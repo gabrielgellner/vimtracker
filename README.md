@@ -37,6 +37,10 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 `Space Space` jumps between views, and `Space ?` lists every key. If you pause after `Space`
 or another prefix, a popup shows what can come next.
 
+No samples come with the repo. Put your own WAV files in `samples/`, which git ignores, and run
+from the repo root to see them in the browser. Choosing one copies it into the project's own
+`samples/` folder, so a saved project keeps working without the original.
+
 | Command | What it does |
 |---|---|
 | `:bpm 137.63` | Tempo |
