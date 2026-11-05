@@ -1,6 +1,8 @@
 //! Song data, actions and project files for vimtracker.
 
+pub mod action;
 pub mod constants;
+pub mod history;
 pub mod project;
 pub mod sample;
 pub mod samples;
