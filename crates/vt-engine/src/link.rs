@@ -23,6 +23,10 @@ pub enum Command {
     Return,
     /// Play an entered note on the preview voice.
     Preview { instrument: u32, note: u8 },
+    /// Mute or unmute a track.
+    SetMute { track: usize, mute: bool },
+    /// Solo or unsolo a track.
+    SetSolo { track: usize, solo: bool },
 }
 
 /// What the callback reports back each block.
@@ -127,6 +131,8 @@ impl Realtime {
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
                 Command::Preview { instrument, note } => self.engine.preview(instrument, note),
+                Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
+                Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
             }
         }
         self.engine.process(out);

@@ -9,6 +9,9 @@ pub struct TrackState {
     pub tail: Voice,
     /// The instrument a note with no instrument keeps playing.
     pub instrument: Option<u32>,
+    /// Live controls, kept here rather than in the song so undo can't change them.
+    pub mute: bool,
+    pub solo: bool,
 }
 
 impl TrackState {

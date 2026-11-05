@@ -41,6 +41,13 @@ pub struct Cursor {
     pub field: Field,
 }
 
+/// A track's live controls.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrackLive {
+    pub mute: bool,
+    pub solo: bool,
+}
+
 /// The whole program's state.
 pub struct App {
     pub history: History,
@@ -58,6 +65,8 @@ pub struct App {
     pub transport: Transport,
     pub playhead: usize,
     pub should_quit: bool,
+    /// Live mute and solo per track, kept outside undo and written to the song on save.
+    pub levels: Vec<TrackLive>,
     table: Table,
     pending: Vec<Key>,
     guard: Option<(Key, Instant)>,
@@ -72,7 +81,8 @@ impl App {
         handle: Handle,
         rate: u32,
     ) -> Self {
-        Self {
+        let levels = live_from(&song);
+        let mut app = Self {
             history: History::new(Arc::new(song)),
             folder,
             dirty: false,
@@ -93,10 +103,37 @@ impl App {
             transport: Transport::Stopped,
             playhead: 0,
             should_quit: false,
+            levels,
             table: Table::default(),
             pending: Vec::new(),
             guard: None,
+        };
+        app.send_live();
+        app
+    }
+
+    /// Tell the engine every track's live controls, after loading a song.
+    fn send_live(&mut self) {
+        for (track, live) in self.levels.clone().into_iter().enumerate() {
+            self.handle.send(Command::SetMute {
+                track,
+                mute: live.mute,
+            });
+            self.handle.send(Command::SetSolo {
+                track,
+                solo: live.solo,
+            });
         }
+    }
+
+    /// The song as saved: with live mute and solo written into it.
+    fn song_to_save(&self) -> Arc<Song> {
+        let mut song = Song::clone(self.song());
+        for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
+            track.mute = live.mute;
+            track.solo = live.solo;
+        }
+        Arc::new(song)
     }
 
     /// The current song.
@@ -230,6 +267,11 @@ impl App {
                 self.guard = Some((key, now));
             }
             Cmd::Quit => self.quit(false),
+            Cmd::NextTrack => self.move_track(1),
+            Cmd::PreviousTrack => self.move_track(-1),
+            Cmd::ToggleMute => self.toggle_mute(),
+            Cmd::ToggleSolo => self.toggle_solo(),
+            Cmd::ClearMutes => self.clear_live(),
             Cmd::Undo => {
                 if self.history.undo().is_some() {
                     self.after_history();
@@ -249,8 +291,76 @@ impl App {
 
     fn after_history(&mut self) {
         self.dirty = true;
+        self.fit_levels();
+        self.cursor.track = self.cursor.track.min(self.song().tracks.len() - 1);
         self.clamp_cursor();
         self.publish();
+    }
+
+    /// Keep one set of live controls per track as tracks come and go.
+    fn fit_levels(&mut self) {
+        let tracks = self.song().tracks.len();
+        for removed in tracks..self.levels.len() {
+            self.handle.send(Command::SetMute {
+                track: removed,
+                mute: false,
+            });
+            self.handle.send(Command::SetSolo {
+                track: removed,
+                solo: false,
+            });
+        }
+        self.levels.resize(tracks, TrackLive::default());
+    }
+
+    /// Move to another track, staying at the same position in the section.
+    fn move_track(&mut self, by: isize) {
+        let last = self.song().tracks.len() as isize - 1;
+        let track = (self.cursor.track as isize + by).clamp(0, last) as usize;
+        if track == self.cursor.track {
+            return;
+        }
+        let section_step = self.section_step();
+        self.cursor.track = track;
+        let song = Arc::clone(self.song());
+        let position = song
+            .sections
+            .first()
+            .and_then(|s| s.chains.get(track).copied().flatten())
+            .and_then(|chain| song.chain_position(chain, section_step));
+        match position {
+            Some(position) => {
+                self.cursor.slot = position.slot;
+                self.cursor.step = position.step;
+            }
+            None => self.cursor.slot = 0,
+        }
+    }
+
+    fn toggle_mute(&mut self) {
+        let track = self.cursor.track;
+        if let Some(live) = self.levels.get_mut(track) {
+            live.mute = !live.mute;
+            let mute = live.mute;
+            self.handle.send(Command::SetMute { track, mute });
+            self.dirty = true;
+        }
+    }
+
+    fn toggle_solo(&mut self) {
+        let track = self.cursor.track;
+        if let Some(live) = self.levels.get_mut(track) {
+            live.solo = !live.solo;
+            let solo = live.solo;
+            self.handle.send(Command::SetSolo { track, solo });
+            self.dirty = true;
+        }
+    }
+
+    fn clear_live(&mut self) {
+        self.levels.fill(TrackLive::default());
+        self.send_live();
+        self.dirty = true;
     }
 
     fn slots(&self) -> usize {
@@ -394,6 +504,22 @@ impl App {
                 self.status = format!("Instrument {id:02X}");
             }
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
+            Line::TrackAdd(count) => {
+                self.apply(&Action::AddTracks(count));
+                self.fit_levels();
+            }
+            Line::TrackDel => {
+                self.apply(&Action::RemoveLastTrack);
+                self.fit_levels();
+                let last = self.song().tracks.len() - 1;
+                if self.cursor.track > last {
+                    self.cursor.track = last;
+                    self.cursor.slot = 0;
+                    self.clamp_cursor();
+                }
+            }
+            Line::Mute => self.toggle_mute(),
+            Line::Solo => self.toggle_solo(),
             Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength { phrase, length });
@@ -425,7 +551,7 @@ impl App {
             }
         } else {
             let target = path.expect("a different path is present");
-            project::save_as(self.folder.as_deref(), &target, self.song())
+            project::save_as(self.folder.as_deref(), &target, &self.song_to_save())
                 .map(|saved| (target, Some(saved)))
         };
         match result {
@@ -483,6 +609,8 @@ impl App {
         let mut pool = SamplePool::clone(&self.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
         self.samples = Arc::new(pool);
+        self.levels = live_from(&song);
+        self.send_live();
         self.history = History::new(Arc::new(song));
         self.folder = folder;
         self.cursor = Cursor {
@@ -535,4 +663,14 @@ impl App {
             Err(error) => self.status = error.to_string(),
         }
     }
+}
+
+fn live_from(song: &Song) -> Vec<TrackLive> {
+    song.tracks
+        .iter()
+        .map(|t| TrackLive {
+            mute: t.mute,
+            solo: t.solo,
+        })
+        .collect()
 }

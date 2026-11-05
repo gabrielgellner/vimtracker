@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-use crate::constants::{MAX_MILLIBPM, MIN_MILLIBPM};
+use crate::constants::{MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM};
 use crate::song::{Instrument, Song};
 use crate::step::{Note, Step};
 
@@ -28,6 +28,10 @@ pub enum Action {
     SetLength { phrase: u32, length: usize },
     /// Change the tempo, in thousandths of a BPM.
     SetMilliBpm(u32),
+    /// Add tracks at the end, each with its own new chain and phrase.
+    AddTracks(usize),
+    /// Remove the last track, keeping at least one. Its chain and phrase stay for reuse.
+    RemoveLastTrack,
     /// Set an instrument's sample, creating the instrument if needed.
     SetSample { instrument: u32, sample: String },
 }
@@ -41,6 +45,10 @@ pub enum EditError {
     NoStep { phrase: u32, step: usize },
     #[error("tempo must be from 20 to 400 BPM")]
     Tempo,
+    #[error("a project can have at most {MAX_TRACKS} tracks")]
+    TooManyTracks,
+    #[error("a project needs at least one track")]
+    LastTrack,
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -78,6 +86,23 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 return Err(EditError::Tempo);
             }
             next.millibpm = *millibpm;
+        }
+        Action::AddTracks(count) => {
+            if next.tracks.len() + count > MAX_TRACKS {
+                return Err(EditError::TooManyTracks);
+            }
+            for _ in 0..*count {
+                next.add_track();
+            }
+        }
+        Action::RemoveLastTrack => {
+            if next.tracks.len() <= 1 {
+                return Err(EditError::LastTrack);
+            }
+            next.tracks.pop();
+            for section in &mut next.sections {
+                section.chains.pop();
+            }
         }
         Action::SetSample { instrument, sample } => {
             let entry = next

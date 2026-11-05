@@ -273,3 +273,120 @@ fn opening_refuses_unsaved_changes() {
     assert!(app.status.contains("Unsaved"));
     assert!(!path.exists());
 }
+
+#[test]
+fn track_keys_move_and_keep_the_section_position() {
+    let (mut app, _rt) = app();
+    press(&mut app, "jjj");
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.phrase_id(), Some(1));
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, 1, "the last track stops the cursor");
+    press(&mut app, "BB");
+    assert_eq!(app.cursor.track, 0);
+}
+
+#[test]
+fn added_tracks_save_load_and_play() {
+    let (mut app, mut rt) = app();
+    command(&mut app, "track add 3");
+    assert_eq!(app.song().tracks.len(), 5);
+    assert_eq!(app.levels.len(), 5);
+    press(&mut app, "WWWW");
+    assert_eq!(app.cursor.track, 4);
+    press(&mut app, "iz");
+    special(&mut app, KeyCode::Esc);
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    let (mut other, _rt2) = self::app();
+    command(&mut other, &format!("e {}", path.display()));
+    assert_eq!(other.song().tracks.len(), 5);
+    app.tick();
+    let mut out = vec![0.0; 512];
+    rt.process(&mut out);
+    assert_eq!(rt.engine().current().song.tracks.len(), 5);
+}
+
+#[test]
+fn only_the_last_track_can_be_removed_and_one_stays() {
+    let (mut app, _rt) = app();
+    press(&mut app, "W");
+    command(&mut app, "track del");
+    assert_eq!(app.song().tracks.len(), 1);
+    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.phrase_id(), Some(0));
+    command(&mut app, "track del");
+    assert_eq!(app.song().tracks.len(), 1);
+    assert!(app.status.contains("at least one"));
+    press(&mut app, "uj");
+    assert_eq!(app.song().tracks.len(), 2);
+    assert_eq!(app.levels.len(), 2);
+}
+
+#[test]
+fn track_count_is_limited_to_the_constant() {
+    let (mut app, _rt) = app();
+    command(&mut app, "track add 62");
+    assert_eq!(app.song().tracks.len(), 64);
+    command(&mut app, "track add");
+    assert_eq!(app.song().tracks.len(), 64);
+    assert!(app.status.contains("at most"));
+}
+
+#[test]
+fn mute_isnt_in_undo_history_but_is_saved() {
+    let (mut app, _rt) = app();
+    press(&mut app, " m");
+    assert!(app.levels[0].mute);
+    press(&mut app, "iz");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "u");
+    assert_eq!(notes(&app)[0], Note::Empty);
+    assert!(app.levels[0].mute, "undo must not change a mute");
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    let (mut other, _rt2) = self::app();
+    command(&mut other, &format!("e {}", path.display()));
+    assert!(other.levels[0].mute);
+    press(&mut other, " M");
+    assert!(!other.levels[0].mute);
+}
+
+#[test]
+fn muted_and_soloed_tracks_change_what_sounds() {
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let wav = dir.join("tone.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(&wav, spec).unwrap();
+    for _ in 0..48_000 {
+        writer.write_sample(16_000_i16).unwrap();
+    }
+    writer.finalize().unwrap();
+    let (mut app, mut rt) = app();
+    command(&mut app, &format!("sample {}", wav.display()));
+    press(&mut app, "iz");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    press(&mut app, " m");
+    app.tick();
+    // Let the entered note's preview finish, since previews sound on muted tracks.
+    let mut out = vec![0.0; 2 * 24_000];
+    rt.process(&mut out);
+    let mut out = vec![0.0; 512];
+    app.key(Key::new(KeyCode::Enter), Instant::now());
+    rt.process(&mut out);
+    assert!(out.iter().all(|s| *s == 0.0), "a muted track is silent");
+    press(&mut app, " m");
+    press(&mut app, "W");
+    press(&mut app, " s");
+    rt.process(&mut out);
+    assert!(out.iter().all(|s| *s == 0.0), "another track is soloed");
+}
