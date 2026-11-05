@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
@@ -11,6 +11,7 @@ use vt_model::selection::Scope;
 use vt_model::step::Step;
 
 use crate::app::{App, Field};
+use crate::theme;
 
 /// The width of a read-only note column for another track.
 const NEIGHBOUR_WIDTH: usize = 4;
@@ -138,36 +139,43 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     for (index, step) in phrase.steps().iter().enumerate().skip(top).take(height) {
         let text = step.to_string();
         let marker = if playhead == Some(index) { ">" } else { " " };
-        let number = Style::new().fg(if index % BEAT_STEPS == 0 {
-            Color::Yellow
+        let number = if index % BEAT_STEPS == 0 {
+            Style::new().fg(theme::YELLOW)
         } else {
-            Color::DarkGray
-        });
+            theme::dim()
+        };
         let mut spans = vec![
             Span::styled(format!("{index:02X}"), number),
-            Span::styled(format!(" {marker} "), Style::new().fg(Color::Green)),
+            Span::styled(format!(" {marker} "), theme::active()),
         ];
         let body = if playhead == Some(index) {
-            Style::new().fg(Color::Green)
+            theme::active()
         } else {
             Style::new()
         };
+        // The cursor, clipped to a selection if there is one, so the moving end stays visible.
+        let cursor = (index == app.cursor.step).then(|| {
+            let (start, end) = field_range(step, app.cursor.field);
+            let end = end.min(text.len());
+            (start.min(end), end)
+        });
         let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));
         if let Some(selected) = selected {
             let (start, end) = selected_columns(step, selected.scope, text.len());
-            let picked = Style::new().bg(Color::Blue).fg(Color::White);
-            spans.push(Span::styled(text[..start].to_owned(), body));
-            spans.push(Span::styled(text[start..end].to_owned(), picked));
-            spans.push(Span::styled(text[end..].to_owned(), body));
-        } else if index == app.cursor.step {
-            let (start, end) = field_range(step, app.cursor.field);
-            let end = end.min(text.len());
-            let start = start.min(end);
+            let (from, to) = cursor.map_or((start, start), |(from, to)| {
+                (from.clamp(start, end), to.clamp(start, end))
+            });
             spans.push(Span::styled(text[..start].to_owned(), body));
             spans.push(Span::styled(
-                text[start..end].to_owned(),
-                Style::new().add_modifier(Modifier::REVERSED),
+                text[start..from].to_owned(),
+                theme::selected(),
             ));
+            spans.push(Span::styled(text[from..to].to_owned(), theme::cursor()));
+            spans.push(Span::styled(text[to..end].to_owned(), theme::selected()));
+            spans.push(Span::styled(text[end..].to_owned(), body));
+        } else if let Some((start, end)) = cursor {
+            spans.push(Span::styled(text[..start].to_owned(), body));
+            spans.push(Span::styled(text[start..end].to_owned(), theme::cursor()));
             spans.push(Span::styled(text[end..].to_owned(), body));
         } else {
             spans.push(Span::styled(text.clone(), body));
@@ -177,7 +185,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         for track in &others {
             spans.push(Span::styled(
                 format!("{} ", neighbour_note(app, *track, first_step + index)),
-                Style::new().fg(Color::DarkGray),
+                theme::dim(),
             ));
         }
         lines.push(Line::from(spans));

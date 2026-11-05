@@ -15,6 +15,9 @@ cargo build --release
 cargo run --release -p vt-tui --bin vimtracker
 ```
 
+With [just](https://github.com/casey/just) installed, `just run my-song` does the same for a
+project, and `just test` runs the tests.
+
 Run the tests with `cargo test --workspace`.
 
 ## Quick start
@@ -27,15 +30,17 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 
 1.  `Space 5` opens the instrument view. `i` on the Sample row lists WAV files under the
     project and the folder you ran from. `:sample path` takes a file, or a folder to browse.
-2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays like a piano,
-    `z` to `m` and `q` to `u`, with `[` and `]` changing octave. `Esc` leaves Insert.
+2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
+    `a` to `;` are white keys, `w` to `p` black keys, `z` and `x` change octave, `c` and `v` set
+    the volume written, and the arrows move without writing. `Esc` leaves Insert.
 3.  `Enter` plays from the cursor and stops. `Space x` pauses and `Space c` returns to the top.
 4.  `l` moves to the next field. Type an FX name and two hex digits, such as `CUT40` or `RET14`.
 5.  `Space 2` opens the chain view, where `gd` opens a phrase, or adds one on the empty row.
 6.  `:w` saves. `:render loop.wav` writes the loop, ready to drop into Ableton.
 
-`Space Space` jumps between views, and `Space ?` lists every key. If you pause after `Space`
-or another prefix, a popup shows what can come next.
+`Space Space` jumps between views. `Space ?` opens the guides, short tutorials on each topic,
+and `Space k` lists every key. If you pause after `Space` or another prefix, a popup shows what
+can come next.
 
 No samples come with the repo. Put your own WAV files in `samples/`, which git ignores, and run
 from the repo root to see them in the browser. Choosing one copies it into the project's own
@@ -48,7 +53,7 @@ from the repo root to see them in the browser. Choosing one copies it into the p
 | `:inst 1A`, `:chain 2` | Current instrument, and which chain this track plays |
 | `:len 32`, `:double` | Phrase length, and repeat the phrase to double it |
 | `:track add 4`, `:track del` | Add tracks, or remove the last |
-| `:set step=2`, `:seed 7` | How far Insert moves, and the random seed for `CHA` |
+| `:set step=2`, `:set skip=8`, `:seed 7` | How far a note moves, how far left and right arrows move, and the random seed for `CHA` |
 | `:render path [--rows n] [--tail]` | Render to a WAV file |
 
 `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` renders

@@ -1,7 +1,7 @@
 //! The binding table: one list of mode, key sequence, command and description.
 //!
 //! The input handler resolves keys against this rather than matching on them, so the popup and
-//! `Space ?` are generated from it and can't disagree with it. Counts and registers come before a
+//! `Space k` are generated from it and can't disagree with it. Counts and registers come before a
 //! sequence and aren't in the table; an operator enters `OperatorPending`, which has its own rows.
 
 use vt_model::selection::{Motion, Target};
@@ -56,6 +56,7 @@ pub enum Cmd {
     ClearMutes,
     Double,
     Help,
+    Guides,
     ShowView(View),
     Picker,
     OpenItem,
@@ -141,7 +142,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
-    ("Space ?", Cmd::Help, "Show every key"),
+    ("Space ?", Cmd::Guides, "Open a guide"),
+    ("Space k", Cmd::Help, "Show every key"),
     ("C-o", Cmd::JumpBack, "Jump back"),
     ("Tab", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
@@ -332,7 +334,7 @@ impl Table {
             .collect()
     }
 
-    /// Every row, for `Space ?`.
+    /// Every row, for `Space k`.
     pub fn rows(&self) -> impl Iterator<Item = &Binding> {
         self.rows.iter().map(|(binding, _)| binding)
     }
@@ -347,30 +349,23 @@ impl Default for Table {
 /// The notes Insert mode's keys play, as semitones above the current octave's C.
 pub fn note_key(key: char) -> Option<u8> {
     Some(match key {
-        'z' => 0,
-        's' => 1,
-        'x' => 2,
-        'd' => 3,
-        'c' => 4,
-        'v' => 5,
-        'g' => 6,
-        'b' => 7,
-        'h' => 8,
-        'n' => 9,
-        'j' => 10,
-        'm' => 11,
-        'q' => 12,
-        '2' => 13,
-        'w' => 14,
-        '3' => 15,
-        'e' => 16,
-        'r' => 17,
-        '5' => 18,
-        't' => 19,
-        '6' => 20,
-        'y' => 21,
-        '7' => 22,
-        'u' => 23,
+        'a' => 0,
+        'w' => 1,
+        's' => 2,
+        'e' => 3,
+        'd' => 4,
+        'f' => 5,
+        't' => 6,
+        'g' => 7,
+        'y' => 8,
+        'h' => 9,
+        'u' => 10,
+        'j' => 11,
+        'k' => 12,
+        'o' => 13,
+        'l' => 14,
+        'p' => 15,
+        ';' => 16,
         _ => return None,
     })
 }
@@ -437,9 +432,8 @@ mod tests {
 
     #[test]
     fn note_keys_run_chromatically() {
-        let low: Vec<u8> = "zsxdcvgbhnjm".chars().filter_map(note_key).collect();
-        let high: Vec<u8> = "q2w3er5t6y7u".chars().filter_map(note_key).collect();
-        assert_eq!(low, (0..12).collect::<Vec<u8>>());
-        assert_eq!(high, (12..24).collect::<Vec<u8>>());
+        let notes: Vec<u8> = "awsedftgyhujkolp;".chars().filter_map(note_key).collect();
+        assert_eq!(notes, (0..17).collect::<Vec<u8>>());
+        assert_eq!("zxcvqrinmb".chars().filter_map(note_key).count(), 0);
     }
 }

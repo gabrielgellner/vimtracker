@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
 use ratatui::layout::{Constraint, Layout};
+use ratatui::widgets::Block;
 use thiserror::Error;
 use vt_engine::engine::Engine;
 use vt_engine::link::connect;
@@ -21,6 +22,7 @@ use crate::app::App;
 use crate::audio::{AudioError, AudioStats, Output};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::theme;
 use crate::views;
 
 /// Why the program stopped with an error.
@@ -123,6 +125,7 @@ fn main_loop(
         app.tick();
         app.autosave_if_due(Instant::now());
         terminal.draw(|frame| {
+            frame.render_widget(Block::new().style(theme::screen()), frame.area());
             let [body, status] =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
             app.follow_cursor(usize::from(body.height.saturating_sub(1)));
@@ -135,6 +138,10 @@ fn main_loop(
             views::help::draw_popup(frame, body, app, Instant::now());
             if app.mode == Mode::Help {
                 views::help::draw_help(frame, body, app);
+            }
+            app.guide_page = views::guide::page(body.height);
+            if let Some(guide) = app.guide {
+                views::guide::draw(frame, body, guide, app.guide_scroll);
             }
             if let Some(picker) = &app.picker {
                 views::picker::draw(frame, body, picker);

@@ -35,6 +35,8 @@ pub enum Mode {
     Insert,
     Command,
     Help,
+    /// Reading a guide.
+    Guide,
     Picker,
     /// Waiting for an answer about restoring an autosave.
     Restore,
@@ -54,6 +56,7 @@ impl Mode {
             Self::Insert => "INSERT",
             Self::Command => "COMMAND",
             Self::Help => "HELP",
+            Self::Guide => "GUIDE",
             Self::Picker => "PICK",
             Self::Restore => "RESTORE",
             Self::Chain => "CHAIN",

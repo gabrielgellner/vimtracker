@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::song::Instrument;
@@ -10,6 +10,7 @@ use vt_model::song::Instrument;
 use crate::app::App;
 use crate::input::mode::Mode;
 use crate::instruments::Row;
+use crate::theme;
 
 /// A row's value as text.
 fn value(row: Row, instrument: &Instrument) -> String {
@@ -44,7 +45,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             value(row, current)
         };
         let style = if row == app.instrument_row {
-            Style::new().add_modifier(Modifier::REVERSED)
+            theme::cursor()
         } else {
             Style::new()
         };
@@ -57,9 +58,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     lines.push(Line::styled("All instruments", bold));
     for (id, instrument) in &song.instruments {
         let style = if *id == app.instrument {
-            Style::new().fg(Color::Green)
+            theme::active()
         } else {
-            Style::new().fg(Color::DarkGray)
+            theme::dim()
         };
         lines.push(Line::styled(
             format!(

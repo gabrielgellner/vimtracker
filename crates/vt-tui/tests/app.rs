@@ -71,7 +71,7 @@ fn insert_mode_writes_notes_and_moves_down() {
     let (mut app, _rt) = app();
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Insert);
-    press(&mut app, "zq1");
+    press(&mut app, "ak1");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(60));
     assert_eq!(written[1], Note::On(72));
@@ -86,7 +86,7 @@ fn insert_mode_writes_notes_and_moves_down() {
 #[test]
 fn octave_keys_change_entered_notes() {
     let (mut app, _rt) = app();
-    press(&mut app, "i[z]]z");
+    press(&mut app, "izaxxa");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(48));
     assert_eq!(written[1], Note::On(72));
@@ -95,7 +95,7 @@ fn octave_keys_change_entered_notes() {
 #[test]
 fn undo_and_redo_keys_restore_notes() {
     let (mut app, _rt) = app();
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     assert_eq!(notes(&app)[0], Note::On(60));
     press(&mut app, "u");
@@ -186,7 +186,7 @@ fn the_leader_waits_and_an_unbound_key_cancels_it() {
 #[test]
 fn quit_refuses_unsaved_changes() {
     let (mut app, _rt) = app();
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, " qq");
     assert!(!app.should_quit);
@@ -216,7 +216,7 @@ fn commands_change_tempo_and_length() {
 #[test]
 fn saving_needs_a_folder_then_round_trips() {
     let (mut app, _rt) = app();
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
     assert!(app.dirty);
@@ -252,7 +252,7 @@ fn a_sample_can_be_loaded_and_played() {
     let (mut app, mut rt) = app();
     command(&mut app, &format!("sample {}", wav.display()));
     assert!(app.status.contains("loaded"), "{}", app.status);
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     app.tick();
     press(&mut app, "k");
@@ -266,7 +266,7 @@ fn a_sample_can_be_loaded_and_played() {
 #[test]
 fn opening_refuses_unsaved_changes() {
     let (mut app, _rt) = app();
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     let path = folder();
     command(&mut app, &format!("new {}", path.display()));
@@ -296,7 +296,7 @@ fn added_tracks_save_load_and_play() {
     assert_eq!(app.levels.len(), 5);
     press(&mut app, "WWWW");
     assert_eq!(app.cursor.track, 4);
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
@@ -340,7 +340,7 @@ fn mute_isnt_in_undo_history_but_is_saved() {
     let (mut app, _rt) = app();
     press(&mut app, " m");
     assert!(app.levels[0].mute);
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
     assert_eq!(notes(&app)[0], Note::Empty);
@@ -372,7 +372,7 @@ fn muted_and_soloed_tracks_change_what_sounds() {
     writer.finalize().unwrap();
     let (mut app, mut rt) = app();
     command(&mut app, &format!("sample {}", wav.display()));
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
     press(&mut app, " m");
@@ -577,7 +577,7 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     // The clone stays here. An edit reaches only the clone.
     press(&mut app, "gc");
     assert_eq!(app.phrase_id(), Some(2));
-    press(&mut app, "iz");
+    press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
     assert_eq!(app.song().phrases[&2].steps()[0].note, Note::On(60));
@@ -762,7 +762,7 @@ mod autosave {
         app.autosave_if_due(later(start, 61));
         assert!(!path.join(AUTOSAVE).exists(), "nothing has changed");
 
-        press(&mut app, "iz");
+        press(&mut app, "ia");
         special(&mut app, KeyCode::Esc);
         app.autosave_if_due(later(start, 62));
         assert!(!path.join(AUTOSAVE).exists(), "not due yet");
@@ -781,7 +781,7 @@ mod autosave {
         assert!(!path.join(AUTOSAVE).exists());
 
         // A real save clears it.
-        press(&mut app, "iz");
+        press(&mut app, "ia");
         special(&mut app, KeyCode::Esc);
         app.autosave_if_due(later(start, 260));
         assert!(path.join(AUTOSAVE).exists());
@@ -793,7 +793,7 @@ mod autosave {
     #[test]
     fn an_unsaved_project_with_no_folder_is_left_alone() {
         let (mut app, _realtime) = app();
-        press(&mut app, "iz");
+        press(&mut app, "ia");
         special(&mut app, KeyCode::Esc);
         let start = Instant::now();
         app.autosave_if_due(start);
@@ -868,7 +868,7 @@ mod autosave {
         let path = folder("quit");
         let (mut app, _realtime) = app();
         command(&mut app, &format!("w {}", path.display()));
-        press(&mut app, "iz");
+        press(&mut app, "ia");
         special(&mut app, KeyCode::Esc);
         let start = Instant::now();
         app.autosave_if_due(start);
@@ -882,4 +882,208 @@ mod autosave {
         assert!(!path.join(AUTOSAVE).exists());
         std::fs::remove_dir_all(&path).unwrap();
     }
+}
+
+fn screen(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+#[test]
+fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "Vj");
+    let buffer = screen(&app);
+    // Past the step number and playhead gutter, on the row the selection started from.
+    let selected = &buffer[(6, 1)];
+    assert_eq!(selected.bg, vt_tui::theme::SURFACE1);
+    assert_eq!(selected.fg, vt_tui::theme::TEXT);
+    assert_ne!(selected.symbol(), " ");
+    let cursor = &buffer[(5, 2)];
+    assert_eq!(cursor.bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(cursor.fg, vt_tui::theme::BASE);
+}
+
+#[test]
+fn the_status_line_names_the_column() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    assert_eq!(column_name(&app), "Note");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Volume");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Instrument");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "FX1 command");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "FX1 value");
+    press(&mut app, " 2");
+    assert_eq!(column_name(&app), "Phrase");
+    press(&mut app, " 5");
+    assert_eq!(column_name(&app), "Sample");
+}
+
+#[test]
+fn space_question_opens_guides_and_space_k_lists_keys() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ?");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "note");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Guide);
+    assert_eq!(app.guide.map(|g| g.title()), Some("Note entry"));
+    press(&mut app, "q");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.guide, None);
+    press(&mut app, " k");
+    assert_eq!(app.mode, Mode::Help);
+}
+
+#[test]
+fn a_guide_stops_scrolling_at_its_end() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ?");
+    special(&mut app, KeyCode::Enter);
+    app.guide_page = 10;
+    let last = app.guide.unwrap().lines().len() - 10;
+    press(&mut app, "G");
+    assert_eq!(app.guide_scroll, last);
+    press(&mut app, "j");
+    assert_eq!(app.guide_scroll, last);
+    press(&mut app, "g");
+    assert_eq!(app.guide_scroll, 0);
+    press(&mut app, "?");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().map(|p| p.query.as_str()), Some(""));
+}
+
+/// What the note entry and navigation guides promise.
+#[test]
+fn the_guides_moves_do_what_they_say() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "4j");
+    assert_eq!(app.cursor.step, 4);
+    press(&mut app, "}");
+    assert_eq!(app.cursor.step, 8);
+    press(&mut app, "gg");
+    press(&mut app, "2}");
+    assert_eq!(app.cursor.step, 8);
+    press(&mut app, "gg");
+    press(&mut app, "8G");
+    assert_eq!(app.cursor.step, 7);
+    press(&mut app, "gg");
+
+    press(&mut app, "i");
+    press(&mut app, "a");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "ji");
+    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.cursor.step, 2);
+    special(&mut app, KeyCode::Esc);
+
+    press(&mut app, "gg");
+    command(&mut app, "set step=4");
+    press(&mut app, "iaaaa");
+    special(&mut app, KeyCode::Esc);
+    let written: Vec<usize> = notes(&app)
+        .iter()
+        .enumerate()
+        .filter(|(_, note)| matches!(note, Note::On(_)))
+        .map(|(step, _)| step)
+        .collect();
+    assert_eq!(written, [0, 4, 8, 12]);
+
+    command(&mut app, "set step=0");
+    press(&mut app, "gg");
+    let before = app.cursor.step;
+    press(&mut app, "ia");
+    assert_eq!(app.cursor.step, before);
+}
+
+#[test]
+fn arrows_move_in_insert_without_writing() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "i");
+    special(&mut app, KeyCode::Down);
+    assert_eq!(app.cursor.step, 1);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 5);
+    special(&mut app, KeyCode::Up);
+    assert_eq!(app.cursor.step, 4);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 0);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.mode, Mode::Insert);
+    assert!(notes(&app).iter().all(|note| *note == Note::Empty));
+    assert!(!app.dirty);
+
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "set skip=3");
+    press(&mut app, "i");
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 3);
+}
+
+#[test]
+fn an_arrow_drops_a_half_typed_value() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "li8");
+    special(&mut app, KeyCode::Down);
+    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.cursor.step, 1);
+    assert!(app.entry.text.is_empty());
+    press(&mut app, "40");
+    let volumes: Vec<_> = app.song().phrases[&0]
+        .steps()
+        .iter()
+        .map(|s| s.volume)
+        .collect();
+    assert_eq!(volumes[0], None);
+    assert_eq!(volumes[1], Some(0x40));
+}
+
+#[test]
+fn the_ableton_layout_plays_and_c_and_v_set_the_volume_written() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set step=0");
+    press(&mut app, "ia");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    press(&mut app, "w");
+    assert_eq!(notes(&app)[0], Note::On(61));
+    press(&mut app, "k");
+    assert_eq!(notes(&app)[0], Note::On(72));
+    press(&mut app, "x;");
+    assert_eq!(notes(&app)[0], Note::On(88));
+    press(&mut app, "zz");
+    assert_eq!(app.octave, 3);
+
+    let volume = |app: &App| app.song().phrases[&0].steps()[0].volume;
+    assert_eq!(volume(&app), None);
+    press(&mut app, "a");
+    assert_eq!(volume(&app), None);
+    press(&mut app, "c");
+    assert_eq!(app.note_volume, Some(0xE0));
+    press(&mut app, "ca");
+    assert_eq!(volume(&app), Some(0xC0));
+    assert_eq!(notes(&app)[0], Note::On(48));
+
+    // The whole note is one undo step.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "u");
+    assert_eq!(volume(&app), None);
+
+    press(&mut app, "i");
+    press(&mut app, "vv");
+    assert_eq!(app.note_volume, None);
+    press(&mut app, "v");
+    assert_eq!(app.note_volume, None);
+    for _ in 0..12 {
+        press(&mut app, "c");
+    }
+    assert_eq!(app.note_volume, Some(0x20));
 }

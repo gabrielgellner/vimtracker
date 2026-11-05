@@ -19,9 +19,10 @@ use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Scope, StepRange};
 use vt_model::song::{ChainEntry, Song};
-use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
 
 use crate::grammar::Change;
+use crate::guides::Guide;
 use crate::input::bindings::{Cmd, Op, Table, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
@@ -36,6 +37,10 @@ pub struct Selection {
     pub range: StepRange,
     pub scope: Scope,
 }
+
+/// How far `c` and `v` change the note volume in Insert, and the highest they set.
+const NOTE_VOLUME_STEP: u8 = 0x20;
+const NOTE_VOLUME_TOP: u8 = 0xE0;
 
 /// Typed characters not yet written, in Insert mode.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -84,6 +89,8 @@ pub struct App {
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
+    /// The volume new notes are written with. `None` leaves the Volume column alone.
+    pub note_volume: Option<u8>,
     pub command_line: String,
     pub status: String,
     pub transport: Transport,
@@ -96,6 +103,10 @@ pub struct App {
     pub top: usize,
     pub view_height: usize,
     pub help_scroll: usize,
+    /// The open guide, how far it has scrolled, and how many of its rows fit.
+    pub guide: Option<Guide>,
+    pub guide_scroll: usize,
+    pub guide_page: usize,
     pub(crate) table: Table,
     pub(crate) pending: Vec<Key>,
     pub(crate) pending_since: Option<Instant>,
@@ -148,6 +159,7 @@ impl App {
             },
             instrument: 0,
             octave: 4,
+            note_volume: None,
             command_line: String::new(),
             status: String::new(),
             transport: Transport::Stopped,
@@ -158,6 +170,9 @@ impl App {
             top: 0,
             view_height: 16,
             help_scroll: 0,
+            guide: None,
+            guide_scroll: 0,
+            guide_page: 16,
             table: Table::default(),
             pending: Vec::new(),
             pending_since: None,
@@ -289,6 +304,7 @@ impl App {
             Mode::Insert => self.insert_key(key),
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
+            Mode::Guide => self.guide_key(key),
             Mode::Picker => self.picker_key(key),
             Mode::Restore => self.restore_key(key),
         }
@@ -326,7 +342,7 @@ impl App {
         self.show_view(view);
     }
 
-    /// Every key, for `Space ?`.
+    /// Every key, for `Space k`.
     pub fn help_rows(&self) -> Vec<String> {
         let mut rows = Vec::new();
         let mut last = None;
@@ -354,6 +370,36 @@ impl App {
         }
     }
 
+    /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
+    fn guide_key(&mut self, key: Key) {
+        let Some(guide) = self.guide else {
+            self.mode = Mode::Normal;
+            return;
+        };
+        let last = guide.lines().len().saturating_sub(self.guide_page);
+        let half = (self.guide_page / 2).max(1);
+        self.guide_scroll = match key.code {
+            KeyCode::Char('d') if key.ctrl => self.guide_scroll + half,
+            KeyCode::Char('u') if key.ctrl => self.guide_scroll.saturating_sub(half),
+            KeyCode::Char('j') | KeyCode::Down => self.guide_scroll + 1,
+            KeyCode::Char('k') | KeyCode::Up => self.guide_scroll.saturating_sub(1),
+            KeyCode::Char('g') => 0,
+            KeyCode::Char('G') => last,
+            KeyCode::Char('?') => {
+                self.guide = None;
+                self.open_guide_picker();
+                return;
+            }
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.guide = None;
+                self.mode = Mode::Normal;
+                return;
+            }
+            _ => self.guide_scroll,
+        }
+        .min(last);
+    }
+
     pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
         let handled = match self.view {
             View::Chain => self.run_chain(cmd),
@@ -376,6 +422,7 @@ impl App {
                 self.help_scroll = 0;
                 self.mode = Mode::Help;
             }
+            Cmd::Guides => self.open_guide_picker(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.mode = Mode::Insert;
@@ -576,6 +623,20 @@ impl App {
     }
 
     fn insert_key(&mut self, key: Key) {
+        let skip = self.song().skip as isize;
+        let arrow = match key.code {
+            KeyCode::Up => Some(-1),
+            KeyCode::Down => Some(1),
+            KeyCode::Left => Some(-skip),
+            KeyCode::Right => Some(skip),
+            _ => None,
+        };
+        if let Some(by) = arrow {
+            if self.view == View::Phrase {
+                self.insert_move(by);
+            }
+            return;
+        }
         if self.view != View::Phrase {
             if !key.ctrl {
                 match self.view {
@@ -600,8 +661,10 @@ impl App {
                 self.write_note(Note::Empty, None);
                 self.move_step(-1);
             }
-            KeyCode::Char('[') => self.octave = self.octave.saturating_sub(1),
-            KeyCode::Char(']') => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
+            KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char('c') => self.note_volume = next_note_volume(self.note_volume, false),
+            KeyCode::Char('v') => self.note_volume = next_note_volume(self.note_volume, true),
             KeyCode::Char('1') => {
                 self.write_note(Note::Off, None);
                 self.advance();
@@ -610,7 +673,7 @@ impl App {
                 if let Some(semitones) = note_key(c) {
                     let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
                     let midi = midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8;
-                    self.write_note(Note::On(midi), Some(self.instrument));
+                    self.write_played_note(midi);
                     self.handle.send(Command::Preview {
                         instrument: self.instrument,
                         note: midi,
@@ -620,6 +683,42 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Move without writing, staying in Insert. Anything half typed is dropped.
+    fn insert_move(&mut self, by: isize) {
+        if !self.entry.text.is_empty() || self.entry.command.is_some() {
+            self.cancel_entry();
+            self.mode = Mode::Insert;
+        }
+        self.move_step(by);
+    }
+
+    /// Write a played note, with the note volume if one is set, as one change.
+    fn write_played_note(&mut self, midi: u8) {
+        let note = Note::On(midi);
+        let Some(volume) = self.note_volume else {
+            self.write_note(note, Some(self.instrument));
+            return;
+        };
+        let Some(id) = self.phrase_id() else {
+            self.status = "This track has no phrase here".to_owned();
+            return;
+        };
+        let current = self.song().phrases.get(&id);
+        let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
+            return;
+        };
+        self.apply(&Action::SetStep {
+            phrase: id,
+            step: self.cursor.step,
+            value: Step {
+                note,
+                instrument: Some(self.instrument),
+                volume: Some(volume),
+                ..step
+            },
+        });
     }
 
     /// Leave Insert, dropping anything typed but not written.
@@ -840,6 +939,7 @@ impl App {
             Line::Render { path, rows, tail } => self.render(&path, rows, tail),
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
+            Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
             Line::Swing(swing) => self.apply(&Action::SetSwing(swing)),
             Line::TrackSwing(swing) => self.apply(&Action::SetTrackSwing {
@@ -1014,6 +1114,18 @@ impl App {
             }
             Err(error) => self.status = error.to_string(),
         }
+    }
+}
+
+/// The note volume one press up or down from this one. Above the top it stops being set, and it
+/// stops at the lowest step rather than writing silent notes.
+fn next_note_volume(volume: Option<u8>, up: bool) -> Option<u8> {
+    match (volume, up) {
+        (None, true) => None,
+        (None, false) => Some(NOTE_VOLUME_TOP),
+        (Some(value), true) if value >= NOTE_VOLUME_TOP => None,
+        (Some(value), true) => Some(value + NOTE_VOLUME_STEP),
+        (Some(value), false) => Some(value.saturating_sub(NOTE_VOLUME_STEP).max(NOTE_VOLUME_STEP)),
     }
 }
 

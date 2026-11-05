@@ -602,14 +602,15 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 
 **Project format.** `song.ron` serializes `Song`, and `format_version` can be read alone. Samples are stored by path relative to the project folder. `:new` and launching with no argument create one section, one chain and one 16-step phrase per track, plus instrument `00` with no sample. Without a path, the project is unsaved until `:w path`.
 
-**Keys.** The binding table is the single source for keys, including what `Space ?` shows. Any key that Issue 2 finds does not arrive gets a replacement recorded there.
+**Keys.** The binding table is the single source for keys, including what `Space k` shows. Any key that Issue 2 finds does not arrive gets a replacement recorded there.
 
 | Mode | Key | Action |
 |---|---|---|
 | Normal | `Space` | Leader. It waits for the next key with no timeout. After 300 ms a popup lists the next keys, as which-key does. `Esc` cancels silently, and an unbound key cancels with a status message |
 | Normal | `Space Space`, `Space ff` | Open the view picker |
 | Normal | `Space 1` to `Space 6` | Jump to song, chain, phrase, table, instrument or groove view, when that view exists |
-| Normal | `Space ?` | Show every key, generated from the binding table |
+| Normal | `Space ?` | Open a guide: a short tutorial built into the program |
+| Normal | `Space k` | Show every key, generated from the binding table |
 | Normal | `Space qq` | Quit, the same as `:q` |
 | Normal | `h l` | Previous or next field |
 | Normal | `j k` | Next or previous step |
@@ -646,10 +647,13 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Shape | `r` | Swap the end values |
 | Shape | `Enter` | Close the controls. The sweep stays live |
 | Shape | `Esc` | Cancel, restoring the version from before Shape mode |
-| Insert (note) | `z s x d c v g b h n j m` | C to B, current octave |
-| Insert (note) | `q 2 w 3 e r 5 t 6 y 7 u` | C to B, one octave up |
+| Insert (note) | `a w s e d f t g y h u j` | C to B, current octave, as in Ableton's computer keyboard |
+| Insert (note) | `k o l p ;` | C to E, one octave up |
 | Insert (note) | `1` | Note-off |
-| Insert (note) | `[ ]` | Octave down or up. Starts at octave 4 |
+| Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
+| Insert (note) | `c v` | Lower or raise the volume written with each note, in steps of `20`. It starts unset, which leaves the Volume column alone, and raising past `E0` unsets it |
+| Insert | `Up Down` | Move one step without writing |
+| Insert | `Left Right` | Move back or forward by the skip setting, which starts at 4, without writing |
 | Insert (note) | `Backspace` | Clear the field and move up |
 | Insert (value) | `0-9 a-f` | Two digits commit and move down by the step setting. Instrument IDs accept more digits, and `Enter` commits them |
 | Insert (FX command) | Letters | Typed in uppercase. An invalid name is refused with a message and leaves the field unchanged |
@@ -663,7 +667,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 
 **View picker.** A centred floating window has a search line above a list, modelled on the Snacks picker for Neovim. With no search text, views are ordered by most recent use. With search text, `nucleo-matcher` ranks view names, and ties go to the most recent use. Audio keeps playing, and the view underneath does not change until `Enter`. `grr` uses the same window to list uses.
 
-**Binding table.** Default keys are one data table of mode, key sequence, action and description, not a `match` in the input handler. The popup and `Space ?` are generated from it. A duplicate key within a mode fails a test. Remapping at runtime is not in this plan.
+**Binding table.** Default keys are one data table of mode, key sequence, action and description, not a `match` in the input handler. The popup and `Space k` are generated from it. A duplicate key within a mode fails a test. Remapping at runtime is not in this plan.
 
 **Key conventions.** Keys inherited from Vim keep Vim's meaning. New bindings follow the author's Neovim rules: a capital is the wider version of its lowercase key, and a doubled key is the ordinary case. A key may be both an action and a prefix only if losing a timeout does nothing wrong.
 
@@ -683,6 +687,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
+| `:set skip=n` | How far `Left` and `Right` move in Insert |
 | `:len n` | Phrase length. Shortening hides steps, which come back if lengthened in the session and are dropped on save |
 | `:double` | Double the current phrase |
 | `:gen apply` | Apply the live generator under the cursor |

@@ -476,7 +476,7 @@ fn a_value_on_an_existing_command_keeps_the_command() {
 #[test]
 fn the_step_setting_changes_how_far_entry_moves() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
-    keys(&mut app, ":set step=2<Enter>iz");
+    keys(&mut app, ":set step=2<Enter>ia");
     assert_eq!(app.cursor.step, 2);
 }
 
@@ -511,7 +511,7 @@ fn the_popup_waits_and_lists_next_keys() {
 #[test]
 fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, " ?");
+    keys(&mut app, " k");
     assert_eq!(app.mode, Mode::Help);
     let rows = app.help_rows();
     assert!(

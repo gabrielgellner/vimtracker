@@ -1,4 +1,4 @@
-//! The which-key popup and `Space ?`, both generated from the binding table.
+//! The which-key popup and `Space k`, both generated from the binding table.
 
 use std::time::{Duration, Instant};
 
@@ -9,6 +9,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use crate::app::App;
+use crate::theme;
 
 /// How long a prefix waits before showing what can come next.
 const POPUP_DELAY: Duration = Duration::from_millis(300);
@@ -33,7 +34,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
     };
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        Paragraph::new(lines).block(Block::new().borders(Borders::ALL)),
+        Paragraph::new(lines).block(Block::new().style(theme::window()).borders(Borders::ALL)),
         popup,
     );
 }
@@ -50,6 +51,7 @@ pub fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(
         Paragraph::new(lines).block(
             Block::new()
+                .style(theme::window())
                 .borders(Borders::ALL)
                 .title("Keys: j and k scroll, any other key closes")
                 .title_style(Style::new().add_modifier(Modifier::BOLD)),

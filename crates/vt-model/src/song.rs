@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION};
+use crate::constants::{BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION};
 use crate::step::Step;
 
 /// One voice's lane through the song.
@@ -147,6 +147,10 @@ pub struct ChainPosition {
     pub transpose: i8,
 }
 
+fn default_skip() -> u32 {
+    BEAT_STEPS as u32
+}
+
 /// Everything saved in `song.ron`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Song {
@@ -156,6 +160,9 @@ pub struct Song {
     pub seed: u64,
     /// How far Insert moves down after a note.
     pub step: u32,
+    /// How far the left and right arrows move in Insert.
+    #[serde(default = "default_skip")]
+    pub skip: u32,
     /// Project swing, in tenths of a percent.
     pub swing: u16,
     pub tracks: Vec<Track>,
@@ -173,6 +180,7 @@ impl Song {
             millibpm: DEFAULT_MILLIBPM,
             seed: 0,
             step: 1,
+            skip: default_skip(),
             swing: 500,
             tracks: Vec::new(),
             sections: vec![Section::default()],

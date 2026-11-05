@@ -64,17 +64,26 @@ pub enum Action {
         block: Block,
     },
     /// Double a phrase by repeating its visible steps.
-    Double { phrase: u32 },
+    Double {
+        phrase: u32,
+    },
     /// Set how far Insert moves down after a note.
     SetStepSize(u32),
+    SetSkipSize(u32),
     /// Set the project's random seed.
     SetSeed(u64),
     /// Set the project's swing, in tenths of a percent.
     SetSwing(u16),
     /// Give a track its own swing, or `None` to follow the project.
-    SetTrackSwing { track: usize, swing: Option<u16> },
+    SetTrackSwing {
+        track: usize,
+        swing: Option<u16>,
+    },
     /// Change a phrase's length, keeping steps past it hidden.
-    SetLength { phrase: u32, length: usize },
+    SetLength {
+        phrase: u32,
+        length: usize,
+    },
     /// Change the tempo, in thousandths of a BPM.
     SetMilliBpm(u32),
     /// Add tracks at the end, each with its own new chain and phrase.
@@ -82,7 +91,10 @@ pub enum Action {
     /// Remove the last track, keeping at least one. Its chain and phrase stay for reuse.
     RemoveLastTrack,
     /// Set an instrument's sample, creating the instrument if needed.
-    SetSample { instrument: u32, sample: String },
+    SetSample {
+        instrument: u32,
+        sample: String,
+    },
     /// Set an instrument's setting, creating the instrument if needed.
     SetInstrument {
         id: u32,
@@ -90,7 +102,11 @@ pub enum Action {
         value: u16,
     },
     /// Set a step's instrument to a new one.
-    AssignNewInstrument { phrase: u32, step: usize, id: u32 },
+    AssignNewInstrument {
+        phrase: u32,
+        step: usize,
+        id: u32,
+    },
     /// Change a chain row. A phrase that doesn't exist yet is created.
     SetChainEntry {
         chain: u32,
@@ -104,13 +120,25 @@ pub enum Action {
         entry: ChainEntry,
     },
     /// Remove a chain row, keeping at least one. Its phrase stays for reuse.
-    RemoveChainEntry { chain: u32, at: usize },
+    RemoveChainEntry {
+        chain: u32,
+        at: usize,
+    },
     /// Copy the phrase in a chain row to a new ID, and point the row at the copy.
-    ClonePhrase { chain: u32, slot: usize, new: u32 },
+    ClonePhrase {
+        chain: u32,
+        slot: usize,
+        new: u32,
+    },
     /// Copy a track's chain and its phrases to new IDs, and point the track at the copy.
-    CloneChain { track: usize },
+    CloneChain {
+        track: usize,
+    },
     /// Point a track at a chain. A chain that doesn't exist yet gets a new phrase.
-    SetTrackChain { track: usize, chain: u32 },
+    SetTrackChain {
+        track: usize,
+        chain: u32,
+    },
 }
 
 /// An instrument setting with a number.
@@ -246,6 +274,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::SetStepSize(size) => next.step = *size,
+        Action::SetSkipSize(size) => next.skip = *size,
         Action::SetSeed(seed) => next.seed = *seed,
         Action::SetSwing(swing) => {
             if !(MIN_SWING..=MAX_SWING).contains(swing) {

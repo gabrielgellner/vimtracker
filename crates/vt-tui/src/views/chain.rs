@@ -2,13 +2,14 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 
 use crate::app::App;
 use crate::input::mode::Mode;
+use crate::theme;
 use crate::tree::ChainColumn;
 
 /// Draw the view.
@@ -38,7 +39,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let room = usize::from(area.height.saturating_sub(2)).max(1);
     let first = (app.cursor.slot + 1).saturating_sub(room);
     let typing = app.mode == Mode::Insert;
-    let cursor = Style::new().add_modifier(Modifier::REVERSED);
+    let cursor = theme::cursor();
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };
@@ -73,8 +74,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             .and_then(|entry| song.phrases.get(&entry.phrase))
             .map_or_else(String::new, |phrase| phrase.len().to_string());
         lines.push(Line::from(vec![
-            Span::styled(format!("{slot:02X}"), Style::new().fg(Color::DarkGray)),
-            Span::styled(format!(" {marker}    "), Style::new().fg(Color::Green)),
+            Span::styled(format!("{slot:02X}"), theme::dim()),
+            Span::styled(format!(" {marker}    "), theme::active()),
             Span::styled(
                 format!("{:<3}", shown(ChainColumn::Phrase, phrase)),
                 style(ChainColumn::Phrase),

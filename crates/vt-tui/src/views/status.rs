@@ -4,15 +4,17 @@ use std::sync::atomic::Ordering;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 
-use crate::app::App;
+use crate::app::{App, Field};
 use crate::audio::AudioStats;
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
+use crate::theme;
+use crate::tree::ChainColumn;
 
 /// Show a tempo without trailing zeros.
 pub fn format_bpm(millibpm: u32) -> String {
@@ -36,6 +38,24 @@ pub fn format_swing(swing: u16) -> String {
     }
 }
 
+/// The name of what the cursor is on, for the status line.
+pub fn column_name(app: &App) -> String {
+    match app.view {
+        View::Phrase => match app.cursor.field {
+            Field::Note => "Note".to_owned(),
+            Field::Volume => "Volume".to_owned(),
+            Field::Instrument => "Instrument".to_owned(),
+            Field::FxCommand(slot) => format!("FX{} command", slot + 1),
+            Field::FxValue(slot) => format!("FX{} value", slot + 1),
+        },
+        View::Chain => match app.chain_column {
+            ChainColumn::Phrase => "Phrase".to_owned(),
+            ChainColumn::Transpose => "Transpose".to_owned(),
+        },
+        View::Instrument => app.instrument_row.label().to_owned(),
+    }
+}
+
 /// Draw the status line and the message or command line below it.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>) {
     let transport = match app.transport {
@@ -51,14 +71,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         )
     });
     let mode_style = Style::new()
-        .fg(Color::Black)
+        .fg(theme::BASE)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument => Color::Blue,
-            Mode::VisualField | Mode::VisualStep => Color::Magenta,
-            Mode::Insert => Color::Green,
-            Mode::Command => Color::Yellow,
-            Mode::Help | Mode::Picker => Color::Cyan,
-            Mode::Restore => Color::Red,
+            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument => theme::BLUE,
+            Mode::VisualField | Mode::VisualStep => theme::MAUVE,
+            Mode::Insert => theme::GREEN,
+            Mode::Command => theme::PEACH,
+            Mode::Help | Mode::Guide | Mode::Picker => theme::TEAL,
+            Mode::Restore => theme::RED,
         })
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {
@@ -83,10 +103,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Some(own) => format!("{} (track)", format_swing(own)),
         None => format_swing(app.song().swing),
     };
+    let note_volume = app
+        .note_volume
+        .map_or_else(|| "--".to_owned(), |volume| format!("{volume:02X}"));
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
+        Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Inst {:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vol {note_volume} Inst {:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.instrument,

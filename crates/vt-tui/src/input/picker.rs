@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
+use crate::guides::Guide;
 use crate::input::mode::View;
 
 /// What choosing a row does.
@@ -13,6 +14,7 @@ pub enum Pick {
     View(View),
     Sample(PathBuf),
     Use { track: usize, slot: usize },
+    Guide(Guide),
 }
 
 /// One row.

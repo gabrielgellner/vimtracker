@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use ratatui::crossterm::event::KeyCode;
 
 use crate::app::App;
+use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
@@ -64,6 +65,19 @@ impl App {
         let mut picker = Picker::new("Views", items);
         picker.move_highlight(1);
         self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Open the list of guides, in the order to learn them.
+    pub(crate) fn open_guide_picker(&mut self) {
+        let items = GUIDES
+            .iter()
+            .map(|guide| Item {
+                label: guide.title().to_owned(),
+                pick: Pick::Guide(*guide),
+            })
+            .collect();
+        self.picker = Some(Picker::new("Guides", items));
         self.mode = Mode::Picker;
     }
 
@@ -127,6 +141,11 @@ impl App {
                     Some(Pick::View(view)) => self.jump_to_view(view),
                     Some(Pick::Use { track, slot }) => self.open_use(track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
+                    Some(Pick::Guide(guide)) => {
+                        self.guide = Some(guide);
+                        self.guide_scroll = 0;
+                        self.mode = Mode::Guide;
+                    }
                     None => {}
                 }
             }
