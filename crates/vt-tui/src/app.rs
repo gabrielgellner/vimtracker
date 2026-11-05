@@ -752,6 +752,7 @@ impl App {
             }
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
+            Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
             Line::Len(length) => {

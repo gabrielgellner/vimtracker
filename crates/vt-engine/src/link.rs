@@ -248,6 +248,36 @@ mod tests {
     }
 
     #[test]
+    fn every_fx_command_stays_off_the_allocator() {
+        let pool = samples();
+        let mut fx = Song::new(2);
+        fx.instruments.insert(
+            0,
+            Arc::new(Instrument {
+                sample: Some("flat".to_owned()),
+                ..Instrument::default()
+            }),
+        );
+        let texts = [
+            "C-4 01 00 VOL80 PAN20 CUT40",
+            "C-4 -- -- RESC0 DLY80 REV80",
+            "C-4 -- -- DEL02 KIL03 OFF01",
+            "C-4 -- -- RET52 CHA80 ---00",
+            "OFF -- -- ---00 ---00 ---00",
+        ];
+        for id in 0..2 {
+            let phrase = Arc::make_mut(fx.phrases.get_mut(&id).unwrap());
+            for (index, text) in texts.iter().enumerate() {
+                *phrase.step_mut(index).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(fx, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayOrStop { from: 0 });
+        assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
+    #[test]
     fn the_newest_version_always_arrives() {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(1, 0), &pool));

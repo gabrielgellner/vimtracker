@@ -1,10 +1,12 @@
 //! Sequencer and audio engine for vimtracker.
 
+pub mod dsp;
 pub mod engine;
 pub mod link;
 pub mod mixer;
 pub mod published;
 pub mod render;
+pub mod rng;
 pub mod track_state;
 pub mod voice;
 
