@@ -373,6 +373,15 @@ impl App {
         }
     }
 
+    /// Hear a row, unless playback is using the tracks.
+    pub(crate) fn review(&mut self, section_step: usize) {
+        if self.transport == Transport::Playing {
+            self.status = "Review works while stopped or paused".to_owned();
+        } else {
+            self.handle.send(Command::Review { section_step });
+        }
+    }
+
     /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
     fn guide_key(&mut self, key: Key) {
         let Some(guide) = self.guide else {
@@ -439,6 +448,10 @@ impl App {
                 let from = self.section_step();
                 self.handle.send(Command::PlayOrStop { from });
                 self.guard = Some((key, now));
+            }
+            Cmd::Review => {
+                let section_step = self.section_step();
+                self.review(section_step);
             }
             Cmd::PauseOrResume => {
                 self.handle.send(Command::PauseOrResume);

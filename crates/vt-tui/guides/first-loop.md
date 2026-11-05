@@ -6,7 +6,7 @@ From an empty project to a loop you can hear, in about two minutes.
 
 Press `Space 5` for the instrument view. The cursor starts on the Sample row.
 Press `i` to list the WAV files nearby, type a few letters to filter, such as
-`kick`, and press `Enter`. Press `p` to hear it.
+`kick`, and press `Enter`. Press `r` to hear it.
 
 Nothing listed? Run `:sample /path/to/folder` to browse a folder.
 

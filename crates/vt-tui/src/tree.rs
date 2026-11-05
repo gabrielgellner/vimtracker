@@ -334,6 +334,11 @@ impl App {
             Cmd::Move(Motion::Up) => self.move_slot(self.cursor.slot.saturating_sub(times)),
             Cmd::Move(Motion::First) => self.move_slot(0),
             Cmd::Move(Motion::Last) => self.move_slot(rows),
+            Cmd::Review if self.cursor.slot < rows => {
+                let section_step = self.section_step();
+                self.review(section_step);
+            }
+            Cmd::Review => {}
             Cmd::Move(Motion::Left) => self.chain_column = ChainColumn::Phrase,
             Cmd::Move(Motion::Right) => self.chain_column = ChainColumn::Transpose,
             Cmd::Increase => self.adjust_row(times as i32),

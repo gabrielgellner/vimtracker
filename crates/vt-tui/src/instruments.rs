@@ -119,7 +119,7 @@ impl App {
             }
             Cmd::Increase => self.adjust_instrument(true, times),
             Cmd::Decrease => self.adjust_instrument(false, times),
-            Cmd::Hear => {
+            Cmd::Review => {
                 self.handle.send(Command::Preview {
                     instrument: self.instrument,
                     note: 60,

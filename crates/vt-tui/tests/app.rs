@@ -1521,3 +1521,80 @@ fn a_bundle_keeps_working_after_its_sources_are_gone() {
         Some("samples/tone.wav")
     );
 }
+
+/// Run the audio side long enough to act on what was sent, and return the loudest sample.
+fn loudest(realtime: &mut Realtime, frames: usize) -> f32 {
+    let mut out = vec![0.0_f32; frames * 2];
+    realtime.process(&mut out);
+    out.iter().fold(0.0, |a, b| a.max(b.abs()))
+}
+
+fn with_a_sound(app: &mut App) {
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("tone.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+    for _ in 0..48_000 {
+        writer.write_sample(16_000_i16).unwrap();
+    }
+    writer.finalize().unwrap();
+    command(app, &format!("sample {}", path.display()));
+}
+
+#[test]
+fn r_reviews_in_every_view_and_changes_nothing() {
+    let (mut app, mut rt) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let version = Arc::clone(app.song());
+    // Hand over the edit, and let the note heard while typing finish.
+    block(&mut rt, &mut app);
+    let _ = loudest(&mut rt, 96_000);
+    assert_eq!(loudest(&mut rt, 2000), 0.0);
+
+    press(&mut app, "kr");
+    assert!(
+        loudest(&mut rt, 2000) > 0.01,
+        "the phrase view reviews a row"
+    );
+    assert!(Arc::ptr_eq(&version, app.song()));
+    assert_eq!(app.transport, Transport::Stopped);
+
+    press(&mut app, "jr");
+    let _ = loudest(&mut rt, 4800);
+    assert_eq!(loudest(&mut rt, 2000), 0.0, "an empty row is silent");
+
+    press(&mut app, " 2r");
+    assert!(
+        loudest(&mut rt, 2000) > 0.01,
+        "the chain view reviews its row"
+    );
+    let _ = loudest(&mut rt, 96_000);
+    press(&mut app, " 5r");
+    assert!(loudest(&mut rt, 2000) > 0.01, "the instrument view reviews");
+}
+
+#[test]
+fn p_no_longer_plays_in_the_instrument_view() {
+    let (mut app, mut rt) = app();
+    with_a_sound(&mut app);
+    press(&mut app, " 5p");
+    assert_eq!(loudest(&mut rt, 2000), 0.0);
+}
+
+#[test]
+fn r_while_playing_says_why_it_did_nothing() {
+    let (mut app, mut rt) = app();
+    special(&mut app, KeyCode::Enter);
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Playing);
+    press(&mut app, "r");
+    assert!(app.status.contains("stopped"), "{}", app.status);
+}

@@ -23,6 +23,8 @@ pub enum Command {
     Return,
     /// Play an entered note on the preview voice.
     Preview { instrument: u32, note: u8 },
+    /// Hear a row of the section while not playing.
+    Review { section_step: usize },
     /// Mute or unmute a track.
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
@@ -131,6 +133,7 @@ impl Realtime {
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
                 Command::Preview { instrument, note } => self.engine.preview(instrument, note),
+                Command::Review { section_step } => self.engine.review(section_step),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
             }
@@ -275,6 +278,29 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         handle.send(Command::PlayOrStop { from: 0 });
         assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
+    #[test]
+    fn review_stays_off_the_allocator() {
+        let pool = samples();
+        let mut played = Song::new(2);
+        played.instruments.insert(
+            0,
+            Arc::new(Instrument {
+                sample: Some("flat".to_owned()),
+                ..Instrument::default()
+            }),
+        );
+        for id in 0..2 {
+            let phrase = Arc::make_mut(played.phrases.get_mut(&id).unwrap());
+            *phrase.step_mut(0).unwrap() = "C-4 01 00 VOL80 ---00 ---00".parse().unwrap();
+        }
+        let engine = Engine::new(48_000, published(played, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        for step in 0..50 {
+            handle.send(Command::Review { section_step: step });
+            assert_eq!(blocks(&mut rt, 4), 0);
+        }
     }
 
     #[test]

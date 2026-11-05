@@ -627,6 +627,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `dd yy >> <<` | Apply to the current step |
 | Normal | `x` | Clear the current field |
 | Normal | `p` | Paste over from the cursor |
+| Normal | `r` | Review: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
 | Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z` |
 | Normal | `+`, `-` | Increase or decrease the value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |

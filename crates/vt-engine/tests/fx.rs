@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vt_engine::engine::{Engine, swing_ticks};
+use vt_engine::engine::{Engine, Transport, swing_ticks};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::sample::SampleData;
@@ -484,4 +484,113 @@ fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
     let first = level_at(&out, STEP - 1);
     let later = level_at(&out, STEP * 3 - 1);
     assert!((first - later).abs() < 1e-3, "{first} vs {later}");
+}
+
+/// Two tracks with a note each on step 0, one on track 1 on step 1, and nothing on step 2.
+fn two_tracks() -> Song {
+    let mut song = song(&["C-4 -- 00 ---00 ---00 ---00"]);
+    song.add_track();
+    let chain = song.sections[0].chains[1].unwrap();
+    let phrase = song.chains[&chain].entries[0].phrase;
+    let steps = Arc::make_mut(song.phrases.get_mut(&phrase).unwrap());
+    *steps.step_mut(0).unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
+    *steps.step_mut(1).unwrap() = "C-4 80 00 ---00 ---00 ---00".parse().unwrap();
+    song
+}
+
+fn reviewed(song: Song, level: f32, act: impl Fn(&mut Engine)) -> f32 {
+    let version = Arc::new(Published::new(Arc::new(song), flat(level)));
+    let mut engine = Engine::new(RATE, version);
+    act(&mut engine);
+    assert_ne!(engine.transport(), Transport::Playing);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    let frames = out.as_chunks::<2>().0;
+    level_at(frames, STEP - 1)
+}
+
+#[test]
+fn review_sounds_every_track_on_the_row_and_stays_stopped() {
+    let one = reviewed(two_tracks(), 0.02, |engine| engine.review(1));
+    let both = reviewed(two_tracks(), 0.02, |engine| engine.review(0));
+    assert!(one > 0.0);
+    assert!(both > one * 2.5, "{both} vs {one}");
+    assert_eq!(
+        reviewed(two_tracks(), 0.02, |engine| engine.review(2)),
+        0.0,
+        "an empty row is silent"
+    );
+}
+
+#[test]
+fn review_uses_velocity_and_is_cut_by_the_next_one() {
+    let full = reviewed(song(&["C-4 -- 00 ---00 ---00 ---00"]), 0.02, |e| {
+        e.review(0)
+    });
+    let soft = reviewed(song(&["C-4 80 00 ---00 ---00 ---00"]), 0.02, |e| {
+        e.review(0)
+    });
+    assert!(
+        (soft / full - 128.0 / 255.0).abs() < 1e-3,
+        "{soft} vs {full}"
+    );
+
+    let cut = reviewed(two_tracks(), 0.02, |engine| {
+        engine.review(0);
+        engine.review(2);
+    });
+    assert_eq!(cut, 0.0, "an empty row silences the last review");
+}
+
+#[test]
+fn review_respects_mute_and_solo() {
+    let silent = reviewed(two_tracks(), 0.02, |engine| {
+        engine.set_mute(1, true);
+        engine.review(1);
+    });
+    assert_eq!(silent, 0.0);
+    let soloed = reviewed(two_tracks(), 0.02, |engine| {
+        engine.set_solo(0, true);
+        engine.review(1);
+    });
+    assert_eq!(soloed, 0.0);
+}
+
+#[test]
+fn review_does_not_run_fx_or_change_later_playback() {
+    let text = ["C-4 -- 00 VOL00 ---00 ---00", "--- -- -- ---00 ---00 ---00"];
+    let heard = reviewed(song(&text), 0.02, |engine| engine.review(0));
+    assert!(heard > 0.0, "VOL00 did not run");
+
+    let play = |review: bool| {
+        let version = Arc::new(Published::new(
+            Arc::new(song(&["C-4 -- 00 ---00 ---00 ---00"])),
+            flat(0.02),
+        ));
+        let mut engine = Engine::new(RATE, version);
+        if review {
+            engine.review(0);
+            let mut silence = vec![0.0; RATE as usize * 2 * 8];
+            engine.process(&mut silence);
+        }
+        engine.play_from(0);
+        let mut out = vec![0.0; STEP * 2];
+        engine.process(&mut out);
+        out
+    };
+    let before = play(false);
+    let after = play(true);
+    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |a, b| a.max(b.abs()));
+    assert!((peak(&before) - peak(&after)).abs() < 1e-6);
+}
+
+#[test]
+fn review_does_nothing_while_playing() {
+    let version = Arc::new(Published::new(Arc::new(two_tracks()), flat(0.02)));
+    let mut engine = Engine::new(RATE, version);
+    engine.play_from(2);
+    engine.review(0);
+    let mut out = vec![0.0; 2000];
+    engine.process(&mut out);
+    assert!(out.iter().all(|sample| *sample == 0.0));
 }

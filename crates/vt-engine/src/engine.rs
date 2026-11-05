@@ -537,6 +537,52 @@ impl Engine {
         }
     }
 
+    /// Hear a row while not playing: every audible track's note at this step of the section, with
+    /// its instrument, velocity and transpose. Whatever a review was sounding is cut first. Its
+    /// FX don't run, and nothing that playback relies on changes.
+    pub fn review(&mut self, section_step: usize) {
+        if self.transport == Transport::Playing {
+            return;
+        }
+        let current = Arc::clone(&self.current);
+        let song = &current.song;
+        let Some(section) = song.sections.first() else {
+            return;
+        };
+        for index in 0..song.tracks.len().min(self.tracks.len()) {
+            self.tracks[index].cut_to_tail();
+            if !self.audible(index) {
+                continue;
+            }
+            let Some(Some(chain)) = section.chains.get(index) else {
+                continue;
+            };
+            let Some(position) = song.chain_position(*chain, section_step) else {
+                continue;
+            };
+            let Some(step) = song.step_at(position) else {
+                continue;
+            };
+            let Note::On(midi) = step.note else {
+                continue;
+            };
+            let note = (i16::from(midi) + i16::from(position.transpose))
+                .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
+            let gain = step.velocity.map_or(1.0, |v| f32::from(v) / 255.0);
+            let instrument = step.instrument.or(self.tracks[index].instrument);
+            let Some(on) = instrument.and_then(|i| self.note_on(i, note, gain)) else {
+                continue;
+            };
+            let track = &mut self.tracks[index];
+            if !track.sounding() {
+                track.settle();
+            }
+            let last_note = track.last_note;
+            track.start(on, self.rate);
+            track.last_note = last_note;
+        }
+    }
+
     /// Render voices and effects into a run of frames with no events in it.
     fn render(&mut self, out: &mut [f32]) {
         let samples = Arc::clone(&self.current.samples);
