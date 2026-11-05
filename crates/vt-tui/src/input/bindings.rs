@@ -7,7 +7,7 @@
 use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +56,9 @@ pub enum Cmd {
     ClearMutes,
     Double,
     Help,
+    ShowView(View),
+    /// Play the current instrument.
+    Hear,
 }
 
 /// One row of the table.
@@ -103,6 +106,30 @@ const VIEWPORT: &[(&str, Cmd, &str)] = &[
     ("C-y", Cmd::ScrollUp, "Scroll the view up"),
 ];
 
+/// Keys that mean the same in every view.
+const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
+    ("u", Cmd::Undo, "Undo"),
+    ("C-r", Cmd::Redo, "Redo"),
+    (":", Cmd::EnterCommand, "Command"),
+    ("i", Cmd::EnterInsert, "Insert"),
+    ("Enter", Cmd::PlayOrStop, "Play from the cursor, or stop"),
+    ("Space x", Cmd::PauseOrResume, "Pause in place, or resume"),
+    ("Space c", Cmd::ReturnToStart, "Return to the start"),
+    ("Space q q", Cmd::Quit, "Quit"),
+    ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
+    ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
+    ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
+    ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
+    (
+        "Space 5",
+        Cmd::ShowView(View::Instrument),
+        "Instrument view",
+    ),
+    ("Space ?", Cmd::Help, "Show every key"),
+    ("W", Cmd::NextTrack, "Next track"),
+    ("B", Cmd::PreviousTrack, "Previous track"),
+];
+
 /// Keys for Normal mode only.
 const NORMAL: &[(&str, Cmd, &str)] = &[
     ("d", Cmd::Operator(Op::Clear), "Clear"),
@@ -116,24 +143,25 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("C-a", Cmd::Increase, "Increase the value"),
     ("C-x", Cmd::Decrease, "Decrease the value"),
     (".", Cmd::Repeat, "Repeat the last change"),
-    ("u", Cmd::Undo, "Undo"),
-    ("C-r", Cmd::Redo, "Redo"),
     ("v", Cmd::VisualField, "Select fields"),
     ("V", Cmd::VisualStep, "Select whole steps"),
     ("g v", Cmd::Reselect, "Reselect the last selection"),
-    ("i", Cmd::EnterInsert, "Insert"),
-    (":", Cmd::EnterCommand, "Command"),
-    ("Enter", Cmd::PlayOrStop, "Play from the cursor, or stop"),
-    ("Space x", Cmd::PauseOrResume, "Pause in place, or resume"),
-    ("Space c", Cmd::ReturnToStart, "Return to the start"),
-    ("Space q q", Cmd::Quit, "Quit"),
-    ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
-    ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
-    ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
     ("Space p d", Cmd::Double, "Double this phrase"),
-    ("Space ?", Cmd::Help, "Show every key"),
-    ("W", Cmd::NextTrack, "Next track"),
-    ("B", Cmd::PreviousTrack, "Previous track"),
+];
+
+/// Keys for the instrument view.
+const INSTRUMENT: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next row"),
+    ("k", Cmd::Move(Motion::Up), "Previous row"),
+    ("g g", Cmd::Move(Motion::First), "First row"),
+    ("G", Cmd::Move(Motion::Last), "Last row"),
+    ("h", Cmd::Move(Motion::Left), "Previous instrument"),
+    ("l", Cmd::Move(Motion::Right), "Next instrument"),
+    ("+", Cmd::Increase, "Increase the value"),
+    ("-", Cmd::Decrease, "Decrease the value"),
+    ("C-a", Cmd::Increase, "Increase the value"),
+    ("C-x", Cmd::Decrease, "Decrease the value"),
+    ("p", Cmd::Hear, "Hear this instrument"),
 ];
 
 /// Keys that act on a selection.
@@ -178,6 +206,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, MOTIONS);
     add(Mode::Normal, VIEWPORT);
     add(Mode::Normal, NORMAL);
+    add(Mode::Normal, EVERY_VIEW);
+    add(Mode::Instrument, INSTRUMENT);
+    add(Mode::Instrument, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

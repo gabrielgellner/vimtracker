@@ -76,7 +76,7 @@ impl App {
             self.pending_since = Some(now);
         }
         self.pending.push(key);
-        match self.table.resolve(self.mode, &self.pending) {
+        match self.table.resolve(self.key_scope(), &self.pending) {
             Resolved::Prefix => {}
             Resolved::Unbound => {
                 let keys: Vec<String> = self.pending.iter().map(Key::to_string).collect();

@@ -55,3 +55,6 @@ pub const MIN_SWING: u16 = 500;
 
 /// The highest swing, in tenths of a percent.
 pub const MAX_SWING: u16 = 750;
+
+/// The longest attack or release, in milliseconds.
+pub const MAX_ENVELOPE_MS: u16 = 5000;

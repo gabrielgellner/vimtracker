@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-use crate::constants::{MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING};
+use crate::constants::{
+    MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING,
+};
 use crate::selection::{Block, Scope, Shift, StepRange, clear_step, paste_step, shift_step};
 use crate::song::{Instrument, Song};
 use crate::step::{FxSlot, Note, Step};
@@ -80,6 +82,20 @@ pub enum Action {
     RemoveLastTrack,
     /// Set an instrument's sample, creating the instrument if needed.
     SetSample { instrument: u32, sample: String },
+    /// Set an instrument's setting, creating the instrument if needed.
+    SetInstrument {
+        id: u32,
+        field: InstrumentField,
+        value: u16,
+    },
+}
+
+/// An instrument setting with a number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstrumentField {
+    Volume,
+    Attack,
+    Release,
 }
 
 /// Why an edit was refused.
@@ -97,6 +113,10 @@ pub enum EditError {
     LastTrack,
     #[error("those columns don't match here")]
     ColumnMismatch,
+    #[error("volume goes up to FF")]
+    Volume,
+    #[error("attack and release go up to {MAX_ENVELOPE_MS} ms")]
+    Envelope,
     #[error("swing must be from 50 to 75")]
     Swing,
     #[error("no track {0}")]
@@ -247,6 +267,28 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .entry(*instrument)
                 .or_insert_with(|| Arc::new(Instrument::default()));
             Arc::make_mut(entry).sample = Some(sample.clone());
+        }
+        Action::SetInstrument { id, field, value } => {
+            let entry = next
+                .instruments
+                .entry(*id)
+                .or_insert_with(|| Arc::new(Instrument::default()));
+            let instrument = Arc::make_mut(entry);
+            match field {
+                InstrumentField::Volume => {
+                    instrument.volume = u8::try_from(*value).map_err(|_| EditError::Volume)?;
+                }
+                InstrumentField::Attack | InstrumentField::Release => {
+                    if *value > MAX_ENVELOPE_MS {
+                        return Err(EditError::Envelope);
+                    }
+                    if *field == InstrumentField::Attack {
+                        instrument.attack_ms = *value;
+                    } else {
+                        instrument.release_ms = *value;
+                    }
+                }
+            }
         }
     }
     Ok(Arc::new(next))
