@@ -1,0 +1,330 @@
+//! The queues between the edit thread and the audio callback.
+//!
+//! `rtrb` can't take back a queued item, so the newest unsent version waits in a slot on the edit
+//! thread. Every edit and every frame tries to send it, so the last edit always reaches audio.
+
+use std::sync::Arc;
+
+use rtrb::{Consumer, Producer, RingBuffer};
+use vt_model::constants::{COMMAND_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE};
+
+use crate::engine::{Engine, Transport};
+use crate::published::Published;
+
+/// A transport or preview message. The engine resolves it against its own state, so two quick
+/// presses can't act on an out-of-date view of whether it is playing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Command {
+    /// `Enter`: play from a section step, or stop if playing.
+    PlayOrStop { from: usize },
+    /// `Space x`: pause in place, or resume.
+    PauseOrResume,
+    /// `Space c`: return to the start, and stop if playing.
+    Return,
+    /// Play an entered note on the preview voice.
+    Preview { instrument: u32, note: u8 },
+}
+
+/// What the callback reports back each block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Telemetry {
+    pub position: usize,
+    pub transport: Transport,
+}
+
+/// The edit thread's end.
+pub struct Handle {
+    versions: Producer<Arc<Published>>,
+    returned: Consumer<Arc<Published>>,
+    commands: Producer<Command>,
+    telemetry: Consumer<Telemetry>,
+    pending: Option<Arc<Published>>,
+}
+
+/// The callback's end. Nothing here allocates, frees or locks.
+pub struct Realtime {
+    engine: Engine,
+    versions: Consumer<Arc<Published>>,
+    returned: Producer<Arc<Published>>,
+    commands: Consumer<Command>,
+    telemetry: Producer<Telemetry>,
+}
+
+/// Connect an engine to the edit thread.
+pub fn connect(engine: Engine) -> (Handle, Realtime) {
+    let (version_tx, version_rx) = RingBuffer::new(PUBLISH_QUEUE);
+    let (return_tx, return_rx) = RingBuffer::new(RETURN_QUEUE);
+    let (command_tx, command_rx) = RingBuffer::new(COMMAND_QUEUE);
+    let (telemetry_tx, telemetry_rx) = RingBuffer::new(TELEMETRY_QUEUE);
+    (
+        Handle {
+            versions: version_tx,
+            returned: return_rx,
+            commands: command_tx,
+            telemetry: telemetry_rx,
+            pending: None,
+        },
+        Realtime {
+            engine,
+            versions: version_rx,
+            returned: return_tx,
+            commands: command_rx,
+            telemetry: telemetry_tx,
+        },
+    )
+}
+
+impl Handle {
+    /// Send a new version. If an unsent one is waiting, this replaces it, and it is freed here.
+    pub fn publish(&mut self, version: Arc<Published>) {
+        self.pending = Some(version);
+        self.pump();
+    }
+
+    /// Free returned versions and try to send the waiting one. Call this every frame.
+    pub fn pump(&mut self) {
+        while self.returned.pop().is_ok() {}
+        if let Some(version) = self.pending.take()
+            && let Err(rtrb::PushError::Full(version)) = self.versions.push(version)
+        {
+            self.pending = Some(version);
+        }
+    }
+
+    /// Send a command. If the queue is full, which means audio has stopped, it is dropped.
+    pub fn send(&mut self, command: Command) -> bool {
+        self.commands.push(command).is_ok()
+    }
+
+    /// The newest report from the callback, if there is one.
+    pub fn latest(&mut self) -> Option<Telemetry> {
+        let mut latest = None;
+        while let Ok(report) = self.telemetry.pop() {
+            latest = Some(report);
+        }
+        latest
+    }
+
+    /// Whether a version is still waiting to be sent.
+    pub fn has_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+}
+
+impl Realtime {
+    /// Fill one block of interleaved stereo output.
+    pub fn process(&mut self, out: &mut [f32]) {
+        // Take a new version only when the old one can be sent back to be freed.
+        if !self.returned.is_full()
+            && let Ok(version) = self.versions.pop()
+        {
+            let old = self.engine.swap(version);
+            let _ = self.returned.push(old);
+        }
+        while let Ok(command) = self.commands.pop() {
+            match command {
+                Command::PlayOrStop { from } => self.engine.play_or_stop(from),
+                Command::PauseOrResume => self.engine.pause_or_resume(),
+                Command::Return => self.engine.return_to_start(),
+                Command::Preview { instrument, note } => self.engine.preview(instrument, note),
+            }
+        }
+        self.engine.process(out);
+        let _ = self.telemetry.push(Telemetry {
+            position: self.engine.position(),
+            transport: self.engine.transport(),
+        });
+    }
+
+    /// The engine, for tests.
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use vt_model::constants::MAX_TRACKS;
+    use vt_model::sample::SampleData;
+    use vt_model::samples::SamplePool;
+    use vt_model::song::{Instrument, Song};
+    use vt_model::step::{Note, Step};
+
+    use super::*;
+    use crate::rt_guard::forbidden;
+
+    const BLOCK: usize = 256;
+
+    fn samples() -> Arc<SamplePool> {
+        let mut pool = SamplePool::default();
+        pool.insert(
+            "flat",
+            SampleData {
+                frames: vec![[0.5, 0.5]; 48_000],
+            },
+        );
+        Arc::new(pool)
+    }
+
+    fn song(tracks: usize, steps: usize) -> Song {
+        let mut song = Song::new(tracks);
+        song.instruments.insert(
+            0,
+            Arc::new(Instrument {
+                sample: Some("flat".to_owned()),
+                ..Instrument::default()
+            }),
+        );
+        for id in 0..tracks as u32 {
+            let phrase = Arc::make_mut(song.phrases.get_mut(&id).unwrap());
+            for step in 0..steps {
+                *phrase.step_mut(step).unwrap() = Step {
+                    note: Note::On(60),
+                    instrument: Some(0),
+                    ..Step::default()
+                };
+            }
+        }
+        song
+    }
+
+    fn published(song: Song, pool: &Arc<SamplePool>) -> Arc<Published> {
+        Arc::new(Published::new(Arc::new(song), Arc::clone(pool)))
+    }
+
+    /// Run blocks through the guard and return how many times they allocated.
+    fn blocks(rt: &mut Realtime, count: usize) -> usize {
+        let mut out = vec![0.0; BLOCK * 2];
+        let mut total = 0;
+        for _ in 0..count {
+            let ((), violations) = forbidden(|| rt.process(&mut out));
+            total += violations;
+        }
+        total
+    }
+
+    #[test]
+    fn publishing_never_allocates_or_frees_in_the_callback() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayOrStop { from: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..1000u32 {
+            let mut next = song(8, 16);
+            next.millibpm = 100_000 + round;
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn changing_track_count_and_removing_a_phrase_dont_allocate() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayOrStop { from: 0 });
+        let mut violations = blocks(&mut rt, 4);
+        for tracks in [MAX_TRACKS, 1, 8] {
+            handle.publish(published(song(tracks, 16), &pool));
+            violations += blocks(&mut rt, 4);
+            handle.pump();
+        }
+        let mut removed = song(8, 16);
+        removed.phrases.remove(&0);
+        handle.publish(published(removed, &pool));
+        violations += blocks(&mut rt, 4);
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn the_newest_version_always_arrives() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(1, 0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        for bpm in 100..200u32 {
+            let mut next = song(1, 0);
+            next.millibpm = bpm * 1000;
+            handle.publish(published(next, &pool));
+        }
+        assert!(handle.has_pending(), "most should wait while audio is idle");
+        // With no further edits, pumping each frame still gets the last one through.
+        for _ in 0..4 {
+            blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert!(!handle.has_pending());
+        assert_eq!(rt.engine().current().song.millibpm, 199_000);
+    }
+
+    #[test]
+    fn a_full_return_queue_keeps_the_old_version_playing() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(1, 0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        // Never pump, so nothing is freed and the return queue fills up.
+        for bpm in 0..(RETURN_QUEUE as u32 + 4) {
+            let mut next = song(1, 0);
+            next.millibpm = 100_000 + bpm;
+            while handle.versions.is_full() {
+                blocks(&mut rt, 1);
+                if rt.returned.is_full() {
+                    break;
+                }
+            }
+            if rt.returned.is_full() {
+                break;
+            }
+            let _ = handle.versions.push(published(next, &pool));
+        }
+        let current = rt.engine().current().song.millibpm;
+        assert_eq!(blocks(&mut rt, 2), 0);
+        assert_eq!(rt.engine().current().song.millibpm, current);
+        handle.pump();
+        blocks(&mut rt, 1);
+    }
+
+    #[test]
+    fn enter_then_enter_stops_and_returns_to_stopped() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(1, 1), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayOrStop { from: 0 });
+        handle.send(Command::PlayOrStop { from: 0 });
+        blocks(&mut rt, 1);
+        assert_eq!(rt.engine().transport(), Transport::Stopped);
+        handle.send(Command::PauseOrResume);
+        handle.send(Command::PauseOrResume);
+        blocks(&mut rt, 1);
+        assert_eq!(rt.engine().transport(), Transport::Paused);
+    }
+
+    #[test]
+    fn telemetry_reports_position_and_transport() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(1, 1), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayOrStop { from: 3 });
+        blocks(&mut rt, 1);
+        let report = handle.latest().unwrap();
+        assert_eq!(report.transport, Transport::Playing);
+        assert_eq!(report.position, 3);
+    }
+
+    #[test]
+    fn a_silent_track_count_of_one_eight_and_sixty_four_all_run() {
+        let pool = samples();
+        for tracks in [1, 8, 64] {
+            let engine = Engine::new(48_000, published(song(tracks, 16), &pool));
+            let (mut handle, mut rt) = connect(engine);
+            handle.send(Command::PlayOrStop { from: 0 });
+            let mut out = vec![0.0; BLOCK * 2];
+            rt.process(&mut out);
+            assert!(out.iter().any(|s| *s != 0.0), "{tracks} tracks");
+        }
+    }
+}
