@@ -6,6 +6,7 @@ use vt_model::action::{Action, InstrumentField};
 use vt_model::constants::MAX_ENVELOPE_MS;
 use vt_model::selection::Motion;
 use vt_model::song::Instrument;
+use vt_model::step::MAX_VELOCITY;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -127,6 +128,7 @@ impl App {
                 self.handle.send(Command::Preview {
                     instrument: self.instrument,
                     note: 60,
+                    velocity: MAX_VELOCITY,
                 });
             }
             Cmd::EnterInsert if self.instrument_row == Row::Sample => {

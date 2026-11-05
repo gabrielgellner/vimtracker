@@ -11,7 +11,7 @@ use vt_engine::link::{Command, Handle};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
-use vt_model::constants::{DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
+use vt_model::constants::{DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
 use vt_model::history::History;
 use vt_model::label::{is_named_slot, name_of, slot_of};
 use vt_model::project::{self, ProjectError};
@@ -20,7 +20,7 @@ use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Scope, StepRange};
 use vt_model::song::{ChainEntry, Song};
-use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
 
 use crate::grammar::Change;
 use crate::guides::Guide;
@@ -39,9 +39,8 @@ pub struct Selection {
     pub scope: Scope,
 }
 
-/// How far `c` and `v` change the note velocity in Insert, and the highest they set.
-const NOTE_VELOCITY_STEP: u8 = 0x20;
-const NOTE_VELOCITY_TOP: u8 = 0xE0;
+/// The spacing of the velocities `c` and `v` land on in Insert.
+const NOTE_VELOCITY_STEP: u8 = 0x10;
 
 /// Typed characters not yet written, in Insert mode.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -90,8 +89,8 @@ pub struct App {
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
-    /// The velocity new notes are written with. `None` leaves the Velocity column alone.
-    pub note_velocity: Option<u8>,
+    /// The velocity new notes are written with, like the octave.
+    pub note_velocity: u8,
     /// The field a replace started on, since typing an FX command moves on to its value.
     pub(crate) replacing: Option<Field>,
     /// The step last written in Insert, and where that left the cursor.
@@ -164,7 +163,7 @@ impl App {
             },
             instrument: 0,
             octave: 4,
-            note_velocity: None,
+            note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
             last_entry: None,
             command_line: String::new(),
@@ -714,7 +713,7 @@ impl App {
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
-                self.write_note(Note::Empty, None);
+                self.clear_note();
                 self.move_step(-1);
             }
             KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
@@ -731,14 +730,20 @@ impl App {
                 if let Some(semitones) = note_key(c) {
                     let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
                     let midi = midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8;
+                    let on_step = self
+                        .phrase_id()
+                        .and_then(|id| self.song().phrases.get(&id).cloned())
+                        .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
+                    let (instrument, velocity) = on_step
+                        .as_ref()
+                        .map_or((self.instrument, self.note_velocity), |step| {
+                            self.played_with(step)
+                        });
                     self.write_played_note(midi);
-                    let heard = match self.mode {
-                        Mode::Replace => self.step_instrument().unwrap_or(self.instrument),
-                        _ => self.instrument,
-                    };
                     self.handle.send(Command::Preview {
-                        instrument: heard,
+                        instrument,
                         note: midi,
+                        velocity,
                     });
                     self.advance();
                 }
@@ -772,20 +777,44 @@ impl App {
         self.move_step(by);
     }
 
-    /// Write a played note, with the note velocity if one is set, as one change.
+    /// Write a played note with its instrument and velocity, as one change.
     fn write_played_note(&mut self, midi: u8) {
-        let note = Note::On(midi);
-        if self.mode == Mode::Replace {
-            let instrument = self.step_instrument().unwrap_or(self.instrument);
-            self.write_note(note, Some(instrument));
-            return;
-        }
-        let Some(velocity) = self.note_velocity else {
-            self.write_note(note, Some(self.instrument));
-            return;
-        };
         let Some(id) = self.phrase_id() else {
             self.status = "This track has no phrase here".to_owned();
+            return;
+        };
+        let current = self.song().phrases.get(&id);
+        let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
+            return;
+        };
+        let (instrument, velocity) = self.played_with(&step);
+        self.apply(&Action::SetStep {
+            phrase: id,
+            step: self.cursor.step,
+            value: Step {
+                note: Note::On(midi),
+                instrument: Some(instrument),
+                velocity: Some(velocity),
+                ..step
+            },
+        });
+    }
+
+    /// The instrument and velocity a played note takes. Replacing keeps what the step has.
+    fn played_with(&self, step: &Step) -> (u32, u8) {
+        if self.mode == Mode::Replace {
+            (
+                step.instrument.unwrap_or(self.instrument),
+                step.velocity.unwrap_or(self.note_velocity),
+            )
+        } else {
+            (self.instrument, self.note_velocity)
+        }
+    }
+
+    /// Clear a note along with the velocity and instrument it was written with.
+    fn clear_note(&mut self) {
+        let Some(id) = self.phrase_id() else {
             return;
         };
         let current = self.song().phrases.get(&id);
@@ -796,9 +825,9 @@ impl App {
             phrase: id,
             step: self.cursor.step,
             value: Step {
-                note,
-                instrument: Some(self.instrument),
-                velocity: Some(velocity),
+                note: Note::Empty,
+                instrument: None,
+                velocity: None,
                 ..step
             },
         });
@@ -860,7 +889,9 @@ impl App {
             return;
         };
         match self.cursor.field {
-            Field::Velocity => self.set_field(FieldValue::Velocity(Some(value))),
+            Field::Velocity => {
+                self.set_field(FieldValue::Velocity(Some(value.min(MAX_VELOCITY))));
+            }
             Field::FxValue(slot) => {
                 let existing = self.current_slot(slot).and_then(|s| s.command);
                 let Some(command) = self.entry.command.take().or(existing) else {
@@ -1258,19 +1289,14 @@ fn snap_by(step: usize, skip: usize, forward: bool) -> isize {
     }
 }
 
-/// The note velocity one press up or down from this one. Above the top it stops being set, and it
-/// stops at the lowest step rather than writing silent notes.
-fn next_note_velocity(velocity: Option<u8>, up: bool) -> Option<u8> {
-    match (velocity, up) {
-        (None, true) => None,
-        (None, false) => Some(NOTE_VELOCITY_TOP),
-        (Some(value), true) if value >= NOTE_VELOCITY_TOP => None,
-        (Some(value), true) => Some(value + NOTE_VELOCITY_STEP),
-        (Some(value), false) => Some(
-            value
-                .saturating_sub(NOTE_VELOCITY_STEP)
-                .max(NOTE_VELOCITY_STEP),
-        ),
+/// The next velocity on the grid above or below this one, so the default falls onto it. The top
+/// is full level, and it stops at the lowest step rather than writing silent notes.
+fn next_note_velocity(velocity: u8, up: bool) -> u8 {
+    let step = NOTE_VELOCITY_STEP;
+    if up {
+        ((velocity / step + 1) * step).min(MAX_VELOCITY)
+    } else {
+        (velocity.saturating_sub(1) / step * step).max(step)
     }
 }
 

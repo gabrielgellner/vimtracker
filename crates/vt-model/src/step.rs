@@ -11,6 +11,8 @@ use crate::constants::FX_SLOTS;
 pub const MIN_NOTE: u8 = 12;
 /// Highest note the format can write, `G-9`.
 pub const MAX_NOTE: u8 = 127;
+/// The highest velocity, full level, which is also MIDI's.
+pub const MAX_VELOCITY: u8 = 0x7F;
 
 /// A note field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

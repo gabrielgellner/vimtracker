@@ -6,7 +6,7 @@ use vt_model::constants::{
     GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
-use vt_model::step::{FxCommand, MAX_NOTE, MIN_NOTE, Note};
+use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
@@ -246,8 +246,9 @@ impl Engine {
     }
 
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
-    pub fn preview(&mut self, instrument: u32, note: u8) {
-        let Some(on) = self.note_on(instrument, note, 1.0) else {
+    pub fn preview(&mut self, instrument: u32, note: u8, velocity: u8) {
+        let gain = velocity_gain(velocity);
+        let Some(on) = self.note_on(instrument, note, gain) else {
             return;
         };
         let frames = PREVIEW_MS * self.rate / 1000;
@@ -497,7 +498,7 @@ impl Engine {
                 let note = (i16::from(midi) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
-                let gain = step.velocity.map_or(1.0, |v| f32::from(v) / 255.0);
+                let gain = step.velocity.map_or(1.0, velocity_gain);
                 let on = self.tracks[index]
                     .instrument
                     .and_then(|i| self.note_on(i, note, gain));
@@ -568,7 +569,7 @@ impl Engine {
             };
             let note = (i16::from(midi) + i16::from(position.transpose))
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-            let gain = step.velocity.map_or(1.0, |v| f32::from(v) / 255.0);
+            let gain = step.velocity.map_or(1.0, velocity_gain);
             let instrument = step.instrument.or(self.tracks[index].instrument);
             let Some(on) = instrument.and_then(|i| self.note_on(i, note, gain)) else {
                 continue;
@@ -618,6 +619,11 @@ impl Engine {
             ]);
         }
     }
+}
+
+/// The gain of a step's velocity.
+fn velocity_gain(velocity: u8) -> f32 {
+    f32::from(velocity) / f32::from(MAX_VELOCITY)
 }
 
 /// How much `RET`'s first digit changes the level on each retrigger. `0` is no change, 1-7 are

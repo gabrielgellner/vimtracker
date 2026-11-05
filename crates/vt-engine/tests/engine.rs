@@ -197,7 +197,7 @@ fn chain_transpose_and_step_volume_apply() {
         }),
     );
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
-    phrase.step_mut(0).unwrap().velocity = Some(0x7F);
+    phrase.step_mut(0).unwrap().velocity = Some(0x40);
     let samples = pool(&[("flat", flat(1000, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 2000);
     // An octave up plays 1000 frames in about 500.
@@ -208,7 +208,7 @@ fn chain_transpose_and_step_volume_apply() {
         .rposition(|f| f[0] != 0.0)
         .unwrap();
     assert!((495..=510).contains(&last), "ended at {last}");
-    let expected = (0.5 * 127.0_f32 / 255.0).tanh();
+    let expected = (0.5 * 64.0_f32 / 127.0).tanh();
     assert!((out[0] - expected).abs() < 1e-3, "got {}", out[0]);
 }
 
@@ -302,7 +302,7 @@ fn a_preview_plays_without_touching_sequenced_notes() {
     plain.process(&mut alone);
     let mut engine = Engine::new(48_000, version(song, samples));
     engine.play_from(0);
-    engine.preview(0, 60);
+    engine.preview(0, 60, 0xFF);
     let mut both = vec![0.0; 2000];
     engine.process(&mut both);
     assert!(both[1000] > alone[1000], "the preview should add level");

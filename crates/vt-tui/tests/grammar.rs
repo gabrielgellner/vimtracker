@@ -195,9 +195,9 @@ fn increment_takes_a_count_as_its_amount() {
     check(&[A], "^x", &["B-3 40 01 CUT20 ---00 ---00"]);
     // Values clamp to their ranges.
     check(
-        &["C-4 FF -- VOLFF ---00 ---00"],
+        &["C-4 7F -- VOLFF ---00 ---00"],
         "l9+",
-        &["C-4 FF -- VOLFF ---00 ---00"],
+        &["C-4 7F -- VOLFF ---00 ---00"],
     );
     check(
         &["G-9 -- -- ---00 ---00 ---00"],
@@ -406,9 +406,17 @@ fn viewport_keys_move_within_the_screen() {
 fn value_entry_commits_two_digits_and_moves_down() {
     check(&[E, E], "li7f", &["--- 7F -- ---00 ---00 ---00", E]);
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "liaB<Esc>");
-    assert_eq!(steps(&app)[0], "--- AB -- ---00 ---00 ---00");
+    keys(&mut app, "li2B<Esc>");
+    assert_eq!(steps(&app)[0], "--- 2B -- ---00 ---00 ---00");
     assert_eq!(app.cursor.step, 1);
+}
+
+#[test]
+fn a_velocity_above_the_top_writes_the_top() {
+    check(&[E, E], "liff", &["--- 7F -- ---00 ---00 ---00", E]);
+    check(&[FULL], "lrff", &["C-4 7F 00 VOL10 PAN20 CUT30"]);
+    // FX values keep their whole range.
+    check(&[FULL], "llllrff", &["C-4 70 00 VOLFF PAN20 CUT30"]);
 }
 
 #[test]
@@ -527,7 +535,7 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     assert_eq!(app.mode, Mode::Normal);
 }
 
-const FULL: &str = "C-4 80 00 VOL10 PAN20 CUT30";
+const FULL: &str = "C-4 70 00 VOL10 PAN20 CUT30";
 
 #[test]
 fn zero_and_dollar_go_to_the_ends_of_the_row() {
@@ -553,13 +561,13 @@ fn zero_is_still_part_of_a_count() {
 
 #[test]
 fn operators_cover_from_the_cursor_to_the_end_of_the_row() {
-    check(&[FULL], "lld$", &["C-4 80 -- ---00 ---00 ---00"]);
+    check(&[FULL], "lld$", &["C-4 70 -- ---00 ---00 ---00"]);
     check(&[FULL], "lld0", &["--- -- -- VOL10 PAN20 CUT30"]);
-    check(&[FULL], "d0", &["--- 80 00 VOL10 PAN20 CUT30"]);
+    check(&[FULL], "d0", &["--- 70 00 VOL10 PAN20 CUT30"]);
     check(
         &[FULL, FULL],
         "lld$j.",
-        &["C-4 80 -- ---00 ---00 ---00", "C-4 80 -- ---00 ---00 ---00"],
+        &["C-4 70 -- ---00 ---00 ---00", "C-4 70 -- ---00 ---00 ---00"],
     );
 }
 
@@ -573,12 +581,12 @@ fn a_selection_can_grow_to_the_ends_of_the_row() {
 fn r_replaces_a_note_and_keeps_everything_else() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "rk");
-    assert_eq!(steps(&app)[0], "C-5 80 00 VOL10 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "C-5 70 00 VOL10 PAN20 CUT30");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.cursor.step, 0);
     assert_eq!(app.cursor.field, Field::Note);
     keys(&mut app, "r1");
-    assert_eq!(steps(&app)[0], "OFF 80 00 VOL10 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "OFF 70 00 VOL10 PAN20 CUT30");
     keys(&mut app, "uu");
     assert_eq!(steps(&app)[0], FULL);
 }
@@ -601,18 +609,18 @@ fn r_on_an_empty_step_uses_the_current_instrument() {
 fn r_ignores_the_note_velocity_setting() {
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "ic<Esc>");
-    assert_eq!(app.note_velocity, Some(0xE0));
+    assert_eq!(app.note_velocity, 0x60);
     keys(&mut app, "rk");
-    assert_eq!(steps(&app)[0], "C-5 80 00 VOL10 PAN20 CUT30");
-    assert_eq!(app.note_velocity, Some(0xE0));
+    assert_eq!(steps(&app)[0], "C-5 70 00 VOL10 PAN20 CUT30");
+    assert_eq!(app.note_velocity, 0x60);
 }
 
 #[test]
 fn r_takes_a_whole_value_in_the_other_columns() {
     check(&[FULL], "lr40", &["C-4 40 00 VOL10 PAN20 CUT30"]);
-    check(&[FULL], "llr04", &["C-4 80 04 VOL10 PAN20 CUT30"]);
-    check(&[FULL], "llllr7f", &["C-4 80 00 VOL7F PAN20 CUT30"]);
-    check(&[FULL], "lllrres7f", &["C-4 80 00 RES7F PAN20 CUT30"]);
+    check(&[FULL], "llr04", &["C-4 70 04 VOL10 PAN20 CUT30"]);
+    check(&[FULL], "llllr7f", &["C-4 70 00 VOL7F PAN20 CUT30"]);
+    check(&[FULL], "lllrres7f", &["C-4 70 00 RES7F PAN20 CUT30"]);
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "lllrres7f");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
@@ -670,8 +678,8 @@ fn dot_repeats_a_replace_at_the_cursor() {
         &[FULL, FULL, "--- -- -- ---00 ---00 ---00"],
         "rkj.",
         &[
-            "C-5 80 00 VOL10 PAN20 CUT30",
-            "C-5 80 00 VOL10 PAN20 CUT30",
+            "C-5 70 00 VOL10 PAN20 CUT30",
+            "C-5 70 00 VOL10 PAN20 CUT30",
             "--- -- -- ---00 ---00 ---00",
         ],
     );
@@ -683,24 +691,25 @@ fn dot_repeats_a_replace_at_the_cursor() {
     check(
         &[FULL, FULL],
         "lllrres7fj.",
-        &["C-4 80 00 RES7F PAN20 CUT30", "C-4 80 00 RES7F PAN20 CUT30"],
+        &["C-4 70 00 RES7F PAN20 CUT30", "C-4 70 00 RES7F PAN20 CUT30"],
     );
 }
 
 #[test]
 fn a_count_on_r_does_not_change_more_than_this_field() {
-    check(&[FULL, FULL], "3rk", &["C-5 80 00 VOL10 PAN20 CUT30", FULL]);
+    check(&[FULL, FULL], "3rk", &["C-5 70 00 VOL10 PAN20 CUT30", FULL]);
 }
 
 #[test]
 fn s_clears_the_field_and_starts_insert_there() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "s");
-    assert_eq!(steps(&app)[0], "--- 80 00 VOL10 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "--- 70 00 VOL10 PAN20 CUT30");
     assert_eq!(app.mode, Mode::Insert);
     assert_eq!(app.cursor.step, 0);
+    // A note typed in Insert takes the current velocity and instrument, as it always does.
     keys(&mut app, "k");
-    assert_eq!(steps(&app)[0], "C-5 80 00 VOL10 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "C-5 64 00 VOL10 PAN20 CUT30");
     assert_eq!(app.cursor.step, 1, "Insert moves down as usual");
     keys(&mut app, "<Esc>uu");
     assert_eq!(steps(&app)[0], FULL);
@@ -713,12 +722,12 @@ fn s_works_on_the_other_columns() {
     check(
         &[FULL, E],
         "llsbd<Esc>",
-        &["C-4 80 BD VOL10 PAN20 CUT30", E],
+        &["C-4 70 BD VOL10 PAN20 CUT30", E],
     );
     check(
         &[FULL, E],
         "lllsres7f<Esc>",
-        &["C-4 80 00 RES7F PAN20 CUT30", E],
+        &["C-4 70 00 RES7F PAN20 CUT30", E],
     );
 }
 
@@ -726,13 +735,13 @@ fn s_works_on_the_other_columns() {
 fn s_on_an_fx_value_keeps_its_command_for_the_new_value() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "lllls");
-    assert_eq!(steps(&app)[0], "C-4 80 00 ---00 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "C-4 70 00 ---00 PAN20 CUT30");
     keys(&mut app, "60<Esc>");
-    assert_eq!(steps(&app)[0], "C-4 80 00 VOL60 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "C-4 70 00 VOL60 PAN20 CUT30");
 
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "lllls<Esc>");
-    assert_eq!(steps(&app)[0], "C-4 80 00 ---00 PAN20 CUT30");
+    assert_eq!(steps(&app)[0], "C-4 70 00 ---00 PAN20 CUT30");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert!(app.status.contains("VOL needs a value"), "{}", app.status);
@@ -745,7 +754,7 @@ fn a_count_on_s_clears_only_this_field() {
     check(
         &[FULL, FULL],
         "3s<Esc>",
-        &["--- 80 00 VOL10 PAN20 CUT30", FULL],
+        &["--- 70 00 VOL10 PAN20 CUT30", FULL],
     );
 }
 
@@ -754,6 +763,11 @@ fn dot_does_not_repeat_s() {
     check(
         &[FULL, FULL],
         "rks<Esc>j.",
-        &["--- 80 00 VOL10 PAN20 CUT30", "C-5 80 00 VOL10 PAN20 CUT30"],
+        &["--- 70 00 VOL10 PAN20 CUT30", "C-5 70 00 VOL10 PAN20 CUT30"],
     );
+}
+
+#[test]
+fn r_on_a_note_with_no_velocity_fills_it_in() {
+    check(&[E], "ra", &["C-4 64 00 ---00 ---00 ---00"]);
 }

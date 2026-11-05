@@ -2,7 +2,7 @@
 
 use crate::constants::BEAT_STEPS;
 use crate::label::is_named_slot;
-use crate::step::{FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
+use crate::step::{FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
 
 /// One editable part of a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -256,8 +256,8 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
         return;
     }
     if scope.covers(1) {
-        let current = i32::from(step.velocity.unwrap_or(0xFF));
-        let moved = (current + by).clamp(0, 0xFF);
+        let current = i32::from(step.velocity.unwrap_or(MAX_VELOCITY));
+        let moved = (current + by).clamp(0, i32::from(MAX_VELOCITY));
         if step.velocity.is_some() || by < 0 {
             step.velocity = Some(moved as u8);
         }

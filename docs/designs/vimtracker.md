@@ -335,7 +335,7 @@ of the list, this does not change other tracks.
 
 Each track has one voice: one-shot sample playback, a filter, a volume envelope and equal-power pan, with
 `80` defined as exact centre. Final gain is step velocity x `VOL` x track level x instrument volume, and `--` in the step
-means full. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
+means full. Velocity runs `00` to `7F`, matching MIDI, while the other level values run `00` to `FF`. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
 once those exist. Transposed notes clamp to the note range.
 
 Tracks feed a mixer with shared delay and reverb sends, then a fixed master gain of about -6 dB, then a
@@ -600,7 +600,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 ```
 
 *   `NOTE`: `C-4` or `C#4`, from `C-0` (MIDI 12) to `G-9` (MIDI 127). `C-4` is MIDI 60. `---` is empty and `OFF` is a note-off. MIDI 0-11 are not available.
-*   `VOL`: `00` to `FF`, or `--` for full. Gain is the value divided by 255.
+*   `VEL`: `00` to `7F`, or `--` for full. Gain is the value divided by 127.
 *   `INST`: 2 or more hex digits, or `--`. A note with `--` keeps the track's previous instrument, and is silent if there is none.
 *   `FX`: a three-character uppercase command and a two-digit hex value. `---00` is empty.
 
@@ -660,7 +660,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `k o l p ;` | C to E, one octave up |
 | Insert (note) | `1` | Note-off |
 | Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
-| Insert (note) | `c v` | Lower or raise the velocity written with each note, in steps of `20`. It starts unset, which leaves the Velocity column alone, and raising past `E0` unsets it |
+| Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves on a grid of `10` to `70`, then `7F`, stopping at `10`. The note heard while typing uses it |
 | Insert | `Enter` | In the phrase view, play from the cursor or stop, except that it finishes an instrument ID that has been typed |
 | Insert | `Up Down` | Move one step without writing |
 | Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |

@@ -41,6 +41,8 @@ pub const TELEMETRY_QUEUE: usize = 64;
 pub const SMOOTHING_MS: u32 = 10;
 /// Tuning: fade length when a voice is cut.
 pub const DECLICK_FRAMES: u32 = 64;
+/// The velocity new notes are written with until changed, leaving room above it for accents.
+pub const DEFAULT_NOTE_VELOCITY: u8 = 0x64;
 /// Tuning: how long an entered note previews.
 pub const PREVIEW_MS: u32 = 250;
 /// Tuning: time between redraws.

@@ -1068,29 +1068,32 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     assert_eq!(app.octave, 3);
 
     let velocity = |app: &App| app.song().phrases[&0].steps()[0].velocity;
-    assert_eq!(velocity(&app), None);
     press(&mut app, "a");
-    assert_eq!(velocity(&app), None);
+    assert_eq!(velocity(&app), Some(0x64), "filled in from the default");
     press(&mut app, "c");
-    assert_eq!(app.note_velocity, Some(0xE0));
-    press(&mut app, "ca");
-    assert_eq!(velocity(&app), Some(0xC0));
+    assert_eq!(app.note_velocity, 0x60, "the default falls onto the grid");
+    press(&mut app, "a");
+    assert_eq!(velocity(&app), Some(0x60));
     assert_eq!(notes(&app)[0], Note::On(48));
 
     // The whole note is one undo step.
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
-    assert_eq!(velocity(&app), None);
+    assert_eq!(velocity(&app), Some(0x64));
 
     press(&mut app, "i");
-    press(&mut app, "vv");
-    assert_eq!(app.note_velocity, None);
     press(&mut app, "v");
-    assert_eq!(app.note_velocity, None);
+    assert_eq!(app.note_velocity, 0x70);
+    press(&mut app, "v");
+    assert_eq!(app.note_velocity, 0x7F);
+    press(&mut app, "v");
+    assert_eq!(app.note_velocity, 0x7F);
+    press(&mut app, "c");
+    assert_eq!(app.note_velocity, 0x70);
     for _ in 0..12 {
         press(&mut app, "c");
     }
-    assert_eq!(app.note_velocity, Some(0x20));
+    assert_eq!(app.note_velocity, 0x10);
 }
 
 #[test]
@@ -1841,4 +1844,39 @@ fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
     press(&mut app, "a");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(screen(&app)[(5, 2)].bg, vt_tui::theme::ROSEWATER);
+}
+
+#[test]
+fn backspace_clears_a_note_with_what_it_was_written_with_but_keeps_fx() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Backspace);
+    let step = &app.song().phrases[&0].steps()[1];
+    assert_eq!(step.note, Note::Empty);
+    let first = &app.song().phrases[&0].steps()[0];
+    assert_eq!(first.note, Note::On(60), "it clears where the cursor was");
+    special(&mut app, KeyCode::Backspace);
+    let first = &app.song().phrases[&0].steps()[0];
+    assert_eq!(first.note, Note::Empty);
+    assert_eq!(first.velocity, None);
+    assert_eq!(first.instrument, None);
+}
+
+#[test]
+fn the_note_heard_while_typing_uses_the_velocity() {
+    let (mut app, mut rt) = app();
+    with_a_sound(&mut app);
+    block(&mut rt, &mut app);
+    let heard = |app: &mut App, rt: &mut Realtime, keys: &str| {
+        press(app, keys);
+        let level = loudest(rt, 2000);
+        let _ = loudest(rt, 96_000);
+        level
+    };
+    let quiet = heard(&mut app, &mut rt, "icccccc");
+    assert_eq!(quiet, 0.0, "changing velocity plays nothing");
+    let soft = heard(&mut app, &mut rt, "a");
+    press(&mut app, "vvvvvvvv");
+    let full = heard(&mut app, &mut rt, "a");
+    assert!(soft * 2.0 < full, "{soft} vs {full}");
 }

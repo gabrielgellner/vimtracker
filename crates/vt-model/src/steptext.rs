@@ -1,13 +1,13 @@
 //! The readable text form of a step, used on disk and in tests.
 //!
-//! `NOTE VOL INST FX FX FX`, such as `C-4 64 01 CUT40 ---00 RET14`.
+//! `NOTE VEL INST FX FX FX`, such as `C-4 64 01 CUT40 ---00 RET14`.
 
 use std::fmt;
 use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
+use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
 
 /// Why a step's text could not be read.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -121,9 +121,11 @@ impl FromStr for Step {
         let velocity = fields.next().ok_or_else(few)?;
         let velocity = match velocity {
             "--" => None,
-            other => {
-                Some(hex_byte(other).ok_or_else(|| StepTextError::Velocity(other.to_owned()))?)
-            }
+            other => Some(
+                hex_byte(other)
+                    .filter(|velocity| *velocity <= MAX_VELOCITY)
+                    .ok_or_else(|| StepTextError::Velocity(other.to_owned()))?,
+            ),
         };
         let instrument = fields.next().ok_or_else(few)?;
         let instrument = match instrument {
@@ -174,7 +176,7 @@ mod tests {
         for text in [
             "C-4 64 01 CUT40 ---00 RET14",
             "--- -- -- ---00 ---00 ---00",
-            "OFF FF 1A2B VOL00 PAN80 CHAFF",
+            "OFF 7F 1A2B VOL00 PAN80 CHAFF",
             "C-0 00 00 DEL01 KIL02 OFF03",
             "G-9 -- -- RES10 DLY20 REV30",
             "C#3 -- 00",
@@ -200,6 +202,7 @@ mod tests {
             ("C-44 -- --", StepTextError::Note("C-44".into())),
             ("C-4 6 --", StepTextError::Velocity("6".into())),
             ("C-4 ab --", StepTextError::Velocity("ab".into())),
+            ("C-4 80 --", StepTextError::Velocity("80".into())),
             ("C-4 -- 1", StepTextError::Instrument("1".into())),
             ("C-4 -- -- CUT4", StepTextError::Slot("CUT4".into())),
             ("C-4 -- -- ---01", StepTextError::Slot("---01".into())),

@@ -104,9 +104,6 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Some(own) => format!("{} (track)", format_swing(own)),
         None => format_swing(app.song().swing),
     };
-    let note_velocity = app
-        .note_velocity
-        .map_or_else(|| "--".to_owned(), |velocity| format!("{velocity:02X}"));
     let level = app
         .song()
         .tracks
@@ -116,9 +113,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {note_velocity} Inst {}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
+            app.note_velocity,
             name_of(app.instrument),
             load as f64 / 10.0,
         )),

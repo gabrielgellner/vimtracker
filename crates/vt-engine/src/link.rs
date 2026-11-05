@@ -22,7 +22,11 @@ pub enum Command {
     /// `Space c`: return to the start, and stop if playing.
     Return,
     /// Play an entered note on the preview voice.
-    Preview { instrument: u32, note: u8 },
+    Preview {
+        instrument: u32,
+        note: u8,
+        velocity: u8,
+    },
     /// Hear a row of the section while not playing.
     Audition { section_step: usize },
     /// Mute or unmute a track.
@@ -132,7 +136,11 @@ impl Realtime {
                 Command::PlayOrStop { from } => self.engine.play_or_stop(from),
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
-                Command::Preview { instrument, note } => self.engine.preview(instrument, note),
+                Command::Preview {
+                    instrument,
+                    note,
+                    velocity,
+                } => self.engine.preview(instrument, note, velocity),
                 Command::Audition { section_step } => self.engine.audition(section_step),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),

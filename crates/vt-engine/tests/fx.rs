@@ -453,11 +453,11 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
         "{halved} vs {full}"
     );
 
-    let soft = ["C-4 80 00 ---00 ---00 ---00"];
+    let soft = ["C-4 40 00 ---00 ---00 ---00"];
     let mut both = song(&soft);
     both.tracks[0].level = 0x80;
     let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
-    let expected = full * (128.0 / 255.0) * (128.0 / 255.0);
+    let expected = full * (64.0 / 127.0) * (128.0 / 255.0);
     assert!((both / expected - 1.0).abs() < 1e-3, "{both} vs {expected}");
 }
 
@@ -494,7 +494,7 @@ fn two_tracks() -> Song {
     let phrase = song.chains[&chain].entries[0].phrase;
     let steps = Arc::make_mut(song.phrases.get_mut(&phrase).unwrap());
     *steps.step_mut(0).unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
-    *steps.step_mut(1).unwrap() = "C-4 80 00 ---00 ---00 ---00".parse().unwrap();
+    *steps.step_mut(1).unwrap() = "C-4 40 00 ---00 ---00 ---00".parse().unwrap();
     song
 }
 
@@ -527,11 +527,11 @@ fn audition_uses_velocity_and_is_cut_by_the_next_one() {
     let full = auditioned(song(&["C-4 -- 00 ---00 ---00 ---00"]), 0.02, |e| {
         e.audition(0)
     });
-    let soft = auditioned(song(&["C-4 80 00 ---00 ---00 ---00"]), 0.02, |e| {
+    let soft = auditioned(song(&["C-4 40 00 ---00 ---00 ---00"]), 0.02, |e| {
         e.audition(0)
     });
     assert!(
-        (soft / full - 128.0 / 255.0).abs() < 1e-3,
+        (soft / full - 64.0 / 127.0).abs() < 1e-3,
         "{soft} vs {full}"
     );
 

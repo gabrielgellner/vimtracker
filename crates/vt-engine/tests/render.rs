@@ -86,9 +86,9 @@ fn golden(name: &str, samples: &[f32]) {
 }
 
 const FX_LOOP: [&str; 4] = [
-    "C-4 C0 00 CUT60 RES40 PAN40",
+    "C-4 60 00 CUT60 RES40 PAN40",
     "--- -- -- DLY80 ---00 ---00",
-    "G-4 80 00 REV60 RET14 ---00",
+    "G-4 40 00 REV60 RET14 ---00",
     "C-3 -- 00 CHA80 DEL02 KIL04",
 ];
 
