@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod audio;
+pub mod autosave;
 pub mod grammar;
 pub mod input;
 pub mod instruments;

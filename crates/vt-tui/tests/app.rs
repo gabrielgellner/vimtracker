@@ -727,3 +727,159 @@ fn render_writes_what_is_in_memory_with_live_mutes() {
     command(&mut app, "render /no/such/folder/x.wav");
     assert!(app.status.contains("Couldn't write"), "{}", app.status);
 }
+
+mod autosave {
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
+
+    use ratatui::crossterm::event::KeyCode;
+    use vt_model::project;
+    use vt_model::song::Song;
+    use vt_model::step::Note;
+    use vt_tui::input::mode::Mode;
+
+    use super::{app, command, press, special};
+
+    const AUTOSAVE: &str = "song.autosave.ron";
+
+    fn folder(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("vt-auto-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        path
+    }
+
+    fn later(start: Instant, seconds: u64) -> Instant {
+        start + Duration::from_secs(seconds)
+    }
+
+    #[test]
+    fn only_a_changed_project_is_written_and_only_when_due() {
+        let path = folder("changed");
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("w {}", path.display()));
+        let start = Instant::now();
+        app.autosave_if_due(start);
+        app.autosave_if_due(later(start, 61));
+        assert!(!path.join(AUTOSAVE).exists(), "nothing has changed");
+
+        press(&mut app, "iz");
+        special(&mut app, KeyCode::Esc);
+        app.autosave_if_due(later(start, 62));
+        assert!(!path.join(AUTOSAVE).exists(), "not due yet");
+        app.autosave_if_due(later(start, 125));
+        assert!(path.join(AUTOSAVE).exists());
+        let saved = project::load_song(&path).unwrap();
+        assert_eq!(
+            saved.phrases[&0].steps()[0].note,
+            Note::Empty,
+            "song.ron is untouched"
+        );
+
+        // No change since then means no new write.
+        std::fs::remove_file(path.join(AUTOSAVE)).unwrap();
+        app.autosave_if_due(later(start, 190));
+        assert!(!path.join(AUTOSAVE).exists());
+
+        // A real save clears it.
+        press(&mut app, "iz");
+        special(&mut app, KeyCode::Esc);
+        app.autosave_if_due(later(start, 260));
+        assert!(path.join(AUTOSAVE).exists());
+        command(&mut app, "w");
+        assert!(!path.join(AUTOSAVE).exists());
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+
+    #[test]
+    fn an_unsaved_project_with_no_folder_is_left_alone() {
+        let (mut app, _realtime) = app();
+        press(&mut app, "iz");
+        special(&mut app, KeyCode::Esc);
+        let start = Instant::now();
+        app.autosave_if_due(start);
+        app.autosave_if_due(later(start, 61));
+        assert!(app.dirty);
+        assert!(app.status.is_empty(), "{}", app.status);
+    }
+
+    /// A folder as a crash would leave it: a saved song, and newer work beside it.
+    fn crashed(path: &Path) {
+        project::save_song(path, &Song::new(2)).unwrap();
+        let mut newer = Song::new(2);
+        std::sync::Arc::make_mut(newer.phrases.get_mut(&0).unwrap())
+            .step_mut(0)
+            .unwrap()
+            .note = Note::On(60);
+        project::write_autosave(path, &newer).unwrap();
+    }
+
+    #[test]
+    fn a_newer_autosave_is_offered_and_restores_as_unsaved() {
+        let path = folder("restore");
+        crashed(&path);
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("e {}", path.display()));
+        assert_eq!(app.mode, Mode::Restore);
+        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+        // Other keys don't answer.
+        press(&mut app, "q");
+        special(&mut app, KeyCode::Esc);
+        assert_eq!(app.mode, Mode::Restore);
+        press(&mut app, "y");
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::On(60));
+        assert!(app.dirty);
+        command(&mut app, "w");
+        let saved = project::load_song(&path).unwrap();
+        assert_eq!(saved.phrases[&0].steps()[0].note, Note::On(60));
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+
+    #[test]
+    fn declining_deletes_the_autosave_and_keeps_the_song() {
+        let path = folder("decline");
+        crashed(&path);
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("e {}", path.display()));
+        press(&mut app, "n");
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(!path.join(AUTOSAVE).exists());
+        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+        assert!(!app.dirty);
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_autosave_is_kept_and_reported() {
+        let path = folder("broken");
+        project::save_song(&path, &Song::new(2)).unwrap();
+        std::fs::write(path.join(AUTOSAVE), "(format_version: 99)").unwrap();
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("e {}", path.display()));
+        press(&mut app, "y");
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.status.contains("kept"), "{}", app.status);
+        assert!(path.join(AUTOSAVE).exists());
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+
+    #[test]
+    fn quitting_on_purpose_removes_the_autosave() {
+        let path = folder("quit");
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("w {}", path.display()));
+        press(&mut app, "iz");
+        special(&mut app, KeyCode::Esc);
+        let start = Instant::now();
+        app.autosave_if_due(start);
+        app.autosave_if_due(later(start, 61));
+        assert!(path.join(AUTOSAVE).exists());
+        command(&mut app, "q");
+        assert!(!app.should_quit, "unsaved work needs :q!");
+        assert!(path.join(AUTOSAVE).exists());
+        command(&mut app, "q!");
+        assert!(app.should_quit);
+        assert!(!path.join(AUTOSAVE).exists());
+        std::fs::remove_dir_all(&path).unwrap();
+    }
+}

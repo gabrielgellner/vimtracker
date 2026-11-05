@@ -36,6 +36,8 @@ pub enum Mode {
     Command,
     Help,
     Picker,
+    /// Waiting for an answer about restoring an autosave.
+    Restore,
     /// Normal mode's keys in the chain view. Only the binding table and the label use this.
     Chain,
     /// Normal mode's keys in the instrument view. Only the binding table and the label use this.
@@ -53,6 +55,7 @@ impl Mode {
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Picker => "PICK",
+            Self::Restore => "RESTORE",
             Self::Chain => "CHAIN",
             Self::Instrument => "INST",
         }
