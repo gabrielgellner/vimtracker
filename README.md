@@ -10,4 +10,4 @@ There is no code yet. The design and implementation plan are in
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
