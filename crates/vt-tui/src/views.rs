@@ -1,5 +1,6 @@
 //! What is drawn on screen.
 
 pub mod help;
+pub mod instrument;
 pub mod phrase;
 pub mod status;

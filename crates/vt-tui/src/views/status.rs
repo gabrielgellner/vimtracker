@@ -53,7 +53,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
     let mode_style = Style::new()
         .fg(Color::Black)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending => Color::Blue,
+            Mode::Normal | Mode::OperatorPending | Mode::Instrument => Color::Blue,
             Mode::VisualField | Mode::VisualStep => Color::Magenta,
             Mode::Insert => Color::Green,
             Mode::Command => Color::Yellow,
@@ -83,7 +83,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         None => format_swing(app.song().swing),
     };
     let status = Line::from(vec![
-        Span::styled(format!(" {} ", app.mode.label()), mode_style),
+        Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::raw(format!(
             " {transport}  {} BPM  Swing {swing}  Oct {} Inst {:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),

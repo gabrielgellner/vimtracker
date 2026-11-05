@@ -1,4 +1,21 @@
-//! The editing modes.
+//! The editing modes and views.
+
+/// What fills the screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum View {
+    Phrase,
+    Instrument,
+}
+
+impl View {
+    /// The view's name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Phrase => "phrase",
+            Self::Instrument => "instrument",
+        }
+    }
+}
 
 /// What keys currently mean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,6 +30,8 @@ pub enum Mode {
     Insert,
     Command,
     Help,
+    /// Normal mode's keys in the instrument view. Only the binding table and the label use this.
+    Instrument,
 }
 
 impl Mode {
@@ -25,6 +44,7 @@ impl Mode {
             Self::Insert => "INSERT",
             Self::Command => "COMMAND",
             Self::Help => "HELP",
+            Self::Instrument => "INST",
         }
     }
 

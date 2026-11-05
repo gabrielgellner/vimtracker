@@ -12,7 +12,7 @@ use vt_model::song::Song;
 use vt_model::step::Note;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
-use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::{Mode, View};
 
 fn app() -> (App, Realtime) {
     let song = Song::new(2);
@@ -409,4 +409,86 @@ fn swing_commands_set_the_project_and_the_cursors_track_and_undo() {
     assert_eq!(app.song().tracks[0].swing, None);
     press(&mut app, "u");
     assert_eq!(app.song().swing, 500);
+}
+
+#[test]
+fn the_instrument_view_sets_volume_attack_and_release() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5");
+    assert_eq!(app.view, View::Instrument);
+    // Down from the sample row is volume. Two hex digits commit it.
+    press(&mut app, "jia0");
+    assert_eq!(app.song().instruments[&0].volume, 0xA0);
+    assert_eq!(app.mode, Mode::Normal);
+    // Attack is typed in milliseconds and needs Enter.
+    press(&mut app, "ji25");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().instruments[&0].attack_ms, 25);
+    // Each adjustment is one undo step.
+    press(&mut app, "j+");
+    assert_eq!(app.song().instruments[&0].release_ms, 55);
+    press(&mut app, "u");
+    assert_eq!(app.song().instruments[&0].release_ms, 50);
+    // Step sizes shrink for short times, and values stop at the ends.
+    press(&mut app, "k");
+    press(&mut app, "3-");
+    assert_eq!(app.song().instruments[&0].attack_ms, 10);
+    press(&mut app, "99-");
+    assert_eq!(app.song().instruments[&0].attack_ms, 0);
+}
+
+#[test]
+fn the_instrument_view_refuses_values_out_of_range_and_keeps_notes_safe() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5jj");
+    press(&mut app, "i99999");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().instruments[&0].attack_ms, 1);
+    assert!(app.status.contains("5000"), "{}", app.status);
+    // These keys mean something else in the phrase view, and must not touch a step here.
+    let before = notes(&app);
+    press(&mut app, "kk");
+    press(&mut app, "+-");
+    assert_eq!(notes(&app), before);
+    assert_eq!(app.cursor.step, 0);
+}
+
+#[test]
+fn moving_between_instruments_creates_one_only_when_set() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5ll");
+    assert_eq!(app.instrument, 2);
+    assert!(!app.song().instruments.contains_key(&2));
+    press(&mut app, "j-");
+    assert_eq!(app.song().instruments[&2].volume, 0xFE);
+    press(&mut app, "h");
+    assert_eq!(app.instrument, 1);
+    press(&mut app, " 3");
+    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.mode, Mode::Normal);
+}
+
+#[test]
+fn the_samples_row_starts_a_typed_path_and_transport_keys_still_work() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5i");
+    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.command_line, "sample ");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.key_scope(), Mode::Instrument);
+    assert_eq!(app.key_scope().label(), "INST");
+}
+
+#[test]
+fn a_plain_write_keeps_live_mutes_and_solos() {
+    let (mut app, _realtime) = app();
+    let folder = std::env::temp_dir().join(format!("vt-mute-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    command(&mut app, &format!("w {}", folder.display()));
+    press(&mut app, " m");
+    command(&mut app, "w");
+    let saved = vt_model::project::load_song(&folder).unwrap();
+    assert!(saved.tracks[0].mute);
+    std::fs::remove_dir_all(&folder).unwrap();
 }

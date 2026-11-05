@@ -24,7 +24,8 @@ use crate::grammar::Change;
 use crate::input::bindings::{Cmd, Op, Table, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
+use crate::instruments::Row;
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +67,8 @@ pub struct App {
     pub handle: Handle,
     pub rate: u32,
     pub mode: Mode,
+    pub view: View,
+    pub instrument_row: Row,
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
@@ -115,6 +118,8 @@ impl App {
             handle,
             rate,
             mode: Mode::Normal,
+            view: View::Phrase,
+            instrument_row: Row::Sample,
             cursor: Cursor {
                 track: 0,
                 slot: 0,
@@ -247,7 +252,11 @@ impl App {
             self.guard = None;
         }
         match self.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::VisualField | Mode::VisualStep => {
+            Mode::Normal
+            | Mode::OperatorPending
+            | Mode::VisualField
+            | Mode::VisualStep
+            | Mode::Instrument => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key),
@@ -261,7 +270,20 @@ impl App {
         if self.pending.is_empty() || !which_key_due(self.pending_since, now, delay) {
             return Vec::new();
         }
-        self.table.continuations(self.mode, &self.pending)
+        self.table.continuations(self.key_scope(), &self.pending)
+    }
+
+    /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
+    pub fn key_scope(&self) -> Mode {
+        match (self.mode, self.view) {
+            (Mode::Normal, View::Instrument) => Mode::Instrument,
+            (mode, _) => mode,
+        }
+    }
+
+    fn show_view(&mut self, view: View) {
+        self.count = None;
+        self.view = view;
     }
 
     /// Every key, for `Space ?`.
@@ -293,6 +315,9 @@ impl App {
     }
 
     pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
+        if self.view == View::Instrument && self.run_instrument(cmd) {
+            return;
+        }
         if self.run_grammar(cmd) {
             return;
         }
@@ -303,6 +328,7 @@ impl App {
             Cmd::ScrollDown => self.scroll(3),
             Cmd::ScrollUp => self.scroll(-3),
             Cmd::Double => self.double(),
+            Cmd::ShowView(view) => self.show_view(view),
             Cmd::Help => {
                 self.help_scroll = 0;
                 self.mode = Mode::Help;
@@ -499,6 +525,12 @@ impl App {
     }
 
     fn insert_key(&mut self, key: Key) {
+        if self.view == View::Instrument {
+            if !key.ctrl {
+                self.insert_instrument_row(key.code);
+            }
+            return;
+        }
         match self.cursor.field {
             Field::Note => self.insert_note(key),
             Field::Volume | Field::FxValue(_) => self.insert_value(key),
@@ -783,7 +815,9 @@ impl App {
             .is_none_or(|p| Some(p) == self.folder.as_deref());
         let result = if same {
             match self.folder.clone() {
-                Some(folder) => project::save_song(&folder, self.song()).map(|()| (folder, None)),
+                Some(folder) => {
+                    project::save_song(&folder, &self.song_to_save()).map(|()| (folder, None))
+                }
                 None => {
                     self.status = "This project has no folder yet: use :w path".to_owned();
                     return;
