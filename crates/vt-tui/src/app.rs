@@ -1109,6 +1109,15 @@ impl App {
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
+            Line::SetLimiter(on) => {
+                self.apply(&Action::SetLimiter(on));
+                self.status = if on {
+                    "Limiter on".to_owned()
+                } else {
+                    "Limiter off: renders keep levels over 0, and the output still clips at 0"
+                        .to_owned()
+                };
+            }
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
             Line::Swing(swing) => self.apply(&Action::SetSwing(swing)),
             Line::TrackSwing(swing) => self.apply(&Action::SetTrackSwing {

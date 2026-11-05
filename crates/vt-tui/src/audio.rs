@@ -129,8 +129,9 @@ impl Output {
                             .chunks_exact_mut(channels)
                             .zip(block.as_chunks::<2>().0)
                         {
-                            frame[0] = stereo[0];
-                            frame[1] = stereo[1];
+                            // Whatever the limiter setting, nothing over full reaches the device.
+                            frame[0] = stereo[0].clamp(-1.0, 1.0);
+                            frame[1] = stereo[1].clamp(-1.0, 1.0);
                             frame[2..].fill(0.0);
                         }
                     }

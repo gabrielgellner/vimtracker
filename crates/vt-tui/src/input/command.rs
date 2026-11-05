@@ -29,6 +29,7 @@ pub enum Line {
     Double,
     SetStep(u32),
     SetSkip(u32),
+    SetLimiter(bool),
     Seed(u64),
     Swing(u16),
     Chain(u32),
@@ -58,7 +59,7 @@ pub enum LineError {
     Len,
     #[error(":track takes add [n] or del")]
     Track,
-    #[error(":set takes step=n or skip=n")]
+    #[error(":set takes step=n, skip=n, or limiter=on or off")]
     Set,
     #[error(":chain takes a chain ID in hex")]
     Chain,
@@ -203,6 +204,8 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "set" => match argument.split_once('=') {
             Some(("step", n)) => n.parse().map(Line::SetStep).map_err(|_| LineError::Set),
             Some(("skip", n)) => n.parse().map(Line::SetSkip).map_err(|_| LineError::Set),
+            Some(("limiter", "on")) => Ok(Line::SetLimiter(true)),
+            Some(("limiter", "off")) => Ok(Line::SetLimiter(false)),
             _ => Err(LineError::Set),
         },
         "mute" => Ok(Line::Mute),
@@ -265,6 +268,9 @@ mod tests {
         assert_eq!(parse("set step=2"), Ok(Line::SetStep(2)));
         assert_eq!(parse("set skip=8"), Ok(Line::SetSkip(8)));
         assert_eq!(parse("set skip"), Err(LineError::Set));
+        assert_eq!(parse("set limiter=off"), Ok(Line::SetLimiter(false)));
+        assert_eq!(parse("set limiter=on"), Ok(Line::SetLimiter(true)));
+        assert_eq!(parse("set limiter=2"), Err(LineError::Set));
         assert_eq!(parse("set other=1"), Err(LineError::Set));
         assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));

@@ -4,7 +4,7 @@
 use vt_engine::mixer::Reading;
 
 /// The bottom of the scale, in dB, where the meter reads silence.
-pub const FLOOR_DB: f32 = -70.0;
+pub const FLOOR_DB: f32 = -65.0;
 /// Tuning: how fast a bar falls, in dB per second.
 const FALL_DB_PER_SECOND: f32 = 24.0;
 /// Tuning: how long the highest level stays marked, in seconds.
@@ -12,16 +12,21 @@ const HOLD_SECONDS: f32 = 1.5;
 /// Tuning: how long the average takes to follow the sound, in seconds. A VU meter uses 0.3.
 const AVERAGE_SECONDS: f32 = 0.3;
 
-/// The scale, as dB and height pairs. The top is spread out, to show detail near full level, using
-/// the IEC 60268-18 peak meter's scale.
-const SCALE: [(f32, f32); 7] = [
+/// The top of the scale, in dB. Levels can go higher, and the readout still shows them.
+pub const TOP_DB: f32 = 6.0;
+
+/// The scale, as dB and height pairs, modelled on Ableton Live's: an even spread above `-20` for
+/// detail near full level, tightening below it. Live's manual gives no values, so these are a
+/// close match rather than a copy.
+const SCALE: [(f32, f32); 8] = [
     (FLOOR_DB, 0.0),
-    (-60.0, 0.025),
-    (-50.0, 0.075),
-    (-40.0, 0.15),
-    (-30.0, 0.3),
-    (-20.0, 0.5),
-    (0.0, 1.0),
+    (-60.0, 0.02),
+    (-50.0, 0.07),
+    (-40.0, 0.14),
+    (-30.0, 0.28),
+    (-20.0, 0.45),
+    (0.0, 0.873),
+    (TOP_DB, 1.0),
 ];
 
 /// A linear level in dB, stopping at the floor.
@@ -35,7 +40,7 @@ pub fn to_db(level: f32) -> f32 {
 
 /// How high up the scale a level sits, from 0 to 1.
 pub fn height_of(db: f32) -> f32 {
-    let db = db.clamp(FLOOR_DB, 0.0);
+    let db = db.clamp(FLOOR_DB, TOP_DB);
     for pair in SCALE.windows(2) {
         let ((low_db, low), (high_db, high)) = (pair[0], pair[1]);
         if db <= high_db {
@@ -54,7 +59,7 @@ pub fn db_at(height: f32) -> f32 {
             return low_db + (height - low) / (high - low) * (high_db - low_db);
         }
     }
-    0.0
+    TOP_DB
 }
 
 /// A value that jumps up at once, falls slowly, and remembers its recent highest.
@@ -138,7 +143,7 @@ impl Meter {
         let reading = reading.unwrap_or_default();
         let mut reduction = 0.0_f32;
         for (index, channel) in self.channels.iter_mut().enumerate() {
-            channel.peak.update(to_db(reading.after[index]), seconds);
+            channel.peak.update(to_db(reading.before[index]), seconds);
             if reading.frames > 0 {
                 let power = reading.power[index] / reading.frames as f32;
                 let follow = 1.0 - (-seconds / AVERAGE_SECONDS).exp();
@@ -168,7 +173,7 @@ mod tests {
         Reading {
             before: [before; 2],
             after: [after; 2],
-            power: [after * after * 100.0; 2],
+            power: [before * before * 100.0; 2],
             frames: 100,
         }
     }
@@ -176,11 +181,12 @@ mod tests {
     #[test]
     fn the_scale_runs_bottom_to_top_and_spreads_out_the_top() {
         assert_eq!(height_of(FLOOR_DB), 0.0);
-        assert_eq!(height_of(0.0), 1.0);
-        assert_eq!(height_of(6.0), 1.0, "nothing draws above the top");
-        assert_eq!(height_of(-20.0), 0.5);
+        assert_eq!(height_of(TOP_DB), 1.0);
+        assert_eq!(height_of(20.0), 1.0, "nothing draws above the top");
+        assert_eq!(height_of(-20.0), 0.45);
+        assert!(height_of(0.0) < 1.0, "there is room above full level");
         assert!(height_of(0.0) - height_of(-6.0) > height_of(-40.0) - height_of(-46.0));
-        for db in [-70.0, -55.0, -33.0, -12.0, -3.0, 0.0] {
+        for db in [-65.0, -55.0, -33.0, -12.0, -3.0, 0.0, 4.0, 6.0] {
             assert!((db_at(height_of(db)) - db).abs() < 1e-3, "{db}");
         }
     }
@@ -229,6 +235,22 @@ mod tests {
         meter.update(Some(reading(1.0, 0.5)), FRAME);
         assert!((meter.reduction.now - 6.02).abs() < 0.01);
         assert!((meter.reduction.top - 6.02).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_level_over_full_shows_on_the_bar_and_past_the_top() {
+        let mut meter = Meter::default();
+        meter.update(Some(reading(4.0, 0.99)), FRAME);
+        assert!((meter.top() - 12.04).abs() < 0.01, "{}", meter.top());
+        assert!((meter.reduction.top - 12.13).abs() < 0.01);
+    }
+
+    #[test]
+    fn with_the_limiter_off_nothing_reads_as_reduced() {
+        let mut meter = Meter::default();
+        meter.update(Some(reading(2.0, 2.0)), FRAME);
+        assert_eq!(meter.reduction.now, 0.0);
+        assert!((meter.top() - 6.02).abs() < 0.01);
     }
 
     #[test]

@@ -57,9 +57,10 @@ pub fn label() -> Style {
     Style::new().fg(PEACH)
 }
 
-/// A meter's colour at a level in dB: green, then yellow, orange and red toward full level.
+/// A meter's colour at a level in dB: green, turning yellow and then orange toward full level, and
+/// red above that, where a level is over.
 pub fn level(db: f32) -> Color {
-    const STOPS: [(f32, Color); 4] = [(-18.0, GREEN), (-9.0, YELLOW), (-3.0, PEACH), (0.0, RED)];
+    const STOPS: [(f32, Color); 3] = [(-18.0, GREEN), (-6.0, YELLOW), (0.0, PEACH)];
     if db <= STOPS[0].0 {
         return STOPS[0].1;
     }

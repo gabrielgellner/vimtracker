@@ -176,6 +176,25 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
 }
 
 #[test]
+fn with_the_limiter_off_a_render_keeps_levels_over_full() {
+    // The same tone on eight tracks at once adds up to well past full level.
+    let mut loud = song(&[]);
+    loud = Song {
+        instruments: loud.instruments,
+        ..Song::new(8)
+    };
+    for id in 0..8 {
+        let phrase = Arc::make_mut(loud.phrases.get_mut(&id).unwrap());
+        *phrase.step_mut(0).unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
+    }
+    let limited = peak(&render(loud.clone(), RenderOptions::default()));
+    assert_eq!(limited, 1.0);
+    loud.limiter = false;
+    let open = peak(&render(loud, RenderOptions::default()));
+    assert!(open > 1.2, "{open}");
+}
+
+#[test]
 fn a_render_repeats_and_respects_mute() {
     let first = render(song(&FX_LOOP), RenderOptions::default());
     assert_eq!(first, render(song(&FX_LOOP), RenderOptions::default()));

@@ -140,7 +140,7 @@ fn main_loop(
                 View::Instrument => views::instrument::draw(frame, view, app),
             }
             if let Some(meter) = meter {
-                views::meter::draw(frame, meter, &app.meter);
+                views::meter::draw(frame, meter, &app.meter, app.song().limiter);
             }
             views::status::draw(frame, status, app, Some(stats));
             views::help::draw_popup(frame, body, app, Instant::now());

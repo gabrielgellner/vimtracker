@@ -407,9 +407,9 @@ mod tests {
         handle.send(Command::Audition { section_step: 1 });
         assert_eq!(blocks(&mut rt, 2), 0, "the audition has been cut");
         let reading = handle.latest().unwrap().reading;
-        // A 0.5 sample at the master's gain, before and after the soft clip.
-        assert!((reading.before[0] - 0.25).abs() < 1e-3, "{reading:?}");
-        assert!((reading.after[0] - 0.25_f32.tanh()).abs() < 1e-3);
+        // A 0.5 sample, which the limiter leaves alone.
+        assert!((reading.before[0] - 0.5).abs() < 1e-3, "{reading:?}");
+        assert_eq!(reading.after[0], reading.before[0]);
         assert_eq!(reading.frames, BLOCK as u32 * 5);
         assert!(reading.power[0] > 0.0);
         assert_eq!(handle.latest(), None, "nothing is counted twice");

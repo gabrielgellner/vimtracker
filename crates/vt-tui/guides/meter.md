@@ -1,11 +1,11 @@
 # The meter
 
-The column on the right of the screen shows the main output, after the
-limiter. It is what you hear. It hides on a very narrow terminal.
+The column on the right of the screen shows the main output, going into the
+limiter. It hides on a very narrow terminal.
 
 ```
 Main            the title
-  -3  2         highest recent peak in dB, and the most recently limited
+  +3  2         highest recent peak in dB, and the most recently limited
 L  R  G         left, right, and how much the limiter is taking off
 ```
 
@@ -17,25 +17,37 @@ L  R  G         left, right, and how much the limiter is taking off
 | Dimmer colour above it | The peak, which jumps with each hit |
 | A line above that | The highest recent peak, held for a moment |
 
-The numbers are dB below full level. The top of the scale is spread out, as
-that is where the detail matters. The colour goes from green to yellow near
-`-18`, to orange near `-9`, and to red in the last `3`.
+The numbers are dBFS: `0` is the loudest the output can carry. Inside the
+program a level can go past it without harm, and the scale runs up to `+6`
+so you can see by how much. The number on top keeps counting if the bar runs
+out of room. The colour goes from green to yellow at `-6`, and to orange at
+`0`. Red means over.
 
 ## The G bar
 
-G is gain reduction: how many dB the limiter is taking off right now. It
+G shows the limiter working: how many dB it is taking off right now. It
 hangs down from the top, and its full height is `12`. It has its own scale,
 so the numbers beside L and R don't apply to it.
 
-The limiter is a soft curve with no hard edge, so it is always taking off a
-very little, and G is rarely exactly zero:
+The limiter is a safety, not part of the sound. Up to `0` on L and R it does
+nothing at all, so what you hear is exactly what went in. Above `0` it clips
+hard, and that is meant to sound bad.
 
-| Peak on L and R | G |
-|---|---|
-| `-12` | Under `1`, and hard to hear |
-| `-6` | Still under `1` |
-| `-3` | About `2`, and the top number turns red |
+So G should stay empty. Any limiting at all turns the number above it red.
+If that happens, the fix is the mix: bring tracks down with `:tvol`, or lower
+velocities, until the bars stay under `0`.
 
-So a red number above G means the limiter is doing real work. That may be
-what you want on a loud hit. If it is red all the time and things sound
-squashed, turn some tracks down with `:tvol`.
+## Protecting your ears
+
+The limiter stops levels going past full, but full is still very loud, and a
+clipped sound can seem louder than a clean one. Your system volume is what
+protects your ears, so keep it at a safe level.
+
+## Turning it off
+
+Run `:set limiter=off` for a render to keep levels over `0` in its float WAV,
+so another program can turn them down. `:set limiter=on` puts it back. G then
+reads `--`. It is saved with the project.
+
+It doesn't change what you hear while playing: the output clips at `0` either
+way, so nothing over full reaches your gear.

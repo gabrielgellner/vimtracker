@@ -338,8 +338,10 @@ Each track has one voice: one-shot sample playback, a filter, a volume envelope 
 means full. Velocity runs `00` to `7F`, matching MIDI, while the other level values run `00` to `FF`. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
 once those exist. Transposed notes clamp to the note range.
 
-Tracks feed a mixer with shared delay and reverb sends, then a fixed master gain of about -6 dB, then a
-`tanh` soft clip. Processing is 32-bit float at the device's sample rate. Samples are converted to that
+Tracks feed a mixer with shared delay and reverb sends, then a
+safety limiter: nothing changes up to full level, and anything above it clips hard, since the fix for hearing it is
+the mix. A non-finite sample becomes silence. `:set limiter=off` lets a float render keep levels over full, and the
+live output clips at full either way. Processing is 32-bit float at the device's sample rate. Samples are converted to that
 rate when loaded and kept fully in memory. All other tuning values are chosen at implementation, tuned by
 ear, and pinned by golden hashes.
 
@@ -349,7 +351,7 @@ ear. If it does, a column under a live sweep ramps across each step toward its n
 sweep's own values with no look-ahead into the audio, and hand-entered values keep the 10 ms smoother.
 
 **Scope and meters.** The main output meter is built: each report carries the master's peak before and after the
-soft clip and its summed power, and reports merge so a hit between two frames isn't missed. The meter's own motion is
+limiter and its summed power, and reports merge so a hit between two frames isn't missed. The meter's own motion is
 in `meter.rs`, apart from its drawing, so a mixer can have one per track. A scope is still to come: the callback copies a
 master signal into a preallocated ring buffer that drops frames when full, so it never waits on the UI. Track levels go
 through telemetry.
@@ -594,7 +596,7 @@ These apply to every issue. Change them by updating this document.
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |
 | `TELEMETRY_QUEUE` | 64 | Playhead and load messages; newest dropped when full |
 
-**Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), `AUTOSAVE_SECONDS` (60), and master gain.
+**Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), and `AUTOSAVE_SECONDS` (60).
 
 **Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space.
 
@@ -707,6 +709,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |
+| `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
 | `:len n` | Phrase length. Shortening hides steps, which come back if lengthened in the session and are dropped on save |
 | `:double` | Double the current phrase |
 | `:gen apply` | Apply the live generator under the cursor |
@@ -777,7 +780,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/track_state.rs`: fixed-size per-track state.
 *   `src/voice.rs`: sample playback, envelope and the preview voice.
 *   `src/dsp/filter.rs`, `src/dsp/smoother.rs`, `src/dsp/delay.rs`, `src/dsp/reverb.rs`: effects.
-*   `src/mixer.rs`: track mix, sends, master gain and soft clip.
+*   `src/mixer.rs`: track mix, sends and limiter.
 *   `src/rng.rs`: PCG32.
 *   `src/rt_guard.rs` (**copy** of `crates/gmuse-engine/src/rt_guard.rs`): per-thread allocation counting in tests.
 *   `src/render.rs`: offline WAV rendering.

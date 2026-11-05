@@ -18,12 +18,9 @@ const LOWEST_METER: u16 = 6;
 /// The rows that aren't bars: the heading, the readout and the bar names.
 const ROWS_AROUND_BARS: u16 = 3;
 /// Scale marks, most wanted first, since a short meter can't fit them all.
-const MARKS: [i32; 9] = [0, -12, -6, -24, -3, -48, -18, -36, -60];
+const MARKS: [i32; 9] = [0, 6, -12, -24, -6, -48, -18, -36, -60];
 /// The most gain reduction the G bar can show, in dB.
 const MOST_REDUCTION: f32 = 12.0;
-/// How much gain reduction turns the G readout red, in dB. The limiter is always curving a little,
-/// so this is where it starts to be doing real work.
-const LIMITING: f32 = 1.0;
 /// Partial blocks, from one eighth of a cell up to a whole one.
 const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -67,21 +64,13 @@ fn reduction_cell(row: usize, rows: usize, reduction: f32) -> Span<'static> {
     let total = (reduction / MOST_REDUCTION).min(1.0) * (rows * 8) as f32;
     let filled = (total.round() as usize).saturating_sub(row * 8).min(8);
     // There are no blocks that hang from the top, so a partial one is drawn the other way around.
-    let color = reduction_color(reduction);
+    let color = theme::RED;
     let (symbol, fg, bg): (char, Color, Color) = match filled {
         0 => (' ', color, theme::MANTLE),
         8 => ('█', color, theme::MANTLE),
         part => (EIGHTHS[8 - part], theme::MANTLE, color),
     };
     Span::styled(symbol.to_string().repeat(2), Style::new().fg(fg).bg(bg))
-}
-
-fn reduction_color(reduction: f32) -> Color {
-    if reduction >= LIMITING {
-        theme::RED
-    } else {
-        theme::PEACH
-    }
 }
 
 /// The scale's mark for each row, counting rows up from the bottom.
@@ -97,19 +86,25 @@ fn marks(rows: usize) -> Vec<Option<i32>> {
 }
 
 /// Draw the meter.
-pub fn draw(frame: &mut Frame, area: Rect, meter: &Meter) {
+pub fn draw(frame: &mut Frame, area: Rect, meter: &Meter, limiter: bool) {
     let rows = usize::from(area.height.saturating_sub(ROWS_AROUND_BARS));
     if rows == 0 {
         return;
     }
     let peak = if meter.top() > FLOOR_DB {
         // Adding zero turns a rounded -0 into 0.
-        format!("{:.0}", meter.top().round() + 0.0)
+        let top = meter.top().round() + 0.0;
+        if top > 0.0 {
+            format!("{top:+.0}")
+        } else {
+            format!("{top:.0}")
+        }
     } else {
         "--".to_owned()
     };
     let reduction = meter.reduction.top;
-    let reduction_style = if reduction >= LIMITING {
+    // The limiter should never be working, so any amount at all is a warning and reads at least 1.
+    let reduction_style = if reduction > 0.0 {
         Style::new().fg(theme::RED).add_modifier(Modifier::BOLD)
     } else {
         theme::dim()
@@ -118,7 +113,16 @@ pub fn draw(frame: &mut Frame, area: Rect, meter: &Meter) {
         Line::styled("     Main", Style::new().add_modifier(Modifier::BOLD)),
         Line::from(vec![
             Span::raw(format!("     {peak:>5} ")),
-            Span::styled(format!("{reduction:>2.0}"), reduction_style),
+            Span::styled(
+                if limiter && reduction > 0.0 {
+                    format!("{:>2.0}", reduction.round().max(1.0))
+                } else if limiter {
+                    " 0".to_owned()
+                } else {
+                    "--".to_owned()
+                },
+                reduction_style,
+            ),
         ]),
     ];
     let labels = marks(rows);
@@ -147,13 +151,14 @@ mod tests {
     use vt_engine::mixer::Reading;
 
     use super::*;
+    use crate::meter::TOP_DB;
 
     const HEIGHT: u16 = 22;
 
     fn screen(meter: &Meter) -> ratatui::buffer::Buffer {
         let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
         terminal
-            .draw(|frame| draw(frame, frame.area(), meter))
+            .draw(|frame| draw(frame, frame.area(), meter, true))
             .unwrap();
         terminal.backend().buffer().clone()
     }
@@ -169,7 +174,7 @@ mod tests {
                 Some(Reading {
                     before: [before; 2],
                     after: [after; 2],
-                    power: [after * after; 2],
+                    power: [before * before; 2],
                     frames: 1,
                 }),
                 0.033,
@@ -182,7 +187,7 @@ mod tests {
     fn silence_draws_empty_bars_and_a_blank_readout() {
         let buffer = screen(&Meter::default());
         assert_eq!(text(&buffer, 1).trim(), "--  0");
-        assert!(text(&buffer, 2).starts_with("   0 "));
+        assert!(text(&buffer, 2).starts_with("   6 "));
         for y in 2..HEIGHT - 1 {
             assert!(!text(&buffer, y).contains('█'), "row {y}");
         }
@@ -191,23 +196,47 @@ mod tests {
     #[test]
     fn a_loud_signal_fills_up_the_scale_and_shows_the_limiter() {
         let buffer = screen(&played(1.0, 0.76));
-        assert_eq!(text(&buffer, 1).trim(), "-2  2");
-        assert_eq!(buffer[(11, 1)].fg, theme::RED, "2 dB off is real limiting");
-        // The bars reach near the top, and the G bar starts from it.
-        assert_eq!(buffer[(5, 4)].symbol(), "█");
+        assert_eq!(text(&buffer, 1).trim(), "0  2");
+        assert_eq!(buffer[(12, 1)].fg, theme::RED);
+        // The bars reach 0, with room above it, and the G bar starts from the top.
+        assert_eq!(buffer[(5, 5)].symbol(), "█");
+        assert_ne!(buffer[(5, 2)].symbol(), "█");
         assert_eq!(buffer[(11, 2)].symbol(), "█");
         assert_eq!(buffer[(11, HEIGHT - 2)].symbol(), " ");
     }
 
     #[test]
-    fn just_under_full_level_reads_zero() {
-        let buffer = screen(&played(4.0, 0.99));
-        assert_eq!(text(&buffer, 1).trim(), "0 12");
+    fn the_readout_shows_how_far_over_full_level_it_is() {
+        let buffer = screen(&played(4.0, 1.0));
+        assert_eq!(text(&buffer, 1).trim(), "+12 12");
+        assert_eq!(buffer[(5, 2)].symbol(), "█", "the bar is at the top");
+        assert_eq!(buffer[(5, 2)].fg, theme::level(TOP_DB));
+        assert_eq!(theme::level(TOP_DB), theme::RED);
+        let buffer = screen(&played(0.998, 0.998));
+        assert_eq!(text(&buffer, 1).trim(), "0  0", "not -0");
+    }
+
+    #[test]
+    fn any_limiting_at_all_is_a_warning() {
+        let buffer = screen(&played(1.01, 1.0));
+        assert_eq!(text(&buffer, 1).trim(), "0  1", "under 1 dB still shows");
+        assert_eq!(buffer[(12, 1)].fg, theme::RED);
+    }
+
+    #[test]
+    fn with_the_limiter_off_g_says_so() {
+        let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, frame.area(), &played(2.0, 2.0), false))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(text(buffer, 1).trim(), "+6 --");
     }
 
     #[test]
     fn a_clean_signal_keeps_the_g_readout_quiet() {
-        let buffer = screen(&played(0.25, 0.2449));
+        let buffer = screen(&played(0.25, 0.25));
+        assert_eq!(text(&buffer, 1).trim(), "-12  0");
         assert_eq!(buffer[(12, 1)].fg, theme::OVERLAY2);
         assert_eq!(buffer[(5, HEIGHT - 2)].symbol(), "█");
         assert_eq!(buffer[(5, 2)].symbol(), " ");
@@ -215,8 +244,8 @@ mod tests {
 
     #[test]
     fn the_bars_change_colour_up_the_scale() {
-        let buffer = screen(&played(1.0, 1.0));
-        assert_eq!(buffer[(5, 2)].fg, theme::level(db_at(1.0 - 0.5 / 19.0)));
+        let buffer = screen(&played(2.0, 1.0));
+        assert_eq!(buffer[(5, 2)].fg, theme::RED);
         assert_eq!(buffer[(5, HEIGHT - 2)].fg, theme::GREEN);
     }
 
@@ -228,10 +257,11 @@ mod tests {
     }
 
     #[test]
-    fn every_mark_row_is_one_mark_and_the_top_is_zero() {
+    fn every_row_has_one_mark_at_most_and_the_top_is_six() {
         let labels = marks(18);
-        assert_eq!(labels[17], Some(0));
+        assert_eq!(labels[17], Some(6));
+        assert!(labels.contains(&Some(0)));
         assert!(labels.iter().flatten().count() >= 7);
-        assert_eq!(marks(1), [Some(0)]);
+        assert_eq!(marks(1), [Some(0)], "0 is the mark worth keeping");
     }
 }

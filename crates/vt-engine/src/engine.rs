@@ -596,6 +596,7 @@ impl Engine {
     fn render(&mut self, out: &mut [f32]) {
         let samples = Arc::clone(&self.current.samples);
         let delay_frames = sample_of_tick(DELAY_TICKS, self.rate, self.millibpm) as usize;
+        let limiter = self.current.song.limiter;
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
             let mut delay_in = [0.0_f32; 2];
@@ -625,7 +626,7 @@ impl Engine {
                 mix[0] + preview[0] + delayed[0] + reverbed[0],
                 mix[1] + preview[1] + delayed[1] + reverbed[1],
             ];
-            let out = master(mixed);
+            let out = master(mixed, limiter);
             self.reading.add(mixed, out);
             *frame = out;
         }

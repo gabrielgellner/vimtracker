@@ -171,6 +171,10 @@ pub struct ChainPosition {
     pub transpose: i8,
 }
 
+fn default_limiter() -> bool {
+    true
+}
+
 fn default_skip() -> u32 {
     BEAT_STEPS as u32
 }
@@ -187,6 +191,9 @@ pub struct Song {
     /// How far the left and right arrows move in Insert.
     #[serde(default = "default_skip")]
     pub skip: u32,
+    /// Whether the main output clips at full level. Off, a render keeps levels above it.
+    #[serde(default = "default_limiter")]
+    pub limiter: bool,
     /// Project swing, in tenths of a percent.
     pub swing: u16,
     pub tracks: Vec<Track>,
@@ -205,6 +212,7 @@ impl Song {
             seed: 0,
             step: 1,
             skip: default_skip(),
+            limiter: default_limiter(),
             swing: 500,
             tracks: Vec::new(),
             sections: vec![Section::default()],
