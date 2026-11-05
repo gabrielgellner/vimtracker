@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/vt-model", "crates/vt-engine", "crates/vt-tui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/gabrielgellner/vimtracker"
+
+[workspace.dependencies]
+vt-model = { path = "crates/vt-model" }
+vt-engine = { path = "crates/vt-engine" }
+serde = { version = "=1.0.229", features = ["derive", "rc"] }
+ron = "=0.12.3"
+hound = "=3.5.1"
+rubato = "=5.0.0"
+thiserror = "=2.0.20"
+rtrb = "=0.4.1"
+ratatui = "=0.30.2"
+cpal = "=0.18.2"
+clap = { version = "=4.6.6", features = ["derive"] }
+nucleo-matcher = "=0.3.1"

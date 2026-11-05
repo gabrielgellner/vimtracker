@@ -5,8 +5,17 @@ keyboard grammar modelled on Neovim. It takes ideas from the Polyend Tracker, th
 Dirtywave M8, Elektron sequencers and Jeskola Buzz, but it is a separate program and is
 not affiliated with any of them.
 
-There is no code yet. The design and implementation plan are in
+It is early, and the design and implementation plan are in
 [docs/designs/vimtracker.md](docs/designs/vimtracker.md).
+
+## Build and run
+
+```sh
+cargo build --release
+cargo run --release -p vt-tui --bin vimtracker
+```
+
+Run the tests with `cargo test --workspace`.
 
 ## License
 

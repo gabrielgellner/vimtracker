@@ -1,0 +1,14 @@
+[package]
+name = "vt-model"
+description = "Song data, actions and project files for vimtracker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+ron.workspace = true
+hound.workspace = true
+rubato.workspace = true
+thiserror.workspace = true

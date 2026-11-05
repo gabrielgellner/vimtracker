@@ -1,0 +1,13 @@
+[package]
+name = "vt-engine"
+description = "Sequencer and audio engine for vimtracker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+vt-model.workspace = true
+hound.workspace = true
+rtrb.workspace = true
+thiserror.workspace = true
