@@ -1,5 +1,6 @@
 //! Application state, and what each key does. It runs without a terminal, so tests can drive it.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,28 +9,36 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle};
 use vt_engine::published::Published;
-use vt_model::action::{Action, edit};
+use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
 use vt_model::history::History;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
+pub use vt_model::selection::Field;
+use vt_model::selection::{Block, Scope, StepRange};
 use vt_model::song::Song;
-use vt_model::step::{MAX_NOTE, MIN_NOTE, Note};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note};
 
-use crate::input::bindings::{Cmd, Resolved, Table, note_key};
+use crate::grammar::Change;
+use crate::input::bindings::{Cmd, Op, Table, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 
-/// One editable part of a step.
+/// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Field {
-    Note,
-    Volume,
-    Instrument,
-    FxCommand(usize),
-    FxValue(usize),
+pub struct Selection {
+    pub range: StepRange,
+    pub scope: Scope,
+}
+
+/// Typed characters not yet written, in Insert mode.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Entry {
+    pub text: String,
+    /// A command name waiting for its value, so the command doesn't take effect until then.
+    pub command: Option<FxCommand>,
 }
 
 /// Where the cursor is: a step in a chain slot on a track.
@@ -67,8 +76,24 @@ pub struct App {
     pub should_quit: bool,
     /// Live mute and solo per track, kept outside undo and written to the song on save.
     pub levels: Vec<TrackLive>,
-    table: Table,
-    pending: Vec<Key>,
+    pub entry: Entry,
+    /// The first step on screen, and how many fit.
+    pub top: usize,
+    pub view_height: usize,
+    pub help_scroll: usize,
+    pub(crate) table: Table,
+    pub(crate) pending: Vec<Key>,
+    pub(crate) pending_since: Option<Instant>,
+    pub(crate) count: Option<usize>,
+    pub(crate) operator: Option<Op>,
+    pub(crate) operator_count: Option<usize>,
+    pub(crate) register: Option<char>,
+    pub(crate) awaiting_register: bool,
+    pub(crate) registers: HashMap<char, Block>,
+    pub(crate) anchor: Option<(usize, Scope)>,
+    pub(crate) selection_scope: Option<Scope>,
+    pub(crate) last_selection: Option<Selection>,
+    pub(crate) last_change: Option<Change>,
     guard: Option<(Key, Instant)>,
 }
 
@@ -104,8 +129,23 @@ impl App {
             playhead: 0,
             should_quit: false,
             levels,
+            entry: Entry::default(),
+            top: 0,
+            view_height: 16,
+            help_scroll: 0,
             table: Table::default(),
             pending: Vec::new(),
+            pending_since: None,
+            count: None,
+            operator: None,
+            operator_count: None,
+            register: None,
+            awaiting_register: false,
+            registers: HashMap::new(),
+            anchor: None,
+            selection_scope: None,
+            last_selection: None,
+            last_change: None,
             guard: None,
         };
         app.send_live();
@@ -207,47 +247,69 @@ impl App {
             self.guard = None;
         }
         match self.mode {
-            Mode::Normal => self.normal_key(key, now),
+            Mode::Normal | Mode::OperatorPending | Mode::VisualField | Mode::VisualStep => {
+                self.command_key_normal(key, now);
+            }
             Mode::Insert => self.insert_key(key),
             Mode::Command => self.command_key(key),
+            Mode::Help => self.help_key(key),
         }
     }
 
-    fn normal_key(&mut self, key: Key, now: Instant) {
-        if key.code == KeyCode::Esc {
-            self.pending.clear();
+    /// What the popup should list, once the delay has passed.
+    pub fn popup_rows(&self, now: Instant, delay: Duration) -> Vec<(String, &'static str)> {
+        if self.pending.is_empty() || !which_key_due(self.pending_since, now, delay) {
+            return Vec::new();
+        }
+        self.table.continuations(self.mode, &self.pending)
+    }
+
+    /// Every key, for `Space ?`.
+    pub fn help_rows(&self) -> Vec<String> {
+        let mut rows = Vec::new();
+        let mut last = None;
+        for binding in self.table.rows() {
+            if last != Some(binding.mode) {
+                rows.push(String::new());
+                rows.push(format!("{:?}", binding.mode));
+                last = Some(binding.mode);
+            }
+            rows.push(format!("  {:<12} {}", binding.keys, binding.description));
+        }
+        rows
+    }
+
+    fn help_key(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => self.help_scroll += 1,
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.help_scroll = self.help_scroll.saturating_sub(1);
+            }
+            _ => {
+                self.help_scroll = 0;
+                self.mode = Mode::Normal;
+            }
+        }
+    }
+
+    pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
+        if self.run_grammar(cmd) {
             return;
         }
-        self.pending.push(key);
-        match self.table.resolve(Mode::Normal, &self.pending) {
-            Resolved::Prefix => {}
-            Resolved::Unbound => {
-                if self.pending.len() > 1 {
-                    let keys: Vec<String> = self.pending.iter().map(Key::to_string).collect();
-                    self.status = format!("{} isn't bound", keys.join(" "));
-                }
-                self.pending.clear();
-            }
-            Resolved::Command(cmd) => {
-                self.pending.clear();
-                self.status.clear();
-                self.run(cmd, key, now);
-            }
-        }
-    }
-
-    fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
         match cmd {
-            Cmd::MoveLeft => self.move_field(false),
-            Cmd::MoveRight => self.move_field(true),
-            Cmd::MoveDown => self.move_step(1),
-            Cmd::MoveUp => self.move_step(-1),
+            Cmd::ViewTop | Cmd::ViewMiddle | Cmd::ViewBottom => self.view_cursor(cmd),
+            Cmd::HalfPageDown => self.half_page(1),
+            Cmd::HalfPageUp => self.half_page(-1),
+            Cmd::ScrollDown => self.scroll(3),
+            Cmd::ScrollUp => self.scroll(-3),
+            Cmd::Double => self.double(),
+            Cmd::Help => {
+                self.help_scroll = 0;
+                self.mode = Mode::Help;
+            }
             Cmd::EnterInsert => {
-                if self.cursor.field == Field::Note {
-                    self.mode = Mode::Insert;
-                } else {
-                    self.status = "Insert only edits notes for now".to_owned();
-                }
+                self.entry = Entry::default();
+                self.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
                 self.command_line.clear();
@@ -286,7 +348,58 @@ impl App {
                     self.status = "Nothing to redo".to_owned();
                 }
             }
+            _ => {}
         }
+    }
+
+    fn double(&mut self) {
+        if let Some(phrase) = self.phrase_id() {
+            self.apply(&Action::Double { phrase });
+        }
+    }
+
+    fn phrase_len(&self) -> usize {
+        self.phrase_id()
+            .and_then(|id| self.song().phrases.get(&id))
+            .map_or(0, |p| p.len())
+    }
+
+    /// Keep the cursor on screen, moving the view rather than the cursor.
+    pub fn follow_cursor(&mut self, height: usize) {
+        self.view_height = height.max(1);
+        let last_top = self.phrase_len().saturating_sub(self.view_height);
+        if self.cursor.step < self.top {
+            self.top = self.cursor.step;
+        } else if self.cursor.step >= self.top + self.view_height {
+            self.top = self.cursor.step + 1 - self.view_height;
+        }
+        self.top = self.top.min(last_top);
+    }
+
+    fn view_cursor(&mut self, cmd: Cmd) {
+        let height = self.view_height.min(self.phrase_len().max(1));
+        self.cursor.step = self.top
+            + match cmd {
+                Cmd::ViewTop => 0,
+                Cmd::ViewMiddle => height / 2,
+                _ => height - 1,
+            };
+        self.clamp_cursor();
+    }
+
+    fn half_page(&mut self, sign: isize) {
+        let half = (self.view_height / 2).max(1) as isize;
+        self.move_step(sign * half);
+        self.top = self.cursor.step.saturating_sub(self.view_height / 2);
+    }
+
+    /// Scroll the view. The cursor only moves if it would leave the screen.
+    fn scroll(&mut self, by: isize) {
+        let last_top = self.phrase_len().saturating_sub(self.view_height);
+        self.top = self.top.saturating_add_signed(by).min(last_top);
+        let bottom = self.top + self.view_height.saturating_sub(1);
+        self.cursor.step = self.cursor.step.clamp(self.top, bottom);
+        self.clamp_cursor();
     }
 
     fn after_history(&mut self) {
@@ -363,36 +476,11 @@ impl App {
         self.dirty = true;
     }
 
-    fn slots(&self) -> usize {
+    pub(crate) fn slots(&self) -> usize {
         self.phrase_id()
             .and_then(|id| self.song().phrases.get(&id))
             .and_then(|p| p.steps().get(self.cursor.step))
             .map_or(0, |step| step.fx.len())
-    }
-
-    fn move_field(&mut self, forward: bool) {
-        let slots = self.slots();
-        let order = |field: Field| match field {
-            Field::Note => 0,
-            Field::Volume => 1,
-            Field::Instrument => 2,
-            Field::FxCommand(slot) => 3 + slot * 2,
-            Field::FxValue(slot) => 4 + slot * 2,
-        };
-        let last = 2 + slots * 2;
-        let current = order(self.cursor.field);
-        let next = if forward {
-            (current + 1).min(last)
-        } else {
-            current.saturating_sub(1)
-        };
-        self.cursor.field = match next {
-            0 => Field::Note,
-            1 => Field::Volume,
-            2 => Field::Instrument,
-            n if (n - 3) % 2 == 0 => Field::FxCommand((n - 3) / 2),
-            n => Field::FxValue((n - 4) / 2),
-        };
     }
 
     fn move_step(&mut self, by: isize) {
@@ -406,11 +494,20 @@ impl App {
         self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
     }
 
-    fn clamp_cursor(&mut self) {
+    pub(crate) fn clamp_cursor(&mut self) {
         self.move_step(0);
     }
 
     fn insert_key(&mut self, key: Key) {
+        match self.cursor.field {
+            Field::Note => self.insert_note(key),
+            Field::Volume | Field::FxValue(_) => self.insert_value(key),
+            Field::Instrument => self.insert_instrument(key),
+            Field::FxCommand(slot) => self.insert_command(key, slot),
+        }
+    }
+
+    fn insert_note(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
@@ -433,6 +530,141 @@ impl App {
                         note: midi,
                     });
                     self.advance();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Leave Insert, dropping anything typed but not written.
+    fn cancel_entry(&mut self) {
+        if let Some(command) = self.entry.command
+            && let Field::FxValue(slot) = self.cursor.field
+        {
+            self.status = format!("{} needs a value, so nothing was written", command.name());
+            self.cursor.field = Field::FxCommand(slot);
+        }
+        self.entry = Entry::default();
+        self.mode = Mode::Normal;
+    }
+
+    fn set_field(&mut self, value: FieldValue) {
+        let Some(phrase) = self.phrase_id() else {
+            return;
+        };
+        self.apply(&Action::SetField {
+            phrase,
+            step: self.cursor.step,
+            value,
+        });
+    }
+
+    /// Two hex digits commit and move down by the step setting. A command typed just before
+    /// takes effect here, so typing `CUT` during playback doesn't close the filter.
+    fn insert_value(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    match self.cursor.field {
+                        Field::Volume => self.set_field(FieldValue::Volume(None)),
+                        Field::FxValue(slot) if self.entry.command.is_none() => {
+                            self.set_field(FieldValue::Slot(slot, FxSlot::default()));
+                        }
+                        _ => {}
+                    }
+                    self.move_step(-1);
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
+                self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 2 {
+                    self.commit_value();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn commit_value(&mut self) {
+        let text = std::mem::take(&mut self.entry.text);
+        let Ok(value) = u8::from_str_radix(&text, 16) else {
+            return;
+        };
+        match self.cursor.field {
+            Field::Volume => self.set_field(FieldValue::Volume(Some(value))),
+            Field::FxValue(slot) => {
+                let existing = self.current_slot(slot).and_then(|s| s.command);
+                let Some(command) = self.entry.command.take().or(existing) else {
+                    self.status = "Type an FX command first".to_owned();
+                    return;
+                };
+                self.set_field(FieldValue::Slot(
+                    slot,
+                    FxSlot {
+                        command: Some(command),
+                        value,
+                    },
+                ));
+            }
+            _ => {}
+        }
+        self.advance();
+    }
+
+    fn current_slot(&self, slot: usize) -> Option<FxSlot> {
+        let id = self.phrase_id()?;
+        let phrase = self.song().phrases.get(&id)?;
+        phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
+    }
+
+    /// Instrument IDs can have more digits, so `Enter` commits them.
+    fn insert_instrument(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.set_field(FieldValue::Instrument(None));
+                    self.move_step(-1);
+                }
+            }
+            KeyCode::Enter => {
+                let text = std::mem::take(&mut self.entry.text);
+                if let Ok(id) = u32::from_str_radix(&text, 16) {
+                    self.instrument = id;
+                    self.set_field(FieldValue::Instrument(Some(id)));
+                    self.advance();
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() && self.entry.text.len() < 8 => {
+                self.entry.text.push(c.to_ascii_uppercase());
+            }
+            _ => {}
+        }
+    }
+
+    /// The third letter of a valid name moves to the value. An invalid name is refused, and the
+    /// field is unchanged.
+    fn insert_command(&mut self, key: Key, slot: usize) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.set_field(FieldValue::Slot(slot, FxSlot::default()));
+                    self.move_step(-1);
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_alphabetic() => {
+                self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 3 {
+                    let name = std::mem::take(&mut self.entry.text);
+                    match FxCommand::from_name(&name) {
+                        Some(command) => {
+                            self.entry.command = Some(command);
+                            self.cursor.field = Field::FxValue(slot);
+                        }
+                        None => self.status = format!("{name} isn't an FX command"),
+                    }
                 }
             }
             _ => {}
@@ -518,6 +750,8 @@ impl App {
                     self.clamp_cursor();
                 }
             }
+            Line::Double => self.double(),
+            Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
             Line::Len(length) => {
@@ -662,6 +896,14 @@ impl App {
             }
             Err(error) => self.status = error.to_string(),
         }
+    }
+}
+
+/// Whether a delay since a time has passed. Copied from gmuse's `src/ui/mod.rs`.
+fn which_key_due(since: Option<Instant>, now: Instant, delay: Duration) -> bool {
+    match since {
+        Some(started) => now.saturating_duration_since(started) >= delay,
+        None => false,
     }
 }
 

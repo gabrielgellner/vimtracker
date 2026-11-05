@@ -44,9 +44,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
     let mode_style = Style::new()
         .fg(Color::Black)
         .bg(match app.mode {
-            Mode::Normal => Color::Blue,
+            Mode::Normal | Mode::OperatorPending => Color::Blue,
+            Mode::VisualField | Mode::VisualStep => Color::Magenta,
             Mode::Insert => Color::Green,
             Mode::Command => Color::Yellow,
+            Mode::Help => Color::Cyan,
         })
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {
@@ -56,11 +58,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         format!("  {}", keys.join(" "))
     };
     let dirty = if app.dirty { " *" } else { "" };
+    let typed = if app.entry.text.is_empty() {
+        String::new()
+    } else {
+        format!("  typed {}", app.entry.text)
+    };
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.mode.label()), mode_style),
         Span::raw(format!(
-            " {transport}  {} BPM  CPU {:.1}%  late {late}  xruns {errors}{dirty}{pending}",
+            " {transport}  {} BPM  Oct {} Inst {:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
+            app.octave,
+            app.instrument,
             load as f64 / 10.0,
         )),
     ]);

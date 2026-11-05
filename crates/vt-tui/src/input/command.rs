@@ -19,6 +19,8 @@ pub enum Line {
     TrackDel,
     Mute,
     Solo,
+    Double,
+    SetStep(u32),
 }
 
 /// Why a command line was refused.
@@ -36,6 +38,8 @@ pub enum LineError {
     Len,
     #[error(":track takes add [n] or del")]
     Track,
+    #[error(":set takes step=n")]
+    Set,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -107,6 +111,12 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             ["del"] => Ok(Line::TrackDel),
             _ => Err(LineError::Track),
         },
+        "double" => Ok(Line::Double),
+        "set" => argument
+            .strip_prefix("step=")
+            .and_then(|n| n.parse().ok())
+            .map(Line::SetStep)
+            .ok_or(LineError::Set),
         "mute" => Ok(Line::Mute),
         "solo" => Ok(Line::Solo),
         other => Err(LineError::Unknown(other.to_owned())),
