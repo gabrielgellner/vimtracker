@@ -64,9 +64,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Transport::Playing => "playing",
         Transport::Paused => "paused",
     };
-    let (load, late, errors) = stats.map_or((0, 0, 0), |s| {
+    let (late, errors) = stats.map_or((0, 0), |s| {
         (
-            s.load.load(Ordering::Relaxed),
             s.late.load(Ordering::Relaxed),
             s.errors.load(Ordering::Relaxed),
         )
@@ -113,12 +112,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}  CPU {:>2}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,
             name_of(app.instrument),
-            load as f64 / 10.0,
+            app.cpu.percent(),
         )),
     ]);
     let message = if app.mode == Mode::Command {

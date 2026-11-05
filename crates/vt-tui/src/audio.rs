@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{ErrorKind, SampleFormat, StreamConfig};
@@ -36,6 +36,41 @@ pub struct AudioStats {
     pub load: AtomicU64,
     /// The device has gone, so the program exits.
     pub lost: AtomicBool,
+}
+
+/// The CPU figure for the status line. The callback's own number changes every block, so this
+/// averages it and only changes the figure now and then.
+#[derive(Debug, Default)]
+pub struct LoadReadout {
+    total: u64,
+    samples: u64,
+    since: Option<Instant>,
+    shown: u64,
+}
+
+impl LoadReadout {
+    /// How long each figure stays up.
+    const EVERY: Duration = Duration::from_millis(500);
+
+    /// Add one look at the callback's load, in thousandths of the buffer.
+    pub fn sample(&mut self, load: u64, now: Instant) {
+        let since = *self.since.get_or_insert(now);
+        self.total += load;
+        self.samples += 1;
+        if now.saturating_duration_since(since) >= Self::EVERY {
+            self.shown = (self.total + self.samples * 5) / (self.samples * 10);
+            *self = Self {
+                since: Some(now),
+                shown: self.shown,
+                ..Self::default()
+            };
+        }
+    }
+
+    /// The figure to show, as a whole percent.
+    pub fn percent(&self) -> u64 {
+        self.shown
+    }
 }
 
 /// A chosen device, before its stream starts.
@@ -126,5 +161,28 @@ impl Output {
             .play()
             .map_err(|e| AudioError::Device(e.to_string()))?;
         Ok(stream)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_cpu_figure_is_a_whole_average_that_changes_only_now_and_then() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut readout = LoadReadout::default();
+        assert_eq!(readout.percent(), 0);
+        readout.sample(70, at(0));
+        readout.sample(100, at(100));
+        assert_eq!(readout.percent(), 0, "still gathering the first figure");
+        readout.sample(40, at(500));
+        assert_eq!(readout.percent(), 7);
+        // The callback's number can jump around without the figure moving.
+        readout.sample(900, at(600));
+        assert_eq!(readout.percent(), 7);
+        readout.sample(100, at(1000));
+        assert_eq!(readout.percent(), 50);
     }
 }

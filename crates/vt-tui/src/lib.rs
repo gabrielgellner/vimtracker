@@ -7,6 +7,7 @@ pub mod grammar;
 pub mod guides;
 pub mod input;
 pub mod instruments;
+pub mod meter;
 pub mod picking;
 pub mod probe;
 pub mod run;

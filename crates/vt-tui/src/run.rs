@@ -123,6 +123,8 @@ fn main_loop(
             return Err(RunError::DeviceLost);
         }
         app.tick();
+        app.cpu
+            .sample(stats.load.load(Ordering::Relaxed), Instant::now());
         app.autosave_if_due(Instant::now());
         terminal.draw(|frame| {
             frame.render_widget(Block::new().style(theme::screen()), frame.area());
@@ -131,10 +133,14 @@ fn main_loop(
             app.follow_cursor(usize::from(
                 body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
             ));
+            let (view, meter) = views::meter::split(body);
             match app.view {
-                View::Chain => views::chain::draw(frame, body, app),
-                View::Phrase => views::phrase::draw(frame, body, app),
-                View::Instrument => views::instrument::draw(frame, body, app),
+                View::Chain => views::chain::draw(frame, view, app),
+                View::Phrase => views::phrase::draw(frame, view, app),
+                View::Instrument => views::instrument::draw(frame, view, app),
+            }
+            if let Some(meter) = meter {
+                views::meter::draw(frame, meter, &app.meter);
             }
             views::status::draw(frame, status, app, Some(stats));
             views::help::draw_popup(frame, body, app, Instant::now());

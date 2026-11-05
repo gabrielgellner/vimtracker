@@ -11,7 +11,7 @@ use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::smoother::coefficient;
-use crate::mixer::master;
+use crate::mixer::{Reading, master};
 use crate::published::Published;
 use crate::track_state::{DelayedNote, Retrigger, TrackState};
 use crate::voice::{NoteOn, Voice};
@@ -61,6 +61,8 @@ pub struct Engine {
     smoothing: f32,
     delay: Delay,
     reverb: Reverb,
+    /// The master's levels since the last report.
+    reading: Reading,
 }
 
 impl Engine {
@@ -83,6 +85,7 @@ impl Engine {
             smoothing: coefficient(rate),
             delay: Delay::new(delay_frames),
             reverb: Reverb::new(rate),
+            reading: Reading::default(),
         };
         engine.follow_levels();
         for track in engine.tracks.iter_mut() {
@@ -275,6 +278,11 @@ impl Engine {
     }
 
     /// Fill interleaved stereo output. This doesn't allocate, lock or print.
+    /// The master's levels since this was last asked.
+    pub fn take_reading(&mut self) -> Reading {
+        std::mem::take(&mut self.reading)
+    }
+
     pub fn process(&mut self, out: &mut [f32]) {
         let mut written = 0;
         let total = out.len() / 2;
@@ -613,10 +621,13 @@ impl Engine {
             let preview = self.preview.next(samples.get(self.preview.sample()));
             let delayed = self.delay.process(delay_in, delay_frames);
             let reverbed = self.reverb.process(reverb_in);
-            *frame = master([
+            let mixed = [
                 mix[0] + preview[0] + delayed[0] + reverbed[0],
                 mix[1] + preview[1] + delayed[1] + reverbed[1],
-            ]);
+            ];
+            let out = master(mixed);
+            self.reading.add(mixed, out);
+            *frame = out;
         }
     }
 }

@@ -57,6 +57,35 @@ pub fn label() -> Style {
     Style::new().fg(PEACH)
 }
 
+/// A meter's colour at a level in dB: green, then yellow, orange and red toward full level.
+pub fn level(db: f32) -> Color {
+    const STOPS: [(f32, Color); 4] = [(-18.0, GREEN), (-9.0, YELLOW), (-3.0, PEACH), (0.0, RED)];
+    if db <= STOPS[0].0 {
+        return STOPS[0].1;
+    }
+    for pair in STOPS.windows(2) {
+        let ((low_db, low), (high_db, high)) = (pair[0], pair[1]);
+        if db <= high_db {
+            return mix(low, high, (db - low_db) / (high_db - low_db));
+        }
+    }
+    RED
+}
+
+/// A colour pushed back toward the screen, for the part of a bar that isn't solid.
+pub fn dimmed(color: Color) -> Color {
+    mix(color, BASE, 0.55)
+}
+
+/// A colour some share of the way from one to another.
+fn mix(from: Color, to: Color, share: f32) -> Color {
+    let (Color::Rgb(r0, g0, b0), Color::Rgb(r1, g1, b1)) = (from, to) else {
+        return from;
+    };
+    let channel = |a: u8, b: u8| (f32::from(a) + (f32::from(b) - f32::from(a)) * share) as u8;
+    Color::Rgb(channel(r0, r1), channel(g0, g1), channel(b0, b1))
+}
+
 /// The playhead, and whatever is current in a list.
 pub fn active() -> Style {
     Style::new().fg(GREEN)

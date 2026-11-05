@@ -9,6 +9,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{COMMAND_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE};
 
 use crate::engine::{Engine, Transport};
+use crate::mixer::Reading;
 use crate::published::Published;
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
@@ -36,10 +37,11 @@ pub enum Command {
 }
 
 /// What the callback reports back each block.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Telemetry {
     pub position: usize,
     pub transport: Transport,
+    pub reading: Reading,
 }
 
 /// The edit thread's end.
@@ -106,10 +108,14 @@ impl Handle {
         self.commands.push(command).is_ok()
     }
 
-    /// The newest report from the callback, if there is one.
+    /// The newest report from the callback, if there is one. Its reading covers every report
+    /// since the last call, so a meter doesn't miss a hit that fell between two frames.
     pub fn latest(&mut self) -> Option<Telemetry> {
-        let mut latest = None;
-        while let Ok(report) = self.telemetry.pop() {
+        let mut latest: Option<Telemetry> = None;
+        while let Ok(mut report) = self.telemetry.pop() {
+            if let Some(earlier) = latest {
+                report.reading.merge(earlier.reading);
+            }
             latest = Some(report);
         }
         latest
@@ -150,6 +156,7 @@ impl Realtime {
         let _ = self.telemetry.push(Telemetry {
             position: self.engine.position(),
             transport: self.engine.transport(),
+            reading: self.engine.take_reading(),
         });
     }
 
@@ -383,6 +390,29 @@ mod tests {
         let report = handle.latest().unwrap();
         assert_eq!(report.transport, Transport::Playing);
         assert_eq!(report.position, 3);
+    }
+
+    #[test]
+    fn the_reading_keeps_the_loudest_hit_across_reports() {
+        let pool = samples();
+        let mut one = song(1, 0);
+        *Arc::make_mut(one.phrases.get_mut(&0).unwrap())
+            .step_mut(0)
+            .unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
+        let engine = Engine::new(48_000, published(one, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert_eq!(blocks(&mut rt, 1), 0);
+        handle.send(Command::Audition { section_step: 0 });
+        assert_eq!(blocks(&mut rt, 2), 0);
+        handle.send(Command::Audition { section_step: 1 });
+        assert_eq!(blocks(&mut rt, 2), 0, "the audition has been cut");
+        let reading = handle.latest().unwrap().reading;
+        // A 0.5 sample at the master's gain, before and after the soft clip.
+        assert!((reading.before[0] - 0.25).abs() < 1e-3, "{reading:?}");
+        assert!((reading.after[0] - 0.25_f32.tanh()).abs() < 1e-3);
+        assert_eq!(reading.frames, BLOCK as u32 * 5);
+        assert!(reading.power[0] > 0.0);
+        assert_eq!(handle.latest(), None, "nothing is counted twice");
     }
 
     #[test]

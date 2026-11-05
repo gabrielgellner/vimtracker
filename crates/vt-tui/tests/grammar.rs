@@ -609,10 +609,10 @@ fn r_on_an_empty_step_uses_the_current_instrument() {
 fn r_ignores_the_note_velocity_setting() {
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "ic<Esc>");
-    assert_eq!(app.note_velocity, 0x60);
+    assert_eq!(app.note_velocity, 0x54);
     keys(&mut app, "rk");
     assert_eq!(steps(&app)[0], "C-5 70 00 VOL10 PAN20 CUT30");
-    assert_eq!(app.note_velocity, 0x60);
+    assert_eq!(app.note_velocity, 0x54);
 }
 
 #[test]

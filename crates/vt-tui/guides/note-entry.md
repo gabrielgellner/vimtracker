@@ -60,9 +60,9 @@ Set how far each note moves, which suits drums.
 Every note you write gets the velocity on the status line, as `Vel`, and you
 hear it as you type. Velocity runs from `00` to `7F`, the same range as MIDI.
 It starts at `64`, which leaves room above it for louder hits. Press `c` and
-`v` to go down or up: `10`, `20` and so on to `70`, then `7F`, which is full.
-Those presses don't land on `64` again. Like the octave, the setting isn't
-saved with the project.
+`v` to go down or up by the top digit: `54`, `44` and so on to `04`, or `74`
+then `7F`, which is full. Like the octave, the setting isn't saved with the
+project.
 
 `Backspace` clears a note with the velocity and instrument it was written
 with. A `--` in the Velocity column plays at full.

@@ -1071,9 +1071,9 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     press(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x64), "filled in from the default");
     press(&mut app, "c");
-    assert_eq!(app.note_velocity, 0x60, "the default falls onto the grid");
+    assert_eq!(app.note_velocity, 0x54, "only the top digit moves");
     press(&mut app, "a");
-    assert_eq!(velocity(&app), Some(0x60));
+    assert_eq!(velocity(&app), Some(0x54));
     assert_eq!(notes(&app)[0], Note::On(48));
 
     // The whole note is one undo step.
@@ -1083,17 +1083,47 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
 
     press(&mut app, "i");
     press(&mut app, "v");
-    assert_eq!(app.note_velocity, 0x70);
+    assert_eq!(app.note_velocity, 0x64, "back on the default");
+    press(&mut app, "v");
+    assert_eq!(app.note_velocity, 0x74);
     press(&mut app, "v");
     assert_eq!(app.note_velocity, 0x7F);
     press(&mut app, "v");
     assert_eq!(app.note_velocity, 0x7F);
     press(&mut app, "c");
-    assert_eq!(app.note_velocity, 0x70);
+    assert_eq!(app.note_velocity, 0x74, "steps back on from the top");
+    press(&mut app, "c");
+    assert_eq!(app.note_velocity, 0x64);
     for _ in 0..12 {
         press(&mut app, "c");
     }
-    assert_eq!(app.note_velocity, 0x10);
+    assert_eq!(app.note_velocity, 0x04);
+}
+
+#[test]
+fn other_tracks_light_the_step_they_are_playing() {
+    let song = Song::new(3);
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    let color = |app: &App, row: u16| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+            .unwrap();
+        // The neighbour column after the focused track's text, on a step two rows below the title.
+        let buffer = terminal.backend().buffer();
+        buffer[(34, row + 2)].fg
+    };
+    app.playhead = 2;
+    assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
+    app.transport = Transport::Playing;
+    assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
+    assert_eq!(color(&app, 3), vt_tui::theme::OVERLAY2);
+    app.transport = Transport::Paused;
+    assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
 }
 
 #[test]

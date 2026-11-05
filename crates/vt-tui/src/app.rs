@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::audio::LoadReadout;
+use crate::meter::Meter;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle};
@@ -39,7 +41,7 @@ pub struct Selection {
     pub scope: Scope,
 }
 
-/// The spacing of the velocities `c` and `v` land on in Insert.
+/// How far `c` and `v` move the note velocity in Insert: its top digit.
 const NOTE_VELOCITY_STEP: u8 = 0x10;
 
 /// Typed characters not yet written, in Insert mode.
@@ -99,6 +101,11 @@ pub struct App {
     pub status: String,
     pub transport: Transport,
     pub playhead: usize,
+    /// The main output's level.
+    pub meter: Meter,
+    /// The CPU figure on the status line.
+    pub cpu: LoadReadout,
+    last_tick: Instant,
     pub should_quit: bool,
     /// Live mute and solo per track, kept outside undo and written to the song on save.
     pub levels: Vec<TrackLive>,
@@ -170,6 +177,9 @@ impl App {
             status: String::new(),
             transport: Transport::Stopped,
             playhead: 0,
+            meter: Meter::default(),
+            cpu: LoadReadout::default(),
+            last_tick: Instant::now(),
             should_quit: false,
             levels,
             entry: Entry::default(),
@@ -281,7 +291,13 @@ impl App {
     /// Do the work due each frame: send waiting versions and read the callback's report.
     pub fn tick(&mut self) {
         self.handle.pump();
-        if let Some(report) = self.handle.latest() {
+        let now = Instant::now();
+        let seconds = now.saturating_duration_since(self.last_tick).as_secs_f32();
+        self.last_tick = now;
+        let report = self.handle.latest();
+        self.meter
+            .update(report.map(|report| report.reading), seconds);
+        if let Some(report) = report {
             self.playhead = report.position;
             self.transport = report.transport;
         }
@@ -1289,14 +1305,19 @@ fn snap_by(step: usize, skip: usize, forward: bool) -> isize {
     }
 }
 
-/// The next velocity on the grid above or below this one, so the default falls onto it. The top
-/// is full level, and it stops at the lowest step rather than writing silent notes.
+/// The note velocity one press up or down from this one, changing only its top digit so that
+/// pressing back always returns to the default. `7F` is the one value above that ladder, and going
+/// down from it steps back on.
 fn next_note_velocity(velocity: u8, up: bool) -> u8 {
     let step = NOTE_VELOCITY_STEP;
+    let lowest = DEFAULT_NOTE_VELOCITY % step;
+    let highest = MAX_VELOCITY - (MAX_VELOCITY - lowest) % step;
     if up {
-        ((velocity / step + 1) * step).min(MAX_VELOCITY)
+        (velocity + step).min(MAX_VELOCITY)
+    } else if velocity > highest {
+        highest
     } else {
-        (velocity.saturating_sub(1) / step * step).max(step)
+        velocity.saturating_sub(step).max(lowest)
     }
 }
 

@@ -115,6 +115,24 @@ fn neighbour_note(app: &App, track: usize, section_step: usize) -> String {
         .map_or_else(|| "   ".to_owned(), |step| step.note.to_string())
 }
 
+/// Whether another track is playing the step shown at a section position. A track shorter than
+/// this one loops, so a step it is playing can show on more than one row.
+fn neighbour_playing(app: &App, track: usize, section_step: usize) -> bool {
+    if app.transport != Transport::Playing && app.transport != Transport::Paused {
+        return false;
+    }
+    let song = app.song();
+    let chain = song
+        .sections
+        .first()
+        .and_then(|s| s.chains.get(track).copied().flatten());
+    chain
+        .and_then(|chain| song.chain_position(chain, section_step))
+        .is_some_and(|shown| {
+            chain.and_then(|chain| song.chain_position(chain, app.playhead)) == Some(shown)
+        })
+}
+
 fn track_label(app: &App, track: usize) -> String {
     let live = app.levels.get(track).copied().unwrap_or_default();
     let flag = if live.mute {
@@ -226,9 +244,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
         for track in &others {
+            let style = if neighbour_playing(app, *track, first_step + index) {
+                theme::active()
+            } else {
+                theme::dim()
+            };
             spans.push(Span::styled(
                 format!("{} ", neighbour_note(app, *track, first_step + index)),
-                theme::dim(),
+                style,
             ));
         }
         lines.push(Line::from(spans));

@@ -348,8 +348,11 @@ BPM a step lasts 125 ms, so a full filter sweep may sound stepped on a held soun
 ear. If it does, a column under a live sweep ramps across each step toward its next value, using the
 sweep's own values with no look-ahead into the audio, and hand-entered values keep the 10 ms smoother.
 
-**Scope and meters.** The callback copies a master signal into a preallocated ring buffer that drops frames
-when full, so it never waits on the UI. Track levels go through telemetry.
+**Scope and meters.** The main output meter is built: each report carries the master's peak before and after the
+soft clip and its summed power, and reports merge so a hit between two frames isn't missed. The meter's own motion is
+in `meter.rs`, apart from its drawing, so a mixer can have one per track. A scope is still to come: the callback copies a
+master signal into a preallocated ring buffer that drops frames when full, so it never waits on the UI. Track levels go
+through telemetry.
 
 ### Editing
 
@@ -660,7 +663,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `k o l p ;` | C to E, one octave up |
 | Insert (note) | `1` | Note-off |
 | Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
-| Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves on a grid of `10` to `70`, then `7F`, stopping at `10`. The note heard while typing uses it |
+| Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves by the top digit from `04` up to `74`, then `7F`. The note heard while typing uses it |
 | Insert | `Enter` | In the phrase view, play from the cursor or stop, except that it finishes an instrument ID that has been typed |
 | Insert | `Up Down` | Move one step without writing |
 | Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |
