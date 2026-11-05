@@ -394,9 +394,9 @@ Actions are plain data, so `.` can replay them and tests can run editing without
 *   **Undo.** Undo history is a list of song versions, and undo publishes an older one. It drops the oldest version
     past `HISTORY_LIMIT`. One Insert session and one Shape session are each one undo step.
 *   **Views.** Before G1: phrase, chain and instrument, and a help view. The phrase view shows the focused track's
-    full steps beside read-only note columns for the other tracks, aligned by step. Each row shows what plays beside
-    it on the selected track's current pass, so a longer track's column changes as the selected track loops, and only
-    the row playback is on is lit.
+    full steps beside read-only note columns for the other tracks. Each column shows that track's own current phrase from its own
+    loop start, with rows blank past its end, and its own `>`. Rows line up by number, not by time, since unequal
+    lengths drift. Rows continue past a short focused phrase for longer tracks. `;` and play still work in song time.
 *   **Fallback rule.** If a behaviour is not specified and does not affect what G1 tests, follow Vim, or else choose
     the simplest option and record it in the issue.
 

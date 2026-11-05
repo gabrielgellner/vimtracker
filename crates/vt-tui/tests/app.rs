@@ -9,7 +9,7 @@ use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Phrase, Song};
+use vt_model::song::{Chain, ChainEntry, Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
@@ -2017,7 +2017,7 @@ fn rows_count_from_the_loop_start_and_dim_outside_it() {
 }
 
 #[test]
-fn other_tracks_are_blank_beside_rows_outside_the_loop() {
+fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     let song = Song::new(2);
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -2027,10 +2027,14 @@ fn other_tracks_are_blank_beside_rows_outside_the_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (38..41).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (39..42).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
-    assert_eq!(neighbour(10), "   ", "past the loop");
+    assert_eq!(
+        neighbour(10),
+        "---",
+        "the other track is longer than this loop"
+    );
 }
 
 #[test]
@@ -2109,71 +2113,99 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-/// The note text in another track's column on one row of steps, and its colour.
+/// Another track's column on one row of steps: its marker and note, and its colour.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
     let x = 38 + column * 4;
-    let text = (x..x + 3).map(|x| buffer[(x, row + 2)].symbol()).collect();
-    (text, buffer[(x, row + 2)].fg)
+    let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
+    (text, buffer[(x + 1, row + 2)].fg)
 }
 
 #[test]
-fn other_tracks_show_the_pass_that_is_playing() {
+fn other_tracks_show_their_own_length_and_playhead() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let (dim, green) = (vt_tui::theme::OVERLAY2, vt_tui::theme::GREEN);
     let note = |text: &str, color| (text.to_owned(), color);
 
-    // Stopped, the columns show the first pass and nothing is lit.
+    // Stopped, nothing is marked. The 2-step track ends early, and the 8-step one has rows past
+    // the selected track's 4.
+    let buffer = screen(&app);
+    assert_eq!(beside(&buffer, 0, 1), note(" C#4", dim));
+    assert_eq!(beside(&buffer, 0, 2).0, "    ");
+    assert_eq!(beside(&buffer, 1, 3), note(" D#4", dim));
+    assert_eq!(beside(&buffer, 1, 7), note(" G-4", dim));
+
+    // Each track marks where it is in its own loop.
+    app.transport = Transport::Playing;
     app.playhead = 5;
     let buffer = screen(&app);
-    assert_eq!(beside(&buffer, 1, 1), note("C#4", dim));
-    assert_eq!(beside(&buffer, 1, 3), note("D#4", dim));
-
-    // Playing on the second pass, row 01 is step 5 of the longer track, and only it is lit.
-    app.transport = Transport::Playing;
-    let buffer = screen(&app);
-    assert_eq!(beside(&buffer, 1, 0), note("E-4", dim));
-    assert_eq!(beside(&buffer, 1, 1), note("F-4", green));
-    assert_eq!(beside(&buffer, 1, 2), note("F#4", dim));
-    assert_eq!(beside(&buffer, 1, 3), note("G-4", dim));
-
-    // The shorter track lights one row, not every row showing the same step.
-    assert_eq!(beside(&buffer, 0, 1), note("C#4", green));
-    assert_eq!(beside(&buffer, 0, 3), note("C#4", dim));
+    assert_eq!(beside(&buffer, 0, 1), note(">C#4", green));
+    assert_eq!(beside(&buffer, 0, 3).0, "    ");
+    assert_eq!(beside(&buffer, 1, 5), note(">F-4", green));
+    assert_eq!(beside(&buffer, 1, 1), note(" C#4", dim));
 
     app.transport = Transport::Paused;
-    assert_eq!(beside(&screen(&app), 1, 1), note("F-4", green));
-
-    // Back to the first pass.
-    app.transport = Transport::Playing;
-    app.playhead = 1;
-    assert_eq!(beside(&screen(&app), 1, 1), note("C#4", green));
+    assert_eq!(beside(&screen(&app), 1, 5), note(">F-4", green));
 }
 
 #[test]
-fn other_tracks_run_past_the_longest_and_show_a_reset() {
+fn a_column_shows_the_phrase_its_chain_is_on() {
     let mut song = Song::new(2);
-    song.phrases.insert(0, Arc::new(Phrase::new(3)));
-    let mut longer = Phrase::new(5);
-    let note = |midi| Step {
-        note: Note::On(midi),
-        ..Step::default()
+    song.phrases.insert(0, Arc::new(Phrase::new(4)));
+    for (id, midi) in [(1, 60), (2, 64)] {
+        let mut phrase = Phrase::new(2);
+        *phrase.step_mut(0).unwrap() = Step {
+            note: Note::On(midi),
+            ..Step::default()
+        };
+        song.phrases.insert(id, Arc::new(phrase));
+    }
+    let entry = |phrase| ChainEntry {
+        phrase,
+        transpose: 0,
     };
-    *longer.step_mut(0).unwrap() = note(60);
-    *longer.step_mut(4).unwrap() = note(64);
-    song.phrases.insert(1, Arc::new(longer));
+    let entries = vec![entry(1), entry(2)];
+    song.chains.insert(1, Arc::new(Chain { entries }));
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    app.transport = Transport::Playing;
-    app.playhead = 3;
-    // The selected track is on its second pass, so its row 01 is the longer track's step 4.
-    assert_eq!(beside(&screen(&app), 0, 0).1, vt_tui::theme::GREEN);
-    assert_eq!(beside(&screen(&app), 0, 1).0, "E-4");
+    assert_eq!(beside(&screen(&app), 0, 0).0, " C-4");
 
-    // A reset at 4 comes first, so that row is where everything has gone back to the start.
-    command(&mut app, "reset 4");
-    assert_eq!(beside(&screen(&app), 0, 1).0, "C-4");
+    // Stopped, it follows the cursor, as that's where playing would start.
+    app.cursor.step = 2;
+    assert_eq!(beside(&screen(&app), 0, 0).0, " E-4");
+    app.cursor.step = 0;
+
+    app.transport = Transport::Playing;
+    app.playhead = 2;
+    assert_eq!(beside(&screen(&app), 0, 0).0, ">E-4");
+}
+
+#[test]
+fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let time = Instant::now();
+    app.key(Key::char('i'), time);
+    let buffer = screen(&app);
+    // Row 04 is past the selected track's end: it closes the box beside the longer track.
+    let text = |row: u16| -> String {
+        (0..37)
+            .map(|x| buffer[(x, row + 2)].symbol())
+            .collect::<String>()
+    };
+    assert!(text(3).contains('│'), "{}", text(3));
+    assert!(text(4).contains('└'), "{}", text(4));
+    assert!(text(5).contains(" 05"), "{}", text(5));
+    assert_eq!(beside(&buffer, 1, 4).0, " E-4");
+    assert_eq!(beside(&buffer, 1, 5).0, " F-4");
+    app.key(Key::new(KeyCode::Esc), time);
+
+    // A row above the selected track's loop start is above every other track's too.
+    press(&mut app, "]l");
+    app.top = 0;
+    let buffer = screen(&app);
+    assert_eq!(beside(&buffer, 1, 0).0, "    ");
+    assert_eq!(beside(&buffer, 1, 1).0, " C-4");
 }
 
 #[test]
