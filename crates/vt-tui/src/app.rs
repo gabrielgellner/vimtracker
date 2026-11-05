@@ -9,6 +9,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle};
 use vt_engine::published::Published;
+use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
 use vt_model::history::History;
@@ -831,6 +832,7 @@ impl App {
                 }
             }
             Line::Chain(chain) => self.set_track_chain(chain),
+            Line::Render { path, rows, tail } => self.render(&path, rows, tail),
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
@@ -848,6 +850,21 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Render what is in memory, with the live mutes and at the device's rate. The screen waits,
+    /// and audio keeps playing on its own thread.
+    fn render(&mut self, path: &Path, rows: Option<usize>, tail: bool) {
+        let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
+        let samples = render_loop(Arc::new(version), self.rate, RenderOptions { rows, tail });
+        self.status = match write_wav(path, self.rate, &samples) {
+            Ok(()) => format!(
+                "Rendered {} ({:.2} s)",
+                path.display(),
+                samples.len() as f64 / 2.0 / f64::from(self.rate)
+            ),
+            Err(error) => format!("Couldn't write {}: {error}", path.display()),
+        };
     }
 
     fn quit(&mut self, force: bool) {

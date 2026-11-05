@@ -21,6 +21,4 @@ cpal.workspace = true
 clap.workspace = true
 thiserror.workspace = true
 nucleo-matcher.workspace = true
-
-[dev-dependencies]
 hound.workspace = true

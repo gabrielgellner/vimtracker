@@ -712,3 +712,18 @@ fn undo_keeps_the_cursor_on_a_row_that_exists() {
     assert_eq!(app.cursor.slot, 0);
     assert_eq!(app.phrase_id(), Some(0));
 }
+
+#[test]
+fn render_writes_what_is_in_memory_with_live_mutes() {
+    let (mut app, _realtime) = app();
+    let path = std::env::temp_dir().join(format!("vt-app-render-{}.wav", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    command(&mut app, &format!("render {} --rows 4", path.display()));
+    assert!(app.status.contains("Rendered"), "{}", app.status);
+    let reader = hound::WavReader::open(&path).unwrap();
+    assert_eq!(reader.len(), 24_000 * 2);
+    std::fs::remove_file(&path).unwrap();
+    assert!(!app.dirty, "rendering isn't an edit");
+    command(&mut app, "render /no/such/folder/x.wav");
+    assert!(app.status.contains("Couldn't write"), "{}", app.status);
+}

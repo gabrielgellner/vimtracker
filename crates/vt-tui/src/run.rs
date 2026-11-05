@@ -11,6 +11,7 @@ use thiserror::Error;
 use vt_engine::engine::Engine;
 use vt_engine::link::connect;
 use vt_engine::published::Published;
+use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::constants::{DEFAULT_TRACKS, FRAME_MS};
 use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
@@ -33,6 +34,47 @@ pub enum RunError {
     Io(#[from] std::io::Error),
     #[error("the audio device was lost")]
     DeviceLost,
+    #[error("couldn't write the render: {0}")]
+    Render(#[from] hound::Error),
+    #[error("{0} couldn't be loaded, so the render would be missing it")]
+    MissingSample(String),
+}
+
+/// What `vimtracker render` was asked for.
+pub struct RenderRequest {
+    pub project: PathBuf,
+    pub out: PathBuf,
+    pub rate: u32,
+    pub rows: Option<usize>,
+    pub seed: Option<u64>,
+    pub tail: bool,
+}
+
+/// Render a saved project to a file, with no terminal or sound device. A sample that won't load
+/// stops it, since a file that quietly lacks a part is worse than no file.
+pub fn render(request: &RenderRequest) -> Result<(), RunError> {
+    let mut song = project::load_song(&request.project)?;
+    if let Some(seed) = request.seed {
+        song.seed = seed;
+    }
+    let mut pool = SamplePool::default();
+    let errors = project::load_samples(Some(&request.project), &song, request.rate, &mut pool);
+    if let Some(first) = errors.first() {
+        return Err(RunError::MissingSample(first.to_string()));
+    }
+    let version = Published::new(Arc::new(song), Arc::new(pool));
+    let options = RenderOptions {
+        rows: request.rows,
+        tail: request.tail,
+    };
+    let samples = render_loop(Arc::new(version), request.rate, options);
+    write_wav(&request.out, request.rate, &samples)?;
+    println!(
+        "Rendered {} ({:.2} s)",
+        request.out.display(),
+        samples.len() as f64 / 2.0 / f64::from(request.rate)
+    );
+    Ok(())
 }
 
 /// Open a project, or start an unsaved one, and run until the user quits.
