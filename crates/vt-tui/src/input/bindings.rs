@@ -72,7 +72,9 @@ pub enum Cmd {
     RemoveRow,
     CopyRow,
     /// Play the current instrument.
-    Review,
+    Audition,
+    Replace,
+    Substitute,
     PickInstrument,
 }
 
@@ -161,7 +163,9 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("<", Cmd::Operator(Op::ShiftDown), "Shift down"),
     ("x", Cmd::ClearField, "Clear this field"),
     ("p", Cmd::Paste, "Paste over from the cursor"),
-    ("r", Cmd::Review, "Review this row on every track"),
+    (";", Cmd::Audition, "Audition this row on every track"),
+    ("r", Cmd::Replace, "Replace this field, and stay here"),
+    ("s", Cmd::Substitute, "Clear this field and start Insert"),
     ("+", Cmd::Increase, "Increase the value"),
     ("-", Cmd::Decrease, "Decrease the value"),
     ("C-a", Cmd::Increase, "Increase the value"),
@@ -200,9 +204,9 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
     ("y y", Cmd::CopyRow, "Copy this row"),
     ("p", Cmd::Paste, "Add the copied row below"),
     (
-        "r",
-        Cmd::Review,
-        "Review the start of this row, every track",
+        ";",
+        Cmd::Audition,
+        "Audition the start of this row, every track",
     ),
     ("g d", Cmd::OpenItem, "Open this phrase, or add one"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
@@ -222,7 +226,7 @@ const INSTRUMENT: &[(&str, Cmd, &str)] = &[
     ("-", Cmd::Decrease, "Decrease the value"),
     ("C-a", Cmd::Increase, "Increase the value"),
     ("C-x", Cmd::Decrease, "Decrease the value"),
-    ("r", Cmd::Review, "Review this instrument"),
+    (";", Cmd::Audition, "Audition this instrument"),
 ];
 
 /// Keys that act on a selection.

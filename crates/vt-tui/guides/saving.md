@@ -21,15 +21,16 @@ moved or shared, and you carry on working in that folder.
 | Keys | Does |
 |---|---|
 | `Enter` | Play from the cursor, or stop |
-| `r` | Review: hear this row on every track, while stopped |
+| `;` | Audition: hear this row on every track, while stopped |
 | `Space x` | Pause in place, or resume |
 | `Space c` | Return to the start |
 | `:bpm 137.63` | Set the tempo |
 
-`r` means the same in every view: in a chain it plays the start of that row,
-and in the instrument view that instrument. Press `j` then `r` to step through
-a pattern. Each review cuts the last, and an empty row silences it. FX on a
-row don't run, so `DEL`, `CUT` and the like are only heard in playback.
+`;` means the same in every view: in a chain it plays the start of that row,
+and in the instrument view that instrument. Press `j` then `;` to step
+through a pattern. Each audition cuts the last, and an empty row silences
+it. FX on a row don't run, so `DEL`, `CUT` and the like are only heard in
+playback.
 
 ## Rendering to a WAV
 

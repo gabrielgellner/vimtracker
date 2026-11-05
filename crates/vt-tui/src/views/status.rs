@@ -79,7 +79,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
             Mode::Help | Mode::Guide | Mode::Picker => theme::TEAL,
-            Mode::Restore => theme::RED,
+            Mode::Replace | Mode::Restore => theme::RED,
         })
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {

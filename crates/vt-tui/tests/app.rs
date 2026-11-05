@@ -1546,7 +1546,7 @@ fn with_a_sound(app: &mut App) {
 }
 
 #[test]
-fn r_reviews_in_every_view_and_changes_nothing() {
+fn semicolon_auditions_in_every_view_and_changes_nothing() {
     let (mut app, mut rt) = app();
     with_a_sound(&mut app);
     press(&mut app, "ia");
@@ -1557,26 +1557,29 @@ fn r_reviews_in_every_view_and_changes_nothing() {
     let _ = loudest(&mut rt, 96_000);
     assert_eq!(loudest(&mut rt, 2000), 0.0);
 
-    press(&mut app, "kr");
+    press(&mut app, "k;");
     assert!(
         loudest(&mut rt, 2000) > 0.01,
-        "the phrase view reviews a row"
+        "the phrase view auditions a row"
     );
     assert!(Arc::ptr_eq(&version, app.song()));
     assert_eq!(app.transport, Transport::Stopped);
 
-    press(&mut app, "jr");
+    press(&mut app, "j;");
     let _ = loudest(&mut rt, 4800);
     assert_eq!(loudest(&mut rt, 2000), 0.0, "an empty row is silent");
 
-    press(&mut app, " 2r");
+    press(&mut app, " 2;");
     assert!(
         loudest(&mut rt, 2000) > 0.01,
-        "the chain view reviews its row"
+        "the chain view auditions its row"
     );
     let _ = loudest(&mut rt, 96_000);
-    press(&mut app, " 5r");
-    assert!(loudest(&mut rt, 2000) > 0.01, "the instrument view reviews");
+    press(&mut app, " 5;");
+    assert!(
+        loudest(&mut rt, 2000) > 0.01,
+        "the instrument view auditions"
+    );
 }
 
 #[test]
@@ -1585,15 +1588,17 @@ fn p_no_longer_plays_in_the_instrument_view() {
     with_a_sound(&mut app);
     press(&mut app, " 5p");
     assert_eq!(loudest(&mut rt, 2000), 0.0);
+    press(&mut app, "r");
+    assert_eq!(app.mode, Mode::Normal, "r is not bound in this view");
 }
 
 #[test]
-fn r_while_playing_says_why_it_did_nothing() {
+fn semicolon_while_playing_says_why_it_did_nothing() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Enter);
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
-    press(&mut app, "r");
+    press(&mut app, ";");
     assert!(app.status.contains("stopped"), "{}", app.status);
 }
 
@@ -1823,4 +1828,17 @@ fn zero_and_dollar_pick_the_chain_columns_and_stay_out_of_the_instrument_view() 
     let instrument = app.instrument;
     press(&mut app, "0$");
     assert_eq!(app.instrument, instrument);
+}
+
+#[test]
+fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "r");
+    assert_eq!(app.mode, Mode::Replace);
+    let buffer = screen(&app);
+    assert_eq!(buffer[(5, 2)].bg, vt_tui::theme::RED);
+    assert_eq!(buffer[(4, 2)].symbol(), " ");
+    press(&mut app, "a");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(screen(&app)[(5, 2)].bg, vt_tui::theme::ROSEWATER);
 }

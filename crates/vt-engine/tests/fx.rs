@@ -498,7 +498,7 @@ fn two_tracks() -> Song {
     song
 }
 
-fn reviewed(song: Song, level: f32, act: impl Fn(&mut Engine)) -> f32 {
+fn auditioned(song: Song, level: f32, act: impl Fn(&mut Engine)) -> f32 {
     let version = Arc::new(Published::new(Arc::new(song), flat(level)));
     let mut engine = Engine::new(RATE, version);
     act(&mut engine);
@@ -510,66 +510,66 @@ fn reviewed(song: Song, level: f32, act: impl Fn(&mut Engine)) -> f32 {
 }
 
 #[test]
-fn review_sounds_every_track_on_the_row_and_stays_stopped() {
-    let one = reviewed(two_tracks(), 0.02, |engine| engine.review(1));
-    let both = reviewed(two_tracks(), 0.02, |engine| engine.review(0));
+fn audition_sounds_every_track_on_the_row_and_stays_stopped() {
+    let one = auditioned(two_tracks(), 0.02, |engine| engine.audition(1));
+    let both = auditioned(two_tracks(), 0.02, |engine| engine.audition(0));
     assert!(one > 0.0);
     assert!(both > one * 2.5, "{both} vs {one}");
     assert_eq!(
-        reviewed(two_tracks(), 0.02, |engine| engine.review(2)),
+        auditioned(two_tracks(), 0.02, |engine| engine.audition(2)),
         0.0,
         "an empty row is silent"
     );
 }
 
 #[test]
-fn review_uses_velocity_and_is_cut_by_the_next_one() {
-    let full = reviewed(song(&["C-4 -- 00 ---00 ---00 ---00"]), 0.02, |e| {
-        e.review(0)
+fn audition_uses_velocity_and_is_cut_by_the_next_one() {
+    let full = auditioned(song(&["C-4 -- 00 ---00 ---00 ---00"]), 0.02, |e| {
+        e.audition(0)
     });
-    let soft = reviewed(song(&["C-4 80 00 ---00 ---00 ---00"]), 0.02, |e| {
-        e.review(0)
+    let soft = auditioned(song(&["C-4 80 00 ---00 ---00 ---00"]), 0.02, |e| {
+        e.audition(0)
     });
     assert!(
         (soft / full - 128.0 / 255.0).abs() < 1e-3,
         "{soft} vs {full}"
     );
 
-    let cut = reviewed(two_tracks(), 0.02, |engine| {
-        engine.review(0);
-        engine.review(2);
+    let cut = auditioned(two_tracks(), 0.02, |engine| {
+        engine.audition(0);
+        engine.audition(2);
     });
-    assert_eq!(cut, 0.0, "an empty row silences the last review");
+    assert_eq!(cut, 0.0, "an empty row silences the last audition");
 }
 
 #[test]
-fn review_respects_mute_and_solo() {
-    let silent = reviewed(two_tracks(), 0.02, |engine| {
+fn audition_respects_mute_and_solo() {
+    let silent = auditioned(two_tracks(), 0.02, |engine| {
         engine.set_mute(1, true);
-        engine.review(1);
+        engine.audition(1);
     });
     assert_eq!(silent, 0.0);
-    let soloed = reviewed(two_tracks(), 0.02, |engine| {
+    let soloed = auditioned(two_tracks(), 0.02, |engine| {
         engine.set_solo(0, true);
-        engine.review(1);
+        engine.audition(1);
     });
     assert_eq!(soloed, 0.0);
 }
 
 #[test]
-fn review_does_not_run_fx_or_change_later_playback() {
+fn audition_does_not_run_fx_or_change_later_playback() {
     let text = ["C-4 -- 00 VOL00 ---00 ---00", "--- -- -- ---00 ---00 ---00"];
-    let heard = reviewed(song(&text), 0.02, |engine| engine.review(0));
+    let heard = auditioned(song(&text), 0.02, |engine| engine.audition(0));
     assert!(heard > 0.0, "VOL00 did not run");
 
-    let play = |review: bool| {
+    let play = |audition: bool| {
         let version = Arc::new(Published::new(
             Arc::new(song(&["C-4 -- 00 ---00 ---00 ---00"])),
             flat(0.02),
         ));
         let mut engine = Engine::new(RATE, version);
-        if review {
-            engine.review(0);
+        if audition {
+            engine.audition(0);
             let mut silence = vec![0.0; RATE as usize * 2 * 8];
             engine.process(&mut silence);
         }
@@ -585,11 +585,11 @@ fn review_does_not_run_fx_or_change_later_playback() {
 }
 
 #[test]
-fn review_does_nothing_while_playing() {
+fn audition_does_nothing_while_playing() {
     let version = Arc::new(Published::new(Arc::new(two_tracks()), flat(0.02)));
     let mut engine = Engine::new(RATE, version);
     engine.play_from(2);
-    engine.review(0);
+    engine.audition(0);
     let mut out = vec![0.0; 2000];
     engine.process(&mut out);
     assert!(out.iter().all(|sample| *sample == 0.0));

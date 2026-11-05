@@ -31,10 +31,10 @@ pub fn window() -> Style {
 
 /// The cursor, which turns the Insert colour while typing writes to the song.
 pub fn cursor(mode: Mode) -> Style {
-    let color = if mode == Mode::Insert {
-        GREEN
-    } else {
-        ROSEWATER
+    let color = match mode {
+        Mode::Insert => GREEN,
+        Mode::Replace => RED,
+        _ => ROSEWATER,
     };
     Style::new().fg(BASE).bg(color)
 }

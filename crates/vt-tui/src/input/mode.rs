@@ -33,6 +33,8 @@ pub enum Mode {
     /// Selecting whole steps.
     VisualStep,
     Insert,
+    /// Waiting for what replaces the field under the cursor.
+    Replace,
     Command,
     Help,
     /// Reading a guide.
@@ -54,6 +56,7 @@ impl Mode {
             Self::VisualField => "VISUAL",
             Self::VisualStep => "V-STEP",
             Self::Insert => "INSERT",
+            Self::Replace => "REPLACE",
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Guide => "GUIDE",

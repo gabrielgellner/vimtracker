@@ -538,9 +538,9 @@ impl Engine {
     }
 
     /// Hear a row while not playing: every audible track's note at this step of the section, with
-    /// its instrument, velocity and transpose. Whatever a review was sounding is cut first. Its
+    /// its instrument, velocity and transpose. Whatever an audition was sounding is cut first. Its
     /// FX don't run, and nothing that playback relies on changes.
-    pub fn review(&mut self, section_step: usize) {
+    pub fn audition(&mut self, section_step: usize) {
         if self.transport == Transport::Playing {
             return;
         }

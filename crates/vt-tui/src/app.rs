@@ -92,8 +92,10 @@ pub struct App {
     pub octave: u8,
     /// The velocity new notes are written with. `None` leaves the Velocity column alone.
     pub note_velocity: Option<u8>,
+    /// The field a replace started on, since typing an FX command moves on to its value.
+    pub(crate) replacing: Option<Field>,
     /// The step last written in Insert, and where that left the cursor.
-    last_entry: Option<(usize, usize)>,
+    pub(crate) last_entry: Option<(usize, usize)>,
     pub command_line: String,
     pub status: String,
     pub transport: Transport,
@@ -163,6 +165,7 @@ impl App {
             instrument: 0,
             octave: 4,
             note_velocity: None,
+            replacing: None,
             last_entry: None,
             command_line: String::new(),
             status: String::new(),
@@ -306,6 +309,7 @@ impl App {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key, now),
+            Mode::Replace => self.replace_key(key),
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
             Mode::Guide => self.guide_key(key),
@@ -375,11 +379,11 @@ impl App {
     }
 
     /// Hear a row, unless playback is using the tracks.
-    pub(crate) fn review(&mut self, section_step: usize) {
+    pub(crate) fn audition(&mut self, section_step: usize) {
         if self.transport == Transport::Playing {
-            self.status = "Review works while stopped or paused".to_owned();
+            self.status = "Audition works while stopped or paused".to_owned();
         } else {
-            self.handle.send(Command::Review { section_step });
+            self.handle.send(Command::Audition { section_step });
         }
     }
 
@@ -437,6 +441,8 @@ impl App {
             }
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickInstrument => self.open_instrument_picker(),
+            Cmd::Replace => self.begin_replace(),
+            Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.last_entry = None;
@@ -451,9 +457,9 @@ impl App {
                 self.handle.send(Command::PlayOrStop { from });
                 self.guard = Some((key, now));
             }
-            Cmd::Review => {
+            Cmd::Audition => {
                 let section_step = self.section_step();
-                self.review(section_step);
+                self.audition(section_step);
             }
             Cmd::PauseOrResume => {
                 self.handle.send(Command::PauseOrResume);
@@ -641,6 +647,29 @@ impl App {
         self.move_step(0);
     }
 
+    /// Typing here means what it does in Insert, for this one field, and `advance` ends it.
+    fn replace_key(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => {
+                self.cancel_entry();
+                if let Some(field) = self.replacing.take() {
+                    self.cursor.field = field;
+                }
+            }
+            KeyCode::Backspace => {
+                self.entry.text.pop();
+            }
+            KeyCode::Enter if self.entry.text.is_empty() => {}
+            KeyCode::Char('c' | 'v') if self.cursor.field == Field::Note => {}
+            _ => match self.cursor.field {
+                Field::Note => self.insert_note(key),
+                Field::Velocity | Field::FxValue(_) => self.insert_value(key),
+                Field::Instrument => self.insert_instrument(key),
+                Field::FxCommand(slot) => self.insert_command(key, slot),
+            },
+        }
+    }
+
     fn insert_key(&mut self, key: Key, now: Instant) {
         // Instrument IDs can have any number of digits, so `Enter` finishes one.
         let finishing_id = self.cursor.field == Field::Instrument && !self.entry.text.is_empty();
@@ -703,8 +732,12 @@ impl App {
                     let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
                     let midi = midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8;
                     self.write_played_note(midi);
+                    let heard = match self.mode {
+                        Mode::Replace => self.step_instrument().unwrap_or(self.instrument),
+                        _ => self.instrument,
+                    };
                     self.handle.send(Command::Preview {
-                        instrument: self.instrument,
+                        instrument: heard,
                         note: midi,
                     });
                     self.advance();
@@ -742,6 +775,11 @@ impl App {
     /// Write a played note, with the note velocity if one is set, as one change.
     fn write_played_note(&mut self, midi: u8) {
         let note = Note::On(midi);
+        if self.mode == Mode::Replace {
+            let instrument = self.step_instrument().unwrap_or(self.instrument);
+            self.write_note(note, Some(instrument));
+            return;
+        }
         let Some(velocity) = self.note_velocity else {
             self.write_note(note, Some(self.instrument));
             return;
@@ -842,7 +880,7 @@ impl App {
         self.advance();
     }
 
-    fn current_slot(&self, slot: usize) -> Option<FxSlot> {
+    pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
         let id = self.phrase_id()?;
         let phrase = self.song().phrases.get(&id)?;
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
@@ -915,6 +953,10 @@ impl App {
     }
 
     fn advance(&mut self) {
+        if self.mode == Mode::Replace {
+            self.finish_replace();
+            return;
+        }
         let written = self.cursor.step;
         let by = self.song().step as isize;
         self.move_step(by);

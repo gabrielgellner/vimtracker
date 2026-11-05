@@ -6,8 +6,9 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue};
 use vt_model::label::is_named_slot;
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
+use vt_model::step::Step;
 
-use crate::app::{App, Selection};
+use crate::app::{App, Entry, Selection};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
@@ -15,10 +16,23 @@ use crate::input::mode::Mode;
 /// What `.` repeats.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
-    Operator { op: Op, cover: Cover },
-    Increment { by: i32, cover: Cover },
+    Operator {
+        op: Op,
+        cover: Cover,
+    },
+    Increment {
+        by: i32,
+        cover: Cover,
+    },
     ClearField,
-    Paste { register: Option<char> },
+    Paste {
+        register: Option<char>,
+    },
+    /// A field replaced, with the step that holds its new value.
+    Replace {
+        field: Field,
+        value: Box<Step>,
+    },
 }
 
 /// What a repeated change covers, relative to the cursor.
@@ -367,8 +381,60 @@ impl App {
         }
     }
 
+    /// Wait for what replaces the field under the cursor, as Vim's `r` does: no move, and back
+    /// to Normal once it's written.
+    pub(crate) fn begin_replace(&mut self) {
+        self.count = None;
+        if let Field::FxValue(slot) = self.cursor.field
+            && self.current_slot(slot).and_then(|s| s.command).is_none()
+        {
+            self.status = "Type an FX command first".to_owned();
+            return;
+        }
+        self.entry = Entry::default();
+        self.replacing = Some(self.cursor.field);
+        self.mode = Mode::Replace;
+    }
+
+    /// Clear the field under the cursor and start Insert there, as Vim's `s` does. An FX value
+    /// keeps its command for the value about to be typed, and the slot does nothing until then.
+    /// As with any Insert, `.` doesn't repeat what is typed.
+    pub(crate) fn substitute(&mut self) {
+        self.count = None;
+        let command = match self.cursor.field {
+            Field::FxValue(slot) => self.current_slot(slot).and_then(|s| s.command),
+            _ => None,
+        };
+        self.do_change(&Change::ClearField);
+        self.entry = Entry {
+            command,
+            ..Entry::default()
+        };
+        self.last_entry = None;
+        self.mode = Mode::Insert;
+    }
+
+    /// Back to where the replace started, and remember it for `.`.
+    pub(crate) fn finish_replace(&mut self) {
+        self.mode = Mode::Normal;
+        let Some(field) = self.replacing.take() else {
+            return;
+        };
+        self.cursor.field = field;
+        let value = self
+            .phrase_id()
+            .and_then(|id| self.song().phrases.get(&id).cloned())
+            .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
+        if let Some(value) = value {
+            self.last_change = Some(Change::Replace {
+                field,
+                value: Box::new(value),
+            });
+        }
+    }
+
     /// The instrument on the cursor's step.
-    fn step_instrument(&self) -> Option<u32> {
+    pub(crate) fn step_instrument(&self) -> Option<u32> {
         let id = self.phrase_id()?;
         let phrase = self.song().phrases.get(&id)?;
         phrase.steps().get(self.cursor.step)?.instrument
@@ -407,6 +473,36 @@ impl App {
                     });
                 }
             }
+            Change::Replace { field, value } => {
+                let Some(phrase) = self.phrase_id() else {
+                    return;
+                };
+                let step = self.cursor.step;
+                let action = match field {
+                    Field::Note => Action::SetNote {
+                        phrase,
+                        step,
+                        note: value.note,
+                        instrument: self.step_instrument().or(value.instrument),
+                    },
+                    Field::Velocity => Action::SetField {
+                        phrase,
+                        step,
+                        value: FieldValue::Velocity(value.velocity),
+                    },
+                    Field::Instrument => Action::SetField {
+                        phrase,
+                        step,
+                        value: FieldValue::Instrument(value.instrument),
+                    },
+                    Field::FxCommand(slot) | Field::FxValue(slot) => Action::SetField {
+                        phrase,
+                        step,
+                        value: FieldValue::Slot(*slot, value.fx[*slot]),
+                    },
+                };
+                self.apply(&action);
+            }
             Change::Paste { register } => {
                 let name = register.unwrap_or('"');
                 let Some(block) = self.registers.get(&name).cloned() else {
@@ -444,7 +540,7 @@ impl App {
                 Change::ClearField => {
                     self.apply_operator(Op::Clear, selection.range, selection.scope)
                 }
-                Change::Paste { .. } => {}
+                Change::Paste { .. } | Change::Replace { .. } => {}
             }
             self.leave_visual(selection);
         } else {

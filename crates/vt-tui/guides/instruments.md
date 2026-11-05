@@ -8,7 +8,7 @@ it.
 |---|---|
 | `h` `l` | Previous or next instrument |
 | `j` `k` | Next or previous row |
-| `r` | Review: hear this instrument at C-4 |
+| `;` | Audition: hear this instrument at C-4 |
 | `+` `-` | Change the value |
 | `i` | On Sample, list samples. On other rows, type a value |
 

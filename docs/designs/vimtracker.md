@@ -632,7 +632,9 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `x` | Clear the current field |
 | Normal | `p` | Paste over from the cursor |
 | Normal | `K` | On the Instrument column, choose this step's instrument from those that exist, labels first |
-| Normal | `r` | Review: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
+| Normal | `;` | Audition: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
+| Normal | `s` | Clear this field and start Insert there, as in Vim. An FX value keeps its command for the value typed next. `.` doesn't repeat it |
+| Normal | `r` | Replace this field as in Vim, with no move, and return to Normal. A note takes one note key and keeps its velocity and instrument. Other columns take a whole value, and an FX command goes on to its value. `.` repeats it |
 | Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z` |
 | Normal | `+`, `-` | Increase or decrease the value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
