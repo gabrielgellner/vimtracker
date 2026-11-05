@@ -102,6 +102,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let _stream = output.start(realtime, Arc::clone(&stats))?;
     let mut app = App::new(song, path, samples, handle, rate);
     app.status = status;
+    app.offer_restore();
 
     let mut terminal = ratatui::init();
     let result = main_loop(&mut terminal, &mut app, &stats);
@@ -120,6 +121,7 @@ fn main_loop(
             return Err(RunError::DeviceLost);
         }
         app.tick();
+        app.autosave_if_due(Instant::now());
         terminal.draw(|frame| {
             let [body, status] =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());

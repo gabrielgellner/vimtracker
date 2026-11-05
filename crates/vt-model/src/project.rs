@@ -14,6 +14,7 @@ use crate::samples::SamplePool;
 use crate::song::{Instrument, Song};
 
 const SONG_FILE: &str = "song.ron";
+const AUTOSAVE_FILE: &str = "song.autosave.ron";
 const SAMPLES_DIR: &str = "samples";
 
 /// Why a project could not be read or written.
@@ -90,6 +91,33 @@ fn write_song(folder: &Path, name: &str, song: &Song) -> Result<(), ProjectError
     let temporary = folder.join(format!(".{name}.tmp"));
     fs::write(&temporary, text).map_err(io_at(&temporary))?;
     fs::rename(&temporary, &target).map_err(io_at(&target))
+}
+
+/// Write unsaved work beside the song, leaving the song itself alone.
+pub fn write_autosave(folder: &Path, song: &Song) -> Result<(), ProjectError> {
+    write_song(folder, AUTOSAVE_FILE, song)
+}
+
+/// Read the autosave file.
+pub fn load_autosave(folder: &Path) -> Result<Song, ProjectError> {
+    let path = folder.join(AUTOSAVE_FILE);
+    let text = fs::read_to_string(&path).map_err(io_at(&path))?;
+    parse_song(&text, &path)
+}
+
+/// Remove the autosave file, if there is one.
+pub fn remove_autosave(folder: &Path) {
+    let _ = fs::remove_file(folder.join(AUTOSAVE_FILE));
+}
+
+/// Whether there is an autosave newer than the song, or with no saved song at all.
+pub fn newer_autosave(folder: &Path) -> bool {
+    let modified = |name: &str| fs::metadata(folder.join(name)).and_then(|m| m.modified());
+    match (modified(AUTOSAVE_FILE), modified(SONG_FILE)) {
+        (Ok(autosave), Ok(song)) => autosave >= song,
+        (Ok(_), Err(_)) => true,
+        (Err(_), _) => false,
+    }
 }
 
 /// Create a project folder for a new song. A folder that already has a song is refused.

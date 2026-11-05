@@ -79,6 +79,8 @@ pub struct App {
     pub(crate) yanked_row: Option<ChainEntry>,
     pub(crate) jumps: Vec<Place>,
     pub(crate) jump_index: usize,
+    pub(crate) last_autosave: Option<Instant>,
+    pub(crate) autosaved: Option<Arc<Song>>,
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
@@ -136,6 +138,8 @@ impl App {
             yanked_row: None,
             jumps: Vec::new(),
             jump_index: 0,
+            last_autosave: None,
+            autosaved: None,
             cursor: Cursor {
                 track: 0,
                 slot: 0,
@@ -188,7 +192,7 @@ impl App {
     }
 
     /// The song as saved: with live mute and solo written into it.
-    fn song_to_save(&self) -> Arc<Song> {
+    pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
@@ -286,6 +290,7 @@ impl App {
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
             Mode::Picker => self.picker_key(key),
+            Mode::Restore => self.restore_key(key),
         }
     }
 
@@ -871,6 +876,7 @@ impl App {
         if self.dirty && !force {
             self.status = "Unsaved changes: use :w to save, or :q! to quit anyway".to_owned();
         } else {
+            self.forget_autosave();
             self.should_quit = true;
         }
     }
@@ -901,6 +907,7 @@ impl App {
                 }
                 self.folder = Some(folder.clone());
                 self.dirty = false;
+                self.forget_autosave();
                 self.status = format!("Saved {}", folder.display());
             }
             Err(error) => self.status = error.to_string(),
@@ -921,6 +928,7 @@ impl App {
                 if self.status.is_empty() {
                     self.status = format!("Opened {}", path.display());
                 }
+                self.offer_restore();
             }
             Err(error) => self.status = error.to_string(),
         }
@@ -945,7 +953,7 @@ impl App {
     }
 
     /// Replace the song and undo history, loading any samples it needs.
-    fn replace_song(&mut self, song: Song, folder: Option<PathBuf>) {
+    pub(crate) fn replace_song(&mut self, song: Song, folder: Option<PathBuf>) {
         let mut pool = SamplePool::clone(&self.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
         self.samples = Arc::new(pool);

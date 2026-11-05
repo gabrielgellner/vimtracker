@@ -64,3 +64,6 @@ pub const MIN_TRANSPOSE: i8 = -48;
 
 /// The highest chain transpose, in semitones.
 pub const MAX_TRANSPOSE: i8 = 48;
+
+/// How often unsaved work is written aside.
+pub const AUTOSAVE_SECONDS: u64 = 60;
