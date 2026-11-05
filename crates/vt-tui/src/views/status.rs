@@ -53,7 +53,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
     let mode_style = Style::new()
         .fg(Color::Black)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::Instrument => Color::Blue,
+            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument => Color::Blue,
             Mode::VisualField | Mode::VisualStep => Color::Magenta,
             Mode::Insert => Color::Green,
             Mode::Command => Color::Yellow,

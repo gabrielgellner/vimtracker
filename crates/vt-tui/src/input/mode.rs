@@ -3,17 +3,19 @@
 /// What fills the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum View {
+    Chain,
     Phrase,
     Instrument,
 }
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 2] = [Self::Phrase, Self::Instrument];
+    pub const ALL: [Self; 3] = [Self::Phrase, Self::Chain, Self::Instrument];
 
     /// The view's name.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Chain => "chain",
             Self::Phrase => "phrase",
             Self::Instrument => "instrument",
         }
@@ -34,6 +36,8 @@ pub enum Mode {
     Command,
     Help,
     Picker,
+    /// Normal mode's keys in the chain view. Only the binding table and the label use this.
+    Chain,
     /// Normal mode's keys in the instrument view. Only the binding table and the label use this.
     Instrument,
 }
@@ -49,6 +53,7 @@ impl Mode {
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Picker => "PICK",
+            Self::Chain => "CHAIN",
             Self::Instrument => "INST",
         }
     }

@@ -58,6 +58,18 @@ pub enum Cmd {
     Help,
     ShowView(View),
     Picker,
+    OpenItem,
+    JumpBack,
+    JumpForward,
+    ListUses,
+    ClonePhrase,
+    CloneChain,
+    NextSlot,
+    PreviousSlot,
+    LastSlot,
+    FirstSlot,
+    RemoveRow,
+    CopyRow,
     /// Play the current instrument.
     Hear,
 }
@@ -120,6 +132,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
     ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
+    ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
     (
         "Space 5",
@@ -129,6 +142,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space ?", Cmd::Help, "Show every key"),
+    ("C-o", Cmd::JumpBack, "Jump back"),
+    ("Tab", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
     ("B", Cmd::PreviousTrack, "Previous track"),
 ];
@@ -150,6 +165,35 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("V", Cmd::VisualStep, "Select whole steps"),
     ("g v", Cmd::Reselect, "Reselect the last selection"),
     ("Space p d", Cmd::Double, "Double this phrase"),
+    ("g d", Cmd::OpenItem, "Open the instrument in this column"),
+    ("g r r", Cmd::ListUses, "List where this phrase plays"),
+    ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
+    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
+    ("] p", Cmd::NextSlot, "Next phrase in the chain"),
+    ("[ p", Cmd::PreviousSlot, "Previous phrase in the chain"),
+    ("] P", Cmd::LastSlot, "Last phrase in the chain"),
+    ("[ P", Cmd::FirstSlot, "First phrase in the chain"),
+];
+
+/// Keys for the chain view.
+const CHAIN: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next row"),
+    ("k", Cmd::Move(Motion::Up), "Previous row"),
+    ("g g", Cmd::Move(Motion::First), "First row"),
+    ("G", Cmd::Move(Motion::Last), "The empty row at the end"),
+    ("h", Cmd::Move(Motion::Left), "Phrase column"),
+    ("l", Cmd::Move(Motion::Right), "Transpose column"),
+    ("+", Cmd::Increase, "Next phrase, or transpose up"),
+    ("-", Cmd::Decrease, "Previous phrase, or transpose down"),
+    ("C-a", Cmd::Increase, "Next phrase, or transpose up"),
+    ("C-x", Cmd::Decrease, "Previous phrase, or transpose down"),
+    ("d d", Cmd::RemoveRow, "Remove this row"),
+    ("y y", Cmd::CopyRow, "Copy this row"),
+    ("p", Cmd::Paste, "Add the copied row below"),
+    ("g d", Cmd::OpenItem, "Open this phrase, or add one"),
+    ("g r r", Cmd::ListUses, "List where this phrase plays"),
+    ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
+    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
 ];
 
 /// Keys for the instrument view.
@@ -210,6 +254,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, VIEWPORT);
     add(Mode::Normal, NORMAL);
     add(Mode::Normal, EVERY_VIEW);
+    add(Mode::Chain, CHAIN);
+    add(Mode::Chain, EVERY_VIEW);
     add(Mode::Instrument, INSTRUMENT);
     add(Mode::Instrument, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);

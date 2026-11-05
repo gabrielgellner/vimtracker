@@ -541,7 +541,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 2);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
@@ -560,4 +560,155 @@ fn a_plain_write_keeps_live_mutes_and_solos() {
     let saved = vt_model::project::load_song(&folder).unwrap();
     assert!(saved.tracks[0].mute);
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn cuj_5_reuse_and_vary_a_phrase() {
+    let (mut app, _realtime) = app();
+    // Add the same phrase twice to this chain, then open the second use.
+    press(&mut app, " 2");
+    assert_eq!(app.view, View::Chain);
+    press(&mut app, "yyp");
+    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "gd");
+    assert_eq!(app.view, View::Phrase);
+    assert!(app.status.contains("used 2 times"), "{}", app.status);
+    // The clone stays here. An edit reaches only the clone.
+    press(&mut app, "gc");
+    assert_eq!(app.phrase_id(), Some(2));
+    press(&mut app, "iz");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+    assert_eq!(app.song().phrases[&2].steps()[0].note, Note::On(60));
+    assert_eq!(app.chain_entries()[0].phrase, 0);
+    // Ctrl-O returns to where the jump started, and Tab goes forward again.
+    let back = parse_sequence("C-o").unwrap()[0];
+    app.key(back, Instant::now());
+    assert_eq!(app.view, View::Chain);
+    assert_eq!(app.cursor.slot, 1);
+    special(&mut app, KeyCode::Tab);
+    assert_eq!(app.view, View::Phrase);
+    // Undo removes the clone's use again.
+    press(&mut app, "uu");
+    assert_eq!(app.chain_entries()[1].phrase, 0);
+}
+
+#[test]
+fn gd_on_the_empty_row_adds_the_lowest_unused_phrase() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2G");
+    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.phrase_id(), None);
+    press(&mut app, "gd");
+    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.phrase_id(), Some(2));
+    assert_eq!(app.chain_entries().len(), 2);
+    // Leaving the chain view never leaves the cursor on the empty row.
+    press(&mut app, " 2G 3");
+    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.phrase_id(), Some(2));
+    assert_eq!(notes(&app).len(), 16);
+}
+
+#[test]
+fn the_chain_view_edits_rows_and_keeps_one() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2");
+    press(&mut app, "dd");
+    assert!(app.status.contains("at least one"), "{}", app.status);
+    // Typing a phrase on the empty row adds it, and a new ID is created.
+    press(&mut app, "ji1f");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.chain_entries()[1].phrase, 0x1F);
+    assert!(app.song().phrases.contains_key(&0x1F));
+    // Transpose by keys and by typing, and out of range is refused.
+    press(&mut app, "l5+");
+    assert_eq!(app.chain_entries()[1].transpose, 5);
+    press(&mut app, "i-12");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.chain_entries()[1].transpose, -12);
+    press(&mut app, "i60");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.chain_entries()[1].transpose, -12);
+    assert!(app.status.contains("48"), "{}", app.status);
+    press(&mut app, "99-");
+    assert_eq!(app.chain_entries()[1].transpose, -48);
+    // Removing the row copies it, so it can be pasted back.
+    press(&mut app, "dd");
+    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "kp");
+    assert_eq!(app.chain_entries()[1].phrase, 0x1F);
+}
+
+#[test]
+fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2yyp 3");
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "[P");
+    assert_eq!(app.cursor.slot, 0);
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 1, "motions stop at the edge");
+    press(&mut app, "[p]P");
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "grr");
+    assert_eq!(app.mode, Mode::Picker);
+    let uses: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(uses, ["Track 01 slot 00", "Track 01 slot 01"]);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.cursor.slot, 0);
+    assert_eq!(app.view, View::Phrase);
+}
+
+#[test]
+fn gd_on_an_instrument_field_opens_or_creates_it() {
+    let (mut app, _realtime) = app();
+    // Note, volume, then instrument.
+    press(&mut app, "llgd");
+    assert_eq!(app.view, View::Instrument);
+    assert_eq!(app.instrument, 1, "00 exists, so a new one is 01");
+    assert!(app.song().instruments.contains_key(&1));
+    let back = parse_sequence("C-o").unwrap()[0];
+    app.key(back, Instant::now());
+    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(1));
+    assert_eq!(
+        app.instrument, 0,
+        "jumping back restores the old instrument"
+    );
+    press(&mut app, "gd");
+    assert_eq!(app.instrument, 1, "this time it already has one");
+}
+
+#[test]
+fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "W");
+    command(&mut app, "chain 0");
+    assert_eq!(app.chain_uses(), 2);
+    press(&mut app, "gc");
+    assert!(app.status.contains("shared"), "{}", app.status);
+    press(&mut app, "gC");
+    assert_eq!(app.chain_uses(), 1);
+    assert_ne!(app.chain_id(), Some(0));
+}
+
+#[test]
+fn undo_keeps_the_cursor_on_a_row_that_exists() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2yyp 3");
+    assert_eq!(app.cursor.slot, 1);
+    press(&mut app, "u");
+    assert_eq!(app.cursor.slot, 0);
+    assert_eq!(app.phrase_id(), Some(0));
 }

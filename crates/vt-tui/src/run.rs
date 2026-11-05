@@ -83,6 +83,7 @@ fn main_loop(
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
             app.follow_cursor(usize::from(body.height.saturating_sub(1)));
             match app.view {
+                View::Chain => views::chain::draw(frame, body, app),
                 View::Phrase => views::phrase::draw(frame, body, app),
                 View::Instrument => views::instrument::draw(frame, body, app),
             }

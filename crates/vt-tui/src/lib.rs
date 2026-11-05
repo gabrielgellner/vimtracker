@@ -8,4 +8,5 @@ pub mod instruments;
 pub mod picking;
 pub mod probe;
 pub mod run;
+pub mod tree;
 pub mod views;
