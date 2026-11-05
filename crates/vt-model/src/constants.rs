@@ -49,3 +49,9 @@ pub const FRAME_MS: u64 = 33;
 pub const TRANSPORT_GUARD_MS: u64 = 450;
 /// Tuning: master gain before the soft clip, about -6 dB.
 pub const MASTER_GAIN: f32 = 0.5;
+
+/// The lowest swing, in tenths of a percent, which is straight time.
+pub const MIN_SWING: u16 = 500;
+
+/// The highest swing, in tenths of a percent.
+pub const MAX_SWING: u16 = 750;

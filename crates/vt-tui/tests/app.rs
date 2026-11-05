@@ -390,3 +390,23 @@ fn muted_and_soloed_tracks_change_what_sounds() {
     rt.process(&mut out);
     assert!(out.iter().all(|s| *s == 0.0), "another track is soloed");
 }
+
+#[test]
+fn swing_commands_set_the_project_and_the_cursors_track_and_undo() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "swing 66.7");
+    assert_eq!(app.song().swing, 667);
+    command(&mut app, "swing 80");
+    assert_eq!(app.song().swing, 667, "out of range is refused");
+    assert!(app.status.contains("50 to 75"), "{}", app.status);
+    command(&mut app, "tswing 60");
+    assert_eq!(app.song().tracks[0].swing, Some(600));
+    assert_eq!(app.song().tracks[1].swing, None);
+    command(&mut app, "tswing off");
+    assert_eq!(app.song().tracks[0].swing, None);
+    press(&mut app, "uu");
+    assert_eq!(app.song().swing, 667);
+    assert_eq!(app.song().tracks[0].swing, None);
+    press(&mut app, "u");
+    assert_eq!(app.song().swing, 500);
+}
