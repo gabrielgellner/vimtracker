@@ -15,7 +15,7 @@ use crate::step::{FxSlot, Note, Step};
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldValue {
-    Volume(Option<u8>),
+    Velocity(Option<u8>),
     Instrument(Option<u32>),
     Slot(usize, FxSlot),
 }
@@ -78,6 +78,11 @@ pub enum Action {
     SetTrackSwing {
         track: usize,
         swing: Option<u16>,
+    },
+    /// Set a track's level.
+    SetTrackLevel {
+        track: usize,
+        level: u8,
     },
     /// Change a phrase's length, keeping steps past it hidden.
     SetLength {
@@ -212,7 +217,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         } => {
             let target = step_mut(&mut next, *phrase, *step)?;
             match value {
-                FieldValue::Volume(volume) => target.volume = *volume,
+                FieldValue::Velocity(velocity) => target.velocity = *velocity,
                 FieldValue::Instrument(instrument) => target.instrument = *instrument,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = *fx;
@@ -290,6 +295,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .swing = *swing;
+        }
+        Action::SetTrackLevel { track, level } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .level = *level;
         }
         Action::SetLength { phrase, length } => {
             let phrase = next

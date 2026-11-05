@@ -7,18 +7,18 @@ use crate::step::{FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
     Note,
-    Volume,
+    Velocity,
     Instrument,
     FxCommand(usize),
     FxValue(usize),
 }
 
 impl Field {
-    /// The column group this field belongs to: note, volume, instrument, then each FX slot.
+    /// The column group this field belongs to: note, velocity, instrument, then each FX slot.
     pub fn group(self) -> usize {
         match self {
             Self::Note => 0,
-            Self::Volume => 1,
+            Self::Velocity => 1,
             Self::Instrument => 2,
             Self::FxCommand(slot) | Self::FxValue(slot) => 3 + slot,
         }
@@ -28,7 +28,7 @@ impl Field {
     pub fn of_group(group: usize) -> Self {
         match group {
             0 => Self::Note,
-            1 => Self::Volume,
+            1 => Self::Velocity,
             2 => Self::Instrument,
             slot => Self::FxCommand(slot - 3),
         }
@@ -38,7 +38,7 @@ impl Field {
     pub fn order(self) -> usize {
         match self {
             Self::Note => 0,
-            Self::Volume => 1,
+            Self::Velocity => 1,
             Self::Instrument => 2,
             Self::FxCommand(slot) => 3 + slot * 2,
             Self::FxValue(slot) => 4 + slot * 2,
@@ -49,7 +49,7 @@ impl Field {
     pub fn from_order(order: usize) -> Self {
         match order {
             0 => Self::Note,
-            1 => Self::Volume,
+            1 => Self::Velocity,
             2 => Self::Instrument,
             n if (n - 3).is_multiple_of(2) => Self::FxCommand((n - 3) / 2),
             n => Self::FxValue((n - 4) / 2),
@@ -209,7 +209,7 @@ pub fn clear_step(step: &mut Step, scope: Scope) {
         step.note = Note::Empty;
     }
     if scope.covers(1) {
-        step.volume = None;
+        step.velocity = None;
     }
     if scope.covers(2) {
         step.instrument = None;
@@ -243,10 +243,10 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
         return;
     }
     if scope.covers(1) {
-        let current = i32::from(step.volume.unwrap_or(0xFF));
+        let current = i32::from(step.velocity.unwrap_or(0xFF));
         let moved = (current + by).clamp(0, 0xFF);
-        if step.volume.is_some() || by < 0 {
-            step.volume = Some(moved as u8);
+        if step.velocity.is_some() || by < 0 {
+            step.velocity = Some(moved as u8);
         }
     }
     if scope.covers(2)
@@ -296,7 +296,7 @@ pub fn paste_step(
         }
         match group {
             0 => target.note = source.note,
-            1 => target.volume = source.volume,
+            1 => target.velocity = source.velocity,
             2 => target.instrument = source.instrument,
             slot => {
                 if let Some(value) = source.fx.get(slot - 3) {

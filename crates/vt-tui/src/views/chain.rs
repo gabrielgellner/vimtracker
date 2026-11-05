@@ -39,7 +39,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let room = usize::from(area.height.saturating_sub(2)).max(1);
     let first = (app.cursor.slot + 1).saturating_sub(room);
     let typing = app.mode == Mode::Insert;
-    let cursor = theme::cursor();
+    let cursor = theme::cursor(app.mode);
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };

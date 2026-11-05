@@ -197,7 +197,7 @@ fn chain_transpose_and_step_volume_apply() {
         }),
     );
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
-    phrase.step_mut(0).unwrap().volume = Some(0x7F);
+    phrase.step_mut(0).unwrap().velocity = Some(0x7F);
     let samples = pool(&[("flat", flat(1000, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 2000);
     // An octave up plays 1000 frames in about 500.

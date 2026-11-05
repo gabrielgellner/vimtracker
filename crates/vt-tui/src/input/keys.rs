@@ -12,6 +12,8 @@ pub struct Key {
     pub code: KeyCode,
     pub ctrl: bool,
     pub alt: bool,
+    /// Only ever set on an arrow, so nothing else has to care about it.
+    pub shift: bool,
 }
 
 /// The leader key.
@@ -19,6 +21,7 @@ pub const LEADER: Key = Key {
     code: KeyCode::Char(' '),
     ctrl: false,
     alt: false,
+    shift: false,
 };
 
 impl Key {
@@ -28,6 +31,7 @@ impl Key {
             code,
             ctrl: false,
             alt: false,
+            shift: false,
         }
     }
 
@@ -36,13 +40,18 @@ impl Key {
         Self::new(KeyCode::Char(c))
     }
 
-    /// Normalise a terminal event. Shift is folded away for characters: the terminal reports `J`
+    /// Normalise a terminal event. Shift is folded away except on arrows: the terminal reports `J`
     /// with SHIFT set, and treating that as different from a bound `J` would break capitals.
     pub fn from_event(event: KeyEvent) -> Self {
         Self {
             code: event.code,
             ctrl: event.modifiers.contains(KeyModifiers::CONTROL),
             alt: event.modifiers.contains(KeyModifiers::ALT),
+            shift: event.modifiers.contains(KeyModifiers::SHIFT)
+                && matches!(
+                    event.code,
+                    KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+                ),
         }
     }
 }
@@ -54,6 +63,9 @@ impl std::fmt::Display for Key {
         }
         if self.ctrl {
             f.write_str("C-")?;
+        }
+        if self.shift {
+            f.write_str("S-")?;
         }
         match self.code {
             KeyCode::Char(' ') => f.write_str("Space"),
@@ -102,6 +114,7 @@ pub fn parse(text: &str) -> Result<Key, KeyParseError> {
         code,
         ctrl,
         alt: false,
+        shift: false,
     })
 }
 

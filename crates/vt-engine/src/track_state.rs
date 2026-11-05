@@ -45,6 +45,8 @@ pub struct TrackState {
     /// A step waiting for its swing delay.
     pub swung: Option<(u64, usize)>,
     gain: Smoothed,
+    /// The track's level from the song, which playback going back to the top leaves alone.
+    pub level: Smoothed,
     pan: Smoothed,
     cutoff: Smoothed,
     resonance: Smoothed,
@@ -92,6 +94,7 @@ impl TrackState {
             retrigger: None,
             swung: None,
             gain: Smoothed::at(1.0),
+            level: Smoothed::at(1.0),
             pan: Smoothed::at(0.5),
             cutoff: Smoothed::at(1.0),
             resonance: Smoothed::at(0.0),
@@ -169,6 +172,7 @@ impl TrackState {
     /// Settle held values, so a new sound doesn't ramp from an old setting while idle.
     pub fn settle(&mut self) {
         self.gain.settle();
+        self.level.settle();
         self.pan.settle();
         self.cutoff.settle();
         self.resonance.settle();
@@ -200,7 +204,7 @@ impl TrackState {
                 None => input,
             }
         };
-        let gain = self.gain.next(smoothing);
+        let gain = self.gain.next(smoothing) * self.level.next(smoothing);
         let (left, right) = pan_gains(self.pan.next(smoothing));
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
         let delay = self.delay_send.next(smoothing);

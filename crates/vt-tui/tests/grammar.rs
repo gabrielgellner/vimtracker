@@ -47,6 +47,7 @@ fn keys(app: &mut App, text: &str) {
                     code: KeyCode::Char(c),
                     ctrl: true,
                     alt: false,
+                    shift: false,
                 },
                 now,
             );
@@ -365,7 +366,7 @@ fn motions_move_the_cursor_and_stop_at_edges() {
     keys(&mut app, "h");
     assert_eq!(app.cursor.field, Field::Note);
     keys(&mut app, "w");
-    assert_eq!(app.cursor.field, Field::Volume);
+    assert_eq!(app.cursor.field, Field::Velocity);
     keys(&mut app, "ww");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     keys(&mut app, "l");

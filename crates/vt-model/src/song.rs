@@ -9,12 +9,31 @@ use crate::constants::{BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMA
 use crate::step::Step;
 
 /// One voice's lane through the song.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
     pub swing: Option<u16>,
+    /// The track's level, set outside its patterns. It also scales what the track sends to the
+    /// delay and reverb.
+    #[serde(default = "full_level")]
+    pub level: u8,
+}
+
+impl Default for Track {
+    fn default() -> Self {
+        Self {
+            mute: false,
+            solo: false,
+            swing: None,
+            level: full_level(),
+        }
+    }
+}
+
+fn full_level() -> u8 {
+    0xFF
 }
 
 /// One row of the song, holding one chain per track.
@@ -290,6 +309,13 @@ mod tests {
     use crate::constants::DEFAULT_TRACKS;
 
     #[test]
+    fn a_track_saved_without_a_level_loads_at_full() {
+        let track: Track = ron::from_str("(mute: false, solo: true, swing: None)").unwrap();
+        assert_eq!(track.level, 0xFF);
+        assert!(track.solo);
+    }
+
+    #[test]
     fn a_new_song_has_a_chain_and_phrase_per_track() {
         let song = Song::new(DEFAULT_TRACKS);
         assert_eq!(song.tracks.len(), DEFAULT_TRACKS);
@@ -330,14 +356,14 @@ mod tests {
     #[test]
     fn hidden_steps_return_in_the_session_and_drop_on_save() {
         let mut phrase = Phrase::new(4);
-        phrase.step_mut(3).unwrap().volume = Some(1);
+        phrase.step_mut(3).unwrap().velocity = Some(1);
         phrase.set_len(2);
         assert_eq!(phrase.len(), 2);
         let saved = ron::to_string(&phrase).unwrap();
         let loaded: Phrase = ron::from_str(&saved).unwrap();
         assert_eq!(loaded.len(), 2);
         phrase.set_len(4);
-        assert_eq!(phrase.steps()[3].volume, Some(1));
+        assert_eq!(phrase.steps()[3].velocity, Some(1));
         phrase.set_len(0);
         assert_eq!(phrase.len(), 1);
     }

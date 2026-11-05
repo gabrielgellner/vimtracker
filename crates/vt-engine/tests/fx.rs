@@ -438,3 +438,50 @@ fn a_swung_steps_fx_move_with_its_note() {
     assert!(level_at(&out, STEP + 2999) > 0.1);
     assert!(level_at(&out, STEP + 3000 + 4000) < 0.001);
 }
+
+#[test]
+fn track_level_scales_the_track_and_multiplies_with_velocity() {
+    // Quiet enough that the master limiter is doing nothing.
+    let text = ["C-4 -- 00 ---00 ---00 ---00"];
+    let full = render(song(&text), flat(0.02), STEP);
+    let mut lower = song(&text);
+    lower.tracks[0].level = 0x80;
+    let halved = render(lower, flat(0.02), STEP);
+    let (full, halved) = (level_at(&full, STEP - 1), level_at(&halved, STEP - 1));
+    assert!(
+        (halved / full - 128.0 / 255.0).abs() < 1e-3,
+        "{halved} vs {full}"
+    );
+
+    let soft = ["C-4 80 00 ---00 ---00 ---00"];
+    let mut both = song(&soft);
+    both.tracks[0].level = 0x80;
+    let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
+    let expected = full * (128.0 / 255.0) * (128.0 / 255.0);
+    assert!((both / expected - 1.0).abs() < 1e-3, "{both} vs {expected}");
+}
+
+#[test]
+fn track_level_also_turns_down_the_sends() {
+    let text = ["C-4 -- 00 DLYFF REVFF ---00"];
+    let mut silent = song(&text);
+    silent.tracks[0].level = 0;
+    let out = render(silent, flat(0.5), STEP * 8);
+    let loudest = out
+        .iter()
+        .map(|f| f[0].abs().max(f[1].abs()))
+        .fold(0.0, f32::max);
+    assert!(loudest < 1e-6, "{loudest}");
+}
+
+#[test]
+fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
+    let text = ["C-4 -- 00 ---00 ---00 ---00"];
+    let mut quiet = song(&text);
+    quiet.tracks[0].level = 0x40;
+    Arc::make_mut(quiet.phrases.get_mut(&0).unwrap()).set_len(1);
+    let out = render(quiet, flat(0.5), STEP * 3);
+    let first = level_at(&out, STEP - 1);
+    let later = level_at(&out, STEP * 3 - 1);
+    assert!((first - later).abs() < 1e-3, "{first} vs {later}");
+}

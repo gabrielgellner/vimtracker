@@ -69,7 +69,7 @@ impl Engine {
         let millibpm = current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         let seed = current.song.seed;
         let delay_frames = sample_of_tick(DELAY_TICKS, rate, MIN_MILLIBPM) as usize + 1;
-        Self {
+        let mut engine = Self {
             rate,
             current,
             tracks: Box::new(std::array::from_fn(|index| TrackState::new(seed, index))),
@@ -83,6 +83,18 @@ impl Engine {
             smoothing: coefficient(rate),
             delay: Delay::new(delay_frames),
             reverb: Reverb::new(rate),
+        };
+        engine.follow_levels();
+        for track in engine.tracks.iter_mut() {
+            track.level.settle();
+        }
+        engine
+    }
+
+    /// Move each track's level toward the current version's.
+    fn follow_levels(&mut self) {
+        for (state, track) in self.tracks.iter_mut().zip(&self.current.song.tracks) {
+            state.level.target = f32::from(track.level) / 255.0;
         }
     }
 
@@ -125,6 +137,7 @@ impl Engine {
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
             track.stop();
         }
+        self.follow_levels();
         self.retune();
         old
     }
@@ -484,7 +497,7 @@ impl Engine {
                 let note = (i16::from(midi) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
-                let gain = step.volume.map_or(1.0, |v| f32::from(v) / 255.0);
+                let gain = step.velocity.map_or(1.0, |v| f32::from(v) / 255.0);
                 let on = self.tracks[index]
                     .instrument
                     .and_then(|i| self.note_on(i, note, gain));

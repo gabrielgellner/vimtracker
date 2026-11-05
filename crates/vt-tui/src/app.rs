@@ -38,9 +38,9 @@ pub struct Selection {
     pub scope: Scope,
 }
 
-/// How far `c` and `v` change the note volume in Insert, and the highest they set.
-const NOTE_VOLUME_STEP: u8 = 0x20;
-const NOTE_VOLUME_TOP: u8 = 0xE0;
+/// How far `c` and `v` change the note velocity in Insert, and the highest they set.
+const NOTE_VELOCITY_STEP: u8 = 0x20;
+const NOTE_VELOCITY_TOP: u8 = 0xE0;
 
 /// Typed characters not yet written, in Insert mode.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -89,8 +89,10 @@ pub struct App {
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
-    /// The volume new notes are written with. `None` leaves the Volume column alone.
-    pub note_volume: Option<u8>,
+    /// The velocity new notes are written with. `None` leaves the Velocity column alone.
+    pub note_velocity: Option<u8>,
+    /// The step last written in Insert, and where that left the cursor.
+    last_entry: Option<(usize, usize)>,
     pub command_line: String,
     pub status: String,
     pub transport: Transport,
@@ -159,7 +161,8 @@ impl App {
             },
             instrument: 0,
             octave: 4,
-            note_volume: None,
+            note_velocity: None,
+            last_entry: None,
             command_line: String::new(),
             status: String::new(),
             transport: Transport::Stopped,
@@ -301,7 +304,7 @@ impl App {
             | Mode::Instrument => {
                 self.command_key_normal(key, now);
             }
-            Mode::Insert => self.insert_key(key),
+            Mode::Insert => self.insert_key(key, now),
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
             Mode::Guide => self.guide_key(key),
@@ -425,6 +428,7 @@ impl App {
             Cmd::Guides => self.open_guide_picker(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
+                self.last_entry = None;
                 self.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
@@ -622,13 +626,21 @@ impl App {
         self.move_step(0);
     }
 
-    fn insert_key(&mut self, key: Key) {
-        let skip = self.song().skip as isize;
-        let arrow = match key.code {
-            KeyCode::Up => Some(-1),
-            KeyCode::Down => Some(1),
-            KeyCode::Left => Some(-skip),
-            KeyCode::Right => Some(skip),
+    fn insert_key(&mut self, key: Key, now: Instant) {
+        // Instrument IDs can have any number of digits, so `Enter` finishes one.
+        let finishing_id = self.cursor.field == Field::Instrument && !self.entry.text.is_empty();
+        if key.code == KeyCode::Enter && self.view == View::Phrase && !finishing_id {
+            self.run(Cmd::PlayOrStop, key, now);
+            return;
+        }
+        let skip = self.song().skip as usize;
+        let arrow = match (key.code, key.shift) {
+            (KeyCode::Up, _) => Some(-1),
+            (KeyCode::Down, _) => Some(1),
+            (KeyCode::Left, true) => Some(snap_by(self.cursor.step, skip, false)),
+            (KeyCode::Right, true) => Some(snap_by(self.cursor.step, skip, true)),
+            (KeyCode::Left, false) => Some(self.skip_by(skip, false)),
+            (KeyCode::Right, false) => Some(self.skip_by(skip, true)),
             _ => None,
         };
         if let Some(by) = arrow {
@@ -648,7 +660,7 @@ impl App {
         }
         match self.cursor.field {
             Field::Note => self.insert_note(key),
-            Field::Volume | Field::FxValue(_) => self.insert_value(key),
+            Field::Velocity | Field::FxValue(_) => self.insert_value(key),
             Field::Instrument => self.insert_instrument(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
         }
@@ -663,8 +675,10 @@ impl App {
             }
             KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
             KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
-            KeyCode::Char('c') => self.note_volume = next_note_volume(self.note_volume, false),
-            KeyCode::Char('v') => self.note_volume = next_note_volume(self.note_volume, true),
+            KeyCode::Char('c') => {
+                self.note_velocity = next_note_velocity(self.note_velocity, false)
+            }
+            KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
             KeyCode::Char('1') => {
                 self.write_note(Note::Off, None);
                 self.advance();
@@ -685,8 +699,24 @@ impl App {
         }
     }
 
+    /// How far a plain left or right arrow moves: one skip from the entry just written, so its
+    /// offset within the beat is kept, or else from the cursor.
+    fn skip_by(&self, skip: usize, forward: bool) -> isize {
+        if skip == 0 {
+            return 0;
+        }
+        let step = self.cursor.step as isize;
+        let from = match self.last_entry {
+            Some((written, landed)) if landed == self.cursor.step => written as isize,
+            _ => step,
+        };
+        let skip = skip as isize;
+        from + if forward { skip } else { -skip } - step
+    }
+
     /// Move without writing, staying in Insert. Anything half typed is dropped.
     fn insert_move(&mut self, by: isize) {
+        self.last_entry = None;
         if !self.entry.text.is_empty() || self.entry.command.is_some() {
             self.cancel_entry();
             self.mode = Mode::Insert;
@@ -694,10 +724,10 @@ impl App {
         self.move_step(by);
     }
 
-    /// Write a played note, with the note volume if one is set, as one change.
+    /// Write a played note, with the note velocity if one is set, as one change.
     fn write_played_note(&mut self, midi: u8) {
         let note = Note::On(midi);
-        let Some(volume) = self.note_volume else {
+        let Some(velocity) = self.note_velocity else {
             self.write_note(note, Some(self.instrument));
             return;
         };
@@ -715,7 +745,7 @@ impl App {
             value: Step {
                 note,
                 instrument: Some(self.instrument),
-                volume: Some(volume),
+                velocity: Some(velocity),
                 ..step
             },
         });
@@ -752,7 +782,7 @@ impl App {
             KeyCode::Backspace => {
                 if self.entry.text.pop().is_none() {
                     match self.cursor.field {
-                        Field::Volume => self.set_field(FieldValue::Volume(None)),
+                        Field::Velocity => self.set_field(FieldValue::Velocity(None)),
                         Field::FxValue(slot) if self.entry.command.is_none() => {
                             self.set_field(FieldValue::Slot(slot, FxSlot::default()));
                         }
@@ -777,7 +807,7 @@ impl App {
             return;
         };
         match self.cursor.field {
-            Field::Volume => self.set_field(FieldValue::Volume(Some(value))),
+            Field::Velocity => self.set_field(FieldValue::Velocity(Some(value))),
             Field::FxValue(slot) => {
                 let existing = self.current_slot(slot).and_then(|s| s.command);
                 let Some(command) = self.entry.command.take().or(existing) else {
@@ -857,8 +887,10 @@ impl App {
     }
 
     fn advance(&mut self) {
+        let written = self.cursor.step;
         let by = self.song().step as isize;
         self.move_step(by);
+        self.last_entry = Some((written, self.cursor.step));
     }
 
     fn write_note(&mut self, note: Note, instrument: Option<u32>) {
@@ -945,6 +977,10 @@ impl App {
             Line::TrackSwing(swing) => self.apply(&Action::SetTrackSwing {
                 track: self.cursor.track,
                 swing,
+            }),
+            Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
+                track: self.cursor.track,
+                level,
             }),
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
@@ -1117,15 +1153,33 @@ impl App {
     }
 }
 
-/// The note volume one press up or down from this one. Above the top it stops being set, and it
+/// How far to move to reach the next multiple of the skip, so a jump lands on the grid wherever
+/// it starts.
+fn snap_by(step: usize, skip: usize, forward: bool) -> isize {
+    if skip == 0 {
+        return 0;
+    }
+    let into = step % skip;
+    match (forward, into) {
+        (true, _) => (skip - into) as isize,
+        (false, 0) => -(skip as isize),
+        (false, _) => -(into as isize),
+    }
+}
+
+/// The note velocity one press up or down from this one. Above the top it stops being set, and it
 /// stops at the lowest step rather than writing silent notes.
-fn next_note_volume(volume: Option<u8>, up: bool) -> Option<u8> {
-    match (volume, up) {
+fn next_note_velocity(velocity: Option<u8>, up: bool) -> Option<u8> {
+    match (velocity, up) {
         (None, true) => None,
-        (None, false) => Some(NOTE_VOLUME_TOP),
-        (Some(value), true) if value >= NOTE_VOLUME_TOP => None,
-        (Some(value), true) => Some(value + NOTE_VOLUME_STEP),
-        (Some(value), false) => Some(value.saturating_sub(NOTE_VOLUME_STEP).max(NOTE_VOLUME_STEP)),
+        (None, false) => Some(NOTE_VELOCITY_TOP),
+        (Some(value), true) if value >= NOTE_VELOCITY_TOP => None,
+        (Some(value), true) => Some(value + NOTE_VELOCITY_STEP),
+        (Some(value), false) => Some(
+            value
+                .saturating_sub(NOTE_VELOCITY_STEP)
+                .max(NOTE_VELOCITY_STEP),
+        ),
     }
 }
 

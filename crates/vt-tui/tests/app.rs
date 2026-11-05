@@ -105,6 +105,7 @@ fn undo_and_redo_keys_restore_notes() {
             code: KeyCode::Char('r'),
             ctrl: true,
             alt: false,
+            shift: false,
         },
         Instant::now(),
     );
@@ -899,11 +900,11 @@ fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
     press(&mut app, "Vj");
     let buffer = screen(&app);
     // Past the step number and playhead gutter, on the row the selection started from.
-    let selected = &buffer[(6, 1)];
+    let selected = &buffer[(6, 2)];
     assert_eq!(selected.bg, vt_tui::theme::SURFACE1);
     assert_eq!(selected.fg, vt_tui::theme::TEXT);
     assert_ne!(selected.symbol(), " ");
-    let cursor = &buffer[(5, 2)];
+    let cursor = &buffer[(5, 3)];
     assert_eq!(cursor.bg, vt_tui::theme::ROSEWATER);
     assert_eq!(cursor.fg, vt_tui::theme::BASE);
 }
@@ -914,7 +915,7 @@ fn the_status_line_names_the_column() {
     let (mut app, _realtime) = app();
     assert_eq!(column_name(&app), "Note");
     press(&mut app, "l");
-    assert_eq!(column_name(&app), "Volume");
+    assert_eq!(column_name(&app), "Velocity");
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Instrument");
     press(&mut app, "l");
@@ -1012,7 +1013,11 @@ fn arrows_move_in_insert_without_writing() {
     assert_eq!(app.cursor.step, 1);
     special(&mut app, KeyCode::Right);
     assert_eq!(app.cursor.step, 5);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 9);
     special(&mut app, KeyCode::Up);
+    assert_eq!(app.cursor.step, 8);
+    special(&mut app, KeyCode::Left);
     assert_eq!(app.cursor.step, 4);
     special(&mut app, KeyCode::Left);
     assert_eq!(app.cursor.step, 0);
@@ -1038,17 +1043,17 @@ fn an_arrow_drops_a_half_typed_value() {
     assert_eq!(app.cursor.step, 1);
     assert!(app.entry.text.is_empty());
     press(&mut app, "40");
-    let volumes: Vec<_> = app.song().phrases[&0]
+    let velocities: Vec<_> = app.song().phrases[&0]
         .steps()
         .iter()
-        .map(|s| s.volume)
+        .map(|s| s.velocity)
         .collect();
-    assert_eq!(volumes[0], None);
-    assert_eq!(volumes[1], Some(0x40));
+    assert_eq!(velocities[0], None);
+    assert_eq!(velocities[1], Some(0x40));
 }
 
 #[test]
-fn the_ableton_layout_plays_and_c_and_v_set_the_volume_written() {
+fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     let (mut app, _realtime) = app();
     command(&mut app, "set step=0");
     press(&mut app, "ia");
@@ -1062,28 +1067,212 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_volume_written() {
     press(&mut app, "zz");
     assert_eq!(app.octave, 3);
 
-    let volume = |app: &App| app.song().phrases[&0].steps()[0].volume;
-    assert_eq!(volume(&app), None);
+    let velocity = |app: &App| app.song().phrases[&0].steps()[0].velocity;
+    assert_eq!(velocity(&app), None);
     press(&mut app, "a");
-    assert_eq!(volume(&app), None);
+    assert_eq!(velocity(&app), None);
     press(&mut app, "c");
-    assert_eq!(app.note_volume, Some(0xE0));
+    assert_eq!(app.note_velocity, Some(0xE0));
     press(&mut app, "ca");
-    assert_eq!(volume(&app), Some(0xC0));
+    assert_eq!(velocity(&app), Some(0xC0));
     assert_eq!(notes(&app)[0], Note::On(48));
 
     // The whole note is one undo step.
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
-    assert_eq!(volume(&app), None);
+    assert_eq!(velocity(&app), None);
 
     press(&mut app, "i");
     press(&mut app, "vv");
-    assert_eq!(app.note_volume, None);
+    assert_eq!(app.note_velocity, None);
     press(&mut app, "v");
-    assert_eq!(app.note_volume, None);
+    assert_eq!(app.note_velocity, None);
     for _ in 0..12 {
         press(&mut app, "c");
     }
-    assert_eq!(app.note_volume, Some(0x20));
+    assert_eq!(app.note_velocity, Some(0x20));
+}
+
+#[test]
+fn tvol_sets_this_tracks_level_and_can_be_undone() {
+    let (mut app, _realtime) = app();
+    assert_eq!(app.song().tracks[0].level, 0xFF);
+    press(&mut app, "W");
+    command(&mut app, "tvol C0");
+    assert_eq!(app.song().tracks[0].level, 0xFF);
+    assert_eq!(app.song().tracks[1].level, 0xC0);
+    assert!(app.dirty);
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[1].level, 0xFF);
+    command(&mut app, "tvol loud");
+    assert_eq!(app.song().tracks[1].level, 0xFF);
+    assert!(app.status.contains(":tvol"));
+}
+
+#[test]
+fn a_note_then_right_lands_on_the_next_beat() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "i");
+    for _ in 0..4 {
+        press(&mut app, "a");
+        special(&mut app, KeyCode::Right);
+    }
+    assert_eq!(app.cursor.step, 15);
+    let written: Vec<usize> = notes(&app)
+        .iter()
+        .enumerate()
+        .filter(|(_, note)| matches!(note, Note::On(_)))
+        .map(|(step, _)| step)
+        .collect();
+    assert_eq!(written, [0, 4, 8, 12]);
+}
+
+fn written_steps(app: &App) -> Vec<usize> {
+    notes(app)
+        .iter()
+        .enumerate()
+        .filter(|(_, note)| matches!(note, Note::On(_)))
+        .map(|(step, _)| step)
+        .collect()
+}
+
+fn shifted(app: &mut App, code: KeyCode) {
+    let key = Key {
+        shift: true,
+        ..Key::new(code)
+    };
+    app.key(key, Instant::now());
+}
+
+#[test]
+fn right_keeps_a_notes_offset_within_the_beat() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "jji");
+    for _ in 0..4 {
+        press(&mut app, "a");
+        special(&mut app, KeyCode::Right);
+    }
+    assert_eq!(written_steps(&app), [2, 6, 10, 14]);
+}
+
+#[test]
+fn right_counts_from_the_note_with_any_skip_or_step() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set skip=8");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Right);
+    press(&mut app, "a");
+    assert_eq!(written_steps(&app), [0, 8]);
+
+    let (mut app, _realtime) = self::app();
+    command(&mut app, "set step=2");
+    press(&mut app, "ia");
+    assert_eq!(app.cursor.step, 2);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 4);
+}
+
+#[test]
+fn left_counts_from_the_note_too_and_any_other_move_forgets_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "8Gi");
+    press(&mut app, "a");
+    assert_eq!(app.cursor.step, 8);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 3);
+
+    press(&mut app, "a");
+    assert_eq!(app.cursor.step, 4);
+    special(&mut app, KeyCode::Up);
+    special(&mut app, KeyCode::Down);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 8);
+
+    press(&mut app, "a");
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.cursor.step, 8);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 12);
+}
+
+#[test]
+fn shift_arrows_snap_to_the_grid() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "jji");
+    press(&mut app, "a");
+    assert_eq!(app.cursor.step, 3);
+    shifted(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 4);
+    shifted(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 8);
+    special(&mut app, KeyCode::Up);
+    shifted(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 4);
+    shifted(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 0);
+}
+
+#[test]
+fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
+    let (mut app, _realtime) = app();
+    let row = |buffer: &ratatui::buffer::Buffer, y: u16| -> String {
+        (0..40).map(|x| buffer[(x, y)].symbol()).collect()
+    };
+
+    let normal = screen(&app);
+    assert_eq!(normal[(5, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(normal[(4, 1)].symbol(), " ");
+    assert_eq!(normal[(4, 2)].symbol(), " ");
+
+    press(&mut app, "i");
+    let insert = screen(&app);
+    assert_eq!(insert[(5, 2)].bg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(5, 2)].fg, vt_tui::theme::BASE);
+    assert_eq!(insert[(4, 1)].symbol(), "┌");
+    assert_eq!(insert[(4, 2)].symbol(), "│");
+    assert_eq!(insert[(4, 18)].symbol(), "└");
+    assert_eq!(insert[(4, 2)].fg, vt_tui::theme::GREEN);
+
+    // Take away the box, and the steps are where they were.
+    assert_eq!(
+        row(&normal, 2).replace(' ', ""),
+        row(&insert, 2).replace(['│', ' '], "")
+    );
+    let step_text_start = |b: &ratatui::buffer::Buffer| b[(5, 2)].symbol().to_owned();
+    assert_eq!(step_text_start(&normal), step_text_start(&insert));
+
+    special(&mut app, KeyCode::Esc);
+    let back = screen(&app);
+    assert_eq!(back[(4, 1)].symbol(), " ");
+    assert_eq!(back[(5, 2)].bg, vt_tui::theme::ROSEWATER);
+}
+
+#[test]
+fn enter_plays_and_stops_from_insert_and_keeps_writing() {
+    let (mut app, mut rt) = app();
+    press(&mut app, "i");
+    let start = Instant::now();
+    app.key(Key::new(KeyCode::Enter), start);
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.mode, Mode::Insert);
+    press(&mut app, "a");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    app.key(
+        Key::new(KeyCode::Enter),
+        start + Duration::from_millis(1000),
+    );
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.mode, Mode::Insert);
+}
+
+#[test]
+fn enter_still_finishes_a_typed_instrument_id_in_insert() {
+    let (mut app, mut rt) = app();
+    press(&mut app, "lli1a");
+    special(&mut app, KeyCode::Enter);
+    block(&mut rt, &mut app);
+    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(0x1A));
+    assert_eq!(app.transport, Transport::Stopped);
 }

@@ -33,6 +33,7 @@ pub enum Line {
         tail: bool,
     },
     TrackSwing(Option<u16>),
+    TrackLevel(u8),
 }
 
 /// Why a command line was refused.
@@ -62,6 +63,8 @@ pub enum LineError {
     Swing,
     #[error(":tswing takes a percent from 50 to 75, or off")]
     TrackSwing,
+    #[error(":tvol takes a level in hex, from 00 to FF")]
+    TrackLevel,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -177,6 +180,9 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "tswing" => swing(argument)
             .map(|value| Line::TrackSwing(Some(value)))
             .ok_or(LineError::TrackSwing),
+        "tvol" => u8::from_str_radix(argument, 16)
+            .map(Line::TrackLevel)
+            .map_err(|_| LineError::TrackLevel),
         "render" => render(argument),
         "chain" => u32::from_str_radix(argument, 16)
             .map(Line::Chain)
@@ -230,6 +236,9 @@ mod tests {
         assert!(parse("swing 66.75").is_err());
         assert_eq!(parse("tswing 60"), Ok(Line::TrackSwing(Some(600))));
         assert_eq!(parse("tswing off"), Ok(Line::TrackSwing(None)));
+        assert_eq!(parse("tvol C0"), Ok(Line::TrackLevel(0xC0)));
+        assert_eq!(parse("tvol"), Err(LineError::TrackLevel));
+        assert_eq!(parse("tvol 100"), Err(LineError::TrackLevel));
         assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
         assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
         assert_eq!(parse("track del"), Ok(Line::TrackDel));

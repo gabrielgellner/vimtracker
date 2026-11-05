@@ -43,7 +43,7 @@ pub fn column_name(app: &App) -> String {
     match app.view {
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
-            Field::Volume => "Volume".to_owned(),
+            Field::Velocity => "Velocity".to_owned(),
             Field::Instrument => "Instrument".to_owned(),
             Field::FxCommand(slot) => format!("FX{} command", slot + 1),
             Field::FxValue(slot) => format!("FX{} value", slot + 1),
@@ -103,14 +103,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Some(own) => format!("{} (track)", format_swing(own)),
         None => format_swing(app.song().swing),
     };
-    let note_volume = app
-        .note_volume
-        .map_or_else(|| "--".to_owned(), |volume| format!("{volume:02X}"));
+    let note_velocity = app
+        .note_velocity
+        .map_or_else(|| "--".to_owned(), |velocity| format!("{velocity:02X}"));
+    let level = app
+        .song()
+        .tracks
+        .get(app.cursor.track)
+        .map_or(0, |t| t.level);
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vol {note_volume} Inst {:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {note_velocity} Inst {:02X}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.instrument,

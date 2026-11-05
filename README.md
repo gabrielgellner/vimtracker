@@ -32,7 +32,7 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
     project and the folder you ran from. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
     `a` to `;` are white keys, `w` to `p` black keys, `z` and `x` change octave, `c` and `v` set
-    the volume written, and the arrows move without writing. `Esc` leaves Insert.
+    the velocity written, and the arrows move without writing. `Esc` leaves Insert.
 3.  `Enter` plays from the cursor and stops. `Space x` pauses and `Space c` returns to the top.
 4.  `l` moves to the next field. Type an FX name and two hex digits, such as `CUT40` or `RET14`.
 5.  `Space 2` opens the chain view, where `gd` opens a phrase, or adds one on the empty row.
@@ -50,10 +50,11 @@ from the repo root to see them in the browser. Choosing one copies it into the p
 |---|---|
 | `:bpm 137.63` | Tempo |
 | `:swing 66.7`, `:tswing 60`, `:tswing off` | Project swing, this track's swing, follow the project |
+| `:tvol C0` | This track's level, separate from each note's velocity |
 | `:inst 1A`, `:chain 2` | Current instrument, and which chain this track plays |
 | `:len 32`, `:double` | Phrase length, and repeat the phrase to double it |
 | `:track add 4`, `:track del` | Add tracks, or remove the last |
-| `:set step=2`, `:set skip=8`, `:seed 7` | How far a note moves, how far left and right arrows move, and the random seed for `CHA` |
+| `:set step=2`, `:set skip=8`, `:seed 7` | How far a note moves, how far the left and right arrows jump, and the random seed for `CHA` |
 | `:render path [--rows n] [--tail]` | Render to a WAV file |
 
 `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` renders

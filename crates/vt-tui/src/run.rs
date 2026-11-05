@@ -128,7 +128,9 @@ fn main_loop(
             frame.render_widget(Block::new().style(theme::screen()), frame.area());
             let [body, status] =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
-            app.follow_cursor(usize::from(body.height.saturating_sub(1)));
+            app.follow_cursor(usize::from(
+                body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
+            ));
             match app.view {
                 View::Chain => views::chain::draw(frame, body, app),
                 View::Phrase => views::phrase::draw(frame, body, app),

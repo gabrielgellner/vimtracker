@@ -95,7 +95,7 @@ pub struct FxSlot {
 pub struct Step {
     pub note: Note,
     /// `None` means full level.
-    pub volume: Option<u8>,
+    pub velocity: Option<u8>,
     pub instrument: Option<u32>,
     pub fx: Vec<FxSlot>,
 }
@@ -104,7 +104,7 @@ impl Default for Step {
     fn default() -> Self {
         Self {
             note: Note::Empty,
-            volume: None,
+            velocity: None,
             instrument: None,
             fx: vec![FxSlot::default(); FX_SLOTS],
         }

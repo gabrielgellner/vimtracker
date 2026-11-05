@@ -11,7 +11,7 @@ only takes effect once its value is typed.
 
 | Command | Sets |
 |---|---|
-| `VOL` | Track volume |
+| `VOL` | Track gain from the pattern, multiplied with `:tvol` |
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |

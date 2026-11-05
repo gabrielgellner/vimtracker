@@ -55,9 +55,9 @@ Per-note tables are a further idea, and they get their own decision after G1.
 *   **Chain:** a list of phrases, each with a transpose.
 *   **Phrase:** one track's sequence of steps, reusable by ID.
 *   **Step:** one position in a phrase. One step is a sixteenth note at normal speed.
-*   **Field:** one editable part of a step: note, volume, instrument, or a slot's command or
+*   **Field:** one editable part of a step: note, velocity, instrument, or a slot's command or
     value.
-*   **Slot:** one FX command and its value. Column group means a slot, or the note, volume
+*   **Slot:** one FX command and its value. Column group means a slot, or the note, velocity
     or instrument column.
 *   **View:** a screen you can jump to.
 *   **Operator:** a key that combines with a motion or target. **Action:** the recorded edit
@@ -245,7 +245,7 @@ Song
 *   **Limits.** Tracks are a list. Chains, phrases and instruments are maps from 32-bit ID to value.
     Instrument IDs widen past two hex digits when needed. Phrases can have any length of 1 step or
     more, and new phrases default to 16 steps. The engine prepares state for `MAX_TRACKS`.
-*   **Steps.** A step has a note or note-off, a volume, an instrument and a list of FX slots. The list
+*   **Steps.** A step has a note or note-off, a velocity, an instrument and a list of FX slots. The list
     has 3 slots for now, and it is saved as a list so the count can grow without changing the format.
 *   **Reuse.** Chains refer to phrases by ID. A shared phrase displays a marker, and an edit changes
     every use. Clone creates a new ID, using the lowest unused number.
@@ -331,8 +331,9 @@ of the list, this does not change other tracks.
 ### Audio path
 
 Each track has one voice: one-shot sample playback, a filter, a volume envelope and equal-power pan, with
-`80` defined as exact centre. Final gain is step volume x `VOL` x instrument volume, and `--` in the step
-means full. Transposed notes clamp to the note range.
+`80` defined as exact centre. Final gain is step velocity x `VOL` x track level x instrument volume, and `--` in the step
+means full. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
+once those exist. Transposed notes clamp to the note range.
 
 Tracks feed a mixer with shared delay and reverb sends, then a fixed master gain of about -6 dB, then a
 `tanh` soft clip. Processing is 32-bit float at the device's sample rate. Samples are converted to that
@@ -651,9 +652,11 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `k o l p ;` | C to E, one octave up |
 | Insert (note) | `1` | Note-off |
 | Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
-| Insert (note) | `c v` | Lower or raise the volume written with each note, in steps of `20`. It starts unset, which leaves the Volume column alone, and raising past `E0` unsets it |
+| Insert (note) | `c v` | Lower or raise the velocity written with each note, in steps of `20`. It starts unset, which leaves the Velocity column alone, and raising past `E0` unsets it |
+| Insert | `Enter` | In the phrase view, play from the cursor or stop, except that it finishes an instrument ID that has been typed |
 | Insert | `Up Down` | Move one step without writing |
-| Insert | `Left Right` | Move back or forward by the skip setting, which starts at 4, without writing |
+| Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |
+| Insert | `Shift-Left Shift-Right` | Move to the previous or next multiple of the skip setting, without writing |
 | Insert (note) | `Backspace` | Clear the field and move up |
 | Insert (value) | `0-9 a-f` | Two digits commit and move down by the step setting. Instrument IDs accept more digits, and `Enter` commits them |
 | Insert (FX command) | Letters | Typed in uppercase. An invalid name is refused with a message and leaves the field unchanged |
@@ -685,6 +688,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:mute`, `:solo` | Toggle on the current track |
 | `:bpm n` | Tempo, in thousandths: `:bpm 137.63` |
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
+| `:tvol xx` | This track's level in hex |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |

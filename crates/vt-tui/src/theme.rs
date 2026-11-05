@@ -3,6 +3,8 @@
 
 use ratatui::style::{Color, Modifier, Style};
 
+use crate::input::mode::Mode;
+
 pub const ROSEWATER: Color = Color::Rgb(0xf2, 0xd5, 0xcf);
 pub const MAUVE: Color = Color::Rgb(0xca, 0x9e, 0xe6);
 pub const RED: Color = Color::Rgb(0xe7, 0x82, 0x84);
@@ -27,9 +29,14 @@ pub fn window() -> Style {
     Style::new().fg(TEXT).bg(MANTLE)
 }
 
-/// The cursor.
-pub fn cursor() -> Style {
-    Style::new().fg(BASE).bg(ROSEWATER)
+/// The cursor, which turns the Insert colour while typing writes to the song.
+pub fn cursor(mode: Mode) -> Style {
+    let color = if mode == Mode::Insert {
+        GREEN
+    } else {
+        ROSEWATER
+    };
+    Style::new().fg(BASE).bg(color)
 }
 
 /// A selection, and the picker's highlighted row. The text stays readable on it.

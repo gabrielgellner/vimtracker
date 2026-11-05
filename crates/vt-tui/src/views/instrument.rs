@@ -45,7 +45,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             value(row, current)
         };
         let style = if row == app.instrument_row {
-            theme::cursor()
+            theme::cursor(app.mode)
         } else {
             Style::new()
         };

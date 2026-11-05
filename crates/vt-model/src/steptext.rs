@@ -12,12 +12,12 @@ use crate::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
 /// Why a step's text could not be read.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum StepTextError {
-    #[error("a step needs a note, a volume and an instrument: {0:?}")]
+    #[error("a step needs a note, a velocity and an instrument: {0:?}")]
     TooFewFields(String),
     #[error("not a note: {0:?}")]
     Note(String),
-    #[error("not a volume: {0:?}")]
-    Volume(String),
+    #[error("not a velocity: {0:?}")]
+    Velocity(String),
     #[error("not an instrument: {0:?}")]
     Instrument(String),
     #[error("not an FX slot: {0:?}")]
@@ -118,10 +118,12 @@ impl FromStr for Step {
         let mut fields = text.split(' ');
         let few = || StepTextError::TooFewFields(text.to_owned());
         let note = fields.next().ok_or_else(few)?.parse()?;
-        let volume = fields.next().ok_or_else(few)?;
-        let volume = match volume {
+        let velocity = fields.next().ok_or_else(few)?;
+        let velocity = match velocity {
             "--" => None,
-            other => Some(hex_byte(other).ok_or_else(|| StepTextError::Volume(other.to_owned()))?),
+            other => {
+                Some(hex_byte(other).ok_or_else(|| StepTextError::Velocity(other.to_owned()))?)
+            }
         };
         let instrument = fields.next().ok_or_else(few)?;
         let instrument = match instrument {
@@ -138,7 +140,7 @@ impl FromStr for Step {
         let fx = fields.map(str::parse).collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             note,
-            volume,
+            velocity,
             instrument,
             fx,
         })
@@ -148,8 +150,8 @@ impl FromStr for Step {
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.note)?;
-        match self.volume {
-            Some(volume) => write!(f, " {volume:02X}")?,
+        match self.velocity {
+            Some(velocity) => write!(f, " {velocity:02X}")?,
             None => f.write_str(" --")?,
         }
         match self.instrument {
@@ -196,8 +198,8 @@ mod tests {
             ("G#9 -- --", StepTextError::Note("G#9".into())),
             ("H-4 -- --", StepTextError::Note("H-4".into())),
             ("C-44 -- --", StepTextError::Note("C-44".into())),
-            ("C-4 6 --", StepTextError::Volume("6".into())),
-            ("C-4 ab --", StepTextError::Volume("ab".into())),
+            ("C-4 6 --", StepTextError::Velocity("6".into())),
+            ("C-4 ab --", StepTextError::Velocity("ab".into())),
             ("C-4 -- 1", StepTextError::Instrument("1".into())),
             ("C-4 -- -- CUT4", StepTextError::Slot("CUT4".into())),
             ("C-4 -- -- ---01", StepTextError::Slot("---01".into())),

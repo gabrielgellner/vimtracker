@@ -11,6 +11,7 @@ use vt_model::selection::Scope;
 use vt_model::step::Step;
 
 use crate::app::{App, Field};
+use crate::input::mode::Mode;
 use crate::theme;
 
 /// The width of a read-only note column for another track.
@@ -18,13 +19,17 @@ const NEIGHBOUR_WIDTH: usize = 4;
 /// Room for the step number, playhead marker and gap.
 const GUTTER: usize = 5;
 
+/// The rows that aren't steps: the heading, and the box's top and bottom. The box always has its
+/// room, so nothing moves when Insert starts.
+pub const ROWS_AROUND_STEPS: u16 = 3;
+
 /// The character range of a field within a step's text.
 fn field_range(step: &Step, field: Field) -> (usize, usize) {
     let instrument_width = step.instrument.map_or(2, |id| format!("{id:02X}").len());
     let fx_start = |slot: usize| 7 + instrument_width + 1 + slot * 6;
     match field {
         Field::Note => (0, 3),
-        Field::Volume => (4, 6),
+        Field::Velocity => (4, 6),
         Field::Instrument => (7, 7 + instrument_width),
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + 3),
         Field::FxValue(slot) => (fx_start(slot) + 3, fx_start(slot) + 5),
@@ -102,7 +107,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         frame.render_widget(Paragraph::new("This track has no phrase here."), area);
         return;
     };
-    let height = usize::from(area.height.saturating_sub(1)).max(1);
+    let height = usize::from(area.height.saturating_sub(ROWS_AROUND_STEPS)).max(1);
     let top = app.top;
     let selection = app.mode.is_visual().then(|| app.current_selection());
     let playhead = playhead_step(app);
@@ -132,10 +137,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     for track in &others {
         title.push_str(&track_label(app, *track));
     }
-    let mut lines = vec![Line::styled(
-        title,
-        Style::new().add_modifier(Modifier::BOLD),
-    )];
+    let cursor_style = theme::cursor(app.mode);
+    let boxed = app.mode == Mode::Insert;
+    let edge = Style::new().fg(theme::GREEN);
+    let rule = |left: &str, right: &str| {
+        if boxed {
+            let inside = "─".repeat(body_width);
+            let indent = " ".repeat(GUTTER - 1);
+            Line::styled(format!("{indent}{left}{inside}{right}"), edge)
+        } else {
+            Line::raw("")
+        }
+    };
+    let side = if boxed { "│" } else { " " };
+    let mut lines = vec![
+        Line::styled(title, Style::new().add_modifier(Modifier::BOLD)),
+        rule("┌", "┐"),
+    ];
     for (index, step) in phrase.steps().iter().enumerate().skip(top).take(height) {
         let text = step.to_string();
         let marker = if playhead == Some(index) { ">" } else { " " };
@@ -146,7 +164,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         };
         let mut spans = vec![
             Span::styled(format!("{index:02X}"), number),
-            Span::styled(format!(" {marker} "), theme::active()),
+            Span::styled(format!(" {marker}"), theme::active()),
+            Span::styled(side, edge),
         ];
         let body = if playhead == Some(index) {
             theme::active()
@@ -170,18 +189,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 text[start..from].to_owned(),
                 theme::selected(),
             ));
-            spans.push(Span::styled(text[from..to].to_owned(), theme::cursor()));
+            spans.push(Span::styled(text[from..to].to_owned(), cursor_style));
             spans.push(Span::styled(text[to..end].to_owned(), theme::selected()));
             spans.push(Span::styled(text[end..].to_owned(), body));
         } else if let Some((start, end)) = cursor {
             spans.push(Span::styled(text[..start].to_owned(), body));
-            spans.push(Span::styled(text[start..end].to_owned(), theme::cursor()));
+            spans.push(Span::styled(text[start..end].to_owned(), cursor_style));
             spans.push(Span::styled(text[end..].to_owned(), body));
         } else {
             spans.push(Span::styled(text.clone(), body));
         }
-        let padding = body_width.saturating_sub(step.to_string().len()) + 2;
+        let padding = body_width.saturating_sub(step.to_string().len());
         spans.push(Span::raw(" ".repeat(padding)));
+        spans.push(Span::styled(side, edge));
+        spans.push(Span::raw(" "));
         for track in &others {
             spans.push(Span::styled(
                 format!("{} ", neighbour_note(app, *track, first_step + index)),
@@ -190,5 +211,6 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         lines.push(Line::from(spans));
     }
+    lines.push(rule("└", "┘"));
     frame.render_widget(Paragraph::new(lines), area);
 }
