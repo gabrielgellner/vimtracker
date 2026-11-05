@@ -21,6 +21,7 @@ pub enum Line {
     Solo,
     Double,
     SetStep(u32),
+    Seed(u64),
 }
 
 /// Why a command line was refused.
@@ -40,6 +41,8 @@ pub enum LineError {
     Track,
     #[error(":set takes step=n")]
     Set,
+    #[error(":seed takes a number")]
+    Seed,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -111,6 +114,10 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             ["del"] => Ok(Line::TrackDel),
             _ => Err(LineError::Track),
         },
+        "seed" => argument
+            .parse()
+            .map(Line::Seed)
+            .map_err(|_| LineError::Seed),
         "double" => Ok(Line::Double),
         "set" => argument
             .strip_prefix("step=")
@@ -143,6 +150,8 @@ mod tests {
         assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
         assert_eq!(parse("inst 1A"), Ok(Line::Inst(0x1A)));
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
+        assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
+        assert!(parse("seed x").is_err());
         assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
         assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
         assert_eq!(parse("track del"), Ok(Line::TrackDel));

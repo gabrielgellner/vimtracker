@@ -64,6 +64,8 @@ pub enum Action {
     Double { phrase: u32 },
     /// Set how far Insert moves down after a note.
     SetStepSize(u32),
+    /// Set the project's random seed.
+    SetSeed(u64),
     /// Change a phrase's length, keeping steps past it hidden.
     SetLength { phrase: u32, length: usize },
     /// Change the tempo, in thousandths of a BPM.
@@ -185,6 +187,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::SetStepSize(size) => next.step = *size,
+        Action::SetSeed(seed) => next.seed = *seed,
         Action::SetLength { phrase, length } => {
             let phrase = next
                 .phrases
