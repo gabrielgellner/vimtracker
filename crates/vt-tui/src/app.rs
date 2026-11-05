@@ -456,6 +456,7 @@ impl App {
             }
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickInstrument => self.open_instrument_picker(),
+            Cmd::ChooseInstrument => self.open_current_instrument_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {

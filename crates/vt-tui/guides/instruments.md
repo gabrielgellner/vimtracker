@@ -91,3 +91,6 @@ always the last one you entered, however you entered it.
 | `i`, then `bd` or `04` | Type a label or number |
 | `+` `-` | Change it. An empty cell gets `Inst` |
 | `gd` | Open it in the instrument view, and `C-o` comes back |
+
+From anywhere, `Space i K` chooses the current instrument from the same list.
+It writes nothing to the step, so the next note you type uses it.

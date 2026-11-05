@@ -220,6 +220,16 @@ impl App {
             self.status = "K chooses an instrument on the Instrument column".to_owned();
             return;
         }
+        self.open_instruments(Pick::Instrument);
+    }
+
+    /// Choose the current instrument from anywhere, writing nothing to the song.
+    pub(crate) fn open_current_instrument_picker(&mut self) {
+        self.open_instruments(Pick::CurrentInstrument);
+    }
+
+    /// List the instruments that exist, labels first, with the current one highlighted.
+    fn open_instruments(&mut self, pick: fn(u32) -> Pick) {
         let song = self.song();
         let mut slots: Vec<u32> = song.instruments.keys().copied().collect();
         slots.sort_by_key(|id| !song.is_labelled(*id));
@@ -234,7 +244,7 @@ impl App {
                 let file = sample.rsplit('/').next().unwrap_or(sample);
                 Item {
                     label: format!("{}  {file}", name_of(*id)),
-                    pick: Pick::Instrument(*id),
+                    pick: pick(*id),
                 }
             })
             .collect();
@@ -317,6 +327,7 @@ impl App {
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.load_kit(&path),
                     Some(Pick::Instrument(id)) => self.pick_instrument(id),
+                    Some(Pick::CurrentInstrument(id)) => self.instrument = id,
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

@@ -14,8 +14,14 @@ pub enum Pick {
     View(View),
     Sample(PathBuf),
     Kit(PathBuf),
+    /// Put this instrument on the step, and make it current.
     Instrument(u32),
-    Use { track: usize, slot: usize },
+    /// Make this instrument current, and write nothing.
+    CurrentInstrument(u32),
+    Use {
+        track: usize,
+        slot: usize,
+    },
     Guide(Guide),
 }
 

@@ -10,7 +10,7 @@ use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 use vt_model::step::Note;
-use vt_tui::app::App;
+use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 
@@ -1793,6 +1793,58 @@ fn k_picks_an_instrument_for_this_step_with_labels_first() {
     assert_eq!(picker.current().unwrap().label, "CH  hat.wav");
     special(&mut app, KeyCode::Esc);
     assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+}
+
+#[test]
+fn space_i_k_chooses_the_current_instrument_from_anywhere_and_writes_nothing() {
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    let before = Arc::clone(app.song());
+    let dirty = app.dirty;
+
+    // On the Note column, where plain K refuses.
+    press(&mut app, " iK");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "hat");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.instrument, slot("CH"));
+    assert_eq!(app.cursor.field, Field::Note, "the cursor stays put");
+    assert_eq!(app.cursor.step, 0);
+    assert_eq!(*app.song(), before, "nothing is written");
+    assert_eq!(app.dirty, dirty);
+
+    // The next note uses it.
+    press(&mut app, "ia");
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+    special(&mut app, KeyCode::Esc);
+
+    // It opens on the current one, and Esc changes nothing.
+    press(&mut app, " iK");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "CH  hat.wav");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.instrument, slot("CH"));
+}
+
+#[test]
+fn space_i_k_works_in_the_chain_and_instrument_views() {
+    for (view_keys, view) in [(" 2", View::Chain), (" 5", View::Instrument)] {
+        let (mut app, _realtime) = app();
+        command(&mut app, &format!("kit {}", labelled_kit().display()));
+        press(&mut app, view_keys);
+        assert_eq!(app.view, view);
+        let scope = app.key_scope();
+        let before = Arc::clone(app.song());
+        press(&mut app, " iK");
+        assert_eq!(app.mode, Mode::Picker, "{view:?}");
+        press(&mut app, "kick");
+        special(&mut app, KeyCode::Enter);
+        assert_eq!(app.instrument, slot("BD"), "{view:?}");
+        assert_eq!(app.view, view, "stays in this view");
+        assert_eq!(app.key_scope(), scope, "the view's keys still work");
+        assert_eq!(*app.song(), before);
+    }
 }
 
 #[test]

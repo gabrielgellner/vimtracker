@@ -76,6 +76,7 @@ pub enum Cmd {
     Replace,
     Substitute,
     PickInstrument,
+    ChooseInstrument,
 }
 
 /// One row of the table.
@@ -149,6 +150,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
     ("Space k", Cmd::Help, "Show every key"),
+    (
+        "Space i K",
+        Cmd::ChooseInstrument,
+        "Choose the current instrument",
+    ),
     ("C-o", Cmd::JumpBack, "Jump back"),
     ("Tab", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),

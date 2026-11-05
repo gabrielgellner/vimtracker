@@ -618,6 +618,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `Space 1` to `Space 6` | Jump to song, chain, phrase, table, instrument or groove view, when that view exists |
 | Normal | `Space ?` | Open a guide: a short tutorial built into the program |
 | Normal | `Space k` | Show every key, generated from the binding table |
+| Normal | `Space i K` | From any view or column, choose the current instrument from those that exist, labels first. Writes nothing to the song |
 | Normal | `Space qq` | Quit, the same as `:q` |
 | Normal | `h l` | Previous or next field |
 | Normal | `0 $` | Start or end of the row. After an operator, they cover this step from the cursor's column to that end, including the cursor's column |
