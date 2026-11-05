@@ -15,6 +15,10 @@ pub enum Line {
     Inst(u32),
     Bpm(u32),
     Len(usize),
+    TrackAdd(usize),
+    TrackDel,
+    Mute,
+    Solo,
 }
 
 /// Why a command line was refused.
@@ -30,6 +34,8 @@ pub enum LineError {
     Bpm,
     #[error(":len takes a number of steps, 1 or more")]
     Len,
+    #[error(":track takes add [n] or del")]
+    Track,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -90,6 +96,19 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             Ok(0) | Err(_) => Err(LineError::Len),
             Ok(length) => Ok(Line::Len(length)),
         },
+        "track" => match argument.split_whitespace().collect::<Vec<_>>()[..] {
+            ["add"] => Ok(Line::TrackAdd(1)),
+            ["add", count] => count
+                .parse()
+                .ok()
+                .filter(|count| *count > 0)
+                .map(Line::TrackAdd)
+                .ok_or(LineError::Track),
+            ["del"] => Ok(Line::TrackDel),
+            _ => Err(LineError::Track),
+        },
+        "mute" => Ok(Line::Mute),
+        "solo" => Ok(Line::Solo),
         other => Err(LineError::Unknown(other.to_owned())),
     }
 }
@@ -114,6 +133,10 @@ mod tests {
         assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
         assert_eq!(parse("inst 1A"), Ok(Line::Inst(0x1A)));
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
+        assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
+        assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
+        assert_eq!(parse("track del"), Ok(Line::TrackDel));
+        assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));
     }
 

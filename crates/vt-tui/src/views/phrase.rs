@@ -11,6 +11,11 @@ use vt_model::step::Step;
 
 use crate::app::{App, Field};
 
+/// The width of a read-only note column for another track.
+const NEIGHBOUR_WIDTH: usize = 4;
+/// Room for the step number, playhead marker and gap.
+const GUTTER: usize = 5;
+
 /// The character range of a field within a step's text.
 fn field_range(step: &Step, field: Field) -> (usize, usize) {
     let instrument_width = step.instrument.map_or(2, |id| format!("{id:02X}").len());
@@ -36,6 +41,44 @@ fn playhead_step(app: &App) -> Option<usize> {
         .then_some(position.step)
 }
 
+/// Which other tracks fit beside the focused one, keeping those near it in view.
+fn neighbours(app: &App, width: usize) -> Vec<usize> {
+    let tracks = app.song().tracks.len();
+    let columns = width / NEIGHBOUR_WIDTH;
+    let others = tracks.saturating_sub(1);
+    let shown = columns.min(others);
+    if shown == 0 {
+        return Vec::new();
+    }
+    let others: Vec<usize> = (0..tracks).filter(|t| *t != app.cursor.track).collect();
+    let centre = others.partition_point(|t| *t < app.cursor.track);
+    let start = centre.saturating_sub(shown / 2).min(others.len() - shown);
+    others[start..start + shown].to_vec()
+}
+
+/// The note another track plays at a section position.
+fn neighbour_note(app: &App, track: usize, section_step: usize) -> String {
+    let song = app.song();
+    song.sections
+        .first()
+        .and_then(|s| s.chains.get(track).copied().flatten())
+        .and_then(|chain| song.chain_position(chain, section_step))
+        .and_then(|position| song.step_at(position))
+        .map_or_else(|| "   ".to_owned(), |step| step.note.to_string())
+}
+
+fn track_label(app: &App, track: usize) -> String {
+    let live = app.levels.get(track).copied().unwrap_or_default();
+    let flag = if live.mute {
+        'm'
+    } else if live.solo {
+        's'
+    } else {
+        ' '
+    };
+    format!("{:02}{flag} ", track + 1)
+}
+
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let Some(phrase) = app.phrase_id().and_then(|id| app.song().phrases.get(&id)) else {
@@ -49,14 +92,29 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .saturating_sub(height / 2)
         .min(phrase.len().saturating_sub(height));
     let playhead = playhead_step(app);
+    let body_width = phrase
+        .steps()
+        .iter()
+        .map(|step| step.to_string().len())
+        .max()
+        .unwrap_or(0);
+    let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
+    let others = neighbours(app, room);
+    let first_step = app.section_step() - app.cursor.step;
+    let mut heading = format!(
+        "Track {}Phrase {:02X}  Octave {}  Inst {:02X}",
+        track_label(app, app.cursor.track),
+        app.phrase_id().unwrap_or(0),
+        app.octave,
+        app.instrument,
+    );
+    heading.truncate(GUTTER + body_width);
+    let mut title = format!("{heading:<width$}  ", width = GUTTER + body_width);
+    for track in &others {
+        title.push_str(&track_label(app, *track));
+    }
     let mut lines = vec![Line::styled(
-        format!(
-            "Track {:02}  Phrase {:02X}  Octave {}  Instrument {:02X}",
-            app.cursor.track + 1,
-            app.phrase_id().unwrap_or(0),
-            app.octave,
-            app.instrument,
-        ),
+        title,
         Style::new().add_modifier(Modifier::BOLD),
     )];
     for (index, step) in phrase.steps().iter().enumerate().skip(top).take(height) {
@@ -87,7 +145,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             ));
             spans.push(Span::styled(text[end..].to_owned(), body));
         } else {
-            spans.push(Span::styled(text, body));
+            spans.push(Span::styled(text.clone(), body));
+        }
+        let padding = body_width.saturating_sub(step.to_string().len()) + 2;
+        spans.push(Span::raw(" ".repeat(padding)));
+        for track in &others {
+            spans.push(Span::styled(
+                format!("{} ", neighbour_note(app, *track, first_step + index)),
+                Style::new().fg(Color::DarkGray),
+            ));
         }
         lines.push(Line::from(spans));
     }

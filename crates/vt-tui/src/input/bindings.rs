@@ -19,6 +19,11 @@ pub enum Cmd {
     PauseOrResume,
     ReturnToStart,
     Quit,
+    NextTrack,
+    PreviousTrack,
+    ToggleMute,
+    ToggleSolo,
+    ClearMutes,
     Undo,
     Redo,
 }
@@ -53,6 +58,11 @@ pub const BINDINGS: &[Binding] = &[
     normal("Space x", Cmd::PauseOrResume, "Pause in place, or resume"),
     normal("Space c", Cmd::ReturnToStart, "Return to the start"),
     normal("Space q q", Cmd::Quit, "Quit"),
+    normal("W", Cmd::NextTrack, "Next track"),
+    normal("B", Cmd::PreviousTrack, "Previous track"),
+    normal("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
+    normal("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
+    normal("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
     normal("u", Cmd::Undo, "Undo"),
     normal("C-r", Cmd::Redo, "Redo"),
 ];

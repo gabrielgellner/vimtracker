@@ -161,6 +161,35 @@ impl Engine {
         self.transport = to;
     }
 
+    /// Set whether a track is muted. A muted track's sounding note fades.
+    pub fn set_mute(&mut self, track: usize, mute: bool) {
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.mute = mute;
+        }
+        self.apply_audibility();
+    }
+
+    /// Set whether a track is soloed. While any track is soloed, only soloed tracks sound.
+    pub fn set_solo(&mut self, track: usize, solo: bool) {
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.solo = solo;
+        }
+        self.apply_audibility();
+    }
+
+    fn any_solo(&self) -> bool {
+        self.tracks.iter().any(|t| t.solo)
+    }
+
+    fn apply_audibility(&mut self) {
+        let any_solo = self.any_solo();
+        for track in self.tracks.iter_mut() {
+            if track.mute || (any_solo && !track.solo) {
+                track.stop();
+            }
+        }
+    }
+
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
     pub fn preview(&mut self, instrument: u32, note: u8) {
         let Some(on) = self.note_on(instrument, note, 1.0) else {
@@ -230,7 +259,8 @@ impl Engine {
             return;
         }
         let section_step = (self.next_step % length as u64) as usize;
-        for (index, track) in song.tracks.iter().enumerate().take(MAX_TRACKS) {
+        let any_solo = self.any_solo();
+        for index in 0..song.tracks.len().min(MAX_TRACKS) {
             let Some(Some(chain)) = section.chains.get(index) else {
                 continue;
             };
@@ -254,8 +284,10 @@ impl Engine {
                     let on = self.tracks[index]
                         .instrument
                         .and_then(|i| self.note_on(i, note, gain));
+                    let state = &self.tracks[index];
+                    let audible = !state.mute && (!any_solo || state.solo);
                     match on {
-                        Some(on) if !track.mute => self.tracks[index].start(on, self.rate),
+                        Some(on) if audible => self.tracks[index].start(on, self.rate),
                         _ => self.tracks[index].cut_to_tail(),
                     }
                 }
