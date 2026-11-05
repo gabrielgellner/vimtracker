@@ -14,6 +14,7 @@ pub enum Pick {
     View(View),
     Sample(PathBuf),
     Kit(PathBuf),
+    Instrument(u32),
     Use { track: usize, slot: usize },
     Guide(Guide),
 }

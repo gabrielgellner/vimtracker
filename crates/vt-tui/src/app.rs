@@ -13,6 +13,7 @@ use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
 use vt_model::history::History;
+use vt_model::label::{is_named_slot, name_of, slot_of};
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -435,6 +436,7 @@ impl App {
                 self.mode = Mode::Help;
             }
             Cmd::Guides => self.open_guide_picker(),
+            Cmd::PickInstrument => self.open_instrument_picker(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.last_entry = None;
@@ -846,7 +848,13 @@ impl App {
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
     }
 
-    /// Instrument IDs can have more digits, so `Enter` commits them.
+    fn write_instrument(&mut self, id: u32) {
+        self.instrument = id;
+        self.set_field(FieldValue::Instrument(Some(id)));
+        self.advance();
+    }
+
+    /// Two characters commit, as a number or a label. `Enter` commits one digit.
     fn insert_instrument(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
@@ -859,13 +867,20 @@ impl App {
             KeyCode::Enter => {
                 let text = std::mem::take(&mut self.entry.text);
                 if let Ok(id) = u32::from_str_radix(&text, 16) {
-                    self.instrument = id;
-                    self.set_field(FieldValue::Instrument(Some(id)));
-                    self.advance();
+                    self.write_instrument(id);
                 }
             }
-            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() && self.entry.text.len() < 8 => {
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_alphanumeric() => {
                 self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 2 {
+                    let text = std::mem::take(&mut self.entry.text);
+                    match slot_of(&text) {
+                        Some(id) => self.write_instrument(id),
+                        None => {
+                            self.status = format!("{text} isn't a number, or a label");
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -965,7 +980,24 @@ impl App {
             Line::Kit(None) => self.open_kit_picker(),
             Line::Inst(id) => {
                 self.instrument = id;
-                self.status = format!("Instrument {id:02X}");
+                self.status = format!("Instrument {}", name_of(id));
+            }
+            Line::Label(Some(id)) => {
+                self.apply(&Action::SetLabelled { id, labelled: true });
+                self.instrument = id;
+                self.status = format!("Instrument {} is labelled", name_of(id));
+            }
+            Line::Label(None) if is_named_slot(self.instrument) => {
+                self.status = format!(
+                    "{} can only be named by its label",
+                    name_of(self.instrument)
+                );
+            }
+            Line::Label(None) => {
+                self.apply(&Action::SetLabelled {
+                    id: self.instrument,
+                    labelled: false,
+                });
             }
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
             Line::TrackAdd(count) => {
@@ -1162,7 +1194,7 @@ impl App {
                     sample: stored,
                 });
                 if self.status.is_empty() {
-                    self.status = format!("Instrument {:02X} loaded", self.instrument);
+                    self.status = format!("Instrument {} loaded", name_of(self.instrument));
                 }
             }
             Err(error) => self.status = error.to_string(),

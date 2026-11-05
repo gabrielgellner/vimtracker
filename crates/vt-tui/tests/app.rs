@@ -1268,12 +1268,12 @@ fn enter_plays_and_stops_from_insert_and_keeps_writing() {
 }
 
 #[test]
-fn enter_still_finishes_a_typed_instrument_id_in_insert() {
+fn enter_still_finishes_one_typed_digit_of_an_instrument_in_insert() {
     let (mut app, mut rt) = app();
-    press(&mut app, "lli1a");
+    press(&mut app, "lli5");
     special(&mut app, KeyCode::Enter);
     block(&mut rt, &mut app);
-    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(0x1A));
+    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(5));
     assert_eq!(app.transport, Transport::Stopped);
 }
 
@@ -1313,8 +1313,7 @@ fn a_kit_fills_slots_in_file_order_as_one_undo_step() {
     assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
     assert_eq!(sample_of(&app, 3), None);
     assert_eq!(app.instrument, 0);
-    assert!(app.status.contains("Kit 909: 3 sounds"), "{}", app.status);
-    assert!(app.status.contains("00 to 02"), "{}", app.status);
+    assert_eq!(app.status, "Kit 909: 00 01 02");
     assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
 
     press(&mut app, "u");
@@ -1440,7 +1439,6 @@ fn editing_the_instrument_in_the_phrase_is_remembered_for_the_next_note() {
 fn typing_an_instrument_is_remembered_too() {
     let (mut app, _realtime) = app();
     press(&mut app, "lli1a");
-    special(&mut app, KeyCode::Enter);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.instrument, 0x1A);
     press(&mut app, "hhi");
@@ -1597,4 +1595,232 @@ fn r_while_playing_says_why_it_did_nothing() {
     assert_eq!(app.transport, Transport::Playing);
     press(&mut app, "r");
     assert!(app.status.contains("stopped"), "{}", app.status);
+}
+
+fn labelled_kit() -> PathBuf {
+    let kit = kit_file();
+    std::fs::write(
+        &kit,
+        r#"(sounds: [
+            (label: "BD", path: "drums/kick.wav"),
+            (label: "CH", path: "drums/hat.wav"),
+            (path: "drums/snare.wav"),
+        ])"#,
+    )
+    .unwrap();
+    kit
+}
+
+fn slot(name: &str) -> u32 {
+    vt_model::label::slot_of(name).unwrap()
+}
+
+#[test]
+fn a_label_is_its_slot_and_a_kit_puts_sounds_there() {
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    assert_eq!(app.status, "Kit 909: BD CH 00");
+    assert!(sample_of(&app, 0xBD).unwrap().ends_with("kick.wav"));
+    assert!(sample_of(&app, slot("CH")).unwrap().ends_with("hat.wav"));
+    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
+    assert_eq!(app.instrument, 0xBD);
+    assert!(app.song().is_labelled(0xBD));
+    assert!(app.song().is_labelled(slot("CH")));
+    assert!(!app.song().is_labelled(0));
+
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 0xBD), None);
+    assert!(!app.song().is_labelled(0xBD));
+}
+
+#[test]
+fn a_kit_warns_only_when_it_changes_a_slots_sample() {
+    let (mut app, _realtime) = app();
+    let kit = labelled_kit();
+    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(app.status, "Kit 909: BD CH 00", "the same sounds again");
+
+    std::fs::write(
+        &kit,
+        r#"(sounds: [
+            (label: "BD", path: "drums/snare.wav"),
+            (label: "CH", path: "drums/hat.wav"),
+            (label: "OH", path: "drums/hat.wav"),
+        ])"#,
+    )
+    .unwrap();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(app.status, "Kit 909: BD CH OH. Replaced BD: u to undo");
+    press(&mut app, "u");
+    assert!(sample_of(&app, 0xBD).unwrap().ends_with("kick.wav"));
+}
+
+#[test]
+fn a_kit_refuses_bad_or_repeated_labels_and_changes_nothing() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    for (text, expected) in [
+        (r#"(sounds: [(label: "1A", path: "drums/kick.wav")])"#, "1A"),
+        (
+            r#"(sounds: [(label: "BDX", path: "drums/kick.wav")])"#,
+            "BDX",
+        ),
+        (
+            r#"(sounds: [(label: "BD", path: "drums/kick.wav"), (label: "bd", path: "drums/hat.wav")])"#,
+            "twice",
+        ),
+    ] {
+        std::fs::write(&kit, text).unwrap();
+        command(&mut app, &format!("kit {}", kit.display()));
+        assert!(app.status.contains(expected), "{}", app.status);
+        assert!(!app.dirty);
+    }
+}
+
+#[test]
+fn typing_two_characters_writes_a_number_or_a_label_at_once() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ll");
+    press(&mut app, "ibd");
+    assert_eq!(step_instrument(&app, 0), Some(0xBD));
+    press(&mut app, "ch");
+    assert_eq!(step_instrument(&app, 1), Some(slot("CH")));
+    assert_eq!(app.instrument, slot("CH"));
+    press(&mut app, "04");
+    assert_eq!(step_instrument(&app, 2), Some(4));
+    press(&mut app, "1h");
+    assert_eq!(step_instrument(&app, 3), None);
+    assert_eq!(app.cursor.step, 3);
+    assert!(app.status.contains("1H"), "{}", app.status);
+    assert!(app.entry.text.is_empty());
+}
+
+#[test]
+fn inst_takes_labels_and_notes_use_them_and_the_song_keeps_them() {
+    let project = folder();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("w {}", project.display()));
+    command(&mut app, "inst ch");
+    assert_eq!(app.instrument, slot("CH"));
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+    command(&mut app, "w");
+    let reopened = vt_model::project::load_song(&project).unwrap();
+    assert_eq!(reopened.phrases[&0].steps()[0].instrument, Some(slot("CH")));
+}
+
+#[test]
+fn label_marks_a_hex_named_slot_and_off_clears_it() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "label BD");
+    assert_eq!(app.instrument, 0xBD);
+    assert!(app.song().is_labelled(0xBD));
+    command(&mut app, "label off");
+    assert!(!app.song().is_labelled(0xBD));
+    command(&mut app, "inst ch");
+    command(&mut app, "label off");
+    assert!(app.song().is_labelled(slot("CH")));
+    assert!(app.status.contains("CH"), "{}", app.status);
+}
+
+#[test]
+fn k_picks_an_instrument_for_this_step_with_labels_first() {
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Normal, "not on the Instrument column");
+    assert!(app.status.contains("Instrument column"), "{}", app.status);
+
+    press(&mut app, "llK");
+    assert_eq!(app.mode, Mode::Picker);
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["BD  kick.wav", "CH  hat.wav", "00  snare.wav"]);
+    press(&mut app, "hat");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+    assert_eq!(app.instrument, slot("CH"));
+    assert_eq!(app.cursor.step, 0);
+
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "CH  hat.wav");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+}
+
+#[test]
+fn plus_and_minus_walk_named_slots_through_those_that_exist() {
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    command(&mut app, "inst oh");
+    command(
+        &mut app,
+        &format!("sample {}", {
+            let dir = folder();
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("open.wav");
+            wav(&path);
+            path.display().to_string()
+        }),
+    );
+    command(&mut app, "inst ch");
+    press(&mut app, "ll+");
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+    press(&mut app, "+");
+    assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
+    press(&mut app, "+");
+    assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
+    press(&mut app, "-");
+    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
+    press(&mut app, "-");
+    assert_eq!(step_instrument(&app, 0), Some(0xBD));
+    assert_eq!(app.instrument, 0xBD);
+}
+
+#[test]
+fn labels_read_differently_in_the_phrase_even_when_they_are_hex() {
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "inst ch");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "inst bc");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let buffer = screen(&app);
+    let cell = |x: u16, y: u16| (buffer[(x, y)].symbol().to_owned(), buffer[(x, y)].fg);
+    let peach = vt_tui::theme::PEACH;
+    // Steps start at row 2, and the instrument is 7 characters into a step's text.
+    assert_eq!(cell(12, 2), ("B".to_owned(), peach));
+    assert_eq!(cell(13, 2), ("D".to_owned(), peach));
+    assert_eq!(cell(12, 3), ("C".to_owned(), peach));
+    assert_eq!(cell(13, 3), ("H".to_owned(), peach));
+    // BC is the same kind of name, but nothing labelled that slot.
+    assert_eq!(buffer[(12, 4)].symbol(), "B");
+    assert_ne!(buffer[(12, 4)].fg, peach);
+}
+
+#[test]
+fn zero_and_dollar_pick_the_chain_columns_and_stay_out_of_the_instrument_view() {
+    use vt_tui::tree::ChainColumn;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2$");
+    assert_eq!(app.chain_column, ChainColumn::Transpose);
+    press(&mut app, "0");
+    assert_eq!(app.chain_column, ChainColumn::Phrase);
+    press(&mut app, " 5l");
+    let instrument = app.instrument;
+    press(&mut app, "0$");
+    assert_eq!(app.instrument, instrument);
 }

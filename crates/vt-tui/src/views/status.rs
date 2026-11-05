@@ -8,6 +8,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
+use vt_model::label::name_of;
 
 use crate::app::{App, Field};
 use crate::audio::AudioStats;
@@ -115,10 +116,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {note_velocity} Inst {:02X}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {note_velocity} Inst {}  TVol {level:02X}  CPU {:.1}%  late {late} xruns {errors}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
-            app.instrument,
+            name_of(app.instrument),
             load as f64 / 10.0,
         )),
     ]);

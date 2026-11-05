@@ -339,8 +339,10 @@ impl App {
                 self.review(section_step);
             }
             Cmd::Review => {}
-            Cmd::Move(Motion::Left) => self.chain_column = ChainColumn::Phrase,
-            Cmd::Move(Motion::Right) => self.chain_column = ChainColumn::Transpose,
+            Cmd::Move(Motion::Left | Motion::RowStart) => self.chain_column = ChainColumn::Phrase,
+            Cmd::Move(Motion::Right | Motion::RowEnd) => {
+                self.chain_column = ChainColumn::Transpose;
+            }
             Cmd::Increase => self.adjust_row(times as i32),
             Cmd::Decrease => self.adjust_row(-(times as i32)),
             Cmd::RemoveRow => {

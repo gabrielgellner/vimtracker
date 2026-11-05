@@ -25,7 +25,7 @@ Our octave numbers are one above Live's: `a` starts on `C-4`, the same pitch
 Live calls C3.
 
 Notes use the current instrument, shown as `Inst` on the status line. Change
-it with `:inst 1A`.
+it with `:inst 1A`, or by label with `:inst bd`.
 
 ## Moving without writing a note
 
@@ -72,5 +72,5 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits, such as `80`, then it moves down |
-| Instrument | Hex digits, then `Enter`, which plays only if nothing is typed |
+| Instrument | Two characters, a number or a label, such as `04` or `bd` |
 | FX | A name then two hex digits, such as `CUT40`. See **FX commands** |

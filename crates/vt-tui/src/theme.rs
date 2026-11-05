@@ -52,6 +52,11 @@ pub fn dim() -> Style {
     Style::new().fg(OVERLAY2)
 }
 
+/// An instrument's label, so a name that means something reads differently from a number.
+pub fn label() -> Style {
+    Style::new().fg(PEACH)
+}
+
 /// The playhead, and whatever is current in a list.
 pub fn active() -> Style {
     Style::new().fg(GREEN)

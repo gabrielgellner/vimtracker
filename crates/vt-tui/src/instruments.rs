@@ -112,10 +112,14 @@ impl App {
             Cmd::Move(Motion::First) => self.move_row(0),
             Cmd::Move(Motion::Last) => self.move_row(Row::ALL.len() - 1),
             Cmd::Move(Motion::Right) => {
-                self.instrument = self.instrument.saturating_add(times as u32);
+                for _ in 0..times {
+                    self.instrument = self.song().next_instrument(self.instrument, true);
+                }
             }
             Cmd::Move(Motion::Left) => {
-                self.instrument = self.instrument.saturating_sub(times as u32);
+                for _ in 0..times {
+                    self.instrument = self.song().next_instrument(self.instrument, false);
+                }
             }
             Cmd::Increase => self.adjust_instrument(true, times),
             Cmd::Decrease => self.adjust_instrument(false, times),

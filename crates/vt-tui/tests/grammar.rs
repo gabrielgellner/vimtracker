@@ -417,11 +417,12 @@ fn partly_typed_values_are_dropped_on_esc() {
 }
 
 #[test]
-fn instrument_entry_commits_on_enter_and_becomes_current() {
+fn instrument_entry_commits_on_two_characters_and_becomes_current() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "lli1a2<Enter><Esc>");
-    assert_eq!(steps(&app)[0], "--- -- 1A2 ---00 ---00 ---00");
-    assert_eq!(app.instrument, 0x1A2);
+    keys(&mut app, "lli1a<Esc>");
+    assert_eq!(steps(&app)[0], "--- -- 1A ---00 ---00 ---00");
+    assert_eq!(app.instrument, 0x1A);
+    assert_eq!(app.cursor.step, 1);
 }
 
 #[test]
@@ -524,4 +525,46 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     assert_eq!(app.help_scroll, 1);
     keys(&mut app, "q");
     assert_eq!(app.mode, Mode::Normal);
+}
+
+const FULL: &str = "C-4 80 00 VOL10 PAN20 CUT30";
+
+#[test]
+fn zero_and_dollar_go_to_the_ends_of_the_row() {
+    let (mut app, _rt) = app_with(&[FULL, FULL]);
+    keys(&mut app, "ll0");
+    assert_eq!(app.cursor.field, Field::Note);
+    keys(&mut app, "$");
+    assert_eq!(app.cursor.field, Field::FxValue(2));
+    keys(&mut app, "$");
+    assert_eq!(app.cursor.field, Field::FxValue(2));
+    keys(&mut app, "0");
+    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.cursor.step, 0);
+}
+
+#[test]
+fn zero_is_still_part_of_a_count() {
+    let (mut app, _rt) = app_with(&[E; 16]);
+    keys(&mut app, "10j");
+    assert_eq!(app.cursor.step, 10);
+    assert_eq!(app.cursor.field, Field::Note);
+}
+
+#[test]
+fn operators_cover_from_the_cursor_to_the_end_of_the_row() {
+    check(&[FULL], "lld$", &["C-4 80 -- ---00 ---00 ---00"]);
+    check(&[FULL], "lld0", &["--- -- -- VOL10 PAN20 CUT30"]);
+    check(&[FULL], "d0", &["--- 80 00 VOL10 PAN20 CUT30"]);
+    check(
+        &[FULL, FULL],
+        "lld$j.",
+        &["C-4 80 -- ---00 ---00 ---00", "C-4 80 -- ---00 ---00 ---00"],
+    );
+}
+
+#[test]
+fn a_selection_can_grow_to_the_ends_of_the_row() {
+    check(&[FULL], "lv$d", &["C-4 -- -- ---00 ---00 ---00"]);
+    check(&[FULL], "llv0d", &["--- -- -- VOL10 PAN20 CUT30"]);
 }

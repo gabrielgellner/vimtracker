@@ -6,6 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION};
+use crate::label::is_named_slot;
 use crate::step::Step;
 
 /// One voice's lane through the song.
@@ -144,6 +145,9 @@ pub struct Instrument {
     pub volume: u8,
     pub attack_ms: u16,
     pub release_ms: u16,
+    /// Whether this slot's name is a label rather than just its number.
+    #[serde(default)]
+    pub labelled: bool,
 }
 
 impl Default for Instrument {
@@ -153,6 +157,7 @@ impl Default for Instrument {
             volume: 0xFF,
             attack_ms: 1,
             release_ms: 50,
+            labelled: false,
         }
     }
 }
@@ -211,6 +216,28 @@ impl Song {
             song.add_track();
         }
         song
+    }
+
+    /// Whether a slot's name is a label.
+    pub fn is_labelled(&self, slot: u32) -> bool {
+        is_named_slot(slot) || self.instruments.get(&slot).is_some_and(|i| i.labelled)
+    }
+
+    /// The slot after or before this one. Numbers go one at a time. Past `FF`, and among slots
+    /// only a label can name, it goes to the next instrument that exists.
+    pub fn next_instrument(&self, slot: u32, forward: bool) -> u32 {
+        if forward {
+            if slot < 0xFF {
+                return slot + 1;
+            }
+            let later = self.instruments.range(slot + 1..).next();
+            return later.map_or(slot, |(id, _)| *id);
+        }
+        if !is_named_slot(slot) {
+            return slot.saturating_sub(1);
+        }
+        let earlier = self.instruments.range(..slot).next_back();
+        earlier.map_or(0xFF, |(id, _)| *id)
     }
 
     /// Add a track at the end, with its own new chain and phrase in every section.

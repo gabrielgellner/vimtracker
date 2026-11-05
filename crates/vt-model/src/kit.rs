@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::label::{is_label, slot_of};
 use crate::project::ProjectError;
 
 /// What a kit file holds.
@@ -18,25 +19,49 @@ struct KitFile {
 #[derive(Debug, Deserialize)]
 struct KitSound {
     path: String,
+    /// The slot it goes in, or empty to fill upward from `00`.
+    #[serde(default)]
+    label: String,
 }
 
-/// Read a kit file, returning where its sounds are, in slot order. Paths can be absolute, start
-/// with `~/`, or be relative to the kit file.
-pub fn load_kit(path: &Path) -> Result<Vec<PathBuf>, ProjectError> {
+/// A sound from a kit, and the labelled slot it goes in, if it has one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KitEntry {
+    pub path: PathBuf,
+    pub slot: Option<u32>,
+}
+
+/// Read a kit file, in file order. Paths can be absolute, start with `~/`, or be relative to the
+/// kit file. A label that can't be one, or is used twice, stops it.
+pub fn load_kit(path: &Path) -> Result<Vec<KitEntry>, ProjectError> {
     let text = fs::read_to_string(path).map_err(|source| ProjectError::Io {
         path: path.display().to_string(),
         source,
     })?;
-    let kit: KitFile = ron::from_str(&text).map_err(|error| ProjectError::Parse {
+    let refuse = |detail: String| ProjectError::Parse {
         path: path.display().to_string(),
-        detail: error.to_string(),
-    })?;
+        detail,
+    };
+    let kit: KitFile = ron::from_str(&text).map_err(|error| refuse(error.to_string()))?;
     let folder = path.parent().unwrap_or_else(|| Path::new(""));
-    Ok(kit
-        .sounds
-        .iter()
-        .map(|sound| resolve(folder, &sound.path))
-        .collect())
+    let mut entries: Vec<KitEntry> = Vec::with_capacity(kit.sounds.len());
+    for sound in &kit.sounds {
+        let label = sound.label.as_str();
+        if !label.is_empty() && !is_label(label) {
+            return Err(refuse(format!(
+                "{label:?} can't be a label: it needs two characters, the first a letter"
+            )));
+        }
+        let slot = slot_of(label);
+        if slot.is_some() && entries.iter().any(|entry| entry.slot == slot) {
+            return Err(refuse(format!("{label:?} is used twice")));
+        }
+        entries.push(KitEntry {
+            path: resolve(folder, &sound.path),
+            slot,
+        });
+    }
+    Ok(entries)
 }
 
 fn resolve(folder: &Path, sound: &str) -> PathBuf {

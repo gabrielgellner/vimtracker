@@ -11,7 +11,7 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | Keys | Does |
 |---|---|
 | `j` `k` | Next or previous row |
-| `h` `l` | Phrase or Transpose column |
+| `h` `l` | Phrase or Transpose column. `0` and `$` do the same |
 | `gd` | Open this phrase, or add one on the empty row |
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
 | `+` `-` | Next or previous phrase, or transpose up or down |

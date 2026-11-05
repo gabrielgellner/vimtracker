@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::constants::BEAT_STEPS;
+use vt_model::label::{is_named_slot, name_of};
 use vt_model::selection::Scope;
 use vt_model::step::Step;
 
@@ -23,9 +24,34 @@ const GUTTER: usize = 5;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
+/// A step's text on screen, which shows a named slot by its name rather than its number.
+fn step_text(step: &Step) -> String {
+    let text = step.to_string();
+    match step.instrument {
+        Some(id) if is_named_slot(id) => {
+            let number = format!("{id:02X}").len();
+            format!("{}{}{}", &text[..7], name_of(id), &text[7 + number..])
+        }
+        _ => text,
+    }
+}
+
+/// Split text into runs of the same style, given a style for each character.
+fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut start = 0;
+    for end in 1..=text.len() {
+        if end == text.len() || styles[end] != styles[start] {
+            spans.push(Span::styled(text[start..end].to_owned(), styles[start]));
+            start = end;
+        }
+    }
+    spans
+}
+
 /// The character range of a field within a step's text.
 fn field_range(step: &Step, field: Field) -> (usize, usize) {
-    let instrument_width = step.instrument.map_or(2, |id| format!("{id:02X}").len());
+    let instrument_width = step.instrument.map_or(2, |id| name_of(id).len());
     let fx_start = |slot: usize| 7 + instrument_width + 1 + slot * 6;
     match field {
         Field::Note => (0, 3),
@@ -114,7 +140,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let body_width = phrase
         .steps()
         .iter()
-        .map(|step| step.to_string().len())
+        .map(|step| step_text(step).len())
         .max()
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
@@ -155,7 +181,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         rule("┌", "┐"),
     ];
     for (index, step) in phrase.steps().iter().enumerate().skip(top).take(height) {
-        let text = step.to_string();
+        let text = step_text(step);
         let marker = if playhead == Some(index) { ">" } else { " " };
         let number = if index % BEAT_STEPS == 0 {
             Style::new().fg(theme::YELLOW)
@@ -172,34 +198,30 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             Style::new()
         };
-        // The cursor, clipped to a selection if there is one, so the moving end stays visible.
-        let cursor = (index == app.cursor.step).then(|| {
-            let (start, end) = field_range(step, app.cursor.field);
-            let end = end.min(text.len());
-            (start.min(end), end)
-        });
+        let mut styles = vec![body; text.len()];
+        if step.instrument.is_some_and(|id| app.song().is_labelled(id)) {
+            let (start, end) = field_range(step, Field::Instrument);
+            let label = body.patch(theme::label());
+            styles[start..end.min(text.len())].fill(label);
+        }
         let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));
         if let Some(selected) = selected {
             let (start, end) = selected_columns(step, selected.scope, text.len());
-            let (from, to) = cursor.map_or((start, start), |(from, to)| {
-                (from.clamp(start, end), to.clamp(start, end))
-            });
-            spans.push(Span::styled(text[..start].to_owned(), body));
-            spans.push(Span::styled(
-                text[start..from].to_owned(),
-                theme::selected(),
-            ));
-            spans.push(Span::styled(text[from..to].to_owned(), cursor_style));
-            spans.push(Span::styled(text[to..end].to_owned(), theme::selected()));
-            spans.push(Span::styled(text[end..].to_owned(), body));
-        } else if let Some((start, end)) = cursor {
-            spans.push(Span::styled(text[..start].to_owned(), body));
-            spans.push(Span::styled(text[start..end].to_owned(), cursor_style));
-            spans.push(Span::styled(text[end..].to_owned(), body));
-        } else {
-            spans.push(Span::styled(text.clone(), body));
+            styles[start..end].fill(theme::selected());
         }
-        let padding = body_width.saturating_sub(step.to_string().len());
+        // The cursor stays visible inside a selection, so the moving end can be seen.
+        if index == app.cursor.step {
+            let (start, end) = field_range(step, app.cursor.field);
+            let end = end.min(text.len());
+            let start = start.min(end);
+            let (first, last) = selected.map_or((start, end), |selected| {
+                let (from, to) = selected_columns(step, selected.scope, text.len());
+                (start.clamp(from, to), end.clamp(from, to))
+            });
+            styles[first..last].fill(cursor_style);
+        }
+        spans.extend(spans_of(&text, &styles));
+        let padding = body_width.saturating_sub(text.len());
         spans.push(Span::raw(" ".repeat(padding)));
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));

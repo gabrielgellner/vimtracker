@@ -1,6 +1,7 @@
 //! Motions, targets and what operators do to the steps they cover. No terminal is needed here.
 
 use crate::constants::BEAT_STEPS;
+use crate::label::is_named_slot;
 use crate::step::{FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
 
 /// One editable part of a step.
@@ -129,6 +130,8 @@ pub enum Motion {
     PreviousBeat,
     First,
     Last,
+    RowStart,
+    RowEnd,
 }
 
 impl Motion {
@@ -153,7 +156,12 @@ impl Motion {
             }
             Self::First => count.map_or(0, |n| n.saturating_sub(1)).min(last),
             Self::Last => count.map_or(last, |n| n.saturating_sub(1)).min(last),
-            Self::Left | Self::Right | Self::NextGroup | Self::PreviousGroup => from,
+            Self::Left
+            | Self::Right
+            | Self::NextGroup
+            | Self::PreviousGroup
+            | Self::RowStart
+            | Self::RowEnd => from,
         }
     }
 
@@ -161,7 +169,12 @@ impl Motion {
     pub fn is_horizontal(self) -> bool {
         matches!(
             self,
-            Self::Left | Self::Right | Self::NextGroup | Self::PreviousGroup
+            Self::Left
+                | Self::Right
+                | Self::NextGroup
+                | Self::PreviousGroup
+                | Self::RowStart
+                | Self::RowEnd
         )
     }
 }
@@ -252,6 +265,7 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
     if scope.covers(2)
         && kind == Shift::Increment
         && let Some(instrument) = step.instrument
+        && !is_named_slot(instrument)
     {
         step.instrument = Some((i64::from(instrument) + i64::from(by)).max(0) as u32);
     }

@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use vt_model::label::name_of;
 use vt_model::song::Instrument;
 
 use crate::app::App;
@@ -40,7 +41,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or(&fallback, |i| i.as_ref());
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let mut lines = vec![
-        Line::styled(format!("Instrument {:02X}", app.instrument), bold),
+        Line::styled(format!("Instrument {}", name_of(app.instrument)), bold),
         Line::raw(""),
     ];
     for row in Row::ALL {
@@ -62,21 +63,26 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     lines.push(Line::raw(""));
     lines.push(Line::styled("All instruments", bold));
     for (id, instrument) in &song.instruments {
-        let style = if *id == app.instrument {
-            theme::active()
+        let (name, rest) = if *id == app.instrument {
+            (theme::active(), theme::active())
+        } else if song.is_labelled(*id) {
+            (theme::label(), theme::dim())
         } else {
-            theme::dim()
+            (theme::dim(), theme::dim())
         };
-        lines.push(Line::styled(
-            format!(
-                "  {id:02X}  {}",
-                instrument
-                    .sample
-                    .as_deref()
-                    .map_or("(no sample)", file_name)
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {}", name_of(*id)), name),
+            Span::styled(
+                format!(
+                    "  {}",
+                    instrument
+                        .sample
+                        .as_deref()
+                        .map_or("(no sample)", file_name)
+                ),
+                rest,
             ),
-            style,
-        ));
+        ]));
     }
     frame.render_widget(Paragraph::new(lines), area);
 }

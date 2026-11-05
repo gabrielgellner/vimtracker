@@ -20,6 +20,14 @@ pub enum FieldValue {
     Slot(usize, FxSlot),
 }
 
+/// A sample going into a slot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotSample {
+    pub id: u32,
+    pub sample: String,
+    pub labelled: bool,
+}
+
 /// One edit, as plain data so it can be replayed and tested without a terminal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
@@ -100,8 +108,14 @@ pub enum Action {
         instrument: u32,
         sample: String,
     },
-    /// Set several instruments' samples as one change, creating them if needed.
-    SetSamples(Vec<(u32, String)>),
+    /// Set several instruments' samples as one change, creating them if needed. A slot marked
+    /// as labelled becomes so, and others stay as they were.
+    SetSamples(Vec<SlotSample>),
+    /// Mark whether a slot's name is a label, creating the instrument if needed.
+    SetLabelled {
+        id: u32,
+        labelled: bool,
+    },
     /// Set an instrument's setting, creating the instrument if needed.
     SetInstrument {
         id: u32,
@@ -342,13 +356,22 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             Arc::make_mut(entry).sample = Some(sample.clone());
         }
         Action::SetSamples(samples) => {
-            for (instrument, sample) in samples {
+            for slot in samples {
                 let entry = next
                     .instruments
-                    .entry(*instrument)
+                    .entry(slot.id)
                     .or_insert_with(|| Arc::new(Instrument::default()));
-                Arc::make_mut(entry).sample = Some(sample.clone());
+                let instrument = Arc::make_mut(entry);
+                instrument.sample = Some(slot.sample.clone());
+                instrument.labelled |= slot.labelled;
             }
+        }
+        Action::SetLabelled { id, labelled } => {
+            let entry = next
+                .instruments
+                .entry(*id)
+                .or_insert_with(|| Arc::new(Instrument::default()));
+            Arc::make_mut(entry).labelled = *labelled;
         }
         Action::AssignNewInstrument { phrase, step, id } => {
             step_mut(&mut next, *phrase, *step)?.instrument = Some(*id);

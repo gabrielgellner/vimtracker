@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue};
+use vt_model::label::is_named_slot;
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
 
 use crate::app::{App, Selection};
@@ -223,6 +224,20 @@ impl App {
         let column = Scope::column(self.cursor.field.group());
         match cover {
             Cover::Cursor => (StepRange::between(step, step), column),
+            Cover::Motion(Motion::RowStart, _) => (
+                StepRange::between(step, step),
+                Scope {
+                    first: 0,
+                    last: self.cursor.field.group(),
+                },
+            ),
+            Cover::Motion(Motion::RowEnd, _) => (
+                StepRange::between(step, step),
+                Scope {
+                    first: self.cursor.field.group(),
+                    last: 2 + self.slots(),
+                },
+            ),
             Cover::Motion(motion, count) => (
                 StepRange::between(step, motion.step(step, count, length)),
                 column,
@@ -321,6 +336,22 @@ impl App {
                     value: FieldValue::Instrument(Some(self.instrument)),
                 });
             }
+            return;
+        }
+        if self.cursor.field == Field::Instrument
+            && let Some(current) = self.step_instrument().filter(|id| is_named_slot(*id))
+            && let Some(phrase) = self.phrase_id()
+        {
+            let mut id = current;
+            for _ in 0..amount {
+                id = self.song().next_instrument(id, sign > 0);
+            }
+            self.apply(&Action::SetField {
+                phrase,
+                step: self.cursor.step,
+                value: FieldValue::Instrument(Some(id)),
+            });
+            self.instrument = id;
             return;
         }
         let change = Change::Increment {
@@ -489,6 +520,8 @@ impl App {
             Motion::Right => Field::from_order((order + 1).min(last)),
             Motion::Left => Field::from_order(order.saturating_sub(1)),
             Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(2 + slots)),
+            Motion::RowStart => Field::Note,
+            Motion::RowEnd => Field::from_order(last),
             _ => Field::of_group(self.cursor.field.group().saturating_sub(1)),
         };
     }

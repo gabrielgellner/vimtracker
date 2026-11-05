@@ -4,13 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::Action;
+use vt_model::action::{Action, FieldValue, SlotSample};
 use vt_model::kit::load_kit;
+use vt_model::label::name_of;
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 
-use crate::app::App;
+use crate::app::{App, Field};
 use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -146,49 +147,112 @@ impl App {
         }
     }
 
-    /// Fill instruments from `00` with a kit's sounds, keeping their other settings. It is one undo
-    /// step, and if any sound won't load, nothing changes.
+    /// Fill slots with a kit's sounds, keeping their other settings: a labelled sound in its
+    /// label's slot, and the others from `00`. It is one undo step, and if any sound won't load,
+    /// nothing changes. Replacing a different sample is reported.
     pub fn load_kit(&mut self, path: &Path) {
-        let sounds = match load_kit(path) {
-            Ok(sounds) if sounds.is_empty() => {
+        let entries = match load_kit(path) {
+            Ok(entries) if entries.is_empty() => {
                 self.status = format!("{} has no sounds", path.display());
                 return;
             }
-            Ok(sounds) => sounds,
+            Ok(entries) => entries,
             Err(error) => {
                 self.status = error.to_string();
                 return;
             }
         };
         let mut pool = SamplePool::clone(&self.samples);
-        let mut samples = Vec::with_capacity(sounds.len());
-        for (slot, sound) in sounds.iter().enumerate() {
-            let stored = self.store_sample(sound).map_err(|error| error.to_string());
+        let mut samples = Vec::with_capacity(entries.len());
+        let mut next_number = 0;
+        for entry in &entries {
+            let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
             let loaded = stored.and_then(|stored| {
                 let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-                let data = load_wav(&resolved, self.rate).map_err(|error| error.to_string())?;
+                let data = load_wav(&resolved, self.rate).map_err(|e| e.to_string())?;
                 Ok((stored, data))
             });
-            match loaded {
-                Ok((stored, data)) => {
-                    pool.insert(&stored, data);
-                    samples.push((slot as u32, stored));
-                }
+            let (stored, data) = match loaded {
+                Ok(loaded) => loaded,
                 Err(error) => {
-                    self.status = format!("{}: {error}", sound.display());
+                    self.status = format!("{}: {error}", entry.path.display());
                     return;
                 }
-            }
+            };
+            pool.insert(&stored, data);
+            let id = entry.slot.unwrap_or_else(|| {
+                next_number += 1;
+                next_number - 1
+            });
+            samples.push(SlotSample {
+                id,
+                sample: stored,
+                labelled: entry.slot.is_some(),
+            });
         }
+        let replaced: Vec<String> = samples
+            .iter()
+            .filter(|slot| {
+                let old = self.song().instruments.get(&slot.id);
+                old.and_then(|i| i.sample.as_ref())
+                    .is_some_and(|old| *old != slot.sample)
+            })
+            .map(|slot| name_of(slot.id))
+            .collect();
+        let names: Vec<String> = samples.iter().map(|slot| name_of(slot.id)).collect();
         self.samples = Arc::new(pool);
+        self.instrument = samples[0].id;
         self.apply(&Action::SetSamples(samples));
-        self.instrument = 0;
-        self.status = format!(
-            "Kit {}: {} sounds in instruments 00 to {:02X}",
-            kit_name(path),
-            sounds.len(),
-            sounds.len() - 1
-        );
+        self.status = format!("Kit {}: {}", kit_name(path), names.join(" "));
+        if !replaced.is_empty() {
+            self.status = format!(
+                "{}. Replaced {}: u to undo",
+                self.status,
+                replaced.join(" ")
+            );
+        }
+    }
+
+    /// Choose this step's instrument from those that exist, labels first, with the current one
+    /// highlighted. It only means something on the Instrument column.
+    pub(crate) fn open_instrument_picker(&mut self) {
+        if self.cursor.field != Field::Instrument {
+            self.status = "K chooses an instrument on the Instrument column".to_owned();
+            return;
+        }
+        let song = self.song();
+        let mut slots: Vec<u32> = song.instruments.keys().copied().collect();
+        slots.sort_by_key(|id| !song.is_labelled(*id));
+        let current = slots.iter().position(|id| *id == self.instrument);
+        let items: Vec<Item> = slots
+            .iter()
+            .map(|id| {
+                let sample = song.instruments[id]
+                    .sample
+                    .as_deref()
+                    .unwrap_or("(no sample)");
+                let file = sample.rsplit('/').next().unwrap_or(sample);
+                Item {
+                    label: format!("{}  {file}", name_of(*id)),
+                    pick: Pick::Instrument(*id),
+                }
+            })
+            .collect();
+        let mut picker = Picker::new("Instruments", items);
+        picker.move_highlight(current.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    fn pick_instrument(&mut self, id: u32) {
+        self.instrument = id;
+        if let Some(phrase) = self.phrase_id() {
+            self.apply(&Action::SetField {
+                phrase,
+                step: self.cursor.step,
+                value: FieldValue::Instrument(Some(id)),
+            });
+        }
     }
 
     /// Open the sample browser on a folder. If nothing is there, offer a typed path instead.
@@ -252,6 +316,7 @@ impl App {
                     Some(Pick::Use { track, slot }) => self.open_use(track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.load_kit(&path),
+                    Some(Pick::Instrument(id)) => self.pick_instrument(id),
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

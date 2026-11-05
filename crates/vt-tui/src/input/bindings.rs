@@ -73,6 +73,7 @@ pub enum Cmd {
     CopyRow,
     /// Play the current instrument.
     Review,
+    PickInstrument,
 }
 
 /// One row of the table.
@@ -96,6 +97,8 @@ const MOTIONS: &[(&str, Cmd, &str)] = &[
         Cmd::Move(Motion::PreviousGroup),
         "Previous column group",
     ),
+    ("0", Cmd::Move(Motion::RowStart), "Start of the row"),
+    ("$", Cmd::Move(Motion::RowEnd), "End of the row"),
     ("}", Cmd::Move(Motion::NextBeat), "Next beat"),
     ("{", Cmd::Move(Motion::PreviousBeat), "Previous beat"),
     ("g g", Cmd::Move(Motion::First), "First step, or step n"),
@@ -169,6 +172,7 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("g v", Cmd::Reselect, "Reselect the last selection"),
     ("Space p d", Cmd::Double, "Double this phrase"),
     ("g d", Cmd::OpenItem, "Open the instrument in this column"),
+    ("K", Cmd::PickInstrument, "Choose this step's instrument"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
     ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
     ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
@@ -186,6 +190,8 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
     ("G", Cmd::Move(Motion::Last), "The empty row at the end"),
     ("h", Cmd::Move(Motion::Left), "Phrase column"),
     ("l", Cmd::Move(Motion::Right), "Transpose column"),
+    ("0", Cmd::Move(Motion::RowStart), "Phrase column"),
+    ("$", Cmd::Move(Motion::RowEnd), "Transpose column"),
     ("+", Cmd::Increase, "Next phrase, or transpose up"),
     ("-", Cmd::Decrease, "Previous phrase, or transpose down"),
     ("C-a", Cmd::Increase, "Next phrase, or transpose up"),

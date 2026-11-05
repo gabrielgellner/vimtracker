@@ -243,7 +243,10 @@ Song
 ```
 
 *   **Limits.** Tracks are a list. Chains, phrases and instruments are maps from 32-bit ID to value.
-    Instrument IDs widen past two hex digits when needed. Phrases can have any length of 1 step or
+    A label is a two-character name that is itself a slot. A hex name like `BD` is that number, and
+    any other, like `CH`, has a fixed slot above the numbered ones that is never shown as a number,
+    so a label means the same slot in every kit and song. Instrument IDs widen past two hex digits
+    when needed. Phrases can have any length of 1 step or
     more, and new phrases default to 16 steps. The engine prepares state for `MAX_TRACKS`.
 *   **Steps.** A step has a note or note-off, a velocity, an instrument and a list of FX slots. The list
     has 3 slots for now, and it is saved as a list so the count can grow without changing the format.
@@ -614,6 +617,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `Space k` | Show every key, generated from the binding table |
 | Normal | `Space qq` | Quit, the same as `:q` |
 | Normal | `h l` | Previous or next field |
+| Normal | `0 $` | Start or end of the row. After an operator, they cover this step from the cursor's column to that end, including the cursor's column |
 | Normal | `j k` | Next or previous step |
 | Normal | `w b` | Next or previous column group |
 | Normal | `W B` | Next or previous track |
@@ -627,6 +631,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `dd yy >> <<` | Apply to the current step |
 | Normal | `x` | Clear the current field |
 | Normal | `p` | Paste over from the cursor |
+| Normal | `K` | On the Instrument column, choose this step's instrument from those that exist, labels first |
 | Normal | `r` | Review: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
 | Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z` |
 | Normal | `+`, `-` | Increase or decrease the value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
@@ -659,7 +664,8 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |
 | Insert | `Shift-Left Shift-Right` | Move to the previous or next multiple of the skip setting, without writing |
 | Insert (note) | `Backspace` | Clear the field and move up |
-| Insert (value) | `0-9 a-f` | Two digits commit and move down by the step setting. Instrument IDs accept more digits, and `Enter` commits them |
+| Insert (value) | `0-9 a-f` | Two digits commit and move down by the step setting |
+| Insert (instrument) | `0-9 a-z` | Two characters commit a number or label and move down. `Enter` commits one digit |
 | Insert (FX command) | Letters | Typed in uppercase. An invalid name is refused with a message and leaves the field unchanged |
 | Insert | `Esc` | Normal mode |
 | Command | `Enter`, `Esc`, `Backspace`, `Up`, `Down` | Run, cancel, edit, recall history |
@@ -684,13 +690,14 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:w [path]`, `:e path`, `:q`, `:q!` | Save, open, quit, quit without saving |
 | `:new path` | Create a project folder. An existing folder is refused |
 | `:sample path` | Assign a WAV to the current instrument, referring to it where it is |
-| `:inst n` | Set the current instrument |
+| `:inst n` | Set the current instrument, by number or label |
+| `:label xx`, `:label off` | Mark a numbered slot as labelled and make it current, or stop |
 | `:track add [n]`, `:track del` | Add `n` tracks at the end, up to `MAX_TRACKS`, or remove the last track, keeping at least one |
 | `:mute`, `:solo` | Toggle on the current track |
 | `:bpm n` | Tempo, in thousandths: `:bpm 137.63` |
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
 | `:tvol xx` | This track's level in hex |
-| `:kit [name or path]` | Fill instruments from `00` with the sounds a kit file lists, in order, as one undo step. With no argument, choose from `samples/kits` |
+| `:kit [name or path]` | Fill instruments from `00` with the sounds a kit file lists, in order, as one undo step. A labelled sound goes in its label's slot and others fill upward from `00`, and replacing a different sample is reported. With no argument, choose from `samples/kits` |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |

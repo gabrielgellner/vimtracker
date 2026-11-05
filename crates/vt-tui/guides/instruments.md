@@ -36,20 +36,38 @@ Samples stay where they are, and the project refers to them, so moving a
 file breaks the projects that use it. To gather every sample into one
 folder, ready to move or share, save a copy with `:w path`.
 
+## Labels
+
+A label is a two-character name for a slot, such as `BD` or `CH`, so you don't
+have to remember numbers. A label is the slot: `BD` is slot `BD`, and `CH` has
+a slot of its own. So `CH` means the same thing in every kit and song, and a
+pattern keeps working when you load another kit with the same labels.
+
+Labels start with a letter, and show in their own colour in the phrase and
+the instrument view. A number stays a number, so a `BD` nobody labelled looks
+plain.
+
+| Command | Does |
+|---|---|
+| `:inst ch` | Make that slot current, then `:sample` fills it |
+| `:label BD` | Mark slot `BD` as labelled, and make it current |
+| `:label off` | Stop treating this numbered slot as labelled |
+
 ## Kits
 
-A kit fills the first instrument slots in one go. It is a file in
-`samples/kits`, such as `909.ron`, listing sounds in slot order:
+A kit fills slots in one go. It is a file in `samples/kits`, such as `909.ron`:
 
 ```
 (
     sounds: [
-        (path: "../drums/kick.wav"),
-        (path: "../drums/snare.wav"),
+        (label: "BD", path: "../drums/kick.wav"),
+        (label: "CH", path: "../drums/hat.wav"),
+        (path: "../drums/fx.wav"),
     ],
 )
 ```
 
+A sound with a label goes in that slot, and the others fill upward from `00`.
 Paths are relative to the kit file, or absolute, or start with `~/`.
 
 | Command | Does |
@@ -58,9 +76,9 @@ Paths are relative to the kit file, or absolute, or start with `~/`.
 | `:kit 909` | Load that kit |
 | `:kit path/drums.ron` | Load a kit file anywhere |
 
-A kit replaces the samples in those slots and keeps their other settings,
-and `u` undoes the whole load. Slots past the end of the kit stay as they
-were.
+A kit keeps a slot's other settings, and leaves slots it doesn't name alone.
+If it replaces a different sample, the status line says which, and `u` undoes
+the whole load.
 
 ## Using instruments in a phrase
 
@@ -69,6 +87,7 @@ always the last one you entered, however you entered it.
 
 | On the Instrument column | Does |
 |---|---|
+| `K` | Choose from a list, labels first. Type to filter |
+| `i`, then `bd` or `04` | Type a label or number |
 | `+` `-` | Change it. An empty cell gets `Inst` |
-| `i`, hex digits, `Enter` | Type one |
 | `gd` | Open it in the instrument view, and `C-o` comes back |

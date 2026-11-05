@@ -21,6 +21,8 @@ Follow one with a motion or a target, or double it for this whole step:
 | `dib` | Clear this beat, whole steps |
 | `dic` | Clear this column, whole phrase |
 | `dip` | Clear this phrase, whole steps |
+| `d$` | Clear this step from this column to the end of the row |
+| `d0` | Clear this step from the start of the row to this column |
 
 ## Selecting
 
