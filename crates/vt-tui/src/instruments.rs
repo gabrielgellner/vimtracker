@@ -126,8 +126,8 @@ impl App {
                 });
             }
             Cmd::EnterInsert if self.instrument_row == Row::Sample => {
-                self.command_line = "sample ".to_owned();
-                self.mode = Mode::Command;
+                let roots = self.sample_roots();
+                self.open_sample_picker(&roots);
             }
             Cmd::EnterInsert => {
                 self.entry = Entry::default();

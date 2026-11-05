@@ -3,4 +3,5 @@
 pub mod help;
 pub mod instrument;
 pub mod phrase;
+pub mod picker;
 pub mod status;

@@ -25,6 +25,7 @@ use crate::input::bindings::{Cmd, Op, Table, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::input::picker::Picker;
 use crate::instruments::Row;
 
 /// A run of steps and columns.
@@ -69,6 +70,9 @@ pub struct App {
     pub mode: Mode,
     pub view: View,
     pub instrument_row: Row,
+    /// Most recently used first, starting with the view on screen.
+    pub recent_views: Vec<View>,
+    pub picker: Option<Picker>,
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
@@ -120,6 +124,8 @@ impl App {
             mode: Mode::Normal,
             view: View::Phrase,
             instrument_row: Row::Sample,
+            recent_views: View::ALL.to_vec(),
+            picker: None,
             cursor: Cursor {
                 track: 0,
                 slot: 0,
@@ -262,6 +268,7 @@ impl App {
             Mode::Insert => self.insert_key(key),
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
+            Mode::Picker => self.picker_key(key),
         }
     }
 
@@ -281,9 +288,10 @@ impl App {
         }
     }
 
-    fn show_view(&mut self, view: View) {
+    pub(crate) fn show_view(&mut self, view: View) {
         self.count = None;
         self.view = view;
+        self.note_view(view);
     }
 
     /// Every key, for `Space ?`.
@@ -329,6 +337,7 @@ impl App {
             Cmd::ScrollUp => self.scroll(-3),
             Cmd::Double => self.double(),
             Cmd::ShowView(view) => self.show_view(view),
+            Cmd::Picker => self.open_view_picker(),
             Cmd::Help => {
                 self.help_scroll = 0;
                 self.mode = Mode::Help;
@@ -902,7 +911,11 @@ impl App {
         self.publish();
     }
 
-    fn sample(&mut self, source: &Path) {
+    pub(crate) fn sample(&mut self, source: &Path) {
+        if source.is_dir() {
+            self.open_sample_picker(&[source.to_path_buf()]);
+            return;
+        }
         let stored = match &self.folder {
             Some(folder) => project::import_sample(folder, source),
             None => source
