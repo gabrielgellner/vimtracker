@@ -5,10 +5,11 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::constants::{
-    MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING,
+    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MAX_TRANSPOSE,
+    MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
 use crate::selection::{Block, Scope, Shift, StepRange, clear_step, paste_step, shift_step};
-use crate::song::{Instrument, Song};
+use crate::song::{Chain, ChainEntry, Instrument, Phrase, Song, lowest_unused};
 use crate::step::{FxSlot, Note, Step};
 
 /// A new value for one field.
@@ -88,6 +89,28 @@ pub enum Action {
         field: InstrumentField,
         value: u16,
     },
+    /// Set a step's instrument to a new one.
+    AssignNewInstrument { phrase: u32, step: usize, id: u32 },
+    /// Change a chain row. A phrase that doesn't exist yet is created.
+    SetChainEntry {
+        chain: u32,
+        slot: usize,
+        entry: ChainEntry,
+    },
+    /// Add a chain row. A phrase that doesn't exist yet is created.
+    InsertChainEntry {
+        chain: u32,
+        at: usize,
+        entry: ChainEntry,
+    },
+    /// Remove a chain row, keeping at least one. Its phrase stays for reuse.
+    RemoveChainEntry { chain: u32, at: usize },
+    /// Copy the phrase in a chain row to a new ID, and point the row at the copy.
+    ClonePhrase { chain: u32, slot: usize, new: u32 },
+    /// Copy a track's chain and its phrases to new IDs, and point the track at the copy.
+    CloneChain { track: usize },
+    /// Point a track at a chain. A chain that doesn't exist yet gets a new phrase.
+    SetTrackChain { track: usize, chain: u32 },
 }
 
 /// An instrument setting with a number.
@@ -117,6 +140,14 @@ pub enum EditError {
     Volume,
     #[error("attack and release go up to {MAX_ENVELOPE_MS} ms")]
     Envelope,
+    #[error("no chain {0:02X}")]
+    NoChain(u32),
+    #[error("chain {chain:02X} has no row {slot:02X}")]
+    NoRow { chain: u32, slot: usize },
+    #[error("a chain needs at least one phrase")]
+    LastRow,
+    #[error("transpose goes from {MIN_TRANSPOSE} to {MAX_TRANSPOSE}")]
+    Transpose,
     #[error("swing must be from 50 to 75")]
     Swing,
     #[error("no track {0}")]
@@ -268,6 +299,113 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .or_insert_with(|| Arc::new(Instrument::default()));
             Arc::make_mut(entry).sample = Some(sample.clone());
         }
+        Action::AssignNewInstrument { phrase, step, id } => {
+            step_mut(&mut next, *phrase, *step)?.instrument = Some(*id);
+            next.instruments
+                .entry(*id)
+                .or_insert_with(|| Arc::new(Instrument::default()));
+        }
+        Action::SetChainEntry { chain, slot, entry } => {
+            check_transpose(entry)?;
+            ensure_phrase(&mut next, entry.phrase);
+            let target =
+                chain_mut(&mut next, *chain)?
+                    .entries
+                    .get_mut(*slot)
+                    .ok_or(EditError::NoRow {
+                        chain: *chain,
+                        slot: *slot,
+                    })?;
+            *target = *entry;
+        }
+        Action::InsertChainEntry { chain, at, entry } => {
+            check_transpose(entry)?;
+            ensure_phrase(&mut next, entry.phrase);
+            let entries = &mut chain_mut(&mut next, *chain)?.entries;
+            let at = (*at).min(entries.len());
+            entries.insert(at, *entry);
+        }
+        Action::RemoveChainEntry { chain, at } => {
+            let entries = &mut chain_mut(&mut next, *chain)?.entries;
+            if entries.len() <= 1 {
+                return Err(EditError::LastRow);
+            }
+            if *at >= entries.len() {
+                return Err(EditError::NoRow {
+                    chain: *chain,
+                    slot: *at,
+                });
+            }
+            entries.remove(*at);
+        }
+        Action::ClonePhrase { chain, slot, new } => {
+            let entry =
+                chain_mut(&mut next, *chain)?
+                    .entries
+                    .get_mut(*slot)
+                    .ok_or(EditError::NoRow {
+                        chain: *chain,
+                        slot: *slot,
+                    })?;
+            let old = std::mem::replace(&mut entry.phrase, *new);
+            let copy = next
+                .phrases
+                .get(&old)
+                .cloned()
+                .ok_or(EditError::NoPhrase(old))?;
+            next.phrases.insert(*new, copy);
+        }
+        Action::CloneChain { track } => {
+            let section = next.sections.first().ok_or(EditError::NoTrack(*track))?;
+            let old = section
+                .chains
+                .get(*track)
+                .copied()
+                .flatten()
+                .ok_or(EditError::NoTrack(*track))?;
+            let mut copy = Chain::clone(next.chains.get(&old).ok_or(EditError::NoChain(old))?);
+            // A phrase used twice in the chain stays one phrase in the copy.
+            let mut made: Vec<(u32, u32)> = Vec::new();
+            for entry in &mut copy.entries {
+                if let Some((_, new)) = made.iter().find(|(from, _)| *from == entry.phrase) {
+                    entry.phrase = *new;
+                    continue;
+                }
+                let phrase = next
+                    .phrases
+                    .get(&entry.phrase)
+                    .cloned()
+                    .ok_or(EditError::NoPhrase(entry.phrase))?;
+                let new = lowest_unused(&next.phrases);
+                next.phrases.insert(new, phrase);
+                made.push((entry.phrase, new));
+                entry.phrase = new;
+            }
+            let new = lowest_unused(&next.chains);
+            next.chains.insert(new, Arc::new(copy));
+            next.sections[0].chains[*track] = Some(new);
+        }
+        Action::SetTrackChain { track, chain } => {
+            if !next.chains.contains_key(chain) {
+                let phrase = lowest_unused(&next.phrases);
+                ensure_phrase(&mut next, phrase);
+                next.chains.insert(
+                    *chain,
+                    Arc::new(Chain {
+                        entries: vec![ChainEntry {
+                            phrase,
+                            transpose: 0,
+                        }],
+                    }),
+                );
+            }
+            let slot = next
+                .sections
+                .first_mut()
+                .and_then(|section| section.chains.get_mut(*track))
+                .ok_or(EditError::NoTrack(*track))?;
+            *slot = Some(*chain);
+        }
         Action::SetInstrument { id, field, value } => {
             let entry = next
                 .instruments
@@ -292,6 +430,28 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
     }
     Ok(Arc::new(next))
+}
+
+fn check_transpose(entry: &ChainEntry) -> Result<(), EditError> {
+    if (MIN_TRANSPOSE..=MAX_TRANSPOSE).contains(&entry.transpose) {
+        Ok(())
+    } else {
+        Err(EditError::Transpose)
+    }
+}
+
+fn ensure_phrase(song: &mut Song, phrase: u32) {
+    song.phrases
+        .entry(phrase)
+        .or_insert_with(|| Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
+}
+
+fn chain_mut(song: &mut Song, chain: u32) -> Result<&mut Chain, EditError> {
+    let target = song
+        .chains
+        .get_mut(&chain)
+        .ok_or(EditError::NoChain(chain))?;
+    Ok(Arc::make_mut(target))
 }
 
 fn step_mut(song: &mut Song, phrase: u32, step: usize) -> Result<&mut Step, EditError> {

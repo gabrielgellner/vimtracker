@@ -17,7 +17,7 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Scope, StepRange};
-use vt_model::song::Song;
+use vt_model::song::{ChainEntry, Song};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note};
 
 use crate::grammar::Change;
@@ -27,6 +27,7 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::instruments::Row;
+use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +74,10 @@ pub struct App {
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
+    pub chain_column: ChainColumn,
+    pub(crate) yanked_row: Option<ChainEntry>,
+    pub(crate) jumps: Vec<Place>,
+    pub(crate) jump_index: usize,
     pub cursor: Cursor,
     pub instrument: u32,
     pub octave: u8,
@@ -126,6 +131,10 @@ impl App {
             instrument_row: Row::Sample,
             recent_views: View::ALL.to_vec(),
             picker: None,
+            chain_column: ChainColumn::Phrase,
+            yanked_row: None,
+            jumps: Vec::new(),
+            jump_index: 0,
             cursor: Cursor {
                 track: 0,
                 slot: 0,
@@ -228,7 +237,13 @@ impl App {
             .filter_map(|e| song.phrases.get(&e.phrase))
             .map(|p| p.len())
             .sum();
-        before + self.cursor.step
+        // The chain view has no step of its own, so it plays from the row's first.
+        before
+            + if self.view == View::Chain {
+                0
+            } else {
+                self.cursor.step
+            }
     }
 
     /// Send the current version to the audio thread.
@@ -262,6 +277,7 @@ impl App {
             | Mode::OperatorPending
             | Mode::VisualField
             | Mode::VisualStep
+            | Mode::Chain
             | Mode::Instrument => {
                 self.command_key_normal(key, now);
             }
@@ -283,6 +299,7 @@ impl App {
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
     pub fn key_scope(&self) -> Mode {
         match (self.mode, self.view) {
+            (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Instrument) => Mode::Instrument,
             (mode, _) => mode,
         }
@@ -292,6 +309,15 @@ impl App {
         self.count = None;
         self.view = view;
         self.note_view(view);
+        self.clamp_cursor();
+    }
+
+    /// Show a view, as a jump that `Ctrl-O` can undo.
+    pub(crate) fn jump_to_view(&mut self, view: View) {
+        if view != self.view {
+            self.record_jump();
+        }
+        self.show_view(view);
     }
 
     /// Every key, for `Space ?`.
@@ -323,10 +349,12 @@ impl App {
     }
 
     pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
-        if self.view == View::Instrument && self.run_instrument(cmd) {
-            return;
-        }
-        if self.run_grammar(cmd) {
+        let handled = match self.view {
+            View::Chain => self.run_chain(cmd),
+            View::Instrument => self.run_instrument(cmd),
+            View::Phrase => false,
+        };
+        if handled || self.run_tree(cmd) || self.run_grammar(cmd) {
             return;
         }
         match cmd {
@@ -336,7 +364,7 @@ impl App {
             Cmd::ScrollDown => self.scroll(3),
             Cmd::ScrollUp => self.scroll(-3),
             Cmd::Double => self.double(),
-            Cmd::ShowView(view) => self.show_view(view),
+            Cmd::ShowView(view) => self.jump_to_view(view),
             Cmd::Picker => self.open_view_picker(),
             Cmd::Help => {
                 self.help_scroll = 0;
@@ -529,14 +557,25 @@ impl App {
         self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
     }
 
+    /// Keep the cursor on something that exists. Only the chain view has a row past the end.
     pub(crate) fn clamp_cursor(&mut self) {
+        let rows = self.chain_entries().len();
+        let last = if self.view == View::Chain {
+            rows
+        } else {
+            rows.saturating_sub(1)
+        };
+        self.cursor.slot = self.cursor.slot.min(last);
         self.move_step(0);
     }
 
     fn insert_key(&mut self, key: Key) {
-        if self.view == View::Instrument {
+        if self.view != View::Phrase {
             if !key.ctrl {
-                self.insert_instrument_row(key.code);
+                match self.view {
+                    View::Chain => self.insert_chain_row(key.code),
+                    _ => self.insert_instrument_row(key.code),
+                }
             }
             return;
         }
@@ -791,6 +830,7 @@ impl App {
                     self.clamp_cursor();
                 }
             }
+            Line::Chain(chain) => self.set_track_chain(chain),
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),

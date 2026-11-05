@@ -23,6 +23,7 @@ pub enum Line {
     SetStep(u32),
     Seed(u64),
     Swing(u16),
+    Chain(u32),
     TrackSwing(Option<u16>),
 }
 
@@ -43,6 +44,8 @@ pub enum LineError {
     Track,
     #[error(":set takes step=n")]
     Set,
+    #[error(":chain takes a chain ID in hex")]
+    Chain,
     #[error(":seed takes a number")]
     Seed,
     #[error(":swing takes a percent from 50 to 75, to one decimal")]
@@ -138,6 +141,9 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "tswing" => swing(argument)
             .map(|value| Line::TrackSwing(Some(value)))
             .ok_or(LineError::TrackSwing),
+        "chain" => u32::from_str_radix(argument, 16)
+            .map(Line::Chain)
+            .map_err(|_| LineError::Chain),
         "double" => Ok(Line::Double),
         "set" => argument
             .strip_prefix("step=")

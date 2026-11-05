@@ -114,10 +114,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
     let others = neighbours(app, room);
     let first_step = app.section_step() - app.cursor.step;
+    let id = app.phrase_id().unwrap_or(0);
+    let shared = if app.phrase_uses(id).len() > 1 {
+        "*"
+    } else {
+        ""
+    };
     let mut heading = format!(
-        "Track {}Phrase {:02X}",
+        "Track {}Phrase {id:02X}{shared} {}/{}",
         track_label(app, app.cursor.track),
-        app.phrase_id().unwrap_or(0),
+        app.cursor.slot + 1,
+        app.chain_entries().len(),
     );
     heading.truncate(GUTTER + body_width);
     let mut title = format!("{heading:<width$}  ", width = GUTTER + body_width);

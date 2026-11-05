@@ -58,3 +58,9 @@ pub const MAX_SWING: u16 = 750;
 
 /// The longest attack or release, in milliseconds.
 pub const MAX_ENVELOPE_MS: u16 = 5000;
+
+/// The lowest chain transpose, in semitones.
+pub const MIN_TRANSPOSE: i8 = -48;
+
+/// The highest chain transpose, in semitones.
+pub const MAX_TRANSPOSE: i8 = 48;

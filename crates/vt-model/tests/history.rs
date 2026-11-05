@@ -101,3 +101,117 @@ fn set_sample_creates_the_instrument() {
         Some("samples/a.wav")
     );
 }
+
+mod tree {
+    use std::sync::Arc;
+
+    use vt_model::action::{Action, EditError, edit};
+    use vt_model::song::{ChainEntry, Song};
+
+    fn entry(phrase: u32) -> ChainEntry {
+        ChainEntry {
+            phrase,
+            transpose: 0,
+        }
+    }
+
+    #[test]
+    fn cloning_a_phrase_leaves_the_original_and_repoints_only_that_row() {
+        let song = Arc::new(Song::new(1));
+        let song = edit(
+            &song,
+            &Action::InsertChainEntry {
+                chain: 0,
+                at: 1,
+                entry: entry(0),
+            },
+        )
+        .unwrap();
+        let cloned = edit(
+            &song,
+            &Action::ClonePhrase {
+                chain: 0,
+                slot: 1,
+                new: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(cloned.chains[&0].entries[0].phrase, 0);
+        assert_eq!(cloned.chains[&0].entries[1].phrase, 1);
+        let edited = edit(
+            &cloned,
+            &Action::SetLength {
+                phrase: 1,
+                length: 4,
+            },
+        )
+        .unwrap();
+        assert_eq!(edited.phrases[&0].len(), 16, "the original is unchanged");
+        assert_eq!(edited.phrases[&1].len(), 4);
+    }
+
+    #[test]
+    fn a_deep_clone_copies_each_phrase_once_and_repoints_the_track() {
+        let song = Arc::new(Song::new(2));
+        let song = edit(
+            &song,
+            &Action::InsertChainEntry {
+                chain: 0,
+                at: 1,
+                entry: entry(0),
+            },
+        )
+        .unwrap();
+        let cloned = edit(&song, &Action::CloneChain { track: 0 }).unwrap();
+        // Tracks took chains and phrases 0 and 1, so the lowest unused are 2.
+        assert_eq!(cloned.sections[0].chains[0], Some(2));
+        assert_eq!(cloned.sections[0].chains[1], Some(1));
+        let copy = &cloned.chains[&2].entries;
+        assert_eq!([copy[0].phrase, copy[1].phrase], [2, 2]);
+        assert_eq!(cloned.chains[&0].entries[0].phrase, 0);
+    }
+
+    #[test]
+    fn a_new_reference_creates_the_phrase_and_rows_keep_one() {
+        let song = Arc::new(Song::new(1));
+        let song = edit(
+            &song,
+            &Action::SetChainEntry {
+                chain: 0,
+                slot: 0,
+                entry: entry(9),
+            },
+        )
+        .unwrap();
+        assert!(song.phrases.contains_key(&9));
+        assert_eq!(
+            edit(&song, &Action::RemoveChainEntry { chain: 0, at: 0 }).unwrap_err(),
+            EditError::LastRow
+        );
+        let far = ChainEntry {
+            phrase: 0,
+            transpose: 49,
+        };
+        assert_eq!(
+            edit(
+                &song,
+                &Action::SetChainEntry {
+                    chain: 0,
+                    slot: 0,
+                    entry: far,
+                }
+            )
+            .unwrap_err(),
+            EditError::Transpose
+        );
+    }
+
+    #[test]
+    fn pointing_a_track_at_a_new_chain_creates_it_with_a_phrase() {
+        let song = Arc::new(Song::new(1));
+        let song = edit(&song, &Action::SetTrackChain { track: 0, chain: 5 }).unwrap();
+        assert_eq!(song.sections[0].chains[0], Some(5));
+        assert_eq!(song.chains[&5].entries[0].phrase, 1);
+        assert!(song.phrases.contains_key(&1));
+    }
+}

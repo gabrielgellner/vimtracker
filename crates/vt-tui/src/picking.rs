@@ -124,7 +124,8 @@ impl App {
                 self.picker = None;
                 self.mode = Mode::Normal;
                 match pick {
-                    Some(Pick::View(view)) => self.show_view(view),
+                    Some(Pick::View(view)) => self.jump_to_view(view),
+                    Some(Pick::Use { track, slot }) => self.open_use(track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     None => {}
                 }
