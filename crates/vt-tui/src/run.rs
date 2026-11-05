@@ -19,6 +19,7 @@ use vt_model::song::Song;
 use crate::app::App;
 use crate::audio::{AudioError, AudioStats, Output};
 use crate::input::keys::Key;
+use crate::input::mode::Mode;
 use crate::views;
 
 /// Why the program stopped with an error.
@@ -80,8 +81,13 @@ fn main_loop(
         terminal.draw(|frame| {
             let [body, status] =
                 Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
+            app.follow_cursor(usize::from(body.height.saturating_sub(1)));
             views::phrase::draw(frame, body, app);
             views::status::draw(frame, status, app, Some(stats));
+            views::help::draw_popup(frame, body, app, Instant::now());
+            if app.mode == Mode::Help {
+                views::help::draw_help(frame, body, app);
+            }
         })?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {

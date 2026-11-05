@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::constants::BEAT_STEPS;
+use vt_model::selection::Scope;
 use vt_model::step::Step;
 
 use crate::app::{App, Field};
@@ -27,6 +28,21 @@ fn field_range(step: &Step, field: Field) -> (usize, usize) {
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + 3),
         Field::FxValue(slot) => (fx_start(slot) + 3, fx_start(slot) + 5),
     }
+}
+
+/// The character range a selection covers on one step.
+fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) {
+    if scope.is_whole() {
+        return (0, length);
+    }
+    let slots = step.fx.len();
+    let last = scope.last.min(2 + slots);
+    let (start, _) = field_range(step, Field::of_group(scope.first.min(last)));
+    let end = match Field::of_group(last) {
+        Field::FxCommand(slot) => field_range(step, Field::FxValue(slot)).1,
+        field => field_range(step, field).1,
+    };
+    (start.min(length), end.min(length))
 }
 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
@@ -86,11 +102,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
     let height = usize::from(area.height.saturating_sub(1)).max(1);
-    let top = app
-        .cursor
-        .step
-        .saturating_sub(height / 2)
-        .min(phrase.len().saturating_sub(height));
+    let top = app.top;
+    let selection = app.mode.is_visual().then(|| app.current_selection());
     let playhead = playhead_step(app);
     let body_width = phrase
         .steps()
@@ -102,11 +115,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let others = neighbours(app, room);
     let first_step = app.section_step() - app.cursor.step;
     let mut heading = format!(
-        "Track {}Phrase {:02X}  Octave {}  Inst {:02X}",
+        "Track {}Phrase {:02X}",
         track_label(app, app.cursor.track),
         app.phrase_id().unwrap_or(0),
-        app.octave,
-        app.instrument,
     );
     heading.truncate(GUTTER + body_width);
     let mut title = format!("{heading:<width$}  ", width = GUTTER + body_width);
@@ -134,7 +145,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             Style::new()
         };
-        if index == app.cursor.step {
+        let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));
+        if let Some(selected) = selected {
+            let (start, end) = selected_columns(step, selected.scope, text.len());
+            let picked = Style::new().bg(Color::Blue).fg(Color::White);
+            spans.push(Span::styled(text[..start].to_owned(), body));
+            spans.push(Span::styled(text[start..end].to_owned(), picked));
+            spans.push(Span::styled(text[end..].to_owned(), body));
+        } else if index == app.cursor.step {
             let (start, end) = field_range(step, app.cursor.field);
             let end = end.min(text.len());
             let start = start.min(end);
