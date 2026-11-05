@@ -3,12 +3,18 @@
 | Command | Does |
 |---|---|
 | `:w` | Save |
-| `:w path` | Save to a new folder, copying the samples there |
+| `:w path` | Save to a new folder, with a copy of every sample |
 | `:e path` | Open a project |
 | `:new path` | Start a new project |
 | `:q` | Quit, or refuse if there are unsaved changes |
 | `:q!` | Quit and discard changes |
 | `Space qq` | The same as `:q` |
+
+## Samples and moving projects
+
+A project refers to its samples where they are, so it is small, but it needs
+them to stay put. `:w path` gathers everything into a new folder that can be
+moved or shared, and you carry on working in that folder.
 
 ## Playing
 

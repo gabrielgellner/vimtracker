@@ -13,6 +13,7 @@ use crate::input::mode::View;
 pub enum Pick {
     View(View),
     Sample(PathBuf),
+    Kit(PathBuf),
     Use { track: usize, slot: usize },
     Guide(Guide),
 }

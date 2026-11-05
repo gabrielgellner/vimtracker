@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::Action;
+use vt_model::action::{Action, FieldValue};
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
 
 use crate::app::{App, Selection};
@@ -312,12 +312,35 @@ impl App {
             self.leave_visual(selection);
             return;
         }
+        // As on the M8, editing an empty cell starts from the value last used there.
+        if self.cursor.field == Field::Instrument && self.step_instrument().is_none() {
+            if let Some(phrase) = self.phrase_id() {
+                self.apply(&Action::SetField {
+                    phrase,
+                    step: self.cursor.step,
+                    value: FieldValue::Instrument(Some(self.instrument)),
+                });
+            }
+            return;
+        }
         let change = Change::Increment {
             by,
             cover: Cover::Cursor,
         };
         self.do_change(&change);
         self.last_change = Some(change);
+        if self.cursor.field == Field::Instrument
+            && let Some(instrument) = self.step_instrument()
+        {
+            self.instrument = instrument;
+        }
+    }
+
+    /// The instrument on the cursor's step.
+    fn step_instrument(&self) -> Option<u32> {
+        let id = self.phrase_id()?;
+        let phrase = self.song().phrases.get(&id)?;
+        phrase.steps().get(self.cursor.step)?.instrument
     }
 
     fn apply_increment(&mut self, by: i32, range: StepRange, scope: Scope) {

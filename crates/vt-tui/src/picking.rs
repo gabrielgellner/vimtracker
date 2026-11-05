@@ -1,8 +1,14 @@
 //! Opening the picker and acting on what it chooses.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
+use vt_model::action::Action;
+use vt_model::kit::load_kit;
+use vt_model::project;
+use vt_model::sample::load_wav;
+use vt_model::samples::SamplePool;
 
 use crate::app::App;
 use crate::guides::GUIDES;
@@ -31,24 +37,57 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
         if found.len() >= MAX_SAMPLES {
             return;
         }
-        let hidden = path
-            .file_name()
-            .is_some_and(|name| name.to_string_lossy().starts_with('.'));
-        if hidden {
+        if !is_visible(&path) {
             continue;
         }
         if path.is_dir() {
             if depth < MAX_DEPTH {
                 walk(&path, depth + 1, found);
             }
-        } else if path
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("wav"))
-        {
+        } else if is_wav(&path) {
             found.push(path);
         }
     }
 }
+
+/// The kits in a folder: its RON files, by name.
+pub fn kits_in(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut kits: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            is_visible(path)
+                && path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("ron"))
+        })
+        .collect();
+    kits.sort();
+    kits
+}
+
+fn is_visible(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
+}
+
+fn is_wav(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("wav"))
+}
+
+/// A kit's name: its file name without the extension.
+fn kit_name(path: &Path) -> String {
+    path.file_stem()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+}
+
+/// Where kits are looked for by name, from where the program ran.
+const KITS_DIR: &str = "samples/kits";
 
 impl App {
     /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
@@ -79,6 +118,77 @@ impl App {
             .collect();
         self.picker = Some(Picker::new("Guides", items));
         self.mode = Mode::Picker;
+    }
+
+    /// Choose a kit from those in `samples/kits`.
+    pub(crate) fn open_kit_picker(&mut self) {
+        let items: Vec<Item> = kits_in(Path::new(KITS_DIR))
+            .into_iter()
+            .map(|path| Item {
+                label: kit_name(&path),
+                pick: Pick::Kit(path),
+            })
+            .collect();
+        if items.is_empty() {
+            self.status = format!("No kits yet: add a kit file to {KITS_DIR}, such as 909.ron");
+            return;
+        }
+        self.picker = Some(Picker::new("Kits", items));
+        self.mode = Mode::Picker;
+    }
+
+    /// Load a kit named in `samples/kits`, or at a path.
+    pub(crate) fn load_named_kit(&mut self, name: &Path) {
+        if name.is_file() {
+            self.load_kit(name);
+        } else {
+            self.load_kit(&Path::new(KITS_DIR).join(name).with_extension("ron"));
+        }
+    }
+
+    /// Fill instruments from `00` with a kit's sounds, keeping their other settings. It is one undo
+    /// step, and if any sound won't load, nothing changes.
+    pub fn load_kit(&mut self, path: &Path) {
+        let sounds = match load_kit(path) {
+            Ok(sounds) if sounds.is_empty() => {
+                self.status = format!("{} has no sounds", path.display());
+                return;
+            }
+            Ok(sounds) => sounds,
+            Err(error) => {
+                self.status = error.to_string();
+                return;
+            }
+        };
+        let mut pool = SamplePool::clone(&self.samples);
+        let mut samples = Vec::with_capacity(sounds.len());
+        for (slot, sound) in sounds.iter().enumerate() {
+            let stored = self.store_sample(sound).map_err(|error| error.to_string());
+            let loaded = stored.and_then(|stored| {
+                let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
+                let data = load_wav(&resolved, self.rate).map_err(|error| error.to_string())?;
+                Ok((stored, data))
+            });
+            match loaded {
+                Ok((stored, data)) => {
+                    pool.insert(&stored, data);
+                    samples.push((slot as u32, stored));
+                }
+                Err(error) => {
+                    self.status = format!("{}: {error}", sound.display());
+                    return;
+                }
+            }
+        }
+        self.samples = Arc::new(pool);
+        self.apply(&Action::SetSamples(samples));
+        self.instrument = 0;
+        self.status = format!(
+            "Kit {}: {} sounds in instruments 00 to {:02X}",
+            kit_name(path),
+            sounds.len(),
+            sounds.len() - 1
+        );
     }
 
     /// Open the sample browser on a folder. If nothing is there, offer a typed path instead.
@@ -141,6 +251,7 @@ impl App {
                     Some(Pick::View(view)) => self.jump_to_view(view),
                     Some(Pick::Use { track, slot }) => self.open_use(track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
+                    Some(Pick::Kit(path)) => self.load_kit(&path),
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

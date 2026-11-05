@@ -406,7 +406,7 @@ changing its shape never depends on what is currently in the fields. It owns eve
 
 ### Saving and loading
 
-A project is a folder holding `song.ron` and a `samples/` folder. Importing a sample copies it there, and `:w path` copies
+A project is a folder holding `song.ron`, and a `samples/` folder once it has been bundled. Samples are referred to where they are, by a full path, or a relative one if they are inside the project. `:w path` copies
 samples to a new folder. Saving writes to a temporary file and renames it, so a process crash cannot leave a partial song,
 and a failed save leaves the previous file intact. Loading first reads only `format_version` and compares it, then parses
 the full `Song`. A different version is refused with a message naming both versions and suggesting rendering to WAV before
@@ -682,13 +682,14 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 |---|---|
 | `:w [path]`, `:e path`, `:q`, `:q!` | Save, open, quit, quit without saving |
 | `:new path` | Create a project folder. An existing folder is refused |
-| `:sample path` | Copy a WAV into `samples/` and assign it to the current instrument |
+| `:sample path` | Assign a WAV to the current instrument, referring to it where it is |
 | `:inst n` | Set the current instrument |
 | `:track add [n]`, `:track del` | Add `n` tracks at the end, up to `MAX_TRACKS`, or remove the last track, keeping at least one |
 | `:mute`, `:solo` | Toggle on the current track |
 | `:bpm n` | Tempo, in thousandths: `:bpm 137.63` |
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
 | `:tvol xx` | This track's level in hex |
+| `:kit [name or path]` | Fill instruments from `00` with the sounds a kit file lists, in order, as one undo step. With no argument, choose from `samples/kits` |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |

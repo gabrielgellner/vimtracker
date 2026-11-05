@@ -1276,3 +1276,248 @@ fn enter_still_finishes_a_typed_instrument_id_in_insert() {
     assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(0x1A));
     assert_eq!(app.transport, Transport::Stopped);
 }
+
+/// A kit file beside its sounds, returning the kit's path.
+fn kit_file() -> PathBuf {
+    let root = folder();
+    let sounds = root.join("drums");
+    std::fs::create_dir_all(&sounds).unwrap();
+    wav(&sounds.join("kick.wav"));
+    wav(&sounds.join("snare.wav"));
+    wav(&sounds.join("hat.wav"));
+    let kit = root.join("909.ron");
+    std::fs::write(
+        &kit,
+        r#"(sounds: [
+            (path: "drums/snare.wav"),
+            (path: "drums/kick.wav"),
+            (path: "drums/hat.wav"),
+        ])"#,
+    )
+    .unwrap();
+    kit
+}
+
+fn sample_of(app: &App, id: u32) -> Option<String> {
+    app.song().instruments.get(&id)?.sample.clone()
+}
+
+#[test]
+fn a_kit_fills_slots_in_file_order_as_one_undo_step() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, "inst 5");
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
+    assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
+    assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
+    assert_eq!(sample_of(&app, 3), None);
+    assert_eq!(app.instrument, 0);
+    assert!(app.status.contains("Kit 909: 3 sounds"), "{}", app.status);
+    assert!(app.status.contains("00 to 02"), "{}", app.status);
+    assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
+
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 0), None);
+    assert_eq!(sample_of(&app, 1), None);
+    assert_eq!(sample_of(&app, 2), None);
+}
+
+#[test]
+fn a_kit_replaces_samples_but_keeps_settings_and_later_slots() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let other = folder();
+    std::fs::create_dir_all(&other).unwrap();
+    let later = other.join("later.wav");
+    wav(&later);
+    command(&mut app, "inst 3");
+    command(&mut app, &format!("sample {}", later.display()));
+    command(&mut app, "inst 0");
+    press(&mut app, " 5jia0");
+    assert_eq!(app.song().instruments[&0].volume, 0xA0);
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(sample_of(&app, 3).unwrap().ends_with("later.wav"));
+    assert_eq!(app.song().instruments[&0].volume, 0xA0);
+}
+
+#[test]
+fn a_kit_with_a_bad_sound_changes_nothing_and_names_it() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let drums = kit.parent().unwrap().join("drums");
+    std::fs::write(drums.join("broken.wav"), "not audio").unwrap();
+    std::fs::write(
+        &kit,
+        r#"(sounds: [(path: "drums/kick.wav"), (path: "drums/broken.wav")])"#,
+    )
+    .unwrap();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(sample_of(&app, 0), None);
+    assert!(!app.dirty);
+    assert!(app.status.contains("broken"), "{}", app.status);
+
+    std::fs::write(&kit, r#"(sounds: [(path: "drums/gone.wav")])"#).unwrap();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(sample_of(&app, 0), None);
+    assert!(app.status.contains("gone"), "{}", app.status);
+
+    std::fs::write(&kit, "not a kit").unwrap();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(sample_of(&app, 0), None);
+    assert!(app.status.contains("909.ron"), "{}", app.status);
+}
+
+#[test]
+fn a_kit_is_referred_to_and_saving_elsewhere_gathers_its_sounds() {
+    let project = folder();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("w {}", project.display()));
+    let kit = kit_file();
+    let snare = kit.parent().unwrap().join("drums/snare.wav");
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(std::path::Path::new(&sample_of(&app, 0).unwrap()).is_absolute());
+    assert!(!project.join("samples").exists());
+
+    command(&mut app, "w");
+    let reopened = vt_model::project::load_song(&project).unwrap();
+    assert_eq!(
+        reopened.instruments[&0].sample.as_deref(),
+        Some(snare.canonicalize().unwrap().to_str().unwrap())
+    );
+
+    let bundle = folder();
+    command(&mut app, &format!("w {}", bundle.display()));
+    assert_eq!(sample_of(&app, 0).unwrap(), "samples/snare.wav");
+    assert!(bundle.join("samples/hat.wav").exists());
+}
+
+#[test]
+fn a_missing_kit_or_none_at_all_says_so() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "kit nothing-here");
+    assert!(app.status.contains("nothing-here"), "{}", app.status);
+    command(&mut app, "kit");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("samples/kits"), "{}", app.status);
+}
+
+#[test]
+fn only_ron_files_count_as_kits() {
+    use vt_tui::picking::kits_in;
+    let kit = kit_file();
+    let root = kit.parent().unwrap();
+    std::fs::write(root.join("stray.wav"), "").unwrap();
+    std::fs::write(root.join(".hidden.ron"), "").unwrap();
+    assert_eq!(kits_in(root), vec![kit.clone()]);
+}
+
+fn step_instrument(app: &App, step: usize) -> Option<u32> {
+    app.song().phrases[&0].steps()[step].instrument
+}
+
+#[test]
+fn editing_the_instrument_in_the_phrase_is_remembered_for_the_next_note() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "inst 4");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "kll+");
+    assert_eq!(step_instrument(&app, 0), Some(5));
+    assert_eq!(app.instrument, 5);
+    press(&mut app, "-");
+    assert_eq!(app.instrument, 4);
+    press(&mut app, "3+");
+    assert_eq!(step_instrument(&app, 0), Some(7));
+    assert_eq!(app.instrument, 7);
+
+    press(&mut app, "hhji");
+    press(&mut app, "a");
+    assert_eq!(step_instrument(&app, 1), Some(7));
+}
+
+#[test]
+fn typing_an_instrument_is_remembered_too() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "lli1a");
+    special(&mut app, KeyCode::Enter);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.instrument, 0x1A);
+    press(&mut app, "hhi");
+    press(&mut app, "a");
+    assert_eq!(step_instrument(&app, 1), Some(0x1A));
+}
+
+#[test]
+fn plus_on_an_empty_instrument_cell_writes_the_remembered_one() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "inst 9");
+    press(&mut app, "ll+");
+    assert_eq!(step_instrument(&app, 0), Some(9));
+    assert_eq!(app.instrument, 9);
+    press(&mut app, "u");
+    assert_eq!(step_instrument(&app, 0), None);
+    press(&mut app, "-");
+    assert_eq!(step_instrument(&app, 0), Some(9));
+}
+
+#[test]
+fn a_sample_is_referred_to_rather_than_copied() {
+    let project = folder();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("w {}", project.display()));
+    let source = folder();
+    std::fs::create_dir_all(&source).unwrap();
+    let tone = source.join("tone.wav");
+    wav(&tone);
+    command(&mut app, &format!("sample {}", tone.display()));
+    assert_eq!(
+        sample_of(&app, 0).unwrap(),
+        tone.canonicalize().unwrap().display().to_string()
+    );
+    assert!(!project.join("samples").exists());
+    assert!(app.status.contains("loaded"), "{}", app.status);
+}
+
+#[test]
+fn a_sample_inside_the_project_stays_relative_so_a_bundle_can_move() {
+    let project = folder();
+    let inside = project.join("samples");
+    std::fs::create_dir_all(&inside).unwrap();
+    wav(&inside.join("tone.wav"));
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("w {}", project.display()));
+    command(&mut app, &format!("sample {}/tone.wav", inside.display()));
+    assert_eq!(sample_of(&app, 0).unwrap(), "samples/tone.wav");
+
+    std::fs::write(
+        project.join("kit.ron"),
+        r#"(sounds: [(path: "samples/tone.wav")])"#,
+    )
+    .unwrap();
+    command(&mut app, "inst 0");
+    command(&mut app, &format!("kit {}/kit.ron", project.display()));
+    assert_eq!(sample_of(&app, 0).unwrap(), "samples/tone.wav");
+}
+
+#[test]
+fn a_bundle_keeps_working_after_its_sources_are_gone() {
+    let source = folder();
+    std::fs::create_dir_all(&source).unwrap();
+    let tone = source.join("tone.wav");
+    wav(&tone);
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("sample {}", tone.display()));
+    let bundle = folder();
+    command(&mut app, &format!("w {}", bundle.display()));
+    std::fs::remove_dir_all(&source).unwrap();
+
+    let song = vt_model::project::load_song(&bundle).unwrap();
+    let mut pool = SamplePool::default();
+    let errors = vt_model::project::load_samples(Some(&bundle), &song, 48_000, &mut pool);
+    assert!(errors.is_empty());
+    assert_eq!(
+        song.instruments[&0].sample.as_deref(),
+        Some("samples/tone.wav")
+    );
+}

@@ -14,6 +14,8 @@ pub enum Line {
     },
     New(PathBuf),
     Sample(PathBuf),
+    /// Load a kit by name or path, or choose one.
+    Kit(Option<PathBuf>),
     Inst(u32),
     Bpm(u32),
     Len(usize),
@@ -152,6 +154,7 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "q!" => Ok(Line::Quit { force: true }),
         "new" => needed(":new").map(Line::New),
         "sample" => needed(":sample").map(Line::Sample),
+        "kit" => Ok(Line::Kit((!argument.is_empty()).then(|| path(argument)))),
         "inst" => u32::from_str_radix(argument, 16)
             .map(Line::Inst)
             .map_err(|_| LineError::Inst),
@@ -248,6 +251,8 @@ mod tests {
         assert_eq!(parse("set other=1"), Err(LineError::Set));
         assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));
+        assert_eq!(parse("kit"), Ok(Line::Kit(None)));
+        assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
     }
 
     #[test]

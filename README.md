@@ -43,8 +43,12 @@ and `Space k` lists every key. If you pause after `Space` or another prefix, a p
 can come next.
 
 No samples come with the repo. Put your own WAV files in `samples/`, which git ignores, and run
-from the repo root to see them in the browser. Choosing one copies it into the project's own
-`samples/` folder, so a saved project keeps working without the original.
+from the repo root to see them in the browser. A file in `samples/kits/` listing sounds, such as
+`909.ron`, is a kit: `:kit 909` fills the first instrument slots from it. See the instruments guide
+for the format.
+
+Samples stay where they are, and a project refers to them. `:w new-folder` saves a copy with every
+sample gathered into it, ready to move or share.
 
 | Command | What it does |
 |---|---|

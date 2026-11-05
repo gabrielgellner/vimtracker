@@ -3,6 +3,7 @@
 pub mod action;
 pub mod constants;
 pub mod history;
+pub mod kit;
 pub mod project;
 pub mod sample;
 pub mod samples;

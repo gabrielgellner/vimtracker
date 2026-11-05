@@ -100,6 +100,8 @@ pub enum Action {
         instrument: u32,
         sample: String,
     },
+    /// Set several instruments' samples as one change, creating them if needed.
+    SetSamples(Vec<(u32, String)>),
     /// Set an instrument's setting, creating the instrument if needed.
     SetInstrument {
         id: u32,
@@ -338,6 +340,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .entry(*instrument)
                 .or_insert_with(|| Arc::new(Instrument::default()));
             Arc::make_mut(entry).sample = Some(sample.clone());
+        }
+        Action::SetSamples(samples) => {
+            for (instrument, sample) in samples {
+                let entry = next
+                    .instruments
+                    .entry(*instrument)
+                    .or_insert_with(|| Arc::new(Instrument::default()));
+                Arc::make_mut(entry).sample = Some(sample.clone());
+            }
         }
         Action::AssignNewInstrument { phrase, step, id } => {
             step_mut(&mut next, *phrase, *step)?.instrument = Some(*id);

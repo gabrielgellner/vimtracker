@@ -948,6 +948,8 @@ impl App {
             Line::Edit(path) => self.open(&path),
             Line::New(path) => self.new_project(&path),
             Line::Sample(path) => self.sample(&path),
+            Line::Kit(Some(name)) => self.load_named_kit(&name),
+            Line::Kit(None) => self.open_kit_picker(),
             Line::Inst(id) => {
                 self.instrument = id;
                 self.status = format!("Instrument {id:02X}");
@@ -1112,22 +1114,24 @@ impl App {
         self.publish();
     }
 
+    /// How a song refers to a sample: where it is, or relative to the project if it's inside,
+    /// so a bundled project can be moved. `:w` to a new folder is what copies samples.
+    pub(crate) fn store_sample(&self, source: &Path) -> Result<String, ProjectError> {
+        let full = source.canonicalize().map_err(|error| ProjectError::Io {
+            path: source.display().to_string(),
+            source: error,
+        })?;
+        let project = self.folder.as_deref().and_then(|f| f.canonicalize().ok());
+        let inside = project.as_deref().and_then(|f| full.strip_prefix(f).ok());
+        Ok(inside.unwrap_or(&full).display().to_string())
+    }
+
     pub(crate) fn sample(&mut self, source: &Path) {
         if source.is_dir() {
             self.open_sample_picker(&[source.to_path_buf()]);
             return;
         }
-        let stored = match &self.folder {
-            Some(folder) => project::import_sample(folder, source),
-            None => source
-                .canonicalize()
-                .map(|p| p.display().to_string())
-                .map_err(|error| ProjectError::Io {
-                    path: source.display().to_string(),
-                    source: error,
-                }),
-        };
-        let stored = match stored {
+        let stored = match self.store_sample(source) {
             Ok(stored) => stored,
             Err(error) => {
                 self.status = error.to_string();

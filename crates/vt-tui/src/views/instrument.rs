@@ -25,6 +25,11 @@ fn value(row: Row, instrument: &Instrument) -> String {
     }
 }
 
+/// The file name alone, since a kit's sounds have long paths that would hide it.
+fn file_name(sample: &str) -> &str {
+    sample.rsplit('/').next().unwrap_or(sample)
+}
+
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let song = app.song();
@@ -65,7 +70,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(Line::styled(
             format!(
                 "  {id:02X}  {}",
-                instrument.sample.as_deref().unwrap_or("(no sample)")
+                instrument
+                    .sample
+                    .as_deref()
+                    .map_or("(no sample)", file_name)
             ),
             style,
         ));

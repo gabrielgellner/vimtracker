@@ -30,12 +30,45 @@ to choose one.
 | `:sample path/kick.wav` | Load one file |
 | `:sample path/drums` | Browse a folder |
 
-The browser looks 4 folders deep and lists up to 2000 files. Choosing a
-sample copies it into the project, so the project keeps working without the
-original.
+The browser looks 4 folders deep and lists up to 2000 files.
+
+Samples stay where they are, and the project refers to them, so moving a
+file breaks the projects that use it. To gather every sample into one
+folder, ready to move or share, save a copy with `:w path`.
+
+## Kits
+
+A kit fills the first instrument slots in one go. It is a file in
+`samples/kits`, such as `909.ron`, listing sounds in slot order:
+
+```
+(
+    sounds: [
+        (path: "../drums/kick.wav"),
+        (path: "../drums/snare.wav"),
+    ],
+)
+```
+
+Paths are relative to the kit file, or absolute, or start with `~/`.
+
+| Command | Does |
+|---|---|
+| `:kit` | Choose a kit from `samples/kits` |
+| `:kit 909` | Load that kit |
+| `:kit path/drums.ron` | Load a kit file anywhere |
+
+A kit replaces the samples in those slots and keeps their other settings,
+and `u` undoes the whole load. Slots past the end of the kit stay as they
+were.
 
 ## Using instruments in a phrase
 
-Notes you write use the current instrument, which is the one last shown
-here. In the phrase view, `gd` on the Instrument column opens that
-instrument, and `C-o` comes back.
+Notes use the current instrument, shown as `Inst` on the status line. It is
+always the last one you entered, however you entered it.
+
+| On the Instrument column | Does |
+|---|---|
+| `+` `-` | Change it. An empty cell gets `Inst` |
+| `i`, hex digits, `Enter` | Type one |
+| `gd` | Open it in the instrument view, and `C-o` comes back |
