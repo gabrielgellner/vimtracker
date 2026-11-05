@@ -9,7 +9,9 @@ use thiserror::Error;
 pub enum Line {
     Write(Option<PathBuf>),
     Edit(PathBuf),
-    Quit { force: bool },
+    Quit {
+        force: bool,
+    },
     New(PathBuf),
     Sample(PathBuf),
     Inst(u32),
@@ -24,6 +26,11 @@ pub enum Line {
     Seed(u64),
     Swing(u16),
     Chain(u32),
+    Render {
+        path: PathBuf,
+        rows: Option<usize>,
+        tail: bool,
+    },
     TrackSwing(Option<u16>),
 }
 
@@ -46,6 +53,8 @@ pub enum LineError {
     Set,
     #[error(":chain takes a chain ID in hex")]
     Chain,
+    #[error(":render takes a path, --rows n and --tail")]
+    Render,
     #[error(":seed takes a number")]
     Seed,
     #[error(":swing takes a percent from 50 to 75, to one decimal")]
@@ -90,6 +99,32 @@ fn swing(text: &str) -> Option<u16> {
         return None;
     }
     u16::try_from(thousandths / 100).ok()
+}
+
+/// Read `:render`'s arguments. Anything that isn't a flag is the path, which can hold spaces.
+fn render(argument: &str) -> Result<Line, LineError> {
+    let mut words = Vec::new();
+    let mut rows = None;
+    let mut tail = false;
+    let mut parts = argument.split_whitespace();
+    while let Some(part) = parts.next() {
+        match part {
+            "--tail" => tail = true,
+            "--rows" => {
+                let count = parts.next().and_then(|n| n.parse().ok());
+                rows = Some(count.filter(|n| *n > 0).ok_or(LineError::Render)?);
+            }
+            word => words.push(word),
+        }
+    }
+    if words.is_empty() {
+        return Err(LineError::Render);
+    }
+    Ok(Line::Render {
+        path: path(&words.join(" ")),
+        rows,
+        tail,
+    })
 }
 
 /// Parse a command line, without its leading `:`.
@@ -141,6 +176,7 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "tswing" => swing(argument)
             .map(|value| Line::TrackSwing(Some(value)))
             .ok_or(LineError::TrackSwing),
+        "render" => render(argument),
         "chain" => u32::from_str_radix(argument, 16)
             .map(Line::Chain)
             .map_err(|_| LineError::Chain),
@@ -177,6 +213,16 @@ mod tests {
         assert_eq!(parse("inst 1A"), Ok(Line::Inst(0x1A)));
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
         assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
+        assert_eq!(
+            parse("render a b.wav --rows 8 --tail"),
+            Ok(Line::Render {
+                path: "a b.wav".into(),
+                rows: Some(8),
+                tail: true,
+            })
+        );
+        assert!(parse("render").is_err());
+        assert!(parse("render a.wav --rows 0").is_err());
         assert!(parse("seed x").is_err());
         assert_eq!(parse("swing 66.7"), Ok(Line::Swing(667)));
         assert_eq!(parse("swing 50"), Ok(Line::Swing(500)));

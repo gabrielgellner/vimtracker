@@ -190,6 +190,11 @@ impl Engine {
         }
     }
 
+    /// Stop sequencing but let everything sounding finish on its own, for a render's tail.
+    pub fn let_ring(&mut self) {
+        self.transport = Transport::Stopped;
+    }
+
     /// Stop moving. Voices fade so stopping doesn't click, and effect tails keep ringing.
     fn halt(&mut self, to: Transport) {
         for track in self.tracks.iter_mut() {
