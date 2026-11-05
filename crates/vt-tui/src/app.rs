@@ -753,6 +753,11 @@ impl App {
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
+            Line::Swing(swing) => self.apply(&Action::SetSwing(swing)),
+            Line::TrackSwing(swing) => self.apply(&Action::SetTrackSwing {
+                track: self.cursor.track,
+                swing,
+            }),
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
             Line::Len(length) => {

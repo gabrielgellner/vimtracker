@@ -22,6 +22,8 @@ pub enum Line {
     Double,
     SetStep(u32),
     Seed(u64),
+    Swing(u16),
+    TrackSwing(Option<u16>),
 }
 
 /// Why a command line was refused.
@@ -43,6 +45,10 @@ pub enum LineError {
     Set,
     #[error(":seed takes a number")]
     Seed,
+    #[error(":swing takes a percent from 50 to 75, to one decimal")]
+    Swing,
+    #[error(":tswing takes a percent from 50 to 75, or off")]
+    TrackSwing,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -72,6 +78,15 @@ fn millibpm(text: &str) -> Option<u32> {
     };
     let scaled: u32 = format!("{fraction:0<3}").parse().ok()?;
     whole.checked_mul(1000)?.checked_add(scaled)
+}
+
+/// Read a swing percent as tenths, so `66.7` is 667.
+fn swing(text: &str) -> Option<u16> {
+    let thousandths = millibpm(text)?;
+    if !thousandths.is_multiple_of(100) {
+        return None;
+    }
+    u16::try_from(thousandths / 100).ok()
 }
 
 /// Parse a command line, without its leading `:`.
@@ -118,6 +133,11 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             .parse()
             .map(Line::Seed)
             .map_err(|_| LineError::Seed),
+        "swing" => swing(argument).map(Line::Swing).ok_or(LineError::Swing),
+        "tswing" if argument == "off" => Ok(Line::TrackSwing(None)),
+        "tswing" => swing(argument)
+            .map(|value| Line::TrackSwing(Some(value)))
+            .ok_or(LineError::TrackSwing),
         "double" => Ok(Line::Double),
         "set" => argument
             .strip_prefix("step=")
@@ -152,6 +172,11 @@ mod tests {
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
         assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
         assert!(parse("seed x").is_err());
+        assert_eq!(parse("swing 66.7"), Ok(Line::Swing(667)));
+        assert_eq!(parse("swing 50"), Ok(Line::Swing(500)));
+        assert!(parse("swing 66.75").is_err());
+        assert_eq!(parse("tswing 60"), Ok(Line::TrackSwing(Some(600))));
+        assert_eq!(parse("tswing off"), Ok(Line::TrackSwing(None)));
         assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
         assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
         assert_eq!(parse("track del"), Ok(Line::TrackDel));

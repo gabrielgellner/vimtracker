@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM, PREVIEW_MS, TICKS_PER_QUARTER,
-    TICKS_PER_STEP,
+    GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
+    TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::step::{FxCommand, MAX_NOTE, MIN_NOTE, Note};
 
@@ -34,6 +34,12 @@ pub fn sample_of_tick(tick_from_origin: u64, rate: u32, millibpm: u32) -> u64 {
     let numerator = u128::from(tick_from_origin) * 60 * u128::from(rate) * 1000;
     let denominator = u128::from(TICKS_PER_QUARTER) * u128::from(millibpm);
     (numerator / denominator) as u64
+}
+
+/// How many ticks swing delays odd steps by, for a swing in tenths of a percent.
+pub fn swing_ticks(swing: u16) -> u64 {
+    let swing = u64::from(swing.clamp(MIN_SWING, MAX_SWING));
+    (TICKS_PER_STEP * 2 * swing + 500) / 1000 - TICKS_PER_STEP
 }
 
 /// Sequencer and voices. It owns all its state ahead of time, and `process` doesn't allocate.
@@ -393,13 +399,32 @@ impl Engine {
         let section_step = (self.next_step % length as u64) as usize;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
-            self.tracks[index].retrigger = None;
-            self.fire_track(index, section_step);
+            // A big tempo jump can bring this step before the last one's swing delay ended.
+            if let Some((_, pending)) = self.tracks[index].swung.take() {
+                self.fire_track(index, pending);
+            }
+            let delay = self.swing_frames(index, section_step);
+            if delay > 0 {
+                self.tracks[index].swung = Some((self.clock + delay, section_step));
+            } else {
+                self.fire_track(index, section_step);
+            }
         }
+    }
+
+    /// How long a track's step waits for swing. Pairs count from the section start.
+    fn swing_frames(&self, index: usize, section_step: usize) -> u64 {
+        if section_step.is_multiple_of(2) {
+            return 0;
+        }
+        let song = &self.current.song;
+        let swing = song.tracks[index].swing.unwrap_or(song.swing);
+        sample_of_tick(swing_ticks(swing), self.rate, self.millibpm)
     }
 
     /// Start or stop a track's note for a step, and run its FX left to right.
     fn fire_track(&mut self, index: usize, section_step: usize) {
+        self.tracks[index].retrigger = None;
         let current = Arc::clone(&self.current);
         let song = &current.song;
         let Some(section) = song.sections.first() else {

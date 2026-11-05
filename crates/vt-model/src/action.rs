@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-use crate::constants::{MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM};
+use crate::constants::{MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING};
 use crate::selection::{Block, Scope, Shift, StepRange, clear_step, paste_step, shift_step};
 use crate::song::{Instrument, Song};
 use crate::step::{FxSlot, Note, Step};
@@ -66,6 +66,10 @@ pub enum Action {
     SetStepSize(u32),
     /// Set the project's random seed.
     SetSeed(u64),
+    /// Set the project's swing, in tenths of a percent.
+    SetSwing(u16),
+    /// Give a track its own swing, or `None` to follow the project.
+    SetTrackSwing { track: usize, swing: Option<u16> },
     /// Change a phrase's length, keeping steps past it hidden.
     SetLength { phrase: u32, length: usize },
     /// Change the tempo, in thousandths of a BPM.
@@ -93,6 +97,10 @@ pub enum EditError {
     LastTrack,
     #[error("those columns don't match here")]
     ColumnMismatch,
+    #[error("swing must be from 50 to 75")]
+    Swing,
+    #[error("no track {0}")]
+    NoTrack(usize),
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -188,6 +196,21 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
         Action::SetStepSize(size) => next.step = *size,
         Action::SetSeed(seed) => next.seed = *seed,
+        Action::SetSwing(swing) => {
+            if !(MIN_SWING..=MAX_SWING).contains(swing) {
+                return Err(EditError::Swing);
+            }
+            next.swing = *swing;
+        }
+        Action::SetTrackSwing { track, swing } => {
+            if swing.is_some_and(|swing| !(MIN_SWING..=MAX_SWING).contains(&swing)) {
+                return Err(EditError::Swing);
+            }
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .swing = *swing;
+        }
         Action::SetLength { phrase, length } => {
             let phrase = next
                 .phrases
