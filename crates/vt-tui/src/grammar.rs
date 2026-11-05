@@ -1,5 +1,6 @@
 //! Counts, registers, operators, Visual modes and repeat, on top of the binding table.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
@@ -12,6 +13,9 @@ use crate::app::{App, Entry, Selection};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
+
+/// The register that holds the last copy. A cut doesn't touch it.
+const YANK_REGISTER: char = '0';
 
 /// What `.` repeats.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +31,10 @@ pub enum Change {
     ClearField,
     Paste {
         register: Option<char>,
+        times: usize,
+        merge: bool,
+        /// Land just after what was pasted.
+        advance: bool,
     },
     /// A field replaced, with the step that holds its new value.
     Replace {
@@ -63,11 +71,11 @@ impl App {
         if self.awaiting_register {
             self.awaiting_register = false;
             if let KeyCode::Char(c) = key.code
-                && c.is_ascii_lowercase()
+                && (c.is_ascii_lowercase() || c == YANK_REGISTER)
             {
                 self.register = Some(c);
             } else {
-                self.status = "Registers are a to z".to_owned();
+                self.status = "Registers are a to z, and 0 for the last copy".to_owned();
             }
             return;
         }
@@ -134,9 +142,12 @@ impl App {
                 self.last_change = Some(Change::ClearField);
                 self.count = None;
             }
-            Cmd::Paste => {
+            Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
                     register: self.register,
+                    times: self.take_count().unwrap_or(1).max(1),
+                    merge: cmd == Cmd::PasteMerge,
+                    advance: cmd == Cmd::PasteAfter,
                 };
                 self.do_change(&change);
                 self.last_change = Some(change);
@@ -161,12 +172,6 @@ impl App {
         }
     }
 
-    fn phrase_length(&self) -> usize {
-        self.phrase_id()
-            .and_then(|id| self.song().phrases.get(&id))
-            .map_or(0, |p| p.len())
-    }
-
     fn motion(&mut self, motion: Motion) {
         if self.mode == Mode::OperatorPending {
             let count = self.take_count();
@@ -179,7 +184,7 @@ impl App {
                 self.move_horizontal(motion);
             }
         } else {
-            self.cursor.step = motion.step(self.cursor.step, count, self.phrase_length());
+            self.cursor.step = motion.step(self.cursor.step, count, self.extent());
         }
     }
 
@@ -226,15 +231,14 @@ impl App {
             self.cursor.step,
             self.cursor.field.group(),
             count,
-            self.phrase_length(),
+            self.extent(),
         )
     }
 
     /// The steps and columns a cover means at the cursor.
     fn resolve_cover(&self, cover: Cover) -> (StepRange, Scope) {
         let step = self.cursor.step;
-        let length = self.phrase_length();
-        let last = length.saturating_sub(1);
+        let extent = self.extent();
         let column = Scope::column(self.cursor.field.group());
         match cover {
             Cover::Cursor => (StepRange::between(step, step), column),
@@ -253,16 +257,16 @@ impl App {
                 },
             ),
             Cover::Motion(motion, count) => (
-                StepRange::between(step, motion.step(step, count, length)),
+                StepRange::between(step, motion.step(step, count, extent)),
                 column,
             ),
             Cover::Target(target, count) => self.target_range(target, count),
             Cover::Steps(steps) => (
-                StepRange::between(step, (step + steps - 1).min(last)),
+                StepRange::between(step, (step + steps - 1).min(extent.last_stored())),
                 Scope::WHOLE,
             ),
             Cover::Sized { steps, scope } => (
-                StepRange::between(step, (step + steps - 1).min(last)),
+                StepRange::between(step, (step + steps - 1).min(extent.last_stored())),
                 scope,
             ),
         }
@@ -290,14 +294,14 @@ impl App {
         };
         match op {
             Op::Clear => {
-                self.copy_block(phrase, range, scope);
+                self.copy_block(phrase, range, scope, false);
                 self.apply(&Action::Clear {
                     phrase,
                     range,
                     scope,
                 });
             }
-            Op::Copy => self.copy_block(phrase, range, scope),
+            Op::Copy => self.copy_block(phrase, range, scope, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
                 self.apply(&Action::Shift {
@@ -312,15 +316,19 @@ impl App {
         self.register = None;
     }
 
-    /// Copy into the unnamed register, and a named one if chosen.
-    fn copy_block(&mut self, phrase: u32, range: StepRange, scope: Scope) {
+    /// Fill the unnamed register, and a named one if chosen. Only a copy reaches register `0`, so
+    /// a cut can never overwrite it.
+    fn copy_block(&mut self, phrase: u32, range: StepRange, scope: Scope, copying: bool) {
         let Some(source) = self.song().phrases.get(&phrase).cloned() else {
             return;
         };
         let steps = source.steps()[range.first..=range.last].to_vec();
         let block = Block { scope, steps };
-        if let Some(name) = self.register {
+        if let Some(name) = self.register.filter(|name| *name != YANK_REGISTER) {
             self.registers.insert(name, block.clone());
+        }
+        if copying {
+            self.registers.insert(YANK_REGISTER, block.clone());
         }
         self.registers.insert('"', block);
     }
@@ -503,19 +511,31 @@ impl App {
                 };
                 self.apply(&action);
             }
-            Change::Paste { register } => {
+            Change::Paste {
+                register,
+                times,
+                merge,
+                advance,
+            } => {
                 let name = register.unwrap_or('"');
                 let Some(block) = self.registers.get(&name).cloned() else {
                     self.status = format!("Nothing in register {name}");
                     return;
                 };
                 if let Some(phrase) = self.phrase_id() {
+                    let length = block.steps.len().saturating_mul(*times);
+                    let before = Arc::clone(self.song());
                     self.apply(&Action::Paste {
                         phrase,
                         at: self.cursor.step,
                         group: self.cursor.field.group(),
                         block,
+                        times: *times,
+                        merge: *merge,
                     });
+                    if *advance && !Arc::ptr_eq(&before, self.song()) {
+                        self.move_step(length.min(isize::MAX as usize) as isize);
+                    }
                 }
             }
         }

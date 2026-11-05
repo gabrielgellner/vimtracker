@@ -40,6 +40,7 @@ pub enum Line {
     },
     TrackSwing(Option<u16>),
     TrackLevel(u8),
+    Reset(Option<usize>),
 }
 
 /// Why a command line was refused.
@@ -73,6 +74,8 @@ pub enum LineError {
     TrackSwing,
     #[error(":tvol takes a level in hex, from 00 to FF")]
     TrackLevel,
+    #[error(":reset takes a number of steps, 1 or more, or off")]
+    Reset,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -196,6 +199,11 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "tvol" => u8::from_str_radix(argument, 16)
             .map(Line::TrackLevel)
             .map_err(|_| LineError::TrackLevel),
+        "reset" if argument == "off" => Ok(Line::Reset(None)),
+        "reset" => match argument.parse() {
+            Ok(0) | Err(_) => Err(LineError::Reset),
+            Ok(steps) => Ok(Line::Reset(Some(steps))),
+        },
         "render" => render(argument),
         "chain" => u32::from_str_radix(argument, 16)
             .map(Line::Chain)
@@ -259,6 +267,10 @@ mod tests {
         assert!(parse("swing 66.75").is_err());
         assert_eq!(parse("tswing 60"), Ok(Line::TrackSwing(Some(600))));
         assert_eq!(parse("tswing off"), Ok(Line::TrackSwing(None)));
+        assert_eq!(parse("reset 64"), Ok(Line::Reset(Some(64))));
+        assert_eq!(parse("reset off"), Ok(Line::Reset(None)));
+        assert!(parse("reset 0").is_err());
+        assert!(parse("reset").is_err());
         assert_eq!(parse("tvol C0"), Ok(Line::TrackLevel(0xC0)));
         assert_eq!(parse("tvol"), Err(LineError::TrackLevel));
         assert_eq!(parse("tvol 100"), Err(LineError::TrackLevel));

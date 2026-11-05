@@ -17,8 +17,8 @@ use crate::theme;
 
 /// The width of a read-only note column for another track.
 const NEIGHBOUR_WIDTH: usize = 4;
-/// Room for the distance from the cursor, the step number, the playhead marker and a gap.
-const GUTTER: usize = 8;
+/// Room for the distance from the cursor, the row number, the playhead marker and a gap.
+const GUTTER: usize = 9;
 
 /// The rows that aren't steps: the heading, and the box's top and bottom. The box always has its
 /// room, so nothing moves when Insert starts.
@@ -85,8 +85,9 @@ fn playhead_step(app: &App) -> Option<usize> {
     let song = app.song();
     let chain = (*song.sections.first()?.chains.get(app.cursor.track)?)?;
     let position = song.chain_position(chain, app.playhead)?;
+    let start = song.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
-        .then_some(position.step)
+        .then_some(start + position.step)
 }
 
 /// Which other tracks fit beside the focused one, keeping those near it in view.
@@ -104,7 +105,7 @@ fn neighbours(app: &App, width: usize) -> Vec<usize> {
     others[start..start + shown].to_vec()
 }
 
-/// The note another track plays at a section position.
+/// The note another track plays at a place in the song.
 fn neighbour_note(app: &App, track: usize, section_step: usize) -> String {
     let song = app.song();
     song.sections
@@ -115,22 +116,26 @@ fn neighbour_note(app: &App, track: usize, section_step: usize) -> String {
         .map_or_else(|| "   ".to_owned(), |step| step.note.to_string())
 }
 
-/// Whether another track is playing the step shown at a section position. A track shorter than
-/// this one loops, so a step it is playing can show on more than one row.
-fn neighbour_playing(app: &App, track: usize, section_step: usize) -> bool {
+/// Where the selected track's current pass through its chain began. A row on screen means a
+/// different place on each pass, and other tracks need to show that place to show what really
+/// plays beside it. While stopped, it is the first pass.
+fn pass_start(app: &App) -> usize {
     if app.transport != Transport::Playing && app.transport != Transport::Paused {
-        return false;
+        return 0;
     }
     let song = app.song();
-    let chain = song
+    let total = song
         .sections
         .first()
-        .and_then(|s| s.chains.get(track).copied().flatten());
-    chain
-        .and_then(|chain| song.chain_position(chain, section_step))
-        .is_some_and(|shown| {
-            chain.and_then(|chain| song.chain_position(chain, app.playhead)) == Some(shown)
-        })
+        .and_then(|s| s.chains.get(app.cursor.track).copied().flatten())
+        .map_or(0, |chain| song.chain_steps(chain));
+    app.playhead.checked_div(total).unwrap_or(0) * total
+}
+
+/// Whether a row's place is where playback is now.
+fn section_playing(app: &App, section_step: usize) -> bool {
+    (app.transport == Transport::Playing || app.transport == Transport::Paused)
+        && section_step == app.playhead
 }
 
 /// How far a row is from the cursor's, as the count to type before `j` or `k`, so it is decimal.
@@ -141,6 +146,12 @@ fn relative_number(index: usize, cursor: usize) -> String {
         // Long phrases can reach three digits, which then use up the gap.
         distance => format!("{:<3}", format!("{distance:>2}")),
     }
+}
+
+/// A row's number. Row `00` is the loop's first step, and rows above it are negative.
+fn row_number(row: isize) -> String {
+    let sign = if row < 0 { '-' } else { ' ' };
+    format!("{sign}{:02X}", row.unsigned_abs())
 }
 
 fn track_label(app: &App, track: usize) -> String {
@@ -173,7 +184,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
     let others = neighbours(app, room);
-    let first_step = app.section_step() - app.cursor.step;
+    let extent = phrase.extent();
+    let slot_start = app.slot_start();
+    let pass = pass_start(app);
+    let reset = app.song().sections.first().and_then(|s| s.reset);
     let id = app.phrase_id().unwrap_or(0);
     let shared = if app.phrase_uses(id).len() > 1 {
         "*"
@@ -211,24 +225,30 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     for (index, step) in phrase.steps().iter().enumerate().skip(top).take(height) {
         let text = step_text(step);
         let marker = if playhead == Some(index) { ">" } else { " " };
-        let number = if index % BEAT_STEPS == 0 {
-            Style::new().fg(theme::YELLOW)
-        } else {
-            Style::new().fg(theme::SUBTEXT1)
+        let row = extent.row(index);
+        let plays = extent.plays(index);
+        let on_beat = row.rem_euclid(BEAT_STEPS as isize) == 0;
+        let number = match (plays, on_beat) {
+            (true, true) => Style::new().fg(theme::YELLOW),
+            (true, false) => Style::new().fg(theme::SUBTEXT1),
+            (false, true) => theme::dim(),
+            (false, false) => theme::faint(),
         };
         let mut spans = vec![
             Span::styled(relative_number(index, app.cursor.step), theme::faint()),
-            Span::styled(format!("{index:02X}"), number),
+            Span::styled(row_number(row), number),
             Span::styled(format!(" {marker}"), theme::active()),
             Span::styled(side, edge),
         ];
         let body = if playhead == Some(index) {
             theme::active()
-        } else {
+        } else if plays {
             Style::new()
+        } else {
+            theme::faint()
         };
         let mut styles = vec![body; text.len()];
-        if step.instrument.is_some_and(|id| app.song().is_labelled(id)) {
+        if plays && step.instrument.is_some_and(|id| app.song().is_labelled(id)) {
             let (start, end) = field_range(step, Field::Instrument);
             let label = body.patch(theme::label());
             styles[start..end.min(text.len())].fill(label);
@@ -255,13 +275,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
         for track in &others {
-            let style = if neighbour_playing(app, *track, first_step + index) {
+            // Only the loop has a place in the song, so other tracks have nothing beside the rest.
+            if !plays {
+                spans.push(Span::raw(" ".repeat(NEIGHBOUR_WIDTH)));
+                continue;
+            }
+            // A reset can come before this pass finishes.
+            let place = pass + slot_start + (index - extent.start);
+            let section_step = reset.map_or(place, |reset| place.checked_rem(reset).unwrap_or(0));
+            let style = if section_playing(app, section_step) {
                 theme::active()
             } else {
                 theme::dim()
             };
             spans.push(Span::styled(
-                format!("{} ", neighbour_note(app, *track, first_step + index)),
+                format!("{} ", neighbour_note(app, *track, section_step)),
                 style,
             ));
         }

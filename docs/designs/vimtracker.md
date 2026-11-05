@@ -253,8 +253,10 @@ Song
 *   **Reuse.** Chains refer to phrases by ID. A shared phrase displays a marker, and an edit changes
     every use. Clone creates a new ID, using the lowest unused number.
 *   **One voice per track.** A new note on a track replaces the note already playing.
-*   **Sections before G1.** A project has one section. Shorter chains loop until the longest chain
-    ends, then all tracks restart together.
+*   **Sections before G1.** A project has one section. Each chain loops at its own length for as long
+    as the song plays, so unequal lengths drift, like Elektron's master length at `INF`. `:reset n`
+    sends every track back to its start every `n` steps, and is off by default. The tracks' place is
+    counted apart from the step clock, so a reset doesn't move the beat.
 
 ### Passing edits to audio
 
@@ -274,7 +276,7 @@ for `MAX_TRACKS` made ahead of time.
 them when a new version arrives:
 
 *   If the phrase got shorter, the position wraps to fit.
-*   If an ID no longer exists, which undo can cause, the track is silent until the section restarts.
+*   If an ID no longer exists, which undo can cause, the track is silent until it's restored.
 *   If the track no longer exists, its voice stops with a short fade. Before G1, only the last track
     can be removed, so positions stay stable.
 
@@ -313,9 +315,9 @@ sample = floor(tick x 60 x rate x 1000 / (960 x millibpm))     using 128-bit int
 **Swing** uses the MPC scale of 50-75%, which is the share of time given to the first of each pair of
 sixteenths. 66.7% is triplet feel. Project swing applies to all tracks, and a track can have its own
 value instead, as on the M8, where a track uses one groove. Nothing combines. Odd-numbered steps counted
-from the section start are delayed by `round(480 x swing% / 100 - 240)` ticks, and the step's FX move
-with its note. Because pairs count from the section start, a short looping phrase swings different steps
-on each pass.
+from the start or the last reset are delayed by `round(480 x swing% / 100 - 240)` ticks, and the step's FX move
+with its note. Because pairs don't count from a track's own loop, an odd-length phrase swings different steps
+on each pass and stays on the same grid as everything else.
 
 Whole-tick arithmetic holds for straight rows at normal speed. Track speeds and M8-style grooves are
 after G1.
@@ -368,11 +370,20 @@ Actions are plain data, so `.` can replay them and tests can run editing without
     count is the amount, on the cursor or selection.
 *   **Values.** `>` and `<` move notes by a semitone and other values by 1. They skip empty fields, `OFF`, FX
     names and instrument IDs.
-*   **Registers and paste.** `d` and `y` also fill the unnamed register. `p` overwrites from the cursor and clips
-    at the phrase end. Empty copied fields overwrite too. A column type mismatch is refused with a message.
+*   **Registers and paste.** `d` and `y` also fill the unnamed register, and only `y` fills `0`. `p` overwrites from
+    the cursor and stores more past the last step, leaving the loop alone. Empty copied fields overwrite too, while `gm` leaves what is there alone.
+    A column type mismatch is refused with a message.
 *   **Edges and repeat.** Motions stop at the edge. `.` repeats operators, value changes and shapes, in Normal or
     Visual. It does not repeat Insert sessions.
-*   **Doubling.** `Space pd` doubles a phrase by repeating its visible steps, as one undo step.
+*   **Doubling.** `Space pd` doubles a phrase's loop by repeating it, as one undo step. Steps after the loop move
+    down rather than being overwritten.
+*   **The loop.** A phrase stores more steps than it plays, like a clip: a loop with a start and a length, saved with
+    everything outside it. Chains only see the loop, so moving it needs nothing from them. Rows on screen count from the
+    loop's start, so `00` is always beat 1, beats stay at multiples of 4, and rows above it are negative. There is no
+    separate play marker as in Ableton: the loop's start is the 1. Internally the cursor and edits use stored positions,
+    and only the view, the beat motions and `chain_position` convert. `]l` `[l` and `]L` `[L` slide it, keeping its
+    length, and `gs` starts it on the cursor. Slides work during playback and stay in time, since position comes from
+    the section's step count. Length changes are refused until stopped, as a new length moves where playback lands.
 *   **Moving through the tree.** `gd` opens the item under the cursor, and on an empty reference it creates the
     next unused ID, assigns it and opens it. `Ctrl-O` jumps back, `Tab` jumps forward, and `grr` lists uses in the
     picker window.
@@ -383,7 +394,9 @@ Actions are plain data, so `.` can replay them and tests can run editing without
 *   **Undo.** Undo history is a list of song versions, and undo publishes an older one. It drops the oldest version
     past `HISTORY_LIMIT`. One Insert session and one Shape session are each one undo step.
 *   **Views.** Before G1: phrase, chain and instrument, and a help view. The phrase view shows the focused track's
-    full steps beside read-only note columns for the other tracks, aligned by step.
+    full steps beside read-only note columns for the other tracks, aligned by step. Each row shows what plays beside
+    it on the selected track's current pass, so a longer track's column changes as the selected track loops, and only
+    the row playback is on is lit.
 *   **Fallback rule.** If a behaviour is not specified and does not affect what G1 tests, follow Vim, or else choose
     the simplest option and record it in the issue.
 
@@ -547,7 +560,7 @@ The G1 outcome decides what happens next. **Continue** works through this list i
 1.  **Tables.** Per-note tables with their own speed, independent column rates, and aux tables, modelled on the M8. The author wants cycles that drift across notes, such as a 5-step table cycle against a 16-step phrase, which the M8's `TIC00` per-note mode allows. Open questions: how transpose and volume columns get a rate and loop point, end-of-table behaviour, when a cycle's position resets, a command that tests whether a note is held (a community M8 tutorial says tables cannot detect note-off, and the manual documents no such test), FX addressing such as `HOP` beyond row `F` and IDs above `FF`, table `00` as an aux table, and a safe rule for zero-time `HOP` loops. First command candidates: `HOP`, `THO`, `TIC`, `TBL`, `TBX`, `RND`, `REP`, `IFC`.
 2.  **Sample slicing and waveform view.** Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
 3.  **Score view.** Full multi-track editing, column folding (`za zc zo zM zR`), and selections across tracks.
-4.  **Song view and looping.** Song view and section navigation. Unequal looping with the author's decision: each section has a length, tracks loop until it ends, and a section either **resets** tracks or **carries** their positions on, like Elektron's `RESET` at `INF`. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
+4.  **Song view and looping.** Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
 5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
 6.  **Smaller items.** Chasing held values on play, scales and `:set scale`, a fine-timing nudge command, keyframes in sweeps, track groups, macros, marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
 
@@ -586,6 +599,7 @@ These apply to every issue. Change them by updating this document.
 | `TICKS_PER_STEP` | 240 | Clock ticks per step, at 960 per quarter note |
 | `GROOVE_UNIT_TICKS` | 40 | One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step |
 | `DEFAULT_PHRASE_STEPS` | 16 | Steps in a new phrase |
+| `MAX_PHRASE_STEPS` | 4096 | The most steps a phrase keeps, so a big count can't use up memory |
 | `BEAT_STEPS` | 4 | Steps per beat, for `ib` and `{ }` |
 | `FX_SLOTS` | 3 | FX slots per step |
 | `DEFAULT_BPM` | 120.000 | New project tempo |
@@ -636,12 +650,14 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `d y > <` + motion or target | Clear, copy, or shift values |
 | Normal | `dd yy >> <<` | Apply to the current step |
 | Normal | `x` | Clear the current field |
-| Normal | `p` | Paste over from the cursor |
+| Normal | `p`, `3p` | Paste over from the cursor, some number of times end to end |
+| Normal | `gp` | Paste over, and land just after it |
+| Normal | `gm` | Merge paste: empty cells in the copy leave what is there alone |
 | Normal | `K` | On the Instrument column, choose this step's instrument from those that exist, labels first |
 | Normal | `;` | Audition: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
 | Normal | `s` | Clear this field and start Insert there, as in Vim. An FX value keeps its command for the value typed next. `.` doesn't repeat it |
 | Normal | `r` | Replace this field as in Vim, with no move, and return to Normal. A note takes one note key and keeps its velocity and instrument. Other columns take a whole value, and an FX command goes on to its value. `.` repeats it |
-| Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z` |
+| Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z`. `"0` holds the last `y`, which a cut can't replace |
 | Normal | `+`, `-` | Increase or decrease the value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
 | Normal | `gd`, `Ctrl-O`, `Tab`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |
@@ -707,13 +723,14 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:bpm n` | Tempo, in thousandths: `:bpm 137.63` |
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
 | `:tvol xx` | This track's level in hex |
+| `:reset n`, `:reset off` | Send every track to its start every `n` steps, or let them run. Off by default |
 | `:kit [name or path]` | Fill instruments from `00` with the sounds a kit file lists, in order, as one undo step. A labelled sound goes in its label's slot and others fill upward from `00`, and replacing a different sample is reported. With no argument, choose from `samples/kits` |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |
 | `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
-| `:len n` | Phrase length. Shortening hides steps, which come back if lengthened in the session and are dropped on save |
-| `:double` | Double the current phrase |
+| `:len n` | How many steps the loop plays, while stopped. Steps outside it are kept and saved |
+| `:double` | Double the loop, while stopped |
 | `:gen apply` | Apply the live generator under the cursor |
 | `:render path [--rows n] [--tail]` | Render to WAV |
 
@@ -811,7 +828,7 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 *   **Issue 2: Key probe.** Add `probe.rs`. Print each key event with no keyboard flags pushed. `Ctrl-C` exits and restores the terminal. **Done when:** the author records in `docs/terminal-notes.md`, with and without tmux, whether `Ctrl-A`, `Ctrl-X`, `Ctrl-O`, `Ctrl-R`, `Ctrl-N`, `Ctrl-P`, `Ctrl-D`, `Ctrl-U`, `Ctrl-E`, `Ctrl-Y` and `Tab` arrive, plus `Esc` latency. Any key that does not arrive gets a replacement recorded there and in the key table.
 *   **Issue 3: Model and step text.** Add `constants.rs`, `step.rs`, `song.rs` and `steptext.rs`. Each `Song` map uses `BTreeMap<u32, Arc<T>>`. **Tests:** every field form round-trips; invalid notes, widths and unknown commands give errors.
 *   **Issue 4: Project files.** Add `project.rs`, `sample.rs` and `samples.rs`. **Tests:** a song round-trips; a file with a changed field and a different version gives an error naming both versions; 16-bit mono and 24-bit stereo WAVs load at a requested rate; a missing sample is an error naming the path and the rest loads; a save failure leaves the previous file intact. WAV fixtures are generated inside tests.
-*   **Issue 5: Engine and render.** Add `engine.rs`, `playhead.rs`, `track_state.rs`, `voice.rs`, `mixer.rs` and `render.rs`, with no FX commands yet. **Tests:** a note starts on its exact sample at 44100 Hz and 48000 Hz, including at a fractional tempo; a new note fades the old one; two renders match by hash; a section with 8-step and 16-step chains restarts together; replacing a sample does not move a playing voice; reads stop at a sample's end.
+*   **Issue 5: Engine and render.** Add `engine.rs`, `playhead.rs`, `track_state.rs`, `voice.rs`, `mixer.rs` and `render.rs`, with no FX commands yet. **Tests:** a note starts on its exact sample at 44100 Hz and 48000 Hz, including at a fractional tempo; a new note fades the old one; two renders match by hash; a 7-step chain keeps looping past a 16-step one, and a reset brings them together; replacing a sample does not move a playing voice; reads stop at a sample's end.
 *   **Issue 6: Publishing.** Add `link.rs` and `rt_guard.rs`. **Tests:** no allocations or frees in `process` across 1,000 rapid publishes, track count changes and phrase removal; the playhead rules in the Technical Plan hold; the core engine tests run at 1, 8 and 64 tracks; two `Toggle`s return to the original state.
 *   **Issue 7: Actions and history.** Add `action.rs` and `history.rs`, with only the note and instrument actions Issue 8 needs. **Tests:** `u` and `Ctrl-R` restore exact versions; unchanged phrases stay the same `Arc`; the oldest version drops past `HISTORY_LIMIT`.
 *   **Issue 8: Minimal program.** Add `app.rs`, `audio.rs`, `input/mode.rs`, `input/keys.rs`, `input/bindings.rs`, `input/command.rs`, `views/phrase.rs` and `views/status.rs`. Support the leader, `h j k l`, Insert note entry with the preview voice, `Enter`, `Space x`, `Space c`, `Space qq`, `:new`, `:sample`, `:inst`, `:bpm`, `:len`, `:w`, `:e`, `:q` and `:q!`. **Tests:** a duplicate binding fails; a preview during playback leaves rendered track notes unchanged. **Done when:** the author can write a loop and hear it, and an edit during playback is heard on the next pass.

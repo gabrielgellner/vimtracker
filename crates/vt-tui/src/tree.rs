@@ -126,8 +126,7 @@ impl App {
         }
         self.view = View::Phrase;
         self.note_view(View::Phrase);
-        self.cursor.step = 0;
-        self.top = 0;
+        self.go_to_loop_start();
         self.say_if_shared();
     }
 
@@ -255,17 +254,15 @@ impl App {
         self.record_jump();
         self.cursor.track = track;
         self.cursor.slot = slot;
-        self.cursor.step = 0;
-        self.top = 0;
         self.view = View::Phrase;
         self.note_view(View::Phrase);
+        self.go_to_loop_start();
         self.clamp_cursor();
     }
 
     fn move_slot(&mut self, to: usize) {
         self.cursor.slot = to;
-        self.cursor.step = 0;
-        self.top = 0;
+        self.go_to_loop_start();
         self.clamp_cursor();
     }
 

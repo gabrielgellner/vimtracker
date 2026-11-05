@@ -49,8 +49,11 @@ pub struct Engine {
     tracks: Box<[TrackState; MAX_TRACKS]>,
     preview: Voice,
     transport: Transport,
-    /// The next step to fire, counted from the section start without wrapping.
+    /// The next step to fire, for timing. It never wraps.
     next_step: u64,
+    /// Where the next step falls for the tracks, which each loop at their own length. Separate from
+    /// `next_step` so a reset moves the tracks but not the beat.
+    place: u64,
     /// The tick the tempo began at.
     origin_tick: u64,
     /// Frames played since `origin_tick`.
@@ -78,6 +81,7 @@ impl Engine {
             preview: Voice::default(),
             transport: Transport::Stopped,
             next_step: 0,
+            place: 0,
             origin_tick: 0,
             frames_since_origin: 0,
             clock: 0,
@@ -116,14 +120,29 @@ impl Engine {
         &self.current
     }
 
-    /// The last step fired, within the section, or the next to fire if none has yet.
+    /// The place last fired, or the next to fire if none has yet.
     pub fn position(&self) -> usize {
-        let length = self.section_steps();
-        if length == 0 {
+        if self.section_steps() == 0 {
             return 0;
         }
         let fired = self.transport == Transport::Playing && self.frames_since_origin > 0;
-        (self.next_step.saturating_sub(u64::from(fired)) % length as u64) as usize
+        let place = self.place.saturating_sub(u64::from(fired));
+        if self.past_reset(place) {
+            0
+        } else {
+            place as usize
+        }
+    }
+
+    /// Whether a place is one the section's reset would already have sent back to the start.
+    fn past_reset(&self, place: u64) -> bool {
+        let reset = self.current.song.sections.first().and_then(|s| s.reset);
+        reset.is_some_and(|reset| place >= reset as u64)
+    }
+
+    /// Send every track back to its start from the next step, leaving the beat where it is.
+    pub fn realign(&mut self) {
+        self.place = 0;
     }
 
     fn section_steps(&self) -> usize {
@@ -175,6 +194,7 @@ impl Engine {
             self.reset_tracks();
         }
         self.next_step = step as u64;
+        self.place = step as u64;
         self.origin_tick = step as u64 * TICKS_PER_STEP;
         self.frames_since_origin = 0;
         self.millibpm = self.current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
@@ -194,6 +214,7 @@ impl Engine {
     pub fn return_to_start(&mut self) {
         self.halt(Transport::Stopped);
         self.next_step = 0;
+        self.place = 0;
         self.origin_tick = 0;
         self.frames_since_origin = 0;
         self.reset_tracks();
@@ -291,6 +312,7 @@ impl Engine {
             if playing && self.frames_until_next_step() == 0 {
                 self.fire_step();
                 self.next_step += 1;
+                self.place += 1;
                 continue;
             }
             if playing {
@@ -419,11 +441,13 @@ impl Engine {
 
     /// Fire every track for the next step.
     fn fire_step(&mut self) {
-        let length = self.section_steps();
-        if length == 0 {
+        if self.section_steps() == 0 {
             return;
         }
-        let section_step = (self.next_step % length as u64) as usize;
+        if self.past_reset(self.place) {
+            self.place = 0;
+        }
+        let section_step = self.place as usize;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
             // A big tempo jump can bring this step before the last one's swing delay ended.
@@ -439,7 +463,8 @@ impl Engine {
         }
     }
 
-    /// How long a track's step waits for swing. Pairs count from the section start.
+    /// How long a track's step waits for swing. Pairs count from the start or the last reset, not
+    /// from each track's own loop, so an odd length stays on the same grid as everything else.
     fn swing_frames(&self, index: usize, section_step: usize) -> u64 {
         if section_step.is_multiple_of(2) {
             return 0;

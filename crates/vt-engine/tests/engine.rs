@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use vt_engine::engine::{Engine, Transport, sample_of_tick};
 use vt_engine::published::Published;
-use vt_engine::render::render_frames;
+use vt_engine::render::{RenderOptions, render_frames, render_loop};
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -155,9 +155,8 @@ fn a_new_note_fades_the_old_one() {
     assert!(biggest < drop / 3.0, "jumped {biggest} of {drop}");
 }
 
-#[test]
-fn shorter_chains_loop_and_all_restart_with_the_section() {
-    // Track 0 has 16 steps. Track 1 has 7, so without a restart it would fire at 14 then 21.
+/// Track 0 has 16 steps, with no notes. Track 1 has 7, with a note on its first.
+fn sixteen_and_seven() -> Song {
     let mut song = song_with_notes(2, &[]);
     let seven = Phrase::from_steps(
         (0..7)
@@ -176,12 +175,99 @@ fn shorter_chains_loop_and_all_restart_with_the_section() {
     );
     song.phrases.insert(1, Arc::new(seven));
     assert_eq!(song.section_steps(&song.sections[0]), 16);
-    // A very short sample, so each firing shows up separately.
+    song
+}
+
+/// Which of the first steps a very short sample sounds on, 6000 frames apart.
+fn fired_steps(out: &[f32], steps: usize) -> Vec<usize> {
+    (0..steps).filter(|s| out[s * 6000 * 2] != 0.0).collect()
+}
+
+#[test]
+fn tracks_loop_at_their_own_lengths_past_the_longest() {
     let samples = pool(&[("flat", flat(10, 1.0))]);
-    let step = 6000;
-    let out = render_frames(version(song, samples), 48_000, step * 24);
-    let fired: Vec<usize> = (0..24).filter(|s| out[s * step * 2] != 0.0).collect();
-    assert_eq!(fired, [0, 7, 14, 16, 23]);
+    let out = render_frames(version(sixteen_and_seven(), samples), 48_000, 6000 * 30);
+    assert_eq!(fired_steps(&out, 30), [0, 7, 14, 21, 28]);
+}
+
+#[test]
+fn a_reset_sends_every_track_back_to_its_start() {
+    let mut song = sixteen_and_seven();
+    song.sections[0].reset = Some(16);
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let out = render_frames(version(song, samples), 48_000, 6000 * 24);
+    assert_eq!(fired_steps(&out, 24), [0, 7, 14, 16, 23]);
+}
+
+#[test]
+fn a_reset_can_be_shorter_than_a_track() {
+    let mut song = sixteen_and_seven();
+    song.sections[0].reset = Some(4);
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let out = render_frames(version(song, samples), 48_000, 6000 * 10);
+    assert_eq!(fired_steps(&out, 10), [0, 4, 8]);
+}
+
+#[test]
+fn changing_the_reset_live_keeps_the_beat_and_turning_it_off_keeps_the_place() {
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let mut song = sixteen_and_seven();
+    let free = version(song.clone(), Arc::clone(&samples));
+    song.sections[0].reset = Some(4);
+    let reset = version(song, samples);
+    let mut engine = Engine::new(48_000, free);
+    engine.play_from(0);
+    let mut out = vec![0.0; 6000 * 10 * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.position(), 9);
+
+    // On with the tracks past it: they go back on the next step, and that step is on time.
+    engine.swap(Arc::clone(&reset));
+    assert_eq!(engine.position(), 0);
+    let mut out = vec![0.0; 6000 * 3 * 2];
+    engine.process(&mut out);
+    assert_ne!(out[0], 0.0, "the note fires exactly where step 10 was due");
+    assert_eq!(engine.position(), 2);
+
+    // Off: the tracks carry on from where they are.
+    let mut off = (*reset.song).clone();
+    off.sections[0].reset = None;
+    engine.swap(version(off, Arc::clone(&reset.samples)));
+    assert_eq!(engine.position(), 2);
+}
+
+#[test]
+fn swing_stays_on_the_grid_across_an_odd_length() {
+    let mut song = song_with_notes(1, &[0]);
+    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).set_len(3);
+    song.swing = 750;
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let out = render_frames(version(song, samples), 48_000, 6000 * 8);
+    // Step 3 is an odd step of the song, though it's the first of the track's second pass.
+    assert_eq!(out[6000 * 3 * 2], 0.0);
+    assert_ne!(out[(6000 * 3 + 3000) * 2], 0.0);
+    assert_ne!(out[6000 * 6 * 2], 0.0);
+}
+
+#[test]
+fn a_render_captures_every_track_from_its_start() {
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let options = RenderOptions {
+        rows: Some(24),
+        tail: false,
+    };
+    let out = render_loop(version(sixteen_and_seven(), samples), 48_000, options);
+    assert_eq!(fired_steps(&out, 24), [0, 7, 14, 21]);
+}
+
+#[test]
+fn a_render_is_as_long_as_the_reset() {
+    let mut song = sixteen_and_seven();
+    song.sections[0].reset = Some(8);
+    let samples = pool(&[("flat", flat(10, 1.0))]);
+    let out = render_loop(version(song, samples), 48_000, RenderOptions::default());
+    assert_eq!(out.len(), 6000 * 8 * 2);
+    assert_eq!(fired_steps(&out, 8), [0, 7]);
 }
 
 #[test]
@@ -251,6 +337,39 @@ fn a_tempo_change_keeps_the_next_step_in_time() {
     let mut rest = vec![0.0; 2 * 3000];
     engine.process(&mut rest);
     assert_eq!(first_sound(&rest, 0), Some(1500));
+}
+
+#[test]
+fn only_the_loop_plays() {
+    let mut song = song_with_notes(1, &[8]);
+    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    phrase.set_len(4);
+    let samples = pool(&[("flat", flat(SECOND, 1.0))]);
+    let silent = render_frames(version(song.clone(), Arc::clone(&samples)), 48_000, SECOND);
+    assert_eq!(first_sound(&silent, 0), None, "the note is past the loop");
+    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    phrase.slide(8);
+    let out = render_frames(version(song, samples), 48_000, SECOND);
+    assert_eq!(first_sound(&out, 0), Some(0), "its step is now beat 1");
+}
+
+#[test]
+fn a_live_slide_keeps_the_beat() {
+    let mut song = song_with_notes(1, &[10]);
+    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).set_len(4);
+    let samples = pool(&[("flat", flat(SECOND, 1.0))]);
+    let mut engine = Engine::new(48_000, version(song.clone(), Arc::clone(&samples)));
+    engine.play_from(0);
+    // Half way through the first step at 6000 frames a step.
+    let mut out = vec![0.0; 2 * 3000];
+    engine.process(&mut out);
+    assert_eq!(first_sound(&out, 0), None);
+    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).slide(8);
+    engine.swap(version(song, samples));
+    let mut rest = vec![0.0; 2 * 12_000];
+    engine.process(&mut rest);
+    // The note is now on row 02, which plays at frame 12000, the same place in the bar as ever.
+    assert_eq!(first_sound(&rest, 0), Some(9000));
 }
 
 #[test]

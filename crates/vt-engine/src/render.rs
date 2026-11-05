@@ -17,7 +17,7 @@ const SILENT_SECONDS: f32 = 0.25;
 /// What to capture.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderOptions {
-    /// The length in steps, or the section's length if not set.
+    /// The length in steps. If not set, the section's reset, or else its longest chain.
     pub rows: Option<usize>,
     /// Let sound ring out after the last step, ending at silence.
     pub tail: bool,
@@ -32,15 +32,20 @@ pub fn render_frames(version: Arc<Published>, rate: u32, frames: usize) -> Vec<f
     out
 }
 
-/// Render a loop: one silent pass fills delay and reverb, then the next pass is captured from the
-/// top, so the file is exactly the loop's length and its start hears its own end.
+/// Render a loop: one silent pass fills delay and reverb, then every track goes back to its start
+/// and the next pass is captured, so the file is exactly the loop's length and its start hears its
+/// own end. Tracks whose lengths don't divide the file's won't join up when it repeats.
 pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -> Vec<f32> {
     let song = Arc::clone(&version.song);
     let millibpm = song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
-    let section = song.sections.first().map_or(0, |s| song.section_steps(s));
-    if section == 0 {
+    let Some(section) = song.sections.first() else {
+        return Vec::new();
+    };
+    let longest = song.section_steps(section);
+    if longest == 0 {
         return Vec::new();
     }
+    let section = section.reset.unwrap_or(longest);
     let at_step =
         |step: usize| sample_of_tick(step as u64 * TICKS_PER_STEP, rate, millibpm) as usize;
     let warm = at_step(section);
@@ -54,6 +59,7 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
     engine.play_from(0);
     let mut discard = vec![0.0; warm * 2];
     engine.process(&mut discard);
+    engine.realign();
     let mut out = vec![0.0; length * 2];
     engine.process(&mut out);
     if options.tail {

@@ -14,6 +14,8 @@ pub const TICKS_PER_QUARTER: u64 = 960;
 pub const GROOVE_UNIT_TICKS: u64 = 40;
 /// Steps in a new phrase.
 pub const DEFAULT_PHRASE_STEPS: usize = 16;
+/// The most steps a phrase keeps, so a big count on a paste or a slide can't use up memory.
+pub const MAX_PHRASE_STEPS: usize = 4096;
 /// Steps per beat, for `ib` and `{ }`.
 pub const BEAT_STEPS: usize = 4;
 /// FX slots per step.

@@ -45,8 +45,12 @@ Move to grow the selection. The cursor shows which end is moving. Then press
 | `s` | Clear this field and start Insert there, as in Vim |
 | `+` `-` | Change the value up or down. `C-a` and `C-x` do the same |
 | `.` | Repeat the last change |
-| `p` | Paste over, from the cursor down |
+| `p` | Paste over, from the cursor down. Past the end it stores more |
+| `3p` | Paste 3 times, end to end, as one undo |
+| `gp` | Paste over, and land just after it, ready for the next |
+| `gm` | Merge: empty cells in the copy leave what is there alone |
 | `"a` | Use register `a`, before `y`, `d` or `p`. `a` to `z` all work |
+| `"0` | The last thing you copied with `y`, which a cut can't replace |
 | `u` `C-r` | Undo and redo |
 
 `r` then `k` changes a note to high C. On other columns it takes a whole value:
@@ -59,9 +63,33 @@ waits.
 after each entry. On an FX value it keeps the command, so `s60` on `CUT40`
 makes `CUT60`.
 
-## Phrase length
+## The loop
 
-| Command | Does |
+A phrase can store more than it plays, like a clip. The loop is the part
+that plays, and everything else stays dim and silent until you move the loop
+over it. You can still edit, copy and paste out there.
+
+Rows count from the start of the loop. `00` is always beat 1, and rows above
+it are negative, so yellow beats are always `00`, `04`, `08`.
+
+| Keys | Does |
 |---|---|
-| `:len 32` | Set the phrase length |
-| `:double` or `Space pd` | Repeat the phrase so it is twice as long |
+| `]l` `[l` | Slide the loop a step later or earlier |
+| `]L` `[L` | Slide it a beat later or earlier. Counts work: `4]L` |
+| `gs` | Start the loop on the cursor's step |
+| `:len 32` | Set how many steps the loop plays |
+| `:double` or `Space pd` | Repeat the loop so it is twice as long |
+
+Sliding works while playing, and stays in time. `00` stays where it is and
+the notes move under it. Sliding past either end adds empty steps.
+
+Length changes wait until you stop, since a new length moves where playback
+lands. The loop is saved with the phrase, along with what is outside it.
+
+A phrase used in two places shares one loop. Copy it with `gc` to give one
+place its own.
+
+`gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
+`j` and `k` carry on past its edges. `Enter` on a dim row plays from `00`, and
+`;` there plays just that row's note.
+

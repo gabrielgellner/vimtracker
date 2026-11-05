@@ -4,12 +4,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
+use ratatui::style::Color;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
-use vt_model::song::Song;
-use vt_model::step::Note;
+use vt_model::song::{Phrase, Song};
+use vt_model::step::{Note, Step};
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
@@ -208,8 +209,9 @@ fn commands_change_tempo_and_length() {
         press(&mut app, "j");
     }
     command(&mut app, "len 4");
-    assert_eq!(notes(&app).len(), 4);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.song().phrases[&0].len(), 4);
+    assert_eq!(notes(&app).len(), 16, "the rest is kept");
+    assert_eq!(app.cursor.step, 10, "and the cursor can stay on it");
     command(&mut app, "inst 1A");
     assert_eq!(app.instrument, 0x1A);
 }
@@ -900,11 +902,11 @@ fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
     press(&mut app, "Vj");
     let buffer = screen(&app);
     // Past the step number and playhead gutter, on the row the selection started from.
-    let selected = &buffer[(9, 2)];
+    let selected = &buffer[(10, 2)];
     assert_eq!(selected.bg, vt_tui::theme::SURFACE1);
     assert_eq!(selected.fg, vt_tui::theme::TEXT);
     assert_ne!(selected.symbol(), " ");
-    let cursor = &buffer[(8, 3)];
+    let cursor = &buffer[(9, 3)];
     assert_eq!(cursor.bg, vt_tui::theme::ROSEWATER);
     assert_eq!(cursor.fg, vt_tui::theme::BASE);
 }
@@ -1105,16 +1107,16 @@ fn each_row_shows_how_far_it_is_from_the_cursor() {
     let (mut app, _realtime) = app();
     press(&mut app, "5j");
     let buffer = screen(&app);
-    let row = |step: u16| -> String { (0..8).map(|x| buffer[(x, step + 2)].symbol()).collect() };
-    assert_eq!(row(0), " 5 00   ");
-    assert_eq!(row(4), " 1 04   ");
-    assert_eq!(row(5), "   05   ", "the cursor's row is blank");
-    assert_eq!(row(6), " 1 06   ");
+    let row = |step: u16| -> String { (0..9).map(|x| buffer[(x, step + 2)].symbol()).collect() };
+    assert_eq!(row(0), " 5  00   ");
+    assert_eq!(row(4), " 1  04   ");
+    assert_eq!(row(5), "    05   ", "the cursor's row is blank");
+    assert_eq!(row(6), " 1  06   ");
     // Decimal, to match the count typed, beside a step number in hex.
-    assert_eq!(row(15), "10 0F   ");
+    assert_eq!(row(15), "10  0F   ");
     assert_eq!(buffer[(1, 2)].fg, vt_tui::theme::OVERLAY0);
-    assert_eq!(buffer[(3, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
-    assert_eq!(buffer[(3, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
+    assert_eq!(buffer[(4, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
+    assert_eq!(buffer[(4, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
 }
 
 #[test]
@@ -1132,7 +1134,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(37, row + 2)].fg
+        buffer[(38, row + 2)].fg
     };
     app.playhead = 2;
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
@@ -1270,31 +1272,31 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
     };
 
     let normal = screen(&app);
-    assert_eq!(normal[(8, 2)].bg, vt_tui::theme::ROSEWATER);
-    assert_eq!(normal[(7, 1)].symbol(), " ");
-    assert_eq!(normal[(7, 2)].symbol(), " ");
+    assert_eq!(normal[(9, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(normal[(8, 1)].symbol(), " ");
+    assert_eq!(normal[(8, 2)].symbol(), " ");
 
     press(&mut app, "i");
     let insert = screen(&app);
-    assert_eq!(insert[(8, 2)].bg, vt_tui::theme::GREEN);
-    assert_eq!(insert[(8, 2)].fg, vt_tui::theme::BASE);
-    assert_eq!(insert[(7, 1)].symbol(), "┌");
-    assert_eq!(insert[(7, 2)].symbol(), "│");
-    assert_eq!(insert[(7, 18)].symbol(), "└");
-    assert_eq!(insert[(7, 2)].fg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(9, 2)].bg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(9, 2)].fg, vt_tui::theme::BASE);
+    assert_eq!(insert[(8, 1)].symbol(), "┌");
+    assert_eq!(insert[(8, 2)].symbol(), "│");
+    assert_eq!(insert[(8, 18)].symbol(), "└");
+    assert_eq!(insert[(8, 2)].fg, vt_tui::theme::GREEN);
 
     // Take away the box, and the steps are where they were.
     assert_eq!(
         row(&normal, 2).replace(' ', ""),
         row(&insert, 2).replace(['│', ' '], "")
     );
-    let step_text_start = |b: &ratatui::buffer::Buffer| b[(11, 2)].symbol().to_owned();
+    let step_text_start = |b: &ratatui::buffer::Buffer| b[(12, 2)].symbol().to_owned();
     assert_eq!(step_text_start(&normal), step_text_start(&insert));
 
     special(&mut app, KeyCode::Esc);
     let back = screen(&app);
-    assert_eq!(back[(7, 1)].symbol(), " ");
-    assert_eq!(back[(8, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(back[(8, 1)].symbol(), " ");
+    assert_eq!(back[(9, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
 #[test]
@@ -1909,13 +1911,13 @@ fn labels_read_differently_in_the_phrase_even_when_they_are_hex() {
     let cell = |x: u16, y: u16| (buffer[(x, y)].symbol().to_owned(), buffer[(x, y)].fg);
     let peach = vt_tui::theme::PEACH;
     // Steps start at row 2, and the instrument is 7 characters into a step's text.
-    assert_eq!(cell(15, 2), ("B".to_owned(), peach));
-    assert_eq!(cell(16, 2), ("D".to_owned(), peach));
-    assert_eq!(cell(15, 3), ("C".to_owned(), peach));
-    assert_eq!(cell(16, 3), ("H".to_owned(), peach));
+    assert_eq!(cell(16, 2), ("B".to_owned(), peach));
+    assert_eq!(cell(17, 2), ("D".to_owned(), peach));
+    assert_eq!(cell(16, 3), ("C".to_owned(), peach));
+    assert_eq!(cell(17, 3), ("H".to_owned(), peach));
     // BC is the same kind of name, but nothing labelled that slot.
-    assert_eq!(buffer[(15, 4)].symbol(), "B");
-    assert_ne!(buffer[(15, 4)].fg, peach);
+    assert_eq!(buffer[(16, 4)].symbol(), "B");
+    assert_ne!(buffer[(16, 4)].fg, peach);
 }
 
 #[test]
@@ -1938,11 +1940,11 @@ fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
     press(&mut app, "r");
     assert_eq!(app.mode, Mode::Replace);
     let buffer = screen(&app);
-    assert_eq!(buffer[(8, 2)].bg, vt_tui::theme::RED);
-    assert_eq!(buffer[(7, 2)].symbol(), " ");
+    assert_eq!(buffer[(9, 2)].bg, vt_tui::theme::RED);
+    assert_eq!(buffer[(8, 2)].symbol(), " ");
     press(&mut app, "a");
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(screen(&app)[(8, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
 #[test]
@@ -1978,4 +1980,225 @@ fn the_note_heard_while_typing_uses_the_velocity() {
     press(&mut app, "vvvvvvvv");
     let full = heard(&mut app, &mut rt, "a");
     assert!(soft * 2.0 < full, "{soft} vs {full}");
+}
+
+/// A row of the phrase view as text, up to the end of its number.
+fn row_number_at(buffer: &ratatui::buffer::Buffer, y: u16) -> String {
+    (3..6).map(|x| buffer[(x, y)].symbol()).collect()
+}
+
+#[test]
+fn rows_count_from_the_loop_start_and_dim_outside_it() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 4");
+    press(&mut app, "2]l");
+    // A slide keeps row 00 where it was on screen, so scroll up to see what is above it.
+    app.top = 0;
+    let buffer = screen(&app);
+    assert_eq!(row_number_at(&buffer, 2), "-02");
+    assert_eq!(row_number_at(&buffer, 3), "-01");
+    assert_eq!(row_number_at(&buffer, 4), " 00");
+    assert_eq!(row_number_at(&buffer, 7), " 03");
+    assert_eq!(row_number_at(&buffer, 8), " 04");
+    assert_eq!(buffer[(5, 4)].fg, vt_tui::theme::YELLOW, "the loop start");
+    assert_eq!(buffer[(5, 5)].fg, vt_tui::theme::SUBTEXT1);
+    assert_eq!(buffer[(5, 2)].fg, vt_tui::theme::OVERLAY0, "not played");
+    assert_eq!(
+        buffer[(5, 8)].fg,
+        vt_tui::theme::OVERLAY2,
+        "a beat, not played"
+    );
+    assert_eq!(
+        buffer[(9, 8)].fg,
+        vt_tui::theme::OVERLAY0,
+        "the step's text"
+    );
+    assert_eq!(buffer[(9, 6)].fg, Color::Reset, "a step that plays");
+}
+
+#[test]
+fn other_tracks_are_blank_beside_rows_outside_the_loop() {
+    let song = Song::new(2);
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    command(&mut app, "len 4");
+    press(&mut app, "]L");
+    app.top = 0;
+    let buffer = screen(&app);
+    let neighbour = |y: u16| -> String { (38..41).map(|x| buffer[(x, y)].symbol()).collect() };
+    assert_eq!(neighbour(2), "   ", "above the loop");
+    assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
+    assert_eq!(neighbour(10), "   ", "past the loop");
+}
+
+#[test]
+fn the_playhead_marks_where_the_loop_is_playing() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 4");
+    press(&mut app, "2]L");
+    app.transport = Transport::Playing;
+    app.playhead = 1;
+    app.top = 0;
+    let buffer = screen(&app);
+    // The loop starts at stored step 8, so row 01 is on the screen's row 11.
+    assert_eq!(row_number_at(&buffer, 11), " 01");
+    assert_eq!(buffer[(7, 11)].symbol(), ">");
+}
+
+#[test]
+fn length_changes_wait_until_stopped_and_slides_dont() {
+    let (mut app, _realtime) = app();
+    for transport in [Transport::Playing, Transport::Paused] {
+        app.transport = transport;
+        command(&mut app, "len 4");
+        assert_eq!(app.song().phrases[&0].len(), 16);
+        assert!(app.status.contains("stopped"), "{}", app.status);
+        command(&mut app, "double");
+        assert_eq!(app.song().phrases[&0].len(), 16);
+        press(&mut app, " pd");
+        assert_eq!(app.song().phrases[&0].len(), 16);
+    }
+    app.transport = Transport::Playing;
+    press(&mut app, "]L");
+    assert_eq!(app.song().phrases[&0].start(), 4);
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    press(&mut app, "gs");
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    app.transport = Transport::Stopped;
+    command(&mut app, "len 4");
+    assert_eq!(app.song().phrases[&0].len(), 4);
+}
+
+#[test]
+fn a_loop_survives_saving_with_what_is_outside_it() {
+    let folder = folder();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("w {}", folder.display()));
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "len 4");
+    press(&mut app, "]L");
+    command(&mut app, "w");
+    let saved = vt_model::project::load_song(&folder).unwrap();
+    let phrase = &saved.phrases[&0];
+    assert_eq!((phrase.start(), phrase.len()), (4, 4));
+    assert_eq!(phrase.steps().len(), 16);
+    assert_eq!(phrase.steps()[0].note, Note::On(60), "above the loop");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A selected 4-step track beside a 2-step track and an 8-step track, whose steps are numbered by
+/// their notes.
+fn tracks_of_different_lengths() -> (App, Realtime) {
+    let mut song = Song::new(3);
+    for (id, length) in [(0, 4), (1, 2), (2, 8)] {
+        let mut phrase = Phrase::new(length);
+        for step in 0..length {
+            *phrase.step_mut(step).unwrap() = Step {
+                note: Note::On(60 + step as u8),
+                ..Step::default()
+            };
+        }
+        song.phrases.insert(id, Arc::new(phrase));
+    }
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+/// The note text in another track's column on one row of steps, and its colour.
+fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
+    let x = 38 + column * 4;
+    let text = (x..x + 3).map(|x| buffer[(x, row + 2)].symbol()).collect();
+    (text, buffer[(x, row + 2)].fg)
+}
+
+#[test]
+fn other_tracks_show_the_pass_that_is_playing() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let (dim, green) = (vt_tui::theme::OVERLAY2, vt_tui::theme::GREEN);
+    let note = |text: &str, color| (text.to_owned(), color);
+
+    // Stopped, the columns show the first pass and nothing is lit.
+    app.playhead = 5;
+    let buffer = screen(&app);
+    assert_eq!(beside(&buffer, 1, 1), note("C#4", dim));
+    assert_eq!(beside(&buffer, 1, 3), note("D#4", dim));
+
+    // Playing on the second pass, row 01 is step 5 of the longer track, and only it is lit.
+    app.transport = Transport::Playing;
+    let buffer = screen(&app);
+    assert_eq!(beside(&buffer, 1, 0), note("E-4", dim));
+    assert_eq!(beside(&buffer, 1, 1), note("F-4", green));
+    assert_eq!(beside(&buffer, 1, 2), note("F#4", dim));
+    assert_eq!(beside(&buffer, 1, 3), note("G-4", dim));
+
+    // The shorter track lights one row, not every row showing the same step.
+    assert_eq!(beside(&buffer, 0, 1), note("C#4", green));
+    assert_eq!(beside(&buffer, 0, 3), note("C#4", dim));
+
+    app.transport = Transport::Paused;
+    assert_eq!(beside(&screen(&app), 1, 1), note("F-4", green));
+
+    // Back to the first pass.
+    app.transport = Transport::Playing;
+    app.playhead = 1;
+    assert_eq!(beside(&screen(&app), 1, 1), note("C#4", green));
+}
+
+#[test]
+fn other_tracks_run_past_the_longest_and_show_a_reset() {
+    let mut song = Song::new(2);
+    song.phrases.insert(0, Arc::new(Phrase::new(3)));
+    let mut longer = Phrase::new(5);
+    let note = |midi| Step {
+        note: Note::On(midi),
+        ..Step::default()
+    };
+    *longer.step_mut(0).unwrap() = note(60);
+    *longer.step_mut(4).unwrap() = note(64);
+    song.phrases.insert(1, Arc::new(longer));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    app.transport = Transport::Playing;
+    app.playhead = 3;
+    // The selected track is on its second pass, so its row 01 is the longer track's step 4.
+    assert_eq!(beside(&screen(&app), 0, 0).1, vt_tui::theme::GREEN);
+    assert_eq!(beside(&screen(&app), 0, 1).0, "E-4");
+
+    // A reset at 4 comes first, so that row is where everything has gone back to the start.
+    command(&mut app, "reset 4");
+    assert_eq!(beside(&screen(&app), 0, 1).0, "C-4");
+}
+
+#[test]
+fn reset_shows_on_the_status_line_and_undoes() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let time = Instant::now();
+    let status = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(100, 2);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..100)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>()
+            .contains("Reset 64")
+    };
+    assert!(!status(&app));
+    command(&mut app, "reset 64");
+    assert_eq!(app.song().sections[0].reset, Some(64));
+    assert!(status(&app));
+    app.key(Key::char('u'), time);
+    assert_eq!(app.song().sections[0].reset, None);
+    command(&mut app, "reset 0");
+    assert_eq!(app.song().sections[0].reset, None);
+    assert!(app.status.contains(":reset"));
 }

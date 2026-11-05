@@ -5,8 +5,11 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION};
+use crate::constants::{
+    BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_PHRASE_STEPS,
+};
 use crate::label::is_named_slot;
+use crate::selection::Extent;
 use crate::step::Step;
 
 /// One voice's lane through the song.
@@ -41,6 +44,9 @@ fn full_level() -> u8 {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Section {
     pub chains: Vec<Option<u32>>,
+    /// Send every track back to its start after this many steps. Without it, each loops on its own.
+    #[serde(default)]
+    pub reset: Option<usize>,
 }
 
 /// One phrase in a chain.
@@ -58,35 +64,48 @@ pub struct Chain {
 
 /// One track's sequence of steps, reusable by ID.
 ///
-/// Shortening a phrase hides steps, so they come back if it is lengthened in the session.
-/// Hidden steps are dropped on save.
+/// It stores more than it plays, like a clip: a loop of `length` steps starting at `start`, with
+/// anything either side of it kept but silent. Rows on screen count from the loop's start, so the
+/// loop's first step is always beat 1.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "PhraseFile", into = "PhraseFile")]
 pub struct Phrase {
     steps: Vec<Step>,
-    visible: usize,
+    start: usize,
+    length: usize,
 }
 
 #[derive(Serialize, Deserialize)]
 struct PhraseFile {
     steps: Vec<Step>,
+    #[serde(default)]
+    start: usize,
+    #[serde(default)]
+    length: Option<usize>,
 }
 
 impl From<PhraseFile> for Phrase {
     fn from(file: PhraseFile) -> Self {
-        let visible = file.steps.len();
+        let stored = file.steps.len();
+        let start = file.start.min(stored.saturating_sub(1));
+        let length = file
+            .length
+            .unwrap_or(stored)
+            .min(stored - start.min(stored));
         Self {
             steps: file.steps,
-            visible,
+            start,
+            length,
         }
     }
 }
 
 impl From<Phrase> for PhraseFile {
-    fn from(mut phrase: Phrase) -> Self {
-        phrase.steps.truncate(phrase.visible);
+    fn from(phrase: Phrase) -> Self {
         Self {
             steps: phrase.steps,
+            start: phrase.start,
+            length: Some(phrase.length),
         }
     }
 }
@@ -94,27 +113,37 @@ impl From<Phrase> for PhraseFile {
 impl Phrase {
     /// A phrase of empty steps. A phrase always has at least one.
     pub fn new(length: usize) -> Self {
-        let visible = length.max(1);
+        let length = length.max(1);
         Self {
-            steps: vec![Step::default(); visible],
-            visible,
+            steps: vec![Step::default(); length],
+            start: 0,
+            length,
         }
     }
 
-    /// A phrase holding these steps.
+    /// A phrase holding these steps, looping over all of them.
     pub fn from_steps(steps: Vec<Step>) -> Self {
-        let visible = steps.len();
-        Self { steps, visible }
+        let length = steps.len();
+        Self {
+            steps,
+            start: 0,
+            length,
+        }
+    }
+
+    /// Every stored step, in or out of the loop.
+    pub fn steps(&self) -> &[Step] {
+        &self.steps
     }
 
     /// The steps that play.
-    pub fn steps(&self) -> &[Step] {
-        &self.steps[..self.visible]
+    pub fn loop_steps(&self) -> &[Step] {
+        &self.steps[self.start..self.start + self.length]
     }
 
     /// The number of steps that play.
     pub fn len(&self) -> usize {
-        self.visible
+        self.length
     }
 
     /// Always false, since a phrase has at least one step.
@@ -122,18 +151,66 @@ impl Phrase {
         false
     }
 
-    /// One visible step, to change.
-    pub fn step_mut(&mut self, index: usize) -> Option<&mut Step> {
-        self.steps[..self.visible].get_mut(index)
+    /// Where the loop starts among the stored steps.
+    pub fn start(&self) -> usize {
+        self.start
     }
 
-    /// Set the length, keeping any steps past it hidden. A length of 0 becomes 1.
-    pub fn set_len(&mut self, length: usize) {
-        let visible = length.max(1);
-        if visible > self.steps.len() {
-            self.steps.resize(visible, Step::default());
+    /// Where the loop sits, for working out rows and beats.
+    pub fn extent(&self) -> Extent {
+        Extent {
+            start: self.start,
+            length: self.length,
+            stored: self.steps.len(),
         }
-        self.visible = visible;
+    }
+
+    /// One stored step, to change.
+    pub fn step_mut(&mut self, index: usize) -> Option<&mut Step> {
+        self.steps.get_mut(index)
+    }
+
+    /// Set the loop's length, keeping every step. A length of 0 becomes 1.
+    pub fn set_len(&mut self, length: usize) {
+        self.length = length.max(1);
+        self.store_up_to(self.start + self.length);
+    }
+
+    /// Store at least this many steps, up to the most a phrase keeps. The loop stays where it is.
+    pub fn grow_to(&mut self, stored: usize) {
+        self.store_up_to(stored.min(MAX_PHRASE_STEPS));
+    }
+
+    fn store_up_to(&mut self, stored: usize) {
+        if stored > self.steps.len() {
+            self.steps.resize(stored, Step::default());
+        }
+    }
+
+    /// Move the loop without changing its length, adding empty steps if it runs off either end.
+    pub fn slide(&mut self, by: isize) {
+        let room = MAX_PHRASE_STEPS.saturating_sub(self.steps.len());
+        let to = (self.start as isize).saturating_add(by);
+        if to < 0 {
+            let added = to.unsigned_abs().min(room);
+            self.steps
+                .splice(0..0, std::iter::repeat_n(Step::default(), added));
+            self.start = 0;
+        } else {
+            let highest = MAX_PHRASE_STEPS
+                .max(self.steps.len())
+                .saturating_sub(self.length);
+            self.start = (to as usize).min(highest);
+        }
+        self.store_up_to(self.start + self.length);
+    }
+
+    /// Double the loop by repeating it. Steps after it move down rather than being overwritten.
+    pub fn double(&mut self) {
+        let copy = self.loop_steps().to_vec();
+        let end = self.start + self.length;
+        self.steps.splice(end..end, copy);
+        self.length *= 2;
     }
 }
 
@@ -321,7 +398,7 @@ impl Song {
     pub fn step_at(&self, position: ChainPosition) -> Option<&Step> {
         self.phrases
             .get(&position.phrase)?
-            .steps()
+            .loop_steps()
             .get(position.step)
     }
 }
@@ -388,19 +465,125 @@ mod tests {
         assert_eq!(song.chain_position(99, 0), None);
     }
 
+    /// A phrase whose steps can be told apart by velocity, which is the step's stored position.
+    fn numbered(length: usize) -> Phrase {
+        let steps = (0..length)
+            .map(|index| Step {
+                velocity: Some(index as u8),
+                ..Step::default()
+            })
+            .collect();
+        Phrase::from_steps(steps)
+    }
+
+    fn played(phrase: &Phrase) -> Vec<u8> {
+        phrase
+            .loop_steps()
+            .iter()
+            .map(|step| step.velocity.unwrap())
+            .collect()
+    }
+
     #[test]
-    fn hidden_steps_return_in_the_session_and_drop_on_save() {
-        let mut phrase = Phrase::new(4);
-        phrase.step_mut(3).unwrap().velocity = Some(1);
+    fn steps_outside_the_loop_stay_stored_and_saved() {
+        let mut phrase = numbered(4);
         phrase.set_len(2);
-        assert_eq!(phrase.len(), 2);
+        phrase.slide(1);
+        assert_eq!(played(&phrase), [1, 2]);
+        assert_eq!(phrase.steps().len(), 4);
         let saved = ron::to_string(&phrase).unwrap();
         let loaded: Phrase = ron::from_str(&saved).unwrap();
-        assert_eq!(loaded.len(), 2);
-        phrase.set_len(4);
-        assert_eq!(phrase.steps()[3].velocity, Some(1));
+        assert_eq!(loaded, phrase);
         phrase.set_len(0);
         assert_eq!(phrase.len(), 1);
+    }
+
+    #[test]
+    fn a_file_from_before_loops_plays_all_its_steps() {
+        let file = PhraseFile {
+            steps: vec![Step::default(); 3],
+            start: 0,
+            length: None,
+        };
+        let phrase = Phrase::from(file);
+        assert_eq!((phrase.start(), phrase.len()), (0, 3));
+    }
+
+    #[test]
+    fn a_loop_past_the_end_of_a_file_is_pulled_back() {
+        let file = PhraseFile {
+            steps: vec![Step::default(); 3],
+            start: 9,
+            length: Some(9),
+        };
+        let phrase = Phrase::from(file);
+        assert_eq!((phrase.start(), phrase.len()), (2, 1));
+        assert_eq!(phrase.loop_steps().len(), 1);
+    }
+
+    #[test]
+    fn sliding_keeps_the_length_and_adds_steps_at_either_end() {
+        let mut phrase = numbered(4);
+        phrase.set_len(2);
+        phrase.slide(3);
+        assert_eq!(phrase.start(), 3);
+        assert_eq!(phrase.steps().len(), 5, "one more step, so the loop fits");
+        phrase.slide(-5);
+        assert_eq!(phrase.start(), 0);
+        assert_eq!(phrase.len(), 2);
+        assert_eq!(phrase.steps().len(), 7, "two more in front");
+        assert_eq!(phrase.steps()[2].velocity, Some(0), "what was first moved");
+    }
+
+    #[test]
+    fn a_huge_slide_stops_at_the_most_a_phrase_keeps() {
+        let mut phrase = numbered(4);
+        phrase.slide(isize::MAX);
+        assert_eq!(phrase.steps().len(), MAX_PHRASE_STEPS);
+        assert_eq!(phrase.loop_steps().len(), 4);
+        let mut phrase = numbered(4);
+        phrase.slide(isize::MIN);
+        assert_eq!(phrase.steps().len(), MAX_PHRASE_STEPS);
+        assert_eq!(phrase.start(), 0);
+    }
+
+    #[test]
+    fn doubling_repeats_the_loop_and_keeps_what_is_after_it() {
+        let mut phrase = numbered(4);
+        phrase.set_len(2);
+        phrase.slide(1);
+        phrase.double();
+        assert_eq!(played(&phrase), [1, 2, 1, 2]);
+        assert_eq!(
+            phrase.steps()[5].velocity,
+            Some(3),
+            "moved, not overwritten"
+        );
+    }
+
+    #[test]
+    fn a_section_saved_without_a_reset_loads_with_none() {
+        let section: Section = ron::from_str("(chains: [Some(0)])").unwrap();
+        assert_eq!(section.reset, None);
+        let saved = ron::to_string(&Section {
+            reset: Some(64),
+            ..section
+        })
+        .unwrap();
+        assert_eq!(ron::from_str::<Section>(&saved).unwrap().reset, Some(64));
+    }
+
+    #[test]
+    fn step_at_reads_within_the_loop() {
+        let mut song = Song::new(1);
+        let mut phrase = numbered(8);
+        phrase.set_len(4);
+        phrase.slide(2);
+        song.phrases.insert(0, Arc::new(phrase));
+        assert_eq!(song.chain_steps(0), 4);
+        let position = song.chain_position(0, 5).unwrap();
+        assert_eq!(position.step, 1, "the chain loops over the loop");
+        assert_eq!(song.step_at(position).unwrap().velocity, Some(3));
     }
 
     #[test]

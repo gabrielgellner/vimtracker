@@ -13,14 +13,16 @@ use vt_engine::link::{Command, Handle};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
-use vt_model::constants::{DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, TRANSPORT_GUARD_MS};
+use vt_model::constants::{
+    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, TRANSPORT_GUARD_MS,
+};
 use vt_model::history::History;
 use vt_model::label::{is_named_slot, name_of, slot_of};
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Scope, StepRange};
+use vt_model::selection::{Block, Extent, Scope, StepRange};
 use vt_model::song::{ChainEntry, Song};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
 
@@ -255,8 +257,15 @@ impl App {
         &self.pending
     }
 
-    /// The cursor's position within the section, counting the phrases before its slot.
-    pub fn section_step(&self) -> usize {
+    /// Where the cursor's phrase's loop sits.
+    pub fn extent(&self) -> Extent {
+        self.phrase_id()
+            .and_then(|id| self.song().phrases.get(&id))
+            .map_or(Extent::whole(0), |phrase| phrase.extent())
+    }
+
+    /// The position in the section where the cursor's phrase starts playing.
+    pub fn slot_start(&self) -> usize {
         let song = self.song();
         let Some(chain) = song
             .sections
@@ -264,22 +273,35 @@ impl App {
             .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
             .and_then(|id| song.chains.get(&id))
         else {
-            return self.cursor.step;
+            return 0;
         };
-        let before: usize = chain
+        chain
             .entries
             .iter()
             .take(self.cursor.slot)
             .filter_map(|e| song.phrases.get(&e.phrase))
             .map(|p| p.len())
-            .sum();
+            .sum()
+    }
+
+    /// The cursor's position within the section. Only the loop has one, so a step outside it
+    /// counts as the loop's first.
+    pub fn section_step(&self) -> usize {
+        let extent = self.extent();
         // The chain view has no step of its own, so it plays from the row's first.
-        before
-            + if self.view == View::Chain {
-                0
-            } else {
-                self.cursor.step
-            }
+        let row = if self.view != View::Chain && extent.plays(self.cursor.step) {
+            self.cursor.step - extent.start
+        } else {
+            0
+        };
+        self.slot_start() + row
+    }
+
+    /// Put the cursor on the first step that plays, at the top of the screen.
+    pub(crate) fn go_to_loop_start(&mut self) {
+        let start = self.extent().start;
+        self.cursor.step = start;
+        self.top = start;
     }
 
     /// Send the current version to the audio thread.
@@ -448,6 +470,11 @@ impl App {
             Cmd::ScrollDown => self.scroll(3),
             Cmd::ScrollUp => self.scroll(-3),
             Cmd::Double => self.double(),
+            Cmd::SlideLoop(by) => {
+                let times = self.count.take().unwrap_or(1).min(MAX_PHRASE_STEPS);
+                self.slide_loop(by * times as isize);
+            }
+            Cmd::StartLoopHere => self.start_loop_here(),
             Cmd::ShowView(view) => self.jump_to_view(view),
             Cmd::Picker => self.open_view_picker(),
             Cmd::Help => {
@@ -474,8 +501,12 @@ impl App {
                 self.guard = Some((key, now));
             }
             Cmd::Audition => {
-                let section_step = self.section_step();
-                self.audition(section_step);
+                if self.extent().plays(self.cursor.step) {
+                    let section_step = self.section_step();
+                    self.audition(section_step);
+                } else {
+                    self.audition_outside_loop();
+                }
             }
             Cmd::PauseOrResume => {
                 self.handle.send(Command::PauseOrResume);
@@ -492,14 +523,18 @@ impl App {
             Cmd::ToggleSolo => self.toggle_solo(),
             Cmd::ClearMutes => self.clear_live(),
             Cmd::Undo => {
+                let before = self.loop_place();
                 if self.history.undo().is_some() {
+                    self.keep_row(before);
                     self.after_history();
                 } else {
                     self.status = "Nothing to undo".to_owned();
                 }
             }
             Cmd::Redo => {
+                let before = self.loop_place();
                 if self.history.redo().is_some() {
+                    self.keep_row(before);
                     self.after_history();
                 } else {
                     self.status = "Nothing to redo".to_owned();
@@ -509,22 +544,110 @@ impl App {
         }
     }
 
+    /// Whether a phrase's length can change now. A new length moves where playback lands, so it
+    /// has to wait until playback has stopped, unlike a slide.
+    fn can_change_length(&mut self) -> bool {
+        let stopped = self.transport == Transport::Stopped;
+        if !stopped {
+            self.status = "Length changes wait until stopped. Slides work now: ]l [l".to_owned();
+        }
+        stopped
+    }
+
     fn double(&mut self) {
-        if let Some(phrase) = self.phrase_id() {
+        if let Some(phrase) = self.phrase_id()
+            && self.can_change_length()
+        {
             self.apply(&Action::Double { phrase });
         }
     }
 
-    fn phrase_len(&self) -> usize {
-        self.phrase_id()
+    /// The phrase under the cursor and where its loop starts.
+    fn loop_place(&self) -> (Option<u32>, usize) {
+        (self.phrase_id(), self.extent().start)
+    }
+
+    /// After the loop has moved, keep the cursor and the view on the same row numbers, so the
+    /// notes scroll under them.
+    fn keep_row(&mut self, before: (Option<u32>, usize)) {
+        let (phrase, old) = before;
+        if phrase != self.phrase_id() {
+            return;
+        }
+        let by = self.extent().start as isize - old as isize;
+        self.cursor.step = self.cursor.step.saturating_add_signed(by);
+        self.top = self.top.saturating_add_signed(by);
+    }
+
+    fn slide_loop(&mut self, by: isize) {
+        if let Some(phrase) = self.phrase_id() {
+            let before = self.loop_place();
+            self.apply(&Action::SlideLoop { phrase, by });
+            self.keep_row(before);
+            self.clamp_cursor();
+        }
+    }
+
+    /// Start the loop on the cursor's step. The notes stay where they are and the numbers change.
+    fn start_loop_here(&mut self) {
+        let by = self.extent().row(self.cursor.step);
+        if by != 0
+            && let Some(phrase) = self.phrase_id()
+        {
+            self.apply(&Action::SlideLoop { phrase, by });
+        }
+    }
+
+    /// Hear the note on a row outside the loop. Other tracks have nothing to play with it, since
+    /// only the loop has a place in the section.
+    fn audition_outside_loop(&mut self) {
+        if self.transport == Transport::Playing {
+            self.status = "Audition works while stopped or paused".to_owned();
+            return;
+        }
+        let Some(step) = self
+            .phrase_id()
             .and_then(|id| self.song().phrases.get(&id))
-            .map_or(0, |p| p.len())
+            .and_then(|phrase| phrase.steps().get(self.cursor.step))
+        else {
+            return;
+        };
+        let Note::On(midi) = step.note else {
+            return;
+        };
+        let instrument = step.instrument.unwrap_or(self.instrument);
+        let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
+        let transpose = self
+            .chain_entries()
+            .get(self.cursor.slot)
+            .map_or(0, |entry| entry.transpose);
+        let note = (i16::from(midi) + i16::from(transpose))
+            .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
+        self.handle.send(Command::Preview {
+            instrument,
+            note,
+            velocity,
+        });
+    }
+
+    fn stored_steps(&self) -> usize {
+        self.extent().stored
+    }
+
+    /// The furthest the view can scroll: to the end of what is stored, or with the loop's start at
+    /// the top, so a slide can keep row `00` still on a screen with room to spare.
+    fn last_top(&self) -> usize {
+        let extent = self.extent();
+        extent
+            .stored
+            .saturating_sub(self.view_height)
+            .max(extent.start)
     }
 
     /// Keep the cursor on screen, moving the view rather than the cursor.
     pub fn follow_cursor(&mut self, height: usize) {
         self.view_height = height.max(1);
-        let last_top = self.phrase_len().saturating_sub(self.view_height);
+        let last_top = self.last_top();
         if self.cursor.step < self.top {
             self.top = self.cursor.step;
         } else if self.cursor.step >= self.top + self.view_height {
@@ -534,7 +657,7 @@ impl App {
     }
 
     fn view_cursor(&mut self, cmd: Cmd) {
-        let height = self.view_height.min(self.phrase_len().max(1));
+        let height = self.view_height.min(self.stored_steps().max(1));
         self.cursor.step = self.top
             + match cmd {
                 Cmd::ViewTop => 0,
@@ -552,8 +675,7 @@ impl App {
 
     /// Scroll the view. The cursor only moves if it would leave the screen.
     fn scroll(&mut self, by: isize) {
-        let last_top = self.phrase_len().saturating_sub(self.view_height);
-        self.top = self.top.saturating_add_signed(by).min(last_top);
+        self.top = self.top.saturating_add_signed(by).min(self.last_top());
         let bottom = self.top + self.view_height.saturating_sub(1);
         self.cursor.step = self.cursor.step.clamp(self.top, bottom);
         self.clamp_cursor();
@@ -591,6 +713,9 @@ impl App {
             return;
         }
         let section_step = self.section_step();
+        let extent = self.extent();
+        // A row outside the loop has no place in the section, so it keeps its number instead.
+        let outside = (!extent.plays(self.cursor.step)).then(|| extent.row(self.cursor.step));
         self.cursor.track = track;
         let song = Arc::clone(self.song());
         let position = song
@@ -601,7 +726,8 @@ impl App {
         match position {
             Some(position) => {
                 self.cursor.slot = position.slot;
-                self.cursor.step = position.step;
+                let row = outside.unwrap_or(position.step as isize);
+                self.cursor.step = self.extent().step_of(row);
             }
             None => self.cursor.slot = 0,
         }
@@ -640,14 +766,14 @@ impl App {
             .map_or(0, |step| step.fx.len())
     }
 
-    fn move_step(&mut self, by: isize) {
+    pub(crate) fn move_step(&mut self, by: isize) {
         let Some(phrase) = self
             .phrase_id()
             .and_then(|id| self.song().phrases.get(&id).cloned())
         else {
             return;
         };
-        let last = phrase.len() as isize - 1;
+        let last = phrase.steps().len() as isize - 1;
         self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
     }
 
@@ -697,8 +823,8 @@ impl App {
         let arrow = match (key.code, key.shift) {
             (KeyCode::Up, _) => Some(-1),
             (KeyCode::Down, _) => Some(1),
-            (KeyCode::Left, true) => Some(snap_by(self.cursor.step, skip, false)),
-            (KeyCode::Right, true) => Some(snap_by(self.cursor.step, skip, true)),
+            (KeyCode::Left, true) => Some(snap_by(self.current_row(), skip, false)),
+            (KeyCode::Right, true) => Some(snap_by(self.current_row(), skip, true)),
             (KeyCode::Left, false) => Some(self.skip_by(skip, false)),
             (KeyCode::Right, false) => Some(self.skip_by(skip, true)),
             _ => None,
@@ -767,6 +893,10 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn current_row(&self) -> isize {
+        self.extent().row(self.cursor.step)
     }
 
     /// How far a plain left or right arrow moves: one skip from the entry just written, so its
@@ -1124,6 +1254,7 @@ impl App {
                 track: self.cursor.track,
                 swing,
             }),
+            Line::Reset(reset) => self.apply(&Action::SetReset(reset)),
             Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
                 track: self.cursor.track,
                 level,
@@ -1131,7 +1262,9 @@ impl App {
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
             Line::Len(length) => {
-                if let Some(phrase) = self.phrase_id() {
+                if let Some(phrase) = self.phrase_id()
+                    && self.can_change_length()
+                {
                     self.apply(&Action::SetLength { phrase, length });
                     self.clamp_cursor();
                 }
@@ -1301,13 +1434,13 @@ impl App {
     }
 }
 
-/// How far to move to reach the next multiple of the skip, so a jump lands on the grid wherever
-/// it starts.
-fn snap_by(step: usize, skip: usize, forward: bool) -> isize {
+/// How far to move from a row to reach the next multiple of the skip, so a jump lands on the grid
+/// wherever it starts.
+fn snap_by(row: isize, skip: usize, forward: bool) -> isize {
     if skip == 0 {
         return 0;
     }
-    let into = step % skip;
+    let into = row.rem_euclid(skip as isize) as usize;
     match (forward, into) {
         (true, _) => (skip - into) as isize,
         (false, 0) => -(skip as isize),

@@ -8,7 +8,9 @@ use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MAX_TRANSPOSE,
     MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
-use crate::selection::{Block, Scope, Shift, StepRange, clear_step, paste_step, shift_step};
+use crate::selection::{
+    Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
+};
 use crate::song::{Chain, ChainEntry, Instrument, Phrase, Song, lowest_unused};
 use crate::step::{FxSlot, Note, Step};
 
@@ -64,14 +66,18 @@ pub enum Action {
         by: i32,
         kind: Shift,
     },
-    /// Overwrite steps from a copied block, clipping at the phrase's end.
+    /// Write a copied block some number of times end to end. Past the last stored step this stores
+    /// more without changing the loop. Merging leaves steps alone where the copy is empty, and
+    /// otherwise the copy overwrites them.
     Paste {
         phrase: u32,
         at: usize,
         group: usize,
         block: Block,
+        times: usize,
+        merge: bool,
     },
-    /// Double a phrase by repeating its visible steps.
+    /// Double a phrase's loop by repeating it.
     Double {
         phrase: u32,
     },
@@ -88,15 +94,22 @@ pub enum Action {
         track: usize,
         swing: Option<u16>,
     },
+    /// Send every track back to its start after this many steps, or `None` to let them run.
+    SetReset(Option<usize>),
     /// Set a track's level.
     SetTrackLevel {
         track: usize,
         level: u8,
     },
-    /// Change a phrase's length, keeping steps past it hidden.
+    /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         phrase: u32,
         length: usize,
+    },
+    /// Move a phrase's loop by some steps, keeping its length.
+    SlideLoop {
+        phrase: u32,
+        by: isize,
     },
     /// Change the tempo, in thousandths of a BPM.
     SetMilliBpm(u32),
@@ -202,6 +215,8 @@ pub enum EditError {
     Swing,
     #[error("no track {0}")]
     NoTrack(usize),
+    #[error("a reset needs at least 1 step")]
+    Reset,
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -266,18 +281,23 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             at,
             group,
             block,
+            times,
+            merge,
         } => {
             let target = next
                 .phrases
                 .get_mut(phrase)
                 .ok_or(EditError::NoPhrase(*phrase))?;
             let target = Arc::make_mut(target);
-            for (offset, source) in block.steps.iter().enumerate() {
+            let write = if *merge { merge_step } else { paste_step };
+            let total = block.steps.len().saturating_mul(*times);
+            target.grow_to(at.saturating_add(total));
+            let sources = block.steps.iter().cycle().take(total);
+            for (offset, source) in sources.enumerate() {
                 let Some(step) = target.step_mut(at + offset) else {
                     break;
                 };
-                paste_step(step, source, block.scope, *group)
-                    .map_err(|_| EditError::ColumnMismatch)?;
+                write(step, source, block.scope, *group).map_err(|_| EditError::ColumnMismatch)?;
             }
         }
         Action::Double { phrase } => {
@@ -285,15 +305,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .phrases
                 .get_mut(phrase)
                 .ok_or(EditError::NoPhrase(*phrase))?;
-            let target = Arc::make_mut(target);
-            let steps = target.steps().to_vec();
-            let length = steps.len();
-            target.set_len(length * 2);
-            for (offset, source) in steps.into_iter().enumerate() {
-                if let Some(step) = target.step_mut(length + offset) {
-                    *step = source;
-                }
-            }
+            Arc::make_mut(target).double();
         }
         Action::SetStepSize(size) => next.step = *size,
         Action::SetSkipSize(size) => next.skip = *size,
@@ -314,6 +326,14 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .swing = *swing;
         }
+        Action::SetReset(reset) => {
+            if *reset == Some(0) {
+                return Err(EditError::Reset);
+            }
+            for section in &mut next.sections {
+                section.reset = *reset;
+            }
+        }
         Action::SetTrackLevel { track, level } => {
             next.tracks
                 .get_mut(*track)
@@ -326,6 +346,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(phrase)
                 .ok_or(EditError::NoPhrase(*phrase))?;
             Arc::make_mut(phrase).set_len(*length);
+        }
+        Action::SlideLoop { phrase, by } => {
+            let phrase = next
+                .phrases
+                .get_mut(phrase)
+                .ok_or(EditError::NoPhrase(*phrase))?;
+            Arc::make_mut(phrase).slide(*by);
         }
         Action::SetMilliBpm(millibpm) => {
             if !(MIN_MILLIBPM..=MAX_MILLIBPM).contains(millibpm) {

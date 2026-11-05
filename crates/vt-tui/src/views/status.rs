@@ -99,11 +99,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .tracks
         .get(app.cursor.track)
         .map_or(0, |t| t.level);
+    // Only shown when on, since it changes what you hear and tracks otherwise run freely.
+    let reset = app
+        .song()
+        .sections
+        .first()
+        .and_then(|s| s.reset)
+        .map_or_else(String::new, |steps| format!("Reset {steps}  "));
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X} Inst {}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,

@@ -4,6 +4,7 @@
 //! `Space k` are generated from it and can't disagree with it. Counts and registers come before a
 //! sequence and aren't in the table; an operator enters `OperatorPending`, which has its own rows.
 
+use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
@@ -35,6 +36,8 @@ pub enum Cmd {
     On(Target),
     ClearField,
     Paste,
+    PasteAfter,
+    PasteMerge,
     Increase,
     Decrease,
     Repeat,
@@ -55,6 +58,10 @@ pub enum Cmd {
     ToggleSolo,
     ClearMutes,
     Double,
+    /// Move the loop by this many steps, times the count.
+    SlideLoop(isize),
+    /// Move the loop so that it starts on the cursor's step.
+    StartLoopHere,
     Help,
     Guides,
     ShowView(View),
@@ -161,6 +168,9 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("B", Cmd::PreviousTrack, "Previous track"),
 ];
 
+/// One beat, as a slide.
+const BEAT: isize = BEAT_STEPS as isize;
+
 /// Keys for Normal mode only.
 const NORMAL: &[(&str, Cmd, &str)] = &[
     ("d", Cmd::Operator(Op::Clear), "Clear"),
@@ -169,6 +179,12 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("<", Cmd::Operator(Op::ShiftDown), "Shift down"),
     ("x", Cmd::ClearField, "Clear this field"),
     ("p", Cmd::Paste, "Paste over from the cursor"),
+    ("g p", Cmd::PasteAfter, "Paste over, and land just after it"),
+    (
+        "g m",
+        Cmd::PasteMerge,
+        "Paste, keeping what the copy leaves empty",
+    ),
     (";", Cmd::Audition, "Audition this row on every track"),
     ("r", Cmd::Replace, "Replace this field, and stay here"),
     ("s", Cmd::Substitute, "Clear this field and start Insert"),
@@ -190,6 +206,15 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("[ p", Cmd::PreviousSlot, "Previous phrase in the chain"),
     ("] P", Cmd::LastSlot, "Last phrase in the chain"),
     ("[ P", Cmd::FirstSlot, "First phrase in the chain"),
+    ("] l", Cmd::SlideLoop(1), "Slide the loop a step later"),
+    ("[ l", Cmd::SlideLoop(-1), "Slide the loop a step earlier"),
+    ("] L", Cmd::SlideLoop(BEAT), "Slide the loop a beat later"),
+    (
+        "[ L",
+        Cmd::SlideLoop(-BEAT),
+        "Slide the loop a beat earlier",
+    ),
+    ("g s", Cmd::StartLoopHere, "Start the loop on this step"),
 ];
 
 /// Keys for the chain view.

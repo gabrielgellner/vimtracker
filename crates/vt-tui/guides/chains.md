@@ -4,6 +4,24 @@ A **phrase** is a run of steps. A **chain** is the list of phrases one track
 plays in order, each with its own transpose. Tracks can loop at different
 lengths.
 
+## Tracks of different lengths
+
+Each track loops at its own length, for as long as the song plays. A 3-step
+hat against a 4-step kick drifts, and lines up again every 12 steps. Playing
+from the top lines everything up.
+
+To bring them back together on a schedule, set a reset:
+
+| Command | Does |
+|---|---|
+| `:reset 64` | Send every track to its start every 64 steps |
+| `:reset off` | Let them run, the default |
+
+The status line shows `Reset 64` while one is on. A track longer than the
+reset never reaches its end. You can change it while playing: the beat stays
+put, and if the tracks are already past the new reset they go back on the
+next step.
+
 ## The chain view
 
 Press `Space 2`. The row past the end, shown as `--`, adds a phrase.

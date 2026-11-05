@@ -7,6 +7,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -207,13 +208,125 @@ fn increment_takes_a_count_as_its_amount() {
 }
 
 #[test]
-fn paste_overwrites_from_the_cursor_and_clips_at_the_end() {
+fn paste_overwrites_from_the_cursor() {
     check(&[A, B, E], "yyjjp", &[A, B, A]);
-    check(&[A, B, E], "y2jjjp", &[A, B, "C-4 -- -- ---00 ---00 ---00"]);
     // A copied column pastes as a column, including its empty fields.
     check(&[E, A], "ykjp", &[E, NOTE_GONE_A]);
-    check(&[A, E], "yjjp", &[A, "C-4 -- -- ---00 ---00 ---00"]);
     check(&[A, B], "yyjp", &[A, A]);
+}
+
+#[test]
+fn a_count_stamps_the_copy_end_to_end() {
+    check(&[A, E, E, E, E], "yyj3p", &[A, A, A, A, E]);
+    check(&[A, B, E, E, E, E, E], "Vjyggjj2p", &[A, B, A, B, A, B, E]);
+}
+
+#[test]
+fn paste_past_the_end_stores_more_and_leaves_the_loop_alone() {
+    let (mut app, _rt) = app_with(&[A, E, E]);
+    keys(&mut app, "yyjj9p");
+    assert_eq!(steps(&app).len(), 11);
+    assert_eq!(app.song().phrases[&0].len(), 3, "the loop hasn't changed");
+    keys(&mut app, "u");
+    assert_eq!(steps(&app).len(), 3);
+    // A huge count is no trouble.
+    keys(&mut app, "99999999p");
+    assert_eq!(steps(&app).len(), MAX_PHRASE_STEPS);
+    assert_eq!(app.song().phrases[&0].len(), 3);
+}
+
+#[test]
+fn a_counted_paste_is_one_undo_and_dot_repeats_the_count() {
+    check(&[A, E, E, E], "yyj3pu", &[A, E, E, E]);
+    check(&[A, E, E, E, E, E], "yyj2pjjj.", &[A, A, A, E, A, A]);
+}
+
+#[test]
+fn gp_lands_just_after_what_it_pasted() {
+    let (mut app, _rt) = app_with(&[A, B, E, E, E, E, E, E]);
+    keys(&mut app, "Vjyggjjgp");
+    assert_eq!(app.cursor.step, 4);
+    keys(&mut app, "gp");
+    assert_eq!(app.cursor.step, 6);
+    assert_eq!(steps(&app), [A, B, A, B, A, B, E, E]);
+    keys(&mut app, ".");
+    assert_eq!(app.cursor.step, 7, "stays on the phrase");
+    assert_eq!(steps(&app), [A, B, A, B, A, B, A, B]);
+
+    let (mut app, _rt) = app_with(&[A, E, E, E, E]);
+    keys(&mut app, "yyj2gp");
+    assert_eq!(app.cursor.step, 3, "a count moves past all of it");
+}
+
+#[test]
+fn gp_doesnt_move_when_the_paste_is_refused() {
+    let (mut app, _rt) = app_with(&[A, B]);
+    keys(&mut app, "y1kjlgp");
+    assert_eq!(app.cursor.step, 1);
+    assert_eq!(steps(&app), [A, B]);
+}
+
+#[test]
+fn gm_merges_and_leaves_what_the_copy_leaves_empty() {
+    const KICK: &str = "C-4 40 01 ---00 ---00 ---00";
+    const HAT: &str = "--- -- -- ---00 PAN80 ---00";
+    const BOTH: &str = "C-4 40 01 ---00 PAN80 ---00";
+    // Whole steps.
+    check(&[HAT, KICK], "yyjgm", &[HAT, BOTH]);
+    // A plain paste of the same thing wipes the kick.
+    check(&[HAT, KICK], "yyjp", &[HAT, HAT]);
+    // A full field wins, and OFF counts as full.
+    check(
+        &["D-4 -- -- ---00 ---00 ---00", KICK],
+        "yyjgm",
+        &["D-4 -- -- ---00 ---00 ---00", "D-4 40 01 ---00 ---00 ---00"],
+    );
+    check(
+        &["OFF -- -- ---00 ---00 ---00", KICK],
+        "yyjgm",
+        &["OFF -- -- ---00 ---00 ---00", "OFF 40 01 ---00 ---00 ---00"],
+    );
+    // A column, and a count across steps with gaps in the copy.
+    check(&[A, E, B, B, B, B], "Vjyjj2gm", &[A, E, A, B, A, B]);
+    check(&[E, A], "yykgm", &[E, A]);
+    check(&[E, A], "yjjgm", &[E, A, "C-4 -- -- ---00 ---00 ---00"]);
+}
+
+#[test]
+fn gm_refuses_a_column_type_mismatch() {
+    let (mut app, _rt) = app_with(&[A, B]);
+    keys(&mut app, "y1kjlgm");
+    assert_eq!(steps(&app), [A, B]);
+    assert!(app.status.contains("don't match"), "{}", app.status);
+}
+
+#[test]
+fn register_zero_keeps_the_last_copy_through_cuts() {
+    // The cut takes over plain p, as in Vim, and "0 still has the copy.
+    check(&[A, B, E], "yyjddjp", &[A, E, B]);
+    check(&[A, B, E], "yyjddj\"0p", &[A, E, A]);
+    // A cut naming it doesn't get in either.
+    check(&[A, B, E], "yyj\"0ddj\"0p", &[A, E, A]);
+    // A newer copy replaces it.
+    check(&[A, B, E], "yyjyyj\"0p", &[A, B, B]);
+}
+
+#[test]
+fn a_cut_alone_leaves_register_zero_empty() {
+    let (mut app, _rt) = app_with(&[A, E]);
+    keys(&mut app, "ddj\"0p");
+    assert!(
+        app.status.contains("Nothing in register 0"),
+        "{}",
+        app.status
+    );
+}
+
+#[test]
+fn other_digits_arent_registers() {
+    let (mut app, _rt) = app_with(&[A]);
+    keys(&mut app, "\"1");
+    assert!(app.status.contains("a to z"), "{}", app.status);
 }
 
 #[test]
@@ -488,6 +601,138 @@ fn the_step_setting_changes_how_far_entry_moves() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, ":set step=2<Enter>ia");
     assert_eq!(app.cursor.step, 2);
+}
+
+#[test]
+fn slides_keep_the_row_and_scroll_the_notes_under_it() {
+    let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
+    keys(&mut app, ":len 4<Enter>j");
+    assert_eq!(app.cursor.step, 1);
+    keys(&mut app, "]l");
+    assert_eq!(app.song().phrases[&0].start(), 1);
+    assert_eq!(app.cursor.step, 2, "still row 01");
+    assert_eq!(app.top, 1, "and the screen moved with it");
+    keys(&mut app, "[l");
+    assert_eq!(app.song().phrases[&0].start(), 0);
+    assert_eq!(app.cursor.step, 1);
+    keys(&mut app, "]L");
+    assert_eq!(app.song().phrases[&0].start(), 4);
+    keys(&mut app, "[L");
+    assert_eq!(app.song().phrases[&0].start(), 0);
+    keys(&mut app, "2]l");
+    assert_eq!(app.song().phrases[&0].start(), 2);
+    assert_eq!(app.song().phrases[&0].len(), 4);
+}
+
+#[test]
+fn a_slide_keeps_row_zero_still_when_the_phrase_fits_on_screen() {
+    let (mut app, _rt) = app_with(&[E; 8]);
+    keys(&mut app, ":len 4<Enter>");
+    app.follow_cursor(24);
+    assert_eq!(app.top, 0);
+    keys(&mut app, "2]l");
+    app.follow_cursor(24);
+    assert_eq!(app.top, 2, "row 00 is still the top row");
+    assert_eq!(app.cursor.step, 2);
+    // Scrolling up still shows what is above the loop, and it stays there.
+    keys(&mut app, "^y");
+    app.follow_cursor(24);
+    assert_eq!(app.top, 0);
+    keys(&mut app, "[l");
+    app.follow_cursor(24);
+    assert_eq!(app.top, 0, "nothing is above the top to keep row 00 still");
+}
+
+#[test]
+fn undoing_a_slide_keeps_the_row() {
+    let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
+    keys(&mut app, ":len 4<Enter>j2]l");
+    assert_eq!(app.cursor.step, 3);
+    keys(&mut app, "u");
+    assert_eq!(app.song().phrases[&0].start(), 0);
+    assert_eq!(app.cursor.step, 1);
+    keys(&mut app, "^r");
+    assert_eq!(app.song().phrases[&0].start(), 2);
+    assert_eq!(app.cursor.step, 3);
+}
+
+#[test]
+fn sliding_above_the_first_step_adds_room_and_keeps_the_notes() {
+    let (mut app, _rt) = app_with(&[A, B]);
+    keys(&mut app, "2[l");
+    let phrase = &app.song().phrases[&0];
+    assert_eq!((phrase.start(), phrase.len()), (0, 2));
+    assert_eq!(steps(&app), [E, E, A, B]);
+    assert_eq!(app.cursor.step, 0, "still row 00");
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [A, B]);
+}
+
+#[test]
+fn gs_starts_the_loop_on_the_cursor_and_leaves_the_notes_on_screen() {
+    let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
+    keys(&mut app, ":len 4<Enter>jjgs");
+    assert_eq!(app.song().phrases[&0].start(), 2);
+    assert_eq!(app.cursor.step, 2, "the cursor stays on its note");
+    assert_eq!(app.song().phrases[&0].len(), 4);
+}
+
+#[test]
+fn motions_go_by_the_loop_and_can_leave_it() {
+    let (mut app, _rt) = app_with(&[E; 32]);
+    keys(&mut app, ":len 8<Enter>6]l");
+    keys(&mut app, "gg");
+    assert_eq!(app.cursor.step, 6, "row 00");
+    keys(&mut app, "G");
+    assert_eq!(app.cursor.step, 13, "the loop's last row");
+    keys(&mut app, "j");
+    assert_eq!(app.cursor.step, 14, "out of the loop");
+    keys(&mut app, "ggk");
+    assert_eq!(app.cursor.step, 5, "and above it");
+    keys(&mut app, "gg}");
+    assert_eq!(app.cursor.step, 10, "a beat from the loop start");
+    keys(&mut app, "{{");
+    assert_eq!(app.cursor.step, 2, "a beat above it");
+    keys(&mut app, "3G");
+    assert_eq!(app.cursor.step, 8, "a count counts from the loop start");
+}
+
+#[test]
+fn whole_phrase_targets_cover_only_what_plays() {
+    let (mut app, _rt) = app_with(&[A, A, A, A, A, A]);
+    keys(&mut app, ":len 2<Enter>2]ldip");
+    assert_eq!(steps(&app), [A, A, E, E, A, A]);
+}
+
+#[test]
+fn notes_can_be_written_outside_the_loop() {
+    let (mut app, _rt) = app_with(&[E, E, E, E]);
+    keys(&mut app, ":len 2<Enter>Gjj");
+    assert_eq!(app.cursor.step, 3);
+    keys(&mut app, "ia<Esc>");
+    assert_ne!(steps(&app)[3], E);
+    assert_eq!(app.song().phrases[&0].len(), 2);
+}
+
+#[test]
+fn going_to_a_phrase_lands_on_its_loop_start() {
+    let (mut app, _rt) = app_with(&[E; 8]);
+    keys(&mut app, ":len 4<Enter>]Lj");
+    assert_eq!(app.cursor.step, 5);
+    keys(&mut app, "]P[P");
+    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.top, 4);
+}
+
+#[test]
+fn playing_from_outside_the_loop_starts_at_its_first_step() {
+    let (mut app, _rt) = app_with(&[E; 8]);
+    keys(&mut app, ":len 4<Enter>2]l");
+    keys(&mut app, "j");
+    assert_eq!(app.section_step(), 1);
+    keys(&mut app, "gg");
+    keys(&mut app, "k");
+    assert_eq!(app.section_step(), 0);
 }
 
 #[test]
