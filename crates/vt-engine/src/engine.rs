@@ -81,11 +81,8 @@ impl Engine {
         if length == 0 {
             return 0;
         }
-        (self.next_step.saturating_sub(u64::from(self.has_fired())) % length as u64) as usize
-    }
-
-    fn has_fired(&self) -> bool {
-        self.transport == Transport::Playing && self.frames_since_origin > 0
+        let fired = self.transport == Transport::Playing && self.frames_since_origin > 0;
+        (self.next_step.saturating_sub(u64::from(fired)) % length as u64) as usize
     }
 
     fn section_steps(&self) -> usize {
