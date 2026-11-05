@@ -1,0 +1,23 @@
+[package]
+name = "vt-tui"
+description = "A Neovim-style terminal music tracker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "vimtracker"
+path = "src/main.rs"
+
+[dependencies]
+vt-model.workspace = true
+vt-engine.workspace = true
+ratatui.workspace = true
+cpal.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+nucleo-matcher.workspace = true
