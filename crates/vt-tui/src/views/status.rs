@@ -1,6 +1,4 @@
-//! The status line: mode, transport, tempo, load and messages.
-
-use std::sync::atomic::Ordering;
+//! The status line: mode, transport, tempo and messages.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -11,7 +9,6 @@ use vt_engine::engine::Transport;
 use vt_model::label::name_of;
 
 use crate::app::{App, Field};
-use crate::audio::AudioStats;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::theme;
@@ -58,18 +55,12 @@ pub fn column_name(app: &App) -> String {
 }
 
 /// Draw the status line and the message or command line below it.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>) {
+pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let transport = match app.transport {
         Transport::Stopped => "stopped",
         Transport::Playing => "playing",
         Transport::Paused => "paused",
     };
-    let (late, errors) = stats.map_or((0, 0), |s| {
-        (
-            s.late.load(Ordering::Relaxed),
-            s.errors.load(Ordering::Relaxed),
-        )
-    });
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {
@@ -112,12 +103,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}  CPU {:>2}%  late {late} xruns {errors}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  Oct {} Vel {:02X} Inst {}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,
             name_of(app.instrument),
-            app.cpu.percent(),
         )),
     ]);
     let message = if app.mode == Mode::Command {

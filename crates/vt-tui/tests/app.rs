@@ -900,11 +900,11 @@ fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
     press(&mut app, "Vj");
     let buffer = screen(&app);
     // Past the step number and playhead gutter, on the row the selection started from.
-    let selected = &buffer[(6, 2)];
+    let selected = &buffer[(9, 2)];
     assert_eq!(selected.bg, vt_tui::theme::SURFACE1);
     assert_eq!(selected.fg, vt_tui::theme::TEXT);
     assert_ne!(selected.symbol(), " ");
-    let cursor = &buffer[(5, 3)];
+    let cursor = &buffer[(8, 3)];
     assert_eq!(cursor.bg, vt_tui::theme::ROSEWATER);
     assert_eq!(cursor.fg, vt_tui::theme::BASE);
 }
@@ -1101,6 +1101,23 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
 }
 
 #[test]
+fn each_row_shows_how_far_it_is_from_the_cursor() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "5j");
+    let buffer = screen(&app);
+    let row = |step: u16| -> String { (0..8).map(|x| buffer[(x, step + 2)].symbol()).collect() };
+    assert_eq!(row(0), " 5 00   ");
+    assert_eq!(row(4), " 1 04   ");
+    assert_eq!(row(5), "   05   ", "the cursor's row is blank");
+    assert_eq!(row(6), " 1 06   ");
+    // Decimal, to match the count typed, beside a step number in hex.
+    assert_eq!(row(15), "10 0F   ");
+    assert_eq!(buffer[(1, 2)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(3, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
+    assert_eq!(buffer[(3, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
+}
+
+#[test]
 fn other_tracks_light_the_step_they_are_playing() {
     let song = Song::new(3);
     let samples = Arc::new(SamplePool::default());
@@ -1115,7 +1132,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(34, row + 2)].fg
+        buffer[(37, row + 2)].fg
     };
     app.playhead = 2;
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
@@ -1253,31 +1270,31 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
     };
 
     let normal = screen(&app);
-    assert_eq!(normal[(5, 2)].bg, vt_tui::theme::ROSEWATER);
-    assert_eq!(normal[(4, 1)].symbol(), " ");
-    assert_eq!(normal[(4, 2)].symbol(), " ");
+    assert_eq!(normal[(8, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(normal[(7, 1)].symbol(), " ");
+    assert_eq!(normal[(7, 2)].symbol(), " ");
 
     press(&mut app, "i");
     let insert = screen(&app);
-    assert_eq!(insert[(5, 2)].bg, vt_tui::theme::GREEN);
-    assert_eq!(insert[(5, 2)].fg, vt_tui::theme::BASE);
-    assert_eq!(insert[(4, 1)].symbol(), "┌");
-    assert_eq!(insert[(4, 2)].symbol(), "│");
-    assert_eq!(insert[(4, 18)].symbol(), "└");
-    assert_eq!(insert[(4, 2)].fg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(8, 2)].bg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(8, 2)].fg, vt_tui::theme::BASE);
+    assert_eq!(insert[(7, 1)].symbol(), "┌");
+    assert_eq!(insert[(7, 2)].symbol(), "│");
+    assert_eq!(insert[(7, 18)].symbol(), "└");
+    assert_eq!(insert[(7, 2)].fg, vt_tui::theme::GREEN);
 
     // Take away the box, and the steps are where they were.
     assert_eq!(
         row(&normal, 2).replace(' ', ""),
         row(&insert, 2).replace(['│', ' '], "")
     );
-    let step_text_start = |b: &ratatui::buffer::Buffer| b[(5, 2)].symbol().to_owned();
+    let step_text_start = |b: &ratatui::buffer::Buffer| b[(11, 2)].symbol().to_owned();
     assert_eq!(step_text_start(&normal), step_text_start(&insert));
 
     special(&mut app, KeyCode::Esc);
     let back = screen(&app);
-    assert_eq!(back[(4, 1)].symbol(), " ");
-    assert_eq!(back[(5, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(back[(7, 1)].symbol(), " ");
+    assert_eq!(back[(8, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
 #[test]
@@ -1892,13 +1909,13 @@ fn labels_read_differently_in_the_phrase_even_when_they_are_hex() {
     let cell = |x: u16, y: u16| (buffer[(x, y)].symbol().to_owned(), buffer[(x, y)].fg);
     let peach = vt_tui::theme::PEACH;
     // Steps start at row 2, and the instrument is 7 characters into a step's text.
-    assert_eq!(cell(12, 2), ("B".to_owned(), peach));
-    assert_eq!(cell(13, 2), ("D".to_owned(), peach));
-    assert_eq!(cell(12, 3), ("C".to_owned(), peach));
-    assert_eq!(cell(13, 3), ("H".to_owned(), peach));
+    assert_eq!(cell(15, 2), ("B".to_owned(), peach));
+    assert_eq!(cell(16, 2), ("D".to_owned(), peach));
+    assert_eq!(cell(15, 3), ("C".to_owned(), peach));
+    assert_eq!(cell(16, 3), ("H".to_owned(), peach));
     // BC is the same kind of name, but nothing labelled that slot.
-    assert_eq!(buffer[(12, 4)].symbol(), "B");
-    assert_ne!(buffer[(12, 4)].fg, peach);
+    assert_eq!(buffer[(15, 4)].symbol(), "B");
+    assert_ne!(buffer[(15, 4)].fg, peach);
 }
 
 #[test]
@@ -1921,11 +1938,11 @@ fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
     press(&mut app, "r");
     assert_eq!(app.mode, Mode::Replace);
     let buffer = screen(&app);
-    assert_eq!(buffer[(5, 2)].bg, vt_tui::theme::RED);
-    assert_eq!(buffer[(4, 2)].symbol(), " ");
+    assert_eq!(buffer[(8, 2)].bg, vt_tui::theme::RED);
+    assert_eq!(buffer[(7, 2)].symbol(), " ");
     press(&mut app, "a");
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(screen(&app)[(5, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(screen(&app)[(8, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
 #[test]

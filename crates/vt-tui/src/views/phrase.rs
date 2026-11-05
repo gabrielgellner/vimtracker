@@ -17,8 +17,8 @@ use crate::theme;
 
 /// The width of a read-only note column for another track.
 const NEIGHBOUR_WIDTH: usize = 4;
-/// Room for the step number, playhead marker and gap.
-const GUTTER: usize = 5;
+/// Room for the distance from the cursor, the step number, the playhead marker and a gap.
+const GUTTER: usize = 8;
 
 /// The rows that aren't steps: the heading, and the box's top and bottom. The box always has its
 /// room, so nothing moves when Insert starts.
@@ -133,6 +133,16 @@ fn neighbour_playing(app: &App, track: usize, section_step: usize) -> bool {
         })
 }
 
+/// How far a row is from the cursor's, as the count to type before `j` or `k`, so it is decimal.
+/// The cursor's own row is blank.
+fn relative_number(index: usize, cursor: usize) -> String {
+    match index.abs_diff(cursor) {
+        0 => "   ".to_owned(),
+        // Long phrases can reach three digits, which then use up the gap.
+        distance => format!("{:<3}", format!("{distance:>2}")),
+    }
+}
+
 fn track_label(app: &App, track: usize) -> String {
     let live = app.levels.get(track).copied().unwrap_or_default();
     let flag = if live.mute {
@@ -204,9 +214,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let number = if index % BEAT_STEPS == 0 {
             Style::new().fg(theme::YELLOW)
         } else {
-            theme::dim()
+            Style::new().fg(theme::SUBTEXT1)
         };
         let mut spans = vec![
+            Span::styled(relative_number(index, app.cursor.step), theme::faint()),
             Span::styled(format!("{index:02X}"), number),
             Span::styled(format!(" {marker}"), theme::active()),
             Span::styled(side, edge),

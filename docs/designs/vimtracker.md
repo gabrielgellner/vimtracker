@@ -689,7 +689,9 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 
 **Key conventions.** Keys inherited from Vim keep Vim's meaning. New bindings follow the author's Neovim rules: a capital is the wider version of its lowercase key, and a doubled key is the ordinary case. A key may be both an action and a prefix only if losing a timeout does nothing wrong.
 
-**Status line.** It always shows the mode, CPU load (callback time divided by buffer duration), the late count, and swing and BPM. Errors and notices go here.
+**Status line.** It always shows the mode, swing and BPM. Errors and notices go here. How the program itself is running, meaning CPU load (callback time divided by buffer duration), the late count and xruns, sits at the top right of the view instead, and turns red on a dropout.
+
+**Step numbers.** The phrase view shows each step's number in hex and, more faintly to its left, its distance from the cursor in decimal, which is the count to type before `j` or `k`.
 
 **Commands.** `:q`, `:e` and `Space qq` refuse with unsaved changes, as in Vim.
 

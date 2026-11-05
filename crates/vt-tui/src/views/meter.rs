@@ -105,7 +105,7 @@ pub fn draw(frame: &mut Frame, area: Rect, meter: &Meter, limiter: bool) {
     let reduction = meter.reduction.top;
     // The limiter should never be working, so any amount at all is a warning and reads at least 1.
     let reduction_style = if reduction > 0.0 {
-        Style::new().fg(theme::RED).add_modifier(Modifier::BOLD)
+        theme::warning()
     } else {
         theme::dim()
     };

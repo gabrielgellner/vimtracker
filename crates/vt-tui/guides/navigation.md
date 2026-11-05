@@ -30,6 +30,10 @@ A number before a motion repeats it, as in Vim.
 
 Step numbers on screen are hex, so step `10` on screen is the 17th step.
 
+The fainter number left of each step is how far it is from the cursor, as in
+Neovim's relative line numbers. It is decimal, so it is the count to type:
+if a row shows `10`, then `10j` or `10k` lands on it.
+
 ## Moving between things
 
 | Keys | Does |

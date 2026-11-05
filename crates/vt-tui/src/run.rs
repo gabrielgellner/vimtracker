@@ -139,10 +139,11 @@ fn main_loop(
                 View::Phrase => views::phrase::draw(frame, view, app),
                 View::Instrument => views::instrument::draw(frame, view, app),
             }
+            views::system::draw(frame, view, app, Some(stats));
             if let Some(meter) = meter {
                 views::meter::draw(frame, meter, &app.meter, app.song().limiter);
             }
-            views::status::draw(frame, status, app, Some(stats));
+            views::status::draw(frame, status, app);
             views::help::draw_popup(frame, body, app, Instant::now());
             if app.mode == Mode::Help {
                 views::help::draw_help(frame, body, app);

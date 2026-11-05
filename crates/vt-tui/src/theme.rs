@@ -14,7 +14,9 @@ pub const GREEN: Color = Color::Rgb(0xa6, 0xd1, 0x89);
 pub const TEAL: Color = Color::Rgb(0x81, 0xc8, 0xbe);
 pub const BLUE: Color = Color::Rgb(0x8c, 0xaa, 0xee);
 pub const TEXT: Color = Color::Rgb(0xc6, 0xd0, 0xf5);
+pub const SUBTEXT1: Color = Color::Rgb(0xb5, 0xbf, 0xe2);
 pub const OVERLAY2: Color = Color::Rgb(0x94, 0x9c, 0xbb);
+pub const OVERLAY0: Color = Color::Rgb(0x73, 0x79, 0x94);
 pub const SURFACE1: Color = Color::Rgb(0x51, 0x57, 0x6d);
 pub const BASE: Color = Color::Rgb(0x30, 0x34, 0x46);
 pub const MANTLE: Color = Color::Rgb(0x29, 0x2c, 0x3c);
@@ -50,6 +52,16 @@ pub fn selected() -> Style {
 /// Text that matters less than what is around it.
 pub fn dim() -> Style {
     Style::new().fg(OVERLAY2)
+}
+
+/// Text that helps without asking to be read.
+pub fn faint() -> Style {
+    Style::new().fg(OVERLAY0)
+}
+
+/// Something has gone wrong and needs noticing.
+pub fn warning() -> Style {
+    Style::new().fg(RED).add_modifier(Modifier::BOLD)
 }
 
 /// An instrument's label, so a name that means something reads differently from a number.
