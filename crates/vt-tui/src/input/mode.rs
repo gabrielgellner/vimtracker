@@ -8,6 +8,9 @@ pub enum View {
 }
 
 impl View {
+    /// Every view, in the order the picker starts with.
+    pub const ALL: [Self; 2] = [Self::Phrase, Self::Instrument];
+
     /// The view's name.
     pub fn name(self) -> &'static str {
         match self {
@@ -30,6 +33,7 @@ pub enum Mode {
     Insert,
     Command,
     Help,
+    Picker,
     /// Normal mode's keys in the instrument view. Only the binding table and the label use this.
     Instrument,
 }
@@ -44,6 +48,7 @@ impl Mode {
             Self::Insert => "INSERT",
             Self::Command => "COMMAND",
             Self::Help => "HELP",
+            Self::Picker => "PICK",
             Self::Instrument => "INST",
         }
     }

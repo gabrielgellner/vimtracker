@@ -91,6 +91,9 @@ fn main_loop(
             if app.mode == Mode::Help {
                 views::help::draw_help(frame, body, app);
             }
+            if let Some(picker) = &app.picker {
+                views::picker::draw(frame, body, picker);
+            }
         })?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {

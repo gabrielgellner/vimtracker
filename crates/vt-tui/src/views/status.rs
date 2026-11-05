@@ -57,7 +57,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
             Mode::VisualField | Mode::VisualStep => Color::Magenta,
             Mode::Insert => Color::Green,
             Mode::Command => Color::Yellow,
-            Mode::Help => Color::Cyan,
+            Mode::Help | Mode::Picker => Color::Cyan,
         })
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {

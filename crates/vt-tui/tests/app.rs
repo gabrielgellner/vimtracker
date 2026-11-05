@@ -11,7 +11,7 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::input::keys::Key;
+use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 
 fn app() -> (App, Realtime) {
@@ -468,16 +468,85 @@ fn moving_between_instruments_creates_one_only_when_set() {
     assert_eq!(app.mode, Mode::Normal);
 }
 
+fn wav(path: &std::path::Path) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    writer.write_sample(1000_i16).unwrap();
+    writer.finalize().unwrap();
+}
+
 #[test]
-fn the_samples_row_starts_a_typed_path_and_transport_keys_still_work() {
+fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 5i");
-    assert_eq!(app.mode, Mode::Command);
-    assert_eq!(app.command_line, "sample ");
+    let folder = std::env::temp_dir().join(format!("vt-browse-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(folder.join("kit/.hidden")).unwrap();
+    wav(&folder.join("kit/kick.wav"));
+    wav(&folder.join("kit/snare.WAV"));
+    wav(&folder.join("kit/.hidden/secret.wav"));
+    std::fs::write(folder.join("kit/notes.txt"), "not audio").unwrap();
+
+    command(&mut app, &format!("sample {}", folder.display()));
+    assert_eq!(app.mode, Mode::Picker);
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["kit/kick.wav", "kit/snare.WAV"]);
+    press(&mut app, "sn");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    let chosen = app.song().instruments[&0].sample.clone().unwrap();
+    assert!(chosen.ends_with("snare.WAV"), "{chosen}");
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn the_view_picker_flips_back_and_escape_changes_nothing() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5");
+    assert_eq!(app.view, View::Instrument);
+    press(&mut app, "  ");
+    assert_eq!(app.mode, Mode::Picker);
+    // Keys that would edit in other modes only search here.
+    press(&mut app, "x");
+    assert_eq!(app.view, View::Instrument);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.key_scope(), Mode::Instrument);
-    assert_eq!(app.key_scope().label(), "INST");
+    assert_eq!(app.view, View::Instrument);
+    assert!(app.picker.is_none());
+    // The list starts on the view before this one.
+    press(&mut app, " ff");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Phrase);
+    press(&mut app, "  ");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Instrument);
+}
+
+#[test]
+fn the_view_picker_searches_and_moves_with_ctrl_keys() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "  ins");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Instrument);
+    press(&mut app, "  zz");
+    special(&mut app, KeyCode::Backspace);
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 2);
+    app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
+    assert_eq!(app.picker.as_ref().unwrap().selected, 0);
+    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
+    assert_eq!(app.picker.as_ref().unwrap().selected, 1);
+    special(&mut app, KeyCode::Esc);
 }
 
 #[test]

@@ -57,6 +57,7 @@ pub enum Cmd {
     Double,
     Help,
     ShowView(View),
+    Picker,
     /// Play the current instrument.
     Hear,
 }
@@ -125,6 +126,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         Cmd::ShowView(View::Instrument),
         "Instrument view",
     ),
+    ("Space Space", Cmd::Picker, "Open the view picker"),
+    ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space ?", Cmd::Help, "Show every key"),
     ("W", Cmd::NextTrack, "Next track"),
     ("B", Cmd::PreviousTrack, "Previous track"),
