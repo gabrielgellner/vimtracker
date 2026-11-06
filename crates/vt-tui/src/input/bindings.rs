@@ -64,6 +64,8 @@ pub enum Cmd {
     RotateLoop(isize),
     /// Move the loop so that it starts on the cursor's step.
     StartLoopHere,
+    /// End the loop on the cursor's step.
+    EndLoopHere,
     Help,
     Guides,
     ShowView(View),
@@ -226,6 +228,7 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "Rotate the loop's steps earlier",
     ),
     ("g s", Cmd::StartLoopHere, "Start the loop on this step"),
+    ("g e", Cmd::EndLoopHere, "End the loop on this step"),
 ];
 
 /// Keys for the chain view.

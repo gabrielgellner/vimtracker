@@ -1205,3 +1205,51 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
     keys(&mut app, "lllrCUTFF");
     assert_eq!(steps(&app)[0], "--- -- -- CUTFF ---00 ---00");
 }
+
+#[test]
+fn ge_ends_the_loop_on_the_cursor_and_keeps_what_is_stored() {
+    let (mut app, _rt) = app_with(&[A, B, E, E, E, E]);
+    let length = |app: &App| app.song().phrases[&0].len();
+    keys(&mut app, "jjge");
+    assert_eq!(length(&app), 3);
+    assert_eq!(steps(&app).len(), 6, "nothing is lost");
+    assert_eq!(app.cursor.step, 2);
+
+    // Below the loop, it brings the steps in.
+    keys(&mut app, "jjge");
+    assert_eq!(length(&app), 5);
+    keys(&mut app, "u");
+    assert_eq!(length(&app), 3);
+}
+
+#[test]
+fn ge_counts_from_the_loop_start() {
+    let (mut app, _rt) = app_with(&[A, B, E, E, E, E]);
+    keys(&mut app, ":len 2<Enter>]ljjge");
+    let phrase = &app.song().phrases[&0];
+    assert_eq!((phrase.start(), phrase.len()), (1, 3));
+}
+
+#[test]
+fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
+    let (mut app, _rt) = app_with(&[E, E, E, E]);
+    keys(&mut app, ":len 2<Enter>]l");
+    let depth = app.history.undo_depth();
+    app.cursor.step = 0;
+    keys(&mut app, "ge");
+    assert_eq!(app.song().phrases[&0].len(), 2);
+    assert!(app.status.contains("above its start"), "{}", app.status);
+    app.cursor.step = 2;
+    keys(&mut app, "ge");
+    assert_eq!(app.song().phrases[&0].len(), 2);
+    assert_eq!(app.history.undo_depth(), depth);
+}
+
+#[test]
+fn len_takes_hex_after_0x() {
+    let (mut app, _rt) = app_with(&[E; 32]);
+    keys(&mut app, ":len 0x10<Enter>");
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    keys(&mut app, ":len 10<Enter>");
+    assert_eq!(app.song().phrases[&0].len(), 10);
+}

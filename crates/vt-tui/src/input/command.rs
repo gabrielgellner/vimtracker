@@ -56,7 +56,7 @@ pub enum LineError {
     Label,
     #[error(":bpm takes a number from 20 to 400")]
     Bpm,
-    #[error(":len takes a number of steps, 1 or more")]
+    #[error(":len takes a number of steps, 1 or more, with 0x for hex: 0x10")]
     Len,
     #[error(":track takes add [n] or del")]
     Track,
@@ -74,7 +74,7 @@ pub enum LineError {
     TrackSwing,
     #[error(":tvol takes a level in hex, from 00 to FF")]
     TrackLevel,
-    #[error(":reset takes a number of steps, 1 or more, or off")]
+    #[error(":reset takes a number of steps, 1 or more, with 0x for hex, or off")]
     Reset,
 }
 
@@ -105,6 +105,16 @@ fn millibpm(text: &str) -> Option<u32> {
     };
     let scaled: u32 = format!("{fraction:0<3}").parse().ok()?;
     whole.checked_mul(1000)?.checked_add(scaled)
+}
+
+/// Read a number of steps, 1 or more: decimal, or hex after `0x` as in Rust, since rows are numbered
+/// in hex on screen.
+fn steps(text: &str) -> Option<usize> {
+    let parsed = match text.strip_prefix("0x") {
+        Some(digits) => usize::from_str_radix(digits, 16).ok(),
+        None => text.parse().ok(),
+    };
+    parsed.filter(|steps| *steps > 0)
 }
 
 /// Read a swing percent as tenths, so `66.7` is 667.
@@ -172,10 +182,7 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "label" if is_label(argument) => Ok(Line::Label(slot_of(argument))),
         "label" => Err(LineError::Label),
         "bpm" => millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
-        "len" => match argument.parse() {
-            Ok(0) | Err(_) => Err(LineError::Len),
-            Ok(length) => Ok(Line::Len(length)),
-        },
+        "len" => steps(argument).map(Line::Len).ok_or(LineError::Len),
         "track" => match argument.split_whitespace().collect::<Vec<_>>()[..] {
             ["add"] => Ok(Line::TrackAdd(1)),
             ["add", count] => count
@@ -200,10 +207,9 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             .map(Line::TrackLevel)
             .map_err(|_| LineError::TrackLevel),
         "reset" if argument == "off" => Ok(Line::Reset(None)),
-        "reset" => match argument.parse() {
-            Ok(0) | Err(_) => Err(LineError::Reset),
-            Ok(steps) => Ok(Line::Reset(Some(steps))),
-        },
+        "reset" => steps(argument)
+            .map(|steps| Line::Reset(Some(steps)))
+            .ok_or(LineError::Reset),
         "render" => render(argument),
         "chain" => u32::from_str_radix(argument, 16)
             .map(Line::Chain)
@@ -271,6 +277,27 @@ mod tests {
         assert_eq!(parse("reset off"), Ok(Line::Reset(None)));
         assert!(parse("reset 0").is_err());
         assert!(parse("reset").is_err());
+        assert_eq!(parse("reset 0x40"), Ok(Line::Reset(Some(64))));
+        assert_eq!(parse("len 16"), Ok(Line::Len(16)));
+        assert_eq!(parse("len 0x10"), Ok(Line::Len(16)));
+        assert_eq!(parse("len 0xfF"), Ok(Line::Len(255)));
+        assert_eq!(
+            parse("len 10"),
+            Ok(Line::Len(10)),
+            "plain numbers stay decimal"
+        );
+        for wrong in [
+            "len 0x",
+            "len 0x0",
+            "len 0",
+            "len 0xg",
+            "len x10",
+            "len 0X10",
+            "reset x40",
+            "reset 0x0",
+        ] {
+            assert!(parse(wrong).is_err(), "{wrong}");
+        }
         assert_eq!(parse("tvol C0"), Ok(Line::TrackLevel(0xC0)));
         assert_eq!(parse("tvol"), Err(LineError::TrackLevel));
         assert_eq!(parse("tvol 100"), Err(LineError::TrackLevel));

@@ -20,6 +20,7 @@ To bring them back together on a schedule, set a reset:
 | Command | Does |
 |---|---|
 | `:reset 64` | Send every track to its start every 64 steps |
+| `:reset 0x40` | The same, in hex like the row numbers |
 | `:reset off` | Let them run, the default |
 
 The status line shows `Reset 64` while one is on. A track longer than the

@@ -82,8 +82,9 @@ it are negative, so yellow beats are always `00`, `04`, `08`.
 | `]l` `[l` | Slide the loop a step later or earlier |
 | `]L` `[L` | Slide it a beat later or earlier. Counts work: `4]L` |
 | `gs` | Start the loop on the cursor's step |
+| `ge` | End the loop on the cursor's step |
 | `]r` `[r` | Rotate the loop's steps later or earlier |
-| `:len 32` | Set how many steps the loop plays |
+| `:len 32` | Set how many steps the loop plays. Or in hex: `:len 0x20` |
 | `:double` or `Space pd` | Repeat the loop so it is twice as long |
 
 Sliding works while playing, and stays in time. `00` stays where it is and
@@ -92,7 +93,7 @@ the notes move under it. Sliding past either end adds empty steps.
 Rotating wraps whole steps round within the loop, and leaves dim steps
 alone. It works while playing, and counts work: `3]r`.
 
-Length changes wait until you stop, since a new length moves where playback
+`ge`, `:len` and `:double` wait until you stop, since a new length moves where playback
 lands. The loop is saved with the phrase, along with what is outside it.
 
 A phrase used in two places shares one loop. Copy it with `gc` to give one

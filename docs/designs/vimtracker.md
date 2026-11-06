@@ -407,7 +407,7 @@ Actions are plain data, so `.` can replay them and tests can run editing without
     loop's start, so `00` is always beat 1, beats stay at multiples of 4, and rows above it are negative. There is no
     separate play marker as in Ableton: the loop's start is the 1. Internally the cursor and edits use stored positions,
     and only the view, the beat motions and `chain_position` convert. `]l` `[l` and `]L` `[L` slide it, keeping its
-    length, and `gs` starts it on the cursor. `]r` `[r` rotate whole steps within the loop, wrapping round and leaving steps outside it alone. Slides work during playback and stay in time, since position comes from
+    length, `gs` starts it on the cursor, and `ge` ends it there, so the row can be chosen rather than read off and converted. `]r` `[r` rotate whole steps within the loop, wrapping round and leaving steps outside it alone. Slides work during playback and stay in time, since position comes from
     the section's step count. Length changes are refused until stopped, as a new length moves where playback lands.
 *   **Moving through the tree.** `gd` opens the item under the cursor, and on an empty reference it creates the
     next unused ID, assigns it and opens it. `Ctrl-O` jumps back, `Tab` jumps forward, and `grr` lists uses in the
@@ -755,7 +755,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |
 | `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
-| `:len n` | How many steps the loop plays, while stopped. Steps outside it are kept and saved |
+| `:len n` | How many steps the loop plays, while stopped. Decimal, or hex after `0x` as in Rust: `:len 0x10`. `:reset` reads numbers the same way. Steps outside it are kept and saved |
 | `:double` | Double the loop, while stopped |
 | `:gen apply` | Apply the live generator under the cursor |
 | `:render path [--rows n] [--tail]` | Render to WAV |

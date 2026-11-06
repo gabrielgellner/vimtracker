@@ -2053,6 +2053,20 @@ fn the_playhead_marks_where_the_loop_is_playing() {
 }
 
 #[test]
+fn ge_waits_until_stopped_like_other_length_changes() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "jj");
+    app.transport = Transport::Playing;
+    let length = app.song().phrases[&0].len();
+    press(&mut app, "ge");
+    assert_eq!(app.song().phrases[&0].len(), length);
+    assert!(app.status.contains("until stopped"), "{}", app.status);
+    app.transport = Transport::Stopped;
+    press(&mut app, "ge");
+    assert_eq!(app.song().phrases[&0].len(), 3);
+}
+
+#[test]
 fn length_changes_wait_until_stopped_and_slides_dont() {
     let (mut app, _realtime) = app();
     for transport in [Transport::Playing, Transport::Paused] {

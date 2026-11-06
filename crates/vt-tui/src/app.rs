@@ -495,6 +495,7 @@ impl App {
                 self.rotate_loop(by * times as isize);
             }
             Cmd::StartLoopHere => self.start_loop_here(),
+            Cmd::EndLoopHere => self.end_loop_here(),
             Cmd::ShowView(view) => self.jump_to_view(view),
             Cmd::Picker => self.open_view_picker(),
             Cmd::Help => {
@@ -627,6 +628,23 @@ impl App {
             && let Some(phrase) = self.phrase_id()
         {
             self.apply(&Action::SlideLoop { phrase, by });
+        }
+    }
+
+    /// End the loop on the cursor's step, so its row is the last that plays. Steps after it stay
+    /// stored, and a dim step below the loop brings the steps before it in.
+    fn end_loop_here(&mut self) {
+        let extent = self.extent();
+        let Ok(row) = usize::try_from(extent.row(self.cursor.step)) else {
+            self.status = "The loop can't end above its start".to_owned();
+            return;
+        };
+        let length = row + 1;
+        if let Some(phrase) = self.phrase_id()
+            && length != extent.length
+            && self.can_change_length()
+        {
+            self.apply(&Action::SetLength { phrase, length });
         }
     }
 
