@@ -49,6 +49,11 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
         View::Track | View::Mixer => app.track_control().label().to_owned(),
+        View::Song => match app.song_column {
+            0 => "Length".to_owned(),
+            1 => "Start".to_owned(),
+            column => format!("Track {:02} chain", column - 1),
+        },
     }
 }
 
@@ -62,9 +67,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Track | Mode::Mixer => {
-                theme::BLUE
-            }
+            Mode::Normal
+            | Mode::OperatorPending
+            | Mode::Chain
+            | Mode::Track
+            | Mode::Mixer
+            | Mode::Song => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
@@ -101,11 +109,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or(0, |t| t.level);
     // Only shown when on, since it changes what you hear and tracks otherwise run freely.
     let reset = app
-        .song()
-        .sections
-        .first()
+        .section_here()
         .and_then(|s| s.reset)
         .map_or_else(String::new, |steps| format!("Reset {steps}  "));
+    let sections = app.song().sections.len();
+    let section = if sections > 1 {
+        let looping = if app.looping.is_some() { " loop" } else { "" };
+        format!("Sec {}/{sections}{looping}  ", app.cursor.section + 1)
+    } else {
+        String::new()
+    };
+    let reset = format!("{section}{reset}");
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),

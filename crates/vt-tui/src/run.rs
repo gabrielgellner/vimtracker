@@ -174,6 +174,7 @@ fn main_loop(
                 View::Phrase => views::phrase::draw(frame, view, app),
                 View::Track => views::track::draw(frame, view, app),
                 View::Mixer => views::mixer::draw(frame, view, app),
+                View::Song => views::song::draw(frame, view, app),
             }
             views::system::draw(frame, view, app, Some(stats));
             if let Some(meter) = meter {

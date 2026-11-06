@@ -5,7 +5,6 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_engine::engine::Transport;
 use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::Scope;
 use vt_model::step::{FxSlot, Mark, Step};
@@ -91,12 +90,10 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
 fn playhead_step(app: &App) -> Option<usize> {
-    if app.transport != Transport::Playing && app.transport != Transport::Paused {
-        return None;
-    }
+    let playhead = app.playhead_here()?;
     let song = app.song();
-    let chain = (*song.sections.first()?.chains.get(app.cursor.track)?)?;
-    let position = song.chain_position(chain, app.playhead)?;
+    let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
+    let position = song.chain_position(chain, playhead)?;
     let start = song.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some(start + position.step)
@@ -125,18 +122,14 @@ struct Column<'a> {
 
 /// The phrase a track is on now, or the one that would play from the cursor while stopped.
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
-    let moving = matches!(app.transport, Transport::Playing | Transport::Paused);
-    let place = if moving {
-        app.playhead
-    } else {
-        app.section_step()
-    };
+    let moving = app.playhead_here();
+    let place = moving.unwrap_or_else(|| app.section_step());
     let song = app.song();
-    let chain = (*song.sections.first()?.chains.get(track)?)?;
+    let chain = (*app.section_here()?.chains.get(track)?)?;
     let position = song.chain_position(chain, place)?;
     Some(Column {
         steps: song.phrases.get(&position.phrase)?.loop_steps(),
-        playing: moving.then_some(position.step),
+        playing: moving.map(|_| position.step),
     })
 }
 

@@ -42,11 +42,16 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
     let Some(section) = song.sections.first() else {
         return Vec::new();
     };
-    let longest = song.section_steps(section);
+    let longest = song.song_steps();
     if longest == 0 {
         return Vec::new();
     }
-    let section = section.reset.unwrap_or(longest);
+    // A song with sections is rendered through once, and one section as its loop.
+    let section = if song.sections.len() == 1 {
+        section.reset.unwrap_or(longest)
+    } else {
+        longest
+    };
     let at_step =
         |step: usize| sample_of_tick(step as u64 * TICKS_PER_STEP, rate, millibpm) as usize;
     let warm = at_step(section);
@@ -60,7 +65,7 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
     engine.play_from(0);
     let mut discard = vec![0.0; warm * 2];
     engine.process(&mut discard);
-    engine.realign();
+    engine.rewind();
     let mut out = vec![0.0; length * 2];
     engine.process(&mut out);
     if options.tail {

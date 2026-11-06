@@ -96,6 +96,10 @@ pub enum Cmd {
     Shape,
     /// Choose this track's sample from a list.
     PickSample,
+    /// Add a section after this one.
+    AddSection,
+    /// Copy this section after itself.
+    CloneSection,
     /// Go to a part of the track page.
     ShowPage(Page),
 }
@@ -160,6 +164,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
     ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
+    ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
     ("Space 4", Cmd::ShowView(View::Track), "Track page"),
@@ -298,6 +303,34 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("K", Cmd::PickValue, "Choose this setting from a list"),
 ];
 
+const SONG: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next section"),
+    ("k", Cmd::Move(Motion::Up), "Previous section"),
+    ("g g", Cmd::Move(Motion::First), "First section"),
+    ("G", Cmd::Move(Motion::Last), "Last section"),
+    ("h", Cmd::Move(Motion::Left), "Previous column"),
+    ("l", Cmd::Move(Motion::Right), "Next column"),
+    ("0", Cmd::Move(Motion::RowStart), "Length column"),
+    ("$", Cmd::Move(Motion::RowEnd), "Last track's column"),
+    ("=", Cmd::Increase, "Increase the value"),
+    ("-", Cmd::Decrease, "Decrease the value"),
+    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+    ("C-a", Cmd::Increase, "Increase the value"),
+    ("C-x", Cmd::Decrease, "Decrease the value"),
+    (
+        "x",
+        Cmd::ClearField,
+        "Follow the longest chain, carry, or no chain",
+    ),
+    ("K", Cmd::PickValue, "Switch between carry and reset"),
+    ("g d", Cmd::OpenItem, "Open this chain, or add one"),
+    ("a", Cmd::AddSection, "Add a section after this one"),
+    ("g c", Cmd::CloneSection, "Copy this section after itself"),
+    ("d d", Cmd::RemoveRow, "Remove this section"),
+    (";", Cmd::Audition, "Hear the start of this section"),
+];
+
 const MIXER: &[(&str, Cmd, &str)] = &[
     ("j", Cmd::Move(Motion::Down), "Next track"),
     ("k", Cmd::Move(Motion::Up), "Previous track"),
@@ -387,6 +420,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
     add(Mode::Track, EVERY_VIEW);
+    add(Mode::Song, SONG);
+    add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MIXER);
     add(Mode::Mixer, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);

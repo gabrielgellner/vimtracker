@@ -5,7 +5,6 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_engine::engine::Transport;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -31,9 +30,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         ),
         Line::styled("Slot    Phrase  Trans  Steps", bold),
     ];
-    let playing = matches!(app.transport, Transport::Playing | Transport::Paused)
-        .then(|| song.chain_position(chain, app.playhead))
-        .flatten()
+    let playing = app
+        .playhead_here()
+        .and_then(|playhead| song.chain_position(chain, playhead))
         .map(|position| position.slot);
     let entries = app.chain_entries();
     let room = usize::from(area.height.saturating_sub(2)).max(1);

@@ -18,6 +18,10 @@ use crate::published::Published;
 pub enum Command {
     /// `Space c` and `Shift-Tab`: play from a section step, whatever is happening now.
     PlayFrom { step: usize },
+    /// `Space c`: play from a step of a section.
+    PlaySection { section: usize, step: usize },
+    /// `:loop`: keep playing a section, or go back to playing the song.
+    LoopSection(Option<usize>),
     /// `Tab`: pause in place, or play from there.
     PauseOrResume,
     /// Opening a project: stop, and go back to the start.
@@ -29,7 +33,7 @@ pub enum Command {
         velocity: u8,
     },
     /// Hear a row of the section while not playing.
-    Audition { section_step: usize },
+    Audition { section: usize, section_step: usize },
     /// Mute or unmute a track.
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
@@ -39,6 +43,7 @@ pub enum Command {
 /// What the callback reports back each block.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Telemetry {
+    pub section: usize,
     pub position: usize,
     pub transport: Transport,
     pub reading: Reading,
@@ -147,13 +152,19 @@ impl Realtime {
                     note,
                     velocity,
                 } => self.engine.preview(track, note, velocity),
-                Command::Audition { section_step } => self.engine.audition(section_step),
+                Command::PlaySection { section, step } => self.engine.play_section(section, step),
+                Command::LoopSection(section) => self.engine.set_loop_section(section),
+                Command::Audition {
+                    section,
+                    section_step,
+                } => self.engine.audition_section(section, section_step),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
             }
         }
         self.engine.process(out);
         let _ = self.telemetry.push(Telemetry {
+            section: self.engine.section(),
             position: self.engine.position(),
             transport: self.engine.transport(),
             reading: self.engine.take_reading(),
@@ -339,7 +350,10 @@ mod tests {
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
         for step in 0..50 {
-            handle.send(Command::Audition { section_step: step });
+            handle.send(Command::Audition {
+                section: 0,
+                section_step: step,
+            });
             assert_eq!(blocks(&mut rt, 4), 0);
         }
     }
@@ -427,9 +441,15 @@ mod tests {
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert_eq!(blocks(&mut rt, 1), 0);
-        handle.send(Command::Audition { section_step: 0 });
+        handle.send(Command::Audition {
+            section: 0,
+            section_step: 0,
+        });
         assert_eq!(blocks(&mut rt, 2), 0);
-        handle.send(Command::Audition { section_step: 1 });
+        handle.send(Command::Audition {
+            section: 0,
+            section_step: 1,
+        });
         assert_eq!(blocks(&mut rt, 2), 0, "the audition has been cut");
         let reading = handle.latest().unwrap().reading;
         // A 0.5 sample, which the limiter leaves alone.

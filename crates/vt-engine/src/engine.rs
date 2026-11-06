@@ -8,7 +8,7 @@ use vt_model::constants::{
 };
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
-use vt_model::song::{Track, level_gain};
+use vt_model::song::{Section, SectionStart, Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 
 use crate::dsp::delay::Delay;
@@ -56,6 +56,11 @@ pub struct Engine {
     /// The track the preview voice goes through.
     preview_track: usize,
     transport: Transport,
+    /// The section playing, and how many steps of it have fired.
+    section: usize,
+    section_place: u64,
+    /// A section to keep playing rather than moving on.
+    loop_section: Option<usize>,
     /// The next step to fire, for timing. It never wraps.
     next_step: u64,
     /// Where the next step falls for the tracks, which each loop at their own length. Separate from
@@ -91,6 +96,9 @@ impl Engine {
             preview: Voice::default(),
             preview_track: 0,
             transport: Transport::Stopped,
+            section: 0,
+            section_place: 0,
+            loop_section: None,
             next_step: 0,
             place: 0,
             origin_tick: 0,
@@ -150,7 +158,7 @@ impl Engine {
 
     /// Whether a place is one the section's reset would already have sent back to the start.
     fn past_reset(&self, place: u64) -> bool {
-        let reset = self.current.song.sections.first().and_then(|s| s.reset);
+        let reset = self.playing_section().and_then(|s| s.reset);
         reset.is_some_and(|reset| place >= reset as u64)
     }
 
@@ -161,7 +169,60 @@ impl Engine {
 
     fn section_steps(&self) -> usize {
         let song = &self.current.song;
-        song.sections.first().map_or(0, |s| song.section_steps(s))
+        self.playing_section().map_or(0, |s| song.section_steps(s))
+    }
+
+    /// The section playing. Removing one while playing moves to whichever takes its place.
+    fn playing_section(&self) -> Option<&Section> {
+        let sections = &self.current.song.sections;
+        sections.get(self.section).or(sections.last())
+    }
+
+    /// The section playing, by position.
+    pub fn section(&self) -> usize {
+        self.section
+            .min(self.current.song.sections.len().saturating_sub(1))
+    }
+
+    /// Keep playing this section rather than moving on, or go back to playing the song.
+    pub fn set_loop_section(&mut self, section: Option<usize>) {
+        self.loop_section = section;
+    }
+
+    /// Go back to the first section's start without touching anything sounding, for a render.
+    pub fn rewind(&mut self) {
+        self.section = 0;
+        self.section_place = 0;
+        self.place = 0;
+    }
+
+    /// Move to the next section if this one has played out. False if nothing has any length.
+    fn enter_section_if_due(&mut self) -> bool {
+        let song = Arc::clone(&self.current.song);
+        let count = song.sections.len();
+        if count == 0 {
+            return false;
+        }
+        self.section = self.section.min(count - 1);
+        if self.section_place < song.section_length(&song.sections[self.section]) as u64 {
+            return true;
+        }
+        for _ in 0..count {
+            let next = match self.loop_section {
+                Some(section) if section < count => section,
+                _ => (self.section + 1) % count,
+            };
+            self.section = next;
+            self.section_place = 0;
+            let section = &song.sections[next];
+            if song.section_length(section) > 0 {
+                if section.start == SectionStart::Reset {
+                    self.place = 0;
+                }
+                return true;
+            }
+        }
+        false
     }
 
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
@@ -219,10 +280,17 @@ impl Engine {
     /// Start at a step within the section, whatever is happening now. Anything sounding fades, and
     /// starting from the top resets held values.
     pub fn play_from(&mut self, step: usize) {
+        self.play_section(0, step);
+    }
+
+    /// Start at a step within a section. Only the song's very start resets held values.
+    pub fn play_section(&mut self, section: usize, step: usize) {
         self.halt(Transport::Stopped);
-        if step == 0 {
+        if section == 0 && step == 0 {
             self.reset_tracks();
         }
+        self.section = section;
+        self.section_place = step as u64;
         self.next_step = step as u64;
         self.place = step as u64;
         self.origin_tick = step as u64 * TICKS_PER_STEP;
@@ -306,6 +374,8 @@ impl Engine {
     /// Go back to the start, resetting held values and random generators. If playing, stop there.
     pub fn return_to_start(&mut self) {
         self.halt(Transport::Stopped);
+        self.section = 0;
+        self.section_place = 0;
         self.next_step = 0;
         self.place = 0;
         self.origin_tick = 0;
@@ -416,6 +486,7 @@ impl Engine {
                 self.fire_step();
                 self.next_step += 1;
                 self.place += 1;
+                self.section_place += 1;
                 continue;
             }
             if playing {
@@ -558,7 +629,7 @@ impl Engine {
 
     /// Fire every track for the next step.
     fn fire_step(&mut self) {
-        if self.section_steps() == 0 {
+        if !self.enter_section_if_due() {
             return;
         }
         if self.past_reset(self.place) {
@@ -596,7 +667,7 @@ impl Engine {
         self.tracks[index].retrigger = None;
         let current = Arc::clone(&self.current);
         let song = &current.song;
-        let Some(section) = song.sections.first() else {
+        let Some(section) = song.sections.get(self.section) else {
             return;
         };
         let Some(Some(chain)) = section.chains.get(index) else {
@@ -705,12 +776,17 @@ impl Engine {
     /// its velocity and transpose. Whatever an audition was sounding is cut first. Its
     /// FX don't run, and nothing that playback relies on changes.
     pub fn audition(&mut self, section_step: usize) {
+        self.audition_section(self.section(), section_step);
+    }
+
+    /// Hear a row of a given section while not playing.
+    pub fn audition_section(&mut self, section: usize, section_step: usize) {
         if self.transport == Transport::Playing {
             return;
         }
         let current = Arc::clone(&self.current);
         let song = &current.song;
-        let Some(section) = song.sections.first() else {
+        let Some(section) = song.sections.get(section) else {
             return;
         };
         for index in 0..song.tracks.len().min(self.tracks.len()) {

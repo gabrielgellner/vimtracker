@@ -154,10 +154,26 @@ fn centre() -> u8 {
     0x80
 }
 
+/// What a section does to the tracks when it starts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SectionStart {
+    /// Tracks keep counting from where they are.
+    #[default]
+    Carry,
+    /// Every track goes back to its start.
+    Reset,
+}
+
 /// One row of the song, holding one chain per track.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Section {
     pub chains: Vec<Option<u32>>,
+    /// How many steps it plays. If not set, the length of its longest chain.
+    #[serde(default)]
+    pub length: Option<usize>,
+    /// What it does to the tracks when it starts.
+    #[serde(default)]
+    pub start: SectionStart,
     /// Send every track back to its start after this many steps. Without it, each loops on its own.
     #[serde(default)]
     pub reset: Option<usize>,
@@ -435,6 +451,40 @@ impl Song {
             );
             self.sections[index].chains.push(Some(chain));
         }
+    }
+
+    /// How many steps a section plays before the next one.
+    pub fn section_length(&self, section: &Section) -> usize {
+        section
+            .length
+            .unwrap_or_else(|| self.section_steps(section))
+    }
+
+    /// How many steps the whole song plays, once through.
+    pub fn song_steps(&self) -> usize {
+        self.sections.iter().map(|s| self.section_length(s)).sum()
+    }
+
+    /// Add a section after this position, with its own new chain and phrase per track.
+    pub fn insert_section(&mut self, at: usize) {
+        let mut section = Section::default();
+        for _ in 0..self.tracks.len() {
+            let phrase = lowest_unused(&self.phrases);
+            self.phrases
+                .insert(phrase, Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
+            let chain = lowest_unused(&self.chains);
+            self.chains.insert(
+                chain,
+                Arc::new(Chain {
+                    entries: vec![ChainEntry {
+                        phrase,
+                        transpose: 0,
+                    }],
+                }),
+            );
+            section.chains.push(Some(chain));
+        }
+        self.sections.insert(at.min(self.sections.len()), section);
     }
 
     /// The total steps in a chain. A missing or empty chain has none.

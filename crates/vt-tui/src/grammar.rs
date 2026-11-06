@@ -330,7 +330,7 @@ impl App {
         let id = if track == self.cursor.track {
             self.phrase_id()?
         } else {
-            let chain = (*song.sections.first()?.chains.get(track)?)?;
+            let chain = (*self.section_here()?.chains.get(track)?)?;
             song.chain_position(chain, self.section_step())?.phrase
         };
         Some((id, song.phrases.get(&id)?.start()))

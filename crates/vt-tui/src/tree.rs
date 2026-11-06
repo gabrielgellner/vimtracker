@@ -31,7 +31,7 @@ pub struct Place {
 impl App {
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
-        let section = self.song().sections.first()?;
+        let section = self.section_here()?;
         section.chains.get(self.cursor.track).copied().flatten()
     }
 
@@ -92,6 +92,7 @@ impl App {
     fn open_item(&mut self) {
         match self.view {
             View::Chain => self.open_row(),
+            View::Song => self.open_section_chain(),
             View::Phrase | View::Track | View::Mixer => {}
         }
     }
@@ -121,34 +122,33 @@ impl App {
         self.say_if_shared();
     }
 
-    /// How many track and slot positions play a phrase.
-    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
+    /// Which sections, tracks and slots play a phrase.
+    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize, usize)> {
         let song = self.song();
         let mut uses = Vec::new();
-        let Some(section) = song.sections.first() else {
-            return uses;
-        };
-        for (track, chain) in section.chains.iter().enumerate() {
-            let Some(chain) = chain.and_then(|id| song.chains.get(&id)) else {
-                continue;
-            };
-            for (slot, entry) in chain.entries.iter().enumerate() {
-                if entry.phrase == phrase {
-                    uses.push((track, slot));
+        for (number, section) in song.sections.iter().enumerate() {
+            for (track, chain) in section.chains.iter().enumerate() {
+                let Some(chain) = chain.and_then(|id| song.chains.get(&id)) else {
+                    continue;
+                };
+                for (slot, entry) in chain.entries.iter().enumerate() {
+                    if entry.phrase == phrase {
+                        uses.push((number, track, slot));
+                    }
                 }
             }
         }
         uses
     }
 
-    /// How many tracks play the cursor's chain.
+    /// How many places in the song play the cursor's chain.
     pub fn chain_uses(&self) -> usize {
         let Some(chain) = self.chain_id() else {
             return 0;
         };
-        self.song().sections.first().map_or(0, |section| {
-            section.chains.iter().filter(|c| **c == Some(chain)).count()
-        })
+        let sections = &self.song().sections;
+        let chains = sections.iter().flat_map(|section| &section.chains);
+        chains.filter(|c| **c == Some(chain)).count()
     }
 
     fn say_if_shared(&mut self) {
@@ -189,6 +189,7 @@ impl App {
             return;
         };
         self.apply(&Action::CloneChain {
+            section: self.cursor.section,
             track: self.cursor.track,
         });
         if let Some(new) = self.chain_id() {
@@ -205,9 +206,17 @@ impl App {
         let items = self
             .phrase_uses(phrase)
             .into_iter()
-            .map(|(track, slot)| Item {
-                label: format!("Track {:02} slot {slot:02X}", track + 1),
-                pick: Pick::Use { track, slot },
+            .map(|(section, track, slot)| Item {
+                label: format!(
+                    "Section {:02} track {:02} slot {slot:02X}",
+                    section + 1,
+                    track + 1
+                ),
+                pick: Pick::Use {
+                    section,
+                    track,
+                    slot,
+                },
             })
             .collect();
         self.picker = Some(Picker::new("Uses", items));
@@ -215,8 +224,9 @@ impl App {
     }
 
     /// Go to a slot from the picker.
-    pub(crate) fn open_use(&mut self, track: usize, slot: usize) {
+    pub(crate) fn open_use(&mut self, section: usize, track: usize, slot: usize) {
         self.record_jump();
+        self.cursor.section = section;
         self.cursor.track = track;
         self.cursor.slot = slot;
         self.view = View::Phrase;
@@ -521,6 +531,7 @@ impl App {
     /// `:chain n`: point this track at a chain, creating it if needed.
     pub(crate) fn set_track_chain(&mut self, chain: u32) {
         self.apply(&Action::SetTrackChain {
+            section: self.cursor.section,
             track: self.cursor.track,
             chain,
         });

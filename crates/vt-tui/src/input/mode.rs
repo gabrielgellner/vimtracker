@@ -3,6 +3,7 @@
 /// What fills the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum View {
+    Song,
     Chain,
     Phrase,
     Track,
@@ -11,11 +12,18 @@ pub enum View {
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 4] = [Self::Phrase, Self::Chain, Self::Track, Self::Mixer];
+    pub const ALL: [Self; 5] = [
+        Self::Phrase,
+        Self::Chain,
+        Self::Song,
+        Self::Track,
+        Self::Mixer,
+    ];
 
     /// The view's name.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Song => "song",
             Self::Chain => "chain",
             Self::Phrase => "phrase",
             Self::Track => "track",
@@ -52,6 +60,8 @@ pub enum Mode {
     Track,
     /// Normal mode's keys on the mixer. Only the binding table and the label use this.
     Mixer,
+    /// Normal mode's keys in the song view. Only the binding table and the label use this.
+    Song,
 }
 
 impl Mode {
@@ -72,6 +82,7 @@ impl Mode {
             Self::Chain => "CHAIN",
             Self::Track => "TRACK",
             Self::Mixer => "MIX",
+            Self::Song => "SONG",
         }
     }
 
