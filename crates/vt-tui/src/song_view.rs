@@ -1,6 +1,7 @@
 //! What keys do in the song view: a row per section, and a column for each track's chain.
 
 use ratatui::crossterm::event::KeyCode;
+use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::selection::Motion;
@@ -71,6 +72,8 @@ impl App {
                 self.apply(&Action::CloneSection { at: section });
                 self.go_to_section(section + 1);
             }
+            Cmd::Launch => self.launch(),
+            Cmd::Capture => self.capture(),
             Cmd::RemoveRow => {
                 self.apply(&Action::RemoveSection { at: section });
                 self.go_to_section(section);
@@ -234,6 +237,79 @@ impl App {
         self.cursor.slot = 0;
         self.view = View::Chain;
         self.note_view(View::Chain);
+    }
+
+    /// `Enter`: play the chain under the cursor on its track once its current one ends, or stop
+    /// the track there on a `--`. The song stays on this section, so the jam doesn't move on.
+    fn launch(&mut self) {
+        if self.transport != Transport::Playing {
+            self.status = "Enter launches a chain while playing".to_owned();
+            return;
+        }
+        let Some(track) = self.song_track() else {
+            self.status = "Enter launches from a track's column".to_owned();
+            return;
+        };
+        let chain = self
+            .section_here()
+            .and_then(|here| here.chains.get(track).copied().flatten());
+        self.handle.send(Command::Launch { track, chain });
+        if self.looping.is_none() {
+            self.looping = Some(self.playing_section);
+            self.handle.send(Command::LoopSection(self.looping));
+        }
+        self.status = match chain {
+            Some(chain) => format!(
+                "Track {:02} plays chain {chain:02X} when its chain ends. Staying on section {:02}",
+                track + 1,
+                self.playing_section + 1
+            ),
+            None => format!(
+                "Track {:02} stops when its chain ends. Staying on section {:02}",
+                track + 1,
+                self.playing_section + 1
+            ),
+        };
+    }
+
+    /// `C`: add a section below the one playing, holding what each track is playing, and carry on
+    /// in it without a break.
+    fn capture(&mut self) {
+        if self.transport != Transport::Playing {
+            self.status = "C captures what's playing, so start the song first".to_owned();
+            return;
+        }
+        let song = self.song();
+        let Some(playing) = song.sections.get(self.playing_section) else {
+            return;
+        };
+        let chains: Vec<Option<u32>> = (0..song.tracks.len())
+            .map(|track| {
+                let row = playing.chains.get(track).copied().flatten();
+                self.jam
+                    .get(track)
+                    .and_then(|jam| jam.playing)
+                    .unwrap_or(row)
+            })
+            .collect();
+        if chains.iter().all(Option::is_none) {
+            self.status = "Nothing is playing to capture".to_owned();
+            return;
+        }
+        let at = self.playing_section + 1;
+        let mut actions = vec![Action::AddSection { at }];
+        for (track, chain) in chains.into_iter().enumerate() {
+            actions.push(Action::SetSectionChain {
+                section: at,
+                track,
+                chain,
+            });
+        }
+        self.apply(&Action::Batch(actions));
+        self.handle.send(Command::ContinueIn { section: at });
+        self.looping = Some(at);
+        self.go_to_section(at);
+        self.status = format!("Captured to section {:02}, and staying on it", at + 1);
     }
 
     /// `:loop`: keep playing the section being edited, or go back to playing the song.

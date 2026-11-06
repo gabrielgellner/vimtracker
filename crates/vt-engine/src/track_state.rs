@@ -111,9 +111,21 @@ pub struct Retrigger {
     pub factor: f32,
 }
 
+/// A chain a track is playing instead of its section's, or none if it's been stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Launched {
+    pub chain: Option<u32>,
+    /// The place it started at, as it plays from its own start.
+    pub started: u64,
+}
+
 /// One track's voices, held FX values and pending events.
 #[derive(Debug, Clone, Copy)]
 pub struct TrackState {
+    /// A chain launched in place of its section's, while jamming.
+    pub launched: Option<Launched>,
+    /// What to launch when the track's chain next ends. Inside is a chain, or none to stop it.
+    pub cued: Option<Option<u32>>,
     pub voice: Voice,
     pub tail: Voice,
     /// Live controls, kept here rather than in the song so undo can't change them.
@@ -204,6 +216,8 @@ impl TrackState {
     /// A silent track with default held values.
     pub fn new(seed: u64, index: usize) -> Self {
         Self {
+            launched: None,
+            cued: None,
             voice: Voice::default(),
             tail: Voice::default(),
             mute: false,

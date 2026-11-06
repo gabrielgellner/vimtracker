@@ -9,12 +9,12 @@ use crate::audio::LoadReadout;
 use crate::meter::Meter;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
-use vt_engine::link::{Command, Handle};
+use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
-    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, TRANSPORT_GUARD_MS,
+    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRANSPORT_GUARD_MS,
 };
 use vt_model::history::History;
 use vt_model::project::{self, ProjectError};
@@ -117,6 +117,8 @@ pub struct App {
     pub playing_section: usize,
     /// A section being kept playing, set with `:loop`.
     pub looping: Option<usize>,
+    /// What each track is launched onto and cued to, as the engine last said.
+    pub jam: Vec<JamState>,
     pub track_page: Page,
     pub track_row: usize,
     pub track_field: usize,
@@ -206,6 +208,7 @@ impl App {
             song_column: 0,
             playing_section: 0,
             looping: None,
+            jam: vec![JamState::default(); MAX_TRACKS],
             track_page: Page::Sound,
             track_row: 0,
             track_field: 0,
@@ -406,6 +409,9 @@ impl App {
             self.playhead = report.position;
             self.playing_section = report.section;
             self.transport = report.transport;
+        }
+        while let Some((track, state)) = self.handle.jam_change() {
+            self.jam[track] = state;
         }
     }
 

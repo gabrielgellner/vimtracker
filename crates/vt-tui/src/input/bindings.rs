@@ -100,6 +100,10 @@ pub enum Cmd {
     AddSection,
     /// Copy this section after itself.
     CloneSection,
+    /// Play the chain under the cursor on its track, once its current one ends.
+    Launch,
+    /// Add a section holding what each track is playing, and carry on in it.
+    Capture,
     /// Go to a part of the track page.
     ShowPage(Page),
 }
@@ -327,6 +331,16 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ("g d", Cmd::OpenItem, "Open this chain, or add one"),
     ("a", Cmd::AddSection, "Add an empty section after this one"),
     ("g c", Cmd::CloneSection, "Copy this section after itself"),
+    (
+        "Enter",
+        Cmd::Launch,
+        "Play this chain on its track next, or stop on --",
+    ),
+    (
+        "C",
+        Cmd::Capture,
+        "Add a section of what's playing, and stay on it",
+    ),
     ("d d", Cmd::RemoveRow, "Remove this section"),
     (";", Cmd::Audition, "Hear the start of this section"),
 ];

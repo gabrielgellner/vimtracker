@@ -230,3 +230,82 @@ fn songs_with_sections_render_the_same_each_time() {
     let render = || render_loop(version(whole.clone()), RATE, RenderOptions::default());
     assert_eq!(render(), render());
 }
+
+/// Play from the top, launching partway through, and give the level in each step.
+fn jam(song: Song, steps: usize, launch_at: usize, act: impl Fn(&mut Engine)) -> Vec<f32> {
+    let mut engine = Engine::new(RATE, version(song));
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    let mut before = vec![0.0; (launch_at * STEP + 3000) * 2];
+    engine.process(&mut before);
+    act(&mut engine);
+    let mut after = vec![0.0; (steps * STEP - before.len() / 2) * 2];
+    engine.process(&mut after);
+    before.extend_from_slice(&after);
+    (0..steps)
+        .map(|step| before[(step * STEP + 3000) * 2])
+        .collect()
+}
+
+#[test]
+fn a_launched_chain_waits_for_the_end_then_plays_from_its_own_start() {
+    let out = jam(song(&[&[A, A, A], &[B, C]]), 9, 1, |engine| {
+        engine.launch(0, Some(11));
+    });
+    same(&out, &[AV, AV, AV, BV, CV, BV, CV, BV, CV]);
+}
+
+#[test]
+fn launching_on_a_none_stops_the_track_at_its_end() {
+    let out = jam(song(&[&[A, A]]), 5, 0, |engine| engine.launch(0, None));
+    same(&out, &[AV, AV, 0.0, 0.0, 0.0]);
+}
+
+#[test]
+fn launches_end_on_a_new_section_or_playing_again() {
+    let mut engine = Engine::new(RATE, version(song(&[&[A, A], &[B]])));
+    engine.play_from(0);
+    engine.launch(0, Some(11));
+    let mut out = vec![0.0; 3 * STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.jam(0).playing, None, "the song moved on");
+
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    engine.launch(0, Some(11));
+    let mut out = vec![0.0; 3 * STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.jam(0).playing, Some(Some(11)));
+    engine.play_from(0);
+    assert_eq!(engine.jam(0).playing, None);
+}
+
+#[test]
+fn a_reset_keeps_a_launched_chain_and_starts_it_over() {
+    let mut reset = song(&[&[A, A], &[B, C, C]]);
+    reset.sections[0].start = SectionStart::Reset;
+    let out = jam(reset, 7, 0, |engine| engine.launch(0, Some(11)));
+    // Launched at step 2. The section's 2 steps send it back to the chain's start each time.
+    same(&out, &[AV, AV, BV, CV, BV, CV, BV]);
+}
+
+#[test]
+fn continuing_in_a_captured_section_doesnt_change_what_plays() {
+    let mut captured = song(&[&[A, A, A], &[B, C]]);
+    captured.sections.insert(1, captured.sections[1].clone());
+    let play = |capture: bool| {
+        let mut engine = Engine::new(RATE, version(captured.clone()));
+        engine.set_loop_section(Some(0));
+        engine.play_from(0);
+        engine.launch(0, Some(11));
+        let mut out = vec![0.0; 10 * STEP * 2];
+        let (early, late) = out.split_at_mut(4 * STEP * 2);
+        engine.process(early);
+        if capture {
+            engine.continue_in(1);
+        }
+        engine.process(late);
+        out
+    };
+    assert_eq!(play(true), play(false));
+}

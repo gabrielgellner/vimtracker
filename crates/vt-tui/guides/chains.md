@@ -5,8 +5,8 @@ plays in order, each with its own transpose. Tracks can loop at different
 lengths.
 
 Each track has its own chains and phrases, numbered from `00` to `FF`. Chain
-`03` on one track has nothing to do with chain `03` on another. To use a part
-on another track, copy its steps with `y` and `p`.
+`03` on one track has nothing to do with chain `03` on another. To use a
+part on another track, copy its steps with `y` and `p`.
 
 ## Tracks of different lengths
 
@@ -60,7 +60,7 @@ an edit changes all of them.
 |---|---|
 | `gc` | Copy this phrase, and use the copy here |
 | `gC` | Copy this chain and all its phrases |
-| `grr` | List where this track plays this phrase, in a phrase or chain view |
+| `grr` | List where this track plays this phrase |
 
 ## Tracks
 
@@ -102,9 +102,9 @@ note. It also turns down what the track sends to the delay and reverb.
 
 ## Songs
 
-A song is a list of sections, each choosing one of every track's chains. Press `Space 1`
-for the song view, with a row per section. The other views edit the section the
-cursor is on, and `Sec 2/4` on the status line says which.
+A song is a list of sections, each choosing one of every track's chains.
+Press `Space 1` for the song view, with a row per section. The other views edit
+the section the cursor is on, and `Sec 2/4` on the status line says which.
 
 | Keys | Does |
 |---|---|
@@ -118,6 +118,8 @@ cursor is on, and `Sec 2/4` on the status line says which.
 | `a` | Add an empty section after this one |
 | `gc` | Copy this section after itself, using the same chains |
 | `dd` | Remove this section |
+| `Enter` | While playing, play this chain on its track next, or stop it on `--` |
+| `C` | While playing, add a section of what's playing, and stay on it |
 | `;` | Hear its first row |
 
 Sections play in order, and the song goes round to the first at the end. A
@@ -132,3 +134,15 @@ from where they were, and `reset` sends them all back to their start.
 section being edited. `:loop` keeps playing the section being edited while you
 work on it, and `:loop` again goes back to the song. A `:render` of a song covers
 it once through, and `--stems` does too.
+
+## Jamming
+
+While the song plays, `Enter` on any chain, on any row, plays it on that track
+once the track's current chain ends. `~` marks a chain waiting to start, `>` one
+that's been launched, and the song stays on the section it's on. A launch doesn't
+change the song, and it ends when the song moves on or plays again.
+
+When you like what you hear, `C` adds a section below with what each track is
+playing, and carries on in it without a break. A stopped track becomes `--`. Keep
+going to build up an arrangement a row at a time. Tracks launched at different
+times can be out of step, so a row can sound different played from its start.

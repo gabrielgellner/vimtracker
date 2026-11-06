@@ -87,6 +87,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             format!("{number:<NUMBER_WIDTH$}"),
             number_style,
         )];
+        let playing_here = moving && index == app.playing_section;
         let mut cell = |text: String, column: usize, width: usize, faint: bool| {
             let selected = here && app.song_column == column;
             let typing = selected && app.mode == Mode::Insert;
@@ -119,12 +120,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         cell(start.to_owned(), 1, START_WIDTH, false);
         for track in shown_tracks.clone() {
             let chain = section.chains.get(track).copied().flatten();
+            let jam = app.jam.get(track).copied().unwrap_or_default();
             let text = chain.map_or_else(|| "--".to_owned(), |id| format!("{id:02X}"));
+            // `~` is waiting to start, `>` is launched, and a row's chain that's been replaced dims.
+            let mark = if jam.cued == Some(chain) {
+                "~"
+            } else if chain.is_some() && jam.playing == Some(chain) {
+                ">"
+            } else {
+                ""
+            };
+            let replaced = playing_here && jam.playing.is_some_and(|playing| playing != chain);
             cell(
-                text,
+                format!("{text}{mark}"),
                 COLUMNS_BEFORE_TRACKS + track,
                 TRACK_WIDTH,
-                chain.is_none(),
+                chain.is_none() || replaced,
             );
         }
         lines.push(Line::from(spans));
