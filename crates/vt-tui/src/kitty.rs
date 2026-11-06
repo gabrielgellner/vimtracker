@@ -30,11 +30,11 @@ const POSITIONS: [char; 28] = [
 /// The most base64 the protocol takes in one command.
 const CHUNK: usize = 4096;
 /// The grid of dots an envelope is drawn on, for each character.
-const CELL_DOTS_ACROSS: usize = 4;
-const CELL_DOTS_DOWN: usize = 8;
+const CELL_DOTS_ACROSS: usize = 6;
+const CELL_DOTS_DOWN: usize = 12;
 /// The pixels across and down each dot. Kitty smooths an image it scales, so a dot is a solid block
 /// that's already near its final size, which keeps its edges crisp.
-const DOT_PIXELS: usize = 4;
+const DOT_PIXELS: usize = 3;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn an_envelope_is_a_small_png_of_one_colour_on_nothing() {
         let png = envelope_png(&adsr(1, 200, 0, 50), [1, 2, 3], 28, 4);
-        assert!(png.len() < 8000, "{}", png.len());
+        assert!(png.len() < 10_000, "{}", png.len());
         let (chunks, _) = decode(&png);
         let names: Vec<&str> = chunks.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(names, ["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
