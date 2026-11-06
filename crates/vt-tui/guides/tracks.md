@@ -1,11 +1,13 @@
 # The track page, envelopes and LFOs
 
-Press `Space 4` for what a track holds apart from its steps. FX columns belong
+Press `Space 4` for what a track holds apart from its steps, on two pages: Sound
+has its sample, filter and output, and Mod its envelopes and LFOs. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
 | Keys | Does |
 |---|---|
+| `H` `L` | The Sound page or the Mod page |
 | `W` `B` | Next or previous track |
 | `j` `k` | Next or previous row |
 | `h` `l` | Previous or next setting. `0` and `$` go to the ends |

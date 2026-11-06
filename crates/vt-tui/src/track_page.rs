@@ -53,6 +53,8 @@ pub enum EnvelopeField {
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
+    /// The file it plays.
+    Sample,
     Base(TrackControl),
     Level,
     Swing,
@@ -106,15 +108,39 @@ pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelop
 /// Each LFO's row.
 pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
 
-/// Every row, top to bottom.
-pub const ROWS: [&[Control]; 2 + TRACK_ENVELOPES + LFOS_PER_TRACK] = [
-    &FILTER,
-    &OUTPUT,
-    &ENVELOPES[0],
-    &ENVELOPES[1],
-    &LFOS[0],
-    &LFOS[1],
-];
+/// The sample's row.
+pub const SAMPLE: [Control; 1] = [Control::Sample];
+
+/// The Sound page's rows, top to bottom.
+pub const SOUND_ROWS: [&[Control]; 3] = [&SAMPLE, &FILTER, &OUTPUT];
+/// The Mod page's rows, top to bottom.
+pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
+    [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
+
+/// A part of the track page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Page {
+    Sound,
+    Mod,
+}
+
+impl Page {
+    /// The page's name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Sound => "Sound",
+            Self::Mod => "Mod",
+        }
+    }
+
+    /// The page's rows, top to bottom.
+    pub fn rows(self) -> &'static [&'static [Control]] {
+        match self {
+            Self::Sound => &SOUND_ROWS,
+            Self::Mod => &MOD_ROWS,
+        }
+    }
+}
 
 impl Control {
     /// The setting's name on screen.
@@ -128,6 +154,7 @@ impl Control {
             Self::Base(TrackControl::Drive) => "Drive",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
+            Self::Sample => "File",
             Self::FilterType => "Type",
             Self::Level => "Level",
             Self::Swing => "Swing",
@@ -156,7 +183,8 @@ impl Control {
     fn is_choice(self) -> bool {
         matches!(
             self,
-            Self::FilterType
+            Self::Sample
+                | Self::FilterType
                 | Self::Lfo(
                     _,
                     LfoField::Destination | LfoField::Shape | LfoField::Retrig
@@ -176,7 +204,8 @@ fn next_in<T: Copy + PartialEq>(items: &[T], current: T, up: bool) -> T {
 impl App {
     /// What the cursor is on.
     pub fn track_control(&self) -> Control {
-        let row = ROWS[self.track_row.min(ROWS.len() - 1)];
+        let rows = self.track_page.rows();
+        let row = rows[self.track_row.min(rows.len() - 1)];
         row[self.track_field.min(row.len() - 1)]
     }
 
@@ -221,6 +250,9 @@ impl App {
             moved.clamp(0, 0xFF) as u8
         };
         match control {
+            Control::Sample => {
+                self.status = "K chooses a sample".to_owned();
+            }
             Control::Base(which) => {
                 let value = match which {
                     TrackControl::Cutoff => track.cutoff,
@@ -279,8 +311,9 @@ impl App {
     }
 
     fn move_control(&mut self, row: usize, field: usize) {
-        self.track_row = row.min(ROWS.len() - 1);
-        self.track_field = field.min(ROWS[self.track_row].len() - 1);
+        let rows = self.track_page.rows();
+        self.track_row = row.min(rows.len() - 1);
+        self.track_field = field.min(rows[self.track_row].len() - 1);
     }
 
     /// Run a command on the track page. Returns false if it means the same as anywhere.
@@ -292,11 +325,15 @@ impl App {
             Cmd::Move(Motion::Down) => self.move_control(row.saturating_add(times), field),
             Cmd::Move(Motion::Up) => self.move_control(row.saturating_sub(times), field),
             Cmd::Move(Motion::First) => self.move_control(0, field),
-            Cmd::Move(Motion::Last) => self.move_control(ROWS.len() - 1, field),
+            Cmd::Move(Motion::Last) => self.move_control(usize::MAX, field),
             Cmd::Move(Motion::Right) => self.move_control(row, field.saturating_add(times)),
             Cmd::Move(Motion::Left) => self.move_control(row, field.saturating_sub(times)),
             Cmd::Move(Motion::RowStart) => self.move_control(row, 0),
             Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
+            Cmd::ShowPage(page) => {
+                self.track_page = page;
+                self.move_control(0, field);
+            }
             Cmd::Increase => self.adjust_control(true, times, false),
             Cmd::Decrease => self.adjust_control(false, times, false),
             Cmd::IncreaseLarge => self.adjust_control(true, times, true),
@@ -338,6 +375,13 @@ impl App {
                     self.set_hex(control, value(&fresh));
                 }
             }
+            Control::Sample if track.sample.is_some() => {
+                self.apply(&Action::SetTrackSample {
+                    track: self.cursor.track,
+                    sample: None,
+                });
+            }
+            Control::Sample => {}
             Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
             Control::Level => {}
             Control::Swing if track.swing.is_some() => {
@@ -428,6 +472,10 @@ impl App {
 
     /// List what an LFO's setting can be, with the current one highlighted.
     fn open_control_picker(&mut self) {
+        if self.track_control() == Control::Sample {
+            self.open_default_sample_picker();
+            return;
+        }
         if self.track_control() == Control::FilterType {
             self.open_filter_picker();
             return;
@@ -438,7 +486,8 @@ impl App {
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Type, Dest, Shape, Rate, Retrig and Reset".to_owned();
+                "K chooses from a list on File, Type, Dest, Shape, Rate, Retrig and Reset"
+                    .to_owned();
             return;
         };
         let track = self.cursor.track;
@@ -616,6 +665,7 @@ impl App {
     fn commit_control(&mut self, control: Control, text: &str) {
         let track = self.page_track();
         match control {
+            Control::Sample => {}
             Control::Base(_) | Control::Level => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {
                     self.set_hex(control, value);
