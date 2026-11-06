@@ -369,6 +369,9 @@ whose depth is in semitones. A second envelope on `Vol` moves the level by its d
 character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it.
 ``Drive` turns up the input, soft-clips the feedback and the output at 2x, and compensates for level. At `00` the state-variable path is untouched and not oversampled. Changing `Type` starts the new filter from silence. A low-pass with nothing to do is skipped.
 
+**Utility filter.** Each track also has `Low cut` and `High cut` after its main filter, as Elektron's Digitakt II and Digitone II pair a swappable filter with a base-width one. They use the same
+state-variable filter at 12 dB and Q 0.707 on the same 20 Hz to 20 kHz scale, with no resonance, modulation or FX for now. `00` and `FF` are off, cost nothing, and leave renders unchanged. The position is fixed after the main filter, so it can tame a driven ladder, rather than movable as on the Digitone II.
+
 **Randomness.** Each track has its own PCG32 generator, seeded from the project seed and the track's index.
 Generators restart when playback starts from the top. Because tracks are only added or removed at the end
 of the list, this does not change other tracks.

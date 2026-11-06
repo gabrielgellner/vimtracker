@@ -310,3 +310,67 @@ fn a_changed_filter_type_is_heard_while_playing() {
     let level = out.iter().map(|sample| sample.abs()).sum::<f32>();
     assert!(level > 1000.0, "{level}");
 }
+
+#[test]
+fn the_utility_filter_is_off_until_set_and_works_on_top_of_the_main_one() {
+    let with = |low_cut, high_cut, filter| {
+        let mut note = song(&[NOTE], adsr(0, 0, 100, 0));
+        note.tracks[0].low_cut = low_cut;
+        note.tracks[0].high_cut = high_cut;
+        note.tracks[0].filter = filter;
+        render(note, buzz(), STEP)
+    };
+    let level = |out: &[f32]| -> f32 {
+        (1000..5000)
+            .map(|frame| left(out, frame).abs())
+            .sum::<f32>()
+            / 4000.0
+    };
+    let plain = render(song(&[NOTE], adsr(0, 0, 100, 0)), buzz(), STEP);
+    assert_eq!(
+        plain,
+        with(0, 0xFF, FilterType::LowPass),
+        "off changes nothing"
+    );
+    assert!(level(&with(0, 0x60, FilterType::LowPass)) < level(&plain) * 0.1);
+    // A buzz is all highs, so a low cut leaves it, and on flat DC it takes everything.
+    assert!(level(&with(0x80, 0xFF, FilterType::LowPass)) > level(&plain) * 0.9);
+    let mut dc = song(&[NOTE], adsr(0, 0, 100, 0));
+    dc.tracks[0].low_cut = 0x80;
+    let out = render(dc, flat(), STEP);
+    assert!(
+        left(&out, STEP - 1).abs() < 0.01,
+        "{}",
+        left(&out, STEP - 1)
+    );
+    // It sits on the ladder too.
+    let ladder = with(0x20, 0xC0, FilterType::Ladder);
+    assert!(ladder.iter().all(|sample| sample.is_finite()));
+}
+
+#[test]
+fn turning_on_the_high_cut_while_playing_does_not_jump() {
+    let start = song(&[NOTE], adsr(0, 0, 100, 0));
+    let samples = flat();
+    let mut cut = start.clone();
+    cut.tracks[0].high_cut = 0xC0;
+    let mut engine = Engine::new(
+        RATE,
+        Arc::new(Published::new(Arc::new(start), Arc::clone(&samples))),
+    );
+    engine.play_from(0);
+    let mut out = vec![0.0; 2000 * 2];
+    engine.process(&mut out);
+    let before = out[out.len() - 2];
+    engine.swap(Arc::new(Published::new(Arc::new(cut), samples)));
+    let mut after = vec![0.0; 2000 * 2];
+    engine.process(&mut after);
+    close(after[0], before);
+    let biggest = after
+        .as_chunks::<2>()
+        .0
+        .windows(2)
+        .map(|pair| (pair[1][0] - pair[0][0]).abs())
+        .fold(0.0, f32::max);
+    assert!(biggest < 0.01, "jumped {biggest}");
+}

@@ -85,11 +85,13 @@ const fn envelope_row(slot: usize) -> [Control; 7] {
 }
 
 /// The filter's row.
-pub const FILTER: [Control; 4] = [
+pub const FILTER: [Control; 6] = [
     Control::Base(TrackControl::Cutoff),
     Control::Base(TrackControl::Resonance),
     Control::Base(TrackControl::Drive),
     Control::FilterType,
+    Control::Base(TrackControl::LowCut),
+    Control::Base(TrackControl::HighCut),
 ];
 /// The output's row.
 pub const OUTPUT: [Control; 5] = [
@@ -124,6 +126,8 @@ impl Control {
             Self::Base(TrackControl::Delay) => "Delay",
             Self::Base(TrackControl::Reverb) => "Reverb",
             Self::Base(TrackControl::Drive) => "Drive",
+            Self::Base(TrackControl::LowCut) => "Low cut",
+            Self::Base(TrackControl::HighCut) => "High cut",
             Self::FilterType => "Type",
             Self::Level => "Level",
             Self::Swing => "Swing",
@@ -225,6 +229,8 @@ impl App {
                     TrackControl::Delay => track.delay,
                     TrackControl::Reverb => track.reverb,
                     TrackControl::Drive => track.drive,
+                    TrackControl::LowCut => track.low_cut,
+                    TrackControl::HighCut => track.high_cut,
                 };
                 self.set_hex(control, change(value));
             }
@@ -325,6 +331,8 @@ impl App {
                     TrackControl::Delay => track.delay,
                     TrackControl::Reverb => track.reverb,
                     TrackControl::Drive => track.drive,
+                    TrackControl::LowCut => track.low_cut,
+                    TrackControl::HighCut => track.high_cut,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));

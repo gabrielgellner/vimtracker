@@ -248,6 +248,8 @@ pub enum TrackControl {
     Delay,
     Reverb,
     Drive,
+    LowCut,
+    HighCut,
 }
 
 /// An FX slot with its value within what its command takes.
@@ -470,6 +472,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Delay => track.delay = (*value).min(MAX_LEVEL),
                 TrackControl::Reverb => track.reverb = (*value).min(MAX_LEVEL),
                 TrackControl::Drive => track.drive = *value,
+                TrackControl::LowCut => track.low_cut = *value,
+                TrackControl::HighCut => track.high_cut = *value,
             }
         }
         Action::SetLfo { track, slot, lfo } => {

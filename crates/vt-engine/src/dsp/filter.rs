@@ -222,6 +222,44 @@ impl Channel {
     }
 }
 
+/// One channel of a track's utility filter: a high-pass and a low-pass, flat and without resonance,
+/// for thinning out a sound after its main filter.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Trim {
+    high_pass: Svf,
+    low_pass: Svf,
+}
+
+impl Trim {
+    /// Pass through the high-pass.
+    #[inline]
+    pub fn low_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+        let (band, low) = self.high_pass.tick(input, c);
+        input - c.k * band - low
+    }
+
+    /// Pass through the low-pass.
+    #[inline]
+    pub fn high_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+        self.low_pass.tick(input, c).1
+    }
+
+    /// Get ready to start cutting highs at this input, so its output doesn't start from silence.
+    #[inline]
+    pub fn prime_high_cut(&mut self, input: f32) {
+        self.low_pass = Svf {
+            ic1: 0.0,
+            ic2: input,
+        };
+    }
+
+    /// Forget the low cut, which then starts with nothing to take away.
+    #[inline]
+    pub fn clear_low_cut(&mut self) {
+        self.high_pass = Svf::default();
+    }
+}
+
 /// The output a mode takes from the state-variable filter.
 #[inline]
 fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, c: &Coefficients) -> f32 {
@@ -453,6 +491,53 @@ mod tests {
                 assert!(found < most, "{kind:?} {alias} is at {found} dB");
             }
         }
+    }
+
+    fn trimmed(hertz: f32, low_cut: Option<f32>, high_cut: Option<f32>) -> f32 {
+        let low = low_cut.map(|cut| Coefficients::new(cutoff(cut), 0.0, RATE));
+        let high = high_cut.map(|cut| Coefficients::new(cutoff(cut), 0.0, RATE));
+        let mut trim = Trim::default();
+        let frames = RATE as usize / 2;
+        let (mut power_in, mut power_out) = (0.0_f64, 0.0_f64);
+        for frame in 0..frames {
+            let t = frame as f32 / RATE as f32;
+            let input = (t * hertz * std::f32::consts::TAU).sin();
+            let mut output = input;
+            if let Some(c) = &low {
+                output = trim.low_cut(output, c);
+            }
+            if let Some(c) = &high {
+                output = trim.high_cut(output, c);
+            }
+            if frame > frames / 2 {
+                power_in += f64::from(input * input);
+                power_out += f64::from(output * output);
+            }
+        }
+        10.0 * (power_out / power_in).log10() as f32
+    }
+
+    #[test]
+    fn the_utility_filter_is_flat_and_cuts_at_both_ends() {
+        let band = |hertz| trimmed(hertz, Some(200.0), Some(4000.0));
+        near(band(900.0), 0.0, 0.3);
+        near(band(200.0), -3.0, 0.5);
+        near(band(4000.0), -3.0, 0.5);
+        assert!(band(20.0) < -35.0, "{}", band(20.0));
+        assert!(band(15_000.0) < -20.0, "{}", band(15_000.0));
+        // No peak near either cutoff.
+        for hertz in [100.0, 300.0, 500.0, 2000.0, 3000.0, 5000.0] {
+            assert!(band(hertz) < 0.2, "{hertz} is at {}", band(hertz));
+        }
+    }
+
+    #[test]
+    fn a_primed_high_cut_starts_without_a_jump() {
+        let c = Coefficients::new(cutoff(5000.0), 0.0, RATE);
+        let mut trim = Trim::default();
+        trim.prime_high_cut(0.8);
+        let first = trim.high_cut(0.8, &c);
+        assert!((first - 0.8).abs() < 1e-3, "{first}");
     }
 
     #[test]

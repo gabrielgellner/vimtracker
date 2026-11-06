@@ -6,7 +6,7 @@ use vt_model::lfo::{Destination, LFOS_PER_TRACK};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::FxCommand;
 
-use crate::dsp::filter::{Channel, Coefficients};
+use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::lfo::wave;
 use crate::dsp::smoother::Smoothed;
 use crate::rng::Pcg32;
@@ -14,6 +14,8 @@ use crate::voice::{NoteOn, Voice};
 
 /// How often filter coefficients are recalculated while the cutoff moves, in frames.
 const FILTER_UPDATE_FRAMES: u32 = 32;
+/// How close to wide open the utility filter counts as out of the way, on `0..=1`.
+const TRIM_OPEN: f32 = 0.001;
 
 /// Where an LFO's cycles count from.
 #[derive(Debug, Clone, Copy, Default)]
@@ -106,6 +108,13 @@ pub struct TrackState {
     filter: [Channel; 2],
     filter_type: FilterType,
     drive: Smoothed,
+    trim: [Trim; 2],
+    low_cut: Smoothed,
+    high_cut: Smoothed,
+    /// The coefficients in use, and the value each was worked out for.
+    low_cut_coefficients: Option<(f32, Coefficients)>,
+    high_cut_coefficients: Option<(f32, Coefficients)>,
+    trim_countdown: u32,
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
     pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
@@ -175,6 +184,12 @@ impl TrackState {
             filter: [Channel::default(); 2],
             filter_type: FilterType::LowPass,
             drive: Smoothed::at(0.0),
+            trim: [Trim::default(); 2],
+            low_cut: Smoothed::at(0.0),
+            high_cut: Smoothed::at(1.0),
+            low_cut_coefficients: None,
+            high_cut_coefficients: None,
+            trim_countdown: 0,
             coefficients: None,
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
@@ -235,6 +250,8 @@ impl TrackState {
             self.coefficients = None;
         }
         self.drive.target = f32::from(track.drive) / 255.0;
+        self.low_cut.target = f32::from(track.low_cut) / 255.0;
+        self.high_cut.target = f32::from(track.high_cut) / 255.0;
         self.cut_offset.target = offsets[Destination::Cut as usize];
         self.res_offset.target = offsets[Destination::Res as usize];
         self.pan_offset.target = offsets[Destination::Pan as usize];
@@ -382,8 +399,62 @@ impl TrackState {
         self.res_envelope.settle();
         self.pan_envelope.settle();
         self.drive.settle();
+        self.low_cut.settle();
+        self.high_cut.settle();
         self.coefficients = None;
         self.filter_countdown = 0;
+    }
+
+    /// The utility filter. It's out of the way when wide open, and coefficients are only worked out
+    /// while it moves.
+    #[inline]
+    fn trimmed(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
+        let low_cut = self.low_cut.next(smoothing);
+        let high_cut = self.high_cut.next(smoothing);
+        let (low_on, high_on) = (low_cut > TRIM_OPEN, high_cut < 1.0 - TRIM_OPEN);
+        if !low_on && !high_on {
+            self.low_cut_coefficients = None;
+            self.high_cut_coefficients = None;
+            return input;
+        }
+        if self.trim_countdown == 0 {
+            self.trim_countdown = FILTER_UPDATE_FRAMES;
+            let update = |slot: &mut Option<(f32, Coefficients)>, value: f32| {
+                let current = slot.is_some_and(|(at, _)| (at - value).abs() < TRIM_OPEN);
+                if !current {
+                    *slot = Some((value, Coefficients::new(value, 0.0, rate)));
+                }
+            };
+            if low_on {
+                if self.low_cut_coefficients.is_none() {
+                    self.trim[0].clear_low_cut();
+                    self.trim[1].clear_low_cut();
+                }
+                update(&mut self.low_cut_coefficients, low_cut);
+            } else {
+                self.low_cut_coefficients = None;
+            }
+            if high_on {
+                if self.high_cut_coefficients.is_none() {
+                    self.trim[0].prime_high_cut(input[0]);
+                    self.trim[1].prime_high_cut(input[1]);
+                }
+                update(&mut self.high_cut_coefficients, high_cut);
+            } else {
+                self.high_cut_coefficients = None;
+            }
+        }
+        self.trim_countdown -= 1;
+        let mut output = input;
+        for (sample, trim) in output.iter_mut().zip(&mut self.trim) {
+            if let Some((_, c)) = &self.low_cut_coefficients {
+                *sample = trim.low_cut(*sample, c);
+            }
+            if let Some((_, c)) = &self.high_cut_coefficients {
+                *sample = trim.high_cut(*sample, c);
+            }
+        }
+        output
     }
 
     /// Filter, level and pan one frame of voice output, and work out what it sends.
@@ -426,6 +497,7 @@ impl TrackState {
                 None => input,
             }
         };
+        let filtered = self.trimmed(filtered, smoothing, rate);
         let gain = self.gain.next(smoothing) * self.level.next(smoothing);
         let (left, right) = pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];

@@ -20,8 +20,15 @@ hat pattern.
 | Setting | Value |
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
-| Drive | How hard it's driven, from `00` for clean. Level stays about even |
+| Drive | How hard it's driven, from `00` for clean |
 | Type | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
+| Low cut, High cut | The utility filter: `00` and `FF` are off |
+
+Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
+filter after the main one, for thinning out a sound without giving up the main
+filter's character. They run from 20 Hz at `00` to 20 kHz at `FF`, at 12 dB with
+no resonance. `Low cut 00` and `High cut FF` are off, and off costs nothing.
+Unlike `Cut`, steps and modulators don't move them.
 
 `LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
 it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance

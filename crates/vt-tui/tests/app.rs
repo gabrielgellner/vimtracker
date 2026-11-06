@@ -2503,6 +2503,34 @@ fn the_track_page_sets_the_filters_type_and_drive() {
 }
 
 #[test]
+fn the_track_page_sets_the_utility_filter() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
+    let lines = track_page_text(&app);
+    assert!(lines[2].contains("Low cut") && lines[2].contains("High cut"));
+    assert!(lines[3].contains("00") && lines[3].contains("FF"));
+
+    press(&mut app, "$h");
+    press(&mut app, "i40");
+    assert_eq!(track(&app).low_cut, 0x40);
+    press(&mut app, "x");
+    assert_eq!(track(&app).low_cut, 0);
+    press(&mut app, "l");
+    press(&mut app, "i80");
+    assert_eq!(track(&app).high_cut, 0x80);
+    press(&mut app, "=");
+    assert_eq!(track(&app).high_cut, 0x81);
+    press(&mut app, "+");
+    assert_eq!(track(&app).high_cut, 0x91);
+    press(&mut app, "x");
+    assert_eq!(track(&app).high_cut, 0xFF);
+    press(&mut app, "u");
+    assert_eq!(track(&app).high_cut, 0x91);
+    assert_eq!(app.track_control().label(), "High cut");
+}
+
+#[test]
 fn the_track_page_sets_envelopes() {
     let (mut app, _realtime) = on_track_page();
     let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];

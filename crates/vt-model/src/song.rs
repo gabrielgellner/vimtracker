@@ -92,6 +92,12 @@ pub struct Track {
     /// How hard the filter is driven.
     #[serde(default)]
     pub drive: u8,
+    /// The utility filter after it: a high-pass, which `00` turns off.
+    #[serde(default)]
+    pub low_cut: u8,
+    /// And a low-pass, which `FF` turns off.
+    #[serde(default = "open_cutoff")]
+    pub high_cut: u8,
     /// Where held `PAN` starts.
     #[serde(default = "centre")]
     pub pan: u8,
@@ -118,6 +124,8 @@ impl Default for Track {
             resonance: 0,
             filter: FilterType::default(),
             drive: 0,
+            low_cut: 0,
+            high_cut: open_cutoff(),
             pan: centre(),
             delay: 0,
             reverb: 0,

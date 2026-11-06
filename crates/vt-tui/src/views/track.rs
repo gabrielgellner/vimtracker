@@ -34,6 +34,8 @@ fn value(control: Control, track: &Track, project_swing: u16) -> String {
         Control::Base(TrackControl::Delay) => hex(track.delay),
         Control::Base(TrackControl::Reverb) => hex(track.reverb),
         Control::Base(TrackControl::Drive) => hex(track.drive),
+        Control::Base(TrackControl::LowCut) => hex(track.low_cut),
+        Control::Base(TrackControl::HighCut) => hex(track.high_cut),
         Control::FilterType => track.filter.name().to_owned(),
         Control::Level => hex(track.level),
         Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
@@ -80,6 +82,7 @@ fn width(control: Control) -> usize {
         Control::Lfo(_, LfoField::Rate) => 9,
         Control::Lfo(_, LfoField::Shape) => 8,
         Control::Base(TrackControl::Reverb) | Control::Lfo(_, LfoField::Retrig) => 8,
+        Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
             _,
             EnvelopeField::Attack
