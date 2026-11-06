@@ -8,10 +8,12 @@ use std::process::Command;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ratatui::style::Color;
+use vt_engine::dsp::filter::track_response_db;
 use vt_engine::dsp::lfo::wave;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{LFOS_PER_TRACK, Shape};
+use vt_model::song::{FilterType, Track};
 
 use crate::app::App;
 use crate::input::mode::View;
@@ -19,7 +21,8 @@ use crate::theme;
 use crate::track_page::Page;
 use crate::views::braille::{envelope_columns, line_columns};
 use crate::views::track::{
-    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, LFO_ICON_WIDTH, envelope_being_edited, lfo_being_edited,
+    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
+    envelope_being_edited, filter_being_edited, lfo_being_edited,
 };
 
 /// The character that stands for a piece of an image.
@@ -45,6 +48,11 @@ const ICON_HEIGHT: f32 = 0.8;
 /// The random values an LFO's icon shows, and how many a random shape's icon shows.
 const ICON_KEY: u64 = 148;
 const RANDOM_ICON_CYCLES: f64 = 4.0;
+
+/// What a filter curve's height covers, in dB, with the frequency across it from 20 Hz to 20 kHz. It
+/// has more room below than above, as a filter takes away more than it adds.
+const CURVE_BOTTOM_DB: f32 = -36.0;
+const CURVE_TOP_DB: f32 = 24.0;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -171,6 +179,22 @@ pub fn shape_png(shape: Shape, color: [u8; 3], columns: usize, rows: usize) -> V
     line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
+/// A track's filter and utility filter as a PNG, showing what they let through at each frequency.
+pub fn filter_png(
+    track: &Track,
+    rate: u32,
+    color: [u8; 3],
+    columns: usize,
+    rows: usize,
+) -> Vec<u8> {
+    let level = |x: f32| {
+        let db = track_response_db(track, rate, 20.0 * 1000_f32.powf(x));
+        (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
+}
+
 /// Write one command, wrapped so tmux passes it on.
 fn command(out: &mut impl Write, controls: &str, data: &[u8], in_tmux: bool) -> io::Result<()> {
     if in_tmux {
@@ -265,6 +289,9 @@ pub fn support() -> Support {
     judge(&terminal, None)
 }
 
+/// The settings a filter curve is drawn from.
+type FilterSettings = (FilterType, u8, u8, u8, u8, u8);
+
 /// The colour of a drawing, with the cursor on it or not.
 fn color(active: bool) -> [u8; 3] {
     let style = if active {
@@ -289,6 +316,7 @@ pub struct Graphics {
     next: u32,
     images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
     shapes: [[Option<u32>; 2]; Shape::ALL.len()],
+    filter: [Option<(FilterSettings, u32)>; 2],
     /// Images to forget once the screen has moved on from them.
     retired: Vec<u32>,
     in_tmux: bool,
@@ -302,6 +330,7 @@ impl Graphics {
             next: 0,
             images: [[None; 2]; TRACK_ENVELOPES],
             shapes: [[None; 2]; Shape::ALL.len()],
+            filter: [None; 2],
             retired: Vec::new(),
             in_tmux: std::env::var_os("TMUX").is_some(),
         }
@@ -324,6 +353,7 @@ impl Graphics {
                     .flatten()
                     .flatten()
                     .any(|image| image.1 == id)
+                || self.filter.iter().flatten().any(|image| image.1 == id)
                 || self.retired.contains(&id);
             if !in_use {
                 return id;
@@ -336,12 +366,52 @@ impl Graphics {
         for id in self.retired.drain(..) {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
         }
-        let Some(track) = app.song().tracks.get(app.cursor.track) else {
-            return out.flush();
-        };
-        if app.view != View::Track || app.track_page != Page::Mod {
-            return out.flush();
+        if app.view == View::Track
+            && let Some(track) = app.song().tracks.get(app.cursor.track).cloned()
+        {
+            match app.track_page {
+                Page::Sound => self.sync_sound(app, &track, out)?,
+                Page::Mod => self.sync_mod(app, &track, out)?,
+            }
         }
+        out.flush()
+    }
+
+    /// Send the Sound page's filter curve, if the terminal lacks it.
+    fn sync_sound(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let settings = (
+            track.filter,
+            track.cutoff,
+            track.resonance,
+            track.drive,
+            track.low_cut,
+            track.high_cut,
+        );
+        let active = filter_being_edited(app);
+        let held = self.filter[usize::from(active)];
+        let id = match held {
+            Some((drawn, id)) if drawn == settings => id,
+            _ => {
+                let id = self.new_id();
+                let png = filter_png(
+                    track,
+                    app.rate,
+                    color(active),
+                    FILTER_CURVE_WIDTH,
+                    FILTER_CURVE_HEIGHT,
+                );
+                self.send(out, id, &png, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)?;
+                self.retired.extend(held.map(|(_, old)| old));
+                self.filter[usize::from(active)] = Some((settings, id));
+                id
+            }
+        };
+        app.filter_image = Some(id);
+        Ok(())
+    }
+
+    /// Send the Mod page's envelopes and LFO shapes, if the terminal lacks them.
+    fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let (envelopes, lfos) = (track.envelopes, track.lfos);
         let edited = envelope_being_edited(app);
         let mut envelope_ids = [0; TRACK_ENVELOPES];
@@ -381,7 +451,7 @@ impl Graphics {
         }
         app.envelope_images = Some(envelope_ids);
         app.lfo_images = Some(lfo_ids);
-        out.flush()
+        Ok(())
     }
 
     /// Send one image.
@@ -406,7 +476,8 @@ impl Graphics {
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
         let held = self.images.iter().flatten().flatten().map(|image| &image.1);
         let shapes = self.shapes.iter().flatten().flatten();
-        for id in held.chain(shapes).chain(&self.retired) {
+        let filter = self.filter.iter().flatten().map(|image| &image.1);
+        for id in held.chain(shapes).chain(filter).chain(&self.retired) {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
         }
         out.flush()
@@ -548,6 +619,62 @@ mod tests {
         assert!(saw[0].0 < saw[23].0);
         assert!(ramp[0].0 > ramp[23].0);
         assert_eq!(saw[23].0, saw[23].1, "a single dot, with no line back up");
+    }
+
+    /// A filter curve's height at points across it, from 0 at the bottom to 1.
+    fn curve(track: &Track) -> Vec<f32> {
+        let level = |x: f32| {
+            let db = track_response_db(track, 48_000, 20.0 * 1000_f32.powf(x));
+            (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
+        };
+        (0..=10).map(|step| level(step as f32 / 10.0)).collect()
+    }
+
+    fn open_track() -> Track {
+        Track {
+            filter: FilterType::LowPass,
+            cutoff: 0xFF,
+            resonance: 0,
+            drive: 0,
+            low_cut: 0,
+            high_cut: 0xFF,
+            ..Track::default()
+        }
+    }
+
+    #[test]
+    fn a_filter_curve_is_small_and_flat_when_the_filter_is_open() {
+        let track = open_track();
+        let png = filter_png(&track, 48_000, [255; 3], 24, 3);
+        assert!(png.len() < 7000, "{}", png.len());
+        let (_, pixels) = decode(&png);
+        let (across, down) = (24 * CELL_DOTS_ACROSS, 3 * CELL_DOTS_DOWN);
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        let flat = (0.0 - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB);
+        for level in curve(&track) {
+            assert!((level - flat).abs() < 0.001, "{level}");
+        }
+    }
+
+    #[test]
+    fn a_filter_curve_goes_where_the_filter_does() {
+        let mut track = Track {
+            cutoff: 0x80,
+            ..open_track()
+        };
+        let low = curve(&track);
+        assert!(low[0] > low[10]);
+        track.filter = FilterType::HighPass;
+        let high = curve(&track);
+        assert!(high[0] < high[10]);
+        // Resonance raises a peak above the plain low-pass.
+        track.filter = FilterType::LowPass;
+        track.resonance = 0xC0;
+        let peak = curve(&track).into_iter().fold(0.0, f32::max);
+        assert!(peak > low.into_iter().fold(0.0, f32::max) + 0.1);
     }
 
     #[test]

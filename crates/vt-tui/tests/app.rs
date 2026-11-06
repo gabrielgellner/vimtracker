@@ -3878,3 +3878,79 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
         assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
     }
 }
+
+#[test]
+fn the_filter_curve_follows_its_settings_and_the_cursor() {
+    use vt_tui::kitty::Graphics;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out).unwrap().matches(",c=24,").count()
+    };
+    press(&mut app, " 4");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let plain = app.filter_image.unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+
+    // On the filter's rows it's picked out, once.
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Filter");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.filter_image.unwrap();
+    assert_ne!(picked, plain);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.filter_image.unwrap(), plain);
+
+    // A new setting draws it again.
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Cut");
+    press(&mut app, "-");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.filter_image.unwrap(), picked);
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+}
+
+#[test]
+fn the_filter_curve_sits_on_the_right_beside_the_last_rows() {
+    use vt_tui::track_page::{SAMPLE_ROWS, SYNTH_ROWS};
+    for rows in [&SAMPLE_ROWS[..], &SYNTH_ROWS[..]] {
+        assert!(rows[rows.len() - 3..].iter().all(|row| row.len() == 1));
+    }
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    let plain = draw(&app);
+    app.filter_image = Some(0x01_02_03);
+    let drawn = draw(&app);
+    let row_of = |text: &str| {
+        (0..24)
+            .find(|y| {
+                (0..80)
+                    .map(|x| plain[(x, *y)].symbol())
+                    .collect::<String>()
+                    .starts_with(text)
+            })
+            .unwrap()
+    };
+    let (top, bottom) = (row_of("Drive"), row_of("High cut"));
+    assert_eq!(bottom, top + 2);
+    assert_eq!(drawn[(36, top)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(36, top)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(drawn[(59, bottom)].symbol(), "\u{10EEEE}\u{30E}\u{369}");
+    assert_eq!(drawn[(60, bottom)].symbol(), " ");
+    // The left column is as it was.
+    for x in 0..36 {
+        assert_eq!(drawn[(x, top)].symbol(), plain[(x, top)].symbol());
+    }
+}

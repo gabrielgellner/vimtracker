@@ -128,6 +128,8 @@ pub struct App {
     pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
     /// The ids of the images of the LFOs' shapes, likewise.
     pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
+    /// The id of the image of the filter's curve, likewise.
+    pub filter_image: Option<u32>,
     pub track_row: usize,
     pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
@@ -222,6 +224,7 @@ impl App {
             track_page: Page::Sound,
             envelope_images: None,
             lfo_images: None,
+            filter_image: None,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),

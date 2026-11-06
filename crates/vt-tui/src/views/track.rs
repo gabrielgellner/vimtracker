@@ -24,6 +24,9 @@ pub(crate) const DIAGRAM_HEIGHT: usize = 4;
 /// The size of an LFO's icon, in characters, and the room for its shape's name before it.
 pub(crate) const LFO_ICON_WIDTH: usize = 4;
 const LFO_SHAPE_NAME: usize = 7;
+/// The size of the filter's curve, in characters. It's as wide as a value with its bar.
+pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
+pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
@@ -79,8 +82,13 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     }
 }
 
-/// A row of the Sound page: a control on the left, and perhaps one on the right.
-fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
+/// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
+fn sound_row(
+    app: &App,
+    track: &Track,
+    controls: &[Control],
+    beside: Option<Span<'static>>,
+) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
     let mut used = 0;
@@ -121,6 +129,10 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             spans.push(Span::styled(bar, Style::new().fg(theme::MAUVE)));
             spans.push(Span::styled(BAR_END, theme::faint()));
         }
+    }
+    if let Some(beside) = beside {
+        spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
+        spans.push(beside);
     }
     Line::from(spans)
 }
@@ -265,6 +277,21 @@ pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
     }
 }
 
+/// Whether the cursor is on something the filter's curve shows.
+pub(crate) fn filter_being_edited(app: &App) -> bool {
+    matches!(
+        app.track_control(),
+        Control::FilterType
+            | Control::Base(
+                TrackControl::Cutoff
+                    | TrackControl::Resonance
+                    | TrackControl::Drive
+                    | TrackControl::LowCut
+                    | TrackControl::HighCut
+            )
+    )
+}
+
 /// Which LFO the cursor is on, if any.
 pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
@@ -341,12 +368,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines = vec![Line::from(title), Line::raw("")];
     match app.track_page {
         Page::Sound => {
-            for controls in app.page_rows() {
+            let rows = app.page_rows();
+            // The filter's curve sits beside its last rows, with nothing else on the right there.
+            let curve = rows.len().saturating_sub(FILTER_CURVE_HEIGHT);
+            for (index, controls) in rows.iter().enumerate() {
                 // The filter stands apart from the machine above it.
                 if controls.first() == Some(&Control::FilterType) {
                     lines.push(Line::raw(""));
                 }
-                lines.push(sound_row(app, track, controls));
+                let beside = app.filter_image.filter(|_| index >= curve).map(|id| {
+                    let row = &kitty::placeholder_lines(FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)
+                        [index - curve];
+                    Span::styled(row.clone(), Style::new().fg(kitty::id_color(id)))
+                });
+                lines.push(sound_row(app, track, controls, beside));
             }
         }
         Page::Mod => {
