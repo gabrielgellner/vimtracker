@@ -171,7 +171,7 @@ fn a_reset_leaves_lfos_running() {
 #[test]
 fn retrig_restarts_it_on_each_note() {
     let texts = [
-        "C-4 -- 00 VOL80 ---00 ---00",
+        "C-4 -- 00 VOL80h ---00 ---00",
         "--- -- -- ---00 ---00 ---00",
         "--- -- -- ---00 ---00 ---00",
         "--- -- -- ---00 ---00 ---00",
@@ -301,7 +301,7 @@ fn a_tracks_base_is_where_its_held_values_start() {
 
 #[test]
 fn a_page_change_is_heard_now_and_leaves_what_a_step_set() {
-    let start = song(&["C-4 -- 00 PAN00 ---00 ---00"]);
+    let start = song(&["C-4 -- 00 PAN00h ---00 ---00"]);
     let samples = flat();
     let mut engine = Engine::new(RATE, version(start.clone(), Arc::clone(&samples)));
     engine.play_from(0);

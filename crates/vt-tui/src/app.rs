@@ -24,7 +24,7 @@ use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Scope, StepRange};
 use vt_model::song::{ChainEntry, Song};
-use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 use crate::grammar::Change;
 use crate::guides::Guide;
@@ -1113,12 +1113,28 @@ impl App {
                     FxSlot {
                         command: Some(command),
                         value,
+                        mark: self.mark_for_typed_value(slot),
                     },
                 ));
             }
             _ => {}
         }
         self.advance();
+    }
+
+    /// The mark a value typed here gets: the one it's typed over, or else the nearest value's
+    /// above it in this column.
+    pub(crate) fn mark_for_typed_value(&self, slot: usize) -> Mark {
+        let song = self.song();
+        let phrase = self.phrase_id().and_then(|id| song.phrases.get(&id));
+        let Some(steps) = phrase.map(|phrase| phrase.steps()) else {
+            return Mark::default();
+        };
+        let upward = steps[..=self.cursor.step.min(steps.len() - 1)].iter().rev();
+        upward
+            .filter_map(|step| step.fx.get(slot))
+            .find(|fx| fx.is_value())
+            .map_or(Mark::default(), |fx| fx.mark)
     }
 
     pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {

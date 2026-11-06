@@ -1,7 +1,7 @@
 //! Filling a column across a selection with a shaped ramp or random values.
 
 use crate::selection::StepRange;
-use crate::step::{FxCommand, FxSlot, MAX_VELOCITY, Note, Step};
+use crate::step::{FxCommand, FxSlot, MAX_VELOCITY, Mark, Note, Step};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
@@ -119,7 +119,9 @@ impl ShapeColumn {
                     *fx = FxSlot {
                         command: Some(command),
                         value,
-                    };
+                        mark: if fx.is_value() { fx.mark } else { Mark::Lock },
+                    }
+                    .with_valid_mark();
                 }
             }
         }
@@ -261,6 +263,23 @@ pub fn default_ends(steps: &[Step], range: StepRange, column: ShapeColumn) -> (u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn writing_a_value_keeps_a_mark_already_there_and_otherwise_locks() {
+        let column = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::Res,
+        };
+        let mut step: Step = "--- -- -- CUT40h".parse().unwrap();
+        column.write(&mut step, 0x20);
+        assert_eq!(step.to_string(), "--- -- -- RES20h");
+        let mut step: Step = "--- -- -- ---00".parse().unwrap();
+        column.write(&mut step, 0x20);
+        assert_eq!(step.to_string(), "--- -- -- RES20");
+        let mut step: Step = "--- -- -- DEL10".parse().unwrap();
+        column.write(&mut step, 0x20);
+        assert_eq!(step.to_string(), "--- -- -- RES20");
+    }
 
     const VEL: ShapeColumn = ShapeColumn::Velocity;
     const CUT: ShapeColumn = ShapeColumn::Fx {

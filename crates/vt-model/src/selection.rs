@@ -2,7 +2,7 @@
 
 use crate::constants::BEAT_STEPS;
 use crate::label::is_named_slot;
-use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
+use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 /// One editable part of a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,6 +292,23 @@ pub fn clear_step(step: &mut Step, scope: Scope) {
     for (index, slot) in step.fx.iter_mut().enumerate() {
         if scope.covers(3 + index) {
             *slot = FxSlot::default();
+        }
+    }
+}
+
+/// The first value a scope covers on a step, with its slot's index.
+pub fn first_value(step: &Step, scope: Scope) -> Option<FxSlot> {
+    let mut slots = step.fx.iter().enumerate();
+    slots
+        .find(|(index, slot)| scope.covers(3 + index) && slot.is_value())
+        .map(|(_, slot)| *slot)
+}
+
+/// Set the mark on every value a scope covers on a step.
+pub fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
+    for (index, slot) in step.fx.iter_mut().enumerate() {
+        if scope.covers(3 + index) && slot.is_value() {
+            slot.mark = mark;
         }
     }
 }

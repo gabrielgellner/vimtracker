@@ -6,7 +6,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::label::is_named_slot;
-use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
+use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target, first_value};
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{Note, Step};
 
@@ -32,6 +32,10 @@ pub enum Change {
         kind: Shift,
     },
     ClearField,
+    /// `~`, cycling marks from the first value covered.
+    CycleMark {
+        cover: Cover,
+    },
     Paste {
         register: Option<char>,
         times: usize,
@@ -153,6 +157,7 @@ impl App {
                 self.last_change = Some(Change::ClearField);
                 self.count = None;
             }
+            Cmd::CycleMark => self.cycle_mark_key(),
             Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
                     register: self.register,
@@ -344,6 +349,50 @@ impl App {
             self.registers.insert(YANK_REGISTER, block.clone());
         }
         self.registers.insert('"', block);
+    }
+
+    fn cycle_mark_key(&mut self) {
+        self.count = None;
+        if self.mode.is_visual() {
+            let selection = self.current_selection();
+            self.cycle_mark(selection.range, selection.scope);
+            self.last_change = Some(Change::CycleMark {
+                cover: Cover::Sized {
+                    steps: selection.range.len(),
+                    scope: selection.scope,
+                },
+            });
+            self.leave_visual(selection);
+            return;
+        }
+        let change = Change::CycleMark {
+            cover: Cover::Cursor,
+        };
+        self.do_change(&change);
+        self.last_change = Some(change);
+    }
+
+    /// Move every value covered to the mark after the first one's, so a mix ends up the same.
+    fn cycle_mark(&mut self, range: StepRange, scope: Scope) {
+        let Some(phrase) = self.phrase_id() else {
+            return;
+        };
+        let song = self.song();
+        let steps = song.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
+        let last = range.last.min(steps.len().saturating_sub(1));
+        let first = steps
+            .get(range.first..=last)
+            .and_then(|steps| steps.iter().find_map(|step| first_value(step, scope)));
+        let Some(first) = first else {
+            self.status = "No value to mark here, as events have no marks".to_owned();
+            return;
+        };
+        self.apply(&Action::SetMark {
+            phrase,
+            range,
+            scope,
+            mark: first.mark.next(),
+        });
     }
 
     fn increment(&mut self, sign: i32, kind: Shift) {
@@ -560,6 +609,10 @@ impl App {
                 let (range, scope) = self.resolve_cover(*cover);
                 self.apply_increment(*by, range, scope, *kind);
             }
+            Change::CycleMark { cover } => {
+                let (range, scope) = self.resolve_cover(*cover);
+                self.cycle_mark(range, scope);
+            }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
@@ -667,6 +720,7 @@ impl App {
                 Change::ClearField => {
                     self.apply_operator(Op::Clear, selection.range, selection.scope)
                 }
+                Change::CycleMark { .. } => self.cycle_mark(selection.range, selection.scope),
                 Change::Replace { field, value, .. } => {
                     self.fill(selection.range, field, &value);
                 }

@@ -1183,7 +1183,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(38, row + 2)].fg
+        buffer[(44, row + 2)].fg
     };
     app.playhead = 2;
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
@@ -2080,7 +2080,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (39..42).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (45..48).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2185,7 +2185,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 
 /// Another track's column on one row of steps: its marker and note, and its colour.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 38 + column * 4;
+    let x = 44 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -2259,7 +2259,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..37)
+        (0..43)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -2989,4 +2989,23 @@ fn reset_shows_on_the_status_line_and_undoes() {
     command(&mut app, "reset 0");
     assert_eq!(app.song().sections[0].reset, None);
     assert!(app.status.contains(":reset"));
+}
+
+#[test]
+fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
+    let mut song = Song::new(1);
+    let step = |text: &str| text.parse::<Step>().unwrap();
+    let phrase = Phrase::from_steps(vec![
+        step("C-4 40 01 CUT40 DLY20h RES10g"),
+        step("C-4 40 01 DEL10 ---00 ---00"),
+    ]);
+    song.phrases.insert(0, Arc::new(phrase));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let app = App::new(song, None, samples, handle, 48_000);
+    let buffer = screen(&app);
+    let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
+    assert!(row(2).contains("CUT40 . DLY20 h RES10 g"), "{}", row(2));
+    assert!(row(3).contains("DEL10   ---00   ---00"), "{}", row(3));
 }

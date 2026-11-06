@@ -125,11 +125,63 @@ impl FxCommand {
     }
 }
 
+/// How long a value lasts. Only values have one, so events and empty slots keep the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mark {
+    /// Until the next note on the track, or the next value of its parameter.
+    #[default]
+    Lock,
+    /// Replaces the base until playback next starts from the top.
+    Hold,
+    /// Slides from this row to the next value of its parameter in the slot.
+    Glide,
+}
+
+impl Mark {
+    /// The mark after this one, for `~`.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Lock => Self::Hold,
+            Self::Hold => Self::Glide,
+            Self::Glide => Self::Lock,
+        }
+    }
+
+    /// The character shown beside a value.
+    pub fn glyph(self) -> char {
+        match self {
+            Self::Lock => '.',
+            Self::Hold => 'h',
+            Self::Glide => 'g',
+        }
+    }
+}
+
 /// One FX command and its value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FxSlot {
     pub command: Option<FxCommand>,
     pub value: u8,
+    pub mark: Mark,
+}
+
+impl FxSlot {
+    /// Whether this is a value, which has a mark, rather than an event or nothing.
+    pub fn is_value(self) -> bool {
+        self.command.is_some_and(FxCommand::holds)
+    }
+
+    /// This slot, with the default mark unless it's a value.
+    pub fn with_valid_mark(self) -> Self {
+        Self {
+            mark: if self.is_value() {
+                self.mark
+            } else {
+                Mark::default()
+            },
+            ..self
+        }
+    }
 }
 
 /// One position in a phrase.

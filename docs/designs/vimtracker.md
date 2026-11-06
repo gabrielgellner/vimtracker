@@ -796,7 +796,7 @@ These apply to every issue. Change them by updating this document.
 
 **Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), and `AUTOSAVE_SECONDS` (60).
 
-**Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space.
+**Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space. A hold or glide adds one letter, as in `CUT40h`.
 
 ```text
 Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
@@ -846,6 +846,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `+`, `_` | Up or down a large step, the same keys with Shift: an octave, or `10` in hex. On `RET`, the small step changes only the rate digit and the large step only the fade digit, with no carry |
 | Normal | `x` | Clear a step's field. On the track page, instrument view and chain Transpose, back to the default |
 | Normal | `K` | Choose the field from a list: Instrument and FX columns, a chain row's phrase, a sample, and an LFO's `Dest`, `Shape`, `Rate` and `Retrig` |
+| Normal | `~` | Cycle a value's mark: lock, hold, glide. In Visual too |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
 | Normal | `gd`, `Ctrl-O`, `Ctrl-N`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |
 | Normal | `gc`, `gC` | Clone, deep-clone |
@@ -1103,7 +1104,7 @@ Since `CHA` decides whether a row's note plays, it is read before locks end. It 
 **Issues.**
 
 1.  **Marks in the model and phrase view:** the data, step text, display and editing above, with marks stored but not yet heard. **Tests:** step text round-trips each mark, a mark on an event is refused, `~` cycles and is one undo step, `.` repeats it, Visual `~` makes a mixed selection the same, and a new value copies the mark above.
-2.  **Lock and hold in the engine:** the layers and the table above. Existing tests that expect values to hold gain `h`, and goldens are re-blessed. **Tests:** each row of the table, the rightmost slot winning, an LFO carrying on around a lock, and renders staying repeatable. The author plays this before glide starts.
+2.  **Lock and hold in the engine:** the layers and the table above. Existing tests that expect values to hold gain `h`, which also leaves the goldens unchanged. **Tests:** each row of the table, the rightmost slot winning, an LFO carrying on around a lock, and renders staying repeatable. The author plays this before glide starts.
 3.  **Glide in the engine.** **Tests:** the value at the halfway row, landing exactly, wrapping, a skipped command, no other value, crossing a note, a tempo change, a chain moving on, and no allocation under the real-time guard.
 
 ### Known Gaps From Review

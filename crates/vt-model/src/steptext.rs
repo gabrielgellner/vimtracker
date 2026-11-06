@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
+use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 /// Why a step's text could not be read.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -81,13 +81,20 @@ impl FromStr for FxSlot {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bad = || StepTextError::Slot(text.to_owned());
-        if text.len() != 5 || !text.is_ascii() {
+        if !matches!(text.len(), 5 | 6) || !text.is_ascii() {
             return Err(bad());
         }
-        let (name, value) = text.split_at(3);
+        let (body, mark) = text.split_at(5);
+        let mark = match mark {
+            "" => Mark::Lock,
+            "h" => Mark::Hold,
+            "g" => Mark::Glide,
+            _ => return Err(bad()),
+        };
+        let (name, value) = body.split_at(3);
         let value = hex_byte(value).ok_or_else(bad)?;
         if name == "---" {
-            return if value == 0 {
+            return if value == 0 && mark == Mark::Lock {
                 Ok(Self::default())
             } else {
                 Err(bad())
@@ -95,9 +102,13 @@ impl FromStr for FxSlot {
         }
         let command =
             FxCommand::from_name(name).ok_or_else(|| StepTextError::Command(name.to_owned()))?;
+        if mark != Mark::Lock && !command.holds() {
+            return Err(bad());
+        }
         Ok(Self {
             command: Some(command),
             value,
+            mark,
         })
     }
 }
@@ -105,8 +116,12 @@ impl FromStr for FxSlot {
 impl fmt::Display for FxSlot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.command {
-            Some(command) => write!(f, "{}{:02X}", command.name(), self.value),
-            None => f.write_str("---00"),
+            Some(command) => write!(f, "{}{:02X}", command.name(), self.value)?,
+            None => f.write_str("---00")?,
+        }
+        match self.mark {
+            Mark::Lock => Ok(()),
+            mark => write!(f, "{}", mark.glyph()),
         }
     }
 }
@@ -180,9 +195,25 @@ mod tests {
             "C-0 00 00 DEL01 KIL02 OFF03",
             "G-9 -- -- RES10 DLY20 REV30",
             "C#3 -- 00",
+            "C-4 64 01 CUT40h DLY20g PAN80",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);
+        }
+    }
+
+    #[test]
+    fn a_slot_reads_its_mark_with_lock_the_plain_form() {
+        let slot = |text: &str| text.parse::<FxSlot>().map(|slot| slot.mark);
+        assert_eq!(slot("CUT40"), Ok(Mark::Lock));
+        assert_eq!(slot("CUT40h"), Ok(Mark::Hold));
+        assert_eq!(slot("CUT40g"), Ok(Mark::Glide));
+    }
+
+    #[test]
+    fn only_values_can_have_a_mark() {
+        for text in ["DEL10h", "RET14g", "---00h", "CUT40x", "CUT40."] {
+            assert!(text.parse::<FxSlot>().is_err(), "{text} should be refused");
         }
     }
 

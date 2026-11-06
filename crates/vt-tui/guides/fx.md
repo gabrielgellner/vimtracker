@@ -7,7 +7,7 @@ To write one, go to the slot with `l` in Normal mode, press `i` and type it,
 such as `CUT40`. The status line says `FX1 command`, then `FX1 value`. A slot
 only takes effect once its value is typed.
 
-## Settings that stay until changed
+## Values and their marks
 
 | Command | Sets |
 |---|---|
@@ -23,7 +23,29 @@ others start from the values on the track page, `Space 4`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
 a step has put it. See **The track page, envelopes and LFOs**.
 
+Each value has a mark beside it, which says how long it lasts:
+
+| Mark | Lasts |
+|---|---|
+| `.` lock | The default. Until the next note or the next value of that command |
+| `h` hold | Until playback next starts from the top. A lock returns to this |
+| `g` glide | Slides to the next value of that command in the slot |
+
+A glide wraps through the phrase's loop to find its value.
+
+Press `~` on a value to cycle its mark, or in Visual to give every value selected
+the mark after the first one's, and `.` repeats it. A value typed into an empty slot copies the mark
+of the nearest value above it.
+
+A note that a failed `CHA` skips, an `OFF` and a `RET` don't end a lock, as the same note is
+still sounding. A note doesn't stop a glide, so a sweep can cross notes, and a glide's last row
+uses its own mark, so ending on a lock jumps back at the next note. With no other value to
+slide to, a glide stays where it is, as a lock would. An edit on the track page changes what's
+underneath, so you hear it straight away unless a lock or glide is on top.
+
 ## Things that happen once
+
+These have no mark.
 
 | Command | Does |
 |---|---|

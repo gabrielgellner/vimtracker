@@ -1585,3 +1585,107 @@ fn a_shape_on_an_fx_column_snaps_to_its_commands_top() {
     keys(&mut app, "<Enter>");
     assert_eq!(steps(&app)[1], "--- -- -- VOLF8 ---00 ---00");
 }
+
+const MARKED: &str = "C-4 40 01 CUT20h ---00 ---00";
+const GLIDING: &str = "C-4 40 01 CUT20g ---00 ---00";
+
+#[test]
+fn tilde_cycles_a_values_mark_from_either_of_its_fields() {
+    check(&[A], "lll~", &[MARKED]);
+    check(&[A], "llll~", &[MARKED]);
+    check(&[A], "lll~~", &[GLIDING]);
+    check(&[A], "lll~~~", &[A]);
+}
+
+#[test]
+fn tilde_is_one_undo_step_and_dot_repeats_it() {
+    check(&[A], "lll~u", &[A]);
+    check(&[A, A], "lll~j.", &[MARKED, MARKED]);
+}
+
+#[test]
+fn tilde_refuses_anything_but_a_value_and_says_why() {
+    for (start, typed) in [
+        ("C-4 40 01 DEL10 ---00 ---00", "lll~"),
+        ("C-4 40 01 ---00 ---00 ---00", "lll~"),
+        ("C-4 40 01 CUT20 ---00 ---00", "~"),
+    ] {
+        let (mut app, _rt) = app_with(&[start]);
+        keys(&mut app, typed);
+        assert_eq!(steps(&app), [start], "after {typed:?}");
+        assert!(app.status.contains("No value to mark"), "{}", app.status);
+    }
+}
+
+#[test]
+fn visual_tilde_makes_a_mixed_selection_the_same() {
+    let start = [
+        "C-4 40 01 CUT20 ---00 ---00",
+        "C-4 40 01 RES30g ---00 ---00",
+        "C-4 40 01 DEL10 ---00 ---00",
+        "C-4 40 01 PAN40h ---00 ---00",
+    ];
+    check(
+        &start,
+        "lllV3j~",
+        &[
+            "C-4 40 01 CUT20h ---00 ---00",
+            "C-4 40 01 RES30h ---00 ---00",
+            "C-4 40 01 DEL10 ---00 ---00",
+            "C-4 40 01 PAN40h ---00 ---00",
+        ],
+    );
+}
+
+#[test]
+fn visual_tilde_stays_in_the_selected_column_and_repeats() {
+    let start = ["C-4 40 01 CUT20 RES30 ---00", "C-4 40 01 CUT20 RES30 ---00"];
+    let one = "C-4 40 01 CUT20h RES30 ---00";
+    check(&start, "lllvj~", &[one, one]);
+    let (mut app, _rt) = app_with(&[start[0], start[1], start[0]]);
+    keys(&mut app, "lllvj~jj.");
+    assert_eq!(steps(&app), [one, one, "C-4 40 01 CUT20h RES30 ---00"]);
+}
+
+#[test]
+fn a_typed_value_copies_the_mark_above_it_without_wrapping() {
+    let empty = "--- -- -- ---00 ---00 ---00";
+    let above = "C-4 40 01 CUT20h ---00 ---00";
+    let typed = "--- -- -- CUT40h ---00 ---00";
+    let plain = "--- -- -- CUT40 ---00 ---00";
+    check(&[above, empty], "jllliCUT40<Esc>", &[above, typed]);
+    check(&[empty, above], "llliCUT40<Esc>", &[plain, above]);
+    let event_between = "C-4 40 01 DEL10 ---00 ---00";
+    check(
+        &[above, event_between, empty],
+        "2jllliCUT40<Esc>",
+        &[above, event_between, typed],
+    );
+}
+
+#[test]
+fn a_value_typed_over_another_keeps_its_mark() {
+    let start = "--- -- -- CUT20 ---00 ---00";
+    let above = "C-4 40 01 CUT20g ---00 ---00";
+    check(
+        &[above, "--- -- -- CUT20h ---00 ---00"],
+        "jllllr55",
+        &[above, "--- -- -- CUT55h ---00 ---00"],
+    );
+    check(&[start], "lllrRES40", &["--- -- -- RES40 ---00 ---00"]);
+}
+
+#[test]
+fn changing_a_value_to_an_event_drops_its_mark() {
+    check(&[MARKED], "lllrDEL10", &["C-4 40 01 DEL10 ---00 ---00"]);
+}
+
+#[test]
+fn moving_a_slot_carries_its_mark_and_clearing_removes_it() {
+    let empty = "--- -- -- ---00 ---00 ---00";
+    check(&[MARKED, empty], "yyjp", &[MARKED, MARKED]);
+    check(&[MARKED, empty], "]r", &[empty, MARKED]);
+    let cleared = "C-4 40 01 ---00 ---00 ---00";
+    check(&[MARKED], "lllx", &[cleared]);
+    check(&[MARKED], "lll=", &["C-4 40 01 CUT21h ---00 ---00"]);
+}

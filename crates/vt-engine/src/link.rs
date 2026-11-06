@@ -247,6 +247,28 @@ mod tests {
     }
 
     #[test]
+    fn locks_holds_and_glides_never_allocate_in_the_callback() {
+        let pool = samples();
+        let mut marked = song(8, 16);
+        for id in 0..8u32 {
+            let phrase = Arc::make_mut(marked.phrases.get_mut(&id).unwrap());
+            for step in 0..16 {
+                let text = match step % 4 {
+                    0 => "C-4 -- 00 CUT40g VOL80 PANC0h",
+                    1 => "--- -- -- RES20g ---00 ---00",
+                    2 => "C-4 -- 00 CUTF0h VOLA0g ---00",
+                    _ => "--- -- -- ---00 RES40 ---00",
+                };
+                *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(marked, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
+    #[test]
     fn changing_track_count_and_removing_a_phrase_dont_allocate() {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(8, 16), &pool));

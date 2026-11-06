@@ -4,7 +4,7 @@ use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK};
 use vt_model::song::{FilterType, Track, level_gain};
-use vt_model::step::FxCommand;
+use vt_model::step::{FxCommand, FxSlot, Mark};
 
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::lfo::wave;
@@ -58,6 +58,43 @@ pub struct SongTime {
     pub seed: u64,
 }
 
+/// The commands whose values last, in the order `TrackState::values` keeps them.
+const VALUE_COMMANDS: [FxCommand; 6] = [
+    FxCommand::Vol,
+    FxCommand::Pan,
+    FxCommand::Cut,
+    FxCommand::Res,
+    FxCommand::Dly,
+    FxCommand::Rev,
+];
+
+/// A value moving in a straight line, by song position, so it keeps up with tempo changes.
+#[derive(Debug, Clone, Copy)]
+struct Glide {
+    from: u8,
+    to: FxSlot,
+    start_tick: f64,
+    ticks: f64,
+}
+
+/// What can set one value. What's heard is the glide if there is one, then the lock, then the base.
+#[derive(Debug, Clone, Copy)]
+struct ValueLayers {
+    base: u8,
+    lock: Option<u8>,
+    glide: Option<Glide>,
+}
+
+impl ValueLayers {
+    fn at(base: u8) -> Self {
+        Self {
+            base,
+            lock: None,
+            glide: None,
+        }
+    }
+}
+
 /// A note waiting for its delayed start.
 #[derive(Debug, Clone, Copy)]
 pub struct DelayedNote {
@@ -92,6 +129,8 @@ pub struct TrackState {
     pub retrigger: Option<Retrigger>,
     /// A step waiting for its swing delay.
     pub swung: Option<(u64, usize)>,
+    /// What each value is set to, in `VALUE_COMMANDS`' order. The fields below it are what's heard.
+    values: [ValueLayers; VALUE_COMMANDS.len()],
     /// Held `VOL`, `DLY` and `REV`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
     /// curve is only worked out when they or an LFO change.
     vol: f32,
@@ -146,13 +185,21 @@ fn pan_gains(position: f32) -> (f32, f32) {
 }
 
 /// Map a `PAN` value to a `0..=1` position, with `80` as exact centre.
-fn pan_position(value: u8) -> f32 {
-    let value = f32::from(value);
+fn pan_position(value: f32) -> f32 {
     if value >= 128.0 {
         0.5 + (value - 128.0) / 127.0 * 0.5
     } else {
         value / 128.0 * 0.5
     }
+}
+
+/// Where `TrackState::values` keeps a command's value. Other commands have none, and share the
+/// first place, as nothing that calls this passes them.
+fn value_index(command: FxCommand) -> usize {
+    VALUE_COMMANDS
+        .iter()
+        .position(|value| *value == command)
+        .unwrap_or(0)
 }
 
 impl TrackState {
@@ -170,6 +217,14 @@ impl TrackState {
             kill_at: None,
             off_at: None,
             retrigger: None,
+            values: [
+                ValueLayers::at(UNITY_LEVEL),
+                ValueLayers::at(0x80),
+                ValueLayers::at(0xFF),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+            ],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
             delay: 0.0,
@@ -212,18 +267,27 @@ impl TrackState {
         self.rng = Pcg32::new(seed, index as u64);
         self.instrument = None;
         self.last_note = None;
-        self.set_held(FxCommand::Vol, UNITY_LEVEL);
-        self.set_held(FxCommand::Pan, track.pan);
-        self.set_held(FxCommand::Cut, track.cutoff);
-        self.set_held(FxCommand::Res, track.resonance);
-        self.set_held(FxCommand::Dly, track.delay);
-        self.set_held(FxCommand::Rev, track.reverb);
+        let bases = [
+            UNITY_LEVEL,
+            track.pan,
+            track.cutoff,
+            track.resonance,
+            track.delay,
+            track.reverb,
+        ];
+        for (command, base) in VALUE_COMMANDS.into_iter().zip(bases) {
+            self.values[value_index(command)] = ValueLayers::at(base);
+            self.write_value(command, f32::from(base));
+        }
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
     }
 
     /// Work out what the LFOs add now. A stopped track sits at its held values, so an audition
     /// hears those rather than wherever the LFO stopped.
     pub fn modulate(&mut self, track: &Track, index: usize, now: SongTime, stopped: bool) {
+        if !stopped {
+            self.advance_glides(now);
+        }
         let mut offsets = [0.0_f32; Destination::ALL.len()];
         self.filter_moving = false;
         for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
@@ -362,16 +426,92 @@ impl TrackState {
         self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }
 
-    /// Set a held value from an FX command.
-    pub fn set_held(&mut self, command: FxCommand, value: u8) {
-        let scaled = f32::from(value) / 255.0;
+    /// Run a lock or hold value from a step. Anything else on that value gives way to it.
+    pub fn set_value(&mut self, command: FxCommand, value: u8, mark: Mark) {
+        let layers = &mut self.values[value_index(command)];
+        layers.glide = None;
+        if mark == Mark::Hold {
+            layers.base = value;
+            layers.lock = None;
+        } else {
+            layers.lock = Some(value);
+        }
+        self.write_value(command, f32::from(value));
+    }
+
+    /// Run a glide value from a step, toward the next value of its parameter if there is one.
+    /// `to` is that value, with how many ticks away it is.
+    pub fn start_glide(
+        &mut self,
+        command: FxCommand,
+        value: u8,
+        to: Option<(FxSlot, f64)>,
+        now: SongTime,
+    ) {
+        self.set_value(command, value, Mark::Lock);
+        if let Some((to, ticks)) = to {
+            let layers = &mut self.values[value_index(command)];
+            layers.lock = None;
+            layers.glide = Some(Glide {
+                from: value,
+                to,
+                start_tick: now.tick,
+                ticks,
+            });
+        }
+    }
+
+    /// A note has started, so the locks it would have outlived are over. Glides carry on.
+    pub fn end_locks(&mut self) {
+        for command in VALUE_COMMANDS {
+            let layers = &mut self.values[value_index(command)];
+            if layers.lock.take().is_some() && layers.glide.is_none() {
+                let base = layers.base;
+                self.write_value(command, f32::from(base));
+            }
+        }
+    }
+
+    /// The track page changed a value. A lock or glide on top stays until it ends.
+    pub fn set_base(&mut self, command: FxCommand, value: u8) {
+        let layers = &mut self.values[value_index(command)];
+        layers.base = value;
+        if layers.lock.is_none() && layers.glide.is_none() {
+            self.write_value(command, f32::from(value));
+        }
+    }
+
+    /// Move glides along to where the song is.
+    fn advance_glides(&mut self, now: SongTime) {
+        for command in VALUE_COMMANDS {
+            let index = value_index(command);
+            let Some(glide) = self.values[index].glide else {
+                continue;
+            };
+            let progress = (now.tick - glide.start_tick) / glide.ticks;
+            if progress < 1.0 {
+                let (from, to) = (f32::from(glide.from), f32::from(glide.to.value));
+                self.write_value(command, from + (to - from) * progress.max(0.0) as f32);
+            } else {
+                // Its row hasn't run, as a chain moved on, so this takes that row's place.
+                let mark = match glide.to.mark {
+                    Mark::Hold => Mark::Hold,
+                    Mark::Lock | Mark::Glide => Mark::Lock,
+                };
+                self.set_value(command, glide.to.value, mark);
+            }
+        }
+    }
+
+    /// Set what's heard for a value, on the `00` to `FF` scale.
+    fn write_value(&mut self, command: FxCommand, value: f32) {
         match command {
-            FxCommand::Vol => self.vol = f32::from(value),
+            FxCommand::Vol => self.vol = value,
             FxCommand::Pan => self.pan.target = pan_position(value),
-            FxCommand::Cut => self.cutoff.target = scaled,
-            FxCommand::Res => self.resonance.target = scaled,
-            FxCommand::Dly => self.delay = f32::from(value),
-            FxCommand::Rev => self.reverb = f32::from(value),
+            FxCommand::Cut => self.cutoff.target = value / 255.0,
+            FxCommand::Res => self.resonance.target = value / 255.0,
+            FxCommand::Dly => self.delay = value,
+            FxCommand::Rev => self.reverb = value,
             _ => {}
         }
         self.update_gains();
@@ -525,9 +665,9 @@ mod tests {
 
     #[test]
     fn pan_is_exactly_centred_at_80_and_keeps_power() {
-        assert_eq!(pan_position(0x80), 0.5);
-        assert_eq!(pan_position(0x00), 0.0);
-        assert_eq!(pan_position(0xFF), 1.0);
+        assert_eq!(pan_position(0x80 as f32), 0.5);
+        assert_eq!(pan_position(0x00 as f32), 0.0);
+        assert_eq!(pan_position(0xFF as f32), 1.0);
         let (l, r) = pan_gains(0.5);
         assert!((l - 1.0).abs() < 1e-5 && (r - 1.0).abs() < 1e-5);
         let (l, r) = pan_gains(0.2);

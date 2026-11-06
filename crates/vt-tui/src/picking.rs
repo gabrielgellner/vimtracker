@@ -276,6 +276,7 @@ impl App {
                 FxSlot {
                     command: Some(command),
                     value,
+                    mark: self.mark_for_typed_value(slot),
                 },
             ));
             return;

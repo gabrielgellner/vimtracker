@@ -7,9 +7,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::constants::BEAT_STEPS;
-use vt_model::label::{is_named_slot, name_of};
+use vt_model::label::name_of;
 use vt_model::selection::Scope;
-use vt_model::step::Step;
+use vt_model::step::{FxSlot, Mark, Step};
 
 use crate::app::{App, Field};
 use crate::input::mode::Mode;
@@ -24,16 +24,32 @@ const GUTTER: usize = 9;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
+/// A slot on screen: its text, its mark, and the gap before the next.
+const SLOT_WIDTH: usize = 8;
+
+/// The gap and mark after a slot's value.
+const MARK_WIDTH: usize = 2;
+
 /// A step's text on screen, which shows a named slot by its name rather than its number.
 fn step_text(step: &Step) -> String {
-    let text = step.to_string();
-    match step.instrument {
-        Some(id) if is_named_slot(id) => {
-            let number = format!("{id:02X}").len();
-            format!("{}{}{}", &text[..7], name_of(id), &text[7 + number..])
-        }
-        _ => text,
+    let instrument = step.instrument.map_or("--".to_owned(), name_of);
+    let velocity = step
+        .velocity
+        .map_or("--".to_owned(), |v| format!("{v:02X}"));
+    let mut text = format!("{} {velocity} {instrument}", step.note);
+    for slot in &step.fx {
+        let bare = FxSlot {
+            mark: Mark::Lock,
+            ..*slot
+        };
+        let mark = if slot.is_value() {
+            slot.mark.glyph()
+        } else {
+            ' '
+        };
+        text.push_str(&format!(" {bare} {mark}"));
     }
+    text
 }
 
 /// Split text into runs of the same style, given a style for each character.
@@ -52,7 +68,7 @@ fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
 /// The character range of a field within a step's text.
 fn field_range(step: &Step, field: Field) -> (usize, usize) {
     let instrument_width = step.instrument.map_or(2, |id| name_of(id).len());
-    let fx_start = |slot: usize| 7 + instrument_width + 1 + slot * 6;
+    let fx_start = |slot: usize| 7 + instrument_width + 1 + slot * SLOT_WIDTH;
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
@@ -71,7 +87,7 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
     let last = scope.last.min(2 + slots);
     let (start, _) = field_range(step, Field::of_group(scope.first.min(last)));
     let end = match Field::of_group(last) {
-        Field::FxCommand(slot) => field_range(step, Field::FxValue(slot)).1,
+        Field::FxCommand(slot) => field_range(step, Field::FxValue(slot)).1 + MARK_WIDTH,
         field => field_range(step, field).1,
     };
     (start.min(length), end.min(length))
@@ -294,6 +310,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             let (start, end) = field_range(step, Field::Instrument);
             let label = body.patch(theme::label());
             styles[start..end.min(text.len())].fill(label);
+        }
+        for (slot, fx) in step.fx.iter().enumerate() {
+            if fx.is_value() && fx.mark == Mark::Lock {
+                let at = field_range(step, Field::FxValue(slot)).1 + MARK_WIDTH - 1;
+                styles[at] = body.patch(theme::dim());
+            }
         }
         let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));
         if let Some(selected) = selected {

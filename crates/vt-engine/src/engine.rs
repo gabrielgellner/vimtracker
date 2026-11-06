@@ -9,7 +9,7 @@ use vt_model::constants::{
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
 use vt_model::song::{Track, level_gain};
-use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
+use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
@@ -192,7 +192,7 @@ impl Engine {
             ];
             for (command, was, now) in controls {
                 if was != now {
-                    state.set_held(command, now);
+                    state.set_base(command, now);
                 }
             }
         }
@@ -612,8 +612,15 @@ impl Engine {
         let mut kill_units = None;
         let mut off_units = None;
         let mut retrigger = None;
+        // `CHA` goes first, as whether the note plays decides whether locks end.
         let mut plays = true;
-        for slot in &step.fx {
+        for slot in step.fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
+            plays &= self.tracks[index].rng.chance(slot.value);
+        }
+        if plays && matches!(step.note, Note::On(_)) {
+            self.tracks[index].end_locks();
+        }
+        for (number, slot) in step.fx.iter().enumerate() {
             let Some(command) = slot.command else {
                 continue;
             };
@@ -622,10 +629,17 @@ impl Engine {
                 FxCommand::Kil => kill_units = Some(slot.value),
                 FxCommand::Off => off_units = Some(slot.value),
                 FxCommand::Ret => retrigger = Some(slot.value),
-                FxCommand::Cha => {
-                    plays &= self.tracks[index].rng.chance(slot.value);
+                FxCommand::Cha => {}
+                value if slot.mark == Mark::Glide => {
+                    let to = song.phrases.get(&position.phrase).and_then(|phrase| {
+                        phrase
+                            .next_value(position.step, number, value)
+                            .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
+                    });
+                    let now = self.song_time();
+                    self.tracks[index].start_glide(value, slot.value, to, now);
                 }
-                held => self.tracks[index].set_held(held, slot.value),
+                value => self.tracks[index].set_value(value, slot.value, slot.mark),
             }
         }
         if plays && delay_units.is_none() && matches!(step.note, Note::On(_)) {

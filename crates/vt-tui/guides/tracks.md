@@ -38,8 +38,8 @@ the others, which matters only for tracks using it.
 ## Output
 
 `Pan`, `Delay` and `Reverb` are where those values start when
-playback starts from the top. A step's FX changes them until the next start,
-and changing one here is heard straight away. `Level` scales the whole track.
+playback starts from the top. A step's `h` value changes them until the next start,
+and changing one here is heard straight away unless a lock or glide is on top. `Level` scales the whole track.
 Dimmed `Swing` is the project's, which this track follows. Changing it gives the
 track its own, and `x` follows the project again.
 

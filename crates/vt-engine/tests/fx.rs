@@ -341,7 +341,7 @@ fn held_values_reset_on_return_and_keep_on_resume() {
 fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     let version = Arc::new(Published::new(
         Arc::new(song(&[
-            "C-4 -- 00 VOL00 ---00 ---00",
+            "C-4 -- 00 VOL00h ---00 ---00",
             "C-4 -- 00 ---00 ---00 ---00",
         ])),
         flat(0.5),

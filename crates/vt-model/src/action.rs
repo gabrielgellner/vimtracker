@@ -11,11 +11,11 @@ use crate::constants::{
 use crate::envelope::Envelope;
 use crate::lfo::Lfo;
 use crate::selection::{
-    Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
+    Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{Chain, ChainEntry, FilterType, Instrument, Phrase, Song, lowest_unused};
-use crate::step::{FxCommand, FxSlot, Note, Step};
+use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +64,13 @@ pub enum Action {
         phrase: u32,
         step: usize,
         value: Step,
+    },
+    /// Set the mark on every value in a selection.
+    SetMark {
+        phrase: u32,
+        range: StepRange,
+        scope: Scope,
+        mark: Mark,
     },
     /// Set one field of a step.
     SetField {
@@ -259,6 +266,7 @@ fn snapped(slot: FxSlot) -> FxSlot {
         value: slot.value.min(highest),
         ..slot
     }
+    .with_valid_mark()
 }
 
 /// Why an edit was refused.
@@ -384,6 +392,16 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                         }
                     }
                 }
+            }
+        }
+        Action::SetMark {
+            phrase,
+            range,
+            scope,
+            mark,
+        } => {
+            for index in range.first..=range.last {
+                mark_step(step_mut(&mut next, *phrase, index)?, *scope, *mark);
             }
         }
         Action::Clear {

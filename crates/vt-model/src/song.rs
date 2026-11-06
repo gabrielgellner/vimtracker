@@ -13,7 +13,7 @@ use crate::envelope::{Envelope, default_envelopes};
 use crate::label::is_named_slot;
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::selection::Extent;
-use crate::step::Step;
+use crate::step::{FxCommand, FxSlot, Step};
 
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
 /// past `MAX_LEVEL`, and the value can be between steps, as an LFO moves it.
@@ -246,6 +246,21 @@ impl Phrase {
     /// The steps that play.
     pub fn loop_steps(&self) -> &[Step] {
         &self.steps[self.start..self.start + self.length]
+    }
+
+    /// The next value with this command in a slot, looking forward from a step of the loop and
+    /// wrapping, with how many steps away it is. The step itself doesn't count.
+    pub fn next_value(
+        &self,
+        step: usize,
+        slot: usize,
+        command: FxCommand,
+    ) -> Option<(usize, FxSlot)> {
+        let steps = self.loop_steps();
+        (1..steps.len()).find_map(|distance| {
+            let fx = steps[(step + distance) % steps.len()].fx.get(slot)?;
+            (fx.command == Some(command)).then_some((distance, *fx))
+        })
     }
 
     /// The number of steps that play.
@@ -531,6 +546,28 @@ pub fn lowest_unused<T>(items: &BTreeMap<u32, T>) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_value_looks_forward_in_the_slot_and_wraps() {
+        let steps = [
+            "--- -- -- CUT10 ---00",
+            "--- -- -- RES20 ---00",
+            "--- -- -- CUT30 CUT90",
+            "--- -- -- ---00 ---00",
+        ];
+        let steps = steps.iter().map(|text| text.parse().unwrap()).collect();
+        let phrase = Phrase::from_steps(steps);
+        let found = |step, slot, command| {
+            phrase
+                .next_value(step, slot, command)
+                .map(|(distance, fx)| (distance, fx.value))
+        };
+        assert_eq!(found(0, 0, FxCommand::Cut), Some((2, 0x30)));
+        assert_eq!(found(2, 0, FxCommand::Cut), Some((2, 0x10)));
+        assert_eq!(found(1, 0, FxCommand::Res), None, "not itself");
+        assert_eq!(found(0, 1, FxCommand::Cut), Some((2, 0x90)));
+        assert_eq!(found(0, 0, FxCommand::Vol), None);
+    }
     use crate::constants::DEFAULT_TRACKS;
 
     #[test]

@@ -35,6 +35,7 @@ pub enum Cmd {
     WholeStep,
     On(Target),
     ClearField,
+    CycleMark,
     Paste,
     PasteAfter,
     PasteMerge,
@@ -204,6 +205,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
     ("C-a", Cmd::Increase, "Increase the value"),
     ("C-x", Cmd::Decrease, "Decrease the value"),
+    (
+        "~",
+        Cmd::CycleMark,
+        "Cycle a value's mark: lock, hold, glide",
+    ),
     (".", Cmd::Repeat, "Repeat the last change"),
     ("v", Cmd::VisualField, "Select fields"),
     ("V", Cmd::VisualStep, "Select whole steps"),
@@ -349,6 +355,7 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
     ),
     ("C-a", Cmd::Increase, "Increase the selection's values"),
     ("C-x", Cmd::Decrease, "Decrease the selection's values"),
+    ("~", Cmd::CycleMark, "Cycle the selected values' marks"),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
 ];
 
