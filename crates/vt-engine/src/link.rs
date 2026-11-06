@@ -40,7 +40,7 @@ pub enum Command {
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
     SetSolo { track: usize, solo: bool },
-    /// Play a chain on one track when its current one ends, or stop it there.
+    /// Play a chain on one track when its launch timing allows, or stop it then.
     Launch { track: usize, chain: Option<u32> },
     /// Carry on in a captured section, with launched chains still running.
     ContinueIn { section: usize },
@@ -381,6 +381,31 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         handle.send(Command::PlayFrom { step: 0 });
         assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
+    #[test]
+    fn launching_on_the_grid_and_across_rows_stays_off_the_allocator() {
+        let pool = samples();
+        let mut played = Song::new(2);
+        for track in &mut played.tracks {
+            track.sample = Some("flat".to_owned());
+            track.add_chain(1);
+        }
+        played.launch = vt_model::song::Launch::every(2).unwrap();
+        played.sections[0].length = Some(4);
+        let mut second = played.sections[0].clone();
+        second.chains[1] = Some(1);
+        played.sections.push(second);
+        let engine = Engine::new(48_000, published(played, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        for round in 0..20 {
+            handle.send(Command::Launch {
+                track: round % 2,
+                chain: (round % 3 > 0).then_some(1),
+            });
+            assert_eq!(blocks(&mut rt, 4), 0);
+        }
     }
 
     #[test]

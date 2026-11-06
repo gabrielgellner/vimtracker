@@ -8,7 +8,7 @@ use vt_model::constants::{
 };
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
-use vt_model::song::{Section, SectionStart, Track, level_gain};
+use vt_model::song::{Launch, Section, SectionStart, Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 
 use crate::dsp::delay::Delay;
@@ -173,7 +173,7 @@ impl Engine {
         }
     }
 
-    /// Play a chain on one track when its current one ends, or stop it there.
+    /// Play a chain on one track when its launch timing allows, or stop it then.
     pub fn launch(&mut self, track: usize, chain: Option<u32>) {
         if let Some(track) = self.tracks.get_mut(track) {
             track.cued = Some(chain);
@@ -196,11 +196,18 @@ impl Engine {
             })
     }
 
-    /// Back to every track playing its section's chain.
+    /// Back to every track playing its section's chain, forgetting what's cued.
     fn clear_launches(&mut self) {
+        self.end_launches();
+        for track in self.tracks.iter_mut() {
+            track.cued = None;
+        }
+    }
+
+    /// Back to every track playing its section's chain, keeping what's cued.
+    fn end_launches(&mut self) {
         for track in self.tracks.iter_mut() {
             track.launched = None;
-            track.cued = None;
         }
     }
 
@@ -214,27 +221,38 @@ impl Engine {
         Some(((*section.chains.get(index)?)?, section_step))
     }
 
-    /// Start what a track has cued, if its chain has just come to an end.
+    /// Start what a track has cued, if this is a step its launch timing starts one on.
     fn start_cued(&mut self, index: usize, section_step: usize) {
-        let Some(chain) = self.tracks[index].cued else {
+        if self.tracks[index].cued.is_none() {
+            return;
+        }
+        let due = match self.current.song.launch {
+            Launch::Every(steps) => self.section_place.is_multiple_of(u64::from(steps.get())),
+            Launch::ChainEnd => {
+                self.track_place(index, section_step)
+                    .is_none_or(|(current, place)| {
+                        let length = self.current.song.tracks[index].chain_steps(current);
+                        length == 0 || place.is_multiple_of(length)
+                    })
+            }
+        };
+        if due {
+            self.begin_cued(index, section_step);
+        }
+    }
+
+    /// Start what a track has cued now, if it has anything cued.
+    fn begin_cued(&mut self, index: usize, section_step: usize) {
+        let Some(chain) = self.tracks[index].cued.take() else {
             return;
         };
-        let at_end = self
-            .track_place(index, section_step)
-            .is_none_or(|(current, place)| {
-                let length = self.current.song.tracks[index].chain_steps(current);
-                length == 0 || place.is_multiple_of(length)
-            });
-        if at_end {
-            self.tracks[index].cued = None;
-            if chain.is_none() {
-                self.tracks[index].stop();
-            }
-            self.tracks[index].launched = Some(Launched {
-                chain,
-                started: section_step as u64,
-            });
+        if chain.is_none() {
+            self.tracks[index].stop();
         }
+        self.tracks[index].launched = Some(Launched {
+            chain,
+            started: section_step as u64,
+        });
     }
 
     fn section_steps(&self) -> usize {
@@ -278,13 +296,15 @@ impl Engine {
         if self.section_place < song.section_length(&song.sections[self.section]) as u64 {
             return true;
         }
+        let mut changed = false;
         for _ in 0..count {
             let next = match self.loop_section {
                 Some(section) if section < count => section,
                 _ => (self.section + 1) % count,
             };
             if next != self.section {
-                self.clear_launches();
+                self.end_launches();
+                changed = true;
             }
             self.section = next;
             self.section_place = 0;
@@ -292,6 +312,12 @@ impl Engine {
             if song.section_length(section) > 0 {
                 if section.start == SectionStart::Reset {
                     self.realign();
+                }
+                // A cue left waiting isn't lost to the song moving on.
+                if changed {
+                    for index in 0..self.tracks.len() {
+                        self.begin_cued(index, self.place as usize);
+                    }
                 }
                 return true;
             }

@@ -478,9 +478,13 @@ fn a_glide_a_chain_moves_past_finishes_on_time() {
         transpose: 0,
     };
     let entries = vec![entry(0), entry(1)];
-    start.tracks[0]
-        .chains
-        .insert(0, Arc::new(Chain { entries }));
+    start.tracks[0].chains.insert(
+        0,
+        Arc::new(Chain {
+            entries,
+            label: String::new(),
+        }),
+    );
     let out = render(start, STEP * 6);
     close(at_step(&out, 4), 192.0);
     close(at_step(&out, 5), UNITY);

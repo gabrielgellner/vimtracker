@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_model::action::{Action, EditError, KitSound, edit};
 use vt_model::constants::MAX_TRACKS;
 use vt_model::history::History;
-use vt_model::song::Song;
+use vt_model::song::{Launch, Song};
 use vt_model::step::Note;
 
 fn set_note(phrase: u32, step: usize, midi: u8) -> Action {
@@ -295,4 +295,31 @@ mod tree {
         assert_eq!(song.tracks[0].chains[&5].entries[0].phrase, 1);
         assert!(song.tracks[0].phrases.contains_key(&1));
     }
+}
+
+#[test]
+fn a_chain_label_and_launch_timing_are_edits() {
+    let song = Arc::new(Song::new(1));
+    let labelled = edit(
+        &song,
+        &Action::SetChainLabel {
+            track: 0,
+            chain: 0,
+            label: "bass".to_owned(),
+        },
+    )
+    .unwrap();
+    assert_eq!(labelled.tracks[0].chains[&0].label, "bass");
+    assert_eq!(song.tracks[0].chains[&0].label, "");
+    let missing = edit(
+        &song,
+        &Action::SetChainLabel {
+            track: 0,
+            chain: 9,
+            label: "bass".to_owned(),
+        },
+    );
+    assert_eq!(missing, Err(EditError::NoChain(9)));
+    let timed = edit(&song, &Action::SetLaunch(Launch::ChainEnd)).unwrap();
+    assert_eq!(timed.launch, Launch::ChainEnd);
 }

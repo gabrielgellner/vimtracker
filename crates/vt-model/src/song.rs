@@ -1,13 +1,15 @@
 //! The song and everything it refers to by ID.
 
 use std::collections::BTreeMap;
+use std::fmt;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
-    BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_LEVEL,
-    MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
+    BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION,
+    MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
@@ -182,6 +184,7 @@ impl Track {
                     phrase,
                     transpose: 0,
                 }],
+                label: String::new(),
             }),
         );
     }
@@ -235,6 +238,69 @@ pub enum SectionStart {
     Reset,
 }
 
+/// When a launched chain starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Launch {
+    /// When the track's own chain ends.
+    ChainEnd,
+    /// On the next step this many into the row, so every row's start is one.
+    Every(NonZeroU32),
+}
+
+/// The lengths `:launch` has names for.
+const LAUNCH_NAMES: [(&str, u32); 7] = [
+    ("step", 1),
+    ("1/4", BEAT_STEPS as u32),
+    ("1/2", BEAT_STEPS as u32 * 2),
+    ("1bar", BAR_STEPS as u32),
+    ("2bar", BAR_STEPS as u32 * 2),
+    ("4bar", BAR_STEPS as u32 * 4),
+    ("8bar", BAR_STEPS as u32 * 8),
+];
+
+impl Launch {
+    /// Launch on a grid of this many steps, if it's 1 or more.
+    pub fn every(steps: usize) -> Option<Self> {
+        let steps = u32::try_from(steps).ok()?;
+        NonZeroU32::new(steps).map(Self::Every)
+    }
+
+    /// The setting with this name in `:launch`.
+    pub fn named(name: &str) -> Option<Self> {
+        if name == "chain" {
+            return Some(Self::ChainEnd);
+        }
+        let (_, steps) = LAUNCH_NAMES.iter().find(|(known, _)| *known == name)?;
+        NonZeroU32::new(*steps).map(Self::Every)
+    }
+
+    /// When a launch starts, to finish a sentence on the status line.
+    pub fn when(self) -> String {
+        match self {
+            Self::ChainEnd => "when its chain ends".to_owned(),
+            Self::Every(_) => format!("on the {self} grid"),
+        }
+    }
+}
+
+impl Default for Launch {
+    fn default() -> Self {
+        Self::every(BAR_STEPS).unwrap_or(Self::ChainEnd)
+    }
+}
+
+impl fmt::Display for Launch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self::Every(steps) = self else {
+            return f.write_str("chain");
+        };
+        match LAUNCH_NAMES.iter().find(|(_, known)| *known == steps.get()) {
+            Some((name, _)) => f.write_str(name),
+            None => write!(f, "{steps}-step"),
+        }
+    }
+}
+
 /// One row of the song, holding one chain per track.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Section {
@@ -261,6 +327,9 @@ pub struct ChainEntry {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Chain {
     pub entries: Vec<ChainEntry>,
+    /// What to call it on screen, or empty for just its number.
+    #[serde(default)]
+    pub label: String,
 }
 
 /// One track's sequence of steps, reusable by ID.
@@ -475,6 +544,9 @@ pub struct Song {
     pub limiter: bool,
     /// Project swing, in tenths of a percent.
     pub swing: u16,
+    /// When launched chains start.
+    #[serde(default)]
+    pub launch: Launch,
     pub tracks: Vec<Track>,
     pub sections: Vec<Section>,
 }
@@ -490,6 +562,7 @@ impl Song {
             skip: default_skip(),
             limiter: default_limiter(),
             swing: 500,
+            launch: Launch::default(),
             tracks: Vec::new(),
             sections: vec![Section::default()],
         };
@@ -616,6 +689,7 @@ mod tests {
                         transpose: 3,
                     },
                 ],
+                label: String::new(),
             }),
         );
         assert_eq!(song.tracks[0].chain_steps(0), 20);

@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use thiserror::Error;
+use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::label::is_name;
+use vt_model::song::Launch;
 
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +46,10 @@ pub enum Line {
     TrackSwing(Option<u16>),
     TrackLevel(u8),
     Reset(Option<usize>),
+    /// Set when launched chains start, or show it.
+    Launch(Option<Launch>),
+    /// Label the chain under the cursor, or clear its label.
+    Label(Option<String>),
 }
 
 /// Why a command line was refused.
@@ -77,6 +83,10 @@ pub enum LineError {
     TrackLevel,
     #[error(":reset takes a number of steps, 1 or more, with 0x for hex, or off")]
     Reset,
+    #[error(":launch takes step, 1/4, 1/2, 1bar, 2bar, 4bar, 8bar, a number of steps, or chain")]
+    Launch,
+    #[error(":label takes up to 32 characters, or nothing to clear it")]
+    Label,
 }
 
 /// Expand a leading `~/` using the home directory.
@@ -210,6 +220,16 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "reset" => steps(argument)
             .map(|steps| Line::Reset(Some(steps)))
             .ok_or(LineError::Reset),
+        "launch" if argument.is_empty() => Ok(Line::Launch(None)),
+        "launch" => Launch::named(argument)
+            .or_else(|| steps(argument).and_then(Launch::every))
+            .map(|launch| Line::Launch(Some(launch)))
+            .ok_or(LineError::Launch),
+        "label" if argument.is_empty() => Ok(Line::Label(None)),
+        "label" if argument.chars().count() <= MAX_LABEL_CHARS => {
+            Ok(Line::Label(Some(argument.to_owned())))
+        }
+        "label" => Err(LineError::Label),
         "render" => render(argument),
         "chain" => u32::from_str_radix(argument, 16)
             .map(Line::Chain)
@@ -232,6 +252,42 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_takes_a_name_or_a_number_of_steps() {
+        let every = |steps| Ok(Line::Launch(Launch::every(steps)));
+        assert_eq!(parse("launch"), Ok(Line::Launch(None)));
+        assert_eq!(parse("launch step"), every(1));
+        assert_eq!(parse("launch 1/4"), every(4));
+        assert_eq!(parse("launch 1/2"), every(8));
+        assert_eq!(parse("launch 1bar"), every(16));
+        assert_eq!(parse("launch 2bar"), every(32));
+        assert_eq!(parse("launch 4bar"), every(64));
+        assert_eq!(parse("launch 8bar"), every(128));
+        assert_eq!(parse("launch 12"), every(12));
+        assert_eq!(parse("launch 0x10"), every(16));
+        assert_eq!(
+            parse("launch chain"),
+            Ok(Line::Launch(Some(Launch::ChainEnd)))
+        );
+        assert_eq!(parse("launch 0"), Err(LineError::Launch));
+        assert_eq!(parse("launch soon"), Err(LineError::Launch));
+    }
+
+    #[test]
+    fn a_label_is_free_text_up_to_a_limit() {
+        assert_eq!(parse("label"), Ok(Line::Label(None)));
+        assert_eq!(
+            parse("label verse bass"),
+            Ok(Line::Label(Some("verse bass".to_owned())))
+        );
+        let longest = "x".repeat(MAX_LABEL_CHARS);
+        assert_eq!(
+            parse(&format!("label {longest}")),
+            Ok(Line::Label(Some(longest.clone())))
+        );
+        assert_eq!(parse(&format!("label {longest}x")), Err(LineError::Label));
+    }
 
     #[test]
     fn tempos_are_exact_thousandths() {

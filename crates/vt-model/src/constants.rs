@@ -24,6 +24,10 @@ pub const DEFAULT_PHRASE_STEPS: usize = 16;
 pub const MAX_PHRASE_STEPS: usize = 4096;
 /// Steps per beat, for `ib` and `{ }`.
 pub const BEAT_STEPS: usize = 4;
+/// Steps per bar, for launch timing and large steps through lengths.
+pub const BAR_STEPS: usize = 16;
+/// The most characters a chain's label can have.
+pub const MAX_LABEL_CHARS: usize = 32;
 /// FX slots per step.
 pub const FX_SLOTS: usize = 3;
 /// New project tempo, in thousandths of a BPM.

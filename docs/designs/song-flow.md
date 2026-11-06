@@ -1,8 +1,8 @@
 # Song flow and session workflow
 
-**Status:** proposed on 2026-11-06, not yet built, with its choices approved by the author after a review. **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
+**Status:** proposed on 2026-11-06, with its choices approved by the author after a review. M8d is built, and M8c isn't. **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
 
-**Replaces:** the main design's carry rule and default, launches waiting for a chain's end, its limits on playheads, and `gd` on `--` opening a chain. Where the two documents differ, this one wins. Tests that pin the old behaviour change with it, such as `tests/sections.rs:116`, which pins carry as the default.
+**Replaces:** the main design's carry rule and default, launches waiting for a chain's end, its limits on playheads, `gd` on `--` opening a chain, and captured rows having no set length. Where the two documents differ, this one wins. Tests that pin the old behaviour change with it, such as `tests/sections.rs:116`, which pins carry as the default.
 
 vimtracker is a keyboard-driven terminal tracker for making full songs at about a Maschine's scale. It isn't a DAW. Detailed arrangement happens in Ableton, from exported stems. There's one author and no compatibility promise, so saved songs can change format freely.
 
@@ -87,13 +87,13 @@ Within one step, the order is: row change and its `Start`, then `:reset N`, then
 
 ### Capture
 
-`C` adds a row holding what each track is playing. The row copies the source row's `length`, `start` and `:reset N`, so realigning carries on unchanged. Capture switches the engine's current row without running its `Start`, so no chain position changes and nothing audible changes at that moment.
+`C` adds a row holding what each track is playing. The row sets its length to the source row's effective length, and copies its `start` and `:reset N`, so timing and realigning carry on unchanged. A longer launched chain is cut to that length when the row is reached in order. Capture switches the engine's current row without running its `Start`, so no chain position changes and nothing audible changes at that moment.
 
 ### One-phrase chains
 
 *   `gd` on `--` adds a chain holding a new phrase and opens the phrase, as one undo.
 *   `gd` on a chain with one phrase opens that phrase.
-*   `gd` on a chain with no phrases adds one and opens it.
+*   `gd` on a chain with no phrases, which only a hand-edited file can have, adds one and opens it.
 *   `gd` on a chain with several opens the chain view, as it does now.
 *   `Space 2` already opens the chain view from a phrase, and `C-o` jumps back.
 *   `gc` in the phrase still repoints the chain's slot, so it changes every row using that chain. `gC` makes a variation for just this cell, and works from the phrase view.
@@ -234,9 +234,7 @@ The review's last stage ended with these not applied to the design above. Where 
 
 | Finding | Milestone | Treatment |
 |---|---|---|
-| Capture can be audible. A captured row shorter than the source ends at once, as `continue_in` leaves the row step alone, and a source with `Rpt` does the same. | M8d | Capture writes the source's effective length as a set length, and `ContinueIn` wraps the row step to fit. A longer launched chain is cut when the row is reached in order. Tests: a `reset` source with no set length, and later a repeated source. |
-| A saved `launch` step count of 0 would panic on `%` in the callback. | M8d | Use a type or a load check that rules out 0. |
-| `clear_launches` both ends launches and clears cues. | M8d | Split it. A different row keeps cues, and starting playback clears them. |
+| Capture from a row with `Rpt` can end its row at once, as `continue_in` leaves the row step alone. M8d settled the same problem without `Rpt` by copying the effective length. | M8c | `ContinueIn` wraps the row step to fit, with a test from a repeated source. |
 | A row with a set length and only `--` cells appears to stall playback, as `frames_until_next_step` waits forever when the row has no chain steps (`engine.rs:598`). Not yet reproduced. | Before M8c | Reproduce it with a test first. Then test the row's length there. It may be its own small PR. |
 | Playing from a chain step can need a negative `started`, which breaks `started <= place`. | M8c | Make `started` signed, use `rem_euclid`, and drop the invariant and saturation. Chain step 40 from an earlier row's cell plays that row against the chain's second half, which is an accepted limit. |
 | The play-from-row walk starts wrongly at a `:reset N` row, and copies the transition rules. | M8c | Start from the top or the last `Start` `reset`. Share one pure, non-allocating row-entry function with the engine, and test that the walk's state equals playing through. A row with no set length costs tracks times `chain_steps` in the walk, so correct the risk wording. |
@@ -246,14 +244,14 @@ The review's last stage ended with these not applied to the design above. Where 
 | `repeat` has two defences against 0. | M8c | Use `NonZeroU16`, so serde rejects it and the engine needs no case. |
 | Audition (`engine.rs:880`, `tree.rs:414`) and moving between tracks (`app.rs:883`) treat one row step as every chain's position. | M8c | Decide per case. A spanning row otherwise differs from playback. `PlaySection` needs a track field. |
 | "Render content matching a second pass" holds only for even song lengths or no swing. | M8c | Use an even length, or no swing, in that test. |
-| The milestone names run against the build order, and "Replaces" misses captured rows' set length. | M8d | Add the second to "Replaces". Swapping the names is the author's call. |
+| The milestone names run against the build order. | M8c | The author's call. |
 
 ### M8d: files
 
 | File | Change |
 |---|---|
 | `crates/vt-model/src/constants.rs` | Add `BAR_STEPS`, for a bar of 16 steps. |
-| `crates/vt-model/src/song.rs` | Add the launch timing type and `Song.launch`, default `1bar`, saved. Add `Chain.label`. Bump `FORMAT_VERSION`. |
+| `crates/vt-model/src/song.rs` | Add the launch timing type, which rules out a grid of 0, and `Song.launch`, default `1bar`, saved. Add `Chain.label`. Both have serde defaults, so `FORMAT_VERSION` doesn't change. |
 | `crates/vt-model/src/action.rs` | Add `SetLaunch` and `SetChainLabel`, like `SetSeed` (`action.rs:137`). `CloneChain` (`action.rs:732`) copies the label already, as it copies the whole chain. |
 | `crates/vt-engine/src/engine.rs` | `start_cued` (`engine.rs:218`) tests `launch` against the row step, with `chain` as now. Split `clear_launches` (`engine.rs:200`): the different-row call at `engine.rs:287` keeps cues, which fire on the new row's first step, and the calls at 267, 365 and 454 clear them. `continue_in` wraps the row step. |
 | `crates/vt-engine/tests/sections.rs` | Launch grid, cue and capture-length tests. Existing launch tests change where they rely on chain-end timing, by setting `chain`. |

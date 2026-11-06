@@ -52,7 +52,14 @@ pub fn column_name(app: &App) -> String {
         View::Song => match app.song_column {
             0 => "Length".to_owned(),
             1 => "Start".to_owned(),
-            column => format!("Track {:02} chain", column - 1),
+            column => {
+                let label = app.song_label();
+                if label.is_empty() {
+                    format!("Track {:02} chain", column - 1)
+                } else {
+                    format!("Track {:02} chain: {label}", column - 1)
+                }
+            }
         },
     }
 }

@@ -272,6 +272,7 @@ fn chain_transpose_and_step_volume_apply() {
                 phrase: 0,
                 transpose: 12,
             }],
+            label: String::new(),
         }),
     );
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());

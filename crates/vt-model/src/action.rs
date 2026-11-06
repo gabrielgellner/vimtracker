@@ -15,7 +15,8 @@ use crate::selection::{
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Phrase, Section, SectionStart, Song, Track, lowest_unused,
+    Chain, ChainEntry, FilterType, Launch, Phrase, Section, SectionStart, Song, Track,
+    lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
@@ -135,6 +136,14 @@ pub enum Action {
     SetLimiter(bool),
     /// Set the project's random seed.
     SetSeed(u64),
+    /// When launched chains start.
+    SetLaunch(Launch),
+    /// What a chain is called on screen.
+    SetChainLabel {
+        track: usize,
+        chain: u32,
+        label: String,
+    },
     /// Set the project's swing, in tenths of a percent.
     SetSwing(u16),
     /// Give a track its own swing, or `None` to follow the project.
@@ -509,6 +518,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         Action::SetSkipSize(size) => next.skip = *size,
         Action::SetLimiter(on) => next.limiter = *on,
         Action::SetSeed(seed) => next.seed = *seed,
+        Action::SetLaunch(launch) => next.launch = *launch,
+        Action::SetChainLabel {
+            track,
+            chain,
+            label,
+        } => {
+            let owner = track_mut(&mut next, *track)?;
+            let old = owner.chains.get(chain).ok_or(EditError::NoChain(*chain))?;
+            let mut labelled = Chain::clone(old);
+            labelled.label.clone_from(label);
+            owner.chains.insert(*chain, Arc::new(labelled));
+        }
         Action::SetSwing(swing) => {
             if !(MIN_SWING..=MAX_SWING).contains(swing) {
                 return Err(EditError::Swing);

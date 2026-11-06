@@ -104,6 +104,11 @@ impl App {
         };
         let slot = self.cursor.slot;
         self.record_jump();
+        self.enter_row(chain, slot);
+    }
+
+    /// Open the phrase on a row of a chain, adding one if the row is past the last.
+    pub(crate) fn enter_row(&mut self, chain: u32, slot: usize) {
         if slot >= self.chain_entries().len() {
             let phrase = self
                 .track_here()
@@ -192,7 +197,7 @@ impl App {
     }
 
     /// `gC`: copy this track's chain and all its phrases, and point this track at the copy.
-    fn clone_chain(&mut self) {
+    pub(crate) fn clone_chain(&mut self) {
         let Some(old) = self.chain_id() else {
             self.status = "This track has no chain".to_owned();
             return;
