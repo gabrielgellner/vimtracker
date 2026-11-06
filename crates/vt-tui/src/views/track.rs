@@ -68,7 +68,8 @@ fn bar_cell(value: u8) -> usize {
 }
 
 /// A value's bar when something is moving it. The fill or bright mark follows what's playing, with
-/// a dim mark for what's set. Over a filled cell, that mark is cut out of the fill.
+/// a dim mark for what's set. Over a filled cell, that mark is cut out of the fill, and the moving
+/// edge takes its place while passing through its cell, as a cell can only show one of them.
 pub fn bar_spans(set: u8, live: u8, centred: bool) -> Vec<Span<'static>> {
     let bright = Style::new().fg(theme::MAUVE);
     if set == live {
@@ -87,14 +88,12 @@ pub fn bar_spans(set: u8, live: u8, centred: bool) -> Vec<Span<'static>> {
     let mark = bar_cell(set);
     bar.chars()
         .enumerate()
-        .map(|(cell, shown)| {
-            if cell != mark || shown == '│' {
-                Span::styled(shown.to_string(), bright)
-            } else if shown == '█' {
+        .map(|(cell, shown)| match shown {
+            '█' if cell == mark => {
                 Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
-            } else {
-                Span::styled("│", theme::faint())
             }
+            ' ' if cell == mark => Span::styled("│", theme::faint()),
+            _ => Span::styled(shown.to_string(), bright),
         })
         .collect()
 }

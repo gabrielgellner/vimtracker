@@ -1594,6 +1594,47 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
 }
 
 #[test]
+fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
+    use vt_tui::views::track::{bar_spans, level_bar};
+    let text = |set, live| -> String {
+        bar_spans(set, live, false)
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    };
+    for set in 0..=u8::MAX {
+        for live in 0..u8::MAX {
+            // Each step the plain bar takes shows, wherever the mark is.
+            if level_bar(live) != level_bar(live + 1) {
+                assert_ne!(
+                    text(set, live),
+                    text(set, live + 1),
+                    "set {set:02X}, from {live:02X}"
+                );
+            }
+        }
+    }
+    // A slow rise across a mark at 80: the edge goes through its cell, with no mark to hide it.
+    let frames =
+        [0x70, 0x74, 0x78, 0x7B, 0x7E, 0x82, 0x85, 0x89, 0x8D, 0x92].map(|live| text(0x80, live));
+    assert_eq!(
+        frames,
+        [
+            "███▉│    ",
+            "████│    ",
+            "████▏    ",
+            "████▎    ",
+            "████▍    ",
+            "████▌    ",
+            "████▋    ",
+            "████▊    ",
+            "████▉    ",
+            "████│▏   ",
+        ]
+    );
+}
+
+#[test]
 fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
