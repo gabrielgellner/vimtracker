@@ -27,6 +27,15 @@ settings, named on the page.
 | `Index` | How hard it bends: a pure sine at `00`, and brighter going up |
 | `Feedback` | None at `80`, gritty above, and unstable pitch below |
 
+`Fold` is a wave folded back on itself into harmonics, for bass and leads with a
+west-coast edge. Try a note around `C-2`.
+
+| Setting | Does |
+|---|---|
+| `Shape` | The waveshaper before the fold, plain at `80` |
+| `Fold` | How far it's folded: smooth at `00`, and rich going up |
+| `Slope` | The wave's tilt, from a triangle at `00` to a ramp |
+
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
 
 | Setting | Does |
@@ -53,7 +62,7 @@ hat, and raise `Decay` for an open one.
 | `Decay` | How long it rings |
 
 The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
-and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA` or `FM` note holds
+and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM` or `Fold` note holds
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
 Sustain for plucks. The drums die away by themselves. A track plays one note at a time.
 

@@ -9,3 +9,5 @@ pub mod lfo;
 pub mod reverb;
 pub mod smoother;
 pub mod virtual_analog;
+pub mod waveshaping;
+mod waveshaping_tables;

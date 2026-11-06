@@ -1500,12 +1500,12 @@ fn k_on_voice_chooses_a_synth_and_names_its_settings() {
     press(&mut app, "k=");
     assert_eq!(
         app.song().tracks[0].synth_voice,
-        SynthVoice::Kick,
+        SynthVoice::Waveshaping,
         "the next"
     );
-    assert_eq!(names(&app), ["Punch", "Tone", "Decay"]);
+    assert_eq!(names(&app), ["Shape", "Fold", "Slope"]);
     press(&mut app, "jj");
-    assert_eq!(column_name(&app), "Tone");
+    assert_eq!(column_name(&app), "Fold");
     press(&mut app, "i40");
     assert_eq!(app.song().tracks[0].timbre, 0x40);
     press(&mut app, "kkx");
