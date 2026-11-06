@@ -101,7 +101,7 @@ impl App {
             View::Phrase => {
                 self.status = "gd opens an instrument from its column here".to_owned();
             }
-            View::Instrument => {}
+            View::Instrument | View::Track => {}
         }
     }
 

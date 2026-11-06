@@ -326,8 +326,30 @@ after G1.
 
 One interpreter runs FX commands, once per step before G1. It must not assume it is only running for a
 phrase, because tables will use it at their own rate. Slots run left to right. Held values start at `VOL
-FF`, `PAN 80`, `CUT FF`, `RES 00`, `DLY 00` and `REV 00`, per track. They reset on `Space c` and when
-playback starts from the top. `Space x` resume and `Enter` keep them.
+FF`, and at the track page's `Cut`, `Res`, `Pan`, `Delay` and `Reverb`, which default to `FF`, `00`, `80`, `00`
+and `00`. They reset on `Space c` and when playback starts from the top. `Space x` resume and `Enter` keep them.
+Changing one of those on the track page sets its held value straight away, until a step sets it again.
+
+**LFOs.** Added ahead of the M3 sweeps, by a change of plan: the author reached for this while playing, and
+sweeps and LFOs do different jobs. FX and sweeps belong to steps, and an LFO runs apart from them. Each track has
+two, on its page rather than on an instrument, since its filter, pan and sends are the track's, and it shouldn't care which
+sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are not: settings use standard names and units.
+
+*   **Destination:** `Cut`, `Res`, `Pan`, `Vol`, `Dly` or `Rev`, which are the values a track holds. `K` lists them. An LFO adds to
+    the held value, so a step's FX moves the centre and the LFO carries on around it. The result is clamped to the
+    value's range. Two LFOs on one destination add.
+*   **Rate:** the length of one cycle. A note division in exact ticks (`1/4`, `1/8d`, `1/16t`), whole bars, a count of
+    steps (`7st`) for lengths that slide against the bar, or hertz (`2.5hz`), which ignores the tempo. `+` is always faster.
+*   **Depth:** how far it swings either way, in hex in the destination's units, so `Cut 80` and `Depth +40` moves between
+    `40` and `C0`. Negative flips the shape. **Phase:** where in the cycle it starts, in degrees.
+*   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square` or `Random` (a new value each cycle, from the seed).
+*   **Retrig:** when on, each note on the track restarts it. Otherwise playing from the top is the only restart. A
+    `:reset` doesn't touch LFOs, as it's about patterns, and anything that should follow steps uses Retrig.
+*   **Timing:** position is worked out from the song's ticks, or from frames played for hertz, rather than added up, so
+    it can't drift and a render repeats exactly. It's worked out every 32 frames and smoothed like held values. A
+    stopped track sits at its held values, so auditions hear those, and pausing freezes it.
+*   **The filter stays running** while an LFO moves `Cut` or `Res`, even at the top of its range, or it would come back
+    with old state and jump.
 
 **Randomness.** Each track has its own PCG32 generator, seeded from the project seed and the track's index.
 Generators restart when playback starts from the top. Because tracks are only added or removed at the end
@@ -382,7 +404,7 @@ Actions are plain data, so `.` can replay them and tests can run editing without
     loop's start, so `00` is always beat 1, beats stay at multiples of 4, and rows above it are negative. There is no
     separate play marker as in Ableton: the loop's start is the 1. Internally the cursor and edits use stored positions,
     and only the view, the beat motions and `chain_position` convert. `]l` `[l` and `]L` `[L` slide it, keeping its
-    length, and `gs` starts it on the cursor. Slides work during playback and stay in time, since position comes from
+    length, and `gs` starts it on the cursor. `]r` `[r` rotate whole steps within the loop, wrapping round and leaving steps outside it alone. Slides work during playback and stay in time, since position comes from
     the section's step count. Length changes are refused until stopped, as a new length moves where playback lands.
 *   **Moving through the tree.** `gd` opens the item under the cursor, and on an empty reference it creates the
     next unused ID, assigns it and opens it. `Ctrl-O` jumps back, `Tab` jumps forward, and `grr` lists uses in the
@@ -393,7 +415,7 @@ Actions are plain data, so `.` can replay them and tests can run editing without
     and repoints the section's reference.
 *   **Undo.** Undo history is a list of song versions, and undo publishes an older one. It drops the oldest version
     past `HISTORY_LIMIT`. One Insert session and one Shape session are each one undo step.
-*   **Views.** Before G1: phrase, chain and instrument, and a help view. The phrase view shows the focused track's
+*   **Views.** Before G1: phrase, chain, track and instrument, and a help view. The phrase view shows the focused track's
     full steps beside read-only note columns for the other tracks. Each column shows that track's own current phrase from its own
     loop start, with rows blank past its end, and its own `>`. Rows line up by number, not by time, since unequal
     lengths drift. Rows continue past a short focused phrase for longer tracks. `;` and play still work in song time.
@@ -671,6 +693,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `Space c` | Return to the start. If playing, stop there |
 | Normal | `i`, `v`, `V`, `:` | Insert, field Visual, step Visual, Command |
 | Visual | Motions, targets, `d y > < + - .` | Extend, then apply to the selection |
+| Visual | `r`, then a value | Fill the cursor's column across the selection, as one undo. `vGra` writes C on each step. Velocity and instrument only go on notes, and FX values only on commands |
 | Visual | `=` | Enter Shape mode |
 | Visual | `Esc` | Normal mode |
 | Shape | `h l` | Onset (curve bias) down or up by 0.05, within 0.05 to 0.95 |

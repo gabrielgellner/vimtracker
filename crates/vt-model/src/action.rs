@@ -8,6 +8,7 @@ use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MAX_TRANSPOSE,
     MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
+use crate::lfo::Lfo;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
 };
@@ -20,6 +21,22 @@ pub enum FieldValue {
     Velocity(Option<u8>),
     Instrument(Option<u32>),
     Slot(usize, FxSlot),
+}
+
+/// A value written across a selection. A velocity or instrument means nothing without a note, and
+/// an FX value nothing without a command, so those only go on steps that have one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fill {
+    /// A note, with an instrument and velocity for steps that don't have them.
+    Note {
+        note: Note,
+        instrument: u32,
+        velocity: u8,
+    },
+    Velocity(Option<u8>),
+    Instrument(Option<u32>),
+    Slot(usize, FxSlot),
+    SlotValue(usize, u8),
 }
 
 /// A sample going into a slot.
@@ -51,6 +68,12 @@ pub enum Action {
         phrase: u32,
         step: usize,
         value: FieldValue,
+    },
+    /// Write one value across steps.
+    Fill {
+        phrase: u32,
+        range: StepRange,
+        fill: Fill,
     },
     /// Clear fields across steps.
     Clear {
@@ -94,6 +117,18 @@ pub enum Action {
         track: usize,
         swing: Option<u16>,
     },
+    /// Set where one of a track's held values starts.
+    SetTrackBase {
+        track: usize,
+        control: TrackControl,
+        value: u8,
+    },
+    /// Replace one of a track's LFOs.
+    SetLfo {
+        track: usize,
+        slot: usize,
+        lfo: Lfo,
+    },
     /// Send every track back to its start after this many steps, or `None` to let them run.
     SetReset(Option<usize>),
     /// Set a track's level.
@@ -108,6 +143,11 @@ pub enum Action {
     },
     /// Move a phrase's loop by some steps, keeping its length.
     SlideLoop {
+        phrase: u32,
+        by: isize,
+    },
+    /// Move a phrase's loop steps later or earlier, wrapping round within the loop.
+    RotateLoop {
         phrase: u32,
         by: isize,
     },
@@ -184,6 +224,16 @@ pub enum InstrumentField {
     Release,
 }
 
+/// One of the values a track holds, set from its page rather than a step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackControl {
+    Cutoff,
+    Resonance,
+    Pan,
+    Delay,
+    Reverb,
+}
+
 /// Why an edit was refused.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EditError {
@@ -217,6 +267,8 @@ pub enum EditError {
     NoTrack(usize),
     #[error("a reset needs at least 1 step")]
     Reset,
+    #[error("an LFO's rate, depth or phase is out of range")]
+    Lfo,
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -253,6 +305,41 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 FieldValue::Instrument(instrument) => target.instrument = *instrument,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = *fx;
+                }
+            }
+        }
+        Action::Fill {
+            phrase,
+            range,
+            fill,
+        } => {
+            for index in range.first..=range.last {
+                let target = step_mut(&mut next, *phrase, index)?;
+                let has_note = matches!(target.note, Note::On(_));
+                match fill {
+                    Fill::Note {
+                        note,
+                        instrument,
+                        velocity,
+                    } => {
+                        target.note = *note;
+                        if matches!(note, Note::On(_)) {
+                            target.instrument.get_or_insert(*instrument);
+                            target.velocity.get_or_insert(*velocity);
+                        }
+                    }
+                    Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
+                    Fill::Instrument(instrument) if has_note => target.instrument = *instrument,
+                    Fill::Velocity(_) | Fill::Instrument(_) => {}
+                    Fill::Slot(slot, value) => {
+                        *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = *value;
+                    }
+                    Fill::SlotValue(slot, value) => {
+                        let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
+                        if slot.command.is_some() {
+                            slot.value = *value;
+                        }
+                    }
                 }
             }
         }
@@ -326,6 +413,36 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .swing = *swing;
         }
+        Action::SetTrackBase {
+            track,
+            control,
+            value,
+        } => {
+            let track = next
+                .tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?;
+            let base = match control {
+                TrackControl::Cutoff => &mut track.cutoff,
+                TrackControl::Resonance => &mut track.resonance,
+                TrackControl::Pan => &mut track.pan,
+                TrackControl::Delay => &mut track.delay,
+                TrackControl::Reverb => &mut track.reverb,
+            };
+            *base = *value;
+        }
+        Action::SetLfo { track, slot, lfo } => {
+            if !lfo.in_range() {
+                return Err(EditError::Lfo);
+            }
+            *next
+                .tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .lfos
+                .get_mut(*slot)
+                .ok_or(EditError::Lfo)? = *lfo;
+        }
         Action::SetReset(reset) => {
             if *reset == Some(0) {
                 return Err(EditError::Reset);
@@ -353,6 +470,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(phrase)
                 .ok_or(EditError::NoPhrase(*phrase))?;
             Arc::make_mut(phrase).slide(*by);
+        }
+        Action::RotateLoop { phrase, by } => {
+            let phrase = next
+                .phrases
+                .get_mut(phrase)
+                .ok_or(EditError::NoPhrase(*phrase))?;
+            Arc::make_mut(phrase).rotate(*by);
         }
         Action::SetMilliBpm(millibpm) => {
             if !(MIN_MILLIBPM..=MAX_MILLIBPM).contains(millibpm) {

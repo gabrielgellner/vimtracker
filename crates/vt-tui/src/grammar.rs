@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::{Action, FieldValue};
+use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::label::is_named_slot;
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
-use vt_model::step::Step;
+use vt_model::step::{Note, Step};
 
 use crate::app::{App, Entry, Selection};
 use crate::input::bindings::{Cmd, Op, Resolved};
@@ -40,6 +40,8 @@ pub enum Change {
     Replace {
         field: Field,
         value: Box<Step>,
+        /// More than one if it filled a selection.
+        steps: usize,
     },
 }
 
@@ -393,6 +395,10 @@ impl App {
     /// to Normal once it's written.
     pub(crate) fn begin_replace(&mut self) {
         self.count = None;
+        if self.mode.is_visual() {
+            self.begin_selection_replace();
+            return;
+        }
         if let Field::FxValue(slot) = self.cursor.field
             && self.current_slot(slot).and_then(|s| s.command).is_none()
         {
@@ -401,6 +407,44 @@ impl App {
         }
         self.entry = Entry::default();
         self.replacing = Some(self.cursor.field);
+        self.mode = Mode::Replace;
+    }
+
+    /// Replace across a selection: the value is typed as usual on its first step that can take it,
+    /// then goes on the rest. A velocity or instrument needs a note, and an FX value a command.
+    fn begin_selection_replace(&mut self) {
+        let selection = self.current_selection();
+        let field = self.cursor.field;
+        let Some(phrase) = self
+            .phrase_id()
+            .and_then(|id| self.song().phrases.get(&id).cloned())
+        else {
+            return;
+        };
+        let takes = |step: &usize| {
+            let Some(step) = phrase.steps().get(*step) else {
+                return false;
+            };
+            match field {
+                Field::Velocity | Field::Instrument => matches!(step.note, Note::On(_)),
+                Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
+                Field::Note | Field::FxCommand(_) => true,
+            }
+        };
+        let Some(first) = (selection.range.first..=selection.range.last).find(takes) else {
+            self.status = match field {
+                Field::FxValue(_) => "Type an FX command first",
+                _ => "There are no notes in the selection",
+            }
+            .to_owned();
+            return;
+        };
+        self.leave_visual(selection);
+        self.cursor.step = first;
+        self.cursor.field = field;
+        self.entry = Entry::default();
+        self.replacing = Some(field);
+        self.replacing_selection = Some((selection, self.history.undo_depth()));
         self.mode = Mode::Replace;
     }
 
@@ -433,12 +477,44 @@ impl App {
             .phrase_id()
             .and_then(|id| self.song().phrases.get(&id).cloned())
             .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
-        if let Some(value) = value {
-            self.last_change = Some(Change::Replace {
-                field,
-                value: Box::new(value),
-            });
+        let Some(value) = value else {
+            return;
+        };
+        let mut steps = 1;
+        if let Some((selection, depth)) = self.replacing_selection.take() {
+            self.fill(selection.range, field, &value);
+            self.history.squash_to(depth);
+            self.cursor.step = selection.range.first;
+            steps = selection.range.len();
         }
+        self.last_change = Some(Change::Replace {
+            field,
+            value: Box::new(value),
+            steps,
+        });
+    }
+
+    /// Write a replaced field's value across steps.
+    fn fill(&mut self, range: StepRange, field: Field, value: &Step) {
+        let Some(phrase) = self.phrase_id() else {
+            return;
+        };
+        let fill = match field {
+            Field::Note => Fill::Note {
+                note: value.note,
+                instrument: self.instrument,
+                velocity: self.note_velocity,
+            },
+            Field::Velocity => Fill::Velocity(value.velocity),
+            Field::Instrument => Fill::Instrument(value.instrument),
+            Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
+            Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
+        };
+        self.apply(&Action::Fill {
+            phrase,
+            range,
+            fill,
+        });
     }
 
     /// The instrument on the cursor's step.
@@ -481,7 +557,16 @@ impl App {
                     });
                 }
             }
-            Change::Replace { field, value } => {
+            Change::Replace {
+                field,
+                value,
+                steps,
+            } if *steps > 1 => {
+                let last = self.extent().last_stored();
+                let end = self.cursor.step.saturating_add(*steps - 1).min(last);
+                self.fill(StepRange::between(self.cursor.step, end), *field, value);
+            }
+            Change::Replace { field, value, .. } => {
                 let Some(phrase) = self.phrase_id() else {
                     return;
                 };
@@ -560,7 +645,10 @@ impl App {
                 Change::ClearField => {
                     self.apply_operator(Op::Clear, selection.range, selection.scope)
                 }
-                Change::Paste { .. } | Change::Replace { .. } => {}
+                Change::Replace { field, value, .. } => {
+                    self.fill(selection.range, field, &value);
+                }
+                Change::Paste { .. } => {}
             }
             self.leave_visual(selection);
         } else {

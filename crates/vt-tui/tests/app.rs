@@ -8,6 +8,7 @@ use ratatui::style::Color;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Phrase, Song};
 use vt_model::step::{Note, Step};
@@ -544,7 +545,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 4);
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
@@ -2206,6 +2207,213 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 1, 0).0, "    ");
     assert_eq!(beside(&buffer, 1, 1).0, " C-4");
+}
+
+/// An app on the track page.
+fn on_track_page() -> (App, Realtime) {
+    let (mut app, realtime) = tracks_of_different_lengths();
+    press(&mut app, " 4");
+    assert_eq!(app.view, View::Track);
+    (app, realtime)
+}
+
+/// Start typing a value, type it and enter it.
+fn typed(app: &mut App, text: &str) {
+    press(app, "i");
+    press(app, text);
+    special(app, KeyCode::Enter);
+}
+
+/// Everything the track page draws, a line at a time.
+fn track_page_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..16)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+#[test]
+fn the_track_page_sets_base_values_and_undoes() {
+    let (mut app, _realtime) = on_track_page();
+    assert_eq!(app.song().tracks[0].cutoff, 0xFF);
+    press(&mut app, "i40");
+    assert_eq!(app.song().tracks[0].cutoff, 0x40);
+    assert_eq!(app.mode, Mode::Normal);
+    press(&mut app, "3-");
+    assert_eq!(app.song().tracks[0].cutoff, 0x3D);
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[0].cutoff, 0x40);
+
+    // The output row, on the next track.
+    press(&mut app, "W");
+    press(&mut app, "jl");
+    press(&mut app, "i20");
+    assert_eq!(app.song().tracks[1].pan, 0x20);
+    assert_eq!(app.song().tracks[0].pan, 0x80);
+    press(&mut app, "hi7F");
+    assert_eq!(app.song().tracks[1].level, 0x7F);
+}
+
+#[test]
+fn the_track_page_types_lfo_settings() {
+    let (mut app, _realtime) = on_track_page();
+    let lfo = |app: &App| app.song().tracks[0].lfos[0];
+    // Down to LFO 1, on Dest.
+    press(&mut app, "jj0");
+    press(&mut app, "+");
+    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+    press(&mut app, "-");
+    assert_eq!(lfo(&app).destination, None);
+    press(&mut app, "-");
+    assert_eq!(lfo(&app).destination, Some(Destination::Rev));
+
+    press(&mut app, "l+");
+    assert_eq!(lfo(&app).shape, Shape::Saw);
+
+    press(&mut app, "l");
+    typed(&mut app, "1/8d");
+    assert_eq!(lfo(&app).rate, Rate::Note(720));
+    typed(&mut app, "7st");
+    assert_eq!(lfo(&app).rate, Rate::Steps(7));
+    typed(&mut app, "2.5hz");
+    assert_eq!(lfo(&app).rate, Rate::Hertz(250));
+    typed(&mut app, "fast");
+    assert_eq!(lfo(&app).rate, Rate::Hertz(250));
+    assert!(app.status.contains("1/8d"), "{}", app.status);
+
+    press(&mut app, "l");
+    typed(&mut app, "-40");
+    assert_eq!(lfo(&app).depth, -0x40);
+    typed(&mut app, "+7F");
+    assert_eq!(lfo(&app).depth, 0x7F);
+    typed(&mut app, "100");
+    assert_eq!(lfo(&app).depth, 0x7F);
+
+    press(&mut app, "l");
+    typed(&mut app, "90");
+    assert_eq!(lfo(&app).phase, 90);
+    typed(&mut app, "360");
+    assert_eq!(lfo(&app).phase, 90);
+    press(&mut app, "3-");
+    assert_eq!(lfo(&app).phase, 45);
+    press(&mut app, "4-");
+    assert_eq!(lfo(&app).phase, 345);
+
+    press(&mut app, "l+");
+    assert!(lfo(&app).retrig);
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("+ or -"), "{}", app.status);
+
+    // Nothing else moved.
+    assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
+}
+
+#[test]
+fn k_chooses_an_lfos_destination_from_a_list() {
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Normal, "not on a Dest");
+    assert!(app.status.contains("Dest"), "{}", app.status);
+
+    // The second LFO's Dest, on the next track.
+    press(&mut app, "W");
+    press(&mut app, "jjj0K");
+    assert_eq!(app.mode, Mode::Picker);
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.shown().count(), 7);
+    assert_eq!(picker.selected, 0, "what it moves now");
+    press(&mut app, "res");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.view, View::Track);
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(Destination::Res)
+    );
+    assert_eq!(app.song().tracks[1].lfos[0], Lfo::default());
+    assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
+
+    // It opens on what's set, and leaves the other settings alone. Esc changes nothing.
+    typed_rate_on_second_lfo(&mut app);
+    press(&mut app, "0K");
+    assert_eq!(app.picker.as_ref().unwrap().selected, 2);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(Destination::Res)
+    );
+    press(&mut app, "K");
+    press(&mut app, "pan");
+    special(&mut app, KeyCode::Enter);
+    let lfo = app.song().tracks[1].lfos[1];
+    assert_eq!(lfo.destination, Some(Destination::Pan));
+    assert_eq!(lfo.rate, Rate::Steps(7));
+
+    press(&mut app, "u");
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(Destination::Res)
+    );
+}
+
+fn typed_rate_on_second_lfo(app: &mut App) {
+    press(app, "ll");
+    typed(app, "7st");
+}
+
+#[test]
+fn plus_makes_a_rate_faster_of_any_kind() {
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "jj0ll");
+    press(&mut app, "+");
+    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
+    typed(&mut app, "7st");
+    press(&mut app, "+");
+    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Steps(6));
+    typed(&mut app, "2hz");
+    press(&mut app, "+");
+    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Hertz(210));
+}
+
+#[test]
+fn the_track_page_shows_its_settings_in_columns() {
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "jj0+ll");
+    typed(&mut app, "1/8d");
+    press(&mut app, "l");
+    typed(&mut app, "+40");
+    press(&mut app, "l");
+    typed(&mut app, "90");
+    let lines = track_page_text(&app);
+    assert!(lines[0].starts_with("Track 01"), "{}", lines[0]);
+    assert!(lines[2].contains("Cut") && lines[2].contains("Res"));
+    assert!(lines[3].starts_with("Filter") && lines[3].contains("FF"));
+    assert!(lines[5].contains("Level") && lines[5].contains("Swing"));
+    assert!(lines[8].contains("Dest") && lines[8].contains("Retrig"));
+    let lfo: Vec<&str> = lines[9].split_whitespace().collect();
+    assert_eq!(lfo, ["LFO", "1", "Cut", "Tri", "1/8d", "+40", "90°", "off"]);
+    assert!(lines[10].starts_with("LFO 2"));
+}
+
+#[test]
+fn track_swing_on_the_page_matches_its_command() {
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "j$");
+    typed(&mut app, "60");
+    assert_eq!(app.song().tracks[0].swing, Some(600));
+    press(&mut app, "+");
+    assert_eq!(app.song().tracks[0].swing, Some(610));
+    typed(&mut app, "off");
+    assert_eq!(app.song().tracks[0].swing, None);
+    typed(&mut app, "90");
+    assert_eq!(app.song().tracks[0].swing, None);
+    assert!(app.status.contains("50 to 75"), "{}", app.status);
 }
 
 #[test]

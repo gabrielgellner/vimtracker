@@ -81,6 +81,9 @@ pub struct App {
     pub mode: Mode,
     pub view: View,
     pub instrument_row: Row,
+    /// The track page's row and setting.
+    pub track_row: usize,
+    pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
@@ -130,6 +133,8 @@ pub struct App {
     pub(crate) awaiting_register: bool,
     pub(crate) registers: HashMap<char, Block>,
     pub(crate) anchor: Option<(usize, Scope)>,
+    /// The selection a replace will fill, and the undo depth from before it started.
+    pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
     pub(crate) last_selection: Option<Selection>,
     pub(crate) last_change: Option<Change>,
@@ -156,6 +161,8 @@ impl App {
             mode: Mode::Normal,
             view: View::Phrase,
             instrument_row: Row::Sample,
+            track_row: 0,
+            track_field: 0,
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_column: ChainColumn::Phrase,
@@ -201,6 +208,7 @@ impl App {
             awaiting_register: false,
             registers: HashMap::new(),
             anchor: None,
+            replacing_selection: None,
             selection_scope: None,
             last_selection: None,
             last_change: None,
@@ -342,7 +350,8 @@ impl App {
             | Mode::VisualField
             | Mode::VisualStep
             | Mode::Chain
-            | Mode::Instrument => {
+            | Mode::Instrument
+            | Mode::Track => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key, now),
@@ -368,6 +377,7 @@ impl App {
         match (self.mode, self.view) {
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Instrument) => Mode::Instrument,
+            (Mode::Normal, View::Track) => Mode::Track,
             (mode, _) => mode,
         }
     }
@@ -458,6 +468,7 @@ impl App {
         let handled = match self.view {
             View::Chain => self.run_chain(cmd),
             View::Instrument => self.run_instrument(cmd),
+            View::Track => self.run_track_page(cmd),
             View::Phrase => false,
         };
         if handled || self.run_tree(cmd) || self.run_grammar(cmd) {
@@ -473,6 +484,10 @@ impl App {
             Cmd::SlideLoop(by) => {
                 let times = self.count.take().unwrap_or(1).min(MAX_PHRASE_STEPS);
                 self.slide_loop(by * times as isize);
+            }
+            Cmd::RotateLoop(by) => {
+                let times = self.count.take().unwrap_or(1).min(MAX_PHRASE_STEPS);
+                self.rotate_loop(by * times as isize);
             }
             Cmd::StartLoopHere => self.start_loop_here(),
             Cmd::ShowView(view) => self.jump_to_view(view),
@@ -585,6 +600,18 @@ impl App {
             self.apply(&Action::SlideLoop { phrase, by });
             self.keep_row(before);
             self.clamp_cursor();
+        }
+    }
+
+    /// Rotate the loop's steps. The cursor stays on its row. Going all the way round changes
+    /// nothing, so it doesn't leave an undo step.
+    fn rotate_loop(&mut self, by: isize) {
+        let length = self.extent().length as isize;
+        if length > 0
+            && by.rem_euclid(length) != 0
+            && let Some(phrase) = self.phrase_id()
+        {
+            self.apply(&Action::RotateLoop { phrase, by });
         }
     }
 
@@ -797,6 +824,9 @@ impl App {
                 if let Some(field) = self.replacing.take() {
                     self.cursor.field = field;
                 }
+                if let Some((selection, _)) = self.replacing_selection.take() {
+                    self.cursor.step = selection.range.first;
+                }
             }
             KeyCode::Backspace => {
                 self.entry.text.pop();
@@ -839,6 +869,7 @@ impl App {
             if !key.ctrl {
                 match self.view {
                     View::Chain => self.insert_chain_row(key.code),
+                    View::Track => self.insert_track_page(key.code),
                     _ => self.insert_instrument_row(key.code),
                 }
             }

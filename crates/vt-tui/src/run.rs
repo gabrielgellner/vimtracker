@@ -138,6 +138,7 @@ fn main_loop(
                 View::Chain => views::chain::draw(frame, view, app),
                 View::Phrase => views::phrase::draw(frame, view, app),
                 View::Instrument => views::instrument::draw(frame, view, app),
+                View::Track => views::track::draw(frame, view, app),
             }
             views::system::draw(frame, view, app, Some(stats));
             if let Some(meter) = meter {

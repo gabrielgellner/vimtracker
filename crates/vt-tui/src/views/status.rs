@@ -51,6 +51,7 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
         View::Instrument => app.instrument_row.label().to_owned(),
+        View::Track => app.track_control().label().to_owned(),
     }
 }
 
@@ -64,7 +65,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument => theme::BLUE,
+            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument | Mode::Track => {
+                theme::BLUE
+            }
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,

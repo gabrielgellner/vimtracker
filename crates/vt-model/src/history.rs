@@ -59,6 +59,11 @@ impl History {
         Some(&self.current)
     }
 
+    /// Make everything since an earlier undo depth a single undo step, keeping the current version.
+    pub fn squash_to(&mut self, depth: usize) {
+        self.past.truncate(depth + 1);
+    }
+
     /// How many undo steps are held.
     pub fn undo_depth(&self) -> usize {
         self.past.len()

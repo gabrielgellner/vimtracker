@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
+use vt_model::lfo::Destination;
 
 use crate::guides::Guide;
 use crate::input::mode::View;
@@ -18,6 +19,12 @@ pub enum Pick {
     Instrument(u32),
     /// Make this instrument current, and write nothing.
     CurrentInstrument(u32),
+    /// Set what one of a track's LFOs moves.
+    Destination {
+        track: usize,
+        slot: usize,
+        destination: Option<Destination>,
+    },
     Use {
         track: usize,
         slot: usize,

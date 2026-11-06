@@ -34,7 +34,12 @@ Follow one with a motion or a target, or double it for this whole step:
 | `Esc` | Stop selecting |
 
 Move to grow the selection. The cursor shows which end is moving. Then press
-`d`, `x`, `y`, `>`, `<`, `+`, `-` or `.`.
+`d`, `x`, `y`, `>`, `<`, `+`, `-`, `r` or `.`.
+
+`r` fills the cursor's column across the selection, as one undo: `vGra` writes
+a C on every step to the end of the loop. Notes already there keep their
+velocity and instrument. A velocity or instrument only goes on steps with a
+note, an FX value only on steps with a command, and `.` repeats it.
 
 ## Values and small edits
 
@@ -77,11 +82,15 @@ it are negative, so yellow beats are always `00`, `04`, `08`.
 | `]l` `[l` | Slide the loop a step later or earlier |
 | `]L` `[L` | Slide it a beat later or earlier. Counts work: `4]L` |
 | `gs` | Start the loop on the cursor's step |
+| `]r` `[r` | Rotate the loop's steps later or earlier |
 | `:len 32` | Set how many steps the loop plays |
 | `:double` or `Space pd` | Repeat the loop so it is twice as long |
 
 Sliding works while playing, and stays in time. `00` stays where it is and
 the notes move under it. Sliding past either end adds empty steps.
+
+Rotating wraps whole steps round within the loop, and leaves dim steps
+alone. It works while playing, and counts work: `3]r`.
 
 Length changes wait until you stop, since a new length moves where playback
 lands. The loop is saved with the phrase, along with what is outside it.

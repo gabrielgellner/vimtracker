@@ -1016,3 +1016,172 @@ fn dot_does_not_repeat_s() {
 fn r_on_a_note_with_no_velocity_fills_it_in() {
     check(&[E], "ra", &["C-4 64 00 ---00 ---00 ---00"]);
 }
+
+const C4: &str = "C-4 64 00 ---00 ---00 ---00";
+const LOUD: &str = "E-4 7F 05 ---00 ---00 ---00";
+
+#[test]
+fn visual_r_fills_notes_on_every_selected_step() {
+    let (mut app, _rt) = app_with(&[E, E, E, E]);
+    keys(&mut app, "vGra");
+    assert_eq!(steps(&app), [C4, C4, C4, C4]);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.cursor.step, 0, "back at the top of the selection");
+}
+
+#[test]
+fn visual_r_is_one_undo_however_many_steps() {
+    let (mut app, _rt) = app_with(&[E, E, E, E]);
+    keys(&mut app, "vGra");
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [E, E, E, E]);
+    keys(&mut app, "^r");
+    assert_eq!(steps(&app), [C4, C4, C4, C4]);
+}
+
+#[test]
+fn visual_r_only_covers_the_selection_and_keeps_what_notes_have() {
+    let (mut app, _rt) = app_with(&[E, LOUD, E, E]);
+    keys(&mut app, "vjra");
+    assert_eq!(steps(&app), [C4, "C-4 7F 05 ---00 ---00 ---00", E, E]);
+}
+
+#[test]
+fn visual_r_works_from_the_bottom_up_and_with_whole_steps() {
+    let (mut app, _rt) = app_with(&[E, E, E]);
+    keys(&mut app, "Gvkkra");
+    assert_eq!(steps(&app), [C4, C4, C4]);
+    let (mut app, _rt) = app_with(&[E, E, E]);
+    keys(&mut app, "jVjra");
+    assert_eq!(steps(&app), [E, C4, C4]);
+}
+
+#[test]
+fn visual_r_writes_note_offs() {
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "vjr1");
+    assert_eq!(
+        steps(&app),
+        ["OFF -- -- ---00 ---00 ---00", "OFF -- -- ---00 ---00 ---00",]
+    );
+}
+
+#[test]
+fn escape_leaves_a_selection_replace_with_nothing_written() {
+    let (mut app, _rt) = app_with(&[E, E, E]);
+    keys(&mut app, "vG");
+    assert_eq!(app.cursor.step, 2);
+    keys(&mut app, "r<Esc>");
+    assert_eq!(steps(&app), [E, E, E]);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.cursor.step, 0);
+    // A later single replace isn't mistaken for the selection's.
+    keys(&mut app, "ra");
+    assert_eq!(steps(&app), [C4, E, E]);
+}
+
+#[test]
+fn visual_r_puts_a_velocity_only_on_notes() {
+    let (mut app, _rt) = app_with(&[E, LOUD, E, C4]);
+    keys(&mut app, "lvGr40");
+    assert_eq!(
+        steps(&app),
+        [
+            E,
+            "E-4 40 05 ---00 ---00 ---00",
+            E,
+            "C-4 40 00 ---00 ---00 ---00"
+        ]
+    );
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [E, LOUD, E, C4]);
+
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "lvjr");
+    assert_eq!(app.mode, Mode::VisualField, "nothing to replace");
+    assert!(app.status.contains("no notes"), "{}", app.status);
+}
+
+#[test]
+fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "lllvjrCUT40");
+    assert_eq!(
+        steps(&app),
+        ["--- -- -- CUT40 ---00 ---00", "--- -- -- CUT40 ---00 ---00",]
+    );
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [E, E]);
+
+    let (mut app, _rt) = app_with(&[
+        E,
+        "--- -- -- RES10 ---00 ---00",
+        E,
+        "--- -- -- CUT20 ---00 ---00",
+    ]);
+    keys(&mut app, "llllvGr7F");
+    assert_eq!(
+        steps(&app),
+        [
+            E,
+            "--- -- -- RES7F ---00 ---00",
+            E,
+            "--- -- -- CUT7F ---00 ---00",
+        ]
+    );
+    assert_eq!(app.cursor.step, 0);
+}
+
+#[test]
+fn dot_repeats_a_selection_replace() {
+    let (mut app, _rt) = app_with(&[E, E, E, E, E, E]);
+    keys(&mut app, "vjra");
+    // In Normal it covers as many steps again, from the cursor.
+    keys(&mut app, "jj.");
+    assert_eq!(steps(&app), [C4, C4, C4, C4, E, E]);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [C4, C4, E, E, E, E]);
+    // On a selection it covers that selection, and it doesn't run off the end.
+    keys(&mut app, "vjjjj.");
+    assert_eq!(steps(&app), [C4, C4, C4, C4, C4, C4]);
+    keys(&mut app, "u");
+    keys(&mut app, "G.");
+    assert_eq!(steps(&app), [C4, C4, E, E, E, C4]);
+    assert_eq!(steps(&app).len(), 6);
+}
+
+#[test]
+fn rotating_wraps_within_the_loop_and_counts() {
+    let (mut app, _rt) = app_with(&[A, B, E, E]);
+    keys(&mut app, "]r");
+    assert_eq!(steps(&app), [E, A, B, E]);
+    assert_eq!(app.cursor.step, 0, "the cursor stays on its row");
+    keys(&mut app, "2]r");
+    assert_eq!(steps(&app), [B, E, E, A]);
+    keys(&mut app, "[r");
+    assert_eq!(steps(&app), [E, E, A, B]);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [B, E, E, A]);
+}
+
+#[test]
+fn rotating_leaves_steps_outside_the_loop_alone() {
+    let (mut app, _rt) = app_with(&[A, B, E, E, A, B]);
+    keys(&mut app, ":len 3<Enter>]r");
+    assert_eq!(steps(&app), [E, A, B, E, A, B]);
+    keys(&mut app, "]lj]r");
+    assert_eq!(steps(&app), [E, E, A, B, A, B]);
+    assert_eq!(app.song().phrases[&0].start(), 1);
+}
+
+#[test]
+fn rotating_all_the_way_round_leaves_no_undo_step() {
+    let (mut app, _rt) = app_with(&[A, E]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "2]r");
+    assert_eq!(steps(&app), [A, E]);
+    assert_eq!(app.history.undo_depth(), depth);
+    keys(&mut app, "3[r");
+    assert_eq!(steps(&app), [E, A]);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+}

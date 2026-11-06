@@ -108,7 +108,7 @@ fn millibpm(text: &str) -> Option<u32> {
 }
 
 /// Read a swing percent as tenths, so `66.7` is 667.
-fn swing(text: &str) -> Option<u16> {
+pub(crate) fn swing(text: &str) -> Option<u16> {
     let thousandths = millibpm(text)?;
     if !thousandths.is_multiple_of(100) {
         return None;

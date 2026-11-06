@@ -1,14 +1,33 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
+use vt_model::lfo::{Destination, LFOS_PER_TRACK};
+use vt_model::song::Track;
 use vt_model::step::FxCommand;
 
 use crate::dsp::filter::{Coefficients, Svf};
+use crate::dsp::lfo::wave;
 use crate::dsp::smoother::Smoothed;
 use crate::rng::Pcg32;
 use crate::voice::{NoteOn, Voice};
 
 /// How often filter coefficients are recalculated while the cutoff moves, in frames.
 const FILTER_UPDATE_FRAMES: u32 = 32;
+
+/// Where an LFO's cycles count from.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LfoStart {
+    pub tick: f64,
+    pub clock: u64,
+}
+
+/// Where the song is, for working out LFOs.
+#[derive(Debug, Clone, Copy)]
+pub struct SongTime {
+    pub tick: f64,
+    pub clock: u64,
+    pub rate: u32,
+    pub seed: u64,
+}
 
 /// A note waiting for its delayed start.
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +74,12 @@ pub struct TrackState {
     filter: [Svf; 2],
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
+    pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
+    /// What the LFOs add to each held value, in `Destination::ALL`'s order. Separate from the held
+    /// values, so a step's FX moves the centre and the LFO carries on around it.
+    modulation: [Smoothed; Destination::ALL.len()],
+    /// Whether an LFO moves the filter, so it stays running at the top of its range.
+    filter_moving: bool,
 }
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
@@ -103,21 +128,52 @@ impl TrackState {
             filter: [Svf::default(); 2],
             coefficients: None,
             filter_countdown: 0,
+            lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
+            modulation: [Smoothed::at(0.0); Destination::ALL.len()],
+            filter_moving: false,
         }
     }
 
-    /// Reset held values and the random generator, when playback goes back to the top. Values
+    /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values
     /// glide back, so anything still sounding doesn't click.
-    pub fn reset_held(&mut self, seed: u64, index: usize) {
+    pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
         self.instrument = None;
         self.last_note = None;
         self.gain.target = 1.0;
-        self.pan.target = 0.5;
-        self.cutoff.target = 1.0;
-        self.resonance.target = 0.0;
-        self.delay_send.target = 0.0;
-        self.reverb_send.target = 0.0;
+        self.set_held(FxCommand::Pan, track.pan);
+        self.set_held(FxCommand::Cut, track.cutoff);
+        self.set_held(FxCommand::Res, track.resonance);
+        self.set_held(FxCommand::Dly, track.delay);
+        self.set_held(FxCommand::Rev, track.reverb);
+        self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
+    }
+
+    /// Work out what the LFOs add now. A stopped track sits at its held values, so an audition
+    /// hears those rather than wherever the LFO stopped.
+    pub fn modulate(&mut self, track: &Track, index: usize, now: SongTime, stopped: bool) {
+        let mut offsets = [0.0_f32; Destination::ALL.len()];
+        self.filter_moving = false;
+        for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
+            let Some(destination) = lfo.destination else {
+                continue;
+            };
+            if lfo.depth == 0 {
+                continue;
+            }
+            self.filter_moving |= matches!(destination, Destination::Cut | Destination::Res);
+            if stopped {
+                continue;
+            }
+            let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
+            let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
+            let key = now.seed ^ ((index as u64) << 8 | slot as u64);
+            let value = wave(lfo.shape, cycles + f64::from(lfo.phase) / 360.0, key);
+            offsets[destination as usize] += value * f32::from(lfo.depth) / 255.0;
+        }
+        for (smoothed, offset) in self.modulation.iter_mut().zip(offsets) {
+            smoothed.target = offset;
+        }
     }
 
     /// Start a new note, cancelling anything pending for the old one.
@@ -178,6 +234,9 @@ impl TrackState {
         self.resonance.settle();
         self.delay_send.settle();
         self.reverb_send.settle();
+        for offset in &mut self.modulation {
+            offset.settle();
+        }
         self.coefficients = None;
         self.filter_countdown = 0;
     }
@@ -185,9 +244,14 @@ impl TrackState {
     /// Filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
     pub fn shape(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> ShapedFrame {
-        let cutoff = self.cutoff.next(smoothing);
-        let resonance = self.resonance.next(smoothing);
-        let filtered = if cutoff > 0.999 && resonance < 0.001 {
+        let [cut, res, pan, vol, dly, rev] = &mut self.modulation;
+        let cutoff = (self.cutoff.next(smoothing) + cut.next(smoothing)).clamp(0.0, 1.0);
+        let resonance = (self.resonance.next(smoothing) + res.next(smoothing)).clamp(0.0, 1.0);
+        let position = (self.pan.next(smoothing) + pan.next(smoothing)).clamp(0.0, 1.0);
+        let moved = (self.gain.next(smoothing) + vol.next(smoothing)).clamp(0.0, 1.0);
+        let delay = (self.delay_send.next(smoothing) + dly.next(smoothing)).clamp(0.0, 1.0);
+        let reverb = (self.reverb_send.next(smoothing) + rev.next(smoothing)).clamp(0.0, 1.0);
+        let filtered = if cutoff > 0.999 && resonance < 0.001 && !self.filter_moving {
             self.coefficients = None;
             input
         } else {
@@ -204,11 +268,9 @@ impl TrackState {
                 None => input,
             }
         };
-        let gain = self.gain.next(smoothing) * self.level.next(smoothing);
-        let (left, right) = pan_gains(self.pan.next(smoothing));
+        let gain = moved * self.level.next(smoothing);
+        let (left, right) = pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
-        let delay = self.delay_send.next(smoothing);
-        let reverb = self.reverb_send.next(smoothing);
         ShapedFrame {
             dry,
             delay: [dry[0] * delay, dry[1] * delay],

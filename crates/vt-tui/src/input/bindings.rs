@@ -60,6 +60,8 @@ pub enum Cmd {
     Double,
     /// Move the loop by this many steps, times the count.
     SlideLoop(isize),
+    /// Rotate the steps within the loop, by this many steps for each of the count.
+    RotateLoop(isize),
     /// Move the loop so that it starts on the cursor's step.
     StartLoopHere,
     Help,
@@ -84,6 +86,8 @@ pub enum Cmd {
     Substitute,
     PickInstrument,
     ChooseInstrument,
+    /// Choose what an LFO moves from a list.
+    PickDestination,
 }
 
 /// One row of the table.
@@ -148,6 +152,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
+    ("Space 4", Cmd::ShowView(View::Track), "Track page"),
     (
         "Space 5",
         Cmd::ShowView(View::Instrument),
@@ -214,6 +219,12 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         Cmd::SlideLoop(-BEAT),
         "Slide the loop a beat earlier",
     ),
+    ("] r", Cmd::RotateLoop(1), "Rotate the loop's steps later"),
+    (
+        "[ r",
+        Cmd::RotateLoop(-1),
+        "Rotate the loop's steps earlier",
+    ),
     ("g s", Cmd::StartLoopHere, "Start the loop on this step"),
 ];
 
@@ -260,6 +271,22 @@ const INSTRUMENT: &[(&str, Cmd, &str)] = &[
     (";", Cmd::Audition, "Audition this instrument"),
 ];
 
+const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next row"),
+    ("k", Cmd::Move(Motion::Up), "Previous row"),
+    ("g g", Cmd::Move(Motion::First), "First row"),
+    ("G", Cmd::Move(Motion::Last), "Last row"),
+    ("h", Cmd::Move(Motion::Left), "Previous setting"),
+    ("l", Cmd::Move(Motion::Right), "Next setting"),
+    ("0", Cmd::Move(Motion::RowStart), "First setting"),
+    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+    ("+", Cmd::Increase, "Increase the value"),
+    ("-", Cmd::Decrease, "Decrease the value"),
+    ("C-a", Cmd::Increase, "Increase the value"),
+    ("C-x", Cmd::Decrease, "Decrease the value"),
+    ("K", Cmd::PickDestination, "Choose this LFO's destination"),
+];
+
 /// Keys that act on a selection.
 const VISUAL: &[(&str, Cmd, &str)] = &[
     ("d", Cmd::Operator(Op::Clear), "Clear the selection"),
@@ -271,6 +298,11 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         "Shift the selection down",
     ),
     ("x", Cmd::Operator(Op::Clear), "Clear the selection"),
+    (
+        "r",
+        Cmd::Replace,
+        "Replace this column across the selection",
+    ),
     ("+", Cmd::Increase, "Increase the selection's values"),
     ("-", Cmd::Decrease, "Decrease the selection's values"),
     ("C-a", Cmd::Increase, "Increase the selection's values"),
@@ -307,6 +339,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Instrument, INSTRUMENT);
     add(Mode::Instrument, EVERY_VIEW);
+    add(Mode::Track, TRACK_PAGE);
+    add(Mode::Track, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

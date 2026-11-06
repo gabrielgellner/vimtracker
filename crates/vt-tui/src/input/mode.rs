@@ -6,11 +6,12 @@ pub enum View {
     Chain,
     Phrase,
     Instrument,
+    Track,
 }
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 3] = [Self::Phrase, Self::Chain, Self::Instrument];
+    pub const ALL: [Self; 4] = [Self::Phrase, Self::Chain, Self::Track, Self::Instrument];
 
     /// The view's name.
     pub fn name(self) -> &'static str {
@@ -18,6 +19,7 @@ impl View {
             Self::Chain => "chain",
             Self::Phrase => "phrase",
             Self::Instrument => "instrument",
+            Self::Track => "track",
         }
     }
 }
@@ -46,6 +48,8 @@ pub enum Mode {
     Chain,
     /// Normal mode's keys in the instrument view. Only the binding table and the label use this.
     Instrument,
+    /// Normal mode's keys on the track page. Only the binding table and the label use this.
+    Track,
 }
 
 impl Mode {
@@ -64,6 +68,7 @@ impl Mode {
             Self::Restore => "RESTORE",
             Self::Chain => "CHAIN",
             Self::Instrument => "INST",
+            Self::Track => "TRACK",
         }
     }
 

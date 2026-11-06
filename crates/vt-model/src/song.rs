@@ -9,6 +9,7 @@ use crate::constants::{
     BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_PHRASE_STEPS,
 };
 use crate::label::is_named_slot;
+use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::selection::Extent;
 use crate::step::Step;
 
@@ -23,6 +24,23 @@ pub struct Track {
     /// delay and reverb.
     #[serde(default = "full_level")]
     pub level: u8,
+    /// What the track's held `CUT` starts from, and what its LFOs move around until a step sets it.
+    #[serde(default = "full_level")]
+    pub cutoff: u8,
+    /// Where held `RES` starts.
+    #[serde(default)]
+    pub resonance: u8,
+    /// Where held `PAN` starts.
+    #[serde(default = "centre")]
+    pub pan: u8,
+    /// Where held `DLY` starts.
+    #[serde(default)]
+    pub delay: u8,
+    /// Where held `REV` starts.
+    #[serde(default)]
+    pub reverb: u8,
+    #[serde(default)]
+    pub lfos: [Lfo; LFOS_PER_TRACK],
 }
 
 impl Default for Track {
@@ -32,12 +50,22 @@ impl Default for Track {
             solo: false,
             swing: None,
             level: full_level(),
+            cutoff: full_level(),
+            resonance: 0,
+            pan: centre(),
+            delay: 0,
+            reverb: 0,
+            lfos: Default::default(),
         }
     }
 }
 
 fn full_level() -> u8 {
     0xFF
+}
+
+fn centre() -> u8 {
+    0x80
 }
 
 /// One row of the song, holding one chain per track.
@@ -203,6 +231,16 @@ impl Phrase {
             self.start = (to as usize).min(highest);
         }
         self.store_up_to(self.start + self.length);
+    }
+
+    /// Move the loop's steps later, wrapping round within it. Negative moves them earlier, and steps
+    /// outside the loop stay where they are.
+    pub fn rotate(&mut self, by: isize) {
+        let (start, length) = (self.start, self.length);
+        if length > 0 {
+            let by = by.rem_euclid(length as isize) as usize;
+            self.steps[start..start + length].rotate_right(by);
+        }
     }
 
     /// Double the loop by repeating it. Steps after it move down rather than being overwritten.
@@ -562,6 +600,14 @@ mod tests {
     }
 
     #[test]
+    fn a_track_saved_before_its_page_loads_with_the_old_sound() {
+        let track: Track = ron::from_str("(mute: false, solo: false, swing: None)").unwrap();
+        assert_eq!(track, Track::default());
+        assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
+        assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);
+    }
+
+    #[test]
     fn a_section_saved_without_a_reset_loads_with_none() {
         let section: Section = ron::from_str("(chains: [Some(0)])").unwrap();
         assert_eq!(section.reset, None);
@@ -571,6 +617,30 @@ mod tests {
         })
         .unwrap();
         assert_eq!(ron::from_str::<Section>(&saved).unwrap().reset, Some(64));
+    }
+
+    #[test]
+    fn rotating_stays_inside_the_loop() {
+        use crate::step::Note;
+
+        let note = |midi| Step {
+            note: Note::On(midi),
+            ..Step::default()
+        };
+        let mut phrase = Phrase::from_steps((60..66).map(note).collect());
+        phrase.set_len(3);
+        phrase.slide(1);
+        let notes =
+            |phrase: &Phrase| -> Vec<Note> { phrase.steps().iter().map(|s| s.note).collect() };
+
+        phrase.rotate(1);
+        let on = |midi: [u8; 6]| midi.map(Note::On).to_vec();
+        assert_eq!(notes(&phrase), on([60, 63, 61, 62, 64, 65]));
+        phrase.rotate(-1);
+        assert_eq!(notes(&phrase), on([60, 61, 62, 63, 64, 65]));
+        phrase.rotate(4);
+        assert_eq!(notes(&phrase), on([60, 63, 61, 62, 64, 65]));
+        assert_eq!((phrase.start(), phrase.len()), (1, 3));
     }
 
     #[test]

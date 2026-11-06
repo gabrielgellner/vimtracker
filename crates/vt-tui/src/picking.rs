@@ -328,6 +328,11 @@ impl App {
                     Some(Pick::Kit(path)) => self.load_kit(&path),
                     Some(Pick::Instrument(id)) => self.pick_instrument(id),
                     Some(Pick::CurrentInstrument(id)) => self.instrument = id,
+                    Some(Pick::Destination {
+                        track,
+                        slot,
+                        destination,
+                    }) => self.pick_destination(track, slot, destination),
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

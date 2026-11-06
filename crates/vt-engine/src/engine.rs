@@ -6,6 +6,7 @@ use vt_model::constants::{
     GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
+use vt_model::song::Track;
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
 use crate::dsp::delay::Delay;
@@ -13,11 +14,13 @@ use crate::dsp::reverb::Reverb;
 use crate::dsp::smoother::coefficient;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, Retrigger, TrackState};
+use crate::track_state::{DelayedNote, Retrigger, SongTime, TrackState};
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
 const DELAY_TICKS: u64 = TICKS_PER_QUARTER * 3 / 4;
+/// How often LFOs are worked out, in frames. Their values are smoothed in between.
+const LFO_UPDATE_FRAMES: u32 = 32;
 
 /// Whether the sequencer is moving.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +69,8 @@ pub struct Engine {
     reverb: Reverb,
     /// The master's levels since the last report.
     reading: Reading,
+    /// Frames until LFOs are next worked out.
+    lfo_countdown: u32,
 }
 
 impl Engine {
@@ -90,10 +95,12 @@ impl Engine {
             delay: Delay::new(delay_frames),
             reverb: Reverb::new(rate),
             reading: Reading::default(),
+            lfo_countdown: 0,
         };
         engine.follow_levels();
+        engine.reset_tracks();
         for track in engine.tracks.iter_mut() {
-            track.level.settle();
+            track.settle();
         }
         engine
     }
@@ -156,12 +163,35 @@ impl Engine {
     /// and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
+        self.follow_base(&old);
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
             track.stop();
         }
         self.follow_levels();
         self.retune();
         old
+    }
+
+    /// Hear a change to a track's page straight away. A held value a step has set since stays
+    /// until something changes it, so this only acts on what actually changed.
+    fn follow_base(&mut self, old: &Published) {
+        let fresh = Track::default();
+        let tracks = self.tracks.iter_mut().enumerate();
+        for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
+            let before = old.song.tracks.get(index).unwrap_or(&fresh);
+            let controls = [
+                (FxCommand::Cut, before.cutoff, track.cutoff),
+                (FxCommand::Res, before.resonance, track.resonance),
+                (FxCommand::Pan, before.pan, track.pan),
+                (FxCommand::Dly, before.delay, track.delay),
+                (FxCommand::Rev, before.reverb, track.reverb),
+            ];
+            for (command, was, now) in controls {
+                if was != now {
+                    state.set_held(command, now);
+                }
+            }
+        }
     }
 
     /// Move the tempo origin here if the tempo changed, so the next step's time stays right.
@@ -199,6 +229,49 @@ impl Engine {
         self.frames_since_origin = 0;
         self.millibpm = self.current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         self.transport = Transport::Playing;
+        for track in self.tracks.iter_mut() {
+            for start in &mut track.lfo_starts {
+                start.tick = 0.0;
+            }
+        }
+        self.update_lfos();
+    }
+
+    /// Where the song is now, worked out from the tempo's origin so rounding can't build up.
+    fn song_time(&self) -> SongTime {
+        let ticks_per_frame = TICKS_PER_QUARTER as f64 * f64::from(self.millibpm)
+            / (60.0 * f64::from(self.rate) * 1000.0);
+        SongTime {
+            tick: self.origin_tick as f64 + self.frames_since_origin as f64 * ticks_per_frame,
+            clock: self.clock,
+            rate: self.rate,
+            seed: self.current.song.seed,
+        }
+    }
+
+    fn update_lfos(&mut self) {
+        let now = self.song_time();
+        let stopped = self.transport == Transport::Stopped;
+        let tracks = self.tracks.iter_mut().enumerate();
+        for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
+            state.modulate(track, index, now, stopped);
+        }
+    }
+
+    /// Restart a track's LFOs that follow its notes, and put it on their new values.
+    fn retrigger_lfos(&mut self, index: usize) {
+        let now = self.song_time();
+        let Some(track) = self.current.song.tracks.get(index) else {
+            return;
+        };
+        let state = &mut self.tracks[index];
+        for (lfo, start) in track.lfos.iter().zip(&mut state.lfo_starts) {
+            if lfo.retrig {
+                start.tick = now.tick;
+                start.clock = now.clock;
+            }
+        }
+        state.modulate(track, index, now, false);
     }
 
     /// Pause in place, or resume from the stored position.
@@ -222,8 +295,11 @@ impl Engine {
 
     fn reset_tracks(&mut self) {
         let seed = self.current.song.seed;
-        for (index, track) in self.tracks.iter_mut().enumerate() {
-            track.reset_held(seed, index);
+        let fresh = Track::default();
+        let tracks = &self.current.song.tracks;
+        for (index, state) in self.tracks.iter_mut().enumerate() {
+            let track = tracks.get(index).unwrap_or(&fresh);
+            state.reset_held(seed, index, track, self.clock);
         }
     }
 
@@ -318,13 +394,21 @@ impl Engine {
             if playing {
                 self.fire_due_events();
             }
+            if self.lfo_countdown == 0 {
+                self.update_lfos();
+                self.lfo_countdown = LFO_UPDATE_FRAMES;
+            }
             let until_event = if playing {
                 self.frames_until_next_step()
                     .min(self.frames_until_track_event())
             } else {
                 u64::MAX
             };
-            let run = until_event.min((total - written) as u64).max(1) as usize;
+            let run = until_event
+                .min((total - written) as u64)
+                .min(u64::from(self.lfo_countdown))
+                .max(1) as usize;
+            self.lfo_countdown -= run as u32;
             self.render(&mut out[written * 2..(written + run) * 2]);
             if playing {
                 self.frames_since_origin += run as u64;
@@ -388,6 +472,7 @@ impl Engine {
                 && delayed.at <= clock
             {
                 self.tracks[index].delayed = None;
+                self.retrigger_lfos(index);
                 if self.audible(index) {
                     let (kill, off, retrigger) = {
                         let t = &self.tracks[index];
@@ -513,6 +598,9 @@ impl Engine {
                 }
                 held => self.tracks[index].set_held(held, slot.value),
             }
+        }
+        if plays && delay_units.is_none() && matches!(step.note, Note::On(_)) {
+            self.retrigger_lfos(index);
         }
         if !self.tracks[index].sounding() {
             self.tracks[index].settle();
