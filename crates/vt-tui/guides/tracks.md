@@ -50,7 +50,8 @@ track its own, and `x` follows the project again.
 ## Envelopes
 
 Each track has two, which start with each note. The page draws their shapes.
-Time is stretched in the drawing, so a short attack still shows.
+Time is stretched in the drawing, so a short attack still shows, and a stage's
+width depends only on its own time.
 
 | Setting | Value |
 |---|---|

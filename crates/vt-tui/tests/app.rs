@@ -3775,7 +3775,7 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
-        (out.matches("a=T").count(), out)
+        (out.matches(",c=28,").count(), out)
     };
     // Nothing is sent until the page that shows them.
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
@@ -3807,4 +3807,74 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     let forget = format!("a=d,d=I,i={},q=2", moved[1]);
     assert!(!out.contains(&forget));
     assert!(sync(&mut app, &mut graphics).1.contains(&forget));
+}
+
+#[test]
+fn an_lfos_shape_has_an_icon_sent_once_and_shared() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out).unwrap().matches(",c=4,").count()
+    };
+    press(&mut app, " 4L");
+    // Both LFOs start on the same shape, so one image serves both.
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let plain = app.lfo_images.unwrap();
+    assert_eq!(plain[0], plain[1]);
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+
+    // The cursor picks one out, once. After that, moving it sends nothing.
+    press(&mut app, "jj");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.lfo_images.unwrap();
+    assert_ne!(picked[0], picked[1]);
+    assert_eq!(picked[1], plain[1]);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.lfo_images.unwrap(), plain);
+
+    // A new shape has its own image, and coming back to the old one needs nothing sent.
+    press(&mut app, "jl=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.lfo_images.unwrap()[0], picked[0]);
+    press(&mut app, "-");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.lfo_images.unwrap(), picked);
+}
+
+#[test]
+fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let plain = draw(&app);
+    app.lfo_images = Some([0x01_02_03, 0x04_05_06]);
+    let drawn = draw(&app);
+    let row = (0..24)
+        .find(|y| {
+            (0..80)
+                .map(|x| plain[(x, *y)].symbol())
+                .collect::<String>()
+                .starts_with("LFO 1")
+        })
+        .unwrap();
+    let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
+    // Name column, then the icon, with the same text after it either way.
+    assert_eq!(text(&drawn, 24), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(24, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(text(&drawn, 27), "\u{10EEEE}\u{305}\u{310}");
+    assert_eq!(text(&drawn, 28), " ");
+    for x in 30..80 {
+        assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
+    }
 }

@@ -1,5 +1,5 @@
-//! An experiment in drawing with pixels, using kitty's graphics protocol. An image is sent ahead of
-//! time, and placeholder characters say where it goes. As they're text, they stay inside a tmux
+//! Small drawings in pixels, using kitty's graphics protocol. An image is sent ahead of time, and
+//! placeholder characters say where it goes. As they're text, they stay inside a tmux
 //! pane, and a window can be drawn over them.
 
 use std::io::{self, Write};
@@ -8,15 +8,19 @@ use std::process::Command;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ratatui::style::Color;
+use vt_engine::dsp::lfo::wave;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
+use vt_model::lfo::{LFOS_PER_TRACK, Shape};
 
 use crate::app::App;
 use crate::input::mode::View;
 use crate::theme;
 use crate::track_page::Page;
-use crate::views::braille::envelope_columns;
-use crate::views::track::{DIAGRAM_HEIGHT, DIAGRAM_WIDTH, envelope_being_edited};
+use crate::views::braille::{envelope_columns, line_columns};
+use crate::views::track::{
+    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, LFO_ICON_WIDTH, envelope_being_edited, lfo_being_edited,
+};
 
 /// The character that stands for a piece of an image.
 const PLACEHOLDER: char = '\u{10EEEE}';
@@ -35,6 +39,12 @@ const CELL_DOTS_DOWN: usize = 12;
 /// The pixels across and down each dot. Kitty smooths an image it scales, so a dot is a solid block
 /// that's already near its final size, which keeps its edges crisp.
 const DOT_PIXELS: usize = 3;
+
+/// How much of a row an LFO's icon stays inside, so the icons of two rows don't touch.
+const ICON_HEIGHT: f32 = 0.8;
+/// The random values an LFO's icon shows, and how many a random shape's icon shows.
+const ICON_KEY: u64 = 148;
+const RANDOM_ICON_CYCLES: f64 = 4.0;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -126,21 +136,39 @@ fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
     out
 }
 
-/// An envelope's shape as a PNG: a plain line of solid dots, as on a small LCD.
-pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    let mut dots = vec![vec![false; across * DOT_PIXELS]; down * DOT_PIXELS];
-    for (column, (high, low)) in envelope_columns(envelope, across, down)
-        .into_iter()
-        .enumerate()
-    {
-        for row in high..=low {
+/// A line as a PNG of solid dots, with each dot a block of pixels.
+fn line_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
+    let mut dots = vec![vec![false; spans.len() * DOT_PIXELS]; rows * DOT_PIXELS];
+    for (column, (high, low)) in spans.iter().enumerate() {
+        for row in *high..=*low {
             for line in &mut dots[row * DOT_PIXELS..(row + 1) * DOT_PIXELS] {
                 line[column * DOT_PIXELS..(column + 1) * DOT_PIXELS].fill(true);
             }
         }
     }
     png(&dots, color)
+}
+
+/// An envelope's shape as a PNG: a plain line of solid dots, as on a small LCD.
+pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&envelope_columns(envelope, across, down), down, color)
+}
+
+/// An LFO's wave as a PNG, to show which shape it is. It uses the real wave, with one cycle or, for
+/// a random one, a few, since one cycle of `Random` is only flat.
+pub fn shape_png(shape: Shape, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let cycles = match shape {
+        Shape::Random | Shape::Smooth => RANDOM_ICON_CYCLES,
+        _ => 1.0,
+    };
+    let level = |x: f32| {
+        // Stopping just short of the end, or a saw would jump back up there.
+        let value = wave(shape, f64::from(x.min(0.999)) * cycles, ICON_KEY);
+        0.5 + value * 0.5 * ICON_HEIGHT
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
 /// Write one command, wrapped so tmux passes it on.
@@ -189,21 +217,69 @@ pub fn transmit(out: &mut impl Write, image: &Image, in_tmux: bool) -> io::Resul
     Ok(())
 }
 
-/// Why the images can't reach the terminal, if that can be told.
-pub fn problem() -> Option<&'static str> {
-    std::env::var_os("TMUX")?;
-    let output = Command::new("tmux")
-        .args(["show", "-Apv", "allow-passthrough"])
-        .output()
-        .ok()?;
-    let setting = String::from_utf8_lossy(&output.stdout);
-    (!matches!(setting.trim(), "on" | "all")).then_some(
-        "--kitty-graphics needs tmux to pass images on: run `tmux set -g allow-passthrough on`",
-    )
+/// Whether images can reach the terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Support {
+    Images,
+    /// The terminal isn't known to draw them.
+    NoTerminal,
+    /// It's kitty, but tmux won't pass them on.
+    NoPassthrough,
 }
 
-/// The envelope images the terminal has. Each envelope keeps one with the cursor on it and one
-/// without, so moving the cursor sends nothing.
+/// What the status line says when tmux is what's in the way.
+pub const PASSTHROUGH_HINT: &str =
+    "Drawing in Braille: `tmux set -g allow-passthrough on` lets images through";
+
+/// Work out support from the terminal's name and, in tmux, whether it passes images on.
+fn judge(terminal: &str, passthrough: Option<&str>) -> Support {
+    if !terminal.contains("kitty") {
+        Support::NoTerminal
+    } else if passthrough.is_none_or(|setting| matches!(setting, "on" | "all")) {
+        Support::Images
+    } else {
+        Support::NoPassthrough
+    }
+}
+
+/// What tmux says about this pane, or nothing if it can't be asked.
+fn ask_tmux(args: &[&str]) -> String {
+    Command::new("tmux")
+        .args(args)
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .unwrap_or_default()
+}
+
+/// Whether images can reach this terminal. Inside tmux, its client is the terminal that counts.
+pub fn support() -> Support {
+    if std::env::var_os("TMUX").is_some() {
+        let terminal = ask_tmux(&["display-message", "-p", "#{client_termname}"]);
+        let setting = ask_tmux(&["show", "-Apv", "allow-passthrough"]);
+        return judge(&terminal, Some(&setting));
+    }
+    let terminal = std::env::var("TERM").unwrap_or_default();
+    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
+        return Support::Images;
+    }
+    judge(&terminal, None)
+}
+
+/// The colour of a drawing, with the cursor on it or not.
+fn color(active: bool) -> [u8; 3] {
+    let style = if active {
+        theme::active()
+    } else {
+        theme::dim()
+    };
+    match style.fg {
+        Some(Color::Rgb(red, green, blue)) => [red, green, blue],
+        _ => [255; 3],
+    }
+}
+
+/// The images the terminal has. Each envelope keeps one with the cursor on it and one without, so
+/// moving the cursor sends nothing, and each LFO shape has the same two, sent once when first shown.
 ///
 /// A changed image gets a new id, rather than replacing the one with the old id. Kitty only looks at
 /// placeholders on lines that have changed, and replacing an image disconnects them, so it would stay
@@ -212,6 +288,7 @@ pub struct Graphics {
     base: u32,
     next: u32,
     images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
+    shapes: [[Option<u32>; 2]; Shape::ALL.len()],
     /// Images to forget once the screen has moved on from them.
     retired: Vec<u32>,
     in_tmux: bool,
@@ -224,6 +301,7 @@ impl Graphics {
             base: (std::process::id() & 0xFFFF) << 8,
             next: 0,
             images: [[None; 2]; TRACK_ENVELOPES],
+            shapes: [[None; 2]; Shape::ALL.len()],
             retired: Vec::new(),
             in_tmux: std::env::var_os("TMUX").is_some(),
         }
@@ -235,11 +313,17 @@ impl Graphics {
             self.next = self.next % 0xFF + 1;
             let id = self.base | self.next;
             let in_use = self
-                .images
+                .shapes
                 .iter()
                 .flatten()
                 .flatten()
-                .any(|image| image.1 == id)
+                .any(|shape| *shape == id)
+                || self
+                    .images
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(|image| image.1 == id)
                 || self.retired.contains(&id);
             if !in_use {
                 return id;
@@ -258,47 +342,71 @@ impl Graphics {
         if app.view != View::Track || app.track_page != Page::Mod {
             return out.flush();
         }
-        let envelopes = track.envelopes;
+        let (envelopes, lfos) = (track.envelopes, track.lfos);
         let edited = envelope_being_edited(app);
-        let mut ids = [0; TRACK_ENVELOPES];
+        let mut envelope_ids = [0; TRACK_ENVELOPES];
         for (slot, envelope) in envelopes.iter().enumerate() {
             let active = edited == Some(slot);
             let held = self.images[slot][usize::from(active)];
-            ids[slot] = match held {
+            envelope_ids[slot] = match held {
                 Some((drawn, id)) if drawn == *envelope => id,
                 _ => {
-                    let style = if active {
-                        theme::active()
-                    } else {
-                        theme::dim()
-                    };
-                    let color = match style.fg {
-                        Some(Color::Rgb(red, green, blue)) => [red, green, blue],
-                        _ => [255; 3],
-                    };
                     let id = self.new_id();
-                    let png = envelope_png(envelope, color, DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
-                    let image = Image {
-                        id,
-                        png: &png,
-                        columns: DIAGRAM_WIDTH,
-                        rows: DIAGRAM_HEIGHT,
-                    };
-                    transmit(out, &image, self.in_tmux)?;
+                    let png = envelope_png(envelope, color(active), DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
+                    self.send(out, id, &png, DIAGRAM_WIDTH, DIAGRAM_HEIGHT)?;
                     self.retired.extend(held.map(|(_, old)| old));
                     self.images[slot][usize::from(active)] = Some((*envelope, id));
                     id
                 }
             };
         }
-        app.envelope_images = Some(ids);
+        let edited = lfo_being_edited(app);
+        let mut lfo_ids = [0; LFOS_PER_TRACK];
+        for (slot, lfo) in lfos.iter().enumerate() {
+            let active = edited == Some(slot);
+            let index = Shape::ALL
+                .iter()
+                .position(|shape| *shape == lfo.shape)
+                .unwrap_or(0);
+            lfo_ids[slot] = match self.shapes[index][usize::from(active)] {
+                Some(id) => id,
+                None => {
+                    let id = self.new_id();
+                    let png = shape_png(lfo.shape, color(active), LFO_ICON_WIDTH, 1);
+                    self.send(out, id, &png, LFO_ICON_WIDTH, 1)?;
+                    self.shapes[index][usize::from(active)] = Some(id);
+                    id
+                }
+            };
+        }
+        app.envelope_images = Some(envelope_ids);
+        app.lfo_images = Some(lfo_ids);
         out.flush()
+    }
+
+    /// Send one image.
+    fn send(
+        &self,
+        out: &mut impl Write,
+        id: u32,
+        png: &[u8],
+        columns: usize,
+        rows: usize,
+    ) -> io::Result<()> {
+        let image = Image {
+            id,
+            png,
+            columns,
+            rows,
+        };
+        transmit(out, &image, self.in_tmux)
     }
 
     /// Have the terminal forget the images.
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
         let held = self.images.iter().flatten().flatten().map(|image| &image.1);
-        for id in held.chain(&self.retired) {
+        let shapes = self.shapes.iter().flatten().flatten();
+        for id in held.chain(shapes).chain(&self.retired) {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
         }
         out.flush()
@@ -395,6 +503,51 @@ mod tests {
             }
             assert_eq!(ratatui::text::Line::raw(line.as_str()).width(), 28);
         }
+    }
+
+    #[test]
+    fn images_go_to_kitty_when_tmux_lets_them_through() {
+        assert_eq!(judge("xterm-kitty", None), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("on")), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("all")), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("off")), Support::NoPassthrough);
+        assert_eq!(judge("xterm-256color", None), Support::NoTerminal);
+        assert_eq!(judge("alacritty", Some("on")), Support::NoTerminal);
+        assert_eq!(judge("", Some("")), Support::NoTerminal);
+    }
+
+    #[test]
+    fn each_lfo_shape_has_its_own_small_icon() {
+        let icons = Shape::ALL.map(|shape| shape_png(shape, [255; 3], 4, 1));
+        for (index, icon) in icons.iter().enumerate() {
+            assert!(icon.len() < 1000, "{}", icon.len());
+            let (_, pixels) = decode(icon);
+            let (across, down) = (4 * CELL_DOTS_ACROSS, CELL_DOTS_DOWN);
+            assert_eq!(
+                (pixels[0].len(), pixels.len()),
+                (across * DOT_PIXELS, down * DOT_PIXELS)
+            );
+            assert!(
+                !icons[index + 1..].contains(icon),
+                "{:?}",
+                Shape::ALL[index]
+            );
+            // It stays off the top and bottom of its row, so two rows' icons don't touch.
+            assert!(pixels[0].iter().all(|pixel| !pixel));
+            assert!(pixels[down * DOT_PIXELS - 1].iter().all(|pixel| !pixel));
+        }
+    }
+
+    #[test]
+    fn a_saw_falls_and_a_ramp_rises_with_no_jump_at_the_end() {
+        let spans = |shape| {
+            let level = |x: f32| 0.5 + wave(shape, f64::from(x.min(0.999)), 0) * 0.4;
+            line_columns(level, level(0.0), 24, 12)
+        };
+        let (saw, ramp) = (spans(Shape::Saw), spans(Shape::Ramp));
+        assert!(saw[0].0 < saw[23].0);
+        assert!(ramp[0].0 > ramp[23].0);
+        assert_eq!(saw[23].0, saw[23].1, "a single dot, with no line back up");
     }
 
     #[test]

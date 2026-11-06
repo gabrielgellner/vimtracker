@@ -18,6 +18,8 @@ cargo run --release -p vt-tui --bin vimtracker
 With [just](https://github.com/casey/just) installed, `just run my-song` does the same for a
 project, and `just test` runs the tests.
 
+In kitty, small drawings such as envelopes are images. Inside tmux, this needs `set -g allow-passthrough on` in your config. Other terminals get Braille, as does `--no-graphics`.
+
 Run the tests with `cargo test --workspace`.
 
 ## Quick start

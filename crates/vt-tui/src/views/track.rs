@@ -21,6 +21,9 @@ use crate::views::status::format_swing;
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
 pub(crate) const DIAGRAM_HEIGHT: usize = 4;
+/// The size of an LFO's icon, in characters, and the room for its shape's name before it.
+pub(crate) const LFO_ICON_WIDTH: usize = 4;
+const LFO_SHAPE_NAME: usize = 7;
 
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
@@ -188,7 +191,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
 fn width(control: Control) -> usize {
     match control {
         Control::Lfo(_, LfoField::Rate) => 9,
-        Control::Lfo(_, LfoField::Shape) => 8,
+        Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + LFO_ICON_WIDTH + 2,
         Control::Base(TrackControl::Reverb) | Control::Lfo(_, LfoField::Retrig) => 8,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
@@ -235,8 +238,20 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
             Style::new()
         };
         let room = width(*control);
-        let gap = room.saturating_sub(text.chars().count());
+        let mut gap = room.saturating_sub(text.chars().count());
+        let length = text.chars().count();
         spans.push(Span::styled(text, style));
+        // A drawing of an LFO's shape follows its name, with the column the same width without one.
+        if let (Control::Lfo(slot, LfoField::Shape), Some(ids)) = (*control, app.lfo_images) {
+            let before = LFO_SHAPE_NAME.saturating_sub(length);
+            spans.push(Span::raw(" ".repeat(before)));
+            let icon = kitty::placeholder_lines(LFO_ICON_WIDTH, 1).concat();
+            spans.push(Span::styled(
+                icon,
+                Style::new().fg(kitty::id_color(ids[slot])),
+            ));
+            gap = room.saturating_sub(length + before + LFO_ICON_WIDTH);
+        }
         spans.push(Span::raw(" ".repeat(gap)));
     }
     Line::from(spans)
@@ -246,6 +261,14 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
 pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
         Control::Envelope(slot, _) => Some(slot),
+        _ => None,
+    }
+}
+
+/// Which LFO the cursor is on, if any.
+pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
+    match app.track_control() {
+        Control::Lfo(slot, _) => Some(slot),
         _ => None,
     }
 }

@@ -22,7 +22,7 @@ use crate::app::App;
 use crate::audio::{AudioError, AudioStats, Output};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::kitty::{self, Graphics};
+use crate::kitty::{self, Graphics, Support};
 use crate::theme;
 use crate::views;
 
@@ -41,8 +41,6 @@ pub enum RunError {
     Render(#[from] hound::Error),
     #[error("{0} couldn't be loaded, so the render would be missing it")]
     MissingSample(String),
-    #[error("{0}")]
-    Graphics(&'static str),
 }
 
 /// What `vimtracker render` was asked for.
@@ -118,10 +116,7 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
 }
 
 /// Open a project, or start an unsaved one, and run until the user quits.
-pub fn run(path: Option<PathBuf>, kitty_graphics: bool) -> Result<(), RunError> {
-    if kitty_graphics && let Some(problem) = kitty::problem() {
-        return Err(RunError::Graphics(problem));
-    }
+pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let output = Output::open()?;
     let rate = output.rate();
     let mut status = String::new();
@@ -146,7 +141,15 @@ pub fn run(path: Option<PathBuf>, kitty_graphics: bool) -> Result<(), RunError> 
     let mut app = App::new(song, path, samples, handle, rate);
     app.status = status;
     app.offer_restore();
-    let mut graphics = kitty_graphics.then(Graphics::new);
+    let support = if no_graphics {
+        Support::NoTerminal
+    } else {
+        kitty::support()
+    };
+    if support == Support::NoPassthrough && app.status.is_empty() {
+        app.status = kitty::PASSTHROUGH_HINT.to_owned();
+    }
+    let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
     let result = main_loop(&mut terminal, &mut app, &stats, graphics.as_mut());

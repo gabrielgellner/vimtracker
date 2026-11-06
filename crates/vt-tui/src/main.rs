@@ -8,9 +8,9 @@ use clap::{Parser, Subcommand};
 struct Cli {
     /// A project folder to open. It is created on the first save if it doesn't exist.
     project: Option<PathBuf>,
-    /// Experimental: draw envelopes in pixels, with kitty's graphics protocol.
+    /// Draw in Braille, instead of with images where the terminal can show them.
     #[arg(long)]
-    kitty_graphics: bool,
+    no_graphics: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -63,7 +63,7 @@ fn main() -> std::process::ExitCode {
             stems,
         })
         .map_err(|e| e.to_string()),
-        None => vt_tui::run::run(cli.project, cli.kitty_graphics).map_err(|e| e.to_string()),
+        None => vt_tui::run::run(cli.project, cli.no_graphics).map_err(|e| e.to_string()),
     };
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,

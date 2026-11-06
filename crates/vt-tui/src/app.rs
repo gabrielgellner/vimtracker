@@ -19,6 +19,7 @@ use vt_model::constants::{
 };
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
+use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -125,6 +126,8 @@ pub struct App {
     pub track_page: Page,
     /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
     pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
+    /// The ids of the images of the LFOs' shapes, likewise.
+    pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
     pub track_row: usize,
     pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
@@ -218,6 +221,7 @@ impl App {
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: Page::Sound,
             envelope_images: None,
+            lfo_images: None,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),

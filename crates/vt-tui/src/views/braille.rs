@@ -44,17 +44,18 @@ pub(crate) fn level_at(envelope: &Envelope, x: f32) -> f32 {
     0.0
 }
 
-/// The rows an envelope's line covers in each column of a grid of dots, top first, with row 0 at
-/// the top. They join up, so a steep part is a line rather than scattered dots.
-pub(crate) fn envelope_columns(
-    envelope: &Envelope,
+/// The rows a line covers in each column of a grid of dots, top first, with row 0 at the top. It
+/// runs across `x` from 0 to 1, starting from `start`, and each level is from 0 to 1. It joins up,
+/// so a steep part is a line rather than scattered dots.
+pub(crate) fn line_columns(
+    level_at: impl Fn(f32) -> f32,
+    start: f32,
     columns: usize,
     rows: usize,
 ) -> Vec<(usize, usize)> {
     let bottom = rows - 1;
-    let mut last = bottom;
-    // An attack ends on full, however short it is and whatever comes next.
-    let peak = (envelope.attack_ms > 0).then(|| stage_width(envelope.attack_ms) * columns as f32);
+    let row_of = |level: f32| ((1.0 - level.clamp(0.0, 1.0)) * bottom as f32).round() as usize;
+    let mut last = row_of(start);
     (0..columns)
         .map(|column| {
             // Look across the whole column, so a peak between two columns isn't missed.
@@ -62,18 +63,29 @@ pub(crate) fn envelope_columns(
             for sample in 0..=SAMPLES_PER_COLUMN {
                 let x =
                     (column as f32 + sample as f32 / SAMPLES_PER_COLUMN as f32) / columns as f32;
-                let level = level_at(envelope, x).clamp(0.0, 1.0);
-                let row = ((1.0 - level) * bottom as f32).round() as usize;
+                let row = row_of(level_at(x));
                 high = high.min(row);
                 low = low.max(row);
                 last = row;
             }
-            if peak.is_some_and(|peak| peak.floor() as usize == column) {
-                high = 0;
-            }
             (high, low)
         })
         .collect()
+}
+
+/// The rows an envelope's line covers in each column, from silence.
+pub(crate) fn envelope_columns(
+    envelope: &Envelope,
+    columns: usize,
+    rows: usize,
+) -> Vec<(usize, usize)> {
+    let mut spans = line_columns(|x| level_at(envelope, x), 0.0, columns, rows);
+    // An attack ends on full, however short it is and whatever comes next.
+    if envelope.attack_ms > 0 {
+        let peak = (stage_width(envelope.attack_ms) * columns as f32) as usize;
+        spans[peak].0 = 0;
+    }
+    spans
 }
 
 /// An envelope's shape as lines of Braille, from silence up to full and back down to silence.
