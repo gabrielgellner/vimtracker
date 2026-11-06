@@ -90,6 +90,8 @@ pub enum Cmd {
     Substitute,
     /// Choose what's under the cursor from a list.
     PickValue,
+    /// Fill the selected column with a ramp or random values.
+    Shape,
     ChooseInstrument,
 }
 
@@ -327,6 +329,11 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         "r",
         Cmd::Replace,
         "Replace this column across the selection",
+    ),
+    (
+        "S",
+        Cmd::Shape,
+        "Fill this column with a ramp or random values",
     ),
     ("=", Cmd::Increase, "Increase the selection's values"),
     ("-", Cmd::Decrease, "Decrease the selection's values"),

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use vt_model::lfo::Lfo;
+use vt_model::shape::{FillKind, Where};
 use vt_model::step::FxCommand;
 
 use crate::guides::Guide;
@@ -33,6 +34,10 @@ pub enum Pick {
     },
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),
+    /// What the shape panel fills with.
+    ShapeFill(FillKind),
+    /// Which rows the shape panel fills.
+    ShapeWhere(Where),
     Use {
         track: usize,
         slot: usize,

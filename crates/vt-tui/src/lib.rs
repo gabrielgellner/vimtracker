@@ -11,6 +11,7 @@ pub mod meter;
 pub mod picking;
 pub mod probe;
 pub mod run;
+pub mod shaping;
 pub mod theme;
 pub mod track_page;
 pub mod tree;

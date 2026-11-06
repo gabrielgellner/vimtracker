@@ -380,12 +380,12 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.picker = None;
-                self.mode = Mode::Normal;
+                self.mode = self.mode_after_picker();
             }
             KeyCode::Enter => {
                 let pick = picker.current().map(|item| item.pick.clone());
                 self.picker = None;
-                self.mode = Mode::Normal;
+                self.mode = self.mode_after_picker();
                 match pick {
                     Some(Pick::View(view)) => self.jump_to_view(view),
                     Some(Pick::Use { track, slot }) => self.open_use(track, slot),
@@ -398,6 +398,8 @@ impl App {
                         self.apply(&Action::SetLfo { track, slot, lfo });
                     }
                     Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
+                    Some(Pick::ShapeFill(kind)) => self.pick_shape_fill(kind),
+                    Some(Pick::ShapeWhere(place)) => self.pick_shape_where(place),
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

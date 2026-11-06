@@ -59,6 +59,11 @@ impl History {
         Some(&self.current)
     }
 
+    /// Change the current version without adding an undo step, while something is being previewed.
+    pub fn replace_current(&mut self, song: Arc<Song>) {
+        self.current = song;
+    }
+
     /// Make everything since an earlier undo depth a single undo step, keeping the current version.
     pub fn squash_to(&mut self, depth: usize) {
         self.past.truncate(depth + 1);

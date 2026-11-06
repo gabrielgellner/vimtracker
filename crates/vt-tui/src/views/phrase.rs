@@ -184,7 +184,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let height = usize::from(area.height.saturating_sub(ROWS_AROUND_STEPS)).max(1);
     let top = app.top;
     let selection = app.mode.is_visual().then(|| app.current_selection());
-    let selection = selection.or(app.replacing_selection.map(|(selection, _)| selection));
+    let selection = selection
+        .or(app.replacing_selection.map(|(selection, _)| selection))
+        .or(app.shape.as_ref().map(|panel| panel.selection));
     let playhead = playhead_step(app);
     let body_width = phrase
         .steps()

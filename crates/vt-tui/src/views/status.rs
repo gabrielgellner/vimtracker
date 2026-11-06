@@ -71,7 +71,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
-            Mode::Help | Mode::Guide | Mode::Picker => theme::TEAL,
+            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape => theme::TEAL,
             Mode::Replace | Mode::Restore => theme::RED,
         })
         .add_modifier(Modifier::BOLD);

@@ -154,6 +154,9 @@ fn main_loop(
             if let Some(guide) = app.guide {
                 views::guide::draw(frame, body, guide, app.guide_scroll);
             }
+            if let Some(panel) = &app.shape {
+                views::shape::draw(frame, view, app, panel);
+            }
             if let Some(picker) = &app.picker {
                 views::picker::draw(frame, body, picker);
             }

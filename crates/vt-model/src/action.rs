@@ -12,6 +12,7 @@ use crate::lfo::Lfo;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
 };
+use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{Chain, ChainEntry, Instrument, Phrase, Song, lowest_unused};
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -68,6 +69,13 @@ pub enum Action {
         phrase: u32,
         step: usize,
         value: FieldValue,
+    },
+    /// Fill a column across steps with a ramp or random values.
+    Shape {
+        phrase: u32,
+        range: StepRange,
+        column: ShapeColumn,
+        shape: Shape,
     },
     /// Write one value across steps.
     Fill {
@@ -319,6 +327,20 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
                 }
+            }
+        }
+        Action::Shape {
+            phrase,
+            range,
+            column,
+            shape,
+        } => {
+            let found = next
+                .phrases
+                .get(phrase)
+                .ok_or(EditError::NoPhrase(*phrase))?;
+            for (row, value) in values(found.steps(), *range, *column, shape) {
+                column.write(step_mut(&mut next, *phrase, row)?, value);
             }
         }
         Action::Fill {

@@ -34,12 +34,47 @@ Follow one with a motion or a target, or double it for this whole step:
 | `Esc` | Stop selecting |
 
 Move to grow the selection. The cursor shows which end is moving. Then press
-`d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r` or `.`.
+`d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r`, `S` or `.`.
 
 `r` fills the cursor's column across the selection, as one undo: `vGra` writes
 a C on every step to the end of the loop. Notes already there keep their
 velocity and instrument. A velocity or instrument only goes on steps with a
 note, an FX value only on steps with a command, and `.` repeats it.
+
+## Shaping a column
+
+Select part of a Velocity or FX column with `v`, then press `S` for a panel
+beside the grid. The column changes as you adjust it, and you hear it if the
+loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
+
+| Row | Does |
+|---|---|
+| From, To | The ends. `~` swaps them |
+| Curve | Bends the line. Above 0 it moves early, and below 0 late |
+| S | Eases both ends. Above 0 makes an S, and below 0 the reverse |
+| Fill | `Ramp` between them, or `Random`. `r` picks anew |
+| Where | Which rows change, with `Amount` below it for some |
+
+The ends start as the first and last values selected, or if those match, the
+lowest and highest.
+
+| Where | Rows |
+|---|---|
+| Notes | Rows with a note |
+| Commands | Rows already holding this FX command |
+| All rows | Every row |
+| No notes | Rows without a note |
+| Every | Every so many rows, counting from the first selected |
+| Chance | Each row with this percent chance |
+
+The ramp's ends land on the first and last rows it changes, and rows keep their
+spacing along it. A velocity only ever goes on a note, so for Velocity, Every
+and Chance choose among the notes. On an FX column, the command is the first one
+selected, and a row holding a different command keeps it.
+
+The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+`, `i` to type, `K`
+to choose from a list and `x` for the default. `Tab` still plays and pauses.
+`.` applies the same shape to another selection, with its own ends.
 
 ## Values and small edits
 

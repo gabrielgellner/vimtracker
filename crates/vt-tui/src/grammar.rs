@@ -7,12 +7,14 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::label::is_named_slot;
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target};
+use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{Note, Step};
 
 use crate::app::{App, Entry, Selection};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
+use crate::shaping::ShapePanel;
 
 /// The register that holds the last copy. A cut doesn't touch it.
 const YANK_REGISTER: char = '0';
@@ -36,6 +38,12 @@ pub enum Change {
         merge: bool,
         /// Land just after what was pasted.
         advance: bool,
+    },
+    /// A column shaped, whose ends are chosen again from what's there.
+    Shape {
+        column: ShapeColumn,
+        shape: Shape,
+        steps: usize,
     },
     /// A field replaced, with the step that holds its new value.
     Replace {
@@ -562,6 +570,15 @@ impl App {
                     });
                 }
             }
+            Change::Shape {
+                column,
+                shape,
+                steps,
+            } => {
+                let last = self.extent().last_stored();
+                let end = self.cursor.step.saturating_add(*steps - 1).min(last);
+                self.shape_again(StepRange::between(self.cursor.step, end), *column, *shape);
+            }
             Change::Replace {
                 field,
                 value,
@@ -653,6 +670,9 @@ impl App {
                 Change::Replace { field, value, .. } => {
                     self.fill(selection.range, field, &value);
                 }
+                Change::Shape { column, shape, .. } => {
+                    self.shape_again(selection.range, column, shape);
+                }
                 Change::Paste { .. } => {}
             }
             self.leave_visual(selection);
@@ -693,6 +713,20 @@ impl App {
             range: StepRange::between(start, self.cursor.step),
             scope,
         }
+    }
+
+    /// Finish selecting, for something that goes on to use the selection.
+    pub(crate) fn leave_selection(&mut self, selection: Selection) {
+        self.leave_visual(selection);
+    }
+
+    /// Remember a kept shape for `.`.
+    pub(crate) fn remember_shape(&mut self, panel: &ShapePanel) {
+        self.last_change = Some(Change::Shape {
+            column: panel.column,
+            shape: panel.shape,
+            steps: panel.selection.range.len(),
+        });
     }
 
     fn leave_visual(&mut self, selection: Selection) {

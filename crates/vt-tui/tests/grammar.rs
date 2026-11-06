@@ -1355,3 +1355,233 @@ fn k_can_empty_a_slot_and_esc_leaves_it() {
     assert_eq!(steps(&app)[0], E);
     assert_eq!(app.mode, Mode::Normal);
 }
+
+/// Notes on rows 0, 1 and 3 of 4, at the velocities given, with the second row's slot holding `CUT`.
+fn velocities(first: &str, second: &str, last: &str) -> Vec<String> {
+    vec![
+        format!("C-4 {first} 00 ---00 ---00 ---00"),
+        format!("C-4 {second} 00 ---00 ---00 ---00"),
+        E.to_owned(),
+        format!("C-4 {last} 00 ---00 ---00 ---00"),
+    ]
+}
+
+fn app_of(rows: &[String]) -> (App, Realtime) {
+    let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+    app_with(&rows)
+}
+
+/// The velocity on each row.
+fn vel(app: &App) -> Vec<String> {
+    steps(app).iter().map(|s| s[4..6].to_owned()).collect()
+}
+
+#[test]
+fn s_opens_on_the_first_and_last_values_and_previews_a_ramp() {
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    let depth = app.history.undo_depth();
+    keys(&mut app, "lvGS");
+    assert_eq!(app.mode, Mode::Shape);
+    let shape = app.shape.as_ref().unwrap().shape;
+    assert_eq!((shape.from, shape.to), (0x10, 0x40));
+    // Heard straight away, only on notes, and spaced by row. Nothing is in the undo list yet.
+    assert_eq!(vel(&app), ["10", "20", "--", "40"]);
+    assert_eq!(app.history.undo_depth(), depth);
+}
+
+#[test]
+fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
+    let start = velocities("10", "7F", "40");
+    let (mut app, _rt) = app_of(&start);
+    keys(&mut app, "lvGS+=<Enter>");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.shape.is_none());
+    assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
+    assert!(app.dirty);
+    assert_eq!(app.cursor.step, 0);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), start);
+    keys(&mut app, "^r");
+    assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
+
+    let (mut app, _rt) = app_of(&start);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "lvGS+++<Esc>");
+    assert_eq!(steps(&app), start);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.history.undo_depth(), depth);
+    assert!(!app.dirty);
+}
+
+#[test]
+fn panel_keys_move_rows_change_values_and_swap_the_ends() {
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    let shape = |app: &App| app.shape.as_ref().unwrap().shape;
+    keys(&mut app, "~");
+    assert_eq!((shape(&app).from, shape(&app).to), (0x40, 0x10));
+    assert_eq!(vel(&app), ["40", "30", "--", "10"]);
+    keys(&mut app, "~j");
+    keys(&mut app, "i7F");
+    assert_eq!(shape(&app).to, 0x7F);
+    keys(&mut app, "=");
+    assert_eq!(shape(&app).to, 0x7F, "stops at the column's top");
+    keys(&mut app, "x");
+    assert_eq!(shape(&app).to, 0x40);
+    keys(&mut app, "j=_");
+    assert_eq!(shape(&app).curve, -20);
+    keys(&mut app, "i60<Enter>");
+    assert_eq!(shape(&app).curve, 60);
+    keys(&mut app, "i-500<Enter>");
+    assert_eq!(shape(&app).curve, -100, "it stops at the limit");
+    keys(&mut app, "i<Esc>");
+    assert_eq!(shape(&app).curve, -100);
+    keys(&mut app, "x");
+    assert_eq!(shape(&app).curve, 0);
+    keys(&mut app, "j+");
+    assert_eq!(shape(&app).s, 25);
+    // Past the last row it stays.
+    keys(&mut app, "jjjjj");
+    assert_eq!(
+        app.shape.as_ref().unwrap().row,
+        vt_tui::shaping::ShapeRow::Where
+    );
+}
+
+#[test]
+fn k_chooses_fill_and_where_and_returns_to_the_panel() {
+    let (mut app, _rt) = app_with(&[
+        "C-4 -- 00 CUT10 ---00 ---00",
+        E,
+        "C-4 -- 00 ---00 ---00 ---00",
+        "--- -- -- CUT30 ---00 ---00",
+    ]);
+    keys(&mut app, "lllvGS");
+    let shape = |app: &App| app.shape.as_ref().unwrap().shape;
+    let fx =
+        |app: &App| -> Vec<String> { steps(app).iter().map(|s| s[10..15].to_owned()).collect() };
+    assert_eq!(fx(&app), ["CUT10", "---00", "---00", "CUT30"]);
+
+    keys(&mut app, "K");
+    assert_eq!(app.mode, Mode::Shape, "K isn't a list on From");
+    assert!(app.status.contains("Fill"), "{}", app.status);
+
+    // Where, from Commands to All rows, writes the command on the empty rows.
+    keys(&mut app, "jjjjjKall<Enter>");
+    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(fx(&app), ["CUT10", "CUT1B", "CUT25", "CUT30"]);
+
+    keys(&mut app, "Knotes<Enter>");
+    assert_eq!(fx(&app)[0], "CUT10");
+    assert_eq!(fx(&app)[1], "---00");
+    assert_eq!(
+        fx(&app)[3],
+        "CUT30",
+        "no note on this row, so it's left as it was"
+    );
+    keys(&mut app, "Kevery<Enter>");
+    assert!(matches!(
+        shape(&app).place,
+        vt_model::shape::Where::Every(4)
+    ));
+    keys(&mut app, "j");
+    assert_eq!(
+        app.shape.as_ref().unwrap().row,
+        vt_tui::shaping::ShapeRow::Amount
+    );
+    keys(&mut app, "-");
+    assert!(matches!(
+        shape(&app).place,
+        vt_model::shape::Where::Every(3)
+    ));
+    keys(&mut app, "<Esc>");
+    assert_eq!(steps(&app)[1], E);
+
+    // An Esc from a picker goes back to the panel.
+    keys(&mut app, "gvS");
+    assert_eq!(app.mode, Mode::Shape);
+    keys(&mut app, "jjjjjK<Esc>");
+    assert_eq!(app.mode, Mode::Shape);
+    keys(&mut app, "<Esc>");
+    assert_eq!(app.mode, Mode::Normal);
+}
+
+#[test]
+fn random_fill_stays_in_range_and_rerolls() {
+    let rows = vec!["C-4 40 00 ---00 ---00 ---00".to_owned(); 64];
+    let (mut app, _rt) = app_of(&rows);
+    keys(&mut app, "lvGS");
+    keys(&mut app, "ji20jjjKrandom<Enter>");
+    assert_eq!(app.mode, Mode::Shape);
+    let before = vel(&app);
+    assert!(
+        before
+            .iter()
+            .all(|v| (0..=0x20).contains(&u8::from_str_radix(v, 16).unwrap()))
+    );
+    keys(&mut app, "r");
+    assert_ne!(vel(&app), before);
+    keys(&mut app, "<Enter>");
+    keys(&mut app, "u");
+    assert_eq!(steps(&app).len(), 64);
+    assert!(vel(&app).iter().all(|v| v == "40"));
+}
+
+#[test]
+fn shape_refuses_what_it_cannot_fill() {
+    let reason = |rows: &[&str], typed: &str| {
+        let (mut app, _rt) = app_with(rows);
+        keys(&mut app, typed);
+        assert_ne!(app.mode, Mode::Shape, "{typed}");
+        app.status.clone()
+    };
+    let notes = ["C-4 -- 00 ---00 ---00 ---00"; 3];
+    assert!(reason(&notes, "vGS").contains("Velocity and FX"));
+    assert!(reason(&notes, "llvGS").contains("Velocity and FX"));
+    assert!(reason(&notes, "VGS").contains("one column"));
+    assert!(reason(&notes, "lvlGS").contains("one column"));
+    assert!(reason(&notes, "lvS").contains("2 rows"));
+    assert!(reason(&notes, "lllvGS").contains("FX command"));
+    assert!(reason(&[E, E], "lvGS").contains("no notes"));
+}
+
+#[test]
+fn dot_applies_the_same_shape_with_ends_from_what_is_there() {
+    let (mut app, _rt) = app_with(&[
+        "C-4 00 00 ---00 ---00 ---00",
+        "C-4 00 00 ---00 ---00 ---00",
+        "C-4 40 00 ---00 ---00 ---00",
+        "C-4 10 00 ---00 ---00 ---00",
+        "C-4 00 00 ---00 ---00 ---00",
+        "C-4 30 00 ---00 ---00 ---00",
+    ]);
+    keys(&mut app, "lvjjS<Enter>");
+    assert_eq!(vel(&app)[..3], ["00", "20", "40"]);
+    // On a new selection, its own ends.
+    keys(&mut app, "3jvjj.");
+    assert_eq!(vel(&app)[3..], ["10", "20", "30"]);
+    assert_eq!(app.mode, Mode::Normal);
+    keys(&mut app, "u");
+    assert_eq!(vel(&app)[3..], ["10", "00", "30"]);
+    // In Normal, as many rows as before, from the cursor, stopping at the end.
+    keys(&mut app, "G.");
+    assert_eq!(steps(&app).len(), 6);
+}
+
+#[test]
+fn the_transport_keys_work_with_the_panel_open() {
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    app.key(Key::new(KeyCode::Tab), Instant::now());
+    assert_eq!(app.mode, Mode::Shape);
+}
+
+#[test]
+fn a_shape_on_an_fx_column_snaps_to_its_commands_top() {
+    let (mut app, _rt) = app_with(&["--- -- -- VOL10 ---00 ---00", "--- -- -- VOL20 ---00 ---00"]);
+    keys(&mut app, "lllvGS");
+    keys(&mut app, "jiFF");
+    assert_eq!(app.shape.as_ref().unwrap().shape.to, 0xF8);
+    keys(&mut app, "<Enter>");
+    assert_eq!(steps(&app)[1], "--- -- -- VOLF8 ---00 ---00");
+}

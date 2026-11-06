@@ -34,6 +34,7 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::instruments::Row;
+use crate::shaping::ShapePanel;
 use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
@@ -134,6 +135,10 @@ pub struct App {
     pub(crate) awaiting_register: bool,
     pub(crate) registers: HashMap<char, Block>,
     pub(crate) anchor: Option<(usize, Scope)>,
+    /// The open shape panel.
+    pub shape: Option<ShapePanel>,
+    /// Changes each time random values are wanted anew.
+    pub(crate) shape_seed: u64,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -210,6 +215,8 @@ impl App {
             awaiting_register: false,
             registers: HashMap::new(),
             anchor: None,
+            shape: None,
+            shape_seed: 0,
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,
@@ -362,6 +369,7 @@ impl App {
             Mode::Help => self.help_key(key),
             Mode::Guide => self.guide_key(key),
             Mode::Picker => self.picker_key(key),
+            Mode::Shape => self.shape_key(key, now),
             Mode::Restore => self.restore_key(key),
         }
     }
@@ -504,6 +512,7 @@ impl App {
             }
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickValue => self.open_field_picker(),
+            Cmd::Shape => self.open_shape(),
             Cmd::ChooseInstrument => self.open_current_instrument_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),

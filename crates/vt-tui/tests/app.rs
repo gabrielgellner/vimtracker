@@ -2762,6 +2762,36 @@ fn track_swing_on_the_page_matches_its_command() {
 }
 
 #[test]
+fn the_shape_panel_draws_its_settings_beside_the_grid() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    press(&mut app, "lvGS");
+    let panel = app.shape.clone().unwrap();
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), &app, &panel))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: Vec<String> = (0..16)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect();
+    let all = text.join("\n");
+    for expected in [
+        "Shape",
+        "Velocity: 4 of 4 rows",
+        "From",
+        "Curve",
+        "Ramp",
+        "Notes",
+        "Enter keep",
+    ] {
+        assert!(all.contains(expected), "{expected} in {all}");
+    }
+    // The grid's own columns are left showing.
+    assert!(text.iter().all(|line| line[..40].trim().is_empty()));
+}
+
+#[test]
 fn reset_shows_on_the_status_line_and_undoes() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let time = Instant::now();

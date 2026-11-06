@@ -159,8 +159,9 @@ Per-note tables are a further idea, and they get their own decision after G1.
 *   **Given**: A looping phrase with `CUT` values at the first and last steps of a selected column.
 *   **When**: The user presses `S`, adjusts onset and S-shape, then presses `Enter`.
 *   **Then**: Every adjustment is heard during playback and shown in the column. `Enter` closes the
-    controls and leaves the sweep live, one `u` restores the original values, and `Esc` cancels
-    with no change. `.` applies the same shape to another selection.
+    controls and leaves plain values, one `u` restores the original values, and `Esc` cancels
+    with no change. `.` applies the same shape to another selection, with its own ends. Leaving the sweep
+    live is deferred: see Generators.
 
 ### CUJ 4: Adjust a live sweep, then take over by hand
 
@@ -432,13 +433,20 @@ A generator is a pure function of its parameters and target, and later a seed. T
 Later generators combine a **mask**, which chooses the steps to change (as with Polyend's Fill tool), with a **value
 source** that chooses what to write. Those are built when a second generator needs them.
 
-**Sweep.** A sweep covers one column. Its first and last fields must have values, and interior fields are overwritten.
-FX columns must use the same command at both ends. A one-step, multi-column, instrument-column or mixed-command
-selection is refused with a message.
+**Shape panel.** Built ahead of live sweeps, by the author's decision: Visual `S` opens a panel whose result is a preview
+with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there. Issue 18's live
+state is deferred until plain values are found wanting. Selecting and pressing `S` again reshapes, from the values now there.
 
-**Curve.** `f(t)` applies bias then gain, where `t` runs from 0 to 1 across the selection, and the value is `start +
-(end - start) x f(t)`. `bias(t,a) = t / ((1/a - 2)(1 - t) + 1)`, and gain is Schlick's gain built from it. Both start at
-0.5, which gives a straight line. Results round half up and clamp to the column's range.
+**Sweep.** A sweep covers one column, Velocity or FX, across at least two rows. A multi-column, note-column or instrument-column
+selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
+highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
+first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead. `Where` chooses the
+rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, or a percent chance. A velocity only ever goes on a note.
+
+**Curve.** `f(t)` applies bias then gain, where `t` runs by row position from 0 at the first row filled to 1 at the last, and the
+value is `start + (end - start) x f(t)`. `bias(t,a) = t / ((1/a - 2)(1 - t) + 1)`, and gain is Schlick's gain built from it. The panel shows
+them as `Curve` and `S`, from -100 to 100 with 0 a straight line, where `a = 0.5 + Curve/200` and `g = 0.5 - S/200`. The distance travelled rounds half up, so
+falling mirrors rising exactly, and results clamp to the column's range.
 
 **Live state.** A live generator is saved on the phrase with its parameters, column, range and both end values, so
 changing its shape never depends on what is currently in the fields. It owns every column it touches.
@@ -701,7 +709,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `i`, `v`, `V`, `:` | Insert, field Visual, step Visual, Command |
 | Visual | Motions, targets, `d y > < = - + _ .` | Extend, then apply to the selection |
 | Visual | `r`, then a value | Fill the cursor's column across the selection, as one undo. `vGra` writes C on each step. Velocity and instrument only go on notes, and FX values only on commands |
-| Visual | `S` | Enter Shape mode |
+| Visual | `S` | Open the shape panel on one Velocity or FX column |
 | Visual | `Esc` | Normal mode |
 | Shape | `h l` | Onset (curve bias) down or up by 0.05, within 0.05 to 0.95 |
 | Shape | `j k` | S-shape (curve gain) down or up by 0.05, within 0.05 to 0.95 |

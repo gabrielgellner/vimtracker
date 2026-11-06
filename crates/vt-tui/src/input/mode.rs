@@ -39,6 +39,8 @@ pub enum Mode {
     Replace,
     Command,
     Help,
+    /// The shape panel is open.
+    Shape,
     /// Reading a guide.
     Guide,
     Picker,
@@ -63,6 +65,7 @@ impl Mode {
             Self::Replace => "REPLACE",
             Self::Command => "COMMAND",
             Self::Help => "HELP",
+            Self::Shape => "SHAPE",
             Self::Guide => "GUIDE",
             Self::Picker => "PICK",
             Self::Restore => "RESTORE",

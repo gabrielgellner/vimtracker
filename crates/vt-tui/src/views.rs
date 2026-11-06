@@ -7,6 +7,7 @@ pub mod instrument;
 pub mod meter;
 pub mod phrase;
 pub mod picker;
+pub mod shape;
 pub mod status;
 pub mod system;
 pub mod track;
