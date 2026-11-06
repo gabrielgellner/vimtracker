@@ -186,7 +186,7 @@ impl Control {
             Self::Sample => "File",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
-            Self::FilterType => "Type",
+            Self::FilterType => "Filter",
             Self::Level => "Level",
             Self::Swing => "Swing",
             Self::Lfo(_, LfoField::Destination) => "Dest",

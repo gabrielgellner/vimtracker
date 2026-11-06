@@ -1,8 +1,9 @@
 # The track page, envelopes and LFOs
 
 Press `Space 4` for what a track holds apart from its steps, on two pages: Sound
-has its machine, filter and output, with a bar beside each value, and Mod its
-envelopes and LFOs. FX columns belong
+has its machine, filter and output, with a bar beside each value showing where
+it sits between the lines at each end of its range, and Mod its envelopes and
+LFOs. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -24,7 +25,7 @@ hat pattern.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Type | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
