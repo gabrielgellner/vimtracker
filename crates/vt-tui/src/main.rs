@@ -32,6 +32,9 @@ enum Command {
         /// Let sound ring out after the end, up to 10 seconds.
         #[arg(long)]
         tail: bool,
+        /// Write one file per track, with the output as a folder.
+        #[arg(long)]
+        stems: bool,
     },
 }
 
@@ -46,6 +49,7 @@ fn main() -> std::process::ExitCode {
             rows,
             seed,
             tail,
+            stems,
         }) => vt_tui::run::render(&vt_tui::run::RenderRequest {
             project,
             out,
@@ -53,6 +57,7 @@ fn main() -> std::process::ExitCode {
             rows: rows.map(|rows| rows as usize),
             seed,
             tail,
+            stems,
         })
         .map_err(|e| e.to_string()),
         None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),

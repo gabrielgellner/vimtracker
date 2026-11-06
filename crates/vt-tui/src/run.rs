@@ -1,6 +1,6 @@
 //! Setting up audio and the terminal, and the main loop.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -12,7 +12,7 @@ use thiserror::Error;
 use vt_engine::engine::Engine;
 use vt_engine::link::connect;
 use vt_engine::published::Published;
-use vt_engine::render::{RenderOptions, render_loop, write_wav};
+use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
 use vt_model::constants::{DEFAULT_TRACKS, FRAME_MS};
 use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
@@ -50,6 +50,36 @@ pub struct RenderRequest {
     pub rows: Option<usize>,
     pub seed: Option<u64>,
     pub tail: bool,
+    /// Write one file per track, into `out` as a folder.
+    pub stems: bool,
+}
+
+/// What a stem render reports.
+pub fn stems_written(count: usize, folder: &Path) -> String {
+    let stems = if count == 1 { "stem" } else { "stems" };
+    format!("Rendered {count} {stems} to {}", folder.display())
+}
+
+/// Write one file per track that would be heard, as `01-BD.wav` or `02.wav`, and return how many.
+pub fn write_stems(
+    version: &Published,
+    folder: &Path,
+    rate: u32,
+    options: RenderOptions,
+) -> Result<usize, RunError> {
+    std::fs::create_dir_all(folder)?;
+    let stems = render_stems(version, rate, options);
+    for stem in &stems {
+        let name = &version.song.tracks[stem.track].name;
+        let number = stem.track + 1;
+        let file = if name.is_empty() {
+            format!("{number:02}.wav")
+        } else {
+            format!("{number:02}-{name}.wav")
+        };
+        write_wav(&folder.join(file), rate, &stem.samples)?;
+    }
+    Ok(stems.len())
 }
 
 /// Render a saved project to a file, with no terminal or sound device. A sample that won't load
@@ -69,6 +99,11 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
         rows: request.rows,
         tail: request.tail,
     };
+    if request.stems {
+        let count = write_stems(&version, &request.out, request.rate, options)?;
+        println!("{}", stems_written(count, &request.out));
+        return Ok(());
+    }
     let samples = render_loop(Arc::new(version), request.rate, options);
     write_wav(&request.out, request.rate, &samples)?;
     println!(

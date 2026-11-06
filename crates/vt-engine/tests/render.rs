@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use vt_engine::published::Published;
-use vt_engine::render::{RenderOptions, render_loop, write_wav};
+use vt_engine::render::{RenderOptions, Stem, render_loop, render_stems, write_wav};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
@@ -214,4 +214,88 @@ fn a_render_writes_float_stereo_and_replaces_the_file() {
     assert_eq!(spec.sample_format, hound::SampleFormat::Float);
     assert_eq!(reader.len() as usize, samples.len());
     std::fs::remove_file(&path).unwrap();
+}
+
+/// Three tracks with different notes, sends and a chance, to be rendered apart and together.
+fn three_tracks() -> Song {
+    let mut mix = song(&FX_LOOP);
+    mix.add_track();
+    let sample = mix.tracks[0].sample.clone();
+    for track in &mut mix.tracks {
+        track.sample = sample.clone();
+        track.delay = 0x60;
+        track.reverb = 0x60;
+    }
+    for (id, text) in [
+        (1, "G-4 40 CHA80 DLY90h ---00"),
+        (2, "C-3 7F CUT40 ---00 ---00"),
+    ] {
+        let phrase = Arc::make_mut(mix.phrases.get_mut(&id).unwrap());
+        for step in 0..4 {
+            *phrase.step_mut(step * 4).unwrap() = text.parse().unwrap();
+        }
+    }
+    mix
+}
+
+fn stems_of(mix: Song, options: RenderOptions) -> Vec<Stem> {
+    let version = Published::new(Arc::new(mix), pool());
+    render_stems(&version, RATE, options)
+}
+
+#[track_caller]
+fn sums_to(stems: &[Stem], whole: &[f32]) {
+    assert_eq!(stems[0].samples.len(), whole.len());
+    for (at, sample) in whole.iter().enumerate() {
+        let sum: f32 = stems.iter().map(|stem| stem.samples[at]).sum();
+        assert!((sum - sample).abs() < 1e-3, "at {at}: {sum} and {sample}");
+    }
+}
+
+#[test]
+fn stems_add_up_to_the_whole_render_with_the_limiter_off() {
+    let mut mix = three_tracks();
+    mix.limiter = false;
+    let whole = render(mix.clone(), RenderOptions::default());
+    let stems = stems_of(mix, RenderOptions::default());
+    assert_eq!(stems.len(), 3);
+    assert!(stems.iter().all(|stem| peak(&stem.samples) > 0.0));
+    sums_to(&stems, &whole);
+}
+
+#[test]
+fn stems_ignore_the_limiter_and_repeat() {
+    let mut open = three_tracks();
+    open.limiter = false;
+    let limited = stems_of(three_tracks(), RenderOptions::default());
+    let again = stems_of(open, RenderOptions::default());
+    for (one, two) in limited.iter().zip(&again) {
+        assert_eq!(one.samples, two.samples);
+    }
+}
+
+#[test]
+fn only_tracks_that_would_be_heard_get_a_stem() {
+    let mut mix = three_tracks();
+    mix.tracks[1].mute = true;
+    let tracks = |mix: Song| -> Vec<usize> {
+        stems_of(mix, RenderOptions::default())
+            .iter()
+            .map(|stem| stem.track)
+            .collect()
+    };
+    assert_eq!(tracks(mix.clone()), [0, 2]);
+    mix.tracks[2].solo = true;
+    assert_eq!(tracks(mix), [2]);
+}
+
+#[test]
+fn stems_with_tails_end_together() {
+    let options = RenderOptions {
+        rows: None,
+        tail: true,
+    };
+    let stems = stems_of(three_tracks(), options);
+    let length = stems[0].samples.len();
+    assert!(stems.iter().all(|stem| stem.samples.len() == length));
 }
