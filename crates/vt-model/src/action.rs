@@ -15,8 +15,8 @@ use crate::selection::{
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Launch, Phrase, Repeat, Section, SectionStart, Song, Track,
-    lowest_unused,
+    Chain, ChainEntry, FilterType, Launch, Machine, Phrase, Repeat, Section, SectionStart, Song,
+    Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
@@ -242,6 +242,11 @@ pub enum Action {
     },
     /// Put a kit's sounds on tracks from the first, as one change, adding tracks if it needs more.
     LoadKit(Vec<KitSound>),
+    /// Choose what makes a track's sound.
+    SetTrackMachine {
+        track: usize,
+        machine: Machine,
+    },
     /// Choose a track's filter.
     SetFilterType {
         track: usize,
@@ -304,6 +309,9 @@ pub enum TrackControl {
     Drive,
     LowCut,
     HighCut,
+    Harmonics,
+    Timbre,
+    Morph,
 }
 
 /// An FX slot with its value within what its command takes.
@@ -568,6 +576,9 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Drive => track.drive = *value,
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
+                TrackControl::Harmonics => track.harmonics = *value,
+                TrackControl::Timbre => track.timbre = *value,
+                TrackControl::Morph => track.morph = *value,
             }
         }
         Action::SetLfo { track, slot, lfo } => {
@@ -671,10 +682,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::SetTrackSample { track, sample } => {
-            next.tracks
+            let owner = next
+                .tracks
                 .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .sample = sample.clone();
+                .ok_or(EditError::NoTrack(*track))?;
+            owner.sample = sample.clone();
+            // Choosing a sample means wanting to hear it.
+            if sample.is_some() {
+                owner.machine = Machine::Sample;
+            }
         }
         Action::SetTrackName { track, name } => {
             next.tracks
@@ -691,6 +707,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
             for (track, sound) in next.tracks.iter_mut().zip(sounds) {
                 track.sample = Some(sound.sample.clone());
+                track.machine = Machine::Sample;
                 track.name = sound.name.clone();
             }
         }
@@ -801,6 +818,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .chains
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))? = Some(*chain);
+        }
+        Action::SetTrackMachine { track, machine } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .machine = *machine;
         }
         Action::SetFilterType { track, filter } => {
             next.tracks

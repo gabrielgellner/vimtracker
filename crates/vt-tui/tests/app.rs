@@ -10,7 +10,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, FilterType, Launch, Phrase, SectionStart, Song};
+use vt_model::song::{Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
@@ -1396,6 +1396,107 @@ fn a_kit_with_all_fills_tracks_and_a_bad_one_keeps_the_last() {
     assert_eq!(app.kit.len(), 3, "still the last one");
 }
 
+/// The track page as lines of text.
+fn track_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..16)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect()
+}
+
+#[test]
+fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    assert_eq!(column_name(&app), "Machine");
+    assert!(
+        track_text(&app)[3].contains("File"),
+        "{:?}",
+        track_text(&app)
+    );
+    let depth = app.history.undo_depth();
+    press(&mut app, "K");
+    press(&mut app, "VA");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].machine, Machine::VirtualAnalog);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    let text = track_text(&app);
+    assert!(
+        text[2].contains("Machine") && text[2].contains("VA"),
+        "{text:?}"
+    );
+    assert!(
+        text[3].contains("Harm") && text[3].contains("80"),
+        "{text:?}"
+    );
+    assert!(
+        text[4].contains("Timbre") && text[4].contains("00"),
+        "{text:?}"
+    );
+    assert!(
+        text[5].contains("Morph") && text[5].contains("████"),
+        "{text:?}"
+    );
+    assert!(!text.iter().any(|line| line.contains("File")), "{text:?}");
+
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Harm");
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].harmonics, 0x81);
+    press(&mut app, "j");
+    press(&mut app, "i60");
+    assert_eq!(app.song().tracks[0].timbre, 0x60);
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].timbre, 0);
+    press(&mut app, "k");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Pan");
+    press(&mut app, "gg");
+    press(&mut app, "h=");
+    assert_eq!(app.song().tracks[0].machine, Machine::Sample, "goes round");
+    assert!(track_text(&app)[2].contains("Sample"));
+    press(&mut app, "=x");
+    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+}
+
+#[test]
+fn choosing_a_sample_goes_back_to_playing_samples() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {}", kit.display()));
+    press(&mut app, " 4K");
+    press(&mut app, "VA");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, " 5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
+}
+
+#[test]
+fn bars_show_where_a_value_is() {
+    use vt_tui::views::track::{centre_bar, level_bar};
+    assert_eq!(level_bar(0x00), "▏");
+    assert_eq!(level_bar(0x01), "▏");
+    assert_eq!(level_bar(0x80), "████");
+    assert_eq!(level_bar(0xFF), "████████");
+    assert_eq!(level_bar(0x40), "██");
+    assert_eq!(level_bar(0x48), "██▎");
+    assert_eq!(centre_bar(0x00), "│");
+    assert_eq!(centre_bar(0x80), "    │");
+    assert_eq!(centre_bar(0xFF), "       │");
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    let text = track_text(&app).join("\n");
+    assert!(text.contains("Pan") && text.contains("    │"), "{text}");
+}
+
 #[test]
 fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
     let (mut app, _realtime) = app();
@@ -1889,8 +1990,8 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
 /// An app on the track page.
 fn on_track_page() -> (App, Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
-    // On the Filter row, as the Sample row above it is only a file.
-    press(&mut app, " 4j");
+    // On Cut, as the rows above it aren't all values.
+    press(&mut app, " 4jjj");
     assert_eq!(app.view, View::Track);
     (app, realtime)
 }
@@ -1929,11 +2030,11 @@ fn the_track_page_sets_base_values_and_undoes() {
 
     // The output row, on the next track.
     press(&mut app, "W");
-    press(&mut app, "jl");
+    press(&mut app, "ggjl");
     press(&mut app, "i20");
     assert_eq!(app.song().tracks[1].pan, 0x20);
     assert_eq!(app.song().tracks[0].pan, 0x80);
-    press(&mut app, "hi7F");
+    press(&mut app, "ki7F");
     assert_eq!(app.song().tracks[1].level, 0x7F);
 }
 
@@ -1945,7 +2046,7 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     press(&mut app, "i10iFF");
     assert_eq!(track(&app).cutoff, 0xFF);
     // Level, by typing and by nudging.
-    press(&mut app, "ji");
+    press(&mut app, "ggli");
     press(&mut app, "FF");
     assert_eq!(track(&app).level, 0xF8);
     press(&mut app, "20-");
@@ -1955,11 +2056,11 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     command(&mut app, "tvol FF");
     assert_eq!(track(&app).level, 0xF8);
     // Pan runs to FF, and the sends stop at the top.
-    press(&mut app, "liFF");
+    press(&mut app, "jiFF");
     assert_eq!(track(&app).pan, 0xFF);
-    press(&mut app, "liFF");
+    press(&mut app, "jiFF");
     assert_eq!(track(&app).delay, 0xF8);
-    press(&mut app, "liFF");
+    press(&mut app, "jiFF");
     assert_eq!(track(&app).reverb, 0xF8);
 }
 
@@ -1974,7 +2075,7 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
-    assert_eq!(lfo(&app).destination, Some(Destination::Pitch));
+    assert_eq!(lfo(&app).destination, Some(Destination::Mor));
 
     press(&mut app, "l=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
@@ -2030,7 +2131,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "Ljjj0K");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.shown().count(), 8);
+    assert_eq!(picker.shown().count(), 11);
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
     special(&mut app, KeyCode::Enter);
@@ -2075,8 +2176,8 @@ fn typed_rate_on_second_lfo(app: &mut App) {
 fn the_track_page_sets_the_filters_type_and_drive() {
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
-    // Cut, Res, Drive, then Type.
-    press(&mut app, "ll");
+    // Down to Drive, then up to Type.
+    press(&mut app, "jj");
     press(&mut app, "i40");
     assert_eq!(track(&app).drive, 0x40);
     press(&mut app, "+");
@@ -2086,7 +2187,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     press(&mut app, "x");
     assert_eq!(track(&app).drive, 0);
 
-    press(&mut app, "l");
+    press(&mut app, "kkk");
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "=");
     assert_eq!(track(&app).filter, FilterType::HighPass);
@@ -2106,7 +2207,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
         "opens on what's set"
     );
     special(&mut app, KeyCode::Esc);
-    assert!(track_page_text(&app)[6].contains("Ladder"));
+    assert!(track_page_text(&app)[4].contains("Ladder"));
     press(&mut app, "u");
     assert_eq!(track(&app).filter, FilterType::LowPass);
 }
@@ -2117,15 +2218,15 @@ fn the_track_page_sets_the_utility_filter() {
     let track = |app: &App| app.song().tracks[0].clone();
     assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
     let lines = track_page_text(&app);
-    assert!(lines[5].contains("Low cut") && lines[5].contains("High cut"));
-    assert!(lines[6].contains("00") && lines[6].contains("FF"));
+    assert!(lines[8].contains("Low cut") && lines[8].contains("00"));
+    assert!(lines[9].contains("High cut") && lines[9].contains("FF"));
 
-    press(&mut app, "$h");
+    press(&mut app, "jjj");
     press(&mut app, "i40");
     assert_eq!(track(&app).low_cut, 0x40);
     press(&mut app, "x");
     assert_eq!(track(&app).low_cut, 0);
-    press(&mut app, "l");
+    press(&mut app, "j");
     press(&mut app, "i80");
     assert_eq!(track(&app).high_cut, 0x80);
     press(&mut app, "=");
@@ -2293,10 +2394,10 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     let track = |app: &App| app.song().tracks[0].clone();
     press(&mut app, "_");
     assert_eq!(track(&app).cutoff, 0xEF);
-    press(&mut app, "j");
+    press(&mut app, "ggl");
     press(&mut app, "+");
     assert_eq!(track(&app).level, 0xF0);
-    press(&mut app, "$");
+    press(&mut app, "jjjj");
     typed(&mut app, "60");
     press(&mut app, "+");
     assert_eq!(track(&app).swing, Some(650));
@@ -2361,14 +2462,14 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).cutoff, 0x40, "one undo");
     press(&mut app, "x");
 
-    press(&mut app, "j");
+    press(&mut app, "ggl");
     press(&mut app, "i40x");
     assert_eq!(track(&app).level, 0xE0);
-    press(&mut app, "li40x");
+    press(&mut app, "ji40x");
     assert_eq!(track(&app).pan, 0x80);
-    press(&mut app, "li40x");
+    press(&mut app, "ji40x");
     assert_eq!(track(&app).delay, 0);
-    press(&mut app, "li40x");
+    press(&mut app, "ji40x");
     assert_eq!(track(&app).reverb, 0);
 
     // Only the setting under the cursor goes back.
@@ -2415,10 +2516,11 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 8)].symbol() == "S")
-            .unwrap() as u16;
-        let text: String = (at..at + 2).map(|x| buffer[(x, 9)].symbol()).collect();
-        (text, buffer[(at, 9)].fg)
+            .position(|x| buffer[(x, 6)].symbol() == "S")
+            .unwrap() as u16
+            + 10;
+        let text: String = (at..at + 2).map(|x| buffer[(x, 6)].symbol()).collect();
+        (text, buffer[(at, 6)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].swing, None);
@@ -2470,10 +2572,11 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[8].starts_with("LFO 2"));
     press(&mut app, "H");
     let lines = track_page_text(&app);
-    assert!(lines[3].starts_with("Sample"));
-    assert!(lines[5].contains("Cut") && lines[5].contains("Res"));
-    assert!(lines[6].starts_with("Filter") && lines[6].contains("FF"));
-    assert!(lines[8].contains("Level") && lines[8].contains("Swing"));
+    assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
+    assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
+    assert!(lines[4].starts_with("Type") && lines[4].contains("Delay"));
+    assert!(lines[5].starts_with("Cut") && lines[5].contains("FF ████████"));
+    assert!(lines[6].starts_with("Res") && lines[6].contains("Swing"));
 }
 
 #[test]
@@ -2755,7 +2858,7 @@ fn notes_played_while_editing_preview_on_this_tracks_sound() {
 
 #[test]
 fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
-    use vt_tui::track_page::{MOD_ROWS, Page, SOUND_ROWS};
+    use vt_tui::track_page::{MOD_ROWS, Page, SAMPLE_ROWS};
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.track_page, Page::Sound);
     press(&mut app, "j$");
@@ -2767,7 +2870,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     press(&mut app, "GH");
     assert_eq!(app.track_page, Page::Sound);
     assert_eq!(app.track_row, 0);
-    let all: Vec<_> = SOUND_ROWS
+    let all: Vec<_> = SAMPLE_ROWS
         .iter()
         .chain(&MOD_ROWS)
         .flat_map(|row| row.iter())
@@ -2783,7 +2886,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
 #[test]
 fn the_file_setting_chooses_a_sample_and_x_clears_it() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "k");
+    press(&mut app, "kk");
     assert_eq!(app.track_control(), vt_tui::track_page::Control::Sample);
     press(&mut app, "K");
     assert_ne!(app.mode, Mode::Normal);

@@ -1,7 +1,24 @@
 # Sounds, samples and kits
 
-A track plays one sample. Everything else about its sound is on the track page,
-`Space 4`: see **The track page, envelopes and LFOs**.
+A track makes one sound at a time, from its machine: a sample, or a synth. Everything
+else about its sound is on the track page, `Space 4`: see **The track page, envelopes
+and LFOs**.
+
+## The synth
+
+`K` on Machine, at the top of the Sound page, chooses `VA`: a square and a saw, after
+the virtual analog model of Mutable Instruments' Plaits. It suits bass and leads, so
+try a note around `C-2`, and bring `Cut` down.
+
+| Setting | Does |
+|---|---|
+| `Harm` | Detunes the saw, up to two octaves either way. `80` is in tune |
+| `Timbre` | The square: none at `00`, then a pulse, a square and hard sync |
+| `Morph` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
+
+Steps set them with `HAR`, `TIM` and `MOR`, and LFOs and envelopes can move them. A note holds until
+the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for
+plucks. A track plays one note at a time.
 
 ## Choosing a sample
 

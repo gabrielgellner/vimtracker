@@ -77,9 +77,21 @@ pub struct Track {
     /// Two characters, or empty for none.
     #[serde(default)]
     pub name: String,
+    /// What makes its sound.
+    #[serde(default)]
+    pub machine: Machine,
     /// What it plays, relative to the project folder.
     #[serde(default)]
     pub sample: Option<String>,
+    /// Where held `HAR` starts: how far a synth's saw is detuned, in tune at `80`.
+    #[serde(default = "centre")]
+    pub harmonics: u8,
+    /// Where held `TIM` starts: a synth's square.
+    #[serde(default)]
+    pub timbre: u8,
+    /// Where held `MOR` starts: a synth's saw, plain at `80`.
+    #[serde(default = "centre")]
+    pub morph: u8,
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
@@ -194,7 +206,11 @@ impl Default for Track {
     fn default() -> Self {
         Self {
             name: String::new(),
+            machine: Machine::default(),
             sample: None,
+            harmonics: centre(),
+            timbre: 0,
+            morph: centre(),
             mute: false,
             solo: false,
             swing: None,
@@ -236,6 +252,37 @@ pub enum SectionStart {
     New,
     /// Every track goes back to its start, each time the section's length comes round.
     Reset,
+}
+
+/// What makes a track's sound.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Machine {
+    /// Plays its sample, once, at the note's speed.
+    #[default]
+    Sample,
+    /// A square and a saw, after the virtual analog model of Mutable Instruments' Plaits.
+    VirtualAnalog,
+}
+
+impl Machine {
+    /// Every machine, in the order a list shows them.
+    pub const ALL: [Self; 2] = [Self::Sample, Self::VirtualAnalog];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Sample => "Sample",
+            Self::VirtualAnalog => "VA",
+        }
+    }
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Sample => "Plays a sample",
+            Self::VirtualAnalog => "A square and a saw, for bass and leads",
+        }
+    }
 }
 
 /// When a launched chain starts.

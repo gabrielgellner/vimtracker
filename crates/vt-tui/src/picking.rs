@@ -427,6 +427,9 @@ impl App {
                     Some(Pick::Lfo { track, slot, lfo }) => {
                         self.apply(&Action::SetLfo { track, slot, lfo });
                     }
+                    Some(Pick::Machine { track, machine }) => {
+                        self.apply(&Action::SetTrackMachine { track, machine });
+                    }
                     Some(Pick::FilterType { track, filter }) => {
                         self.apply(&Action::SetFilterType { track, filter });
                     }

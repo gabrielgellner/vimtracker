@@ -9,6 +9,7 @@ use vt_model::step::{FxCommand, FxSlot, Mark};
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::lfo::wave;
 use crate::dsp::smoother::Smoothed;
+use crate::dsp::virtual_analog::Settings;
 use crate::rng::Pcg32;
 use crate::voice::{NoteOn, Voice};
 
@@ -59,13 +60,16 @@ pub struct SongTime {
 }
 
 /// The commands whose values last, in the order `TrackState::values` keeps them.
-const VALUE_COMMANDS: [FxCommand; 6] = [
+const VALUE_COMMANDS: [FxCommand; 9] = [
     FxCommand::Vol,
     FxCommand::Pan,
     FxCommand::Cut,
     FxCommand::Res,
     FxCommand::Dly,
     FxCommand::Rev,
+    FxCommand::Har,
+    FxCommand::Tim,
+    FxCommand::Mor,
 ];
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
@@ -177,6 +181,8 @@ pub struct TrackState {
     envelopes: [EnvelopeRun; TRACK_ENVELOPES],
     /// What modulation multiplies a note's speed by.
     pitch: f64,
+    /// Held `HAR`, `TIM` and `MOR`, on `0..=1`.
+    synth: [f32; 3],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
 }
@@ -234,6 +240,9 @@ impl TrackState {
                 ValueLayers::at(0),
                 ValueLayers::at(0),
                 ValueLayers::at(0),
+                ValueLayers::at(0x80),
+                ValueLayers::at(0),
+                ValueLayers::at(0x80),
             ],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
@@ -259,6 +268,7 @@ impl TrackState {
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
             offsets: [0.0; Destination::ALL.len()],
+            synth: [0.5, 0.0, 0.5],
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
             pan_offset: Smoothed::at(0.0),
@@ -283,6 +293,9 @@ impl TrackState {
             track.resonance,
             track.delay,
             track.reverb,
+            track.harmonics,
+            track.timbre,
+            track.morph,
         ];
         for (command, base) in VALUE_COMMANDS.into_iter().zip(bases) {
             self.values[value_index(command)] = ValueLayers::at(base);
@@ -354,7 +367,20 @@ impl TrackState {
         let semitones = offsets[Destination::Pitch as usize] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
         self.voice.set_pitch(self.pitch);
+        self.voice.set_synth(self.synth_settings());
         self.update_gains();
+    }
+
+    /// What a synth on this track plays with: the held values and what modulation adds.
+    pub fn synth_settings(&self) -> Settings {
+        let at = |held: f32, destination: Destination| {
+            (held + self.offsets[destination as usize]).clamp(0.0, 1.0)
+        };
+        Settings {
+            harmonics: at(self.synth[0], Destination::Har),
+            timbre: at(self.synth[1], Destination::Tim),
+            morph: at(self.synth[2], Destination::Mor),
+        }
     }
 
     /// Start the track's envelopes for a note.
@@ -413,6 +439,7 @@ impl TrackState {
         self.off_at = None;
         self.last_note = Some(note);
         self.voice = Voice::start(note, rate, from, self.pitch);
+        self.voice.set_synth(self.synth_settings());
     }
 
     /// Fade the playing note.
@@ -521,8 +548,12 @@ impl TrackState {
             FxCommand::Res => self.resonance.target = value / 255.0,
             FxCommand::Dly => self.delay = value,
             FxCommand::Rev => self.reverb = value,
+            FxCommand::Har => self.synth[0] = value / 255.0,
+            FxCommand::Tim => self.synth[1] = value / 255.0,
+            FxCommand::Mor => self.synth[2] = value / 255.0,
             _ => {}
         }
+        self.voice.set_synth(self.synth_settings());
         self.update_gains();
     }
 

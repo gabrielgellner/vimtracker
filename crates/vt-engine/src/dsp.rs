@@ -5,3 +5,4 @@ pub mod filter;
 pub mod lfo;
 pub mod reverb;
 pub mod smoother;
+pub mod virtual_analog;

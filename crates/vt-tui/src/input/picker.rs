@@ -7,7 +7,7 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Lfo;
 use vt_model::shape::{FillKind, Where};
-use vt_model::song::FilterType;
+use vt_model::song::{FilterType, Machine};
 use vt_model::step::FxCommand;
 
 use crate::guides::Guide;
@@ -48,6 +48,11 @@ pub enum Pick {
     },
     /// Go to this track.
     Track(usize),
+    /// What makes a track's sound.
+    Machine {
+        track: usize,
+        machine: Machine,
+    },
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),
     /// A chain, or none, for the song view cell under the cursor.

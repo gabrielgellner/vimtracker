@@ -33,6 +33,9 @@ pub enum FxCommand {
     Res,
     Dly,
     Rev,
+    Har,
+    Tim,
+    Mor,
     Del,
     Kil,
     Off,
@@ -42,13 +45,16 @@ pub enum FxCommand {
 
 impl FxCommand {
     /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 14] = [
         Self::Vol,
         Self::Pan,
         Self::Cut,
         Self::Res,
         Self::Dly,
         Self::Rev,
+        Self::Har,
+        Self::Tim,
+        Self::Mor,
         Self::Del,
         Self::Kil,
         Self::Off,
@@ -65,6 +71,9 @@ impl FxCommand {
             Self::Res => "Filter resonance, holds",
             Self::Dly => "Delay send, holds",
             Self::Rev => "Reverb send, holds",
+            Self::Har => "Synth detune, holds. 80 in tune",
+            Self::Tim => "Synth square, holds",
+            Self::Mor => "Synth saw, holds. 80 a plain saw",
             Self::Del => "Delay this step by xx units",
             Self::Kil => "Cut the note after xx units",
             Self::Off => "Start the release after xx units",
@@ -90,6 +99,9 @@ impl FxCommand {
             Self::Res => "RES",
             Self::Dly => "DLY",
             Self::Rev => "REV",
+            Self::Har => "HAR",
+            Self::Tim => "TIM",
+            Self::Mor => "MOR",
             Self::Del => "DEL",
             Self::Kil => "KIL",
             Self::Off => "OFF",
@@ -107,6 +119,9 @@ impl FxCommand {
             "RES" => Self::Res,
             "DLY" => Self::Dly,
             "REV" => Self::Rev,
+            "HAR" => Self::Har,
+            "TIM" => Self::Tim,
+            "MOR" => Self::Mor,
             "DEL" => Self::Del,
             "KIL" => Self::Kil,
             "OFF" => Self::Off,
@@ -120,7 +135,15 @@ impl FxCommand {
     pub fn holds(self) -> bool {
         matches!(
             self,
-            Self::Vol | Self::Pan | Self::Cut | Self::Res | Self::Dly | Self::Rev
+            Self::Vol
+                | Self::Pan
+                | Self::Cut
+                | Self::Res
+                | Self::Dly
+                | Self::Rev
+                | Self::Har
+                | Self::Tim
+                | Self::Mor
         )
     }
 }

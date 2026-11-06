@@ -633,6 +633,7 @@ Made by the author on 2026-11-06, after a review of this section:
 12. **No time signature in the model.** Meter comes from lengths, as on the M8, Polyend Tracker and Elektron machines. A bar is 16 steps, from one constant, until a song-wide setting is needed.
 13. **A render is one performance of the song.** Random trigs, step chances and any later chance on rows may differ between seeds, but all stems of one render take the same route.
 14. **A kit is a list of sounds to choose from**, so `:kit 909` adds no tracks and `:kit 909 all` does. Direct jumps are what keep lots of sounds quick on Elektron and Maschine, so tracks get a picker, `Space fb`, like Vim buffers. A drum rack would reverse "a track is one sound", so it waits for evidence from play.
+15. **The first synth comes before FX inserts**, so a song can have bass as well as drums while song mode is tested: Plaits' virtual analog model, its main output, as the `VA` machine, one note at a time. A track holds a `machine`, and its Harm, Timbre and Morph work as `Cut` does, with step commands, LFOs and envelopes. The Sound page is two columns with a bar beside each value, after the M8's instrument page. The M8's Macrosynth is a port of Braids, an earlier Mutable module, so this differs from it. Added on 2026-11-06, ahead of M9.
 
 ## Alternatives Considered
 

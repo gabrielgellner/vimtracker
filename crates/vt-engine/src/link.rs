@@ -458,6 +458,22 @@ mod tests {
     }
 
     #[test]
+    fn a_synth_stays_off_the_allocator() {
+        let pool = samples();
+        let mut played = Song::new(2);
+        for track in &mut played.tracks {
+            track.machine = vt_model::song::Machine::VirtualAnalog;
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            *phrase.step_mut(0).unwrap() = "C-2 7F TIM40 ---00 ---00".parse().unwrap();
+            *phrase.step_mut(4).unwrap() = "G-2 7F MOR20 HAR90 ---00".parse().unwrap();
+        }
+        let engine = Engine::new(48_000, published(played, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        assert_eq!(blocks(&mut rt, 64), 0);
+    }
+
+    #[test]
     fn audition_stays_off_the_allocator() {
         let pool = samples();
         let mut played = Song::new(2);

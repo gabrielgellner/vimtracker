@@ -6,7 +6,7 @@ use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::{FilterType, Track};
+use vt_model::song::{FilterType, Machine, Track};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -53,6 +53,8 @@ pub enum EnvelopeField {
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
+    /// What makes the sound.
+    Machine,
     /// The file it plays.
     Sample,
     Mute,
@@ -88,23 +90,6 @@ const fn envelope_row(slot: usize) -> [Control; 7] {
     ]
 }
 
-/// The filter's row.
-pub const FILTER: [Control; 6] = [
-    Control::Base(TrackControl::Cutoff),
-    Control::Base(TrackControl::Resonance),
-    Control::Base(TrackControl::Drive),
-    Control::FilterType,
-    Control::Base(TrackControl::LowCut),
-    Control::Base(TrackControl::HighCut),
-];
-/// The output's row.
-pub const OUTPUT: [Control; 5] = [
-    Control::Level,
-    Control::Base(TrackControl::Pan),
-    Control::Base(TrackControl::Delay),
-    Control::Base(TrackControl::Reverb),
-    Control::Swing,
-];
 /// Each envelope's row.
 pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelope_row(1)];
 /// Each LFO's row.
@@ -120,11 +105,34 @@ pub const MIXER: [Control; 6] = [
     Control::Solo,
 ];
 
-/// The sample's row.
-pub const SAMPLE: [Control; 1] = [Control::Sample];
+const fn base(control: TrackControl) -> Control {
+    Control::Base(control)
+}
 
-/// The Sound page's rows, top to bottom.
-pub const SOUND_ROWS: [&[Control]; 3] = [&SAMPLE, &FILTER, &OUTPUT];
+/// The Sound page of a track playing a sample, top to bottom, with output on the right.
+pub const SAMPLE_ROWS: [&[Control]; 8] = [
+    &[Control::Machine, Control::Level],
+    &[Control::Sample, base(TrackControl::Pan)],
+    &[Control::FilterType, base(TrackControl::Delay)],
+    &[base(TrackControl::Cutoff), base(TrackControl::Reverb)],
+    &[base(TrackControl::Resonance), Control::Swing],
+    &[base(TrackControl::Drive)],
+    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::HighCut)],
+];
+/// The Sound page of a track playing a synth.
+pub const SYNTH_ROWS: [&[Control]; 10] = [
+    &[Control::Machine, Control::Level],
+    &[base(TrackControl::Harmonics), base(TrackControl::Pan)],
+    &[base(TrackControl::Timbre), base(TrackControl::Delay)],
+    &[base(TrackControl::Morph), base(TrackControl::Reverb)],
+    &[Control::FilterType, Control::Swing],
+    &[base(TrackControl::Cutoff)],
+    &[base(TrackControl::Resonance)],
+    &[base(TrackControl::Drive)],
+    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::HighCut)],
+];
 /// The Mod page's rows, top to bottom.
 pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
     [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
@@ -145,11 +153,12 @@ impl Page {
         }
     }
 
-    /// The page's rows, top to bottom.
-    pub fn rows(self) -> &'static [&'static [Control]] {
-        match self {
-            Self::Sound => &SOUND_ROWS,
-            Self::Mod => &MOD_ROWS,
+    /// The page's rows, top to bottom, for a track with this machine.
+    pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
+        match (self, machine) {
+            (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
+            (Self::Sound, Machine::VirtualAnalog) => &SYNTH_ROWS,
+            (Self::Mod, _) => &MOD_ROWS,
         }
     }
 }
@@ -166,6 +175,10 @@ impl Control {
             Self::Base(TrackControl::Drive) => "Drive",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
+            Self::Machine => "Machine",
+            Self::Base(TrackControl::Harmonics) => "Harm",
+            Self::Base(TrackControl::Timbre) => "Timbre",
+            Self::Base(TrackControl::Morph) => "Morph",
             Self::Sample => "File",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
@@ -197,7 +210,8 @@ impl Control {
     fn is_choice(self) -> bool {
         matches!(
             self,
-            Self::Sample
+            Self::Machine
+                | Self::Sample
                 | Self::Mute
                 | Self::Solo
                 | Self::FilterType
@@ -223,9 +237,19 @@ impl App {
         if self.view == View::Mixer {
             return MIXER[self.mixer_column.min(MIXER.len() - 1)];
         }
-        let rows = self.track_page.rows();
+        let rows = self.page_rows();
         let row = rows[self.track_row.min(rows.len() - 1)];
         row[self.track_field.min(row.len() - 1)]
+    }
+
+    /// The rows of the page showing, which depend on the track's machine.
+    pub(crate) fn page_rows(&self) -> &'static [&'static [Control]] {
+        let machine = self
+            .song()
+            .tracks
+            .get(self.cursor.track)
+            .map_or(Machine::Sample, |track| track.machine);
+        self.track_page.rows(machine)
     }
 
     fn page_track(&self) -> Track {
@@ -284,6 +308,13 @@ impl App {
                     self.toggle_control(control);
                 }
             }
+            Control::Machine => {
+                let machine = next_in(&Machine::ALL, track.machine, up);
+                self.apply(&Action::SetTrackMachine {
+                    track: self.cursor.track,
+                    machine,
+                });
+            }
             Control::Sample => {
                 self.status = "K chooses a sample".to_owned();
             }
@@ -297,6 +328,9 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
+                    TrackControl::Harmonics => track.harmonics,
+                    TrackControl::Timbre => track.timbre,
+                    TrackControl::Morph => track.morph,
                 };
                 self.set_hex(control, change(value));
             }
@@ -345,7 +379,7 @@ impl App {
     }
 
     fn move_control(&mut self, row: usize, field: usize) {
-        let rows = self.track_page.rows();
+        let rows = self.page_rows();
         self.track_row = row.min(rows.len() - 1);
         self.track_field = field.min(rows[self.track_row].len() - 1);
     }
@@ -431,6 +465,9 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
+                    TrackControl::Harmonics => track.harmonics,
+                    TrackControl::Timbre => track.timbre,
+                    TrackControl::Morph => track.morph,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));
@@ -446,6 +483,14 @@ impl App {
                     || (control == Control::Solo && live.solo)
                 {
                     self.toggle_control(control);
+                }
+            }
+            Control::Machine => {
+                if track.machine != fresh.machine {
+                    self.apply(&Action::SetTrackMachine {
+                        track: self.cursor.track,
+                        machine: fresh.machine,
+                    });
                 }
             }
             Control::Sample if track.sample.is_some() => {
@@ -567,13 +612,17 @@ impl App {
             self.open_filter_picker();
             return;
         }
+        if self.track_control() == Control::Machine {
+            self.open_machine_picker();
+            return;
+        }
         if let Control::Envelope(slot, field) = self.track_control() {
             self.open_envelope_picker(slot, field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on File, Type, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, File, Type, Dest, Shape, Rate, Retrig and Reset"
                     .to_owned();
             return;
         };
@@ -650,6 +699,23 @@ impl App {
             .to_vec();
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
         let mut picker = Picker::new("Filter type", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List the machines, with what each does and the current one highlighted.
+    fn open_machine_picker(&mut self) {
+        let track = self.cursor.track;
+        let current = self.page_track().machine;
+        let items = Machine::ALL
+            .map(|machine| Item {
+                label: format!("{:<8}{}", machine.name(), machine.meaning()),
+                pick: Pick::Machine { track, machine },
+            })
+            .to_vec();
+        let position = Machine::ALL.iter().position(|machine| *machine == current);
+        let mut picker = Picker::new("Machine", items);
         picker.move_highlight(position.unwrap_or(0) as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
@@ -802,7 +868,7 @@ impl App {
                 }
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
-            Control::Lfo(..) | Control::FilterType => {}
+            Control::Lfo(..) | Control::FilterType | Control::Machine => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
@@ -856,6 +922,9 @@ fn meaning(destination: Destination) -> &'static str {
         Destination::Dly => "Delay send",
         Destination::Rev => "Reverb send",
         Destination::Pitch => "Pitch, with depth in semitones",
+        Destination::Har => "Synth detune",
+        Destination::Tim => "Synth square",
+        Destination::Mor => "Synth saw",
     }
 }
 
