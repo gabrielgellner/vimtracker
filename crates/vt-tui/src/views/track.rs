@@ -13,7 +13,9 @@ use vt_model::song::Track;
 use crate::app::App;
 use crate::input::mode::Mode;
 use crate::theme;
-use crate::track_page::{Control, ENVELOPES, EnvelopeField, FILTER, LFOS, LfoField, OUTPUT};
+use crate::track_page::{
+    Control, ENVELOPES, EnvelopeField, FILTER, LFOS, LfoField, OUTPUT, Page, SAMPLE,
+};
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
@@ -36,6 +38,10 @@ fn value(control: Control, track: &Track, project_swing: u16) -> String {
         Control::Base(TrackControl::Drive) => hex(track.drive),
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
+        Control::Sample => track.sample.as_deref().map_or_else(
+            || "---".to_owned(),
+            |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),
+        ),
         Control::FilterType => track.filter.name().to_owned(),
         Control::Level => hex(track.level),
         Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
@@ -79,6 +85,7 @@ fn value(control: Control, track: &Track, project_swing: u16) -> String {
 /// How wide a setting's column is, so columns line up and don't move as values change.
 fn width(control: Control) -> usize {
     match control {
+        Control::Sample => 40,
         Control::Lfo(_, LfoField::Rate) => 9,
         Control::Lfo(_, LfoField::Shape) => 8,
         Control::Base(TrackControl::Reverb) | Control::Lfo(_, LfoField::Retrig) => 8,
@@ -181,26 +188,44 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let mut lines = vec![
-        Line::styled(format!("Track {:02}", app.cursor.track + 1), bold),
-        Line::raw(""),
-        heading(&FILTER),
-        row(app, track, "Filter", &FILTER),
-        Line::raw(""),
-        heading(&OUTPUT),
-        row(app, track, "Output", &OUTPUT),
-        Line::raw(""),
-        heading(&ENVELOPES[0]),
-    ];
-    for (slot, controls) in ENVELOPES.iter().enumerate() {
-        lines.push(row(app, track, &format!("Env {}", slot + 1), controls));
+    let tabs = [Page::Sound, Page::Mod].map(|page| {
+        let text = format!(" {} ", page.name());
+        if page == app.track_page {
+            Span::styled(text, bold)
+        } else {
+            Span::styled(text, theme::dim())
+        }
+    });
+    let mut title = vec![Span::styled(
+        format!("Track {:02} {} ", app.cursor.track + 1, track.name),
+        bold,
+    )];
+    title.extend(tabs);
+    let mut lines = vec![Line::from(title), Line::raw("")];
+    match app.track_page {
+        Page::Sound => {
+            lines.push(heading(&SAMPLE));
+            lines.push(row(app, track, "Sample", &SAMPLE));
+            lines.push(Line::raw(""));
+            lines.push(heading(&FILTER));
+            lines.push(row(app, track, "Filter", &FILTER));
+            lines.push(Line::raw(""));
+            lines.push(heading(&OUTPUT));
+            lines.push(row(app, track, "Output", &OUTPUT));
+        }
+        Page::Mod => {
+            lines.push(heading(&ENVELOPES[0]));
+            for (slot, controls) in ENVELOPES.iter().enumerate() {
+                lines.push(row(app, track, &format!("Env {}", slot + 1), controls));
+            }
+            lines.push(Line::raw(""));
+            lines.push(heading(&LFOS[0]));
+            for (slot, controls) in LFOS.iter().enumerate() {
+                lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
+            }
+            lines.push(Line::raw(""));
+            lines.extend(diagrams(app, track));
+        }
     }
-    lines.push(Line::raw(""));
-    lines.push(heading(&LFOS[0]));
-    for (slot, controls) in LFOS.iter().enumerate() {
-        lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
-    }
-    lines.push(Line::raw(""));
-    lines.extend(diagrams(app, track));
     frame.render_widget(Paragraph::new(lines), area);
 }

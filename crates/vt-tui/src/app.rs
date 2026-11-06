@@ -33,6 +33,7 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::shaping::ShapePanel;
+use crate::track_page::Page;
 use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
@@ -80,6 +81,7 @@ pub struct App {
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
+    pub track_page: Page,
     pub track_row: usize,
     pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
@@ -162,6 +164,7 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
+            track_page: Page::Sound,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),

@@ -1767,7 +1767,8 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
 /// An app on the track page.
 fn on_track_page() -> (App, Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
-    press(&mut app, " 4");
+    // On the Filter row, as the Sample row above it is only a file.
+    press(&mut app, " 4j");
     assert_eq!(app.view, View::Track);
     (app, realtime)
 }
@@ -1845,7 +1846,7 @@ fn the_track_page_types_lfo_settings() {
     let (mut app, _realtime) = on_track_page();
     let lfo = |app: &App| app.song().tracks[0].lfos[0];
     // Down to LFO 1, on Dest.
-    press(&mut app, "jjjj0");
+    press(&mut app, "Ljj0");
     press(&mut app, "=");
     assert_eq!(lfo(&app).destination, Some(Destination::Cut));
     press(&mut app, "-");
@@ -1904,7 +1905,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 
     // The second LFO's Dest, on the next track.
     press(&mut app, "W");
-    press(&mut app, "jjjjj0K");
+    press(&mut app, "Ljjj0K");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.shown().count(), 8);
@@ -1983,7 +1984,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
         "opens on what's set"
     );
     special(&mut app, KeyCode::Esc);
-    assert!(track_page_text(&app)[3].contains("Ladder"));
+    assert!(track_page_text(&app)[6].contains("Ladder"));
     press(&mut app, "u");
     assert_eq!(track(&app).filter, FilterType::LowPass);
 }
@@ -1994,8 +1995,8 @@ fn the_track_page_sets_the_utility_filter() {
     let track = |app: &App| app.song().tracks[0].clone();
     assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
     let lines = track_page_text(&app);
-    assert!(lines[2].contains("Low cut") && lines[2].contains("High cut"));
-    assert!(lines[3].contains("00") && lines[3].contains("FF"));
+    assert!(lines[5].contains("Low cut") && lines[5].contains("High cut"));
+    assert!(lines[6].contains("00") && lines[6].contains("FF"));
 
     press(&mut app, "$h");
     press(&mut app, "i40");
@@ -2021,7 +2022,7 @@ fn the_track_page_sets_envelopes() {
     let (mut app, _realtime) = on_track_page();
     let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];
     // Env 1, on its Attack.
-    press(&mut app, "jj0l");
+    press(&mut app, "L0l");
     typed(&mut app, "20");
     assert_eq!(env(&app, 0).attack_ms, 20);
     press(&mut app, "=");
@@ -2091,6 +2092,7 @@ fn the_track_page_draws_each_envelopes_shape() {
             .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
             .collect::<Vec<_>>()
     };
+    press(&mut app, "L");
     let lines = page(&app);
     let heading = lines.iter().position(|l| l.contains("Env 1  Vol")).unwrap();
     assert!(lines[heading].contains("Env 2  Cut"));
@@ -2102,17 +2104,17 @@ fn the_track_page_draws_each_envelopes_shape() {
     assert!(dots(&lines[heading + 1]) > 0);
 
     // Changing a value redraws it.
-    press(&mut app, "jj0lll");
+    press(&mut app, "L0lll");
     typed(&mut app, "0");
     assert_ne!(page(&app)[heading + 1], lines[heading + 1]);
     assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
 
     // The first envelope on Vol has no depth to show, and off it, it does.
-    assert!(page(&app)[9].contains("--"));
+    assert!(page(&app)[3].contains("--"));
     press(&mut app, "0K");
     press(&mut app, "cut");
     special(&mut app, KeyCode::Enter);
-    assert!(page(&app)[9].contains("00"));
+    assert!(page(&app)[3].contains("00"));
 }
 
 #[test]
@@ -2126,7 +2128,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
         special(app, KeyCode::Enter);
         assert_eq!(app.mode, Mode::Normal);
     };
-    press(&mut app, "jjjj0");
+    press(&mut app, "Ljj0");
     choose(&mut app, "cut");
     assert_eq!(lfo(&app).destination, Some(Destination::Cut));
 
@@ -2176,7 +2178,7 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     typed(&mut app, "60");
     press(&mut app, "+");
     assert_eq!(track(&app).swing, Some(650));
-    press(&mut app, "jjj0ll");
+    press(&mut app, "Ljj0ll");
     press(&mut app, "+");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
     press(&mut app, "_");
@@ -2248,7 +2250,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).reverb, 0);
 
     // Only the setting under the cursor goes back.
-    press(&mut app, "jjj0=");
+    press(&mut app, "Ljj0=");
     press(&mut app, "l=");
     press(&mut app, "l");
     typed(&mut app, "7st");
@@ -2291,10 +2293,10 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 5)].symbol() == "S")
+            .position(|x| buffer[(x, 8)].symbol() == "S")
             .unwrap() as u16;
-        let text: String = (at..at + 2).map(|x| buffer[(x, 6)].symbol()).collect();
-        (text, buffer[(at, 6)].fg)
+        let text: String = (at..at + 2).map(|x| buffer[(x, 9)].symbol()).collect();
+        (text, buffer[(at, 9)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].swing, None);
@@ -2315,7 +2317,7 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
 #[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "jjjj0ll");
+    press(&mut app, "Ljj0ll");
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
     typed(&mut app, "7st");
@@ -2329,7 +2331,7 @@ fn plus_makes_a_rate_faster_of_any_kind() {
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "jjjj0=ll");
+    press(&mut app, "Ljj0=ll");
     typed(&mut app, "1/8d");
     press(&mut app, "l");
     typed(&mut app, "+40");
@@ -2337,16 +2339,19 @@ fn the_track_page_shows_its_settings_in_columns() {
     typed(&mut app, "90");
     let lines = track_page_text(&app);
     assert!(lines[0].starts_with("Track 01"), "{}", lines[0]);
-    assert!(lines[2].contains("Cut") && lines[2].contains("Res"));
-    assert!(lines[3].starts_with("Filter") && lines[3].contains("FF"));
-    assert!(lines[5].contains("Level") && lines[5].contains("Swing"));
-    assert!(lines[8].contains("Attack") && lines[8].contains("Reset"));
-    assert!(lines[9].starts_with("Env 1") && lines[9].contains("Vol"));
-    assert!(lines[10].starts_with("Env 2") && lines[10].contains("Cut"));
-    assert!(lines[12].contains("Dest") && lines[12].contains("Retrig"));
-    let lfo: Vec<&str> = lines[13].split_whitespace().collect();
+    assert!(lines[2].contains("Attack") && lines[2].contains("Reset"));
+    assert!(lines[3].starts_with("Env 1") && lines[3].contains("Vol"));
+    assert!(lines[4].starts_with("Env 2") && lines[4].contains("Cut"));
+    assert!(lines[6].contains("Dest") && lines[6].contains("Retrig"));
+    let lfo: Vec<&str> = lines[7].split_whitespace().collect();
     assert_eq!(lfo, ["LFO", "1", "Cut", "Tri", "1/8d", "+40", "90°", "off"]);
-    assert!(lines[14].starts_with("LFO 2"));
+    assert!(lines[8].starts_with("LFO 2"));
+    press(&mut app, "H");
+    let lines = track_page_text(&app);
+    assert!(lines[3].starts_with("Sample"));
+    assert!(lines[5].contains("Cut") && lines[5].contains("Res"));
+    assert!(lines[6].starts_with("Filter") && lines[6].contains("FF"));
+    assert!(lines[8].contains("Level") && lines[8].contains("Swing"));
 }
 
 #[test]
@@ -2624,4 +2629,70 @@ fn notes_played_while_editing_preview_on_this_tracks_sound() {
     block(&mut realtime, &mut app);
     press(&mut app, "ia");
     assert!(loudest(&mut realtime, 2000) > 0.01, "it can be heard");
+}
+
+#[test]
+fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
+    use vt_tui::track_page::{MOD_ROWS, Page, SOUND_ROWS};
+    let (mut app, _realtime) = on_track_page();
+    assert_eq!(app.track_page, Page::Sound);
+    press(&mut app, "j$");
+    press(&mut app, "L");
+    assert_eq!(app.track_page, Page::Mod);
+    assert_eq!(app.track_row, 0);
+    let row = MOD_ROWS[0];
+    assert!(row.contains(&app.track_control()), "the cursor stays valid");
+    press(&mut app, "GH");
+    assert_eq!(app.track_page, Page::Sound);
+    assert_eq!(app.track_row, 0);
+    let all: Vec<_> = SOUND_ROWS
+        .iter()
+        .chain(&MOD_ROWS)
+        .flat_map(|row| row.iter())
+        .collect();
+    for (at, control) in all.iter().enumerate() {
+        assert!(!all[at + 1..].contains(control), "{control:?} is on twice");
+    }
+    // Only here: in the phrase view they keep their meaning.
+    press(&mut app, " 3L");
+    assert_eq!(app.view, View::Phrase);
+}
+
+#[test]
+fn the_file_setting_chooses_a_sample_and_x_clears_it() {
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "k");
+    assert_eq!(app.track_control(), vt_tui::track_page::Control::Sample);
+    press(&mut app, "K");
+    assert_ne!(app.mode, Mode::Normal);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "=");
+    assert!(app.status.contains("K chooses"), "{}", app.status);
+    command(&mut app, "name bd");
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let tone = dir.join("tone.wav");
+    wav(&tone);
+    command(&mut app, &format!("sample {}", tone.display()));
+    let drawn = page_text(&app);
+    assert!(drawn.contains("tone.wav"), "{drawn}");
+    assert!(drawn.contains("BD"), "{drawn}");
+    assert!(!drawn.contains(dir.to_str().unwrap()), "{drawn}");
+    press(&mut app, "x");
+    assert_eq!(sample_of(&app, 0), None);
+    press(&mut app, "u");
+    assert!(sample_of(&app, 0).is_some());
+}
+
+fn page_text(app: &App) -> String {
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..24)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
 }

@@ -23,6 +23,8 @@ folder, ready to move or share, save a copy with `:w path`.
 Press `;` in a phrase to hear the row. Notes you play while editing and
 auditions go through this track's filter, levels and sends.
 
+On the Sound page, `Space 4`, `K` on File chooses a sample too, and `x` clears it.
+
 ## Names
 
 `:name BD` names the current track, in place of its number. A name is two

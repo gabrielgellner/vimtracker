@@ -9,6 +9,7 @@ use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::track_page::Page;
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +96,8 @@ pub enum Cmd {
     Shape,
     /// Choose this track's sample from a list.
     PickSample,
+    /// Go to a part of the track page.
+    ShowPage(Page),
 }
 
 /// One row of the table.
@@ -278,6 +281,8 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("k", Cmd::Move(Motion::Up), "Previous row"),
     ("g g", Cmd::Move(Motion::First), "First row"),
     ("G", Cmd::Move(Motion::Last), "Last row"),
+    ("H", Cmd::ShowPage(Page::Sound), "Sound page"),
+    ("L", Cmd::ShowPage(Page::Mod), "Mod page"),
     ("h", Cmd::Move(Motion::Left), "Previous setting"),
     ("l", Cmd::Move(Motion::Right), "Next setting"),
     ("0", Cmd::Move(Motion::RowStart), "First setting"),
