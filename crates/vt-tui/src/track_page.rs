@@ -157,7 +157,7 @@ impl Page {
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
             (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
-            (Self::Sound, Machine::VirtualAnalog) => &SYNTH_ROWS,
+            (Self::Sound, _) => &SYNTH_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
         }
     }
@@ -198,6 +198,20 @@ impl Control {
             Self::Envelope(_, EnvelopeField::Release) => "Release",
             Self::Envelope(_, EnvelopeField::Depth) => "Depth",
             Self::Envelope(_, EnvelopeField::Reset) => "Reset",
+        }
+    }
+
+    /// The setting's name on screen, for a track with this machine. A synth's three settings do
+    /// different things on each.
+    pub fn label_on(self, machine: Machine) -> &'static str {
+        match (machine, self) {
+            (Machine::Fm, Self::Base(TrackControl::Harmonics)) => "Ratio",
+            (Machine::Fm, Self::Base(TrackControl::Timbre)) => "Index",
+            (Machine::Fm, Self::Base(TrackControl::Morph)) => "Feedback",
+            (Machine::Kick, Self::Base(TrackControl::Harmonics)) => "Punch",
+            (Machine::Kick, Self::Base(TrackControl::Timbre)) => "Tone",
+            (Machine::Kick, Self::Base(TrackControl::Morph)) => "Decay",
+            _ => self.label(),
         }
     }
 
@@ -922,9 +936,9 @@ fn meaning(destination: Destination) -> &'static str {
         Destination::Dly => "Delay send",
         Destination::Rev => "Reverb send",
         Destination::Pitch => "Pitch, with depth in semitones",
-        Destination::Har => "Synth detune",
-        Destination::Tim => "Synth square",
-        Destination::Mor => "Synth saw",
+        Destination::Har => "A synth's first setting",
+        Destination::Tim => "A synth's second setting",
+        Destination::Mor => "A synth's third setting",
     }
 }
 

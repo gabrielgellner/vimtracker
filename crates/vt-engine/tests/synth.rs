@@ -1,4 +1,4 @@
-//! A track playing the virtual analog machine.
+//! Tracks playing the synth machines.
 
 use std::sync::Arc;
 
@@ -158,4 +158,68 @@ fn a_preview_plays_with_the_tracks_settings() {
     let mut out = vec![0.0; STEP * 2];
     engine.process(&mut out);
     assert!(out.iter().any(|sample| *sample != 0.0));
+}
+
+/// A song of one machine, and its first track's next step's peak after a note.
+fn on(machine: Machine, steps: &[&str]) -> Song {
+    let mut song = song(steps);
+    song.tracks[0].machine = machine;
+    song
+}
+
+#[test]
+fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
+    for machine in [Machine::VirtualAnalog, Machine::Fm, Machine::Kick] {
+        // With some of its second setting, as FM with none is a sine whatever else is set.
+        let with_some = |steps: &[&str]| {
+            let mut song = on(machine, steps);
+            song.tracks[0].timbre = 0x40;
+            song
+        };
+        let out = play(with_some(&[NOTE, REST]), 2);
+        assert!(peak(&out, 0) > 0.05, "{machine:?}: {}", peak(&out, 0));
+        assert!(peak(&out, 0) < 1.5, "{machine:?}: {}", peak(&out, 0));
+        for command in ["HAR", "TIM", "MOR"] {
+            let locked = format!("C-2 7F {command}F0 ---00 ---00");
+            let changed = play(with_some(&[&locked, REST]), 2);
+            assert!(changed != out, "{machine:?} {command}");
+        }
+    }
+}
+
+#[test]
+fn a_kick_dies_away_while_fm_holds() {
+    let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
+    let mut kick = on(Machine::Kick, &steps);
+    kick.tracks[0].morph = 0x20;
+    let out = play(kick, 8);
+    assert!(peak(&out, 7) < peak(&out, 0) * 0.05, "{}", peak(&out, 7));
+    let out = play(on(Machine::Fm, &steps), 8);
+    assert!(peak(&out, 7) > peak(&out, 0) * 0.5, "{}", peak(&out, 7));
+}
+
+#[test]
+fn a_new_note_hits_a_kick_again() {
+    let steps = [NOTE, REST, REST, REST, NOTE, REST, REST, REST];
+    let mut kick = on(Machine::Kick, &steps);
+    kick.tracks[0].morph = 0x20;
+    let out = play(kick, 8);
+    assert!(peak(&out, 4) > peak(&out, 3) * 2.0);
+}
+
+#[test]
+fn a_tailed_render_releases_a_held_note_rather_than_running_on() {
+    for machine in [Machine::VirtualAnalog, Machine::Fm] {
+        let held = on(machine, &[NOTE, REST]);
+        let options = RenderOptions {
+            tail: true,
+            ..RenderOptions::default()
+        };
+        let frames = render_loop(version(held), RATE, options).len() / 2;
+        assert!(
+            frames < RATE as usize * 2,
+            "{machine:?}: {} seconds",
+            frames as f32 / RATE as f32
+        );
+    }
 }

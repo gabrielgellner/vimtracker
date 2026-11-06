@@ -2,6 +2,8 @@
 
 pub mod delay;
 pub mod filter;
+pub mod fm;
+pub mod kick;
 pub mod lfo;
 pub mod reverb;
 pub mod smoother;

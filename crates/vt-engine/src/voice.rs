@@ -1,5 +1,7 @@
 //! Sample playback and its envelope.
 
+use crate::dsp::fm::Fm;
+use crate::dsp::kick::Kick;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
@@ -30,6 +32,36 @@ enum Stage {
 /// The frequency of `C-4`, in hertz, for a synth.
 const MIDDLE_C: f64 = 261.625_565_3;
 
+/// A synth playing a note. The audio thread can't allocate, so each voice has room for any of them.
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::large_enum_variant)]
+enum Synth {
+    VirtualAnalog(VirtualAnalog),
+    Fm(Fm),
+    Kick(Kick),
+}
+
+impl Synth {
+    /// A new note on a machine, if it's a synth.
+    fn new(machine: Machine, rate: u32) -> Option<Self> {
+        match machine {
+            Machine::Sample => None,
+            Machine::VirtualAnalog => Some(Self::VirtualAnalog(VirtualAnalog::new())),
+            Machine::Fm => Some(Self::Fm(Fm::new(rate))),
+            Machine::Kick => Some(Self::Kick(Kick::new(rate))),
+        }
+    }
+
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        match self {
+            Self::VirtualAnalog(synth) => synth.next(frequency, settings),
+            Self::Fm(synth) => synth.next(frequency, settings),
+            Self::Kick(synth) => synth.next(frequency, settings),
+        }
+    }
+}
+
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
 /// only affects new notes.
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +83,7 @@ pub struct Voice {
     /// Frames until a timed release starts, for previews.
     release_after: Option<u32>,
     /// A synth to play instead of the sample, and its settings.
-    synth: Option<VirtualAnalog>,
+    synth: Option<Synth>,
     settings: Settings,
 }
 
@@ -108,12 +140,20 @@ impl Voice {
             rate,
             elapsed: 0,
             release_after: note.release_after,
-            synth: (note.machine == Machine::VirtualAnalog).then(VirtualAnalog::new),
+            synth: Synth::new(note.machine, rate),
             settings: Settings::default(),
         }
     }
 
     /// Whether it is sounding.
+    /// Start the release of a note that would otherwise hold until something ended it.
+    pub fn release_if_held(&mut self) {
+        let holds = matches!(self.synth, Some(Synth::VirtualAnalog(_) | Synth::Fm(_)));
+        if holds {
+            self.release();
+        }
+    }
+
     pub fn set_synth(&mut self, settings: Settings) {
         self.settings = settings;
     }

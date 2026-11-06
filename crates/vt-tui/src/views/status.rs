@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
+use vt_model::song::Machine;
 
 use crate::app::{App, Field};
 use crate::input::keys::Key;
@@ -49,7 +50,14 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Phrase => "Phrase".to_owned(),
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
-        View::Track | View::Mixer => app.track_control().label().to_owned(),
+        View::Track | View::Mixer => {
+            let machine = app
+                .song()
+                .tracks
+                .get(app.cursor.track)
+                .map_or(Machine::Sample, |track| track.machine);
+            app.track_control().label_on(machine).to_owned()
+        }
         View::Song => match app.song_column {
             LENGTH_COLUMN => "Length".to_owned(),
             REPEAT_COLUMN => "Rpt".to_owned(),

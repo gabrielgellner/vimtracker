@@ -1459,10 +1459,40 @@ fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "gg");
     press(&mut app, "h=");
+    assert_eq!(app.song().tracks[0].machine, Machine::Fm, "the next one");
+    press(&mut app, "==");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample, "goes round");
     assert!(track_text(&app)[2].contains("Sample"));
     press(&mut app, "=x");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+}
+
+#[test]
+fn a_synths_settings_are_named_for_what_they_do_on_it() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    let names = |app: &App| -> Vec<String> {
+        let text = track_text(app);
+        (3..6)
+            .map(|row| text[row].split_whitespace().next().unwrap().to_owned())
+            .collect()
+    };
+    press(&mut app, " 4K");
+    press(&mut app, "FM");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].machine, Machine::Fm);
+    assert_eq!(names(&app), ["Ratio", "Index", "Feedback"]);
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Ratio");
+    press(&mut app, "ggK");
+    press(&mut app, "Kick");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].machine, Machine::Kick);
+    assert_eq!(names(&app), ["Punch", "Tone", "Decay"]);
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Tone");
+    press(&mut app, "i40");
+    assert_eq!(app.song().tracks[0].timbre, 0x40);
 }
 
 #[test]
