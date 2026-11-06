@@ -147,7 +147,6 @@ pub fn run(path: Option<PathBuf>, kitty_graphics: bool) -> Result<(), RunError> 
     app.status = status;
     app.offer_restore();
     let mut graphics = kitty_graphics.then(Graphics::new);
-    app.envelope_images = graphics.as_ref().map(Graphics::ids);
 
     let mut terminal = ratatui::init();
     let result = main_loop(&mut terminal, &mut app, &stats, graphics.as_mut());

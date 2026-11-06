@@ -175,71 +175,106 @@ pub fn problem() -> Option<&'static str> {
     )
 }
 
-/// The envelope images the terminal has, so one is only sent when it changes.
+/// The envelope images the terminal has. Each envelope keeps one with the cursor on it and one
+/// without, so moving the cursor sends nothing.
+///
+/// A changed image gets a new id, rather than replacing the one with the old id. Kitty only looks at
+/// placeholders on lines that have changed, and replacing an image disconnects them, so it would stay
+/// blank. A new id changes the placeholders' colour, which makes kitty look again.
 pub struct Graphics {
-    ids: [u32; TRACK_ENVELOPES],
-    sent: [Option<(Envelope, bool)>; TRACK_ENVELOPES],
+    base: u32,
+    next: u32,
+    images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
+    /// Images to forget once the screen has moved on from them.
+    retired: Vec<u32>,
     in_tmux: bool,
 }
 
 impl Graphics {
     /// Ready to send images, with ids another running copy won't be using.
     pub fn new() -> Self {
-        let base = (std::process::id() & 0xFFFF) << 8;
         Self {
-            ids: std::array::from_fn(|slot| base | (slot as u32 + 1)),
-            sent: [None; TRACK_ENVELOPES],
+            base: (std::process::id() & 0xFFFF) << 8,
+            next: 0,
+            images: [[None; 2]; TRACK_ENVELOPES],
+            retired: Vec::new(),
             in_tmux: std::env::var_os("TMUX").is_some(),
         }
     }
 
-    /// The image ids, for drawing placeholders.
-    pub fn ids(&self) -> [u32; TRACK_ENVELOPES] {
-        self.ids
+    /// An id no image has at the moment.
+    fn new_id(&mut self) -> u32 {
+        loop {
+            self.next = self.next % 0xFF + 1;
+            let id = self.base | self.next;
+            let in_use = self
+                .images
+                .iter()
+                .flatten()
+                .flatten()
+                .any(|image| image.1 == id)
+                || self.retired.contains(&id);
+            if !in_use {
+                return id;
+            }
+        }
     }
 
-    /// Send the images the screen is about to show, if they've changed.
-    pub fn sync(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+    /// Send the images the screen is about to show, if the terminal lacks them, and say which to use.
+    pub fn sync(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
+        for id in self.retired.drain(..) {
+            command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
+        }
         let Some(track) = app.song().tracks.get(app.cursor.track) else {
-            return Ok(());
+            return out.flush();
         };
         if app.view != View::Track || app.track_page != Page::Mod {
-            return Ok(());
+            return out.flush();
         }
+        let envelopes = track.envelopes;
         let edited = envelope_being_edited(app);
         let (width, height) = (DIAGRAM_WIDTH * CELL_WIDTH, DIAGRAM_HEIGHT * CELL_HEIGHT);
-        for (slot, envelope) in track.envelopes.iter().enumerate() {
+        let mut ids = [0; TRACK_ENVELOPES];
+        for (slot, envelope) in envelopes.iter().enumerate() {
             let active = edited == Some(slot);
-            if self.sent[slot] == Some((*envelope, active)) {
-                continue;
-            }
-            let style = if active {
-                theme::active()
-            } else {
-                theme::dim()
+            let held = self.images[slot][usize::from(active)];
+            ids[slot] = match held {
+                Some((drawn, id)) if drawn == *envelope => id,
+                _ => {
+                    let style = if active {
+                        theme::active()
+                    } else {
+                        theme::dim()
+                    };
+                    let color = match style.fg {
+                        Some(Color::Rgb(red, green, blue)) => [red, green, blue],
+                        _ => [255; 3],
+                    };
+                    let id = self.new_id();
+                    let pixels = envelope_pixels(envelope, color, width, height);
+                    let image = Image {
+                        id,
+                        pixels: &pixels,
+                        width,
+                        height,
+                        columns: DIAGRAM_WIDTH,
+                        rows: DIAGRAM_HEIGHT,
+                    };
+                    transmit(out, &image, self.in_tmux)?;
+                    self.retired.extend(held.map(|(_, old)| old));
+                    self.images[slot][usize::from(active)] = Some((*envelope, id));
+                    id
+                }
             };
-            let color = match style.fg {
-                Some(Color::Rgb(red, green, blue)) => [red, green, blue],
-                _ => [255; 3],
-            };
-            let pixels = envelope_pixels(envelope, color, width, height);
-            let image = Image {
-                id: self.ids[slot],
-                pixels: &pixels,
-                width,
-                height,
-                columns: DIAGRAM_WIDTH,
-                rows: DIAGRAM_HEIGHT,
-            };
-            transmit(out, &image, self.in_tmux)?;
-            self.sent[slot] = Some((*envelope, active));
         }
+        app.envelope_images = Some(ids);
         out.flush()
     }
 
     /// Have the terminal forget the images.
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
-        for id in self.ids {
+        let held = self.images.iter().flatten().flatten().map(|image| &image.1);
+        for id in held.chain(&self.retired) {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
         }
         out.flush()

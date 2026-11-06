@@ -3765,3 +3765,46 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     assert_eq!(second.fg, ratatui::style::Color::Rgb(4, 5, 6));
     assert_eq!(buffer[(27, label + 1)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
 }
+
+#[test]
+fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        (out.matches("a=T").count(), out)
+    };
+    // Nothing is sent until the page that shows them.
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    press(&mut app, " 4L");
+    assert_eq!(sync(&mut app, &mut graphics).0, 2);
+    let first = app.envelope_images.unwrap();
+    assert_ne!(first[0], first[1]);
+    assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
+
+    // Each envelope's other look is sent once, and after that the cursor only swaps between them.
+    press(&mut app, "j");
+    assert_eq!(sync(&mut app, &mut graphics).0, 2);
+    let moved = app.envelope_images.unwrap();
+    assert!(moved[0] != first[0] && moved[1] != first[1]);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    assert_eq!(app.envelope_images.unwrap(), first);
+    press(&mut app, "j");
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    assert_eq!(app.envelope_images.unwrap(), moved);
+
+    // A change makes a new image, and the old one is forgotten only after the screen moves on.
+    press(&mut app, "=");
+    let (sent, out) = sync(&mut app, &mut graphics);
+    assert_eq!(sent, 1);
+    let changed = app.envelope_images.unwrap();
+    assert_ne!(changed[1], moved[1]);
+    assert_eq!(changed[0], moved[0]);
+    let forget = format!("a=d,d=I,i={},q=2", moved[1]);
+    assert!(!out.contains(&forget));
+    assert!(sync(&mut app, &mut graphics).1.contains(&forget));
+}
