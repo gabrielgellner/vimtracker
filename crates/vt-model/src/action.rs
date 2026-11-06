@@ -16,7 +16,7 @@ use crate::selection::{
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
     Chain, ChainEntry, FilterType, Launch, Machine, Phrase, Repeat, Section, SectionStart, Song,
-    Track, lowest_unused,
+    SynthVoice, Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
@@ -246,6 +246,11 @@ pub enum Action {
     SetTrackMachine {
         track: usize,
         machine: Machine,
+    },
+    /// Choose which synth a track plays.
+    SetTrackSynthVoice {
+        track: usize,
+        voice: SynthVoice,
     },
     /// Choose a track's filter.
     SetFilterType {
@@ -824,6 +829,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .machine = *machine;
+        }
+        Action::SetTrackSynthVoice { track, voice } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .synth_voice = *voice;
         }
         Action::SetFilterType { track, filter } => {
             next.tracks

@@ -691,14 +691,14 @@ impl Engine {
     }
 
     fn note_on(&self, track: usize, note: u8, step_gain: f32, shape: Envelope) -> Option<NoteOn> {
-        let machine = self.current.song.tracks.get(track)?.machine;
-        let sample = match machine {
-            Machine::Sample => (*self.current.track_samples.get(track)?)?,
-            _ => 0,
+        let owner = self.current.song.tracks.get(track)?;
+        let (sample, synth) = match owner.machine {
+            Machine::Sample => ((*self.current.track_samples.get(track)?)?, None),
+            Machine::Plaits => (0, Some(owner.synth_voice)),
         };
         Some(NoteOn {
             sample,
-            machine,
+            synth,
             note,
             gain: step_gain,
             shape,

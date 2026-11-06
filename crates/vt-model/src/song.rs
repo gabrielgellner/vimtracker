@@ -80,16 +80,19 @@ pub struct Track {
     /// What makes its sound.
     #[serde(default)]
     pub machine: Machine,
+    /// Which synth it plays, on the Plaits machine.
+    #[serde(default)]
+    pub synth_voice: SynthVoice,
     /// What it plays, relative to the project folder.
     #[serde(default)]
     pub sample: Option<String>,
-    /// Where held `HAR` starts: how far a synth's saw is detuned, in tune at `80`.
+    /// Where held `HAR` starts: a synth's first setting.
     #[serde(default = "centre")]
     pub harmonics: u8,
-    /// Where held `TIM` starts: a synth's square.
+    /// Where held `TIM` starts: a synth's second setting.
     #[serde(default)]
     pub timbre: u8,
-    /// Where held `MOR` starts: a synth's saw, plain at `80`.
+    /// Where held `MOR` starts: a synth's third setting.
     #[serde(default = "centre")]
     pub morph: u8,
     pub mute: bool,
@@ -207,6 +210,7 @@ impl Default for Track {
         Self {
             name: String::new(),
             machine: Machine::default(),
+            synth_voice: SynthVoice::default(),
             sample: None,
             harmonics: centre(),
             timbre: 0,
@@ -260,27 +264,50 @@ pub enum Machine {
     /// Plays its sample, once, at the note's speed.
     #[default]
     Sample,
-    /// A square and a saw, after the virtual analog model of Mutable Instruments' Plaits.
-    VirtualAnalog,
-    /// Two-operator FM, after the same module.
-    Fm,
-    /// An 808-style bass drum, after the same module.
-    Kick,
+    /// One of the synth voices, after Mutable Instruments' Plaits.
+    Plaits,
 }
 
 impl Machine {
     /// Every machine, in the order a list shows them.
-    pub const ALL: [Self; 4] = [Self::Sample, Self::VirtualAnalog, Self::Fm, Self::Kick];
-
-    /// Whether a note keeps sounding until something ends it.
-    pub fn holds(self) -> bool {
-        matches!(self, Self::VirtualAnalog | Self::Fm)
-    }
+    pub const ALL: [Self; 2] = [Self::Sample, Self::Plaits];
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
         match self {
             Self::Sample => "Sample",
+            Self::Plaits => "Plaits",
+        }
+    }
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Sample => "One file, at the speed of its note",
+            Self::Plaits => "A synth, with a choice of voices",
+        }
+    }
+}
+
+/// Which synth the Plaits machine plays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SynthVoice {
+    /// A square and a saw.
+    #[default]
+    VirtualAnalog,
+    /// Two-operator FM.
+    Fm,
+    /// An 808-style bass drum.
+    Kick,
+}
+
+impl SynthVoice {
+    /// Every voice, in the order a list shows them.
+    pub const ALL: [Self; 3] = [Self::VirtualAnalog, Self::Fm, Self::Kick];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
             Self::VirtualAnalog => "VA",
             Self::Fm => "FM",
             Self::Kick => "Kick",
@@ -290,11 +317,33 @@ impl Machine {
     /// What it does, for a list to show.
     pub fn meaning(self) -> &'static str {
         match self {
-            Self::Sample => "Plays a sample",
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
             Self::Fm => "Two-operator FM, for bass, bells and keys",
             Self::Kick => "An 808-style bass drum, tuned by its note",
         }
+    }
+
+    /// What its three settings are called, which `HAR`, `TIM` and `MOR` set in this order.
+    pub fn settings(self) -> [&'static str; 3] {
+        match self {
+            Self::VirtualAnalog => ["Harm", "Timbre", "Morph"],
+            Self::Fm => ["Ratio", "Index", "Feedback"],
+            Self::Kick => ["Punch", "Tone", "Decay"],
+        }
+    }
+
+    /// Which of its settings has a middle of its own, so shows where it is around that.
+    pub fn centred(self) -> [bool; 3] {
+        match self {
+            Self::VirtualAnalog => [true, false, false],
+            Self::Fm => [false, false, true],
+            Self::Kick => [false, false, false],
+        }
+    }
+
+    /// Whether a note keeps sounding until something ends it.
+    pub fn holds(self) -> bool {
+        matches!(self, Self::VirtualAnalog | Self::Fm)
     }
 }
 

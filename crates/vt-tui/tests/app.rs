@@ -10,7 +10,9 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song};
+use vt_model::song::{
+    Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song, SynthVoice,
+};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
@@ -1410,7 +1412,7 @@ fn track_text(app: &App) -> Vec<String> {
 }
 
 #[test]
-fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
+fn k_on_machine_chooses_plaits_and_shows_its_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
@@ -1422,30 +1424,34 @@ fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
     );
     let depth = app.history.undo_depth();
     press(&mut app, "K");
-    press(&mut app, "VA");
+    press(&mut app, "pl");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::VirtualAnalog);
+    assert_eq!(app.song().tracks[0].machine, Machine::Plaits);
     assert_eq!(app.history.undo_depth(), depth + 1);
     let text = track_text(&app);
     assert!(
-        text[2].contains("Machine") && text[2].contains("VA"),
+        text[2].contains("Machine") && text[2].contains("Plaits"),
         "{text:?}"
     );
     assert!(
-        text[3].contains("Harm") && text[3].contains("80"),
+        text[3].contains("Voice") && text[3].contains("VA"),
         "{text:?}"
     );
     assert!(
-        text[4].contains("Timbre") && text[4].contains("00"),
+        text[4].contains("Harm") && text[4].contains("80"),
         "{text:?}"
     );
     assert!(
-        text[5].contains("Morph") && text[5].contains("████"),
+        text[5].contains("Timbre") && text[5].contains("00"),
+        "{text:?}"
+    );
+    assert!(
+        text[6].contains("Morph") && text[6].contains("████"),
         "{text:?}"
     );
     assert!(!text.iter().any(|line| line.contains("File")), "{text:?}");
 
-    press(&mut app, "j");
+    press(&mut app, "jj");
     assert_eq!(column_name(&app), "Harm");
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].harmonics, 0x81);
@@ -1454,13 +1460,9 @@ fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
     assert_eq!(app.song().tracks[0].timbre, 0x60);
     press(&mut app, "x");
     assert_eq!(app.song().tracks[0].timbre, 0);
-    press(&mut app, "k");
-    press(&mut app, "l");
+    press(&mut app, "kkl");
     assert_eq!(column_name(&app), "Pan");
-    press(&mut app, "gg");
-    press(&mut app, "h=");
-    assert_eq!(app.song().tracks[0].machine, Machine::Fm, "the next one");
-    press(&mut app, "==");
+    press(&mut app, "ggh=");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample, "goes round");
     assert!(track_text(&app)[2].contains("Sample"));
     press(&mut app, "=x");
@@ -1468,31 +1470,53 @@ fn k_on_machine_chooses_a_synth_and_shows_its_settings() {
 }
 
 #[test]
-fn a_synths_settings_are_named_for_what_they_do_on_it() {
+fn k_on_voice_chooses_a_synth_and_names_its_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     let names = |app: &App| -> Vec<String> {
         let text = track_text(app);
-        (3..6)
+        (4..7)
             .map(|row| text[row].split_whitespace().next().unwrap().to_owned())
             .collect()
     };
     press(&mut app, " 4K");
+    press(&mut app, "Plaits");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Voice");
+    let depth = app.history.undo_depth();
+    press(&mut app, "K");
+    assert_eq!(
+        app.picker.as_ref().unwrap().shown().count(),
+        SynthVoice::ALL.len()
+    );
     press(&mut app, "FM");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::Fm);
+    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
+    assert_eq!(app.history.undo_depth(), depth + 1);
     assert_eq!(names(&app), ["Ratio", "Index", "Feedback"]);
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Ratio");
-    press(&mut app, "ggK");
-    press(&mut app, "Kick");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::Kick);
+    press(&mut app, "k=");
+    assert_eq!(
+        app.song().tracks[0].synth_voice,
+        SynthVoice::Kick,
+        "the next"
+    );
     assert_eq!(names(&app), ["Punch", "Tone", "Decay"]);
     press(&mut app, "jj");
     assert_eq!(column_name(&app), "Tone");
     press(&mut app, "i40");
     assert_eq!(app.song().tracks[0].timbre, 0x40);
+    press(&mut app, "kkx");
+    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::VirtualAnalog);
+
+    // Back to samples and to the synth again keeps the voice.
+    press(&mut app, "=");
+    press(&mut app, "k-");
+    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
 }
 
 #[test]
@@ -1501,7 +1525,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
     let kit = kit_file();
     command(&mut app, &format!("kit {}", kit.display()));
     press(&mut app, " 4K");
-    press(&mut app, "VA");
+    press(&mut app, "Plaits");
     special(&mut app, KeyCode::Enter);
     press(&mut app, " 5");
     special(&mut app, KeyCode::Enter);

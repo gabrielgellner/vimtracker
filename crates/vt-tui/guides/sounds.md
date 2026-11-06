@@ -6,8 +6,9 @@ and LFOs**.
 
 ## The synths
 
-`K` on Machine, at the top of the Sound page, chooses a synth. They come from Mutable
-Instruments' Plaits, and each has three settings, named on the page.
+`K` on Machine, at the top of the Sound page, chooses `Plaits`, and `K` on Voice below
+it chooses a synth. They come from Mutable Instruments' Plaits, and each has three
+settings, named on the page.
 
 `VA` is a square and a saw, for bass and leads. Try a note around `C-2`, and bring
 `Cut` down.

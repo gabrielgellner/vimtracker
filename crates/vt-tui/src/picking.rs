@@ -430,6 +430,9 @@ impl App {
                     Some(Pick::Machine { track, machine }) => {
                         self.apply(&Action::SetTrackMachine { track, machine });
                     }
+                    Some(Pick::SynthVoice { track, voice }) => {
+                        self.apply(&Action::SetTrackSynthVoice { track, voice });
+                    }
                     Some(Pick::FilterType { track, filter }) => {
                         self.apply(&Action::SetFilterType { track, filter });
                     }

@@ -6,7 +6,7 @@ use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::{FilterType, Machine, Track};
+use vt_model::song::{FilterType, Machine, SynthVoice, Track};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -55,6 +55,8 @@ pub enum EnvelopeField {
 pub enum Control {
     /// What makes the sound.
     Machine,
+    /// Which synth it plays.
+    SynthVoice,
     /// The file it plays.
     Sample,
     Mute,
@@ -121,12 +123,13 @@ pub const SAMPLE_ROWS: [&[Control]; 8] = [
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth.
-pub const SYNTH_ROWS: [&[Control]; 10] = [
+pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[Control::Machine, Control::Level],
-    &[base(TrackControl::Harmonics), base(TrackControl::Pan)],
-    &[base(TrackControl::Timbre), base(TrackControl::Delay)],
-    &[base(TrackControl::Morph), base(TrackControl::Reverb)],
-    &[Control::FilterType, Control::Swing],
+    &[Control::SynthVoice, base(TrackControl::Pan)],
+    &[base(TrackControl::Harmonics), base(TrackControl::Delay)],
+    &[base(TrackControl::Timbre), base(TrackControl::Reverb)],
+    &[base(TrackControl::Morph), Control::Swing],
+    &[Control::FilterType],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
@@ -157,7 +160,7 @@ impl Page {
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
             (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
-            (Self::Sound, _) => &SYNTH_ROWS,
+            (Self::Sound, Machine::Plaits) => &SYNTH_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
         }
     }
@@ -176,6 +179,7 @@ impl Control {
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Machine => "Machine",
+            Self::SynthVoice => "Voice",
             Self::Base(TrackControl::Harmonics) => "Harm",
             Self::Base(TrackControl::Timbre) => "Timbre",
             Self::Base(TrackControl::Morph) => "Morph",
@@ -201,16 +205,14 @@ impl Control {
         }
     }
 
-    /// The setting's name on screen, for a track with this machine. A synth's three settings do
+    /// The setting's name on screen, for a track playing this voice. A synth's three settings do
     /// different things on each.
-    pub fn label_on(self, machine: Machine) -> &'static str {
-        match (machine, self) {
-            (Machine::Fm, Self::Base(TrackControl::Harmonics)) => "Ratio",
-            (Machine::Fm, Self::Base(TrackControl::Timbre)) => "Index",
-            (Machine::Fm, Self::Base(TrackControl::Morph)) => "Feedback",
-            (Machine::Kick, Self::Base(TrackControl::Harmonics)) => "Punch",
-            (Machine::Kick, Self::Base(TrackControl::Timbre)) => "Tone",
-            (Machine::Kick, Self::Base(TrackControl::Morph)) => "Decay",
+    pub fn label_on(self, voice: SynthVoice) -> &'static str {
+        let [first, second, third] = voice.settings();
+        match self {
+            Self::Base(TrackControl::Harmonics) => first,
+            Self::Base(TrackControl::Timbre) => second,
+            Self::Base(TrackControl::Morph) => third,
             _ => self.label(),
         }
     }
@@ -225,6 +227,7 @@ impl Control {
         matches!(
             self,
             Self::Machine
+                | Self::SynthVoice
                 | Self::Sample
                 | Self::Mute
                 | Self::Solo
@@ -321,6 +324,13 @@ impl App {
                 if on != up {
                     self.toggle_control(control);
                 }
+            }
+            Control::SynthVoice => {
+                let voice = next_in(&SynthVoice::ALL, track.synth_voice, up);
+                self.apply(&Action::SetTrackSynthVoice {
+                    track: self.cursor.track,
+                    voice,
+                });
             }
             Control::Machine => {
                 let machine = next_in(&Machine::ALL, track.machine, up);
@@ -499,6 +509,14 @@ impl App {
                     self.toggle_control(control);
                 }
             }
+            Control::SynthVoice => {
+                if track.synth_voice != fresh.synth_voice {
+                    self.apply(&Action::SetTrackSynthVoice {
+                        track: self.cursor.track,
+                        voice: fresh.synth_voice,
+                    });
+                }
+            }
             Control::Machine => {
                 if track.machine != fresh.machine {
                     self.apply(&Action::SetTrackMachine {
@@ -630,13 +648,17 @@ impl App {
             self.open_machine_picker();
             return;
         }
+        if self.track_control() == Control::SynthVoice {
+            self.open_voice_picker();
+            return;
+        }
         if let Control::Envelope(slot, field) = self.track_control() {
             self.open_envelope_picker(slot, field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Machine, File, Type, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, Voice, File, Type, Dest, Shape, Rate, Retrig and Reset"
                     .to_owned();
             return;
         };
@@ -730,6 +752,23 @@ impl App {
             .to_vec();
         let position = Machine::ALL.iter().position(|machine| *machine == current);
         let mut picker = Picker::new("Machine", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List the synth voices, with what each does and the current one highlighted.
+    fn open_voice_picker(&mut self) {
+        let track = self.cursor.track;
+        let current = self.page_track().synth_voice;
+        let items = SynthVoice::ALL
+            .map(|voice| Item {
+                label: format!("{:<8}{}", voice.name(), voice.meaning()),
+                pick: Pick::SynthVoice { track, voice },
+            })
+            .to_vec();
+        let position = SynthVoice::ALL.iter().position(|voice| *voice == current);
+        let mut picker = Picker::new("Voice", items);
         picker.move_highlight(position.unwrap_or(0) as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
@@ -882,7 +921,7 @@ impl App {
                 }
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
-            Control::Lfo(..) | Control::FilterType | Control::Machine => {}
+            Control::Lfo(..) | Control::FilterType | Control::Machine | Control::SynthVoice => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
