@@ -11,7 +11,7 @@ use vt_model::song::{FilterType, Track};
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::command::swing;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 
 /// How far a small and a large step move a phase, in degrees.
@@ -55,6 +55,8 @@ pub enum EnvelopeField {
 pub enum Control {
     /// The file it plays.
     Sample,
+    Mute,
+    Solo,
     Base(TrackControl),
     Level,
     Swing,
@@ -108,6 +110,16 @@ pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelop
 /// Each LFO's row.
 pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
 
+/// The mixer's columns.
+pub const MIXER: [Control; 6] = [
+    Control::Level,
+    Control::Base(TrackControl::Pan),
+    Control::Base(TrackControl::Delay),
+    Control::Base(TrackControl::Reverb),
+    Control::Mute,
+    Control::Solo,
+];
+
 /// The sample's row.
 pub const SAMPLE: [Control; 1] = [Control::Sample];
 
@@ -155,6 +167,8 @@ impl Control {
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Sample => "File",
+            Self::Mute => "Mute",
+            Self::Solo => "Solo",
             Self::FilterType => "Type",
             Self::Level => "Level",
             Self::Swing => "Swing",
@@ -184,6 +198,8 @@ impl Control {
         matches!(
             self,
             Self::Sample
+                | Self::Mute
+                | Self::Solo
                 | Self::FilterType
                 | Self::Lfo(
                     _,
@@ -204,6 +220,9 @@ fn next_in<T: Copy + PartialEq>(items: &[T], current: T, up: bool) -> T {
 impl App {
     /// What the cursor is on.
     pub fn track_control(&self) -> Control {
+        if self.view == View::Mixer {
+            return MIXER[self.mixer_column.min(MIXER.len() - 1)];
+        }
         let rows = self.track_page.rows();
         let row = rows[self.track_row.min(rows.len() - 1)];
         row[self.track_field.min(row.len() - 1)]
@@ -250,6 +269,21 @@ impl App {
             moved.clamp(0, 0xFF) as u8
         };
         match control {
+            Control::Mute | Control::Solo => {
+                let live = self
+                    .levels
+                    .get(self.cursor.track)
+                    .copied()
+                    .unwrap_or_default();
+                let on = if control == Control::Mute {
+                    live.mute
+                } else {
+                    live.solo
+                };
+                if on != up {
+                    self.toggle_control(control);
+                }
+            }
             Control::Sample => {
                 self.status = "K chooses a sample".to_owned();
             }
@@ -316,6 +350,33 @@ impl App {
         self.track_field = field.min(rows[self.track_row].len() - 1);
     }
 
+    /// Run a command on the mixer. Moving goes between tracks, and everything else means what it
+    /// does on the track page.
+    pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
+        let times = self.count.unwrap_or(1).max(1) as isize;
+        let track = self.cursor.track as isize;
+        match cmd {
+            Cmd::Move(Motion::Down) => self.move_track(times),
+            Cmd::Move(Motion::Up) => self.move_track(-times),
+            Cmd::Move(Motion::First) => self.move_track(-track),
+            Cmd::Move(Motion::Last) => {
+                self.move_track(self.song().tracks.len() as isize - 1 - track)
+            }
+            Cmd::Move(Motion::Right) => {
+                let moved = self.mixer_column.saturating_add(times as usize);
+                self.mixer_column = moved.min(MIXER.len() - 1);
+            }
+            Cmd::Move(Motion::Left) => {
+                self.mixer_column = self.mixer_column.saturating_sub(times as usize);
+            }
+            Cmd::Move(Motion::RowStart) => self.mixer_column = 0,
+            Cmd::Move(Motion::RowEnd) => self.mixer_column = MIXER.len() - 1,
+            _ => return self.run_track_page(cmd),
+        }
+        self.count = None;
+        true
+    }
+
     /// Run a command on the track page. Returns false if it means the same as anywhere.
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
         let count = self.count.take();
@@ -373,6 +434,18 @@ impl App {
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));
+                }
+            }
+            Control::Mute | Control::Solo => {
+                let live = self
+                    .levels
+                    .get(self.cursor.track)
+                    .copied()
+                    .unwrap_or_default();
+                if (control == Control::Mute && live.mute)
+                    || (control == Control::Solo && live.solo)
+                {
+                    self.toggle_control(control);
                 }
             }
             Control::Sample if track.sample.is_some() => {
@@ -471,7 +544,21 @@ impl App {
     }
 
     /// List what an LFO's setting can be, with the current one highlighted.
+    /// Switch this track's mute or solo.
+    fn toggle_control(&mut self, control: Control) {
+        if control == Control::Mute {
+            self.toggle_mute();
+        } else {
+            self.toggle_solo();
+        }
+    }
+
     fn open_control_picker(&mut self) {
+        let control = self.track_control();
+        if matches!(control, Control::Mute | Control::Solo) {
+            self.toggle_control(control);
+            return;
+        }
         if self.track_control() == Control::Sample {
             self.open_default_sample_picker();
             return;
@@ -665,6 +752,7 @@ impl App {
     fn commit_control(&mut self, control: Control, text: &str) {
         let track = self.page_track();
         match control {
+            Control::Mute | Control::Solo => {}
             Control::Sample => {}
             Control::Base(_) | Control::Level => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {

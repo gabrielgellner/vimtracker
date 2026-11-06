@@ -27,7 +27,7 @@ const DIAGRAM_HEIGHT: usize = 4;
 const NAME_WIDTH: usize = 10;
 
 /// A setting's value as text.
-fn value(control: Control, track: &Track, project_swing: u16) -> String {
+pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> String {
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
@@ -42,6 +42,7 @@ fn value(control: Control, track: &Track, project_swing: u16) -> String {
             || "---".to_owned(),
             |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),
         ),
+        Control::Mute | Control::Solo => String::new(),
         Control::FilterType => track.filter.name().to_owned(),
         Control::Level => hex(track.level),
         Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),

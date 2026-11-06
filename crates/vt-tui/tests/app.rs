@@ -2477,7 +2477,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 4);
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
@@ -2730,4 +2730,96 @@ fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
         selected.unwrap(),
         "only the rows selected"
     );
+}
+
+fn mixer_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 12);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..12)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect()
+}
+
+#[test]
+fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 6");
+    assert_eq!(app.view, View::Mixer);
+    let depth = app.history.undo_depth();
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].level, 0xE1);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[0].level, 0xE0);
+
+    press(&mut app, "jl");
+    assert_eq!(app.cursor.track, 1);
+    press(&mut app, "i40");
+    assert_eq!(app.song().tracks[1].pan, 0x40);
+    assert_eq!(app.song().tracks[0].pan, 0x80, "only this track");
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[1].pan, 0x80);
+    press(&mut app, "l+");
+    assert_eq!(app.song().tracks[1].delay, 0x10);
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Reverb");
+    press(&mut app, "gg$h");
+    assert_eq!(app.cursor.track, 0);
+    assert_eq!(column_name(&app), "Mute");
+    press(&mut app, "G");
+    assert_eq!(app.cursor.track, 1);
+    press(&mut app, "0");
+    assert_eq!(column_name(&app), "Level");
+}
+
+#[test]
+fn the_mixers_mute_and_solo_reach_the_engine() {
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    block(&mut realtime, &mut app);
+    let _ = loudest(&mut realtime, 96_000);
+    press(&mut app, " 6$h=");
+    assert!(app.levels[0].mute);
+    assert!(mixer_text(&app)[3].contains('M'), "{}", mixer_text(&app)[3]);
+    press(&mut app, "=");
+    assert!(app.levels[0].mute, "= only switches on");
+    press(&mut app, " 3k;");
+    assert_eq!(loudest(&mut realtime, 2000), 0.0, "muted");
+    press(&mut app, " 6-");
+    assert!(!app.levels[0].mute);
+    press(&mut app, "K");
+    assert!(app.levels[0].mute);
+    press(&mut app, "x");
+    assert!(!app.levels[0].mute);
+    press(&mut app, "l=");
+    assert!(app.levels[0].solo);
+    assert!(mixer_text(&app)[3].contains('S'));
+    press(&mut app, "i");
+    assert!(!app.levels[0].solo);
+    assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
+}
+
+#[test]
+fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 30");
+    command(&mut app, "name bd");
+    press(&mut app, " 6");
+    assert!(
+        mixer_text(&app)[3].starts_with("01 BD"),
+        "{}",
+        mixer_text(&app)[3]
+    );
+    press(&mut app, "G");
+    assert_eq!(app.cursor.track, 31);
+    let text = mixer_text(&app);
+    assert!(text.iter().any(|line| line.starts_with("32 ")), "{text:?}");
+    assert!(!text.iter().any(|line| line.starts_with("01 ")), "{text:?}");
 }
