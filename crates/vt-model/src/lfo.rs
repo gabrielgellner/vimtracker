@@ -273,17 +273,20 @@ pub enum Shape {
     Ramp,
     Square,
     Random,
+    /// Random values with a smooth path between them.
+    Smooth,
 }
 
 impl Shape {
     /// Every shape, in the order `+` goes through them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Sine,
         Self::Tri,
         Self::Saw,
         Self::Ramp,
         Self::Square,
         Self::Random,
+        Self::Smooth,
     ];
 
     /// The name on screen.
@@ -295,6 +298,7 @@ impl Shape {
             Self::Ramp => "Ramp",
             Self::Square => "Square",
             Self::Random => "Random",
+            Self::Smooth => "Smooth",
         }
     }
 }

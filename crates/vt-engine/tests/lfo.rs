@@ -245,6 +245,28 @@ fn a_random_wave_holds_for_a_cycle_and_follows_the_seed() {
 }
 
 #[test]
+fn a_smooth_random_wave_moves_within_a_cycle_and_follows_the_seed() {
+    let lfo = |shape| Lfo {
+        shape,
+        rate: Rate::Note(QUARTER),
+        ..Lfo::default()
+    };
+    let smooth = lfo(Shape::Smooth);
+    let held = render(moving(lfo(Shape::Random)), flat(), STEP * 12);
+    let out = render(moving(smooth), flat(), STEP * 12);
+    // A quarter is four steps. It starts each on the value Random then settles at for that quarter,
+    // and is elsewhere in between.
+    close(left(&out, STEP * 4), left(&held, STEP * 5));
+    assert!((left(&out, STEP * 6) - left(&out, STEP * 4)).abs() > 0.001);
+    assert!((left(&out, STEP * 6) - left(&held, STEP * 6)).abs() > 0.001);
+    assert_eq!(out, render(moving(smooth), flat(), STEP * 12));
+
+    let mut reseeded = moving(smooth);
+    reseeded.seed += 1;
+    assert_ne!(out, render(reseeded, flat(), STEP * 12));
+}
+
+#[test]
 fn block_size_does_not_change_the_result() {
     let lfo = Lfo {
         shape: Shape::Sine,
