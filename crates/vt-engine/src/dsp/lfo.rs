@@ -29,6 +29,13 @@ pub fn wave(shape: Shape, cycles: f64, key: u64) -> f32 {
             }
         }
         Shape::Random => random(key, cycles.floor() as i64),
+        // It starts each cycle on the value `Random` holds for it, and eases to the next one.
+        Shape::Smooth => {
+            let cycle = cycles.floor() as i64;
+            let eased = position * position * (3.0 - 2.0 * position);
+            let from = random(key, cycle);
+            from + (random(key, cycle.wrapping_add(1)) - from) * eased
+        }
     }
 }
 
@@ -82,5 +89,32 @@ mod tests {
             let value = wave(Shape::Random, f64::from(cycle), 1);
             assert!((-1.0..=1.0).contains(&value), "{value}");
         }
+    }
+
+    #[test]
+    fn smooth_goes_through_randoms_values_without_jumping() {
+        for cycle in -3..100 {
+            let cycles = f64::from(cycle);
+            close(
+                wave(Shape::Smooth, cycles, 5),
+                wave(Shape::Random, cycles, 5),
+            );
+        }
+        // The steepest an eased path between values 2 apart can be is 3 per cycle.
+        let steps = 10_000;
+        let at = |step: i32| wave(Shape::Smooth, f64::from(step) / f64::from(steps), 5);
+        for step in -steps..steps * 100 {
+            let (here, next) = (at(step), at(step + 1));
+            assert!((-1.0..=1.0).contains(&here), "{here}");
+            assert!((next - here).abs() <= 3.01 / steps as f32, "{here} {next}");
+        }
+    }
+
+    #[test]
+    fn smooth_is_flat_at_each_value_and_follows_its_key() {
+        let start = wave(Shape::Smooth, 2.0, 5);
+        assert!((wave(Shape::Smooth, 2.001, 5) - start).abs() < 1e-4);
+        assert_ne!(wave(Shape::Smooth, 2.5, 5), start);
+        assert_ne!(wave(Shape::Smooth, 2.5, 5), wave(Shape::Smooth, 2.5, 6));
     }
 }

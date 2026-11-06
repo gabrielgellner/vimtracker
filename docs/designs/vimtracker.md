@@ -351,7 +351,7 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
     steps (`7st`) for lengths that slide against the bar, or hertz (`2.5hz`), which ignores the tempo. `+` is always faster.
 *   **Depth:** how far it swings either way, in hex in the destination's units, so `Cut 80` and `Depth +40` moves between
     `40` and `C0`. Negative flips the shape. **Phase:** where in the cycle it starts, in degrees.
-*   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square` or `Random` (a new value each cycle, from the seed).
+*   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square`, `Random` (a new value each cycle, from the seed) or `Smooth` (the same values, eased from one to the next).
 *   **Retrig:** when on, each note on the track restarts it. Otherwise playing from the top is the only restart. A
     `:reset` doesn't touch LFOs, as it's about patterns, and anything that should follow steps uses Retrig.
 *   **Timing:** position is worked out from the song's ticks, or from frames played for hertz, rather than added up, so

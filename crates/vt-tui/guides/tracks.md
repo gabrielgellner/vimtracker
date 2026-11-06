@@ -81,14 +81,15 @@ step moves the centre and the LFO carries on around it.
 | Setting | Value |
 |---|---|
 | Dest | `Cut` `Res` `Pan` `Vol` `Dly` `Rev` `Pitch`, or `---` for off |
-| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` |
+| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
 | Retrig | `on` restarts it with each note on this track |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
-falls and `Ramp` rises. `Random` picks a new value each cycle.
+falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
+from one to the next, which suits a slow drift on `Cut`.
 
 | Type this as a rate | For |
 |---|---|
