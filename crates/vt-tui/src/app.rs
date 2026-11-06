@@ -503,7 +503,7 @@ impl App {
                 self.mode = Mode::Help;
             }
             Cmd::Guides => self.open_guide_picker(),
-            Cmd::PickInstrument => self.open_instrument_picker(),
+            Cmd::PickValue => self.open_field_picker(),
             Cmd::ChooseInstrument => self.open_current_instrument_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
@@ -1046,7 +1046,7 @@ impl App {
         self.mode = Mode::Normal;
     }
 
-    fn set_field(&mut self, value: FieldValue) {
+    pub(crate) fn set_field(&mut self, value: FieldValue) {
         let Some(phrase) = self.phrase_id() else {
             return;
         };

@@ -157,7 +157,7 @@ Per-note tables are a further idea, and they get their own decision after G1.
 ### CUJ 3: Shape a filter sweep
 
 *   **Given**: A looping phrase with `CUT` values at the first and last steps of a selected column.
-*   **When**: The user presses `=`, adjusts onset and S-shape, then presses `Enter`.
+*   **When**: The user presses `S`, adjusts onset and S-shape, then presses `Enter`.
 *   **Then**: Every adjustment is heard during playback and shown in the column. `Enter` closes the
     controls and leaves the sweep live, one `u` restores the original values, and `Esc` cancels
     with no change. `.` applies the same shape to another selection.
@@ -391,7 +391,7 @@ Actions are plain data, so `.` can replay them and tests can run editing without
 *   **Operators and targets.** Operators are `d y > <`. Motions and `ic` act on the current column. `dd yy >>
     <<`, `ib` and `ip` act on whole steps. This differs from Vim on purpose: `dj` clears a column rather than
     whole steps, because editing one column is the everyday tracker action.
-*   **Counts.** A count extends the range: `d4j` covers five steps, and `3ib` three beats. With `+` and `-`, a
+*   **Counts.** A count extends the range: `d4j` covers five steps, and `3ib` three beats. With `=`, `-`, `+` and `_`, a
     count is the amount, on the cursor or selection.
 *   **Values.** `>` and `<` move notes by a semitone and other values by 1. They skip empty fields, `OFF`, FX
     names and instrument IDs.
@@ -683,7 +683,10 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `s` | Clear this field and start Insert there, as in Vim. An FX value keeps its command for the value typed next. `.` doesn't repeat it |
 | Normal | `r` | Replace this field as in Vim, with no move, and return to Normal. A note takes one note key and keeps its velocity and instrument. Other columns take a whole value, and an FX command goes on to its value. `.` repeats it |
 | Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z`. `"0` holds the last `y`, which a cut can't replace |
-| Normal | `+`, `-` | Increase or decrease the value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
+| Normal | `=`, `-` | Up or down a small step: a semitone, or 1 on a value. `Ctrl-A` and `Ctrl-X` do the same where the terminal delivers them |
+| Normal | `+`, `_` | Up or down a large step, the same keys with Shift: an octave, or `10` in hex. On `RET`, the small step changes only the rate digit and the large step only the fade digit, with no carry |
+| Normal | `x` | Clear a step's field. On the track page, instrument view and chain Transpose, back to the default |
+| Normal | `K` | Choose the field from a list: Instrument and FX columns, a chain row's phrase, a sample, and an LFO's `Dest`, `Shape`, `Rate` and `Retrig` |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
 | Normal | `gd`, `Ctrl-O`, `Tab`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |
 | Normal | `gc`, `gC` | Clone, deep-clone |
@@ -695,9 +698,9 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `Space x` | Pause in place, or resume |
 | Normal | `Space c` | Return to the start. If playing, stop there |
 | Normal | `i`, `v`, `V`, `:` | Insert, field Visual, step Visual, Command |
-| Visual | Motions, targets, `d y > < + - .` | Extend, then apply to the selection |
+| Visual | Motions, targets, `d y > < = - + _ .` | Extend, then apply to the selection |
 | Visual | `r`, then a value | Fill the cursor's column across the selection, as one undo. `vGra` writes C on each step. Velocity and instrument only go on notes, and FX values only on commands |
-| Visual | `=` | Enter Shape mode |
+| Visual | `S` | Enter Shape mode |
 | Visual | `Esc` | Normal mode |
 | Shape | `h l` | Onset (curve bias) down or up by 0.05, within 0.05 to 0.95 |
 | Shape | `j k` | S-shape (curve gain) down or up by 0.05, within 0.05 to 0.95 |
@@ -874,7 +877,7 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 *   **Issue 16: Swing.** Add `:swing` and `:tswing`. **Tests:** 66.7% gives exactly 80 ticks; 50% gives none; a track override does not move another track.
 *   **Issue 17: Curves.** Add `curve.rs`. **Tests:** end values are exact in both directions; curves stay monotonic; over 9 steps from `00` to `7F`, curve bias 0.8 gives `00 2E 49 5A 66 6E 75 7B 7F` and curve gain 0.2 gives `00 05 0D 1B 40 64 72 7A 7F`; refused selections give a message.
 *   **Issue 18: Live generators.** Add `generator.rs`, the `Phrase` field for them, their marker and `:gen apply`. `edit` applies any live generator whose owned columns it changes, except for a rerender. **Tests:** the rules under Live state; a rerender changes owned columns only and keeps it live; a live generator round-trips through saving; two generators on different columns are independent.
-*   **Issue 19: Shape mode.** Add `shape.rs`, Visual `=`, `gl`, and `Space ga`. Each change rerenders and publishes without adding history. `Enter` adds one history entry and `Esc` restores the starting version. `.` applies the last shape to the current selection. **Done when:** CUJ 3 and CUJ 4 work with audio.
+*   **Issue 19: Shape mode.** Add `shape.rs`, Visual `S`, `gl`, and `Space ga`. Each change rerenders and publishes without adding history. `Enter` adds one history entry and `Esc` restores the starting version. `.` applies the last shape to the current selection. **Done when:** CUJ 3 and CUJ 4 work with audio.
 *   **Issue 20: Scope and meters.** Add the scope tap to `link.rs` and `views/scope.rs`, with a small master scope and per-track level meters using Braille and block characters. **Tests:** the real-time guard stays at zero with the tap active; a full tap drops frames rather than waiting.
 *   **Issue 21: Render command.** Add `vimtracker render` and `:render`. **Tests:** golden hash tests; a render is exactly the loop's length; `--tail` extends it; `VT_BLESS=1` updates hashes. **Done when:** CUJ 7 works.
 *   **Issue 22: Autosave.** Add autosave to `project.rs`. **Tests:** only a changed project is written; a newer autosave is offered on opening; audio is unaffected.

@@ -2,7 +2,7 @@
 
 use crate::constants::BEAT_STEPS;
 use crate::label::is_named_slot;
-use crate::step::{FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
+use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step};
 
 /// One editable part of a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -302,41 +302,68 @@ pub enum Shift {
     /// `>` and `<`. Whole steps move notes only. Empty fields, `OFF`, FX names and instrument IDs
     /// are skipped.
     Operator,
-    /// `+` and `-`. The same, but instrument IDs change too.
+    /// `=` and `-`. The same, but instrument IDs change too.
     Increment,
+    /// `+` and `_`. The same again in large steps: an octave, or the top hex digit.
+    Large,
+}
+
+/// How much one large step is for a value in hex.
+const LARGE_HEX: i32 = 0x10;
+/// How much one large step is for a note.
+const LARGE_NOTE: i32 = 12;
+
+/// Move an FX value, within what its command takes. `RET`'s two digits mean separate things, a
+/// fade and a rate, so each moves alone and never carries into the other.
+fn shift_fx(command: FxCommand, value: u8, by: i32, kind: Shift) -> u8 {
+    let large = kind == Shift::Large;
+    if command == FxCommand::Ret {
+        let (fade, rate) = (i32::from(value >> 4), i32::from(value & 0x0F));
+        let (fade, rate) = if large {
+            ((fade + by).clamp(0, 0x0F), rate)
+        } else {
+            (fade, (rate + by).clamp(0, 0x0F))
+        };
+        return (fade << 4 | rate) as u8;
+    }
+    let by = if large { by * LARGE_HEX } else { by };
+    (i32::from(value) + by).clamp(0, i32::from(command.highest())) as u8
 }
 
 /// Move the covered values of a step, clamping to each field's range.
 pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
+    let by = by.clamp(-0xFFFF, 0xFFFF);
+    let large = kind == Shift::Large;
     if scope.covers(0)
         && let Note::On(midi) = step.note
     {
+        let by = if large { by * LARGE_NOTE } else { by };
         let moved = (i32::from(midi) + by).clamp(i32::from(MIN_NOTE), i32::from(MAX_NOTE));
         step.note = Note::On(moved as u8);
     }
     if scope.is_whole() {
         return;
     }
+    let hex_by = if large { by * LARGE_HEX } else { by };
     if scope.covers(1) {
         let current = i32::from(step.velocity.unwrap_or(MAX_VELOCITY));
-        let moved = (current + by).clamp(0, i32::from(MAX_VELOCITY));
-        if step.velocity.is_some() || by < 0 {
+        let moved = (current + hex_by).clamp(0, i32::from(MAX_VELOCITY));
+        if step.velocity.is_some() || hex_by < 0 {
             step.velocity = Some(moved as u8);
         }
     }
     if scope.covers(2)
-        && kind == Shift::Increment
+        && kind != Shift::Operator
         && let Some(instrument) = step.instrument
         && !is_named_slot(instrument)
     {
-        step.instrument = Some((i64::from(instrument) + i64::from(by)).max(0) as u32);
+        step.instrument = Some((i64::from(instrument) + i64::from(hex_by)).max(0) as u32);
     }
     for (index, slot) in step.fx.iter_mut().enumerate() {
         if scope.covers(3 + index)
             && let Some(command) = slot.command
         {
-            let highest = i32::from(command.highest());
-            slot.value = (i32::from(slot.value) + by).clamp(0, highest) as u8;
+            slot.value = shift_fx(command, slot.value, by, kind);
         }
     }
 }

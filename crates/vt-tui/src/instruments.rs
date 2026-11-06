@@ -49,7 +49,13 @@ impl Row {
     }
 }
 
-/// How far `+` and `-` move an envelope time. Short times need finer steps than long ones.
+/// How far a small step moves a volume.
+const VOLUME_STEP: u16 = 1;
+
+/// How many small steps a large one is. A volume's is `10` in hex.
+const LARGE_STEP: u16 = 0x10;
+
+/// How far a small step moves an envelope time. Short times need finer steps than long ones.
 fn envelope_step(value: u16) -> u16 {
     match value {
         0..=9 => 1,
@@ -85,20 +91,46 @@ impl App {
         self.instrument_row = Row::ALL[to.min(Row::ALL.len() - 1)];
     }
 
-    fn adjust_instrument(&mut self, up: bool, count: usize) {
+    fn adjust_instrument(&mut self, up: bool, count: usize, large: bool) {
         let Some(field) = self.instrument_row.field() else {
             return;
         };
         let mut value = self.instrument_value(field);
         for _ in 0..count {
+            let times = if large { LARGE_STEP } else { 1 };
             value = match (field, up) {
-                (InstrumentField::Volume, true) => (value + 1).min(0xFF),
-                (InstrumentField::Volume, false) => value.saturating_sub(1),
-                (_, true) => (value + envelope_step(value)).min(MAX_ENVELOPE_MS),
-                (_, false) => value.saturating_sub(envelope_step(value.saturating_sub(1))),
+                (InstrumentField::Volume, true) => (value + VOLUME_STEP * times).min(0xFF),
+                (InstrumentField::Volume, false) => value.saturating_sub(VOLUME_STEP * times),
+                (_, true) => (value + envelope_step(value) * times).min(MAX_ENVELOPE_MS),
+                (_, false) => value.saturating_sub(envelope_step(value.saturating_sub(1)) * times),
             };
         }
         self.set_instrument_value(field, value);
+    }
+
+    /// Put this row back to its default. An instrument nothing has been set on stays that way, and
+    /// a row already there leaves no undo step.
+    fn reset_instrument_row(&mut self) {
+        let Some(current) = self.song().instruments.get(&self.instrument).cloned() else {
+            return;
+        };
+        let Some(field) = self.instrument_row.field() else {
+            if current.sample.is_some() {
+                self.apply(&Action::ClearSample {
+                    instrument: self.instrument,
+                });
+            }
+            return;
+        };
+        let fresh = Instrument::default();
+        let value = match field {
+            InstrumentField::Volume => u16::from(fresh.volume),
+            InstrumentField::Attack => fresh.attack_ms,
+            InstrumentField::Release => fresh.release_ms,
+        };
+        if self.instrument_value(field) != value {
+            self.set_instrument_value(field, value);
+        }
     }
 
     /// Run a command in the instrument view. Returns false if it means the same as anywhere.
@@ -122,8 +154,18 @@ impl App {
                     self.instrument = self.song().next_instrument(self.instrument, false);
                 }
             }
-            Cmd::Increase => self.adjust_instrument(true, times),
-            Cmd::Decrease => self.adjust_instrument(false, times),
+            Cmd::Increase => self.adjust_instrument(true, times, false),
+            Cmd::Decrease => self.adjust_instrument(false, times, false),
+            Cmd::IncreaseLarge => self.adjust_instrument(true, times, true),
+            Cmd::DecreaseLarge => self.adjust_instrument(false, times, true),
+            Cmd::ClearField => self.reset_instrument_row(),
+            Cmd::PickValue if self.instrument_row == Row::Sample => {
+                let roots = self.sample_roots();
+                self.open_sample_picker(&roots);
+            }
+            Cmd::PickValue => {
+                self.status = "K chooses a sample on the Sample row".to_owned();
+            }
             Cmd::Audition => {
                 self.handle.send(Command::Preview {
                     instrument: self.instrument,

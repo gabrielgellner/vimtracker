@@ -9,16 +9,19 @@ hat pattern.
 | `W` `B` | Next or previous track |
 | `j` `k` | Next or previous row |
 | `h` `l` | Previous or next setting. `0` and `$` go to the ends |
-| `+` `-` | Change the value. A count goes further, as in `10+` |
+| `=` `-` | Up or down a small step. A count goes further, as in `10=` |
+| `+` `_` | Up or down a large step: the same keys with Shift |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
-| `K` | On an LFO's Dest, choose from a list |
+| `K` | On Dest, Shape, Rate or Retrig, choose from a list |
+| `x` | Back to its default: centre pan, 0 dB and so on |
 
 ## Filter and output
 
 `Cut`, `Res`, `Pan`, `Delay` and `Reverb` are where those values start when
 playback starts from the top. A step's FX changes them until the next start,
 and changing one here is heard straight away. `Level` scales the whole track.
-`Swing` overrides the project's. Type `off` to follow it again.
+Dimmed `Swing` is the project's, which this track follows. Changing it gives the
+track its own, and `x` follows the project again.
 
 ## LFOs
 
@@ -29,7 +32,7 @@ step moves the centre and the LFO carries on around it.
 |---|---|
 | Dest | `Cut` `Res` `Pan` `Vol` `Dly` `Rev`, or `---` for off |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` |
-| Rate | The length of one cycle. `+` is always faster |
+| Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
 | Retrig | `on` restarts it with each note on this track |
@@ -43,6 +46,12 @@ falls and `Ramp` rises. `Random` picks a new value each cycle.
 | `2 bars` | Whole bars |
 | `7st` | A number of steps, to slide against the bar |
 | `2.5hz` | Free of the tempo, from `0.01hz` to `100hz` |
+
+A large step is `10` in hex, 5% of swing, or 90° of phase. On a rate it skips
+dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
+
+`i` on Dest, Shape or Retrig opens the list too. `K` on Rate lists the note
+divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
 
 ## When an LFO restarts
 

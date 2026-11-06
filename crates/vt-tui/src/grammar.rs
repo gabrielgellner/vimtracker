@@ -27,6 +27,7 @@ pub enum Change {
     Increment {
         by: i32,
         cover: Cover,
+        kind: Shift,
     },
     ClearField,
     Paste {
@@ -155,8 +156,10 @@ impl App {
                 self.last_change = Some(change);
                 self.reset_pending();
             }
-            Cmd::Increase => self.increment(1),
-            Cmd::Decrease => self.increment(-1),
+            Cmd::Increase => self.increment(1, Shift::Increment),
+            Cmd::Decrease => self.increment(-1, Shift::Increment),
+            Cmd::IncreaseLarge => self.increment(1, Shift::Large),
+            Cmd::DecreaseLarge => self.increment(-1, Shift::Large),
             Cmd::Repeat => self.repeat(),
             Cmd::VisualField => self.enter_visual(Mode::VisualField),
             Cmd::VisualStep => self.enter_visual(Mode::VisualStep),
@@ -335,18 +338,19 @@ impl App {
         self.registers.insert('"', block);
     }
 
-    fn increment(&mut self, sign: i32) {
+    fn increment(&mut self, sign: i32, kind: Shift) {
         let amount = self.count.take().unwrap_or(1) as i32;
         let by = sign.saturating_mul(amount);
         if self.mode.is_visual() {
             let selection = self.current_selection();
-            self.apply_increment(by, selection.range, selection.scope);
+            self.apply_increment(by, selection.range, selection.scope, kind);
             self.last_change = Some(Change::Increment {
                 by,
                 cover: Cover::Sized {
                     steps: selection.range.len(),
                     scope: selection.scope,
                 },
+                kind,
             });
             self.leave_visual(selection);
             return;
@@ -381,6 +385,7 @@ impl App {
         let change = Change::Increment {
             by,
             cover: Cover::Cursor,
+            kind,
         };
         self.do_change(&change);
         self.last_change = Some(change);
@@ -524,14 +529,14 @@ impl App {
         phrase.steps().get(self.cursor.step)?.instrument
     }
 
-    fn apply_increment(&mut self, by: i32, range: StepRange, scope: Scope) {
+    fn apply_increment(&mut self, by: i32, range: StepRange, scope: Scope, kind: Shift) {
         if let Some(phrase) = self.phrase_id() {
             self.apply(&Action::Shift {
                 phrase,
                 range,
                 scope,
                 by,
-                kind: Shift::Increment,
+                kind,
             });
         }
     }
@@ -543,9 +548,9 @@ impl App {
                 let (range, scope) = self.resolve_cover(*cover);
                 self.apply_operator(*op, range, scope);
             }
-            Change::Increment { by, cover } => {
+            Change::Increment { by, cover, kind } => {
                 let (range, scope) = self.resolve_cover(*cover);
-                self.apply_increment(*by, range, scope);
+                self.apply_increment(*by, range, scope, *kind);
             }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
@@ -639,8 +644,8 @@ impl App {
                 Change::Operator { op, .. } => {
                     self.apply_operator(op, selection.range, selection.scope);
                 }
-                Change::Increment { by, .. } => {
-                    self.apply_increment(by, selection.range, selection.scope);
+                Change::Increment { by, kind, .. } => {
+                    self.apply_increment(by, selection.range, selection.scope, kind);
                 }
                 Change::ClearField => {
                     self.apply_operator(Op::Clear, selection.range, selection.scope)

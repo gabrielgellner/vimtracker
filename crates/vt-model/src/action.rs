@@ -165,6 +165,10 @@ pub enum Action {
     /// Set several instruments' samples as one change, creating them if needed. A slot marked
     /// as labelled becomes so, and others stay as they were.
     SetSamples(Vec<SlotSample>),
+    /// Leave an instrument with no sample.
+    ClearSample {
+        instrument: u32,
+    },
     /// Mark whether a slot's name is a label, creating the instrument if needed.
     SetLabelled {
         id: u32,
@@ -519,6 +523,11 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .entry(*instrument)
                 .or_insert_with(|| Arc::new(Instrument::default()));
             Arc::make_mut(entry).sample = Some(sample.clone());
+        }
+        Action::ClearSample { instrument } => {
+            if let Some(entry) = next.instruments.get_mut(instrument) {
+                Arc::make_mut(entry).sample = None;
+            }
         }
         Action::SetSamples(samples) => {
             for slot in samples {

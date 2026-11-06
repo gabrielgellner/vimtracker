@@ -9,8 +9,10 @@ it.
 | `h` `l` | Previous or next instrument |
 | `j` `k` | Next or previous row |
 | `;` | Audition: hear this instrument at C-4 |
-| `+` `-` | Change the value |
-| `i` | On Sample, list samples. On other rows, type a value |
+| `=` `-` | Change the value by a small step |
+| `+` `_` | Change the value by a large step |
+| `x` | Back to its default. On Sample, no sample |
+| `i` `K` | On Sample, list samples. On other rows, `i` types a value |
 
 | Row | Value |
 |---|---|
@@ -89,7 +91,7 @@ always the last one you entered, however you entered it.
 |---|---|
 | `K` | Choose from a list, labels first. Type to filter |
 | `i`, then `bd` or `04` | Type a label or number |
-| `+` `-` | Change it. An empty cell gets `Inst` |
+| `=` `-` | Change it. An empty cell gets `Inst` |
 | `gd` | Open it in the instrument view, and `C-o` comes back |
 
 From anywhere, `Space i K` chooses the current instrument from the same list.

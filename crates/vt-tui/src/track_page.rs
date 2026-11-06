@@ -3,8 +3,9 @@
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, TrackControl};
 use vt_model::constants::{MAX_SWING, MIN_SWING};
-use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape};
+use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
+use vt_model::song::Track;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -12,8 +13,14 @@ use crate::input::command::swing;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
 
-/// How far `+` and `-` move a phase, in degrees.
+/// How far a small and a large step move a phase, in degrees.
 const PHASE_NUDGE: i32 = 15;
+const PHASE_JUMP: i32 = 90;
+/// How far a small and a large step move a swing, in tenths of a percent.
+const SWING_NUDGE: i32 = 10;
+const SWING_JUMP: i32 = 50;
+/// How many small steps a large one is for a value in hex.
+const HEX_JUMP: i64 = 0x10;
 
 /// One setting of an LFO.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,7 +123,7 @@ impl App {
         row[self.track_field.min(row.len() - 1)]
     }
 
-    fn page_track(&self) -> vt_model::song::Track {
+    fn page_track(&self) -> Track {
         self.song()
             .tracks
             .get(self.cursor.track)
@@ -148,11 +155,12 @@ impl App {
         }
     }
 
-    fn adjust_control(&mut self, up: bool, count: usize) {
+    fn adjust_control(&mut self, up: bool, count: usize, large: bool) {
         let control = self.track_control();
         let track = self.page_track();
         let change = |value: u8| {
-            let moved = i64::from(value) + if up { 1 } else { -1 } * count as i64;
+            let size = if large { HEX_JUMP } else { 1 };
+            let moved = i64::from(value) + if up { size } else { -size } * count as i64;
             moved.clamp(0, 0xFF) as u8
         };
         match control {
@@ -169,7 +177,8 @@ impl App {
             Control::Level => self.set_hex(control, change(track.level)),
             Control::Swing => {
                 let from = track.swing.unwrap_or(self.song().swing);
-                let by = 10 * count.min(usize::from(MAX_SWING)) as i32;
+                let size = if large { SWING_JUMP } else { SWING_NUDGE };
+                let by = size * count.min(usize::from(MAX_SWING)) as i32;
                 let moved = i32::from(from) + if up { by } else { -by };
                 self.apply(&Action::SetTrackSwing {
                     track: self.cursor.track,
@@ -179,7 +188,7 @@ impl App {
             Control::Lfo(slot, field) => {
                 let mut lfo = track.lfos[slot];
                 for _ in 0..count.min(0x200) {
-                    adjust_lfo(&mut lfo, field, up);
+                    adjust_lfo(&mut lfo, field, up, large);
                 }
                 self.set_lfo(slot, lfo);
             }
@@ -205,12 +214,13 @@ impl App {
             Cmd::Move(Motion::Left) => self.move_control(row, field.saturating_sub(times)),
             Cmd::Move(Motion::RowStart) => self.move_control(row, 0),
             Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
-            Cmd::Increase => self.adjust_control(true, times),
-            Cmd::Decrease => self.adjust_control(false, times),
-            Cmd::PickDestination => self.open_destination_picker(),
-            Cmd::EnterInsert if self.track_control().is_choice() => {
-                self.status = "Press + or - to change this".to_owned();
-            }
+            Cmd::Increase => self.adjust_control(true, times, false),
+            Cmd::Decrease => self.adjust_control(false, times, false),
+            Cmd::IncreaseLarge => self.adjust_control(true, times, true),
+            Cmd::DecreaseLarge => self.adjust_control(false, times, true),
+            Cmd::ClearField => self.reset_control(),
+            Cmd::PickValue => self.open_control_picker(),
+            Cmd::EnterInsert if self.track_control().is_choice() => self.open_control_picker(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.mode = Mode::Insert;
@@ -223,53 +233,133 @@ impl App {
         true
     }
 
-    /// List what an LFO can move, with what it moves now highlighted.
-    fn open_destination_picker(&mut self) {
-        let Control::Lfo(slot, LfoField::Destination) = self.track_control() else {
-            self.status = "K chooses from a list on an LFO's Dest".to_owned();
+    /// Put the setting under the cursor back to its default. If it's there already, nothing changes
+    /// and no undo step is left.
+    fn reset_control(&mut self) {
+        let control = self.track_control();
+        let track = self.page_track();
+        let fresh = Track::default();
+        match control {
+            Control::Base(which) => {
+                let value = |track: &Track| match which {
+                    TrackControl::Cutoff => track.cutoff,
+                    TrackControl::Resonance => track.resonance,
+                    TrackControl::Pan => track.pan,
+                    TrackControl::Delay => track.delay,
+                    TrackControl::Reverb => track.reverb,
+                };
+                if value(&track) != value(&fresh) {
+                    self.set_hex(control, value(&fresh));
+                }
+            }
+            Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
+            Control::Level => {}
+            Control::Swing if track.swing.is_some() => {
+                self.apply(&Action::SetTrackSwing {
+                    track: self.cursor.track,
+                    swing: None,
+                });
+            }
+            Control::Swing => {}
+            Control::Lfo(slot, field) => {
+                let (lfo, default) = (track.lfos[slot], Lfo::default());
+                let reset = match field {
+                    LfoField::Destination => Lfo {
+                        destination: default.destination,
+                        ..lfo
+                    },
+                    LfoField::Shape => Lfo {
+                        shape: default.shape,
+                        ..lfo
+                    },
+                    LfoField::Rate => Lfo {
+                        rate: default.rate,
+                        ..lfo
+                    },
+                    LfoField::Depth => Lfo {
+                        depth: default.depth,
+                        ..lfo
+                    },
+                    LfoField::Phase => Lfo {
+                        phase: default.phase,
+                        ..lfo
+                    },
+                    LfoField::Retrig => Lfo {
+                        retrig: default.retrig,
+                        ..lfo
+                    },
+                };
+                if reset != lfo {
+                    self.set_lfo(slot, reset);
+                }
+            }
+        }
+    }
+
+    /// List what an LFO's setting can be, with the current one highlighted.
+    fn open_control_picker(&mut self) {
+        let Control::Lfo(slot, field) = self.track_control() else {
+            self.status = "K chooses from a list on Dest, Shape, Rate and Retrig".to_owned();
             return;
         };
         let track = self.cursor.track;
-        let current = self.page_track().lfos[slot].destination;
-        let mut choices = vec![None];
-        choices.extend(Destination::ALL.map(Some));
+        let lfo = self.page_track().lfos[slot];
+        let (title, choices): (&'static str, Vec<(String, Lfo)>) = match field {
+            LfoField::Destination => {
+                let off = (
+                    "---  Off".to_owned(),
+                    Lfo {
+                        destination: None,
+                        ..lfo
+                    },
+                );
+                let on = Destination::ALL.map(|destination| {
+                    (
+                        format!("{}  {}", destination.name(), meaning(destination)),
+                        Lfo {
+                            destination: Some(destination),
+                            ..lfo
+                        },
+                    )
+                });
+                ("LFO destination", std::iter::once(off).chain(on).collect())
+            }
+            LfoField::Shape => {
+                let shapes =
+                    Shape::ALL.map(|shape| (shape.name().to_owned(), Lfo { shape, ..lfo }));
+                ("LFO shape", shapes.to_vec())
+            }
+            LfoField::Rate => {
+                let rates = note_rates()
+                    .into_iter()
+                    .map(|rate| (rate.to_string(), Lfo { rate, ..lfo }))
+                    .collect();
+                ("LFO rate. i types any other", rates)
+            }
+            LfoField::Retrig => {
+                let choices = [false, true].map(|retrig| {
+                    let name = if retrig { "on" } else { "off" };
+                    (name.to_owned(), Lfo { retrig, ..lfo })
+                });
+                ("LFO retrig", choices.to_vec())
+            }
+            LfoField::Depth | LfoField::Phase => {
+                self.status = "K chooses from a list on Dest, Shape, Rate and Retrig".to_owned();
+                return;
+            }
+        };
+        let position = choices.iter().position(|(_, choice)| *choice == lfo);
         let items = choices
-            .iter()
-            .map(|destination| Item {
-                label: match destination {
-                    Some(destination) => {
-                        format!("{}  {}", destination.name(), meaning(*destination))
-                    }
-                    None => "---  Off".to_owned(),
-                },
-                pick: Pick::Destination {
-                    track,
-                    slot,
-                    destination: *destination,
-                },
+            .into_iter()
+            .map(|(label, lfo)| Item {
+                label,
+                pick: Pick::Lfo { track, slot, lfo },
             })
             .collect();
-        let position = choices.iter().position(|choice| *choice == current);
-        let mut picker = Picker::new("LFO destination", items);
+        let mut picker = Picker::new(title, items);
         picker.move_highlight(position.unwrap_or(0) as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
-    }
-
-    pub(crate) fn pick_destination(
-        &mut self,
-        track: usize,
-        slot: usize,
-        destination: Option<Destination>,
-    ) {
-        let Some(found) = self.song().tracks.get(track) else {
-            return;
-        };
-        let lfo = Lfo {
-            destination,
-            ..found.lfos[slot]
-        };
-        self.apply(&Action::SetLfo { track, slot, lfo });
     }
 
     /// Type a value: two hex digits for levels, and anything else then `Enter`.
@@ -374,7 +464,7 @@ fn meaning(destination: Destination) -> &'static str {
 }
 
 /// Move one setting of an LFO one notch.
-fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool) {
+fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool, large: bool) {
     match field {
         LfoField::Destination => {
             let mut choices = vec![None];
@@ -382,13 +472,16 @@ fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool) {
             lfo.destination = next_in(&choices, lfo.destination, up);
         }
         LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
+        LfoField::Rate if large => lfo.rate = lfo.rate.jumped(up),
         LfoField::Rate => lfo.rate = lfo.rate.nudged(up),
         LfoField::Depth => {
-            let moved = lfo.depth + if up { 1 } else { -1 };
+            let size = if large { HEX_JUMP as i16 } else { 1 };
+            let moved = lfo.depth + if up { size } else { -size };
             lfo.depth = moved.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH);
         }
         LfoField::Phase => {
-            let by = if up { PHASE_NUDGE } else { -PHASE_NUDGE };
+            let size = if large { PHASE_JUMP } else { PHASE_NUDGE };
+            let by = if up { size } else { -size };
             lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
         }
         LfoField::Retrig => lfo.retrig = !lfo.retrig,

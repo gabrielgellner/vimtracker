@@ -41,6 +41,38 @@ pub enum FxCommand {
 }
 
 impl FxCommand {
+    /// Every command, in the order a list shows them.
+    pub const ALL: [Self; 11] = [
+        Self::Vol,
+        Self::Pan,
+        Self::Cut,
+        Self::Res,
+        Self::Dly,
+        Self::Rev,
+        Self::Del,
+        Self::Kil,
+        Self::Off,
+        Self::Ret,
+        Self::Cha,
+    ];
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Vol => "Track gain, holds",
+            Self::Pan => "Pan, holds. 00 left, 80 centre, FF right",
+            Self::Cut => "Filter cutoff, holds",
+            Self::Res => "Filter resonance, holds",
+            Self::Dly => "Delay send, holds",
+            Self::Rev => "Reverb send, holds",
+            Self::Del => "Delay this step by xx units",
+            Self::Kil => "Cut the note after xx units",
+            Self::Off => "Start the release after xx units",
+            Self::Ret => "Retrigger. x is the fade, y the units between",
+            Self::Cha => "Play the note with a chance of xx out of FF",
+        }
+    }
+
     /// The highest value this takes. Those on the level scale stop at its top.
     pub fn highest(self) -> u8 {
         match self {

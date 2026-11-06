@@ -10,8 +10,9 @@ use vt_model::label::name_of;
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
+use vt_model::step::{FxCommand, FxSlot};
 
-use crate::app::{App, Field};
+use crate::app::{App, Entry, Field};
 use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -216,11 +217,75 @@ impl App {
     /// Choose this step's instrument from those that exist, labels first, with the current one
     /// highlighted. It only means something on the Instrument column.
     pub(crate) fn open_instrument_picker(&mut self) {
-        if self.cursor.field != Field::Instrument {
-            self.status = "K chooses an instrument on the Instrument column".to_owned();
+        self.open_instruments(Pick::Instrument);
+    }
+
+    /// Choose this field from a list, in the columns that are one.
+    pub(crate) fn open_field_picker(&mut self) {
+        match self.cursor.field {
+            Field::Instrument => self.open_instrument_picker(),
+            Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot),
+            Field::Note | Field::Velocity => {
+                self.status = "K chooses on the Instrument and FX columns".to_owned();
+            }
+        }
+    }
+
+    /// List the FX commands, with what each does and this slot's current one highlighted.
+    fn open_fx_picker(&mut self, slot: usize) {
+        let current = self.current_slot(slot).and_then(|s| s.command);
+        let empty = Item {
+            label: "---  Empty".to_owned(),
+            pick: Pick::FxCommand {
+                slot,
+                command: None,
+            },
+        };
+        let items = std::iter::once(empty)
+            .chain(FxCommand::ALL.map(|command| Item {
+                label: format!("{}  {}", command.name(), command.meaning()),
+                pick: Pick::FxCommand {
+                    slot,
+                    command: Some(command),
+                },
+            }))
+            .collect();
+        let position = FxCommand::ALL
+            .iter()
+            .position(|command| Some(*command) == current)
+            .map_or(0, |position| position + 1);
+        let mut picker = Picker::new("FX commands", items);
+        picker.move_highlight(position as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
+    /// to be typed, as a command with no value yet doesn't take effect.
+    fn pick_fx_command(&mut self, slot: usize, command: Option<FxCommand>) {
+        let Some(command) = command else {
+            self.set_field(FieldValue::Slot(slot, FxSlot::default()));
+            self.cursor.field = Field::FxCommand(slot);
+            return;
+        };
+        self.cursor.field = Field::FxValue(slot);
+        let current = self.current_slot(slot);
+        if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {
+            self.set_field(FieldValue::Slot(
+                slot,
+                FxSlot {
+                    command: Some(command),
+                    value,
+                },
+            ));
             return;
         }
-        self.open_instruments(Pick::Instrument);
+        self.entry = Entry {
+            command: Some(command),
+            ..Entry::default()
+        };
+        self.replacing = Some(Field::FxValue(slot));
+        self.mode = Mode::Replace;
     }
 
     /// Choose the current instrument from anywhere, writing nothing to the song.
@@ -328,11 +393,11 @@ impl App {
                     Some(Pick::Kit(path)) => self.load_kit(&path),
                     Some(Pick::Instrument(id)) => self.pick_instrument(id),
                     Some(Pick::CurrentInstrument(id)) => self.instrument = id,
-                    Some(Pick::Destination {
-                        track,
-                        slot,
-                        destination,
-                    }) => self.pick_destination(track, slot, destination),
+                    Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
+                    Some(Pick::Lfo { track, slot, lfo }) => {
+                        self.apply(&Action::SetLfo { track, slot, lfo });
+                    }
+                    Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
                     Some(Pick::Guide(guide)) => {
                         self.guide = Some(guide);
                         self.guide_scroll = 0;

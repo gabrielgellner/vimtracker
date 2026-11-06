@@ -286,7 +286,8 @@ impl App {
         true
     }
 
-    fn adjust_row(&mut self, by: i32) {
+    /// Change a row. A large step is an octave of transpose, or `10` in hex of phrase numbers.
+    fn adjust_row(&mut self, by: i32, large: bool) {
         let (Some(chain), Some(entry)) = (
             self.chain_id(),
             self.chain_entries().get(self.cursor.slot).copied(),
@@ -295,17 +296,23 @@ impl App {
         };
         let entry = match self.chain_column {
             ChainColumn::Transpose => ChainEntry {
-                transpose: (i32::from(entry.transpose) + by)
+                transpose: (i32::from(entry.transpose) + if large { by * 12 } else { by })
                     .clamp(i32::from(MIN_TRANSPOSE), i32::from(MAX_TRANSPOSE))
                     as i8,
                 ..entry
             },
             ChainColumn::Phrase => {
                 let phrases = &self.song().phrases;
+                let distance = if large { by.unsigned_abs() * 0x10 } else { 1 };
                 let next = if by > 0 {
-                    phrases.range(entry.phrase + 1..).next()
+                    phrases
+                        .range(entry.phrase.saturating_add(distance)..)
+                        .next()
                 } else {
-                    phrases.range(..entry.phrase).next_back()
+                    phrases
+                        .range(..=entry.phrase.saturating_sub(distance))
+                        .next_back()
+                        .filter(|(phrase, _)| **phrase != entry.phrase)
                 };
                 let Some((&phrase, _)) = next else {
                     return;
@@ -318,6 +325,90 @@ impl App {
             slot: self.cursor.slot,
             entry,
         });
+    }
+
+    /// Put this row's transpose back to 0. A row always plays a phrase, so `dd` is for removing it.
+    fn reset_row(&mut self) {
+        if self.chain_column != ChainColumn::Transpose {
+            self.status = "x resets Transpose. A row needs a phrase, so dd removes it".to_owned();
+            return;
+        }
+        if let (Some(chain), Some(entry)) = (
+            self.chain_id(),
+            self.chain_entries().get(self.cursor.slot).copied(),
+        ) && entry.transpose != 0
+        {
+            self.apply(&Action::SetChainEntry {
+                chain,
+                slot: self.cursor.slot,
+                entry: ChainEntry {
+                    transpose: 0,
+                    ..entry
+                },
+            });
+        }
+    }
+
+    /// List the phrases to choose from for this row, with the one it plays highlighted.
+    fn open_phrase_picker(&mut self) {
+        if self.chain_column != ChainColumn::Phrase {
+            self.status = "K chooses a phrase on the Phrase column".to_owned();
+            return;
+        }
+        let Some(_) = self.chain_id() else {
+            self.status = "This track has no chain".to_owned();
+            return;
+        };
+        let current = self.chain_entries().get(self.cursor.slot).map(|e| e.phrase);
+        let phrases: Vec<(u32, usize)> = self
+            .song()
+            .phrases
+            .iter()
+            .map(|(id, phrase)| (*id, phrase.len()))
+            .collect();
+        let position = phrases.iter().position(|(id, _)| Some(*id) == current);
+        let items = phrases
+            .iter()
+            .map(|(id, length)| {
+                let shared = if self.phrase_uses(*id).len() > 1 {
+                    "*"
+                } else {
+                    ""
+                };
+                Item {
+                    label: format!("{id:02X}{shared}  {length} steps"),
+                    pick: Pick::RowPhrase(*id),
+                }
+            })
+            .collect();
+        let mut picker = Picker::new("Phrases", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Play a chosen phrase on this row, or on a new one if the cursor is past the last.
+    pub(crate) fn pick_row_phrase(&mut self, phrase: u32) {
+        let Some(chain) = self.chain_id() else {
+            return;
+        };
+        let slot = self.cursor.slot;
+        let action = match self.chain_entries().get(slot).copied() {
+            Some(entry) => Action::SetChainEntry {
+                chain,
+                slot,
+                entry: ChainEntry { phrase, ..entry },
+            },
+            None => Action::InsertChainEntry {
+                chain,
+                at: slot,
+                entry: ChainEntry {
+                    phrase,
+                    transpose: 0,
+                },
+            },
+        };
+        self.apply(&action);
     }
 
     /// Run a command in the chain view. Returns false if it means the same as anywhere.
@@ -340,8 +431,12 @@ impl App {
             Cmd::Move(Motion::Right | Motion::RowEnd) => {
                 self.chain_column = ChainColumn::Transpose;
             }
-            Cmd::Increase => self.adjust_row(times as i32),
-            Cmd::Decrease => self.adjust_row(-(times as i32)),
+            Cmd::Increase => self.adjust_row(times as i32, false),
+            Cmd::Decrease => self.adjust_row(-(times as i32), false),
+            Cmd::IncreaseLarge => self.adjust_row(times as i32, true),
+            Cmd::DecreaseLarge => self.adjust_row(-(times as i32), true),
+            Cmd::ClearField => self.reset_row(),
+            Cmd::PickValue => self.open_phrase_picker(),
             Cmd::RemoveRow => {
                 if let (Some(chain), Some(entry)) =
                     (chain, self.chain_entries().get(self.cursor.slot).copied())

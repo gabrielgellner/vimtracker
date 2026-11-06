@@ -19,7 +19,7 @@ use crate::views::status::format_swing;
 const NAME_WIDTH: usize = 10;
 
 /// A setting's value as text.
-fn value(control: Control, track: &Track) -> String {
+fn value(control: Control, track: &Track, project_swing: u16) -> String {
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
@@ -28,7 +28,7 @@ fn value(control: Control, track: &Track) -> String {
         Control::Base(TrackControl::Delay) => hex(track.delay),
         Control::Base(TrackControl::Reverb) => hex(track.reverb),
         Control::Level => hex(track.level),
-        Control::Swing => track.swing.map_or_else(|| "--".to_owned(), format_swing),
+        Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
         Control::Lfo(slot, field) => {
             let lfo = &track.lfos[slot];
             match field {
@@ -77,10 +77,13 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let text = if typing {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track)
+            value(*control, track, app.song().swing)
         };
+        // A track following the project's swing shows what it plays, dimmed as it isn't its own.
         let style = if *control == current {
             theme::cursor(app.mode)
+        } else if *control == Control::Swing && track.swing.is_none() {
+            theme::dim()
         } else {
             Style::new()
         };

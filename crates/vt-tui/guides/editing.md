@@ -34,7 +34,7 @@ Follow one with a motion or a target, or double it for this whole step:
 | `Esc` | Stop selecting |
 
 Move to grow the selection. The cursor shows which end is moving. Then press
-`d`, `x`, `y`, `>`, `<`, `+`, `-`, `r` or `.`.
+`d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r` or `.`.
 
 `r` fills the cursor's column across the selection, as one undo: `vGra` writes
 a C on every step to the end of the loop. Notes already there keep their
@@ -48,7 +48,9 @@ note, an FX value only on steps with a command, and `.` repeats it.
 | `x` | Clear this field |
 | `r` | Replace this field, as in Vim: no move, and back to Normal |
 | `s` | Clear this field and start Insert there, as in Vim |
-| `+` `-` | Change the value up or down. `C-a` and `C-x` do the same |
+| `=` `-` | Up or down a small step. `C-a` and `C-x` do the same |
+| `+` `_` | Up or down a large step: the same keys with Shift |
+| `K` | On the Instrument or an FX column, choose from a list |
 | `.` | Repeat the last change |
 | `p` | Paste over, from the cursor down. Past the end it stores more |
 | `3p` | Paste 3 times, end to end, as one undo |
@@ -57,6 +59,15 @@ note, an FX value only on steps with a command, and `.` repeats it.
 | `"a` | Use register `a`, before `y`, `d` or `p`. `a` to `z` all work |
 | `"0` | The last thing you copied with `y`, which a cut can't replace |
 | `u` `C-r` | Undo and redo |
+
+A small step is a semitone, or 1 on a value. A large step is an octave, or `10`
+in hex, which changes the left digit. Counts work: `3=`. `RET` is different,
+since its digits mean separate things: `=` `-` change only the right digit,
+the rate, and `+` `_` only the left, the fade, so one never carries into the
+other.
+
+`K` on an FX column lists the commands with what each does. If the slot is
+empty, type the value next. If it has one, it stays.
 
 `r` then `k` changes a note to high C. On other columns it takes a whole value:
 `r40` for a velocity, `rbd` for an instrument, or `rCUT40` for an FX slot. A

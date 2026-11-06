@@ -429,7 +429,7 @@ fn the_instrument_view_sets_volume_attack_and_release() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().instruments[&0].attack_ms, 25);
     // Each adjustment is one undo step.
-    press(&mut app, "j+");
+    press(&mut app, "j=");
     assert_eq!(app.song().instruments[&0].release_ms, 55);
     press(&mut app, "u");
     assert_eq!(app.song().instruments[&0].release_ms, 50);
@@ -452,7 +452,7 @@ fn the_instrument_view_refuses_values_out_of_range_and_keeps_notes_safe() {
     // These keys mean something else in the phrase view, and must not touch a step here.
     let before = notes(&app);
     press(&mut app, "kk");
-    press(&mut app, "+-");
+    press(&mut app, "=-");
     assert_eq!(notes(&app), before);
     assert_eq!(app.cursor.step, 0);
 }
@@ -627,7 +627,7 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     assert_eq!(app.chain_entries()[1].phrase, 0x1F);
     assert!(app.song().phrases.contains_key(&0x1F));
     // Transpose by keys and by typing, and out of range is refused.
-    press(&mut app, "l5+");
+    press(&mut app, "l5=");
     assert_eq!(app.chain_entries()[1].transpose, 5);
     press(&mut app, "i-12");
     special(&mut app, KeyCode::Enter);
@@ -1474,12 +1474,12 @@ fn editing_the_instrument_in_the_phrase_is_remembered_for_the_next_note() {
     command(&mut app, "inst 4");
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "kll+");
+    press(&mut app, "kll=");
     assert_eq!(step_instrument(&app, 0), Some(5));
     assert_eq!(app.instrument, 5);
     press(&mut app, "-");
     assert_eq!(app.instrument, 4);
-    press(&mut app, "3+");
+    press(&mut app, "3=");
     assert_eq!(step_instrument(&app, 0), Some(7));
     assert_eq!(app.instrument, 7);
 
@@ -1503,7 +1503,7 @@ fn typing_an_instrument_is_remembered_too() {
 fn plus_on_an_empty_instrument_cell_writes_the_remembered_one() {
     let (mut app, _realtime) = app();
     command(&mut app, "inst 9");
-    press(&mut app, "ll+");
+    press(&mut app, "ll=");
     assert_eq!(step_instrument(&app, 0), Some(9));
     assert_eq!(app.instrument, 9);
     press(&mut app, "u");
@@ -1789,7 +1789,7 @@ fn k_picks_an_instrument_for_this_step_with_labels_first() {
     command(&mut app, &format!("kit {}", labelled_kit().display()));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal, "not on the Instrument column");
-    assert!(app.status.contains("Instrument column"), "{}", app.status);
+    assert!(app.status.contains("Instrument and FX"), "{}", app.status);
 
     press(&mut app, "llK");
     assert_eq!(app.mode, Mode::Picker);
@@ -1883,11 +1883,11 @@ fn plus_and_minus_walk_named_slots_through_those_that_exist() {
         }),
     );
     command(&mut app, "inst ch");
-    press(&mut app, "ll+");
+    press(&mut app, "ll=");
     assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
     press(&mut app, "-");
     assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
@@ -2286,7 +2286,7 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     assert_eq!(track(&app).level, 0xF8);
     press(&mut app, "20-");
     assert_eq!(track(&app).level, 0xE4);
-    press(&mut app, "99+");
+    press(&mut app, "99=");
     assert_eq!(track(&app).level, 0xF8);
     command(&mut app, "tvol FF");
     assert_eq!(track(&app).level, 0xF8);
@@ -2305,14 +2305,14 @@ fn the_track_page_types_lfo_settings() {
     let lfo = |app: &App| app.song().tracks[0].lfos[0];
     // Down to LFO 1, on Dest.
     press(&mut app, "jj0");
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(lfo(&app).destination, Some(Destination::Cut));
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, Some(Destination::Rev));
 
-    press(&mut app, "l+");
+    press(&mut app, "l=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
 
     press(&mut app, "l");
@@ -2344,11 +2344,11 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "4-");
     assert_eq!(lfo(&app).phase, 345);
 
-    press(&mut app, "l+");
+    press(&mut app, "l=");
     assert!(lfo(&app).retrig);
     press(&mut app, "i");
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("+ or -"), "{}", app.status);
+    assert_eq!(app.mode, Mode::Picker, "i lists a setting that is a list");
+    special(&mut app, KeyCode::Esc);
 
     // Nothing else moved.
     assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
@@ -2408,23 +2408,284 @@ fn typed_rate_on_second_lfo(app: &mut App) {
 }
 
 #[test]
+fn every_list_setting_on_the_track_page_has_a_picker() {
+    let (mut app, _realtime) = on_track_page();
+    let lfo = |app: &App| app.song().tracks[0].lfos[0];
+    let choose = |app: &mut App, keys: &str| {
+        press(app, "K");
+        assert_eq!(app.mode, Mode::Picker);
+        press(app, keys);
+        special(app, KeyCode::Enter);
+        assert_eq!(app.mode, Mode::Normal);
+    };
+    press(&mut app, "jj0");
+    choose(&mut app, "cut");
+    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+
+    press(&mut app, "l");
+    choose(&mut app, "square");
+    assert_eq!(lfo(&app).shape, Shape::Square);
+
+    press(&mut app, "l");
+    assert_eq!(app.mode, Mode::Normal);
+    choose(&mut app, "1/8d");
+    assert_eq!(lfo(&app).rate, Rate::Note(720));
+
+    // Retrig is three along, past Depth and Phase, which aren't lists.
+    press(&mut app, "l");
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("Dest"), "{}", app.status);
+    press(&mut app, "ll");
+    choose(&mut app, "on");
+    assert!(lfo(&app).retrig);
+    assert_eq!(lfo(&app).shape, Shape::Square, "the others are left alone");
+
+    // The picker opens on what's set.
+    press(&mut app, "0lK");
+    assert_eq!(app.picker.as_ref().unwrap().selected, 4);
+    special(&mut app, KeyCode::Esc);
+
+    // On a list setting, i opens it too. On Rate, i types.
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "li");
+    assert_eq!(app.mode, Mode::Insert);
+    special(&mut app, KeyCode::Esc);
+}
+
+#[test]
+fn large_steps_on_the_track_page_suit_each_setting() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    press(&mut app, "_");
+    assert_eq!(track(&app).cutoff, 0xEF);
+    press(&mut app, "j");
+    press(&mut app, "+");
+    assert_eq!(track(&app).level, 0xF0);
+    press(&mut app, "$");
+    typed(&mut app, "60");
+    press(&mut app, "+");
+    assert_eq!(track(&app).swing, Some(650));
+    press(&mut app, "j0ll");
+    press(&mut app, "+");
+    assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
+    press(&mut app, "_");
+    assert_eq!(track(&app).lfos[0].rate, Rate::Note(960));
+    press(&mut app, "l+");
+    assert_eq!(track(&app).lfos[0].depth, 0x10);
+    press(&mut app, "l+");
+    assert_eq!(track(&app).lfos[0].phase, 90);
+    press(&mut app, "_");
+    assert_eq!(track(&app).lfos[0].phase, 0);
+}
+
+#[test]
+fn large_steps_and_k_in_the_instrument_view() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5");
+    press(&mut app, "j_");
+    let volume = app.song().instruments[&0].volume;
+    assert_eq!(volume, 0xD0);
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("Sample"), "{}", app.status);
+    press(&mut app, "j=");
+    assert_eq!(app.song().instruments[&0].attack_ms, 2);
+    press(&mut app, "+");
+    assert_eq!(app.song().instruments[&0].attack_ms, 18);
+    press(&mut app, "gg");
+    press(&mut app, "K");
+    assert_ne!(app.instrument_row, vt_tui::instruments::Row::Volume);
+}
+
+#[test]
+fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 1");
+    press(&mut app, " 2");
+    let row = |app: &App, slot: usize| app.chain_entries()[slot];
+    let start = row(&app, 0).phrase;
+
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    let picker = app.picker.as_ref().unwrap();
+    let count = picker.shown().count();
+    assert!(count >= 2);
+    assert_eq!(picker.selected, start as usize);
+    press(&mut app, "02");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(row(&app, 0).phrase, 2);
+
+    // The empty row past the end adds a row.
+    press(&mut app, "jK");
+    press(&mut app, "01");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(row(&app, 1).phrase, 1);
+
+    // Transpose isn't a list, and moves by octaves.
+    press(&mut app, "lK");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("Phrase"), "{}", app.status);
+    press(&mut app, "+");
+    assert_eq!(row(&app, 1).transpose, 12);
+    press(&mut app, "=");
+    assert_eq!(row(&app, 1).transpose, 13);
+    press(&mut app, "_");
+    assert_eq!(row(&app, 1).transpose, 1);
+}
+
+#[test]
+fn x_puts_track_page_settings_back_to_their_defaults() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    press(&mut app, "i40");
+    press(&mut app, "x");
+    assert_eq!(track(&app).cutoff, 0xFF);
+    press(&mut app, "u");
+    assert_eq!(track(&app).cutoff, 0x40, "one undo");
+    press(&mut app, "x");
+
+    press(&mut app, "j");
+    press(&mut app, "i40x");
+    assert_eq!(track(&app).level, 0xE0);
+    press(&mut app, "li40x");
+    assert_eq!(track(&app).pan, 0x80);
+    press(&mut app, "li40x");
+    assert_eq!(track(&app).delay, 0);
+    press(&mut app, "li40x");
+    assert_eq!(track(&app).reverb, 0);
+
+    // Only the setting under the cursor goes back.
+    press(&mut app, "j0=");
+    press(&mut app, "l=");
+    press(&mut app, "l");
+    typed(&mut app, "7st");
+    press(&mut app, "l");
+    typed(&mut app, "+40");
+    press(&mut app, "l");
+    typed(&mut app, "90");
+    press(&mut app, "l=");
+    let lfo = |app: &App| track(app).lfos[0];
+    press(&mut app, "x");
+    assert!(!lfo(&app).retrig);
+    press(&mut app, "hx");
+    assert_eq!(lfo(&app).phase, 0);
+    press(&mut app, "hx");
+    assert_eq!(lfo(&app).depth, 0);
+    press(&mut app, "hx");
+    assert_eq!(lfo(&app).rate, Lfo::default().rate);
+    assert_eq!(lfo(&app).shape, Shape::Saw);
+    press(&mut app, "hx");
+    assert_eq!(lfo(&app).shape, Shape::Tri);
+    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+    press(&mut app, "hx");
+    assert_eq!(lfo(&app), Lfo::default());
+
+    // Already there, it leaves no undo step.
+    let depth = app.history.undo_depth();
+    press(&mut app, "x");
+    assert_eq!(app.history.undo_depth(), depth);
+}
+
+#[test]
+fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() {
+    let (mut app, _realtime) = on_track_page();
+    command(&mut app, "swing 60");
+    let swing_cell = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 16);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let at = (0..80)
+            .position(|x| buffer[(x, 5)].symbol() == "S")
+            .unwrap() as u16;
+        let text: String = (at..at + 2).map(|x| buffer[(x, 6)].symbol()).collect();
+        (text, buffer[(at, 6)].fg)
+    };
+    // The cursor is elsewhere, so the colour is the setting's own.
+    assert_eq!(app.song().tracks[0].swing, None);
+    assert_eq!(swing_cell(&app), ("60".to_owned(), vt_tui::theme::OVERLAY2));
+
+    // It's the track's own once set, and a nudge starts from what it was playing.
+    press(&mut app, "j$=");
+    assert_eq!(app.song().tracks[0].swing, Some(610));
+    press(&mut app, "k");
+    assert_eq!(swing_cell(&app), ("61".to_owned(), Color::Reset));
+
+    press(&mut app, "j$x");
+    assert_eq!(app.song().tracks[0].swing, None);
+    press(&mut app, "k");
+    assert_eq!(swing_cell(&app), ("60".to_owned(), vt_tui::theme::OVERLAY2));
+}
+
+#[test]
+fn x_in_the_instrument_view_and_chain() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5j");
+    // Nothing set on this slot yet, so nothing changes.
+    let before = app.song().instruments.len();
+    let slot = app.song().next_instrument(app.instrument, true);
+    app.instrument = slot;
+    press(&mut app, "x");
+    assert_eq!(app.song().instruments.len(), before);
+
+    press(&mut app, "i40");
+    assert_eq!(app.song().instruments[&slot].volume, 0x40);
+    press(&mut app, "x");
+    assert_eq!(app.song().instruments[&slot].volume, 0xE0);
+    press(&mut app, "j");
+    press(&mut app, "=");
+    press(&mut app, "x");
+    assert_eq!(app.song().instruments[&slot].attack_ms, 1);
+    press(&mut app, "j=x");
+    assert_eq!(app.song().instruments[&slot].release_ms, 50);
+
+    // The Sample row empties it.
+    command(&mut app, &format!("kit {}", labelled_kit().display()));
+    let with_sample = *app
+        .song()
+        .instruments
+        .iter()
+        .find(|(_, i)| i.sample.is_some())
+        .unwrap()
+        .0;
+    app.instrument = with_sample;
+    press(&mut app, "ggx");
+    assert_eq!(app.song().instruments[&with_sample].sample, None);
+    press(&mut app, "u");
+    assert!(app.song().instruments[&with_sample].sample.is_some());
+
+    // In a chain, only Transpose has a default.
+    press(&mut app, " 2x");
+    assert!(app.status.contains("dd"), "{}", app.status);
+    assert_eq!(app.chain_entries().len(), 1);
+    press(&mut app, "l+x");
+    assert_eq!(app.chain_entries()[0].transpose, 0);
+}
+
+#[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "jj0ll");
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
     typed(&mut app, "7st");
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Steps(6));
     typed(&mut app, "2hz");
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Hertz(210));
 }
 
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "jj0+ll");
+    press(&mut app, "jj0=ll");
     typed(&mut app, "1/8d");
     press(&mut app, "l");
     typed(&mut app, "+40");
@@ -2447,7 +2708,7 @@ fn track_swing_on_the_page_matches_its_command() {
     press(&mut app, "j$");
     typed(&mut app, "60");
     assert_eq!(app.song().tracks[0].swing, Some(600));
-    press(&mut app, "+");
+    press(&mut app, "=");
     assert_eq!(app.song().tracks[0].swing, Some(610));
     typed(&mut app, "off");
     assert_eq!(app.song().tracks[0].swing, None);

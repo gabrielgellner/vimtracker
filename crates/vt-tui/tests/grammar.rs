@@ -187,11 +187,11 @@ fn shifting_moves_notes_and_values_and_skips_the_rest() {
 
 #[test]
 fn increment_takes_a_count_as_its_amount() {
-    check(&[A], "3+", &["D#4 40 01 CUT20 ---00 ---00"]);
+    check(&[A], "3=", &["D#4 40 01 CUT20 ---00 ---00"]);
     check(&[A], "12-", &["C-3 40 01 CUT20 ---00 ---00"]);
-    check(&[A], "l3+", &["C-4 43 01 CUT20 ---00 ---00"]);
-    check(&[A], "ll+", &["C-4 40 02 CUT20 ---00 ---00"]);
-    check(&[A], "lll+", &["C-4 40 01 CUT21 ---00 ---00"]);
+    check(&[A], "l3=", &["C-4 43 01 CUT20 ---00 ---00"]);
+    check(&[A], "ll=", &["C-4 40 02 CUT20 ---00 ---00"]);
+    check(&[A], "lll=", &["C-4 40 01 CUT21 ---00 ---00"]);
     check(&[A], "^a", &["C#4 40 01 CUT20 ---00 ---00"]);
     check(&[A], "^x", &["B-3 40 01 CUT20 ---00 ---00"]);
     // Values clamp to their ranges.
@@ -362,7 +362,7 @@ fn dot_repeats_each_kind_of_change_at_the_cursor() {
     );
     check(
         &[A, B],
-        "2+j.",
+        "2=j.",
         &["D-4 40 01 CUT20 ---00 ---00", "E-4 50 02 VOL30 ---00 ---00"],
     );
     check(&[A, B, E], "yyjjp.", &[A, B, A]);
@@ -401,7 +401,7 @@ fn field_visual_selects_within_columns() {
     );
     check(
         &[A, B],
-        "lvj3+",
+        "lvj3=",
         &["C-4 43 01 CUT20 ---00 ---00", "D-4 53 02 VOL30 ---00 ---00"],
     );
 }
@@ -1194,7 +1194,7 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
     assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
     keys(&mut app, "lrFE");
     assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
-    keys(&mut app, "20+");
+    keys(&mut app, "20=");
     assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
 
     // Filling a selection snaps too, and other commands keep their whole range.
@@ -1252,4 +1252,106 @@ fn len_takes_hex_after_0x() {
     assert_eq!(app.song().phrases[&0].len(), 16);
     keys(&mut app, ":len 10<Enter>");
     assert_eq!(app.song().phrases[&0].len(), 10);
+}
+
+#[test]
+fn plus_and_underscore_are_large_steps() {
+    // A note moves by octaves, and hex values by their top digit.
+    check(&[A], "+", &["C-5 40 01 CUT20 ---00 ---00"]);
+    check(&[A], "_", &["C-3 40 01 CUT20 ---00 ---00"]);
+    check(&[A], "l+", &["C-4 50 01 CUT20 ---00 ---00"]);
+    check(&[A], "l_", &["C-4 30 01 CUT20 ---00 ---00"]);
+    check(&[A], "ll+", &["C-4 40 11 CUT20 ---00 ---00"]);
+    check(&[A], "lll+", &["C-4 40 01 CUT30 ---00 ---00"]);
+    check(&[A], "lll2_", &["C-4 40 01 CUT00 ---00 ---00"]);
+    // They stop at each field's top.
+    check(&[A], "l9+", &["C-4 7F 01 CUT20 ---00 ---00"]);
+    check(&[A], "lll99+", &["C-4 40 01 CUTFF ---00 ---00"]);
+    check(&[B], "lll99+", &["D-4 50 02 VOLF8 ---00 ---00"]);
+}
+
+#[test]
+fn equals_and_minus_are_small_steps_and_carry() {
+    check(&[A], "=", &["C#4 40 01 CUT20 ---00 ---00"]);
+    check(&[A], "-", &["B-3 40 01 CUT20 ---00 ---00"]);
+    check(
+        &["--- -- -- CUT7F ---00 ---00"],
+        "lll=",
+        &["--- -- -- CUT80 ---00 ---00"],
+    );
+}
+
+#[test]
+fn ret_moves_each_digit_alone_and_never_carries() {
+    let ret = "--- -- -- RET1F ---00 ---00";
+    check(&[ret], "lll=", &[ret]);
+    check(&[ret], "lll-", &["--- -- -- RET1E ---00 ---00"]);
+    check(&[ret], "lll+", &["--- -- -- RET2F ---00 ---00"]);
+    check(&[ret], "lll_", &["--- -- -- RET0F ---00 ---00"]);
+    check(&[ret], "lll_lll_", &["--- -- -- RET0F ---00 ---00"]);
+    let top = "--- -- -- RETF4 ---00 ---00";
+    check(&[top], "lll+", &[top]);
+}
+
+#[test]
+fn large_steps_work_on_a_selection_and_repeat() {
+    let (mut app, _rt) = app_with(&[A, B]);
+    keys(&mut app, "vj+");
+    assert_eq!(
+        steps(&app),
+        ["C-5 40 01 CUT20 ---00 ---00", "D-5 50 02 VOL30 ---00 ---00"]
+    );
+    let (mut app, _rt) = app_with(&[A]);
+    keys(&mut app, "lll+.");
+    assert_eq!(steps(&app), ["C-4 40 01 CUT40 ---00 ---00"]);
+}
+
+#[test]
+fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "lllK");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 12);
+    keys(&mut app, "cut<Enter>");
+    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(steps(&app)[0], E, "nothing until the value is typed");
+    keys(&mut app, "40");
+    assert_eq!(steps(&app)[0], "--- -- -- CUT40 ---00 ---00");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.cursor.step, 0, "it stays on this step");
+    assert_eq!(app.cursor.field, Field::FxValue(0));
+}
+
+#[test]
+fn k_keeps_a_value_when_changing_the_command() {
+    let (mut app, _rt) = app_with(&[A]);
+    // On the command or the value, and it opens on what is there.
+    keys(&mut app, "llllK");
+    assert_eq!(app.picker.as_ref().unwrap().selected, 3);
+    keys(&mut app, "res<Enter>");
+    assert_eq!(steps(&app)[0], "C-4 40 01 RES20 ---00 ---00");
+    assert_eq!(app.mode, Mode::Normal);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app)[0], A);
+
+    // A level command snaps what it keeps.
+    let (mut app, _rt) = app_with(&["--- -- -- CUTFF ---00 ---00"]);
+    keys(&mut app, "lllKvol<Enter>");
+    assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
+}
+
+#[test]
+fn k_can_empty_a_slot_and_esc_leaves_it() {
+    let (mut app, _rt) = app_with(&[A]);
+    keys(&mut app, "lllK<Esc>");
+    assert_eq!(steps(&app)[0], A);
+    assert_eq!(app.mode, Mode::Normal);
+    keys(&mut app, "K---<Enter>");
+    assert_eq!(steps(&app)[0], "C-4 40 01 ---00 ---00 ---00");
+
+    // Leaving before the value writes nothing.
+    let (mut app, _rt) = app_with(&[E]);
+    keys(&mut app, "lllKcut<Enter><Esc>");
+    assert_eq!(steps(&app)[0], E);
+    assert_eq!(app.mode, Mode::Normal);
 }

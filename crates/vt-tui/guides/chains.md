@@ -38,7 +38,10 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | `h` `l` | Phrase or Transpose column. `0` and `$` do the same |
 | `gd` | Open this phrase, or add one on the empty row |
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
-| `+` `-` | Next or previous phrase, or transpose up or down |
+| `=` `-` | Next or previous phrase, or transpose by a semitone |
+| `+` `_` | Phrase number by `10` in hex, or transpose by an octave |
+| `K` | Choose this row's phrase from a list |
+| `x` | Transpose back to 0 |
 | `dd` `yy` `p` | Remove a row, copy it, or add the copy below |
 
 Typing a phrase number that doesn't exist creates that phrase. Transpose is
@@ -85,7 +88,7 @@ level, instrument volume, `VOL`, `DLY` and `REV` all use this scale.
 | `40` | -40 dB |
 | `00` | Silent |
 
-Every `10` in hex is 4 dB, so `4+` is 1 dB louder.
+Every `10` in hex is 4 dB, so `+` is 4 dB louder, and `4=` is 1 dB.
 
 ## Velocity and level
 

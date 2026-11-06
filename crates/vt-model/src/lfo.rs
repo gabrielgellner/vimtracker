@@ -101,6 +101,17 @@ impl Rate {
     }
 }
 
+/// A rate as note lengths that can be chosen from a list: divisions, then doubling bars.
+pub fn note_rates() -> Vec<Rate> {
+    let bars = [2, 4, 8, 16, 32, MAX_RATE_BARS].map(|bars| bars * BAR_TICKS);
+    DIVISIONS
+        .iter()
+        .map(|(_, ticks)| *ticks)
+        .chain(bars)
+        .map(Rate::Note)
+        .collect()
+}
+
 /// The next length a note rate can take, going through the divisions and then doubling bars.
 fn next_length(ticks: u32, longer: bool) -> u32 {
     let mut lengths = DIVISIONS
@@ -116,6 +127,40 @@ fn next_length(ticks: u32, longer: bool) -> u32 {
         lengths
             .rfind(|length| *length < ticks)
             .unwrap_or(DIVISIONS[0].1)
+    }
+}
+
+impl Rate {
+    /// A large step faster or slower: straight note lengths only, skipping dotted and triplet, four
+    /// steps, or a doubling of the hertz.
+    #[must_use]
+    pub fn jumped(self, faster: bool) -> Self {
+        match self {
+            Self::Note(ticks) => {
+                let straight: Vec<u32> = note_rates()
+                    .into_iter()
+                    .filter_map(|rate| match rate {
+                        Self::Note(length)
+                            if length % 240 == 0 || length % 60 == 0 && length < 240 =>
+                        {
+                            Some(length)
+                        }
+                        _ => None,
+                    })
+                    .filter(|length| (length / 60).is_power_of_two())
+                    .collect();
+                let found = if faster {
+                    straight.iter().rfind(|length| **length < ticks)
+                } else {
+                    straight.iter().find(|length| **length > ticks)
+                };
+                Self::Note(found.copied().unwrap_or(ticks))
+            }
+            Self::Steps(steps) if faster => Self::Steps(steps.saturating_sub(4).max(1)),
+            Self::Steps(steps) => Self::Steps((steps + 4).min(MAX_RATE_STEPS)),
+            Self::Hertz(hundredths) if faster => Self::Hertz((hundredths * 2).min(MAX_CENTIHERTZ)),
+            Self::Hertz(hundredths) => Self::Hertz((hundredths / 2).max(MIN_CENTIHERTZ)),
+        }
     }
 }
 
@@ -340,6 +385,25 @@ mod tests {
         assert_eq!(rate("1hz").nudged(false), rate("0.95hz"));
         assert_eq!(rate("1hz").nudged(true), rate("1.1hz"));
         assert_eq!(rate("100hz").nudged(true), rate("100hz"));
+    }
+
+    #[test]
+    fn a_large_step_skips_dotted_and_triplet_rates() {
+        assert_eq!(rate("1/4").jumped(true), rate("1/8"));
+        assert_eq!(rate("1/4").jumped(false), rate("1/2"));
+        assert_eq!(rate("1/8d").jumped(true), rate("1/8"));
+        assert_eq!(rate("1/8d").jumped(false), rate("1/4"));
+        assert_eq!(rate("1/2").jumped(false), rate("1 bar"));
+        assert_eq!(rate("1 bar").jumped(false), rate("2 bars"));
+        assert_eq!(rate("3 bars").jumped(false), rate("4 bars"));
+        assert_eq!(rate("1/64").jumped(true), rate("1/64"));
+        assert_eq!(rate("64 bars").jumped(false), rate("64 bars"));
+        assert_eq!(rate("7st").jumped(false), rate("11st"));
+        assert_eq!(rate("3st").jumped(true), rate("1st"));
+        assert_eq!(rate("2hz").jumped(true), rate("4hz"));
+        assert_eq!(rate("2hz").jumped(false), rate("1hz"));
+        assert_eq!(rate("0.01hz").jumped(false), rate("0.01hz"));
+        assert_eq!(rate("60hz").jumped(true), rate("100hz"));
     }
 
     #[test]
