@@ -20,8 +20,12 @@ use crate::published::Published;
 pub enum Command {
     /// `Space c` and `Shift-Tab`: play from a section step, whatever is happening now.
     PlayFrom { step: usize },
-    /// `Space c`: play from a step of a section.
-    PlaySection { section: usize, step: usize },
+    /// `Space c`: play from a step of a section, with a track's chain at that step if it's given.
+    PlaySection {
+        section: usize,
+        step: usize,
+        track: Option<usize>,
+    },
     /// `:loop`: keep playing a section, or go back to playing the song.
     LoopSection(Option<usize>),
     /// `Tab`: pause in place, or play from there.
@@ -52,6 +56,10 @@ pub enum Command {
 pub struct JamState {
     pub playing: Option<Option<u32>>,
     pub cued: Option<Option<u32>>,
+    /// The chain the track is on, launched or not.
+    pub chain: Option<u32>,
+    /// The running count that chain began at.
+    pub started: i64,
 }
 
 /// What the callback reports back each block.
@@ -179,7 +187,16 @@ impl Realtime {
                     note,
                     velocity,
                 } => self.engine.preview(track, note, velocity),
-                Command::PlaySection { section, step } => self.engine.play_section(section, step),
+                Command::PlaySection {
+                    section,
+                    step,
+                    track,
+                } => {
+                    self.engine.play_section(section, step);
+                    if let Some(track) = track {
+                        self.engine.place_track(track, step);
+                    }
+                }
                 Command::LoopSection(section) => self.engine.set_loop_section(section),
                 Command::Audition {
                     section,
@@ -403,6 +420,31 @@ mod tests {
             handle.send(Command::Launch {
                 track: round % 2,
                 chain: (round % 3 > 0).then_some(1),
+            });
+            assert_eq!(blocks(&mut rt, 4), 0);
+        }
+    }
+
+    #[test]
+    fn playing_from_a_row_and_wrapping_stay_off_the_allocator() {
+        let pool = samples();
+        let mut played = Song::new(2);
+        for track in &mut played.tracks {
+            track.sample = Some("flat".to_owned());
+            track.add_chain(1);
+        }
+        played.sections[0].length = Some(2);
+        let mut second = played.sections[0].clone();
+        second.chains[1] = Some(1);
+        second.reset = Some(1);
+        played.sections.push(second);
+        let engine = Engine::new(48_000, published(played, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        for round in 0..20 {
+            handle.send(Command::PlaySection {
+                section: round % 2,
+                step: round,
+                track: (round % 3 == 0).then_some(0),
             });
             assert_eq!(blocks(&mut rt, 4), 0);
         }

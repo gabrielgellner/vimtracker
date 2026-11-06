@@ -306,10 +306,16 @@ impl App {
         sections.get(self.cursor.section).or(sections.last())
     }
 
-    /// Where the playhead is, if it's moving through the section being edited.
-    pub fn playhead_here(&self) -> Option<usize> {
+    /// How far a track is through this chain, if it's playing it.
+    pub fn chain_playhead(&self, track: usize, chain: u32) -> Option<usize> {
         let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
-        (moving && self.playing_section == self.cursor.section).then_some(self.playhead)
+        let jam = self.jam.get(track)?;
+        if !moving || jam.chain != Some(chain) {
+            return None;
+        }
+        let length = self.song().tracks.get(track)?.chain_steps(chain) as i64;
+        let place = (self.playhead as i64 - jam.started).rem_euclid(length.max(1));
+        Some(place as usize)
     }
 
     /// The track under the cursor.
@@ -606,9 +612,12 @@ impl App {
             }
             Cmd::PlayFromCursor => {
                 let step = self.section_step();
+                // The song view plays from the row, so tracks stand where the song has them.
+                let track = (self.view != View::Song).then_some(self.cursor.track);
                 self.handle.send(Command::PlaySection {
                     section: self.cursor.section,
                     step,
+                    track,
                 });
                 self.guard = Some((key, now));
             }

@@ -90,9 +90,9 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
 fn playhead_step(app: &App) -> Option<usize> {
-    let playhead = app.playhead_here()?;
     let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
+    let playhead = app.chain_playhead(app.cursor.track, chain)?;
     let position = owner.chain_position(chain, playhead)?;
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
@@ -122,10 +122,10 @@ struct Column<'a> {
 
 /// The phrase a track is on now, or the one that would play from the cursor while stopped.
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
-    let moving = app.playhead_here();
-    let place = moving.unwrap_or_else(|| app.section_step());
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
+    let moving = app.chain_playhead(track, chain);
+    let place = moving.unwrap_or_else(|| app.section_step());
     let position = owner.chain_position(chain, place)?;
     Some(Column {
         steps: owner.phrases.get(&position.phrase)?.loop_steps(),

@@ -1,6 +1,6 @@
 # Song flow and session workflow
 
-**Status:** proposed on 2026-11-06, with its choices approved by the author after a review. M8d is built, and M8c isn't. **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
+**Status:** proposed on 2026-11-06, with its choices approved by the author after a review. M8d is built. M8c's position rule is built, and its repeats aren't. **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
 
 **Replaces:** the main design's carry rule and default, launches waiting for a chain's end, its limits on playheads, `gd` on `--` opening a chain, and captured rows having no set length. Where the two documents differ, this one wins. Tests that pin the old behaviour change with it, such as `tests/sections.rs:116`, which pins carry as the default.
 
@@ -122,11 +122,11 @@ Each `:launch` value, a stop on the grid, the grid unmoved by `:reset`, a chain 
 
 ## M8c: song flow
 
-**Data.** In `vt-model`, `Section` gains `repeat`, a `u16` of at least 1, default 1. Loading rejects 0, as actions reject a zero length, and the engine treats it as 1. `SectionStart` becomes `New`, the default, and `Reset`. In `vt-engine`, each track gains `started`, and `Launched` drops its own. `JamState` gains `started`.
+**Data.** In `vt-model`, `Section` gains `repeat`, a `u16` of at least 1, default 1. Loading rejects 0, as actions reject a zero length, and the engine treats it as 1. `SectionStart` becomes `New`, the default, and `Reset`. In `vt-engine`, each track gains `started`, signed, and `playing`, the chain it played last, replacing `Launched`. `JamState` gains both, as `started` and `chain`. Removing `Carry` bumps `FORMAT_VERSION` to 4.
 
 ### One position rule
 
-Each track remembers `started`, the running count at which its chain began. Its chain position is `place - started`, saturating at 0, modulo the chain's length, and a chain with no length plays nothing. `started <= place` always holds, as anything that sets `place` sets `started` too, including `rewind`, `return_to_start` and `play_section`.
+Each track remembers `started`, the running count at which its chain began. Its chain position is `place - started`, modulo the chain's length, and a chain with no length plays nothing. `started` is signed, as playing from a chain step can put it below 0. Anything that sets `place` sets `started` too, including `rewind`, `return_to_start` and `play_section`.
 
 A row's `Start` column picks what happens when the row begins:
 
@@ -141,8 +141,8 @@ So the same chain in neighbouring rows runs across the boundary, which is how a 
 
 ### Starting and wrapping
 
-*   **Playing from a row:** this walks the rows above it, from the top or the last row with `Start` `reset` or `:reset N`, to find when each track's chain began, and sets `place` and `started` to match playing through. The walk is bounded by the row count and doesn't allocate.
-*   **Playing from a chain step:** this sets that chain position on the cursor's track, with the row step as that step modulo the row's length. Other tracks follow the walk.
+*   **Playing from a row:** this walks the rows above it, from the top or the last row with `Start` `reset`, to find when each track's chain began, and sets `place` and `started` to match playing through, including any `:reset N` on the way. It shares `start_row` with the engine, and doesn't allocate. A row with no set length costs tracks times `chain_steps` to measure, so the walk is bounded by the song's size.
+*   **Playing from a chain step:** this sets that chain position on the cursor's track, with the row step as that step modulo the row's length. Other tracks follow the walk. So chain step 40 from an earlier row's cell plays that row against the chain's second half, which is an accepted limit.
 *   **A wrap:** every chain restarts from its top, with `started = place`. `place` keeps counting, so swing doesn't change. Held values, locks, glides, generators and tails carry over, as at any boundary.
 *   **A self-loop with `Start` `new`:** `place` and `started` are unaffected, so short chains keep moving against long ones, and one-section golden renders must not change. Empty rows don't count, so adding one to a one-row song changes nothing.
 *   **`:loop` moved to a different row:** that row starts, running its `Start` and ending launches.
@@ -166,7 +166,7 @@ When a different row ends a launch, its `Start` applies as usual, comparing the 
 
 The phrase and chain views use one shared position, shown only when the row being edited is playing. Each track's position now differs. `JamState` carries `started` on the existing queue. A track's chain position on screen is the reported position minus `started`, by the rule above.
 
-The two queues can disagree for a moment, and a full queue delays a report but doesn't lose it (`link.rs:195-207`), so a playhead may be briefly wrong. A view shows a playhead when the chain it's showing is the one the track is playing, whichever row the cursor is on. Read-only columns for other tracks use their own tracks' positions. This fixes M8b's limit of playheads following the row rather than a launched chain.
+The two queues can disagree for a moment, and a full queue delays a report but doesn't lose it, so a playhead may be briefly wrong. The chain position wraps, so it can't go out of range. A view shows a playhead when the chain it's showing is the one the track is playing, whichever row the cursor is on. Read-only columns for other tracks use their own tracks' positions. This fixes M8b's limit of playheads following the row rather than a launched chain.
 
 ### Render
 
@@ -182,7 +182,7 @@ Each `Start` value, a chain spanning two rows, a different-length chain starting
 
 | Risk or limit | Treatment |
 |---|---|
-| New logic in the audio callback | Only scalars are added and every walk is bounded by the row count, so nothing allocates. Both milestones test this. |
+| New logic in the audio callback | Only scalars are added and every walk is bounded by the song's size, so nothing allocates. Both milestones test this. |
 | A bad value in a song file | `repeat` 0 is rejected on load, and the engine treats it as 1. |
 | A jam-state report delayed by a full queue | A playhead may be stale until the next report, and sound isn't affected. |
 | A jam's phase is lost on capture | Chains launched on different bars are often out of phase, and this is lost when the captured row is reached in order, including in stems. It's an accepted cost of `1bar`, to judge in play. |
@@ -235,12 +235,9 @@ The review's last stage ended with these not applied to the design above. Where 
 | Finding | Milestone | Treatment |
 |---|---|---|
 | Capture from a row with `Rpt` can end its row at once, as `continue_in` leaves the row step alone. M8d settled the same problem without `Rpt` by copying the effective length. | M8c | `ContinueIn` wraps the row step to fit, with a test from a repeated source. |
-| Playing from a chain step can need a negative `started`, which breaks `started <= place`. | M8c | Make `started` signed, use `rem_euclid`, and drop the invariant and saturation. Chain step 40 from an earlier row's cell plays that row against the chain's second half, which is an accepted limit. |
-| The play-from-row walk starts wrongly at a `:reset N` row, and copies the transition rules. | M8c | Start from the top or the last `Start` `reset`. Share one pure, non-allocating row-entry function with the engine, and test that the walk's state equals playing through. A row with no set length costs tracks times `chain_steps` in the walk, so correct the risk wording. |
 | `Rpt` puts bar lines mid-pass. | M8c | Test the grid against `section_place % length`, and count a self-loop as a row starting. |
-| The playing chain can't be read back from the previous row, as `self.section` is an index. | M8c | Keep a per-track scalar for the playing chain, which playheads also need. |
 | `repeat` has two defences against 0. | M8c | Use `NonZeroU16`, so serde rejects it and the engine needs no case. |
-| Audition (`engine.rs:880`, `tree.rs:414`) and moving between tracks (`app.rs:883`) treat one row step as every chain's position. | M8c | Decide per case. A spanning row otherwise differs from playback. `PlaySection` needs a track field. |
+| Audition and moving between tracks treat one row step as every chain's position, so on a spanning row they differ from playback. | M8c | Accepted: both act on the row being edited while stopped, where nothing has played to differ from. |
 | "Render content matching a second pass" holds only for even song lengths or no swing. | M8c | Use an even length, or no swing, in that test. |
 | The milestone names run against the build order. | M8c | The author's call. |
 

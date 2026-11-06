@@ -112,8 +112,8 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `h` `l` | Previous or next column |
 | `=` `-` `+` `_` | Change the value |
 | `i` | Type a length then `Enter`, or a chain's two hex digits |
-| `x` | Length follows the chains, Start carries, or no chain |
-| `K` | On Start, switch carry and reset. On a track, choose its chain |
+| `x` | Length follows the chains, Start is new, or no chain |
+| `K` | On Start, switch new and reset. On a track, choose its chain |
 | `gd` | Open this chain's phrase, or its rows if several, or add a chain |
 | `gC` | Copy this chain and its phrases, for this cell alone |
 | `a` | Add an empty section after this one |
@@ -128,11 +128,17 @@ section lasts as long as its longest chain unless you set its length, which
 cuts its chains short or lets them loop on. An empty section is skipped until
 it has a chain or a length, and one with only a length is a rest. A `:reset` belongs to one section.
 
-**Start** says what a section does to the tracks. `carry` keeps them counting
-from where they were, and `reset` sends them all back to their start.
+**Start** says what a section does to the tracks. With `new`, a track given a
+different chain starts it from its top, and one given the same chain keeps going,
+so a part can run across sections. Give the same chain to two sections of 32 steps
+and a 64-step chain plays through once. `reset` sends every track back to its start
+each time the section's length comes round. At the end of the song, every chain
+starts from its top, and a section looping on itself leaves its chains running.
 
-`Shift-Tab` plays the song from the top. `Space c` plays from the cursor, in the
-section being edited. `:loop` keeps playing the section being edited while you
+`Shift-Tab` plays the song from the top. `Space c` in the song view plays from the
+section, with each track where the song would have it. In a phrase or chain it
+plays from that step of this track's chain, and the other tracks stand as they would
+at that step of the section. `:loop` keeps playing the section being edited while you
 work on it, and `:loop` again goes back to the song. A `:render` of a song covers
 it once through, and `--stems` does too.
 

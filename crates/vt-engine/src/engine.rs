@@ -8,7 +8,7 @@ use vt_model::constants::{
 };
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
-use vt_model::song::{Launch, Section, SectionStart, Track, level_gain};
+use vt_model::song::{Launch, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 
 use crate::dsp::delay::Delay;
@@ -17,7 +17,7 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, Launched, Retrigger, SongTime, TrackState};
+use crate::track_state::{DelayedNote, Retrigger, SongTime, TrackState};
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
@@ -82,6 +82,34 @@ pub struct Engine {
     reading: Reading,
     /// Frames until LFOs are next worked out.
     lfo_countdown: u32,
+}
+
+/// The next row with a length after this one, in order, and whether that went past the last. If no
+/// other has one, it's this row.
+fn next_row(song: &Song, from: usize) -> (usize, bool) {
+    let count = song.sections.len();
+    let mut wrapped = false;
+    for ahead in 1..=count {
+        let at = (from + ahead) % count;
+        wrapped |= at == 0;
+        if song.section_length(&song.sections[at]) > 0 {
+            return (at, wrapped);
+        }
+    }
+    (from, false)
+}
+
+/// Where the running count is after some steps from a place, under a section's `:reset`, and
+/// whether a reset came within them. A count at or past the reset goes back on its next step.
+fn after_steps(place: u64, steps: u64, reset: Option<usize>) -> (u64, bool) {
+    let Some(reset) = reset.map(|reset| reset.max(1) as u64) else {
+        return (place + steps, false);
+    };
+    let until = reset.saturating_sub(place);
+    if until >= steps {
+        return (place + steps, false);
+    }
+    (((steps - until - 1) % reset) + 1, true)
 }
 
 impl Engine {
@@ -167,9 +195,63 @@ impl Engine {
     pub fn realign(&mut self) {
         self.place = 0;
         for track in self.tracks.iter_mut() {
-            if let Some(launched) = &mut track.launched {
-                launched.started = 0;
+            track.started = 0;
+        }
+    }
+
+    /// Bring a section in: a track given a different chain starts it from its top.
+    fn start_row(&mut self, section: &Section) {
+        let place = self.place as i64;
+        for (track, chain) in self.tracks.iter_mut().zip(&section.chains) {
+            if track.playing != *chain {
+                track.playing = *chain;
+                track.started = place;
             }
+        }
+    }
+
+    /// Work out the running count and each track's start from the rows before this one, as if the
+    /// song had played to this step of it, and give the step within the section.
+    fn walk_to(&mut self, section: usize, step: usize) -> u64 {
+        self.realign();
+        for track in self.tracks.iter_mut() {
+            track.playing = None;
+        }
+        let song = Arc::clone(&self.current.song);
+        let Some(rows) = song.sections.get(..=section) else {
+            return 0;
+        };
+        // A row that resets makes what came before it not matter.
+        let first = rows
+            .iter()
+            .rposition(|row| row.start == SectionStart::Reset)
+            .unwrap_or(0);
+        let mut within = 0;
+        for (at, row) in rows.iter().enumerate().skip(first) {
+            let length = song.section_length(row) as u64;
+            if length == 0 {
+                continue;
+            }
+            self.start_row(row);
+            let steps = if at == section {
+                within = step as u64 % length;
+                within
+            } else {
+                length
+            };
+            let (place, reset) = after_steps(self.place, steps, row.reset);
+            if reset {
+                self.realign();
+            }
+            self.place = place;
+        }
+        within
+    }
+
+    /// Put a track's chain at this step, leaving the others where they are.
+    pub fn place_track(&mut self, track: usize, step: usize) {
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.started = self.place as i64 - step as i64;
         }
     }
 
@@ -191,8 +273,10 @@ impl Engine {
         self.tracks
             .get(track)
             .map_or_else(JamState::default, |track| JamState {
-                playing: track.launched.map(|launched| launched.chain),
+                playing: track.launched,
                 cued: track.cued,
+                chain: track.playing,
+                started: track.started,
             })
     }
 
@@ -211,14 +295,21 @@ impl Engine {
         }
     }
 
-    /// The chain a track is playing, and how far into it a place falls.
-    fn track_place(&self, index: usize, section_step: usize) -> Option<(u32, usize)> {
+    /// The chain a track is on: one launched, or its section's.
+    fn track_chain(&self, index: usize) -> Option<u32> {
         if let Some(launched) = self.tracks[index].launched {
-            let place = section_step.saturating_sub(launched.started as usize);
-            return launched.chain.map(|chain| (chain, place));
+            return launched;
         }
         let section = self.current.song.sections.get(self.section)?;
-        Some(((*section.chains.get(index)?)?, section_step))
+        *section.chains.get(index)?
+    }
+
+    /// The chain a track is on, and how far into it a place falls.
+    fn track_place(&self, index: usize, section_step: usize) -> Option<(u32, usize)> {
+        let chain = self.track_chain(index)?;
+        let length = self.current.song.tracks.get(index)?.chain_steps(chain) as i64;
+        let place = section_step as i64 - self.tracks[index].started;
+        Some((chain, place.rem_euclid(length.max(1)) as usize))
     }
 
     /// Start what a track has cued, if this is a step its launch timing starts one on.
@@ -249,10 +340,8 @@ impl Engine {
         if chain.is_none() {
             self.tracks[index].stop();
         }
-        self.tracks[index].launched = Some(Launched {
-            chain,
-            started: section_step as u64,
-        });
+        self.tracks[index].launched = Some(chain);
+        self.tracks[index].started = section_step as i64;
     }
 
     /// Whether any section has a length, so there's a next step to fire. One with a length and no
@@ -283,7 +372,7 @@ impl Engine {
     pub fn rewind(&mut self) {
         self.section = 0;
         self.section_place = 0;
-        self.place = 0;
+        self.realign();
         self.clear_launches();
     }
 
@@ -298,33 +387,37 @@ impl Engine {
         if self.section_place < song.section_length(&song.sections[self.section]) as u64 {
             return true;
         }
-        let mut changed = false;
-        for _ in 0..count {
-            let next = match self.loop_section {
-                Some(section) if section < count => section,
-                _ => (self.section + 1) % count,
-            };
-            if next != self.section {
-                self.end_launches();
-                changed = true;
+        let from = self.section;
+        let (next, wrapped) = match self.loop_section {
+            Some(section) if section < count => (section, false),
+            _ => next_row(&song, from),
+        };
+        self.section = next;
+        self.section_place = 0;
+        let section = &song.sections[next];
+        if song.section_length(section) == 0 {
+            return false;
+        }
+        if next != from {
+            self.end_launches();
+        }
+        if section.start == SectionStart::Reset {
+            self.realign();
+        } else if next != from && wrapped {
+            let place = self.place as i64;
+            for track in self.tracks.iter_mut() {
+                track.started = place;
             }
-            self.section = next;
-            self.section_place = 0;
-            let section = &song.sections[next];
-            if song.section_length(section) > 0 {
-                if section.start == SectionStart::Reset {
-                    self.realign();
-                }
-                // A cue left waiting isn't lost to the song moving on.
-                if changed {
-                    for index in 0..self.tracks.len() {
-                        self.begin_cued(index, self.place as usize);
-                    }
-                }
-                return true;
+        } else if next != from {
+            self.start_row(section);
+        }
+        // A cue left waiting isn't lost to the song moving on.
+        if next != from {
+            for index in 0..self.tracks.len() {
+                self.begin_cued(index, self.place as usize);
             }
         }
-        false
+        true
     }
 
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
@@ -395,10 +488,10 @@ impl Engine {
             self.reset_tracks();
         }
         self.section = section;
-        self.section_place = step as u64;
-        self.next_step = step as u64;
-        self.place = step as u64;
-        self.origin_tick = step as u64 * TICKS_PER_STEP;
+        let within = self.walk_to(section, step);
+        self.section_place = within;
+        self.next_step = within;
+        self.origin_tick = within * TICKS_PER_STEP;
         self.frames_since_origin = 0;
         self.millibpm = self.current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         self.transport = Transport::Playing;
@@ -483,7 +576,7 @@ impl Engine {
         self.section = 0;
         self.section_place = 0;
         self.next_step = 0;
-        self.place = 0;
+        self.realign();
         self.origin_tick = 0;
         self.frames_since_origin = 0;
         self.reset_tracks();
@@ -749,6 +842,7 @@ impl Engine {
                 self.fire_track(index, pending);
             }
             self.start_cued(index, section_step);
+            self.tracks[index].playing = self.track_chain(index);
             let delay = self.swing_frames(index, section_step);
             if delay > 0 {
                 self.tracks[index].swung = Some((self.clock + delay, section_step));

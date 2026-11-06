@@ -1,7 +1,7 @@
 //! Design constants and tuning values. Tuning values can change by ear with no document update.
 
 /// Current `song.ron` format.
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 /// The level value that leaves a sound as it is, at 0 dB. Above it is headroom.
 pub const UNITY_LEVEL: u8 = 0xE0;
 /// The highest level value, at +6 dB as on Ableton Live's faders. Anything above it snaps to it.
