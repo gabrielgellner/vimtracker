@@ -22,6 +22,7 @@ use crate::app::App;
 use crate::audio::{AudioError, AudioStats, Output};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::kitty::{self, Graphics};
 use crate::theme;
 use crate::views;
 
@@ -40,6 +41,8 @@ pub enum RunError {
     Render(#[from] hound::Error),
     #[error("{0} couldn't be loaded, so the render would be missing it")]
     MissingSample(String),
+    #[error("{0}")]
+    Graphics(&'static str),
 }
 
 /// What `vimtracker render` was asked for.
@@ -115,7 +118,10 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
 }
 
 /// Open a project, or start an unsaved one, and run until the user quits.
-pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
+pub fn run(path: Option<PathBuf>, kitty_graphics: bool) -> Result<(), RunError> {
+    if kitty_graphics && let Some(problem) = kitty::problem() {
+        return Err(RunError::Graphics(problem));
+    }
     let output = Output::open()?;
     let rate = output.rate();
     let mut status = String::new();
@@ -140,9 +146,14 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let mut app = App::new(song, path, samples, handle, rate);
     app.status = status;
     app.offer_restore();
+    let mut graphics = kitty_graphics.then(Graphics::new);
+    app.envelope_images = graphics.as_ref().map(Graphics::ids);
 
     let mut terminal = ratatui::init();
-    let result = main_loop(&mut terminal, &mut app, &stats);
+    let result = main_loop(&mut terminal, &mut app, &stats, graphics.as_mut());
+    if let Some(graphics) = &graphics {
+        graphics.forget(&mut std::io::stdout())?;
+    }
     ratatui::restore();
     result
 }
@@ -151,6 +162,7 @@ fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
     stats: &AudioStats,
+    mut graphics: Option<&mut Graphics>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
     while !app.should_quit {
@@ -161,6 +173,9 @@ fn main_loop(
         app.cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
         app.autosave_if_due(Instant::now());
+        if let Some(graphics) = graphics.as_deref_mut() {
+            graphics.sync(app, &mut std::io::stdout())?;
+        }
         terminal.draw(|frame| {
             frame.render_widget(Block::new().style(theme::screen()), frame.area());
             let [body, status] =

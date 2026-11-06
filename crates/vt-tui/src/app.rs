@@ -14,7 +14,8 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
-    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRANSPORT_GUARD_MS,
+    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRACK_ENVELOPES,
+    TRANSPORT_GUARD_MS,
 };
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
@@ -122,6 +123,8 @@ pub struct App {
     /// What each track is launched onto and cued to, as the engine last said.
     pub jam: Vec<JamState>,
     pub track_page: Page,
+    /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
+    pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
     pub track_row: usize,
     pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
@@ -214,6 +217,7 @@ impl App {
             looping: None,
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: Page::Sound,
+            envelope_images: None,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),

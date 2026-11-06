@@ -3729,3 +3729,39 @@ fn a_stopped_track_captures_as_empty_and_nothing_playing_is_refused() {
     assert!(app.status.contains("Nothing is playing"), "{}", app.status);
     assert_eq!(app.song().sections.len(), 2);
 }
+
+#[test]
+fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
+    let (mut app, _realtime) = app();
+    app.envelope_images = Some([0x01_02_03, 0x04_05_06]);
+    press(&mut app, " 4L");
+    let buffer = {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let at = |text: &str| {
+        (0..24).find(|y| {
+            (0..80)
+                .map(|x| buffer[(x, *y)].symbol())
+                .collect::<String>()
+                .contains(text)
+        })
+    };
+    let label = at("Env 1  Vol").unwrap();
+    let first = &buffer[(0, label + 1)];
+    assert!(
+        first.symbol().starts_with('\u{10EEEE}'),
+        "{:?}",
+        first.symbol()
+    );
+    assert_eq!(first.fg, ratatui::style::Color::Rgb(1, 2, 3));
+    // The second envelope is one image width and a gap along, and holds its row and column.
+    let second = &buffer[(30, label + 2)];
+    assert_eq!(second.symbol(), "\u{10EEEE}\u{30D}\u{305}");
+    assert_eq!(second.fg, ratatui::style::Color::Rgb(4, 5, 6));
+    assert_eq!(buffer[(27, label + 1)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
+}

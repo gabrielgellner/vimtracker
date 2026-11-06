@@ -11,7 +11,7 @@ const SUSTAIN_SHARE: f32 = 0.25;
 
 /// An envelope's level at `x` from 0 to 1 across its diagram. Time is on a square-root scale, so a
 /// 1 ms attack still shows beside a 500 ms release.
-fn level_at(envelope: &Envelope, x: f32) -> f32 {
+pub(crate) fn level_at(envelope: &Envelope, x: f32) -> f32 {
     let scale = |ms: u16| f32::from(ms).sqrt();
     let (attack, decay, release) = (
         scale(envelope.attack_ms),

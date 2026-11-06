@@ -12,14 +12,15 @@ use vt_model::song::Track;
 
 use crate::app::App;
 use crate::input::mode::Mode;
+use crate::kitty;
 use crate::theme;
 use crate::track_page::{Control, ENVELOPES, EnvelopeField, LFOS, LfoField, Page};
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
 /// The size of an envelope's diagram, in characters.
-const DIAGRAM_WIDTH: usize = 28;
-const DIAGRAM_HEIGHT: usize = 4;
+pub(crate) const DIAGRAM_WIDTH: usize = 28;
+pub(crate) const DIAGRAM_HEIGHT: usize = 4;
 
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
@@ -241,15 +242,21 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
     Line::from(spans)
 }
 
-/// Each envelope's shape, side by side, with the one being edited picked out.
-fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
-    let current = match app.track_control() {
+/// Which envelope the cursor is on, if any.
+pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
+    match app.track_control() {
         Control::Envelope(slot, _) => Some(slot),
         _ => None,
-    };
-    let shapes = track
-        .envelopes
-        .map(|envelope| envelope_lines(&envelope, DIAGRAM_WIDTH, DIAGRAM_HEIGHT));
+    }
+}
+
+/// Each envelope's shape, side by side, with the one being edited picked out.
+fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
+    let current = envelope_being_edited(app);
+    let shapes = track.envelopes.map(|envelope| match app.envelope_images {
+        Some(_) => kitty::placeholder_lines(DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+        None => envelope_lines(&envelope, DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+    });
     let style = |slot: usize| {
         if current == Some(slot) {
             theme::active()
@@ -274,7 +281,14 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines.extend((0..DIAGRAM_HEIGHT).map(|row| {
         Line::from(
             (0..TRACK_ENVELOPES)
-                .map(|slot| Span::styled(format!("{}  ", shapes[slot][row]), style(slot)))
+                .map(|slot| {
+                    // A placeholder's colour says which image it's part of.
+                    let shape = match app.envelope_images {
+                        Some(ids) => Style::new().fg(kitty::id_color(ids[slot])),
+                        None => style(slot),
+                    };
+                    Span::styled(format!("{}  ", shapes[slot][row]), shape)
+                })
                 .collect::<Vec<_>>(),
         )
     }));
