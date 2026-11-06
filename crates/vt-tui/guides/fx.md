@@ -1,6 +1,6 @@
 # FX commands
 
-Each step has FX slots to the right of the Instrument column. A slot is a
+Each step has FX slots to the right of the Velocity column. A slot is a
 three-letter command and a two-digit hex value.
 
 To write one, go to the slot with `l` in Normal mode, press `i` and type it,

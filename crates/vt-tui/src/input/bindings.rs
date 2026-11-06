@@ -85,7 +85,7 @@ pub enum Cmd {
     FirstSlot,
     RemoveRow,
     CopyRow,
-    /// Play the current instrument.
+    /// Hear the row or note here.
     Audition,
     Replace,
     Substitute,
@@ -93,7 +93,8 @@ pub enum Cmd {
     PickValue,
     /// Fill the selected column with a ramp or random values.
     Shape,
-    ChooseInstrument,
+    /// Choose this track's sample from a list.
+    PickSample,
 }
 
 /// One row of the table.
@@ -159,20 +160,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
     ("Space 4", Cmd::ShowView(View::Track), "Track page"),
-    (
-        "Space 5",
-        Cmd::ShowView(View::Instrument),
-        "Instrument view",
-    ),
+    ("Space 5", Cmd::PickSample, "Choose this track's sample"),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
     ("Space k", Cmd::Help, "Show every key"),
-    (
-        "Space i K",
-        Cmd::ChooseInstrument,
-        "Choose the current instrument",
-    ),
     ("C-o", Cmd::JumpBack, "Jump back"),
     ("C-n", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
@@ -215,7 +207,6 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("V", Cmd::VisualStep, "Select whole steps"),
     ("g v", Cmd::Reselect, "Reselect the last selection"),
     ("Space p d", Cmd::Double, "Double this phrase"),
-    ("g d", Cmd::OpenItem, "Open the instrument in this column"),
     ("K", Cmd::PickValue, "Choose this field from a list"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
     ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
@@ -280,25 +271,6 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
     ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
     ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-];
-
-/// Keys for the instrument view.
-const INSTRUMENT: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next row"),
-    ("k", Cmd::Move(Motion::Up), "Previous row"),
-    ("g g", Cmd::Move(Motion::First), "First row"),
-    ("G", Cmd::Move(Motion::Last), "Last row"),
-    ("h", Cmd::Move(Motion::Left), "Previous instrument"),
-    ("l", Cmd::Move(Motion::Right), "Next instrument"),
-    ("=", Cmd::Increase, "Increase the value"),
-    ("-", Cmd::Decrease, "Decrease the value"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    ("x", Cmd::ClearField, "Back to its default"),
-    ("K", Cmd::PickValue, "Choose a sample from a list"),
-    (";", Cmd::Audition, "Audition this instrument"),
 ];
 
 const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
@@ -386,8 +358,6 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Chain, CHAIN);
     add(Mode::Chain, EVERY_VIEW);
-    add(Mode::Instrument, INSTRUMENT);
-    add(Mode::Instrument, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);

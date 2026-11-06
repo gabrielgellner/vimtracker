@@ -53,6 +53,8 @@ pub struct Engine {
     current: Arc<Published>,
     tracks: Box<[TrackState; MAX_TRACKS]>,
     preview: Voice,
+    /// The track the preview voice goes through.
+    preview_track: usize,
     transport: Transport,
     /// The next step to fire, for timing. It never wraps.
     next_step: u64,
@@ -87,6 +89,7 @@ impl Engine {
             current,
             tracks: Box::new(std::array::from_fn(|index| TrackState::new(seed, index))),
             preview: Voice::default(),
+            preview_track: 0,
             transport: Transport::Stopped,
             next_step: 0,
             place: 0,
@@ -363,12 +366,19 @@ impl Engine {
     }
 
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
-    pub fn preview(&mut self, instrument: u32, note: u8, velocity: u8) {
+    pub fn preview(&mut self, track: usize, note: u8, velocity: u8) {
         let gain = velocity_gain(velocity);
-        let Some(on) = self.note_on(instrument, note, gain, Envelope::note_shape()) else {
+        let shape = self.note_shape(track);
+        let Some(on) = self.note_on(track, note, gain, shape) else {
             return;
         };
         let frames = PREVIEW_MS * self.rate / 1000;
+        if let Some(state) = self.tracks.get_mut(track)
+            && !state.sounding()
+        {
+            state.settle();
+        }
+        self.preview_track = track;
         self.preview = Voice::start(
             NoteOn {
                 release_after: Some(frames),
@@ -380,19 +390,12 @@ impl Engine {
         );
     }
 
-    fn note_on(
-        &self,
-        instrument: u32,
-        note: u8,
-        step_gain: f32,
-        shape: Envelope,
-    ) -> Option<NoteOn> {
-        let sample = *self.current.instrument_samples.get(&instrument)?;
-        let settings = self.current.song.instruments.get(&instrument)?;
+    fn note_on(&self, track: usize, note: u8, step_gain: f32, shape: Envelope) -> Option<NoteOn> {
+        let sample = (*self.current.track_samples.get(track)?)?;
         Some(NoteOn {
             sample,
             note,
-            gain: step_gain * level_gain(f32::from(settings.volume)),
+            gain: step_gain,
             shape,
             release_after: None,
         })
@@ -605,9 +608,6 @@ impl Engine {
         let Some(step) = song.step_at(position) else {
             return;
         };
-        if step.instrument.is_some() {
-            self.tracks[index].instrument = step.instrument;
-        }
         let mut delay_units = None;
         let mut kill_units = None;
         let mut off_units = None;
@@ -664,9 +664,7 @@ impl Engine {
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
                 let gain = step.velocity.map_or(1.0, velocity_gain);
-                let on = self.tracks[index]
-                    .instrument
-                    .and_then(|i| self.note_on(i, note, gain, self.note_shape(index)));
+                let on = self.note_on(index, note, gain, self.note_shape(index));
                 match on {
                     Some(on) if start_frames > 0 => {
                         self.tracks[index].last_note = Some(on);
@@ -704,7 +702,7 @@ impl Engine {
     }
 
     /// Hear a row while not playing: every audible track's note at this step of the section, with
-    /// its instrument, velocity and transpose. Whatever an audition was sounding is cut first. Its
+    /// its velocity and transpose. Whatever an audition was sounding is cut first. Its
     /// FX don't run, and nothing that playback relies on changes.
     pub fn audition(&mut self, section_step: usize) {
         if self.transport == Transport::Playing {
@@ -735,9 +733,8 @@ impl Engine {
             let note = (i16::from(midi) + i16::from(position.transpose))
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
             let gain = step.velocity.map_or(1.0, velocity_gain);
-            let instrument = step.instrument.or(self.tracks[index].instrument);
             let shape = self.note_shape(index);
-            let Some(on) = instrument.and_then(|i| self.note_on(i, note, gain, shape)) else {
+            let Some(on) = self.note_on(index, note, gain, shape) else {
                 continue;
             };
             let track = &mut self.tracks[index];
@@ -759,14 +756,23 @@ impl Engine {
             let mut mix = [0.0_f32; 2];
             let mut delay_in = [0.0_f32; 2];
             let mut reverb_in = [0.0_f32; 2];
-            for track in self.tracks.iter_mut() {
-                if !track.sounding() {
+            for (index, track) in self.tracks.iter_mut().enumerate() {
+                let previewing = index == self.preview_track && self.preview.active();
+                if !track.sounding() && !previewing {
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));
                 let tail = track.tail.next(samples.get(track.tail.sample()));
+                let preview = if previewing {
+                    self.preview.next(samples.get(self.preview.sample()))
+                } else {
+                    [0.0; 2]
+                };
                 let shaped = track.shape(
-                    [main[0] + tail[0], main[1] + tail[1]],
+                    [
+                        main[0] + tail[0] + preview[0],
+                        main[1] + tail[1] + preview[1],
+                    ],
                     self.smoothing,
                     self.fast_smoothing,
                     self.rate,
@@ -778,12 +784,11 @@ impl Engine {
                 reverb_in[0] += shaped.reverb[0];
                 reverb_in[1] += shaped.reverb[1];
             }
-            let preview = self.preview.next(samples.get(self.preview.sample()));
             let delayed = self.delay.process(delay_in, delay_frames);
             let reverbed = self.reverb.process(reverb_in);
             let mixed = [
-                mix[0] + preview[0] + delayed[0] + reverbed[0],
-                mix[1] + preview[1] + delayed[1] + reverbed[1],
+                mix[0] + delayed[0] + reverbed[0],
+                mix[1] + delayed[1] + reverbed[1],
             ];
             let out = master(mixed, limiter);
             self.reading.add(mixed, out);

@@ -10,7 +10,6 @@ use crate::constants::{
     MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
-use crate::label::is_named_slot;
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::selection::Extent;
 use crate::step::{FxCommand, FxSlot, Step};
@@ -73,6 +72,12 @@ impl FilterType {
 /// One voice's lane through the song.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
+    /// Two characters, or empty for none.
+    #[serde(default)]
+    pub name: String,
+    /// What it plays, relative to the project folder.
+    #[serde(default)]
+    pub sample: Option<String>,
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
@@ -116,6 +121,8 @@ pub struct Track {
 impl Default for Track {
     fn default() -> Self {
         Self {
+            name: String::new(),
+            sample: None,
             mute: false,
             solo: false,
             swing: None,
@@ -347,26 +354,6 @@ impl Phrase {
 }
 
 /// A sample and how it plays.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Instrument {
-    /// Relative to the project folder.
-    pub sample: Option<String>,
-    pub volume: u8,
-    /// Whether this slot's name is a label rather than just its number.
-    #[serde(default)]
-    pub labelled: bool,
-}
-
-impl Default for Instrument {
-    fn default() -> Self {
-        Self {
-            sample: None,
-            volume: UNITY_LEVEL,
-            labelled: false,
-        }
-    }
-}
-
 /// Where a position in a chain lands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainPosition {
@@ -405,11 +392,10 @@ pub struct Song {
     pub sections: Vec<Section>,
     pub chains: BTreeMap<u32, Arc<Chain>>,
     pub phrases: BTreeMap<u32, Arc<Phrase>>,
-    pub instruments: BTreeMap<u32, Arc<Instrument>>,
 }
 
 impl Song {
-    /// A new project: one section, one chain and one phrase per track, and instrument `00`.
+    /// A new project: one section, one chain and one phrase per track.
     pub fn new(tracks: usize) -> Self {
         let mut song = Self {
             format_version: FORMAT_VERSION,
@@ -423,34 +409,11 @@ impl Song {
             sections: vec![Section::default()],
             chains: BTreeMap::new(),
             phrases: BTreeMap::new(),
-            instruments: BTreeMap::from([(0, Arc::new(Instrument::default()))]),
         };
         for _ in 0..tracks.max(1) {
             song.add_track();
         }
         song
-    }
-
-    /// Whether a slot's name is a label.
-    pub fn is_labelled(&self, slot: u32) -> bool {
-        is_named_slot(slot) || self.instruments.get(&slot).is_some_and(|i| i.labelled)
-    }
-
-    /// The slot after or before this one. Numbers go one at a time. Past `FF`, and among slots
-    /// only a label can name, it goes to the next instrument that exists.
-    pub fn next_instrument(&self, slot: u32, forward: bool) -> u32 {
-        if forward {
-            if slot < 0xFF {
-                return slot + 1;
-            }
-            let later = self.instruments.range(slot + 1..).next();
-            return later.map_or(slot, |(id, _)| *id);
-        }
-        if !is_named_slot(slot) {
-            return slot.saturating_sub(1);
-        }
-        let earlier = self.instruments.range(..slot).next_back();
-        earlier.map_or(0xFF, |(id, _)| *id)
     }
 
     /// Add a track at the end, with its own new chain and phrase in every section.
@@ -550,10 +513,10 @@ mod tests {
     #[test]
     fn next_value_looks_forward_in_the_slot_and_wraps() {
         let steps = [
-            "--- -- -- CUT10 ---00",
-            "--- -- -- RES20 ---00",
-            "--- -- -- CUT30 CUT90",
-            "--- -- -- ---00 ---00",
+            "--- -- CUT10 ---00",
+            "--- -- RES20 ---00",
+            "--- -- CUT30 CUT90",
+            "--- -- ---00 ---00",
         ];
         let steps = steps.iter().map(|text| text.parse().unwrap()).collect();
         let phrase = Phrase::from_steps(steps);
@@ -585,7 +548,6 @@ mod tests {
         assert_eq!(song.sections[0].chains.len(), DEFAULT_TRACKS);
         assert_eq!(song.chains.len(), DEFAULT_TRACKS);
         assert_eq!(song.section_steps(&song.sections[0]), DEFAULT_PHRASE_STEPS);
-        assert!(song.instruments.contains_key(&0));
     }
 
     #[test]

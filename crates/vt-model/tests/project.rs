@@ -8,7 +8,7 @@ use vt_model::project::{
 };
 use vt_model::sample::{SampleError, load_wav};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song};
+use vt_model::song::Song;
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -51,7 +51,7 @@ fn a_song_round_trips() {
     let mut song = Song::new(3);
     song.millibpm = 137_630;
     let phrase = Arc::get_mut(song.phrases.get_mut(&0).unwrap()).unwrap();
-    *phrase.step_mut(2).unwrap() = "C-4 64 01 CUT40 ---00 RET14".parse().unwrap();
+    *phrase.step_mut(2).unwrap() = "C-4 64 CUT40 ---00 RET14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
 }
@@ -67,7 +67,7 @@ fn a_different_format_names_both_versions() {
     match load_song(&dir) {
         Err(ProjectError::Version {
             found, expected, ..
-        }) => assert_eq!((found, expected), (99, 1)),
+        }) => assert_eq!((found, expected), (99, 2)),
         other => panic!("expected a version error, got {other:?}"),
     }
 }
@@ -132,21 +132,9 @@ fn more_than_two_channels_are_refused() {
 fn a_missing_sample_names_its_path_and_the_rest_load() {
     let dir = folder();
     wav(&dir.join("here.wav"), 1, 16, 48_000, 10);
-    let mut song = Song::new(1);
-    song.instruments.insert(
-        1,
-        Arc::new(Instrument {
-            sample: Some("gone.wav".into()),
-            ..Instrument::default()
-        }),
-    );
-    song.instruments.insert(
-        2,
-        Arc::new(Instrument {
-            sample: Some("here.wav".into()),
-            ..Instrument::default()
-        }),
-    );
+    let mut song = Song::new(2);
+    song.tracks[0].sample = Some("gone.wav".into());
+    song.tracks[1].sample = Some("here.wav".into());
     let mut pool = SamplePool::default();
     let errors = load_samples(Some(&dir), &song, 48_000, &mut pool);
     assert_eq!(errors.len(), 1);
@@ -176,19 +164,10 @@ fn save_as_copies_samples_and_rewrites_paths() {
     let absolute = source.join("snare.wav");
     wav(&absolute, 1, 16, 48_000, 10);
     let mut song = Song::new(1);
-    song.instruments.insert(
-        1,
-        Arc::new(Instrument {
-            sample: Some(absolute.display().to_string()),
-            ..Instrument::default()
-        }),
-    );
+    song.tracks[0].sample = Some(absolute.display().to_string());
     let target = folder();
     let saved = save_as(None, &target, &song).unwrap();
-    assert_eq!(
-        saved.instruments[&1].sample.as_deref(),
-        Some("samples/snare.wav")
-    );
+    assert_eq!(saved.tracks[0].sample.as_deref(), Some("samples/snare.wav"));
     assert!(target.join("samples/snare.wav").exists());
     assert_eq!(load_song(&target).unwrap(), saved);
     assert!(matches!(

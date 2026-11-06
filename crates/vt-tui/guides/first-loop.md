@@ -4,9 +4,8 @@ From an empty project to a loop you can hear, in about two minutes.
 
 ## 1. Load a sound
 
-Press `Space 5` for the instrument view. The cursor starts on the Sample row.
-Press `i` to list the WAV files nearby, type a few letters to filter, such as
-`kick`, and press `Enter`. Press `;` to hear it.
+Press `Space 5` to list the WAV files nearby, type a few letters to filter, such
+as `kick`, and press `Enter`. The sample goes on the current track.
 
 Nothing listed? Run `:sample /path/to/folder` to browse a folder.
 

@@ -4,9 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::{Action, FieldValue, SlotSample};
+use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::kit::load_kit;
-use vt_model::label::name_of;
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -148,9 +147,9 @@ impl App {
         }
     }
 
-    /// Fill slots with a kit's sounds, keeping their other settings: a labelled sound in its
-    /// label's slot, and the others from `00`. It is one undo step, and if any sound won't load,
-    /// nothing changes. Replacing a different sample is reported.
+    /// Put a kit's sounds on tracks from the first, keeping their other settings and adding
+    /// tracks if needed. It is one undo step, and if any sound won't load, nothing changes.
+    /// Replacing a different sample is reported.
     pub fn load_kit(&mut self, path: &Path) {
         let entries = match load_kit(path) {
             Ok(entries) if entries.is_empty() => {
@@ -164,8 +163,7 @@ impl App {
             }
         };
         let mut pool = SamplePool::clone(&self.samples);
-        let mut samples = Vec::with_capacity(entries.len());
-        let mut next_number = 0;
+        let mut sounds = Vec::with_capacity(entries.len());
         for entry in &entries {
             let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
             let loaded = stored.and_then(|stored| {
@@ -181,30 +179,26 @@ impl App {
                 }
             };
             pool.insert(&stored, data);
-            let id = entry.slot.unwrap_or_else(|| {
-                next_number += 1;
-                next_number - 1
-            });
-            samples.push(SlotSample {
-                id,
+            sounds.push(KitSound {
                 sample: stored,
-                labelled: entry.slot.is_some(),
+                name: entry.name.clone(),
             });
         }
-        let replaced: Vec<String> = samples
+        let replaced: Vec<String> = sounds
             .iter()
-            .filter(|slot| {
-                let old = self.song().instruments.get(&slot.id);
-                old.and_then(|i| i.sample.as_ref())
-                    .is_some_and(|old| *old != slot.sample)
+            .enumerate()
+            .filter(|(track, sound)| {
+                let old = self.song().tracks.get(*track);
+                old.and_then(|t| t.sample.as_ref())
+                    .is_some_and(|old| *old != sound.sample)
             })
-            .map(|slot| name_of(slot.id))
+            .map(|(track, _)| format!("{:02}", track + 1))
             .collect();
-        let names: Vec<String> = samples.iter().map(|slot| name_of(slot.id)).collect();
+        let count = sounds.len();
         self.samples = Arc::new(pool);
-        self.instrument = samples[0].id;
-        self.apply(&Action::SetSamples(samples));
-        self.status = format!("Kit {}: {}", kit_name(path), names.join(" "));
+        self.apply(&Action::LoadKit(sounds));
+        self.fit_levels();
+        self.status = format!("Kit {}: {count} tracks", kit_name(path));
         if !replaced.is_empty() {
             self.status = format!(
                 "{}. Replaced {}: u to undo",
@@ -214,19 +208,12 @@ impl App {
         }
     }
 
-    /// Choose this step's instrument from those that exist, labels first, with the current one
-    /// highlighted. It only means something on the Instrument column.
-    pub(crate) fn open_instrument_picker(&mut self) {
-        self.open_instruments(Pick::Instrument);
-    }
-
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
-            Field::Instrument => self.open_instrument_picker(),
             Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot),
             Field::Note | Field::Velocity => {
-                self.status = "K chooses on the Instrument and FX columns".to_owned();
+                self.status = "K chooses on the FX columns".to_owned();
             }
         }
     }
@@ -289,46 +276,10 @@ impl App {
         self.mode = Mode::Replace;
     }
 
-    /// Choose the current instrument from anywhere, writing nothing to the song.
-    pub(crate) fn open_current_instrument_picker(&mut self) {
-        self.open_instruments(Pick::CurrentInstrument);
-    }
-
-    /// List the instruments that exist, labels first, with the current one highlighted.
-    fn open_instruments(&mut self, pick: fn(u32) -> Pick) {
-        let song = self.song();
-        let mut slots: Vec<u32> = song.instruments.keys().copied().collect();
-        slots.sort_by_key(|id| !song.is_labelled(*id));
-        let current = slots.iter().position(|id| *id == self.instrument);
-        let items: Vec<Item> = slots
-            .iter()
-            .map(|id| {
-                let sample = song.instruments[id]
-                    .sample
-                    .as_deref()
-                    .unwrap_or("(no sample)");
-                let file = sample.rsplit('/').next().unwrap_or(sample);
-                Item {
-                    label: format!("{}  {file}", name_of(*id)),
-                    pick: pick(*id),
-                }
-            })
-            .collect();
-        let mut picker = Picker::new("Instruments", items);
-        picker.move_highlight(current.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
-    }
-
-    fn pick_instrument(&mut self, id: u32) {
-        self.instrument = id;
-        if let Some(phrase) = self.phrase_id() {
-            self.apply(&Action::SetField {
-                phrase,
-                step: self.cursor.step,
-                value: FieldValue::Instrument(Some(id)),
-            });
-        }
+    /// Choose this track's sample from the usual places.
+    pub(crate) fn open_default_sample_picker(&mut self) {
+        let roots = self.sample_roots();
+        self.open_sample_picker(&roots);
     }
 
     /// Open the sample browser on a folder. If nothing is there, offer a typed path instead.
@@ -392,8 +343,6 @@ impl App {
                     Some(Pick::Use { track, slot }) => self.open_use(track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.load_kit(&path),
-                    Some(Pick::Instrument(id)) => self.pick_instrument(id),
-                    Some(Pick::CurrentInstrument(id)) => self.instrument = id,
                     Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
                     Some(Pick::Lfo { track, slot, lfo }) => {
                         self.apply(&Action::SetLfo { track, slot, lfo });

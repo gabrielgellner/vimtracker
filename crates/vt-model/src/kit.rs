@@ -1,4 +1,4 @@
-//! Kits: a named list of sounds to fill instrument slots with. A kit refers to its sounds where
+//! Kits: a named list of sounds to put on tracks, in order. A kit refers to its sounds where
 //! they are, so making one copies nothing.
 
 use std::fs;
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::label::{is_label, slot_of};
+use crate::label::is_name;
 use crate::project::ProjectError;
 
 /// What a kit file holds.
@@ -19,20 +19,20 @@ struct KitFile {
 #[derive(Debug, Deserialize)]
 struct KitSound {
     path: String,
-    /// The slot it goes in, or empty to fill upward from `00`.
+    /// The name its track takes, or empty for none.
     #[serde(default)]
     label: String,
 }
 
-/// A sound from a kit, and the labelled slot it goes in, if it has one.
+/// A sound from a kit, and the name its track takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KitEntry {
     pub path: PathBuf,
-    pub slot: Option<u32>,
+    pub name: String,
 }
 
 /// Read a kit file, in file order. Paths can be absolute, start with `~/`, or be relative to the
-/// kit file. A label that can't be one, or is used twice, stops it.
+/// kit file. A label that can't be a name stops it.
 pub fn load_kit(path: &Path) -> Result<Vec<KitEntry>, ProjectError> {
     let text = fs::read_to_string(path).map_err(|source| ProjectError::Io {
         path: path.display().to_string(),
@@ -47,18 +47,14 @@ pub fn load_kit(path: &Path) -> Result<Vec<KitEntry>, ProjectError> {
     let mut entries: Vec<KitEntry> = Vec::with_capacity(kit.sounds.len());
     for sound in &kit.sounds {
         let label = sound.label.as_str();
-        if !label.is_empty() && !is_label(label) {
+        if !label.is_empty() && !is_name(label) {
             return Err(refuse(format!(
-                "{label:?} can't be a label: it needs two characters, the first a letter"
+                "{label:?} can't be a name: it needs two characters, the first a letter"
             )));
-        }
-        let slot = slot_of(label);
-        if slot.is_some() && entries.iter().any(|entry| entry.slot == slot) {
-            return Err(refuse(format!("{label:?} is used twice")));
         }
         entries.push(KitEntry {
             path: resolve(folder, &sound.path),
-            slot,
+            name: label.to_ascii_uppercase(),
         });
     }
     Ok(entries)

@@ -270,15 +270,15 @@ mod tests {
             slot: 0,
             command: FxCommand::Res,
         };
-        let mut step: Step = "--- -- -- CUT40h".parse().unwrap();
+        let mut step: Step = "--- -- CUT40h".parse().unwrap();
         column.write(&mut step, 0x20);
-        assert_eq!(step.to_string(), "--- -- -- RES20h");
-        let mut step: Step = "--- -- -- ---00".parse().unwrap();
+        assert_eq!(step.to_string(), "--- -- RES20h");
+        let mut step: Step = "--- -- ---00".parse().unwrap();
         column.write(&mut step, 0x20);
-        assert_eq!(step.to_string(), "--- -- -- RES20");
-        let mut step: Step = "--- -- -- DEL10".parse().unwrap();
+        assert_eq!(step.to_string(), "--- -- RES20");
+        let mut step: Step = "--- -- DEL10".parse().unwrap();
         column.write(&mut step, 0x20);
-        assert_eq!(step.to_string(), "--- -- -- RES20");
+        assert_eq!(step.to_string(), "--- -- RES20");
     }
 
     const VEL: ShapeColumn = ShapeColumn::Velocity;
@@ -308,7 +308,7 @@ mod tests {
     }
 
     fn notes(count: usize) -> Vec<Step> {
-        rows(&vec!["C-4 -- 00 ---00 ---00 ---00"; count])
+        rows(&vec!["C-4 -- ---00 ---00 ---00"; count])
     }
 
     fn written(steps: &[Step], shape: Shape) -> Vec<u8> {
@@ -366,11 +366,11 @@ mod tests {
     #[test]
     fn rows_keep_their_spacing_along_a_ramp() {
         let steps = rows(&[
-            "C-4 -- 00 ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
         ]);
         let out = values(&steps, all(&steps), VEL, &ramp(0, 0x40, 0, 0));
         assert_eq!(out, [(0, 0x00), (1, 0x10), (4, 0x40)]);
@@ -379,10 +379,10 @@ mod tests {
     #[test]
     fn the_ends_are_the_first_and_last_rows_filled() {
         let steps = rows(&[
-            "--- -- -- ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
         ]);
         let out = values(&steps, all(&steps), VEL, &ramp(0x10, 0x20, 0, 0));
         assert_eq!(out, [(1, 0x10), (2, 0x20)]);
@@ -391,11 +391,11 @@ mod tests {
     #[test]
     fn velocity_only_ever_goes_on_notes() {
         let steps = rows(&[
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
         ]);
         let picked = |place| targets(&steps, all(&steps), VEL, place, 1);
         assert_eq!(picked(Where::Notes), [0, 2, 4]);
@@ -406,11 +406,11 @@ mod tests {
     #[test]
     fn fx_rows_can_be_narrowed_and_other_commands_are_kept() {
         let steps = rows(&[
-            "C-4 -- 00 CUT10 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- RES10 ---00 ---00",
-            "--- -- -- CUT30 ---00 ---00",
+            "C-4 -- CUT10 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- RES10 ---00 ---00",
+            "--- -- CUT30 ---00 ---00",
         ]);
         let picked = |place| targets(&steps, all(&steps), CUT, place, 1);
         assert_eq!(picked(Where::Commands), [0, 4]);
@@ -468,38 +468,38 @@ mod tests {
     #[test]
     fn default_ends_prefer_the_first_and_last_values() {
         let steps = rows(&[
-            "C-4 50 00 ---00 ---00 ---00",
-            "C-4 7F 00 ---00 ---00 ---00",
-            "C-4 20 00 ---00 ---00 ---00",
+            "C-4 50 ---00 ---00 ---00",
+            "C-4 7F ---00 ---00 ---00",
+            "C-4 20 ---00 ---00 ---00",
         ]);
         assert_eq!(default_ends(&steps, all(&steps), VEL), (0x50, 0x20));
 
         let same_ends = rows(&[
-            "C-4 40 00 ---00 ---00 ---00",
-            "C-4 7F 00 ---00 ---00 ---00",
-            "C-4 40 00 ---00 ---00 ---00",
+            "C-4 40 ---00 ---00 ---00",
+            "C-4 7F ---00 ---00 ---00",
+            "C-4 40 ---00 ---00 ---00",
         ]);
         assert_eq!(default_ends(&same_ends, all(&same_ends), VEL), (0x40, 0x7F));
 
-        let one_value = rows(&["C-4 40 00 ---00 ---00 ---00"; 3]);
+        let one_value = rows(&["C-4 40 ---00 ---00 ---00"; 3]);
         assert_eq!(default_ends(&one_value, all(&one_value), VEL), (0, 0x7F));
 
-        let empty = rows(&["--- -- -- ---00 ---00 ---00"; 2]);
+        let empty = rows(&["--- -- ---00 ---00 ---00"; 2]);
         assert_eq!(default_ends(&empty, all(&empty), VEL), (0, 0x7F));
     }
 
     #[test]
     fn default_ends_count_a_note_with_no_velocity_as_full() {
-        let steps = rows(&["C-4 -- 00 ---00 ---00 ---00", "C-4 20 00 ---00 ---00 ---00"]);
+        let steps = rows(&["C-4 -- ---00 ---00 ---00", "C-4 20 ---00 ---00 ---00"]);
         assert_eq!(default_ends(&steps, all(&steps), VEL), (0x7F, 0x20));
     }
 
     #[test]
     fn default_ends_for_fx_use_only_that_command() {
         let steps = rows(&[
-            "--- -- -- RES70 ---00 ---00",
-            "--- -- -- CUT10 ---00 ---00",
-            "--- -- -- CUT30 ---00 ---00",
+            "--- -- RES70 ---00 ---00",
+            "--- -- CUT10 ---00 ---00",
+            "--- -- CUT30 ---00 ---00",
         ]);
         assert_eq!(default_ends(&steps, all(&steps), CUT), (0x10, 0x30));
     }

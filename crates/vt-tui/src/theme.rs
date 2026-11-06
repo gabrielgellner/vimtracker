@@ -64,11 +64,6 @@ pub fn warning() -> Style {
     Style::new().fg(RED).add_modifier(Modifier::BOLD)
 }
 
-/// An instrument's label, so a name that means something reads differently from a number.
-pub fn label() -> Style {
-    Style::new().fg(PEACH)
-}
-
 /// A meter's colour at a level in dB: green, turning yellow and then orange toward full level, and
 /// red above that, where a level is over.
 pub fn level(db: f32) -> Color {

@@ -38,7 +38,7 @@ Move to grow the selection. The cursor shows which end is moving. Then press
 
 `r` fills the cursor's column across the selection, as one undo: `vGra` writes
 a C on every step to the end of the loop. Notes already there keep their
-velocity and instrument. A velocity or instrument only goes on steps with a
+velocity. A velocity only goes on steps with a
 note, an FX value only on steps with a command, and `.` repeats it.
 
 ## Shaping a column
@@ -85,7 +85,7 @@ to choose from a list and `x` for the default. `Tab` still plays and pauses.
 | `s` | Clear this field and start Insert there, as in Vim |
 | `=` `-` | Up or down a small step. `C-a` and `C-x` do the same |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `K` | On the Instrument or an FX column, choose from a list |
+| `K` | On an FX column, choose from a list |
 | `.` | Repeat the last change |
 | `p` | Paste over, from the cursor down. Past the end it stores more |
 | `3p` | Paste 3 times, end to end, as one undo |
@@ -105,8 +105,8 @@ other.
 empty, type the value next. If it has one, it stays.
 
 `r` then `k` changes a note to high C. On other columns it takes a whole value:
-`r40` for a velocity, `rbd` for an instrument, or `rCUT40` for an FX slot. A
-note keeps its velocity and instrument, `.` repeats the replace, and `Esc`
+`r40` for a velocity, or `rCUT40` for an FX slot. A
+note keeps its velocity, `.` repeats the replace, and `Esc`
 cancels it. The cursor and `REPLACE` on the status line turn red while it
 waits.
 

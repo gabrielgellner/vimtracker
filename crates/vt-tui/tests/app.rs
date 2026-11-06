@@ -12,7 +12,7 @@ use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, FilterType, Phrase, Song};
 use vt_model::step::{Note, Step};
-use vt_tui::app::{App, Field};
+use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 
@@ -268,8 +268,6 @@ fn commands_change_tempo_and_length() {
     assert_eq!(app.song().phrases[&0].len(), 4);
     assert_eq!(notes(&app).len(), 16, "the rest is kept");
     assert_eq!(app.cursor.step, 10, "and the cursor can stay on it");
-    command(&mut app, "inst 1A");
-    assert_eq!(app.instrument, 0x1A);
 }
 
 #[test]
@@ -470,56 +468,6 @@ fn swing_commands_set_the_project_and_the_cursors_track_and_undo() {
     assert_eq!(app.song().swing, 500);
 }
 
-#[test]
-fn the_instrument_view_sets_volume_attack_and_release() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5");
-    assert_eq!(app.view, View::Instrument);
-    // Down from the sample row is volume. Two hex digits commit it.
-    press(&mut app, "jia0");
-    assert_eq!(app.song().instruments[&0].volume, 0xA0);
-    assert_eq!(app.mode, Mode::Normal);
-    // Each adjustment is one undo step, and it stops at the top of the scale.
-    press(&mut app, "=");
-    assert_eq!(app.song().instruments[&0].volume, 0xA1);
-    press(&mut app, "u");
-    assert_eq!(app.song().instruments[&0].volume, 0xA0);
-    press(&mut app, "99+");
-    assert_eq!(app.song().instruments[&0].volume, 0xF8);
-    press(&mut app, "3-");
-    assert_eq!(app.song().instruments[&0].volume, 0xF5);
-}
-
-#[test]
-fn the_instrument_view_refuses_values_out_of_range_and_keeps_notes_safe() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5j");
-    press(&mut app, "izz");
-    assert_eq!(app.song().instruments[&0].volume, 0xE0);
-    special(&mut app, KeyCode::Esc);
-    // These keys mean something else in the phrase view, and must not touch a step here.
-    let before = notes(&app);
-    press(&mut app, "kk");
-    press(&mut app, "=-");
-    assert_eq!(notes(&app), before);
-    assert_eq!(app.cursor.step, 0);
-}
-
-#[test]
-fn moving_between_instruments_creates_one_only_when_set() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5ll");
-    assert_eq!(app.instrument, 2);
-    assert!(!app.song().instruments.contains_key(&2));
-    press(&mut app, "j-");
-    assert_eq!(app.song().instruments[&2].volume, 0xDF);
-    press(&mut app, "h");
-    assert_eq!(app.instrument, 1);
-    press(&mut app, " 3");
-    assert_eq!(app.view, View::Phrase);
-    assert_eq!(app.mode, Mode::Normal);
-}
-
 fn wav(path: &std::path::Path) {
     let spec = hound::WavSpec {
         channels: 1,
@@ -556,49 +504,9 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
     press(&mut app, "sn");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
-    let chosen = app.song().instruments[&0].sample.clone().unwrap();
+    let chosen = app.song().tracks[0].sample.clone().unwrap();
     assert!(chosen.ends_with("snare.WAV"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
-}
-
-#[test]
-fn the_view_picker_flips_back_and_escape_changes_nothing() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5");
-    assert_eq!(app.view, View::Instrument);
-    press(&mut app, "  ");
-    assert_eq!(app.mode, Mode::Picker);
-    // Keys that would edit in other modes only search here.
-    press(&mut app, "x");
-    assert_eq!(app.view, View::Instrument);
-    special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.view, View::Instrument);
-    assert!(app.picker.is_none());
-    // The list starts on the view before this one.
-    press(&mut app, " ff");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Phrase);
-    press(&mut app, "  ");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Instrument);
-}
-
-#[test]
-fn the_view_picker_searches_and_moves_with_ctrl_keys() {
-    let (mut app, _realtime) = app();
-    press(&mut app, "  ins");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Instrument);
-    press(&mut app, "  zz");
-    special(&mut app, KeyCode::Backspace);
-    special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 4);
-    app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
-    assert_eq!(app.picker.as_ref().unwrap().selected, 0);
-    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
-    assert_eq!(app.picker.as_ref().unwrap().selected, 1);
-    special(&mut app, KeyCode::Esc);
 }
 
 #[test]
@@ -720,26 +628,6 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.slot, 0);
     assert_eq!(app.view, View::Phrase);
-}
-
-#[test]
-fn gd_on_an_instrument_field_opens_or_creates_it() {
-    let (mut app, _realtime) = app();
-    // Note, volume, then instrument.
-    press(&mut app, "llgd");
-    assert_eq!(app.view, View::Instrument);
-    assert_eq!(app.instrument, 1, "00 exists, so a new one is 01");
-    assert!(app.song().instruments.contains_key(&1));
-    let back = parse_sequence("C-o").unwrap()[0];
-    app.key(back, Instant::now());
-    assert_eq!(app.view, View::Phrase);
-    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(1));
-    assert_eq!(
-        app.instrument, 0,
-        "jumping back restores the old instrument"
-    );
-    press(&mut app, "gd");
-    assert_eq!(app.instrument, 1, "this time it already has one");
 }
 
 #[test]
@@ -961,25 +849,6 @@ fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
 }
 
 #[test]
-fn the_status_line_names_the_column() {
-    use vt_tui::views::status::column_name;
-    let (mut app, _realtime) = app();
-    assert_eq!(column_name(&app), "Note");
-    press(&mut app, "l");
-    assert_eq!(column_name(&app), "Velocity");
-    press(&mut app, "l");
-    assert_eq!(column_name(&app), "Instrument");
-    press(&mut app, "l");
-    assert_eq!(column_name(&app), "FX1 command");
-    press(&mut app, "l");
-    assert_eq!(column_name(&app), "FX1 value");
-    press(&mut app, " 2");
-    assert_eq!(column_name(&app), "Phrase");
-    press(&mut app, " 5");
-    assert_eq!(column_name(&app), "Sample");
-}
-
-#[test]
 fn space_question_opens_guides_and_space_k_lists_keys() {
     let (mut app, _realtime) = app();
     press(&mut app, " ?");
@@ -1183,7 +1052,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(44, row + 2)].fg
+        buffer[(41, row + 2)].fg
     };
     app.playhead = 2;
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
@@ -1372,16 +1241,6 @@ fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     assert_eq!(app.mode, Mode::Insert);
 }
 
-#[test]
-fn enter_still_finishes_one_typed_digit_of_an_instrument_in_insert() {
-    let (mut app, mut rt) = app();
-    press(&mut app, "lli5");
-    special(&mut app, KeyCode::Enter);
-    block(&mut rt, &mut app);
-    assert_eq!(app.song().phrases[&0].steps()[0].instrument, Some(5));
-    assert_eq!(app.transport, Transport::Stopped);
-}
-
 /// A kit file beside its sounds, returning the kit's path.
 fn kit_file() -> PathBuf {
     let root = folder();
@@ -1403,46 +1262,8 @@ fn kit_file() -> PathBuf {
     kit
 }
 
-fn sample_of(app: &App, id: u32) -> Option<String> {
-    app.song().instruments.get(&id)?.sample.clone()
-}
-
-#[test]
-fn a_kit_fills_slots_in_file_order_as_one_undo_step() {
-    let (mut app, _realtime) = app();
-    let kit = kit_file();
-    command(&mut app, "inst 5");
-    command(&mut app, &format!("kit {}", kit.display()));
-    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
-    assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
-    assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
-    assert_eq!(sample_of(&app, 3), None);
-    assert_eq!(app.instrument, 0);
-    assert_eq!(app.status, "Kit 909: 00 01 02");
-    assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
-
-    press(&mut app, "u");
-    assert_eq!(sample_of(&app, 0), None);
-    assert_eq!(sample_of(&app, 1), None);
-    assert_eq!(sample_of(&app, 2), None);
-}
-
-#[test]
-fn a_kit_replaces_samples_but_keeps_settings_and_later_slots() {
-    let (mut app, _realtime) = app();
-    let kit = kit_file();
-    let other = folder();
-    std::fs::create_dir_all(&other).unwrap();
-    let later = other.join("later.wav");
-    wav(&later);
-    command(&mut app, "inst 3");
-    command(&mut app, &format!("sample {}", later.display()));
-    command(&mut app, "inst 0");
-    press(&mut app, " 5jia0");
-    assert_eq!(app.song().instruments[&0].volume, 0xA0);
-    command(&mut app, &format!("kit {}", kit.display()));
-    assert!(sample_of(&app, 3).unwrap().ends_with("later.wav"));
-    assert_eq!(app.song().instruments[&0].volume, 0xA0);
+fn sample_of(app: &App, track: usize) -> Option<String> {
+    app.song().tracks.get(track)?.sample.clone()
 }
 
 #[test]
@@ -1486,7 +1307,7 @@ fn a_kit_is_referred_to_and_saving_elsewhere_gathers_its_sounds() {
     command(&mut app, "w");
     let reopened = vt_model::project::load_song(&project).unwrap();
     assert_eq!(
-        reopened.instruments[&0].sample.as_deref(),
+        reopened.tracks[0].sample.as_deref(),
         Some(snare.canonicalize().unwrap().to_str().unwrap())
     );
 
@@ -1514,54 +1335,6 @@ fn only_ron_files_count_as_kits() {
     std::fs::write(root.join("stray.wav"), "").unwrap();
     std::fs::write(root.join(".hidden.ron"), "").unwrap();
     assert_eq!(kits_in(root), vec![kit.clone()]);
-}
-
-fn step_instrument(app: &App, step: usize) -> Option<u32> {
-    app.song().phrases[&0].steps()[step].instrument
-}
-
-#[test]
-fn editing_the_instrument_in_the_phrase_is_remembered_for_the_next_note() {
-    let (mut app, _realtime) = app();
-    command(&mut app, "inst 4");
-    press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    press(&mut app, "kll=");
-    assert_eq!(step_instrument(&app, 0), Some(5));
-    assert_eq!(app.instrument, 5);
-    press(&mut app, "-");
-    assert_eq!(app.instrument, 4);
-    press(&mut app, "3=");
-    assert_eq!(step_instrument(&app, 0), Some(7));
-    assert_eq!(app.instrument, 7);
-
-    press(&mut app, "hhji");
-    press(&mut app, "a");
-    assert_eq!(step_instrument(&app, 1), Some(7));
-}
-
-#[test]
-fn typing_an_instrument_is_remembered_too() {
-    let (mut app, _realtime) = app();
-    press(&mut app, "lli1a");
-    special(&mut app, KeyCode::Esc);
-    assert_eq!(app.instrument, 0x1A);
-    press(&mut app, "hhi");
-    press(&mut app, "a");
-    assert_eq!(step_instrument(&app, 1), Some(0x1A));
-}
-
-#[test]
-fn plus_on_an_empty_instrument_cell_writes_the_remembered_one() {
-    let (mut app, _realtime) = app();
-    command(&mut app, "inst 9");
-    press(&mut app, "ll=");
-    assert_eq!(step_instrument(&app, 0), Some(9));
-    assert_eq!(app.instrument, 9);
-    press(&mut app, "u");
-    assert_eq!(step_instrument(&app, 0), None);
-    press(&mut app, "-");
-    assert_eq!(step_instrument(&app, 0), Some(9));
 }
 
 #[test]
@@ -1598,7 +1371,6 @@ fn a_sample_inside_the_project_stays_relative_so_a_bundle_can_move() {
         r#"(sounds: [(path: "samples/tone.wav")])"#,
     )
     .unwrap();
-    command(&mut app, "inst 0");
     command(&mut app, &format!("kit {}/kit.ron", project.display()));
     assert_eq!(sample_of(&app, 0).unwrap(), "samples/tone.wav");
 }
@@ -1619,10 +1391,7 @@ fn a_bundle_keeps_working_after_its_sources_are_gone() {
     let mut pool = SamplePool::default();
     let errors = vt_model::project::load_samples(Some(&bundle), &song, 48_000, &mut pool);
     assert!(errors.is_empty());
-    assert_eq!(
-        song.instruments[&0].sample.as_deref(),
-        Some("samples/tone.wav")
-    );
+    assert_eq!(song.tracks[0].sample.as_deref(), Some("samples/tone.wav"));
 }
 
 /// Run the audio side long enough to act on what was sent, and return the loudest sample.
@@ -1679,22 +1448,6 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
         loudest(&mut rt, 2000) > 0.01,
         "the chain view auditions its row"
     );
-    let _ = loudest(&mut rt, 96_000);
-    press(&mut app, " 5;");
-    assert!(
-        loudest(&mut rt, 2000) > 0.01,
-        "the instrument view auditions"
-    );
-}
-
-#[test]
-fn p_no_longer_plays_in_the_instrument_view() {
-    let (mut app, mut rt) = app();
-    with_a_sound(&mut app);
-    press(&mut app, " 5p");
-    assert_eq!(loudest(&mut rt, 2000), 0.0);
-    press(&mut app, "r");
-    assert_eq!(app.mode, Mode::Normal, "r is not bound in this view");
 }
 
 #[test]
@@ -1719,272 +1472,6 @@ fn labelled_kit() -> PathBuf {
     )
     .unwrap();
     kit
-}
-
-fn slot(name: &str) -> u32 {
-    vt_model::label::slot_of(name).unwrap()
-}
-
-#[test]
-fn a_label_is_its_slot_and_a_kit_puts_sounds_there() {
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    assert_eq!(app.status, "Kit 909: BD CH 00");
-    assert!(sample_of(&app, 0xBD).unwrap().ends_with("kick.wav"));
-    assert!(sample_of(&app, slot("CH")).unwrap().ends_with("hat.wav"));
-    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
-    assert_eq!(app.instrument, 0xBD);
-    assert!(app.song().is_labelled(0xBD));
-    assert!(app.song().is_labelled(slot("CH")));
-    assert!(!app.song().is_labelled(0));
-
-    press(&mut app, "u");
-    assert_eq!(sample_of(&app, 0xBD), None);
-    assert!(!app.song().is_labelled(0xBD));
-}
-
-#[test]
-fn a_kit_warns_only_when_it_changes_a_slots_sample() {
-    let (mut app, _realtime) = app();
-    let kit = labelled_kit();
-    command(&mut app, &format!("kit {}", kit.display()));
-    command(&mut app, &format!("kit {}", kit.display()));
-    assert_eq!(app.status, "Kit 909: BD CH 00", "the same sounds again");
-
-    std::fs::write(
-        &kit,
-        r#"(sounds: [
-            (label: "BD", path: "drums/snare.wav"),
-            (label: "CH", path: "drums/hat.wav"),
-            (label: "OH", path: "drums/hat.wav"),
-        ])"#,
-    )
-    .unwrap();
-    command(&mut app, &format!("kit {}", kit.display()));
-    assert_eq!(app.status, "Kit 909: BD CH OH. Replaced BD: u to undo");
-    press(&mut app, "u");
-    assert!(sample_of(&app, 0xBD).unwrap().ends_with("kick.wav"));
-}
-
-#[test]
-fn a_kit_refuses_bad_or_repeated_labels_and_changes_nothing() {
-    let (mut app, _realtime) = app();
-    let kit = kit_file();
-    for (text, expected) in [
-        (r#"(sounds: [(label: "1A", path: "drums/kick.wav")])"#, "1A"),
-        (
-            r#"(sounds: [(label: "BDX", path: "drums/kick.wav")])"#,
-            "BDX",
-        ),
-        (
-            r#"(sounds: [(label: "BD", path: "drums/kick.wav"), (label: "bd", path: "drums/hat.wav")])"#,
-            "twice",
-        ),
-    ] {
-        std::fs::write(&kit, text).unwrap();
-        command(&mut app, &format!("kit {}", kit.display()));
-        assert!(app.status.contains(expected), "{}", app.status);
-        assert!(!app.dirty);
-    }
-}
-
-#[test]
-fn typing_two_characters_writes_a_number_or_a_label_at_once() {
-    let (mut app, _realtime) = app();
-    press(&mut app, "ll");
-    press(&mut app, "ibd");
-    assert_eq!(step_instrument(&app, 0), Some(0xBD));
-    press(&mut app, "ch");
-    assert_eq!(step_instrument(&app, 1), Some(slot("CH")));
-    assert_eq!(app.instrument, slot("CH"));
-    press(&mut app, "04");
-    assert_eq!(step_instrument(&app, 2), Some(4));
-    press(&mut app, "1h");
-    assert_eq!(step_instrument(&app, 3), None);
-    assert_eq!(app.cursor.step, 3);
-    assert!(app.status.contains("1H"), "{}", app.status);
-    assert!(app.entry.text.is_empty());
-}
-
-#[test]
-fn inst_takes_labels_and_notes_use_them_and_the_song_keeps_them() {
-    let project = folder();
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("w {}", project.display()));
-    command(&mut app, "inst ch");
-    assert_eq!(app.instrument, slot("CH"));
-    press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    command(&mut app, "w");
-    let reopened = vt_model::project::load_song(&project).unwrap();
-    assert_eq!(reopened.phrases[&0].steps()[0].instrument, Some(slot("CH")));
-}
-
-#[test]
-fn label_marks_a_hex_named_slot_and_off_clears_it() {
-    let (mut app, _realtime) = app();
-    command(&mut app, "label BD");
-    assert_eq!(app.instrument, 0xBD);
-    assert!(app.song().is_labelled(0xBD));
-    command(&mut app, "label off");
-    assert!(!app.song().is_labelled(0xBD));
-    command(&mut app, "inst ch");
-    command(&mut app, "label off");
-    assert!(app.song().is_labelled(slot("CH")));
-    assert!(app.status.contains("CH"), "{}", app.status);
-}
-
-#[test]
-fn k_picks_an_instrument_for_this_step_with_labels_first() {
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Normal, "not on the Instrument column");
-    assert!(app.status.contains("Instrument and FX"), "{}", app.status);
-
-    press(&mut app, "llK");
-    assert_eq!(app.mode, Mode::Picker);
-    let labels: Vec<String> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
-        .collect();
-    assert_eq!(labels, ["BD  kick.wav", "CH  hat.wav", "00  snare.wav"]);
-    press(&mut app, "hat");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    assert_eq!(app.instrument, slot("CH"));
-    assert_eq!(app.cursor.step, 0);
-
-    press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.current().unwrap().label, "CH  hat.wav");
-    special(&mut app, KeyCode::Esc);
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-}
-
-#[test]
-fn space_i_k_chooses_the_current_instrument_from_anywhere_and_writes_nothing() {
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    let before = Arc::clone(app.song());
-    let dirty = app.dirty;
-
-    // On the Note column, where plain K refuses.
-    press(&mut app, " iK");
-    assert_eq!(app.mode, Mode::Picker);
-    press(&mut app, "hat");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.instrument, slot("CH"));
-    assert_eq!(app.cursor.field, Field::Note, "the cursor stays put");
-    assert_eq!(app.cursor.step, 0);
-    assert_eq!(*app.song(), before, "nothing is written");
-    assert_eq!(app.dirty, dirty);
-
-    // The next note uses it.
-    press(&mut app, "ia");
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    special(&mut app, KeyCode::Esc);
-
-    // It opens on the current one, and Esc changes nothing.
-    press(&mut app, " iK");
-    let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.current().unwrap().label, "CH  hat.wav");
-    special(&mut app, KeyCode::Esc);
-    assert_eq!(app.instrument, slot("CH"));
-}
-
-#[test]
-fn space_i_k_works_in_the_chain_and_instrument_views() {
-    for (view_keys, view) in [(" 2", View::Chain), (" 5", View::Instrument)] {
-        let (mut app, _realtime) = app();
-        command(&mut app, &format!("kit {}", labelled_kit().display()));
-        press(&mut app, view_keys);
-        assert_eq!(app.view, view);
-        let scope = app.key_scope();
-        let before = Arc::clone(app.song());
-        press(&mut app, " iK");
-        assert_eq!(app.mode, Mode::Picker, "{view:?}");
-        press(&mut app, "kick");
-        special(&mut app, KeyCode::Enter);
-        assert_eq!(app.instrument, slot("BD"), "{view:?}");
-        assert_eq!(app.view, view, "stays in this view");
-        assert_eq!(app.key_scope(), scope, "the view's keys still work");
-        assert_eq!(*app.song(), before);
-    }
-}
-
-#[test]
-fn plus_and_minus_walk_named_slots_through_those_that_exist() {
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    command(&mut app, "inst oh");
-    command(
-        &mut app,
-        &format!("sample {}", {
-            let dir = folder();
-            std::fs::create_dir_all(&dir).unwrap();
-            let path = dir.join("open.wav");
-            wav(&path);
-            path.display().to_string()
-        }),
-    );
-    command(&mut app, "inst ch");
-    press(&mut app, "ll=");
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    press(&mut app, "=");
-    assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
-    press(&mut app, "=");
-    assert_eq!(step_instrument(&app, 0), Some(slot("OH")));
-    press(&mut app, "-");
-    assert_eq!(step_instrument(&app, 0), Some(slot("CH")));
-    press(&mut app, "-");
-    assert_eq!(step_instrument(&app, 0), Some(0xBD));
-    assert_eq!(app.instrument, 0xBD);
-}
-
-#[test]
-fn labels_read_differently_in_the_phrase_even_when_they_are_hex() {
-    let (mut app, _realtime) = app();
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    command(&mut app, "inst ch");
-    press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    command(&mut app, "inst bc");
-    press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    let buffer = screen(&app);
-    let cell = |x: u16, y: u16| (buffer[(x, y)].symbol().to_owned(), buffer[(x, y)].fg);
-    let peach = vt_tui::theme::PEACH;
-    // Steps start at row 2, and the instrument is 7 characters into a step's text.
-    assert_eq!(cell(16, 2), ("B".to_owned(), peach));
-    assert_eq!(cell(17, 2), ("D".to_owned(), peach));
-    assert_eq!(cell(16, 3), ("C".to_owned(), peach));
-    assert_eq!(cell(17, 3), ("H".to_owned(), peach));
-    // BC is the same kind of name, but nothing labelled that slot.
-    assert_eq!(buffer[(16, 4)].symbol(), "B");
-    assert_ne!(buffer[(16, 4)].fg, peach);
-}
-
-#[test]
-fn zero_and_dollar_pick_the_chain_columns_and_stay_out_of_the_instrument_view() {
-    use vt_tui::tree::ChainColumn;
-    let (mut app, _realtime) = app();
-    press(&mut app, " 2$");
-    assert_eq!(app.chain_column, ChainColumn::Transpose);
-    press(&mut app, "0");
-    assert_eq!(app.chain_column, ChainColumn::Phrase);
-    press(&mut app, " 5l");
-    let instrument = app.instrument;
-    press(&mut app, "0$");
-    assert_eq!(app.instrument, instrument);
 }
 
 #[test]
@@ -2013,7 +1500,6 @@ fn backspace_clears_a_note_with_what_it_was_written_with_but_keeps_fx() {
     let first = &app.song().phrases[&0].steps()[0];
     assert_eq!(first.note, Note::Empty);
     assert_eq!(first.velocity, None);
-    assert_eq!(first.instrument, None);
 }
 
 #[test]
@@ -2080,7 +1566,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (45..48).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (42..45).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2185,7 +1671,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 
 /// Another track's column on one row of steps: its marker and note, and its colour.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 44 + column * 4;
+    let x = 41 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -2259,7 +1745,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..43)
+        (0..40)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -2704,23 +2190,6 @@ fn large_steps_on_the_track_page_suit_each_setting() {
 }
 
 #[test]
-fn large_steps_and_k_in_the_instrument_view() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5");
-    press(&mut app, "j_");
-    let volume = app.song().instruments[&0].volume;
-    assert_eq!(volume, 0xD0);
-    press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("Sample"), "{}", app.status);
-    press(&mut app, "=");
-    assert_eq!(app.song().instruments[&0].volume, 0xD1);
-    press(&mut app, "gg");
-    press(&mut app, "K");
-    assert_ne!(app.instrument_row, vt_tui::instruments::Row::Volume);
-}
-
-#[test]
 fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     let (mut app, _realtime) = app();
     command(&mut app, "track add 1");
@@ -2844,45 +2313,6 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
 }
 
 #[test]
-fn x_in_the_instrument_view_and_chain() {
-    let (mut app, _realtime) = app();
-    press(&mut app, " 5j");
-    // Nothing set on this slot yet, so nothing changes.
-    let before = app.song().instruments.len();
-    let slot = app.song().next_instrument(app.instrument, true);
-    app.instrument = slot;
-    press(&mut app, "x");
-    assert_eq!(app.song().instruments.len(), before);
-
-    press(&mut app, "i40");
-    assert_eq!(app.song().instruments[&slot].volume, 0x40);
-    press(&mut app, "x");
-    assert_eq!(app.song().instruments[&slot].volume, 0xE0);
-
-    // The Sample row empties it.
-    command(&mut app, &format!("kit {}", labelled_kit().display()));
-    let with_sample = *app
-        .song()
-        .instruments
-        .iter()
-        .find(|(_, i)| i.sample.is_some())
-        .unwrap()
-        .0;
-    app.instrument = with_sample;
-    press(&mut app, "ggx");
-    assert_eq!(app.song().instruments[&with_sample].sample, None);
-    press(&mut app, "u");
-    assert!(app.song().instruments[&with_sample].sample.is_some());
-
-    // In a chain, only Transpose has a default.
-    press(&mut app, " 2x");
-    assert!(app.status.contains("dd"), "{}", app.status);
-    assert_eq!(app.chain_entries().len(), 1);
-    press(&mut app, "l+x");
-    assert_eq!(app.chain_entries()[0].transpose, 0);
-}
-
-#[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "jjjj0ll");
@@ -2996,8 +2426,8 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let mut song = Song::new(1);
     let step = |text: &str| text.parse::<Step>().unwrap();
     let phrase = Phrase::from_steps(vec![
-        step("C-4 40 01 CUT40 DLY20h RES10g"),
-        step("C-4 40 01 DEL10 ---00 ---00"),
+        step("C-4 40 CUT40 DLY20h RES10g"),
+        step("C-4 40 DEL10 ---00 ---00"),
     ]);
     song.phrases.insert(0, Arc::new(phrase));
     let samples = Arc::new(SamplePool::default());
@@ -3008,4 +2438,190 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(row(2).contains("CUT40 . DLY20 h RES10 g"), "{}", row(2));
     assert!(row(3).contains("DEL10   ---00   ---00"), "{}", row(3));
+}
+
+#[test]
+fn the_view_picker_flips_back_and_escape_changes_nothing() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    assert_eq!(app.view, View::Track);
+    press(&mut app, "  ");
+    assert_eq!(app.mode, Mode::Picker);
+    // Keys that would edit in other modes only search here.
+    press(&mut app, "x");
+    assert_eq!(app.view, View::Track);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.view, View::Track);
+    assert!(app.picker.is_none());
+    // The list starts on the view before this one.
+    press(&mut app, " ff");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Phrase);
+    press(&mut app, "  ");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Track);
+}
+
+#[test]
+fn the_view_picker_searches_and_moves_with_ctrl_keys() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "  tra");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Track);
+    press(&mut app, "  zz");
+    special(&mut app, KeyCode::Backspace);
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
+    app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
+    assert_eq!(app.picker.as_ref().unwrap().selected, 0);
+    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
+    assert_eq!(app.picker.as_ref().unwrap().selected, 1);
+    special(&mut app, KeyCode::Esc);
+}
+
+#[test]
+fn the_status_line_names_the_column() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    assert_eq!(column_name(&app), "Note");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Velocity");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "FX1 command");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "FX1 value");
+    press(&mut app, " 2");
+    assert_eq!(column_name(&app), "Phrase");
+}
+
+#[test]
+fn zero_and_dollar_pick_the_chain_columns() {
+    use vt_tui::tree::ChainColumn;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2$");
+    assert_eq!(app.chain_column, ChainColumn::Transpose);
+    press(&mut app, "0");
+    assert_eq!(app.chain_column, ChainColumn::Phrase);
+}
+
+#[test]
+fn x_in_a_chain_only_resets_transpose() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 2x");
+    assert!(app.status.contains("dd"), "{}", app.status);
+    assert_eq!(app.chain_entries().len(), 1);
+    press(&mut app, "l+x");
+    assert_eq!(app.chain_entries()[0].transpose, 0);
+}
+
+#[test]
+fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
+    assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
+    assert_eq!(app.status, "Kit 909: 3 tracks");
+    assert_eq!(app.song().tracks.len(), 3, "it added the track it needed");
+    assert_eq!(app.levels.len(), 3);
+    assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
+
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 0), None);
+    assert_eq!(app.song().tracks.len(), 2);
+}
+
+#[test]
+fn a_kit_names_tracks_keeps_their_settings_and_leaves_later_ones_alone() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 2");
+    press(&mut app, "WWW");
+    let other = folder();
+    std::fs::create_dir_all(&other).unwrap();
+    let later = other.join("later.wav");
+    wav(&later);
+    command(&mut app, &format!("sample {}", later.display()));
+    let kit = labelled_kit();
+    let before = app.song().tracks[0].cutoff;
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(app.song().tracks[0].name, "BD");
+    assert_eq!(app.song().tracks[1].name, "CH");
+    assert_eq!(app.song().tracks[2].name, "");
+    assert_eq!(app.song().tracks[0].cutoff, before);
+    assert!(sample_of(&app, 3).unwrap().ends_with("later.wav"));
+}
+
+#[test]
+fn a_kit_warns_only_when_it_changes_a_tracks_sample() {
+    let (mut app, _realtime) = app();
+    let kit = labelled_kit();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(!app.status.contains("Replaced"), "{}", app.status);
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(
+        !app.status.contains("Replaced"),
+        "the same again: {}",
+        app.status
+    );
+    std::fs::write(
+        &kit,
+        r#"(sounds: [(label: "BD", path: "drums/snare.wav")])"#,
+    )
+    .unwrap();
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert!(app.status.contains("Replaced 01"), "{}", app.status);
+}
+
+#[test]
+fn a_kit_refuses_a_bad_name_and_changes_nothing() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    for (text, expected) in [
+        (r#"(sounds: [(label: "1A", path: "drums/kick.wav")])"#, "1A"),
+        (
+            r#"(sounds: [(label: "BDX", path: "drums/kick.wav")])"#,
+            "BDX",
+        ),
+    ] {
+        std::fs::write(&kit, text).unwrap();
+        command(&mut app, &format!("kit {}", kit.display()));
+        assert!(app.status.contains(expected), "{}", app.status);
+        assert!(!app.dirty);
+    }
+}
+
+#[test]
+fn name_sets_and_clears_a_tracks_name_and_it_shows_in_the_phrase() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "name bd");
+    assert_eq!(app.song().tracks[0].name, "BD");
+    let buffer = screen(&app);
+    let top: String = (0..40).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(top.contains("BD"), "{top}");
+    command(&mut app, "name 1A");
+    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.status);
+    command(&mut app, "name");
+    assert_eq!(app.song().tracks[0].name, "");
+}
+
+#[test]
+fn space_5_chooses_a_sample_for_the_current_track() {
+    let (mut app, _realtime) = app();
+    // With nothing to list it asks for a path, and either way the view stays.
+    press(&mut app, " 5");
+    assert_ne!(app.mode, Mode::Normal);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.view, View::Phrase);
+}
+
+#[test]
+fn notes_played_while_editing_preview_on_this_tracks_sound() {
+    let (mut app, mut realtime) = app();
+    press(&mut app, "W");
+    with_a_sound(&mut app);
+    block(&mut realtime, &mut app);
+    press(&mut app, "ia");
+    assert!(loudest(&mut realtime, 2000) > 0.01, "it can be heard");
 }

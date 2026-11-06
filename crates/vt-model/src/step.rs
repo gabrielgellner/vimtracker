@@ -190,7 +190,6 @@ pub struct Step {
     pub note: Note,
     /// `None` means full level.
     pub velocity: Option<u8>,
-    pub instrument: Option<u32>,
     pub fx: Vec<FxSlot>,
 }
 
@@ -199,7 +198,6 @@ impl Default for Step {
         Self {
             note: Note::Empty,
             velocity: None,
-            instrument: None,
             fx: vec![FxSlot::default(); FX_SLOTS],
         }
     }

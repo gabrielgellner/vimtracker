@@ -33,7 +33,7 @@ pub const GUIDES: [Guide; 10] = [
         source: include_str!("../guides/chains.md"),
     },
     Guide {
-        source: include_str!("../guides/instruments.md"),
+        source: include_str!("../guides/sounds.md"),
     },
     Guide {
         source: include_str!("../guides/tracks.md"),

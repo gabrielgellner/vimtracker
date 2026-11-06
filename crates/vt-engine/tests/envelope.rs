@@ -7,7 +7,7 @@ use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{FilterType, Instrument, Song};
+use vt_model::song::{FilterType, Song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -47,13 +47,9 @@ fn ramp() -> Arc<SamplePool> {
 
 fn song(texts: &[&str], shape: Envelope) -> Song {
     let mut song = Song::new(1);
-    song.instruments.insert(
-        0,
-        Arc::new(Instrument {
-            sample: Some("s".to_owned()),
-            ..Instrument::default()
-        }),
-    );
+    for track in &mut song.tracks {
+        track.sample = Some("s".to_owned());
+    }
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
@@ -88,9 +84,9 @@ fn close(actual: f32, expected: f32) {
     assert!((actual - expected).abs() < 0.01, "{actual} and {expected}");
 }
 
-const NOTE: &str = "C-4 -- 00 ---00 ---00 ---00";
-const OFF: &str = "OFF -- -- ---00 ---00 ---00";
-const EMPTY: &str = "--- -- -- ---00 ---00 ---00";
+const NOTE: &str = "C-4 -- ---00 ---00 ---00";
+const OFF: &str = "OFF -- ---00 ---00 ---00";
+const EMPTY: &str = "--- -- ---00 ---00 ---00";
 
 #[test]
 fn a_note_follows_attack_decay_and_sustain() {
@@ -246,7 +242,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
 
 #[test]
 fn a_second_envelope_on_vol_moves_the_level_by_its_depth() {
-    let mut with = song(&["C-4 -- 00 VOL80 ---00 ---00"], adsr(0, 0, 100, 0));
+    let mut with = song(&["C-4 -- VOL80 ---00 ---00"], adsr(0, 0, 100, 0));
     with.tracks[0].envelopes[1] = Envelope {
         destination: Some(Destination::Vol),
         depth: 0x40,

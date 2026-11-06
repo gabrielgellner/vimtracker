@@ -116,8 +116,6 @@ pub struct Retrigger {
 pub struct TrackState {
     pub voice: Voice,
     pub tail: Voice,
-    /// The instrument a note with no instrument keeps playing.
-    pub instrument: Option<u32>,
     /// Live controls, kept here rather than in the song so undo can't change them.
     pub mute: bool,
     pub solo: bool,
@@ -208,7 +206,6 @@ impl TrackState {
         Self {
             voice: Voice::default(),
             tail: Voice::default(),
-            instrument: None,
             mute: false,
             solo: false,
             rng: Pcg32::new(seed, index as u64),
@@ -265,7 +262,6 @@ impl TrackState {
     /// glide back, so anything still sounding doesn't click.
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
-        self.instrument = None;
         self.last_note = None;
         let bases = [
             UNITY_LEVEL,

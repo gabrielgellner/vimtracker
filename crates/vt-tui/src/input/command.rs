@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use thiserror::Error;
-use vt_model::label::{is_label, slot_of};
+use vt_model::label::is_name;
 
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,9 +17,8 @@ pub enum Line {
     Sample(PathBuf),
     /// Load a kit by name or path, or choose one.
     Kit(Option<PathBuf>),
-    Inst(u32),
-    /// Mark a slot as labelled and make it current, or with `None` unmark the current one.
-    Label(Option<u32>),
+    /// Name this track, or clear its name.
+    Name(Option<String>),
     Bpm(u32),
     Len(usize),
     TrackAdd(usize),
@@ -50,10 +49,8 @@ pub enum LineError {
     Unknown(String),
     #[error("{0} needs a path")]
     NeedsPath(&'static str),
-    #[error(":inst takes a hex number or a label")]
-    Inst,
-    #[error(":label takes two characters, the first a letter, or off")]
-    Label,
+    #[error(":name takes two characters, the first a letter, or nothing to clear it")]
+    Name,
     #[error(":bpm takes a number from 20 to 400")]
     Bpm,
     #[error(":len takes a number of steps, 1 or more, with 0x for hex: 0x10")]
@@ -174,13 +171,9 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "new" => needed(":new").map(Line::New),
         "sample" => needed(":sample").map(Line::Sample),
         "kit" => Ok(Line::Kit((!argument.is_empty()).then(|| path(argument)))),
-        "inst" => slot_of(argument)
-            .or_else(|| u32::from_str_radix(argument, 16).ok())
-            .map(Line::Inst)
-            .ok_or(LineError::Inst),
-        "label" if argument == "off" => Ok(Line::Label(None)),
-        "label" if is_label(argument) => Ok(Line::Label(slot_of(argument))),
-        "label" => Err(LineError::Label),
+        "name" if argument.is_empty() => Ok(Line::Name(None)),
+        "name" if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
+        "name" => Err(LineError::Name),
         "bpm" => millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
         "len" => steps(argument).map(Line::Len).ok_or(LineError::Len),
         "track" => match argument.split_whitespace().collect::<Vec<_>>()[..] {
@@ -246,15 +239,6 @@ mod tests {
         assert_eq!(parse("w"), Ok(Line::Write(None)));
         assert_eq!(parse("w a/b"), Ok(Line::Write(Some("a/b".into()))));
         assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
-        assert_eq!(parse("inst 1A"), Ok(Line::Inst(0x1A)));
-        assert_eq!(parse("inst bd"), Ok(Line::Inst(0xBD)));
-        assert_eq!(parse("inst 5"), Ok(Line::Inst(5)));
-        assert_eq!(parse("inst 100"), Ok(Line::Inst(0x100)));
-        assert_eq!(parse("inst ch"), Ok(Line::Inst(slot_of("CH").unwrap())));
-        assert_eq!(parse("inst 1h"), Err(LineError::Inst));
-        assert_eq!(parse("label BD"), Ok(Line::Label(Some(0xBD))));
-        assert_eq!(parse("label off"), Ok(Line::Label(None)));
-        assert_eq!(parse("label 1A"), Err(LineError::Label));
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
         assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
         assert_eq!(
@@ -312,6 +296,9 @@ mod tests {
         assert_eq!(parse("set limiter=2"), Err(LineError::Set));
         assert_eq!(parse("set other=1"), Err(LineError::Set));
         assert_eq!(parse("track add 0"), Err(LineError::Track));
+        assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
+        assert_eq!(parse("name"), Ok(Line::Name(None)));
+        assert_eq!(parse("name 1A"), Err(LineError::Name));
         assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));
         assert_eq!(parse("kit"), Ok(Line::Kit(None)));
         assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));

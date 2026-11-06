@@ -17,7 +17,6 @@ use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, TRANSPORT_GUARD_MS,
 };
 use vt_model::history::History;
-use vt_model::label::{is_named_slot, name_of, slot_of};
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -33,7 +32,6 @@ use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
-use crate::instruments::Row;
 use crate::shaping::ShapePanel;
 use crate::tree::{ChainColumn, Place};
 
@@ -81,7 +79,6 @@ pub struct App {
     pub rate: u32,
     pub mode: Mode,
     pub view: View,
-    pub instrument_row: Row,
     /// The track page's row and setting.
     pub track_row: usize,
     pub track_field: usize,
@@ -95,7 +92,6 @@ pub struct App {
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
     pub cursor: Cursor,
-    pub instrument: u32,
     pub octave: u8,
     /// The velocity new notes are written with, like the octave.
     pub note_velocity: u8,
@@ -166,7 +162,6 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
-            instrument_row: Row::Sample,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),
@@ -183,7 +178,6 @@ impl App {
                 step: 0,
                 field: Field::Note,
             },
-            instrument: 0,
             octave: 4,
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
@@ -359,7 +353,6 @@ impl App {
             | Mode::VisualField
             | Mode::VisualStep
             | Mode::Chain
-            | Mode::Instrument
             | Mode::Track => {
                 self.command_key_normal(key, now);
             }
@@ -386,7 +379,6 @@ impl App {
     pub fn key_scope(&self) -> Mode {
         match (self.mode, self.view) {
             (Mode::Normal, View::Chain) => Mode::Chain,
-            (Mode::Normal, View::Instrument) => Mode::Instrument,
             (Mode::Normal, View::Track) => Mode::Track,
             (mode, _) => mode,
         }
@@ -480,7 +472,6 @@ impl App {
     pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
         let handled = match self.view {
             View::Chain => self.run_chain(cmd),
-            View::Instrument => self.run_instrument(cmd),
             View::Track => self.run_track_page(cmd),
             View::Phrase => false,
         };
@@ -513,7 +504,7 @@ impl App {
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
-            Cmd::ChooseInstrument => self.open_current_instrument_picker(),
+            Cmd::PickSample => self.open_default_sample_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {
@@ -674,7 +665,6 @@ impl App {
         let Note::On(midi) = step.note else {
             return;
         };
-        let instrument = step.instrument.unwrap_or(self.instrument);
         let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
         let transpose = self
             .chain_entries()
@@ -683,7 +673,7 @@ impl App {
         let note = (i16::from(midi) + i16::from(transpose))
             .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
         self.handle.send(Command::Preview {
-            instrument,
+            track: self.cursor.track,
             note,
             velocity,
         });
@@ -749,7 +739,7 @@ impl App {
     }
 
     /// Keep one set of live controls per track as tracks come and go.
-    fn fit_levels(&mut self) {
+    pub(crate) fn fit_levels(&mut self) {
         let tracks = self.song().tracks.len();
         for removed in tracks..self.levels.len() {
             self.handle.send(Command::SetMute {
@@ -868,7 +858,6 @@ impl App {
             _ => match self.cursor.field {
                 Field::Note => self.insert_note(key),
                 Field::Velocity | Field::FxValue(_) => self.insert_value(key),
-                Field::Instrument => self.insert_instrument(key),
                 Field::FxCommand(slot) => self.insert_command(key, slot),
             },
         }
@@ -901,8 +890,7 @@ impl App {
             if !key.ctrl {
                 match self.view {
                     View::Chain => self.insert_chain_row(key.code),
-                    View::Track => self.insert_track_page(key.code),
-                    _ => self.insert_instrument_row(key.code),
+                    _ => self.insert_track_page(key.code),
                 }
             }
             return;
@@ -910,7 +898,6 @@ impl App {
         match self.cursor.field {
             Field::Note => self.insert_note(key),
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
-            Field::Instrument => self.insert_instrument(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
         }
     }
@@ -929,7 +916,7 @@ impl App {
             }
             KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
             KeyCode::Char('1') => {
-                self.write_note(Note::Off, None);
+                self.write_note(Note::Off);
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
@@ -940,14 +927,12 @@ impl App {
                         .phrase_id()
                         .and_then(|id| self.song().phrases.get(&id).cloned())
                         .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
-                    let (instrument, velocity) = on_step
+                    let velocity = on_step
                         .as_ref()
-                        .map_or((self.instrument, self.note_velocity), |step| {
-                            self.played_with(step)
-                        });
+                        .map_or(self.note_velocity, |step| self.played_with(step));
                     self.write_played_note(midi);
                     self.handle.send(Command::Preview {
-                        instrument,
+                        track: self.cursor.track,
                         note: midi,
                         velocity,
                     });
@@ -987,7 +972,7 @@ impl App {
         self.move_step(by);
     }
 
-    /// Write a played note with its instrument and velocity, as one change.
+    /// Write a played note with its velocity, as one change.
     fn write_played_note(&mut self, midi: u8) {
         let Some(id) = self.phrase_id() else {
             self.status = "This track has no phrase here".to_owned();
@@ -997,32 +982,28 @@ impl App {
         let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
             return;
         };
-        let (instrument, velocity) = self.played_with(&step);
+        let velocity = self.played_with(&step);
         self.apply(&Action::SetStep {
             phrase: id,
             step: self.cursor.step,
             value: Step {
                 note: Note::On(midi),
-                instrument: Some(instrument),
                 velocity: Some(velocity),
                 ..step
             },
         });
     }
 
-    /// The instrument and velocity a played note takes. Replacing keeps what the step has.
-    fn played_with(&self, step: &Step) -> (u32, u8) {
+    /// The velocity a played note takes. Replacing keeps what the step has.
+    fn played_with(&self, step: &Step) -> u8 {
         if self.mode == Mode::Replace {
-            (
-                step.instrument.unwrap_or(self.instrument),
-                step.velocity.unwrap_or(self.note_velocity),
-            )
+            step.velocity.unwrap_or(self.note_velocity)
         } else {
-            (self.instrument, self.note_velocity)
+            self.note_velocity
         }
     }
 
-    /// Clear a note along with the velocity and instrument it was written with.
+    /// Clear a note along with the velocity it was written with.
     fn clear_note(&mut self) {
         let Some(id) = self.phrase_id() else {
             return;
@@ -1036,7 +1017,6 @@ impl App {
             step: self.cursor.step,
             value: Step {
                 note: Note::Empty,
-                instrument: None,
                 velocity: None,
                 ..step
             },
@@ -1143,44 +1123,6 @@ impl App {
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
     }
 
-    fn write_instrument(&mut self, id: u32) {
-        self.instrument = id;
-        self.set_field(FieldValue::Instrument(Some(id)));
-        self.advance();
-    }
-
-    /// Two characters commit, as a number or a label. `Enter` commits one digit.
-    fn insert_instrument(&mut self, key: Key) {
-        match key.code {
-            KeyCode::Esc => self.cancel_entry(),
-            KeyCode::Backspace => {
-                if self.entry.text.pop().is_none() {
-                    self.set_field(FieldValue::Instrument(None));
-                    self.move_step(-1);
-                }
-            }
-            KeyCode::Enter => {
-                let text = std::mem::take(&mut self.entry.text);
-                if let Ok(id) = u32::from_str_radix(&text, 16) {
-                    self.write_instrument(id);
-                }
-            }
-            KeyCode::Char(c) if !key.ctrl && c.is_ascii_alphanumeric() => {
-                self.entry.text.push(c.to_ascii_uppercase());
-                if self.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.entry.text);
-                    match slot_of(&text) {
-                        Some(id) => self.write_instrument(id),
-                        None => {
-                            self.status = format!("{text} isn't a number, or a label");
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// The third letter of a valid name moves to the value. An invalid name is refused, and the
     /// field is unchanged.
     fn insert_command(&mut self, key: Key, slot: usize) {
@@ -1220,7 +1162,7 @@ impl App {
         self.last_entry = Some((written, self.cursor.step));
     }
 
-    fn write_note(&mut self, note: Note, instrument: Option<u32>) {
+    fn write_note(&mut self, note: Note) {
         let Some(phrase) = self.phrase_id() else {
             self.status = "This track has no phrase here".to_owned();
             return;
@@ -1229,7 +1171,6 @@ impl App {
             phrase,
             step: self.cursor.step,
             note,
-            instrument,
         });
     }
 
@@ -1277,27 +1218,10 @@ impl App {
             Line::Sample(path) => self.sample(&path),
             Line::Kit(Some(name)) => self.load_named_kit(&name),
             Line::Kit(None) => self.open_kit_picker(),
-            Line::Inst(id) => {
-                self.instrument = id;
-                self.status = format!("Instrument {}", name_of(id));
-            }
-            Line::Label(Some(id)) => {
-                self.apply(&Action::SetLabelled { id, labelled: true });
-                self.instrument = id;
-                self.status = format!("Instrument {} is labelled", name_of(id));
-            }
-            Line::Label(None) if is_named_slot(self.instrument) => {
-                self.status = format!(
-                    "{} can only be named by its label",
-                    name_of(self.instrument)
-                );
-            }
-            Line::Label(None) => {
-                self.apply(&Action::SetLabelled {
-                    id: self.instrument,
-                    labelled: false,
-                });
-            }
+            Line::Name(name) => self.apply(&Action::SetTrackName {
+                track: self.cursor.track,
+                name: name.unwrap_or_default(),
+            }),
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
             Line::TrackAdd(count) => {
                 self.apply(&Action::AddTracks(count));
@@ -1500,12 +1424,12 @@ impl App {
                 let mut pool = SamplePool::clone(&self.samples);
                 pool.insert(&stored, data);
                 self.samples = Arc::new(pool);
-                self.apply(&Action::SetSample {
-                    instrument: self.instrument,
-                    sample: stored,
+                self.apply(&Action::SetTrackSample {
+                    track: self.cursor.track,
+                    sample: Some(stored),
                 });
                 if self.status.is_empty() {
-                    self.status = format!("Instrument {} loaded", name_of(self.instrument));
+                    self.status = format!("Track {:02} sample loaded", self.cursor.track + 1);
                 }
             }
             Err(error) => self.status = error.to_string(),

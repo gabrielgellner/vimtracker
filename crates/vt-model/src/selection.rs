@@ -1,7 +1,6 @@
 //! Motions, targets and what operators do to the steps they cover. No terminal is needed here.
 
 use crate::constants::BEAT_STEPS;
-use crate::label::is_named_slot;
 use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 /// One editable part of a step.
@@ -9,19 +8,17 @@ use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Not
 pub enum Field {
     Note,
     Velocity,
-    Instrument,
     FxCommand(usize),
     FxValue(usize),
 }
 
 impl Field {
-    /// The column group this field belongs to: note, velocity, instrument, then each FX slot.
+    /// The column group this field belongs to: note, velocity, then each FX slot.
     pub fn group(self) -> usize {
         match self {
             Self::Note => 0,
             Self::Velocity => 1,
-            Self::Instrument => 2,
-            Self::FxCommand(slot) | Self::FxValue(slot) => 3 + slot,
+            Self::FxCommand(slot) | Self::FxValue(slot) => 2 + slot,
         }
     }
 
@@ -30,8 +27,7 @@ impl Field {
         match group {
             0 => Self::Note,
             1 => Self::Velocity,
-            2 => Self::Instrument,
-            slot => Self::FxCommand(slot - 3),
+            slot => Self::FxCommand(slot - 2),
         }
     }
 
@@ -40,9 +36,8 @@ impl Field {
         match self {
             Self::Note => 0,
             Self::Velocity => 1,
-            Self::Instrument => 2,
-            Self::FxCommand(slot) => 3 + slot * 2,
-            Self::FxValue(slot) => 4 + slot * 2,
+            Self::FxCommand(slot) => 2 + slot * 2,
+            Self::FxValue(slot) => 3 + slot * 2,
         }
     }
 
@@ -51,9 +46,8 @@ impl Field {
         match order {
             0 => Self::Note,
             1 => Self::Velocity,
-            2 => Self::Instrument,
-            n if (n - 3).is_multiple_of(2) => Self::FxCommand((n - 3) / 2),
-            n => Self::FxValue((n - 4) / 2),
+            n if (n - 2).is_multiple_of(2) => Self::FxCommand((n - 2) / 2),
+            n => Self::FxValue((n - 3) / 2),
         }
     }
 }
@@ -286,11 +280,8 @@ pub fn clear_step(step: &mut Step, scope: Scope) {
     if scope.covers(1) {
         step.velocity = None;
     }
-    if scope.covers(2) {
-        step.instrument = None;
-    }
     for (index, slot) in step.fx.iter_mut().enumerate() {
-        if scope.covers(3 + index) {
+        if scope.covers(2 + index) {
             *slot = FxSlot::default();
         }
     }
@@ -300,14 +291,14 @@ pub fn clear_step(step: &mut Step, scope: Scope) {
 pub fn first_value(step: &Step, scope: Scope) -> Option<FxSlot> {
     let mut slots = step.fx.iter().enumerate();
     slots
-        .find(|(index, slot)| scope.covers(3 + index) && slot.is_value())
+        .find(|(index, slot)| scope.covers(2 + index) && slot.is_value())
         .map(|(_, slot)| *slot)
 }
 
 /// Set the mark on every value a scope covers on a step.
 pub fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
     for (index, slot) in step.fx.iter_mut().enumerate() {
-        if scope.covers(3 + index) && slot.is_value() {
+        if scope.covers(2 + index) && slot.is_value() {
             slot.mark = mark;
         }
     }
@@ -316,10 +307,10 @@ pub fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
 /// What a value change does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shift {
-    /// `>` and `<`. Whole steps move notes only. Empty fields, `OFF`, FX names and instrument IDs
+    /// `>` and `<`. Whole steps move notes only. Empty fields, `OFF`, and FX names
     /// are skipped.
     Operator,
-    /// `=` and `-`. The same, but instrument IDs change too.
+    /// `=` and `-`. The same.
     Increment,
     /// `+` and `_`. The same again in large steps: an octave, or the top hex digit.
     Large,
@@ -369,15 +360,8 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
             step.velocity = Some(moved as u8);
         }
     }
-    if scope.covers(2)
-        && kind != Shift::Operator
-        && let Some(instrument) = step.instrument
-        && !is_named_slot(instrument)
-    {
-        step.instrument = Some((i64::from(instrument) + i64::from(hex_by)).max(0) as u32);
-    }
     for (index, slot) in step.fx.iter_mut().enumerate() {
-        if scope.covers(3 + index)
+        if scope.covers(2 + index)
             && let Some(command) = slot.command
         {
             slot.value = shift_fx(command, slot.value, by, kind);
@@ -397,7 +381,7 @@ pub struct Block {
 pub struct ColumnMismatch;
 
 fn kind(group: usize) -> usize {
-    group.min(3)
+    group.min(2)
 }
 
 /// Overwrite one step from a copied step, starting at a column group. Whole-step blocks replace
@@ -417,10 +401,9 @@ pub fn paste_step(
         match group {
             0 => target.note = source.note,
             1 => target.velocity = source.velocity,
-            2 => target.instrument = source.instrument,
             slot => {
-                if let Some(value) = source.fx.get(slot - 3) {
-                    target.fx[to - 3] = *value;
+                if let Some(value) = source.fx.get(slot - 2) {
+                    target.fx[to - 2] = *value;
                 }
             }
         }
@@ -450,13 +433,12 @@ pub fn merge_step(
         match group {
             0 if source.note != Note::Empty => target.note = source.note,
             1 if source.velocity.is_some() => target.velocity = source.velocity,
-            2 if source.instrument.is_some() => target.instrument = source.instrument,
-            0..=2 => {}
+            0 | 1 => {}
             slot => {
-                if let Some(value) = source.fx.get(slot - 3)
+                if let Some(value) = source.fx.get(slot - 2)
                     && value.command.is_some()
                 {
-                    target.fx[to - 3] = *value;
+                    target.fx[to - 2] = *value;
                 }
             }
         }
@@ -472,7 +454,7 @@ fn column_to(
     at_group: usize,
 ) -> Result<usize, ColumnMismatch> {
     let to = at_group + (group - scope.first);
-    if kind(group) != kind(to) || (to >= 3 && to - 3 >= target.fx.len()) {
+    if kind(group) != kind(to) || (to >= 2 && to - 2 >= target.fx.len()) {
         return Err(ColumnMismatch);
     }
     Ok(to)
@@ -575,7 +557,7 @@ mod tests {
         for order in 0..9 {
             assert_eq!(Field::from_order(order).order(), order);
         }
-        assert_eq!(Field::FxValue(1).group(), 4);
-        assert_eq!(Field::of_group(4), Field::FxCommand(1));
+        assert_eq!(Field::FxValue(1).group(), 3);
+        assert_eq!(Field::of_group(3), Field::FxCommand(1));
     }
 }

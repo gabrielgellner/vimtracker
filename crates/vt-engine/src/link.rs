@@ -24,7 +24,7 @@ pub enum Command {
     Return,
     /// Play an entered note on the preview voice.
     Preview {
-        instrument: u32,
+        track: usize,
         note: u8,
         velocity: u8,
     },
@@ -143,10 +143,10 @@ impl Realtime {
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
                 Command::Preview {
-                    instrument,
+                    track,
                     note,
                     velocity,
-                } => self.engine.preview(instrument, note, velocity),
+                } => self.engine.preview(track, note, velocity),
                 Command::Audition { section_step } => self.engine.audition(section_step),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
@@ -173,7 +173,7 @@ mod tests {
     use vt_model::constants::MAX_TRACKS;
     use vt_model::sample::SampleData;
     use vt_model::samples::SamplePool;
-    use vt_model::song::{Instrument, Song};
+    use vt_model::song::Song;
     use vt_model::step::{Note, Step};
 
     use super::*;
@@ -194,19 +194,14 @@ mod tests {
 
     fn song(tracks: usize, steps: usize) -> Song {
         let mut song = Song::new(tracks);
-        song.instruments.insert(
-            0,
-            Arc::new(Instrument {
-                sample: Some("flat".to_owned()),
-                ..Instrument::default()
-            }),
-        );
+        for track in &mut song.tracks {
+            track.sample = Some("flat".to_owned());
+        }
         for id in 0..tracks as u32 {
             let phrase = Arc::make_mut(song.phrases.get_mut(&id).unwrap());
             for step in 0..steps {
                 *phrase.step_mut(step).unwrap() = Step {
                     note: Note::On(60),
-                    instrument: Some(0),
                     ..Step::default()
                 };
             }
@@ -254,10 +249,10 @@ mod tests {
             let phrase = Arc::make_mut(marked.phrases.get_mut(&id).unwrap());
             for step in 0..16 {
                 let text = match step % 4 {
-                    0 => "C-4 -- 00 CUT40g VOL80 PANC0h",
-                    1 => "--- -- -- RES20g ---00 ---00",
-                    2 => "C-4 -- 00 CUTF0h VOLA0g ---00",
-                    _ => "--- -- -- ---00 RES40 ---00",
+                    0 => "C-4 -- CUT40g VOL80 PANC0h",
+                    1 => "--- -- RES20g ---00 ---00",
+                    2 => "C-4 -- CUTF0h VOLA0g ---00",
+                    _ => "--- -- ---00 RES40 ---00",
                 };
                 *phrase.step_mut(step).unwrap() = text.parse().unwrap();
             }
@@ -266,6 +261,23 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         assert!(handle.send(Command::PlayFrom { step: 0 }));
         assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
+    #[test]
+    fn a_preview_through_a_track_never_allocates_in_the_callback() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        let mut violations = 0;
+        for round in 0..200 {
+            assert!(handle.send(Command::Preview {
+                track: round % 8,
+                note: 60,
+                velocity: 0x7F,
+            }));
+            violations += blocks(&mut rt, 2);
+        }
+        assert_eq!(violations, 0);
     }
 
     #[test]
@@ -291,19 +303,15 @@ mod tests {
     fn every_fx_command_stays_off_the_allocator() {
         let pool = samples();
         let mut fx = Song::new(2);
-        fx.instruments.insert(
-            0,
-            Arc::new(Instrument {
-                sample: Some("flat".to_owned()),
-                ..Instrument::default()
-            }),
-        );
+        for track in &mut fx.tracks {
+            track.sample = Some("flat".to_owned());
+        }
         let texts = [
-            "C-4 01 00 VOL80 PAN20 CUT40",
-            "C-4 -- -- RESC0 DLY80 REV80",
-            "C-4 -- -- DEL02 KIL03 OFF01",
-            "C-4 -- -- RET52 CHA80 ---00",
-            "OFF -- -- ---00 ---00 ---00",
+            "C-4 01 VOL80 PAN20 CUT40",
+            "C-4 -- RESC0 DLY80 REV80",
+            "C-4 -- DEL02 KIL03 OFF01",
+            "C-4 -- RET52 CHA80 ---00",
+            "OFF -- ---00 ---00 ---00",
         ];
         for id in 0..2 {
             let phrase = Arc::make_mut(fx.phrases.get_mut(&id).unwrap());
@@ -321,16 +329,12 @@ mod tests {
     fn audition_stays_off_the_allocator() {
         let pool = samples();
         let mut played = Song::new(2);
-        played.instruments.insert(
-            0,
-            Arc::new(Instrument {
-                sample: Some("flat".to_owned()),
-                ..Instrument::default()
-            }),
-        );
+        for track in &mut played.tracks {
+            track.sample = Some("flat".to_owned());
+        }
         for id in 0..2 {
             let phrase = Arc::make_mut(played.phrases.get_mut(&id).unwrap());
-            *phrase.step_mut(0).unwrap() = "C-4 01 00 VOL80 ---00 ---00".parse().unwrap();
+            *phrase.step_mut(0).unwrap() = "C-4 01 VOL80 ---00 ---00".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -419,7 +423,7 @@ mod tests {
         let mut one = song(1, 0);
         *Arc::make_mut(one.phrases.get_mut(&0).unwrap())
             .step_mut(0)
-            .unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
+            .unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert_eq!(blocks(&mut rt, 1), 0);

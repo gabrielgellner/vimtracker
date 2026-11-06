@@ -25,8 +25,7 @@ by the step setting.
 Our octave numbers are one above Live's: `a` starts on `C-4`, the same pitch
 Live calls C3.
 
-Notes use the current instrument, shown as `Inst` on the status line. Change
-it with `:inst 1A`, or by label with `:inst bd`.
+Notes play the track's sample: see **Sounds, samples and kits**.
 
 ## Moving without writing a note
 
@@ -65,8 +64,7 @@ It starts at `64`, which leaves room above it for louder hits. Press `c` and
 then `7F`, which is full. Like the octave, the setting isn't saved with the
 project.
 
-`Backspace` clears a note with the velocity and instrument it was written
-with. A `--` in the Velocity column plays at full.
+`Backspace` clears a note with the velocity it was written with. A `--` in the Velocity column plays at full.
 
 For how loud a whole track is, use `:tvol`. See **Phrases and chains**.
 
@@ -77,5 +75,4 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`, then it moves down |
-| Instrument | Two characters, a number or a label, such as `04` or `bd` |
 | FX | A name then two hex digits, such as `CUT40`. See **FX commands** |
