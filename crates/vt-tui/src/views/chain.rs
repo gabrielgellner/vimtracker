@@ -32,7 +32,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
     let playing = app
         .playhead_here()
-        .and_then(|playhead| song.chain_position(chain, playhead))
+        .and_then(|playhead| song.tracks[app.cursor.track].chain_position(chain, playhead))
         .map(|position| position.slot);
     let entries = app.chain_entries();
     let room = usize::from(area.height.saturating_sub(2)).max(1);
@@ -70,7 +70,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             }
         };
         let steps = entry
-            .and_then(|entry| song.phrases.get(&entry.phrase))
+            .and_then(|entry| song.tracks[app.cursor.track].phrases.get(&entry.phrase))
             .map_or_else(String::new, |phrase| phrase.len().to_string());
         lines.push(Line::from(vec![
             Span::styled(format!("{slot:02X}"), theme::dim()),

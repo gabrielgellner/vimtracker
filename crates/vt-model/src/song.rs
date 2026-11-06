@@ -116,6 +116,75 @@ pub struct Track {
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
     pub envelopes: [Envelope; TRACK_ENVELOPES],
+    /// The chains this track can play, numbered within it.
+    #[serde(default)]
+    pub chains: BTreeMap<u32, Arc<Chain>>,
+    /// The phrases its chains can play, numbered within it.
+    #[serde(default)]
+    pub phrases: BTreeMap<u32, Arc<Phrase>>,
+}
+
+impl Track {
+    /// The total steps in a chain. A missing or empty chain has none.
+    pub fn chain_steps(&self, chain: u32) -> usize {
+        self.chains.get(&chain).map_or(0, |chain| {
+            chain
+                .entries
+                .iter()
+                .filter_map(|entry| self.phrases.get(&entry.phrase))
+                .map(|phrase| phrase.len())
+                .sum()
+        })
+    }
+
+    /// Find a step within a chain, looping the chain if the position is past its end.
+    pub fn chain_position(&self, chain: u32, step: usize) -> Option<ChainPosition> {
+        let total = self.chain_steps(chain);
+        if total == 0 {
+            return None;
+        }
+        let mut remaining = step % total;
+        let chain = self.chains.get(&chain)?;
+        for (slot, entry) in chain.entries.iter().enumerate() {
+            let Some(phrase) = self.phrases.get(&entry.phrase) else {
+                continue;
+            };
+            if remaining < phrase.len() {
+                return Some(ChainPosition {
+                    slot,
+                    phrase: entry.phrase,
+                    step: remaining,
+                    transpose: entry.transpose,
+                });
+            }
+            remaining -= phrase.len();
+        }
+        None
+    }
+
+    /// The step at a position, once a chain position has been found.
+    pub fn step_at(&self, position: ChainPosition) -> Option<&Step> {
+        self.phrases
+            .get(&position.phrase)?
+            .loop_steps()
+            .get(position.step)
+    }
+
+    /// Make a chain with this ID and one new phrase.
+    pub fn add_chain(&mut self, chain: u32) {
+        let phrase = lowest_unused(&self.phrases);
+        self.phrases
+            .insert(phrase, Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
+        self.chains.insert(
+            chain,
+            Arc::new(Chain {
+                entries: vec![ChainEntry {
+                    phrase,
+                    transpose: 0,
+                }],
+            }),
+        );
+    }
 }
 
 impl Default for Track {
@@ -138,6 +207,8 @@ impl Default for Track {
             reverb: 0,
             lfos: Default::default(),
             envelopes: default_envelopes(),
+            chains: BTreeMap::new(),
+            phrases: BTreeMap::new(),
         }
     }
 }
@@ -406,8 +477,6 @@ pub struct Song {
     pub swing: u16,
     pub tracks: Vec<Track>,
     pub sections: Vec<Section>,
-    pub chains: BTreeMap<u32, Arc<Chain>>,
-    pub phrases: BTreeMap<u32, Arc<Phrase>>,
 }
 
 impl Song {
@@ -423,8 +492,6 @@ impl Song {
             swing: 500,
             tracks: Vec::new(),
             sections: vec![Section::default()],
-            chains: BTreeMap::new(),
-            phrases: BTreeMap::new(),
         };
         for _ in 0..tracks.max(1) {
             song.add_track();
@@ -432,24 +499,13 @@ impl Song {
         song
     }
 
-    /// Add a track at the end, with its own new chain and phrase in every section.
+    /// Add a track at the end, with a new chain and phrase in the first section and none in the rest.
     pub fn add_track(&mut self) {
-        self.tracks.push(Track::default());
-        for index in 0..self.sections.len() {
-            let phrase = lowest_unused(&self.phrases);
-            self.phrases
-                .insert(phrase, Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
-            let chain = lowest_unused(&self.chains);
-            self.chains.insert(
-                chain,
-                Arc::new(Chain {
-                    entries: vec![ChainEntry {
-                        phrase,
-                        transpose: 0,
-                    }],
-                }),
-            );
-            self.sections[index].chains.push(Some(chain));
+        let mut track = Track::default();
+        track.add_chain(0);
+        self.tracks.push(track);
+        for (index, section) in self.sections.iter_mut().enumerate() {
+            section.chains.push((index == 0).then_some(0));
         }
     }
 
@@ -474,60 +530,14 @@ impl Song {
         self.sections.insert(at.min(self.sections.len()), section);
     }
 
-    /// The total steps in a chain. A missing or empty chain has none.
-    pub fn chain_steps(&self, chain: u32) -> usize {
-        self.chains.get(&chain).map_or(0, |chain| {
-            chain
-                .entries
-                .iter()
-                .filter_map(|entry| self.phrases.get(&entry.phrase))
-                .map(|phrase| phrase.len())
-                .sum()
-        })
-    }
-
     /// A section's length: its longest chain.
     pub fn section_steps(&self, section: &Section) -> usize {
-        section
-            .chains
+        self.tracks
             .iter()
-            .flatten()
-            .map(|chain| self.chain_steps(*chain))
+            .zip(&section.chains)
+            .filter_map(|(track, chain)| chain.map(|chain| track.chain_steps(chain)))
             .max()
             .unwrap_or(0)
-    }
-
-    /// Find a step within a chain, looping the chain if the position is past its end.
-    pub fn chain_position(&self, chain: u32, step: usize) -> Option<ChainPosition> {
-        let total = self.chain_steps(chain);
-        if total == 0 {
-            return None;
-        }
-        let mut remaining = step % total;
-        let chain = self.chains.get(&chain)?;
-        for (slot, entry) in chain.entries.iter().enumerate() {
-            let Some(phrase) = self.phrases.get(&entry.phrase) else {
-                continue;
-            };
-            if remaining < phrase.len() {
-                return Some(ChainPosition {
-                    slot,
-                    phrase: entry.phrase,
-                    step: remaining,
-                    transpose: entry.transpose,
-                });
-            }
-            remaining -= phrase.len();
-        }
-        None
-    }
-
-    /// The step at a position, once a chain position has been found.
-    pub fn step_at(&self, position: ChainPosition) -> Option<&Step> {
-        self.phrases
-            .get(&position.phrase)?
-            .loop_steps()
-            .get(position.step)
     }
 }
 
@@ -583,15 +593,17 @@ mod tests {
         assert_eq!(song.tracks.len(), DEFAULT_TRACKS);
         assert_eq!(song.sections.len(), 1);
         assert_eq!(song.sections[0].chains.len(), DEFAULT_TRACKS);
-        assert_eq!(song.chains.len(), DEFAULT_TRACKS);
+        for track in &song.tracks {
+            assert_eq!((track.chains.len(), track.phrases.len()), (1, 1));
+        }
         assert_eq!(song.section_steps(&song.sections[0]), DEFAULT_PHRASE_STEPS);
     }
 
     #[test]
     fn chain_positions_cross_phrases_and_loop() {
         let mut song = Song::new(1);
-        song.phrases.insert(7, Arc::new(Phrase::new(4)));
-        song.chains.insert(
+        song.tracks[0].phrases.insert(7, Arc::new(Phrase::new(4)));
+        song.tracks[0].chains.insert(
             0,
             Arc::new(Chain {
                 entries: vec![
@@ -606,12 +618,12 @@ mod tests {
                 ],
             }),
         );
-        assert_eq!(song.chain_steps(0), 20);
-        let position = song.chain_position(0, 17).unwrap();
+        assert_eq!(song.tracks[0].chain_steps(0), 20);
+        let position = song.tracks[0].chain_position(0, 17).unwrap();
         assert_eq!((position.slot, position.phrase, position.step), (1, 7, 1));
         assert_eq!(position.transpose, 3);
-        assert_eq!(song.chain_position(0, 20).unwrap().step, 0);
-        assert_eq!(song.chain_position(99, 0), None);
+        assert_eq!(song.tracks[0].chain_position(0, 20).unwrap().step, 0);
+        assert_eq!(song.tracks[0].chain_position(99, 0), None);
     }
 
     /// A phrase whose steps can be told apart by velocity, which is the step's stored position.
@@ -777,11 +789,11 @@ mod tests {
         let mut phrase = numbered(8);
         phrase.set_len(4);
         phrase.slide(2);
-        song.phrases.insert(0, Arc::new(phrase));
-        assert_eq!(song.chain_steps(0), 4);
-        let position = song.chain_position(0, 5).unwrap();
+        song.tracks[0].phrases.insert(0, Arc::new(phrase));
+        assert_eq!(song.tracks[0].chain_steps(0), 4);
+        let position = song.tracks[0].chain_position(0, 5).unwrap();
         assert_eq!(position.step, 1, "the chain loops over the loop");
-        assert_eq!(song.step_at(position).unwrap().velocity, Some(3));
+        assert_eq!(song.tracks[0].step_at(position).unwrap().velocity, Some(3));
     }
 
     #[test]

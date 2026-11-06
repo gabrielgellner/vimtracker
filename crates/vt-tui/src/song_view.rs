@@ -108,7 +108,7 @@ impl App {
                 let size = if large { LARGE_CHAIN } else { 1 };
                 let chain = match here.chains.get(track).copied().flatten() {
                     Some(id) => (i64::from(id) + by * size).max(0) as u32,
-                    None => lowest_unused(&self.song().chains),
+                    None => lowest_unused(&self.song().tracks[track].chains),
                 };
                 self.apply(&Action::SetSectionChain {
                     section,
@@ -223,7 +223,7 @@ impl App {
             .and_then(|here| here.chains.get(track).copied().flatten());
         self.record_jump();
         if chain.is_none() {
-            let chain = lowest_unused(&self.song().chains);
+            let chain = lowest_unused(&self.song().tracks[track].chains);
             self.apply(&Action::SetSectionChain {
                 section,
                 track,

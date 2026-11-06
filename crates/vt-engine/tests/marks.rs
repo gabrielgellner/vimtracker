@@ -34,7 +34,9 @@ fn song(texts: &[&str]) -> Song {
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     let steps = texts.iter().map(|text| text.parse().unwrap()).collect();
-    song.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
     song
 }
 
@@ -470,13 +472,15 @@ fn a_glide_a_chain_moves_past_finishes_on_time() {
         "--- -- ---00 ---00 ---00".parse().unwrap(),
         "C-4 -- ---00 ---00 ---00".parse().unwrap(),
     ]);
-    start.phrases.insert(1, Arc::new(quiet));
+    start.tracks[0].phrases.insert(1, Arc::new(quiet));
     let entry = |phrase| ChainEntry {
         phrase,
         transpose: 0,
     };
     let entries = vec![entry(0), entry(1)];
-    start.chains.insert(0, Arc::new(Chain { entries }));
+    start.tracks[0]
+        .chains
+        .insert(0, Arc::new(Chain { entries }));
     let out = render(start, STEP * 6);
     close(at_step(&out, 4), 192.0);
     close(at_step(&out, 5), UNITY);

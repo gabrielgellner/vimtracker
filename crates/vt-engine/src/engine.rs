@@ -673,10 +673,13 @@ impl Engine {
         let Some(Some(chain)) = section.chains.get(index) else {
             return;
         };
-        let Some(position) = song.chain_position(*chain, section_step) else {
+        let Some(owner) = song.tracks.get(index) else {
             return;
         };
-        let Some(step) = song.step_at(position) else {
+        let Some(position) = owner.chain_position(*chain, section_step) else {
+            return;
+        };
+        let Some(step) = owner.step_at(position) else {
             return;
         };
         let mut delay_units = None;
@@ -702,7 +705,7 @@ impl Engine {
                 FxCommand::Ret => retrigger = Some(slot.value),
                 FxCommand::Cha => {}
                 value if slot.mark == Mark::Glide => {
-                    let to = song.phrases.get(&position.phrase).and_then(|phrase| {
+                    let to = owner.phrases.get(&position.phrase).and_then(|phrase| {
                         phrase
                             .next_value(position.step, number, value)
                             .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
@@ -797,10 +800,11 @@ impl Engine {
             let Some(Some(chain)) = section.chains.get(index) else {
                 continue;
             };
-            let Some(position) = song.chain_position(*chain, section_step) else {
+            let owner = &song.tracks[index];
+            let Some(position) = owner.chain_position(*chain, section_step) else {
                 continue;
             };
-            let Some(step) = song.step_at(position) else {
+            let Some(step) = owner.step_at(position) else {
                 continue;
             };
             let Note::On(midi) = step.note else {

@@ -91,10 +91,10 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
 fn playhead_step(app: &App) -> Option<usize> {
     let playhead = app.playhead_here()?;
-    let song = app.song();
+    let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
-    let position = song.chain_position(chain, playhead)?;
-    let start = song.phrases.get(&position.phrase)?.start();
+    let position = owner.chain_position(chain, playhead)?;
+    let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some(start + position.step)
 }
@@ -124,11 +124,11 @@ struct Column<'a> {
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
     let moving = app.playhead_here();
     let place = moving.unwrap_or_else(|| app.section_step());
-    let song = app.song();
+    let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
-    let position = song.chain_position(chain, place)?;
+    let position = owner.chain_position(chain, place)?;
     Some(Column {
-        steps: song.phrases.get(&position.phrase)?.loop_steps(),
+        steps: owner.phrases.get(&position.phrase)?.loop_steps(),
         playing: moving.map(|_| position.step),
     })
 }
@@ -199,7 +199,7 @@ fn track_label(app: &App, track: usize) -> String {
 
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let Some(phrase) = app.phrase_id().and_then(|id| app.song().phrases.get(&id)) else {
+    let Some(phrase) = app.phrase_here() else {
         frame.render_widget(Paragraph::new("This track has no phrase here."), area);
         return;
     };

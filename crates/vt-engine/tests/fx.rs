@@ -30,7 +30,7 @@ fn song(texts: &[&str]) -> Song {
     }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
     }
@@ -269,7 +269,7 @@ fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
 #[test]
 fn chance_varies_across_loop_passes() {
     let mut song = song(&["C-4 -- CHA80 ---00 ---00"]);
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_len(1);
     let out = render(song, pool(vec![[1.0, 1.0]; 10]), STEP * 32);
     let pattern: Vec<bool> = (0..32).map(|s| out[s * STEP][0] != 0.0).collect();
@@ -408,7 +408,7 @@ fn a_tracks_swing_replaces_the_projects_and_leaves_others_alone() {
         track.envelopes[0].attack_ms = 0;
     }
     for (id, pan) in [(0, "PAN00"), (1, "PANFF")] {
-        let phrase = Arc::make_mut(two.phrases.get_mut(&id).unwrap());
+        let phrase = Arc::make_mut(two.tracks[id as usize].phrases.get_mut(&0).unwrap());
         for step in 0..4 {
             *phrase.step_mut(step).unwrap() = format!("C-4 -- {pan} ---00 ---00").parse().unwrap();
         }
@@ -466,7 +466,7 @@ fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
     let text = ["C-4 -- ---00 ---00 ---00"];
     let mut quiet = song(&text);
     quiet.tracks[0].level = 0x40;
-    Arc::make_mut(quiet.phrases.get_mut(&0).unwrap()).set_len(1);
+    Arc::make_mut(quiet.tracks[0].phrases.get_mut(&0).unwrap()).set_len(1);
     let out = render(quiet, flat(0.5), STEP * 3);
     let first = level_at(&out, STEP - 1);
     let later = level_at(&out, STEP * 3 - 1);
@@ -479,8 +479,8 @@ fn two_tracks() -> Song {
     song.add_track();
     song.tracks[1].sample = song.tracks[0].sample.clone();
     let chain = song.sections[0].chains[1].unwrap();
-    let phrase = song.chains[&chain].entries[0].phrase;
-    let steps = Arc::make_mut(song.phrases.get_mut(&phrase).unwrap());
+    let phrase = song.tracks[1].chains[&chain].entries[0].phrase;
+    let steps = Arc::make_mut(song.tracks[1].phrases.get_mut(&phrase).unwrap());
     *steps.step_mut(0).unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
     *steps.step_mut(1).unwrap() = "C-4 40 ---00 ---00 ---00".parse().unwrap();
     song

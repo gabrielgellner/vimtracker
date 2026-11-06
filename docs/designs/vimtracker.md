@@ -89,8 +89,8 @@ Per-note tables are a further idea, and they get their own decision after the mi
 *   **G2: Editing grammar.** Operators combine with motions and targets, counts work, `.`
     repeats the last change, `u` and `Ctrl-R` undo and redo, and registers hold copied steps.
 *   **G3: Reusable song structure.** Every track uses one shared grid model. A song is built
-    from sections, chains and phrases referred to by number. A phrase can be used in several
-    places, it shows when it is shared, and it can be cloned. Polyphony uses several tracks.
+    from sections, and each track's chains and phrases referred to by number. A phrase can be
+    used in several places on its track, it shows when it is shared, and it can be cloned. Polyphony uses several tracks.
 *   **G4: Live sweeps.** A selected range in one column can be filled with a curve. The user
     adjusts its onset and S-shape while the loop plays. The sweep stays live, and can be
     adjusted again, until a hand edit to a column it owns or an explicit command applies it.
@@ -619,7 +619,7 @@ Made by the author on 2026-11-05:
 1.  **Sections come before effects**, as a project with one looping section can't become a song however good it sounds.
 2.  **3 reorderable inserts** rather than a free signal path or a fixed order.
 3.  **No sample locks at first.** An `SMP` FX can come if they're missed in a jam.
-4.  **Chains and shared phrases stay**, under sections, rather than Elektron-style patterns. They and the grammar are what make this not just another groovebox.
+4.  **Chains and shared phrases stay**, under sections, rather than Elektron-style patterns. They and the grammar are what make this not just another groovebox. Decision 10 narrows sharing to within a track.
 5.  **Marks** as above: lock by default, lasting until the next note or value, glide from the marked row, and `~` to change them.
 
 Made by the author on 2026-11-06, after a review of this section:
@@ -628,6 +628,7 @@ Made by the author on 2026-11-06, after a review of this section:
 7.  **The shared parameter list waits** for the first effect, as nothing needs it before then.
 8.  **Two of the same effect are allowed on a track**, though that won't be common.
 9.  **A mixer page comes soon**, before songs, as it's such a common part of a workflow.
+10. **Each track owns its chains and phrases**, numbered `00` to `FF` within it. A track is one sound, so a phrase's notes and values only mean something on its own track, unlike the M8, whose phrases name their instruments. Parts can be shared within a track, and copied but not linked between tracks. Made on 2026-11-06, along with keeping sections rather than the M8's per-track lists, and adding a row leaving it empty.
 
 ## Alternatives Considered
 
@@ -1139,12 +1140,11 @@ Column folding stays in M11. This adds one thing: a Visual selection can reach o
 
 *   **Rows.** A selection is rows of the focused phrase and a run of tracks. `W` and `B` extend the run and leave the cursor on its track, so reaching a shorter track doesn't change the rows. On another track those rows count from that phrase's own loop start, as the neighbour columns show them, on the phrase it's on level with the cursor. Rows a phrase doesn't have are left out.
 *   **Columns.** The same columns on each track. A neighbour column only shows notes, so it lights up by row even when the selection is FX columns.
-*   **Shared phrases.** A phrase two selected tracks share changes once.
 *   **Operators.** `d`, `y`, `>`, `<`, `=`, `-`, `+`, `_`, `r` and `~` work across tracks. Shape refuses, as a shape belongs to one column.
 *   **Copy and paste.** A block keeps each track's steps, and `p` puts them on the tracks from the cursor's onward at the same row. Tracks past the last are dropped.
 *   **Repeat.** `.` repeats on the same number of tracks from the cursor, apart from `r`, which repeats on one track outside Visual.
 
-**Issue.** **Tests:** `d`, `>`, `~` and `r` across tracks, one undo step, a shared phrase changing once, a shorter phrase, a slid loop, `y` then `p`, paste past the last track, `.` repeating, `gv`, Shape refusing, and the neighbour columns lighting up.
+**Issue.** **Tests:** `d`, `>`, `~` and `r` across tracks, one undo step, a shorter phrase, a slid loop, `y` then `p`, paste past the last track, `.` repeating, `gv`, Shape refusing, and the neighbour columns lighting up.
 
 ### M7 design: mixer
 
@@ -1162,7 +1162,7 @@ Made without the author present, on 2026-11-06, following their earlier decision
 
 **Transport.** `Shift-Tab` plays the song from the top, `Space c` from the cursor in the section being edited, and `Tab` pauses in place. `:loop` keeps playing the section being edited.
 
-**Editor.** `Cursor` gains `section`, and the phrase, chain, track and mixer views edit that section. Playheads show only when it's the one playing. Shared phrase and chain counts, and `grr`, cover every section. The status line shows `Sec 2/4` when there's more than one.
+**Editor.** `Cursor` gains `section`, and the phrase, chain, track and mixer views edit that section. Playheads show only when it's the one playing. Shared phrase and chain counts, and `grr`, cover the track in every section. The status line shows `Sec 2/4` when there's more than one.
 
 **Song view.** `Space 1` shows a row per section with Length, Start and each track's chain. `a` adds an empty section, which is skipped until it has a chain or a length, `gc` copies one using the same chains, and `dd` removes one. `gd` opens a chain, adding one on `--`.
 

@@ -54,7 +54,7 @@ fn folder() -> PathBuf {
 
 fn notes(app: &App) -> Vec<Note> {
     let id = app.phrase_id().unwrap();
-    app.song().phrases[&id]
+    app.song().tracks[app.cursor.track].phrases[&id]
         .steps()
         .iter()
         .map(|s| s.note)
@@ -265,7 +265,7 @@ fn commands_change_tempo_and_length() {
         press(&mut app, "j");
     }
     command(&mut app, "len 4");
-    assert_eq!(app.song().phrases[&0].len(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
     assert_eq!(notes(&app).len(), 16, "the rest is kept");
     assert_eq!(app.cursor.step, 10, "and the cursor can stay on it");
 }
@@ -338,7 +338,7 @@ fn track_keys_move_and_keep_the_section_position() {
     press(&mut app, "W");
     assert_eq!(app.cursor.track, 1);
     assert_eq!(app.cursor.step, 3);
-    assert_eq!(app.phrase_id(), Some(1));
+    assert_eq!(app.phrase_id(), Some(0), "its own first phrase");
     press(&mut app, "W");
     assert_eq!(app.cursor.track, 1, "the last track stops the cursor");
     press(&mut app, "BB");
@@ -536,11 +536,17 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     assert!(app.status.contains("used 2 times"), "{}", app.status);
     // The clone stays here. An edit reaches only the clone.
     press(&mut app, "gc");
-    assert_eq!(app.phrase_id(), Some(2));
+    assert_eq!(app.phrase_id(), Some(1));
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
-    assert_eq!(app.song().phrases[&2].steps()[0].note, Note::On(60));
+    assert_eq!(
+        app.song().tracks[0].phrases[&0].steps()[0].note,
+        Note::Empty
+    );
+    assert_eq!(
+        app.song().tracks[0].phrases[&1].steps()[0].note,
+        Note::On(60)
+    );
     assert_eq!(app.chain_entries()[0].phrase, 0);
     // Ctrl-O returns to where the jump started, and Ctrl-N goes forward again.
     let back = parse_sequence("C-o").unwrap()[0];
@@ -562,12 +568,12 @@ fn gd_on_the_empty_row_adds_the_lowest_unused_phrase() {
     assert_eq!(app.phrase_id(), None);
     press(&mut app, "gd");
     assert_eq!(app.view, View::Phrase);
-    assert_eq!(app.phrase_id(), Some(2));
+    assert_eq!(app.phrase_id(), Some(1));
     assert_eq!(app.chain_entries().len(), 2);
     // Leaving the chain view never leaves the cursor on the empty row.
     press(&mut app, " 2G 3");
     assert_eq!(app.cursor.slot, 1);
-    assert_eq!(app.phrase_id(), Some(2));
+    assert_eq!(app.phrase_id(), Some(1));
     assert_eq!(notes(&app).len(), 16);
 }
 
@@ -581,7 +587,7 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     press(&mut app, "ji1f");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.chain_entries()[1].phrase, 0x1F);
-    assert!(app.song().phrases.contains_key(&0x1F));
+    assert!(app.song().tracks[0].phrases.contains_key(&0x1F));
     // Transpose by keys and by typing, and out of range is refused.
     press(&mut app, "l5=");
     assert_eq!(app.chain_entries()[1].transpose, 5);
@@ -624,10 +630,7 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
         .shown()
         .map(|item| item.label.clone())
         .collect();
-    assert_eq!(
-        uses,
-        ["Section 01 track 01 slot 00", "Section 01 track 01 slot 01"]
-    );
+    assert_eq!(uses, ["Section 01 slot 00", "Section 01 slot 01"]);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.slot, 0);
     assert_eq!(app.view, View::Phrase);
@@ -636,8 +639,7 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
 #[test]
 fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
     let (mut app, _realtime) = app();
-    press(&mut app, "W");
-    command(&mut app, "chain 0");
+    press(&mut app, " 1gc 3");
     assert_eq!(app.chain_uses(), 2);
     press(&mut app, "gc");
     assert!(app.status.contains("shared"), "{}", app.status);
@@ -713,7 +715,7 @@ mod autosave {
         assert!(path.join(AUTOSAVE).exists());
         let saved = project::load_song(&path).unwrap();
         assert_eq!(
-            saved.phrases[&0].steps()[0].note,
+            saved.tracks[0].phrases[&0].steps()[0].note,
             Note::Empty,
             "song.ron is untouched"
         );
@@ -749,7 +751,7 @@ mod autosave {
     fn crashed(path: &Path) {
         project::save_song(path, &Song::new(2)).unwrap();
         let mut newer = Song::new(2);
-        std::sync::Arc::make_mut(newer.phrases.get_mut(&0).unwrap())
+        std::sync::Arc::make_mut(newer.tracks[0].phrases.get_mut(&0).unwrap())
             .step_mut(0)
             .unwrap()
             .note = Note::On(60);
@@ -763,18 +765,24 @@ mod autosave {
         let (mut app, _realtime) = app();
         command(&mut app, &format!("e {}", path.display()));
         assert_eq!(app.mode, Mode::Restore);
-        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+        assert_eq!(
+            app.song().tracks[0].phrases[&0].steps()[0].note,
+            Note::Empty
+        );
         // Other keys don't answer.
         press(&mut app, "q");
         special(&mut app, KeyCode::Esc);
         assert_eq!(app.mode, Mode::Restore);
         press(&mut app, "y");
         assert_eq!(app.mode, Mode::Normal);
-        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::On(60));
+        assert_eq!(
+            app.song().tracks[0].phrases[&0].steps()[0].note,
+            Note::On(60)
+        );
         assert!(app.dirty);
         command(&mut app, "w");
         let saved = project::load_song(&path).unwrap();
-        assert_eq!(saved.phrases[&0].steps()[0].note, Note::On(60));
+        assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
         std::fs::remove_dir_all(&path).unwrap();
     }
 
@@ -787,7 +795,10 @@ mod autosave {
         press(&mut app, "n");
         assert_eq!(app.mode, Mode::Normal);
         assert!(!path.join(AUTOSAVE).exists());
-        assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+        assert_eq!(
+            app.song().tracks[0].phrases[&0].steps()[0].note,
+            Note::Empty
+        );
         assert!(!app.dirty);
         std::fs::remove_dir_all(&path).unwrap();
     }
@@ -966,7 +977,7 @@ fn an_arrow_drops_a_half_typed_value() {
     assert_eq!(app.cursor.step, 1);
     assert!(app.entry.text.is_empty());
     press(&mut app, "40");
-    let velocities: Vec<_> = app.song().phrases[&0]
+    let velocities: Vec<_> = app.song().tracks[0].phrases[&0]
         .steps()
         .iter()
         .map(|s| s.velocity)
@@ -990,7 +1001,7 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     press(&mut app, "zz");
     assert_eq!(app.octave, 3);
 
-    let velocity = |app: &App| app.song().phrases[&0].steps()[0].velocity;
+    let velocity = |app: &App| app.song().tracks[0].phrases[&0].steps()[0].velocity;
     press(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x64), "filled in from the default");
     press(&mut app, "c");
@@ -1495,12 +1506,12 @@ fn backspace_clears_a_note_with_what_it_was_written_with_but_keeps_fx() {
     let (mut app, _realtime) = app();
     press(&mut app, "ia");
     special(&mut app, KeyCode::Backspace);
-    let step = &app.song().phrases[&0].steps()[1];
+    let step = &app.song().tracks[0].phrases[&0].steps()[1];
     assert_eq!(step.note, Note::Empty);
-    let first = &app.song().phrases[&0].steps()[0];
+    let first = &app.song().tracks[0].phrases[&0].steps()[0];
     assert_eq!(first.note, Note::On(60), "it clears where the cursor was");
     special(&mut app, KeyCode::Backspace);
-    let first = &app.song().phrases[&0].steps()[0];
+    let first = &app.song().tracks[0].phrases[&0].steps()[0];
     assert_eq!(first.note, Note::Empty);
     assert_eq!(first.velocity, None);
 }
@@ -1598,13 +1609,13 @@ fn ge_waits_until_paused_like_other_length_changes() {
     let (mut app, _realtime) = app();
     press(&mut app, "jj");
     app.transport = Transport::Playing;
-    let length = app.song().phrases[&0].len();
+    let length = app.song().tracks[0].phrases[&0].len();
     press(&mut app, "ge");
-    assert_eq!(app.song().phrases[&0].len(), length);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), length);
     assert!(app.status.contains("until paused"), "{}", app.status);
     app.transport = Transport::Paused;
     press(&mut app, "ge");
-    assert_eq!(app.song().phrases[&0].len(), 3);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 3);
 }
 
 #[test]
@@ -1612,26 +1623,26 @@ fn length_changes_wait_until_paused_and_slides_dont() {
     let (mut app, _realtime) = app();
     app.transport = Transport::Playing;
     command(&mut app, "len 4");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     assert!(app.status.contains("paused"), "{}", app.status);
     command(&mut app, "double");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     press(&mut app, " pd");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     app.transport = Transport::Paused;
     command(&mut app, "len 8");
-    assert_eq!(app.song().phrases[&0].len(), 8);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 8);
     command(&mut app, "double");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     app.transport = Transport::Playing;
     press(&mut app, "]L");
-    assert_eq!(app.song().phrases[&0].start(), 4);
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     press(&mut app, "gs");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     app.transport = Transport::Stopped;
     command(&mut app, "len 4");
-    assert_eq!(app.song().phrases[&0].len(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
 }
 
 #[test]
@@ -1645,7 +1656,7 @@ fn a_loop_survives_saving_with_what_is_outside_it() {
     press(&mut app, "]L");
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&folder).unwrap();
-    let phrase = &saved.phrases[&0];
+    let phrase = &saved.tracks[0].phrases[&0];
     assert_eq!((phrase.start(), phrase.len()), (4, 4));
     assert_eq!(phrase.steps().len(), 16);
     assert_eq!(phrase.steps()[0].note, Note::On(60), "above the loop");
@@ -1664,7 +1675,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
                 ..Step::default()
             };
         }
-        song.phrases.insert(id, Arc::new(phrase));
+        song.tracks[id].phrases.insert(0, Arc::new(phrase));
     }
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -1709,21 +1720,22 @@ fn other_tracks_show_their_own_length_and_playhead() {
 #[test]
 fn a_column_shows_the_phrase_its_chain_is_on() {
     let mut song = Song::new(2);
-    song.phrases.insert(0, Arc::new(Phrase::new(4)));
+    song.tracks[0].phrases.insert(0, Arc::new(Phrase::new(4)));
     for (id, midi) in [(1, 60), (2, 64)] {
         let mut phrase = Phrase::new(2);
         *phrase.step_mut(0).unwrap() = Step {
             note: Note::On(midi),
             ..Step::default()
         };
-        song.phrases.insert(id, Arc::new(phrase));
+        song.tracks[1].phrases.insert(id, Arc::new(phrase));
     }
     let entry = |phrase| ChainEntry {
         phrase,
         transpose: 0,
     };
     let entries = vec![entry(1), entry(2)];
-    song.chains.insert(1, Arc::new(Chain { entries }));
+    song.tracks[1].chains.insert(1, Arc::new(Chain { entries }));
+    song.sections[0].chains[1] = Some(1);
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
@@ -2197,8 +2209,8 @@ fn large_steps_on_the_track_page_suit_each_setting() {
 #[test]
 fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     let (mut app, _realtime) = app();
-    command(&mut app, "track add 1");
-    press(&mut app, " 2");
+    press(&mut app, " 2Ggd 2Ggd 2ggjdddd 2gg");
+    assert_eq!(app.chain_entries().len(), 1);
     let row = |app: &App, slot: usize| app.chain_entries()[slot];
     let start = row(&app, 0).phrase;
 
@@ -2437,7 +2449,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
         step("C-4 40 CUT40 DLY20h RES10g"),
         step("C-4 40 DEL10 ---00 ---00"),
     ]);
-    song.phrases.insert(0, Arc::new(phrase));
+    song.tracks[0].phrases.insert(0, Arc::new(phrase));
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
@@ -2853,11 +2865,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
         vec![None; app.song().tracks.len()],
         "no chains"
     );
-    assert_eq!(
-        app.song().chains.len(),
-        app.song().tracks.len(),
-        "none made"
-    );
+    assert_eq!(app.song().tracks[0].chains.len(), 1, "none made");
     press(&mut app, "gc");
     assert_eq!(app.song().sections.len(), 3);
     assert_eq!(app.cursor.section, 2);
@@ -2915,7 +2923,10 @@ fn the_song_view_edits_length_start_and_chains() {
     assert!(song_text(&app)[3].contains("--"));
     press(&mut app, "i05");
     assert_eq!(app.song().sections[0].chains[1], Some(5));
-    assert!(app.song().chains.contains_key(&5), "made as needed");
+    assert!(
+        app.song().tracks[1].chains.contains_key(&5),
+        "made as needed"
+    );
     press(&mut app, "=");
     assert_eq!(app.song().sections[0].chains[1], Some(6));
     press(&mut app, "$");
@@ -2929,17 +2940,53 @@ fn other_views_edit_the_section_under_the_cursor() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1allgd 3");
     let two = app.song().sections[1].chains[0].unwrap();
-    let phrase = app.song().chains[&two].entries[0].phrase;
+    let phrase = app.song().tracks[0].chains[&two].entries[0].phrase;
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.song().phrases[&phrase].steps()[0].note, Note::On(60));
-    assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+    assert_eq!(
+        app.song().tracks[0].phrases[&phrase].steps()[0].note,
+        Note::On(60)
+    );
+    assert_eq!(
+        app.song().tracks[0].phrases[&0].steps()[0].note,
+        Note::Empty
+    );
     command(&mut app, "reset 8");
     assert_eq!(app.song().sections[1].reset, Some(8));
     assert_eq!(app.song().sections[0].reset, None, "only this section");
     press(&mut app, " 1k");
     assert_eq!(app.cursor.section, 0);
     assert_eq!(app.phrase_id(), Some(0));
+}
+
+#[test]
+fn each_track_numbers_its_own_chains_and_phrases() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "W");
+    assert_eq!(app.phrase_id(), Some(0));
+    assert_eq!(
+        notes(&app)[0],
+        Note::Empty,
+        "not the first track's phrase 00"
+    );
+    press(&mut app, " 2gc");
+    assert_eq!(app.chain_entries()[0].phrase, 1);
+    assert_eq!(
+        app.song().tracks[0].phrases.len(),
+        1,
+        "the first track has none new"
+    );
+    command(&mut app, "chain FF");
+    assert_eq!(app.chain_id(), Some(0xFF));
+    assert!(!app.song().tracks[0].chains.contains_key(&0xFF));
+    press(&mut app, " 1lll");
+    assert!(
+        song_text(&app)[3].contains("FF"),
+        "{:?}",
+        song_text(&app)[3]
+    );
 }
 
 #[test]

@@ -8,6 +8,7 @@ use vt_model::step::Note;
 
 fn set_note(phrase: u32, step: usize, midi: u8) -> Action {
     Action::SetNote {
+        track: 0,
         phrase,
         step,
         note: Note::On(midi),
@@ -45,10 +46,19 @@ fn a_new_edit_clears_redo() {
 fn unchanged_items_stay_the_same_arc() {
     let song = Arc::new(Song::new(2));
     let next = edit(&song, &set_note(0, 0, 60)).unwrap();
-    assert!(!Arc::ptr_eq(&song.phrases[&0], &next.phrases[&0]));
-    assert!(Arc::ptr_eq(&song.phrases[&1], &next.phrases[&1]));
-    assert!(Arc::ptr_eq(&song.chains[&0], &next.chains[&0]));
-    assert_eq!(song.phrases[&0].steps()[0].note, Note::Empty);
+    assert!(!Arc::ptr_eq(
+        &song.tracks[0].phrases[&0],
+        &next.tracks[0].phrases[&0]
+    ));
+    assert!(Arc::ptr_eq(
+        &song.tracks[1].phrases[&0],
+        &next.tracks[1].phrases[&0]
+    ));
+    assert!(Arc::ptr_eq(
+        &song.tracks[0].chains[&0],
+        &next.tracks[0].chains[&0]
+    ));
+    assert_eq!(song.tracks[0].phrases[&0].steps()[0].note, Note::Empty);
 }
 
 #[test]
@@ -61,7 +71,10 @@ fn the_oldest_version_drops_past_the_limit() {
     }
     assert_eq!(history.undo_depth(), 3);
     while history.undo().is_some() {}
-    assert_eq!(history.current().phrases[&0].steps()[0].note, Note::On(62));
+    assert_eq!(
+        history.current().tracks[0].phrases[&0].steps()[0].note,
+        Note::On(62)
+    );
 }
 
 #[test]
@@ -153,6 +166,7 @@ mod tree {
         let song = edit(
             &song,
             &Action::InsertChainEntry {
+                track: 0,
                 chain: 0,
                 at: 1,
                 entry: entry(0),
@@ -162,24 +176,30 @@ mod tree {
         let cloned = edit(
             &song,
             &Action::ClonePhrase {
+                track: 0,
                 chain: 0,
                 slot: 1,
                 new: 1,
             },
         )
         .unwrap();
-        assert_eq!(cloned.chains[&0].entries[0].phrase, 0);
-        assert_eq!(cloned.chains[&0].entries[1].phrase, 1);
+        assert_eq!(cloned.tracks[0].chains[&0].entries[0].phrase, 0);
+        assert_eq!(cloned.tracks[0].chains[&0].entries[1].phrase, 1);
         let edited = edit(
             &cloned,
             &Action::SetLength {
+                track: 0,
                 phrase: 1,
                 length: 4,
             },
         )
         .unwrap();
-        assert_eq!(edited.phrases[&0].len(), 16, "the original is unchanged");
-        assert_eq!(edited.phrases[&1].len(), 4);
+        assert_eq!(
+            edited.tracks[0].phrases[&0].len(),
+            16,
+            "the original is unchanged"
+        );
+        assert_eq!(edited.tracks[0].phrases[&1].len(), 4);
     }
 
     #[test]
@@ -188,6 +208,7 @@ mod tree {
         let song = edit(
             &song,
             &Action::InsertChainEntry {
+                track: 0,
                 chain: 0,
                 at: 1,
                 entry: entry(0),
@@ -202,12 +223,15 @@ mod tree {
             },
         )
         .unwrap();
-        // Tracks took chains and phrases 0 and 1, so the lowest unused are 2.
-        assert_eq!(cloned.sections[0].chains[0], Some(2));
-        assert_eq!(cloned.sections[0].chains[1], Some(1));
-        let copy = &cloned.chains[&2].entries;
-        assert_eq!([copy[0].phrase, copy[1].phrase], [2, 2]);
-        assert_eq!(cloned.chains[&0].entries[0].phrase, 0);
+        assert_eq!(cloned.sections[0].chains[0], Some(1));
+        assert_eq!(
+            cloned.sections[0].chains[1],
+            Some(0),
+            "the other track's own"
+        );
+        let copy = &cloned.tracks[0].chains[&1].entries;
+        assert_eq!([copy[0].phrase, copy[1].phrase], [1, 1]);
+        assert_eq!(cloned.tracks[0].chains[&0].entries[0].phrase, 0);
     }
 
     #[test]
@@ -216,15 +240,24 @@ mod tree {
         let song = edit(
             &song,
             &Action::SetChainEntry {
+                track: 0,
                 chain: 0,
                 slot: 0,
                 entry: entry(9),
             },
         )
         .unwrap();
-        assert!(song.phrases.contains_key(&9));
+        assert!(song.tracks[0].phrases.contains_key(&9));
         assert_eq!(
-            edit(&song, &Action::RemoveChainEntry { chain: 0, at: 0 }).unwrap_err(),
+            edit(
+                &song,
+                &Action::RemoveChainEntry {
+                    track: 0,
+                    chain: 0,
+                    at: 0
+                }
+            )
+            .unwrap_err(),
             EditError::LastRow
         );
         let far = ChainEntry {
@@ -235,6 +268,7 @@ mod tree {
             edit(
                 &song,
                 &Action::SetChainEntry {
+                    track: 0,
                     chain: 0,
                     slot: 0,
                     entry: far,
@@ -258,7 +292,7 @@ mod tree {
         )
         .unwrap();
         assert_eq!(song.sections[0].chains[0], Some(5));
-        assert_eq!(song.chains[&5].entries[0].phrase, 1);
-        assert!(song.phrases.contains_key(&1));
+        assert_eq!(song.tracks[0].chains[&5].entries[0].phrase, 1);
+        assert!(song.tracks[0].phrases.contains_key(&1));
     }
 }

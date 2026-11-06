@@ -209,7 +209,7 @@ mod tests {
             track.sample = Some("flat".to_owned());
         }
         for id in 0..tracks as u32 {
-            let phrase = Arc::make_mut(song.phrases.get_mut(&id).unwrap());
+            let phrase = Arc::make_mut(song.tracks[id as usize].phrases.get_mut(&0).unwrap());
             for step in 0..steps {
                 *phrase.step_mut(step).unwrap() = Step {
                     note: Note::On(60),
@@ -257,7 +257,7 @@ mod tests {
         let pool = samples();
         let mut marked = song(8, 16);
         for id in 0..8u32 {
-            let phrase = Arc::make_mut(marked.phrases.get_mut(&id).unwrap());
+            let phrase = Arc::make_mut(marked.tracks[id as usize].phrases.get_mut(&0).unwrap());
             for step in 0..16 {
                 let text = match step % 4 {
                     0 => "C-4 -- CUT40g VOL80 PANC0h",
@@ -304,7 +304,7 @@ mod tests {
             handle.pump();
         }
         let mut removed = song(8, 16);
-        removed.phrases.remove(&0);
+        removed.tracks[0].phrases.remove(&0);
         handle.publish(published(removed, &pool));
         violations += blocks(&mut rt, 4);
         assert_eq!(violations, 0);
@@ -325,7 +325,7 @@ mod tests {
             "OFF -- ---00 ---00 ---00",
         ];
         for id in 0..2 {
-            let phrase = Arc::make_mut(fx.phrases.get_mut(&id).unwrap());
+            let phrase = Arc::make_mut(fx.tracks[id as usize].phrases.get_mut(&0).unwrap());
             for (index, text) in texts.iter().enumerate() {
                 *phrase.step_mut(index).unwrap() = text.parse().unwrap();
             }
@@ -344,7 +344,7 @@ mod tests {
             track.sample = Some("flat".to_owned());
         }
         for id in 0..2 {
-            let phrase = Arc::make_mut(played.phrases.get_mut(&id).unwrap());
+            let phrase = Arc::make_mut(played.tracks[id as usize].phrases.get_mut(&0).unwrap());
             *phrase.step_mut(0).unwrap() = "C-4 01 VOL80 ---00 ---00".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
@@ -435,7 +435,7 @@ mod tests {
     fn the_reading_keeps_the_loudest_hit_across_reports() {
         let pool = samples();
         let mut one = song(1, 0);
-        *Arc::make_mut(one.phrases.get_mut(&0).unwrap())
+        *Arc::make_mut(one.tracks[0].phrases.get_mut(&0).unwrap())
             .step_mut(0)
             .unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
         let engine = Engine::new(48_000, published(one, &pool));

@@ -36,8 +36,10 @@ fn song(chains: &[&[&str]]) -> Song {
     for (id, steps) in chains.iter().enumerate() {
         let id = id as u32 + 10;
         let steps = steps.iter().map(|text| text.parse().unwrap()).collect();
-        song.phrases.insert(id, Arc::new(Phrase::from_steps(steps)));
-        song.chains.insert(
+        song.tracks[0]
+            .phrases
+            .insert(id, Arc::new(Phrase::from_steps(steps)));
+        song.tracks[0].chains.insert(
             id,
             Arc::new(Chain {
                 entries: vec![ChainEntry {
@@ -126,13 +128,13 @@ fn one_section_that_wraps_keeps_its_tracks_free_running() {
     let mut two = Song::new(2);
     two.tracks[0].sample = Some("s".to_owned());
     two.tracks[1].sample = Some("s".to_owned());
-    two.phrases.insert(
-        1,
+    two.tracks[1].phrases.insert(
+        0,
         Arc::new(Phrase::from_steps(
             STEPS.iter().map(|text| text.parse().unwrap()).collect(),
         )),
     );
-    two.phrases.insert(
+    two.tracks[0].phrases.insert(
         0,
         Arc::new(Phrase::from_steps(vec![
             "--- -- ---00 ---00 ---00"

@@ -46,8 +46,7 @@ note, an FX value only on steps with a command, and `.` repeats it.
 
 In `v` or `V`, `W` and `B` reach other tracks, so `VGWWW` covers a whole drum
 part. `d`, `y`, `p`, `>`, `<`, `=`, `-`, `+`, `_`, `r` and `~` then act on each of them as one
-undo. Rows count from each phrase's own loop start, as on screen, and a phrase two
-tracks share only changes once. `p` puts each track's part on the track the
+undo. Rows count from each phrase's own loop start, as on screen. `p` puts each track's part on the track the
 same distance along from the cursor.
 
 ## Shaping a column

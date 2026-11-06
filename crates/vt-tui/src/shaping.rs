@@ -55,6 +55,7 @@ impl ShapeRow {
 #[derive(Debug, Clone)]
 pub struct ShapePanel {
     pub selection: Selection,
+    pub track: usize,
     pub phrase: u32,
     pub column: ShapeColumn,
     pub shape: Shape,
@@ -85,8 +86,9 @@ impl ShapePanel {
     /// The steps underneath, as they were when the panel opened.
     pub fn base_steps(&self) -> &[vt_model::step::Step] {
         self.base
-            .phrases
-            .get(&self.phrase)
+            .tracks
+            .get(self.track)
+            .and_then(|track| track.phrases.get(&self.phrase))
             .map_or(&[], |phrase| phrase.steps())
     }
 }
@@ -112,10 +114,7 @@ impl App {
         if selection.scope.first != selection.scope.last {
             return Err("Shape works on one column at a time. Select with v");
         }
-        let steps = self
-            .phrase_id()
-            .and_then(|id| self.song().phrases.get(&id))
-            .map_or(&[][..], |phrase| phrase.steps());
+        let steps = self.phrase_here().map_or(&[][..], |phrase| phrase.steps());
         let rows = || (selection.range.first..=selection.range.last).filter_map(|r| steps.get(r));
         match field {
             Field::Velocity => {
@@ -148,11 +147,15 @@ impl App {
             return;
         };
         let base = Arc::clone(self.song());
-        let steps = base.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
+        let steps = base.tracks[self.cursor.track]
+            .phrases
+            .get(&phrase)
+            .map_or(&[][..], |p| p.steps());
         let (from, to) = default_ends(steps, selection.range, column);
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let panel = ShapePanel {
             selection,
+            track: self.cursor.track,
             phrase,
             column,
             shape: Shape {
@@ -181,6 +184,7 @@ impl App {
             return;
         };
         let action = Action::Shape {
+            track: panel.track,
             phrase: panel.phrase,
             range: panel.selection.range,
             column: panel.column,
@@ -232,11 +236,15 @@ impl App {
             return;
         };
         let song = Arc::clone(self.song());
-        let steps = song.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
+        let steps = song.tracks[self.cursor.track]
+            .phrases
+            .get(&phrase)
+            .map_or(&[][..], |p| p.steps());
         let (from, to) = default_ends(steps, range, column);
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
         self.apply(&Action::Shape {
+            track: self.cursor.track,
             phrase,
             range,
             column,

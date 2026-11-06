@@ -20,7 +20,9 @@ const E: &str = "--- -- ---00 ---00 ---00";
 fn app_with(steps: &[&str]) -> (App, Realtime) {
     let mut song = Song::new(1);
     let steps: Vec<Step> = steps.iter().map(|s| s.parse().unwrap()).collect();
-    song.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
@@ -62,7 +64,7 @@ fn keys(app: &mut App, text: &str) {
 
 fn steps(app: &App) -> Vec<String> {
     let id = app.phrase_id().unwrap();
-    app.song().phrases[&id]
+    app.song().tracks[0].phrases[&id]
         .steps()
         .iter()
         .map(ToString::to_string)
@@ -219,13 +221,17 @@ fn paste_past_the_end_stores_more_and_leaves_the_loop_alone() {
     let (mut app, _rt) = app_with(&[A, E, E]);
     keys(&mut app, "yyjj9p");
     assert_eq!(steps(&app).len(), 11);
-    assert_eq!(app.song().phrases[&0].len(), 3, "the loop hasn't changed");
+    assert_eq!(
+        app.song().tracks[0].phrases[&0].len(),
+        3,
+        "the loop hasn't changed"
+    );
     keys(&mut app, "u");
     assert_eq!(steps(&app).len(), 3);
     // A huge count is no trouble.
     keys(&mut app, "99999999p");
     assert_eq!(steps(&app).len(), MAX_PHRASE_STEPS);
-    assert_eq!(app.song().phrases[&0].len(), 3);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 3);
 }
 
 #[test]
@@ -594,19 +600,19 @@ fn slides_keep_the_row_and_scroll_the_notes_under_it() {
     keys(&mut app, ":len 4<Enter>j");
     assert_eq!(app.cursor.step, 1);
     keys(&mut app, "]l");
-    assert_eq!(app.song().phrases[&0].start(), 1);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 1);
     assert_eq!(app.cursor.step, 2, "still row 01");
     assert_eq!(app.top, 1, "and the screen moved with it");
     keys(&mut app, "[l");
-    assert_eq!(app.song().phrases[&0].start(), 0);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
     assert_eq!(app.cursor.step, 1);
     keys(&mut app, "]L");
-    assert_eq!(app.song().phrases[&0].start(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 4);
     keys(&mut app, "[L");
-    assert_eq!(app.song().phrases[&0].start(), 0);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
     keys(&mut app, "2]l");
-    assert_eq!(app.song().phrases[&0].start(), 2);
-    assert_eq!(app.song().phrases[&0].len(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
 }
 
 #[test]
@@ -634,10 +640,10 @@ fn undoing_a_slide_keeps_the_row() {
     keys(&mut app, ":len 4<Enter>j2]l");
     assert_eq!(app.cursor.step, 3);
     keys(&mut app, "u");
-    assert_eq!(app.song().phrases[&0].start(), 0);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
     assert_eq!(app.cursor.step, 1);
     keys(&mut app, "^r");
-    assert_eq!(app.song().phrases[&0].start(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 2);
     assert_eq!(app.cursor.step, 3);
 }
 
@@ -645,7 +651,7 @@ fn undoing_a_slide_keeps_the_row() {
 fn sliding_above_the_first_step_adds_room_and_keeps_the_notes() {
     let (mut app, _rt) = app_with(&[A, B]);
     keys(&mut app, "2[l");
-    let phrase = &app.song().phrases[&0];
+    let phrase = &app.song().tracks[0].phrases[&0];
     assert_eq!((phrase.start(), phrase.len()), (0, 2));
     assert_eq!(steps(&app), [E, E, A, B]);
     assert_eq!(app.cursor.step, 0, "still row 00");
@@ -657,9 +663,9 @@ fn sliding_above_the_first_step_adds_room_and_keeps_the_notes() {
 fn gs_starts_the_loop_on_the_cursor_and_leaves_the_notes_on_screen() {
     let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
     keys(&mut app, ":len 4<Enter>jjgs");
-    assert_eq!(app.song().phrases[&0].start(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 2);
     assert_eq!(app.cursor.step, 2, "the cursor stays on its note");
-    assert_eq!(app.song().phrases[&0].len(), 4);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
 }
 
 #[test]
@@ -696,7 +702,7 @@ fn notes_can_be_written_outside_the_loop() {
     assert_eq!(app.cursor.step, 3);
     keys(&mut app, "ia<Esc>");
     assert_ne!(steps(&app)[3], E);
-    assert_eq!(app.song().phrases[&0].len(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
 }
 
 #[test]
@@ -1118,7 +1124,7 @@ fn rotating_leaves_steps_outside_the_loop_alone() {
     assert_eq!(steps(&app), [E, A, B, E, A, B]);
     keys(&mut app, "]lj]r");
     assert_eq!(steps(&app), [E, E, A, B, A, B]);
-    assert_eq!(app.song().phrases[&0].start(), 1);
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 1);
 }
 
 #[test]
@@ -1155,7 +1161,7 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
 #[test]
 fn ge_ends_the_loop_on_the_cursor_and_keeps_what_is_stored() {
     let (mut app, _rt) = app_with(&[A, B, E, E, E, E]);
-    let length = |app: &App| app.song().phrases[&0].len();
+    let length = |app: &App| app.song().tracks[0].phrases[&0].len();
     keys(&mut app, "jjge");
     assert_eq!(length(&app), 3);
     assert_eq!(steps(&app).len(), 6, "nothing is lost");
@@ -1172,7 +1178,7 @@ fn ge_ends_the_loop_on_the_cursor_and_keeps_what_is_stored() {
 fn ge_counts_from_the_loop_start() {
     let (mut app, _rt) = app_with(&[A, B, E, E, E, E]);
     keys(&mut app, ":len 2<Enter>]ljjge");
-    let phrase = &app.song().phrases[&0];
+    let phrase = &app.song().tracks[0].phrases[&0];
     assert_eq!((phrase.start(), phrase.len()), (1, 3));
 }
 
@@ -1183,11 +1189,11 @@ fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
     let depth = app.history.undo_depth();
     app.cursor.step = 0;
     keys(&mut app, "ge");
-    assert_eq!(app.song().phrases[&0].len(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
     assert!(app.status.contains("above its start"), "{}", app.status);
     app.cursor.step = 2;
     keys(&mut app, "ge");
-    assert_eq!(app.song().phrases[&0].len(), 2);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
     assert_eq!(app.history.undo_depth(), depth);
 }
 
@@ -1195,9 +1201,9 @@ fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
 fn len_takes_hex_after_0x() {
     let (mut app, _rt) = app_with(&[E; 32]);
     keys(&mut app, ":len 0x10<Enter>");
-    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
     keys(&mut app, ":len 10<Enter>");
-    assert_eq!(app.song().phrases[&0].len(), 10);
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 10);
 }
 
 #[test]
@@ -1647,8 +1653,9 @@ fn tracks_with(rows: &[&[&str]]) -> (App, Realtime) {
     let mut song = Song::new(rows.len());
     for (id, steps) in rows.iter().enumerate() {
         let steps: Vec<Step> = steps.iter().map(|s| s.parse().unwrap()).collect();
-        song.phrases
-            .insert(id as u32, Arc::new(Phrase::from_steps(steps)));
+        song.tracks[id]
+            .phrases
+            .insert(0, Arc::new(Phrase::from_steps(steps)));
     }
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -1656,8 +1663,8 @@ fn tracks_with(rows: &[&[&str]]) -> (App, Realtime) {
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-fn track_steps(app: &App, phrase: u32) -> Vec<String> {
-    app.song().phrases[&phrase]
+fn track_steps(app: &App, track: usize) -> Vec<String> {
+    app.song().tracks[track].phrases[&0]
         .steps()
         .iter()
         .map(ToString::to_string)
@@ -1707,37 +1714,19 @@ fn replace_and_marks_work_across_tracks() {
 }
 
 #[test]
-fn a_shorter_phrase_keeps_what_it_has_and_a_shared_one_changes_once() {
+fn a_shorter_phrase_keeps_what_it_has() {
     let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N]]);
     keys(&mut app, "VjjW>");
     assert_eq!(track_steps(&app, 0)[2], "C#4 40 CUT20 ---00 ---00");
     assert_eq!(track_steps(&app, 1), ["C#4 40 CUT20 ---00 ---00"]);
-
-    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
-    keys(&mut app, " 2");
-    let mut shared = Song::clone(app.song());
-    shared.chains.insert(1, Arc::clone(&shared.chains[&0]));
-    let samples = Arc::clone(&app.samples);
-    let version = Arc::new(Published::new(
-        Arc::new(shared.clone()),
-        Arc::clone(&samples),
-    ));
-    let (handle, _rt2) = connect(Engine::new(48_000, version));
-    let mut app = App::new(shared, None, samples, handle, 48_000);
-    keys(&mut app, "VW=");
-    assert_eq!(
-        track_steps(&app, 0),
-        ["C#4 40 CUT20 ---00 ---00"],
-        "once, not twice"
-    );
 }
 
 #[test]
 fn rows_count_from_each_phrases_own_loop_start() {
     let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N, N, N]]);
     let mut slid = Song::clone(app.song());
-    Arc::make_mut(slid.phrases.get_mut(&1).unwrap()).set_len(2);
-    Arc::make_mut(slid.phrases.get_mut(&1).unwrap()).slide(1);
+    Arc::make_mut(slid.tracks[1].phrases.get_mut(&0).unwrap()).set_len(2);
+    Arc::make_mut(slid.tracks[1].phrases.get_mut(&0).unwrap()).slide(1);
     let samples = Arc::clone(&app.samples);
     let version = Arc::new(Published::new(Arc::new(slid.clone()), Arc::clone(&samples)));
     let (handle, _rt2) = connect(Engine::new(48_000, version));

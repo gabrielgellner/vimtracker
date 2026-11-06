@@ -34,7 +34,7 @@ fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
     }
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for step in steps {
         *phrase.step_mut(*step).unwrap() = Step {
             note: Note::On(60),
@@ -129,7 +129,7 @@ fn two_renders_match() {
 #[test]
 fn a_new_note_fades_the_old_one() {
     let mut song = song_with_notes(1, &[0]);
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     *phrase.step_mut(1).unwrap() = Step {
         note: Note::On(60),
         velocity: Some(0x19),
@@ -165,7 +165,7 @@ fn sixteen_and_seven() -> Song {
             })
             .collect(),
     );
-    song.phrases.insert(1, Arc::new(seven));
+    song.tracks[1].phrases.insert(0, Arc::new(seven));
     assert_eq!(song.section_steps(&song.sections[0]), 16);
     song
 }
@@ -231,7 +231,7 @@ fn changing_the_reset_live_keeps_the_beat_and_turning_it_off_keeps_the_place() {
 #[test]
 fn swing_stays_on_the_grid_across_an_odd_length() {
     let mut song = song_with_notes(1, &[0]);
-    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).set_len(3);
+    Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).set_len(3);
     song.swing = 750;
     let samples = pool(&[("flat", flat(10, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 6000 * 8);
@@ -265,7 +265,7 @@ fn a_render_is_as_long_as_the_reset() {
 #[test]
 fn chain_transpose_and_step_volume_apply() {
     let mut song = song_with_notes(1, &[0]);
-    song.chains.insert(
+    song.tracks[0].chains.insert(
         0,
         Arc::new(Chain {
             entries: vec![ChainEntry {
@@ -274,7 +274,7 @@ fn chain_transpose_and_step_volume_apply() {
             }],
         }),
     );
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.step_mut(0).unwrap().velocity = Some(0x40);
     let samples = pool(&[("flat", flat(1000, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 2000);
@@ -334,12 +334,12 @@ fn a_tempo_change_keeps_the_next_step_in_time() {
 #[test]
 fn only_the_loop_plays() {
     let mut song = song_with_notes(1, &[8]);
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_len(4);
     let samples = pool(&[("flat", flat(SECOND, 1.0))]);
     let silent = render_frames(version(song.clone(), Arc::clone(&samples)), 48_000, SECOND);
     assert_eq!(first_sound(&silent, 0), None, "the note is past the loop");
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.slide(8);
     let out = render_frames(version(song, samples), 48_000, SECOND);
     assert_eq!(first_sound(&out, 0), Some(0), "its step is now beat 1");
@@ -348,7 +348,7 @@ fn only_the_loop_plays() {
 #[test]
 fn a_live_slide_keeps_the_beat() {
     let mut song = song_with_notes(1, &[10]);
-    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).set_len(4);
+    Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).set_len(4);
     let samples = pool(&[("flat", flat(SECOND, 1.0))]);
     let mut engine = Engine::new(48_000, version(song.clone(), Arc::clone(&samples)));
     engine.play_from(0);
@@ -356,7 +356,7 @@ fn a_live_slide_keeps_the_beat() {
     let mut out = vec![0.0; 2 * 3000];
     engine.process(&mut out);
     assert_eq!(first_sound(&out, 0), None);
-    Arc::make_mut(song.phrases.get_mut(&0).unwrap()).slide(8);
+    Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).slide(8);
     engine.swap(version(song, samples));
     let mut rest = vec![0.0; 2 * 12_000];
     engine.process(&mut rest);
