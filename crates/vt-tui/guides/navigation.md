@@ -38,7 +38,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 
 | Keys | Does |
 |---|---|
-| `W` `B` | Next or previous track |
+| `W` `B`, `]b` `[b` | Next or previous track |
 | `]p` `[p` | Next or previous phrase in the chain |
 | `]P` `[P` | Last or first phrase in the chain |
 | `Space 1` | Song view |

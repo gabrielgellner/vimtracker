@@ -11,7 +11,7 @@ hat pattern.
 | Keys | Does |
 |---|---|
 | `H` `L` | The Sound page or the Mod page |
-| `W` `B` | Next or previous track |
+| `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row |
 | `h` `l` | Previous or next setting. `0` and `$` go to the ends |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
@@ -40,10 +40,10 @@ it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
 rises, and near `FF` it sings by itself while a note lasts. It costs more than
 the others, which matters only for tracks using it.
 
-In kitty, a curve beside the last rows shows what the filter and utility filter
-let through, from 20 Hz on the left to 20 kHz on the right. It's drawn from these
-settings, so it doesn't follow `Drive`'s saturation, step commands, LFOs or
-envelopes.
+In kitty, a curve in a box under the filter's rows shows what the filter and utility filter
+let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's
+playing `Cut` and `Res`, including step commands, LFOs and envelopes, but it
+doesn't show `Drive`'s saturation.
 
 ## Output
 

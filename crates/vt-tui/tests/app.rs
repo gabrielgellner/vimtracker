@@ -3996,7 +3996,7 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
-        String::from_utf8(out).unwrap().matches(",c=24,").count()
+        String::from_utf8(out).unwrap().matches(",c=22,").count()
     };
     press(&mut app, " 4");
     assert_eq!(sync(&mut app, &mut graphics), 1);
@@ -4023,11 +4023,52 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
 }
 
 #[test]
-fn the_filter_curve_sits_on_the_right_beside_the_last_rows() {
-    use vt_tui::track_page::{SAMPLE_ROWS, SYNTH_ROWS};
-    for rows in [&SAMPLE_ROWS[..], &SYNTH_ROWS[..]] {
-        assert!(rows[rows.len() - 3..].iter().all(|row| row.len() == 1));
-    }
+fn the_filter_curve_moves_with_what_plays() {
+    use vt_engine::track_state::LiveValues;
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        (out.matches(",c=22,").count(), out.matches("a=d,").count())
+    };
+    press(&mut app, " 4");
+    sync(&mut app, &mut graphics);
+    let still = app.filter_image.unwrap();
+    let track = app.song().tracks[0].clone();
+    let live = |cutoff, resonance| LiveValues {
+        level: track.level,
+        pan: track.pan,
+        cutoff,
+        resonance,
+        delay: track.delay,
+        reverb: track.reverb,
+        harmonics: track.harmonics,
+        timbre: track.timbre,
+        morph: track.morph,
+    };
+
+    // Each new value draws it once, and it holds while the value does.
+    app.live = Some(live(0x40, track.resonance));
+    assert_eq!(sync(&mut app, &mut graphics).0, 1);
+    let moved = app.filter_image.unwrap();
+    assert_ne!(moved, still);
+    // Holding, it sends nothing new, and the image it replaced is forgotten.
+    assert_eq!(sync(&mut app, &mut graphics), (0, 1));
+    assert_eq!(sync(&mut app, &mut graphics), (0, 0));
+    app.live = Some(live(0x40, 0xC0));
+    assert_eq!(sync(&mut app, &mut graphics).0, 1);
+    assert_ne!(app.filter_image.unwrap(), moved);
+
+    // Back on the setting, it's drawn from the setting again.
+    app.live = Some(live(track.cutoff, track.resonance));
+    assert_eq!(sync(&mut app, &mut graphics).0, 1);
+}
+
+#[test]
+fn the_filter_curve_sits_in_a_box_under_the_filters_rows() {
     let draw = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -4039,8 +4080,6 @@ fn the_filter_curve_sits_on_the_right_beside_the_last_rows() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     let plain = draw(&app);
-    app.filter_image = Some(0x01_02_03);
-    let drawn = draw(&app);
     let row_of = |text: &str| {
         (0..24)
             .find(|y| {
@@ -4051,14 +4090,43 @@ fn the_filter_curve_sits_on_the_right_beside_the_last_rows() {
             })
             .unwrap()
     };
-    let (top, bottom) = (row_of("Drive"), row_of("High cut"));
-    assert_eq!(bottom, top + 2);
-    assert_eq!(drawn[(36, top)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(drawn[(36, top)].fg, ratatui::style::Color::Rgb(1, 2, 3));
-    assert_eq!(drawn[(59, bottom)].symbol(), "\u{10EEEE}\u{30E}\u{369}");
-    assert_eq!(drawn[(60, bottom)].symbol(), " ");
-    // The left column is as it was.
-    for x in 0..36 {
-        assert_eq!(drawn[(x, top)].symbol(), plain[(x, top)].symbol());
+    let last = row_of("High cut");
+    // Without an image, there's no box.
+    assert_eq!(plain[(0, last + 1)].symbol(), " ");
+
+    app.filter_image = Some(0x01_02_03);
+    let drawn = draw(&app);
+    let top = last + 1;
+    // As wide as a value and its bar, which ends at the line after its cells.
+    let bar_end = (0..80)
+        .rfind(|x| plain[(*x, row_of("Drive"))].symbol() == "▏")
+        .unwrap();
+    assert_eq!(drawn[(0, top)].symbol(), "┌");
+    assert_eq!(drawn[(bar_end, top)].symbol(), "┐");
+    assert_eq!(drawn[(bar_end + 1, top)].symbol(), " ");
+    assert_eq!(drawn[(0, top + 1)].symbol(), "│");
+    assert_eq!(drawn[(1, top + 1)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(1, top + 1)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(drawn[(bar_end, top + 3)].symbol(), "│");
+    assert_eq!(drawn[(0, top + 4)].symbol(), "└");
+    assert_eq!(drawn[(bar_end, top + 4)].symbol(), "┘");
+    // The rows above it are as they were.
+    for x in 0..80 {
+        assert_eq!(drawn[(x, last)].symbol(), plain[(x, last)].symbol());
+    }
+}
+
+#[test]
+fn brackets_move_between_tracks_from_every_view() {
+    for view in [" 1", " 2", " 3", " 4", " 6"] {
+        let (mut app, _realtime) = app();
+        press(&mut app, view);
+        press(&mut app, "]b");
+        assert_eq!(app.cursor.track, 1, "from {view:?}");
+        press(&mut app, "[b");
+        assert_eq!(app.cursor.track, 0, "from {view:?}");
+        // It stops at the first track, rather than going round.
+        press(&mut app, "[b");
+        assert_eq!(app.cursor.track, 0, "from {view:?}");
     }
 }

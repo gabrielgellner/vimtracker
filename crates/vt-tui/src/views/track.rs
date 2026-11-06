@@ -25,8 +25,8 @@ pub(crate) const DIAGRAM_HEIGHT: usize = 4;
 /// The size of an LFO's icon, in characters, and the room for its shape's name before it.
 pub(crate) const LFO_ICON_WIDTH: usize = 4;
 const LFO_SHAPE_NAME: usize = 7;
-/// The size of the filter's curve, in characters. It's as wide as a value with its bar.
-pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
+/// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
+pub(crate) const FILTER_CURVE_WIDTH: usize = 22;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
 /// Room for a section's name.
@@ -138,12 +138,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 }
 
 /// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
-fn sound_row(
-    app: &App,
-    track: &Track,
-    controls: &[Control],
-    beside: Option<Span<'static>>,
-) -> Line<'static> {
+fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
     let mut used = 0;
@@ -183,10 +178,6 @@ fn sound_row(
             spans.extend(bar_spans(value, live, centred));
             spans.push(Span::styled(BAR_END, theme::faint()));
         }
-    }
-    if let Some(beside) = beside {
-        spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
-        spans.push(beside);
     }
     Line::from(spans)
 }
@@ -399,6 +390,22 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines
 }
 
+/// The filter's curve in a box, under its rows.
+fn filter_curve(id: u32) -> Vec<Line<'static>> {
+    let rule = "─".repeat(FILTER_CURVE_WIDTH);
+    let edge = theme::faint();
+    let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
+    for row in kitty::placeholder_lines(FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT) {
+        lines.push(Line::from(vec![
+            Span::styled("│", edge),
+            Span::styled(row, Style::new().fg(kitty::id_color(id))),
+            Span::styled("│", edge),
+        ]));
+    }
+    lines.push(Line::styled(format!("└{rule}┘"), edge));
+    lines
+}
+
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let Some(track) = app.song().tracks.get(app.cursor.track) else {
@@ -422,21 +429,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines = vec![Line::from(title), Line::raw("")];
     match app.track_page {
         Page::Sound => {
-            let rows = app.page_rows();
-            // The filter's curve sits beside its last rows, with nothing else on the right there.
-            let curve = rows.len().saturating_sub(FILTER_CURVE_HEIGHT);
-            for (index, controls) in rows.iter().enumerate() {
+            for controls in app.page_rows() {
                 // The filter stands apart from the machine above it.
                 if controls.first() == Some(&Control::FilterType) {
                     lines.push(Line::raw(""));
                 }
-                let beside = app.filter_image.filter(|_| index >= curve).map(|id| {
-                    let row = &kitty::placeholder_lines(FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)
-                        [index - curve];
-                    Span::styled(row.clone(), Style::new().fg(kitty::id_color(id)))
-                });
-                lines.push(sound_row(app, track, controls, beside));
+                lines.push(sound_row(app, track, controls));
             }
+            lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
         }
         Page::Mod => {
             lines.push(heading(&ENVELOPES[0]));
