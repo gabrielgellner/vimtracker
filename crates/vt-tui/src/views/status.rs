@@ -10,6 +10,7 @@ use vt_engine::engine::Transport;
 use crate::app::{App, Field};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 use crate::tree::ChainColumn;
 
@@ -50,14 +51,16 @@ pub fn column_name(app: &App) -> String {
         },
         View::Track | View::Mixer => app.track_control().label().to_owned(),
         View::Song => match app.song_column {
-            0 => "Length".to_owned(),
-            1 => "Start".to_owned(),
+            LENGTH_COLUMN => "Length".to_owned(),
+            REPEAT_COLUMN => "Rpt".to_owned(),
+            START_COLUMN => "Start".to_owned(),
             column => {
+                let track = column - COLUMNS_BEFORE_TRACKS + 1;
                 let label = app.song_label();
                 if label.is_empty() {
-                    format!("Track {:02} chain", column - 1)
+                    format!("Track {track:02} chain")
                 } else {
-                    format!("Track {:02} chain: {label}", column - 1)
+                    format!("Track {track:02} chain: {label}")
                 }
             }
         },

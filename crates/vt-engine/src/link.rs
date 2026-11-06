@@ -47,7 +47,7 @@ pub enum Command {
     /// Play a chain on one track when its launch timing allows, or stop it then.
     Launch { track: usize, chain: Option<u32> },
     /// Carry on in a captured section, with launched chains still running.
-    ContinueIn { section: usize },
+    ContinueIn { section: usize, length: usize },
 }
 
 /// What one track is doing while jamming. The outer `None`s mean it's following its section and
@@ -205,7 +205,9 @@ impl Realtime {
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
-                Command::ContinueIn { section } => self.engine.continue_in(section),
+                Command::ContinueIn { section, length } => {
+                    self.engine.continue_in(section, length);
+                }
             }
         }
         self.engine.process(out);
@@ -364,7 +366,10 @@ mod tests {
                 chain: (track % 2 == 0).then_some(0),
             });
         }
-        handle.send(Command::ContinueIn { section: 0 });
+        handle.send(Command::ContinueIn {
+            section: 0,
+            length: 4,
+        });
         violations += blocks(&mut rt, 64);
         while handle.jam_change().is_some() {}
         let mut removed = song(8, 16);
@@ -434,9 +439,11 @@ mod tests {
             track.add_chain(1);
         }
         played.sections[0].length = Some(2);
+        played.sections[0].repeat = vt_model::song::Repeat::new(3);
         let mut second = played.sections[0].clone();
         second.chains[1] = Some(1);
         second.reset = Some(1);
+        second.start = vt_model::song::SectionStart::Reset;
         played.sections.push(second);
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);

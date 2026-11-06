@@ -7,7 +7,7 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Section, SectionStart, Song};
+use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, SectionStart, Song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -457,7 +457,7 @@ fn continuing_in_a_captured_section_doesnt_change_what_plays() {
         let (early, late) = out.split_at_mut(4 * STEP * 2);
         engine.process(early);
         if capture {
-            engine.continue_in(1);
+            engine.continue_in(1, 3);
         }
         engine.process(late);
         out
@@ -600,4 +600,120 @@ fn a_song_starting_on_an_empty_row_plays_the_next() {
     let mut empty = song(&[&[A], &[B]]);
     empty.sections[0].chains = vec![None];
     same(&levels(empty, 2), &[BV, BV]);
+}
+
+#[test]
+fn a_section_plays_its_repeats_before_moving_on() {
+    let mut twice = song(&[&[A], &[B]]);
+    twice.sections[0].length = Some(2);
+    twice.sections[0].repeat = Repeat::new(2);
+    same(&levels(twice, 5), &[AV, AV, AV, AV, BV]);
+}
+
+#[test]
+fn chains_run_on_across_repeats_unless_the_section_resets() {
+    let mut twice = song(&[&STEPS]);
+    twice.sections[0].length = Some(2);
+    twice.sections[0].repeat = Repeat::new(2);
+    same(&levels(twice.clone(), 4), &[AV, BV, CV, AV]);
+    twice.sections[0].start = SectionStart::Reset;
+    same(&levels(twice, 4), &[AV, BV, AV, BV]);
+}
+
+#[test]
+fn a_loop_keeps_a_section_past_its_repeats() {
+    let mut twice = song(&[&[A], &[B]]);
+    twice.sections[0].repeat = Repeat::new(2);
+    let mut engine = Engine::new(RATE, version(twice));
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    let mut out = vec![0.0; 5 * STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.section(), 0);
+    engine.set_loop_section(None);
+    let mut out = vec![0.0; 2 * STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.section(), 1, "it moves on when let go");
+}
+
+#[test]
+fn lowering_a_repeat_while_past_it_ends_the_section_at_the_next_step() {
+    let mut four = song(&[&[A], &[B]]);
+    four.sections[0].repeat = Repeat::new(4);
+    let mut engine = Engine::new(RATE, version(four.clone()));
+    engine.play_from(0);
+    let mut out = vec![0.0; (2 * STEP + 3000) * 2];
+    engine.process(&mut out);
+    four.sections[0].repeat = Repeat::new(1);
+    let _ = engine.swap(version(four));
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.section(), 1);
+}
+
+#[test]
+fn each_repeat_starts_the_launch_grid_again() {
+    let mut twice = song(&[&[A, A, A], &[B, C]]);
+    twice.sections[0].length = Some(3);
+    twice.sections[0].repeat = Repeat::new(4);
+    // A grid of 2 falls on steps 0 and 2 of each pass of 3. Launched after step 2's line, it waits
+    // for the next pass rather than the fourth step of the row.
+    twice.launch = Launch::every(2).unwrap();
+    let mut engine = Engine::new(RATE, version(twice));
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    let mut out = vec![0.0; (2 * STEP + 3000) * 2];
+    engine.process(&mut out);
+    engine.launch(0, Some(11));
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(
+        engine.jam(0).playing,
+        Some(Some(11)),
+        "on step 3, a pass's start"
+    );
+}
+
+#[test]
+fn continuing_in_a_captured_section_lands_within_it() {
+    let mut twice = song(&[&[A, A], &[B, B]]);
+    twice.sections[0].length = Some(2);
+    twice.sections[0].repeat = Repeat::new(4);
+    twice.sections[1].length = Some(2);
+    twice.sections[1].start = SectionStart::Reset;
+    let mut engine = Engine::new(RATE, version(twice));
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    let mut out = vec![0.0; (5 * STEP + 3000) * 2];
+    engine.process(&mut out);
+    let place = engine.position();
+    engine.continue_in(1, 2);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.section(), 1);
+    assert_eq!(engine.position(), place + 1, "nothing reset on the way in");
+}
+
+#[test]
+fn playing_from_a_row_counts_the_repeats_before_it() {
+    let mut twice = song(&[&[A, B, C, A, B, C, A, B], &[C]]);
+    twice.sections[0].length = Some(3);
+    twice.sections[0].repeat = Repeat::new(2);
+    twice.sections[1].chains = vec![Some(10)];
+    twice.sections[1].length = Some(2);
+    let (from, through) = from_and_through(twice.clone(), 1, 6, 2);
+    same(&from, &through);
+    twice.sections[0].start = SectionStart::Reset;
+    let (from, through) = from_and_through(twice, 1, 6, 2);
+    same(&from, &through);
+}
+
+#[test]
+fn a_render_covers_repeats_and_stems_line_up() {
+    let mut twice = song(&[&[A, A], &[B]]);
+    twice.sections[0].repeat = Repeat::new(3);
+    let whole = render_loop(version(twice.clone()), RATE, RenderOptions::default());
+    assert_eq!(whole.len() / 2, 7 * STEP);
+    let stems = render_stems(&version(twice), RATE, RenderOptions::default());
+    assert!(stems.iter().all(|stem| stem.samples.len() == whole.len()));
 }

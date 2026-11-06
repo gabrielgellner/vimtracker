@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU16, NonZeroU32};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -301,6 +301,30 @@ impl fmt::Display for Launch {
     }
 }
 
+/// How many times a section plays before moving on. Saved songs can't hold 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Repeat(NonZeroU16);
+
+impl Repeat {
+    /// As many times as this, from 1 to `u16::MAX`.
+    pub fn new(times: i64) -> Self {
+        let times = times.clamp(1, i64::from(u16::MAX)) as u16;
+        Self(NonZeroU16::new(times).unwrap_or(NonZeroU16::MIN))
+    }
+
+    /// How many times it is.
+    pub fn get(self) -> u16 {
+        self.0.get()
+    }
+}
+
+impl Default for Repeat {
+    fn default() -> Self {
+        Self(NonZeroU16::MIN)
+    }
+}
+
 /// One row of the song, holding one chain per track.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Section {
@@ -308,6 +332,9 @@ pub struct Section {
     /// How many steps it plays. If not set, the length of its longest chain.
     #[serde(default)]
     pub length: Option<usize>,
+    /// How many times it plays before moving on.
+    #[serde(default)]
+    pub repeat: Repeat,
     /// What it does to the tracks when it starts.
     #[serde(default)]
     pub start: SectionStart,
@@ -589,9 +616,14 @@ impl Song {
             .unwrap_or_else(|| self.section_steps(section))
     }
 
+    /// How many steps a section plays before moving on, with its repeats.
+    pub fn section_plays(&self, section: &Section) -> usize {
+        self.section_length(section) * usize::from(section.repeat.get())
+    }
+
     /// How many steps the whole song plays, once through.
     pub fn song_steps(&self) -> usize {
-        self.sections.iter().map(|s| self.section_length(s)).sum()
+        self.sections.iter().map(|s| self.section_plays(s)).sum()
     }
 
     /// Add a section after this position, with no chains.

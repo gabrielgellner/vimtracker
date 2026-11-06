@@ -10,12 +10,13 @@ use vt_model::song::SectionStart;
 
 use crate::app::App;
 use crate::input::mode::Mode;
-use crate::song_view::COLUMNS_BEFORE_TRACKS;
+use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 
 /// Room for a section's number and playing marker.
 const NUMBER_WIDTH: usize = 5;
 const LENGTH_WIDTH: usize = 8;
+const REPEAT_WIDTH: usize = 5;
 const START_WIDTH: usize = 7;
 /// A track's column: two hex digits, or a name over them, and a gap.
 const TRACK_WIDTH: usize = 4;
@@ -34,15 +35,15 @@ fn first_shown(cursor: usize, count: usize, room: usize) -> usize {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = app.song();
-    let before = NUMBER_WIDTH + LENGTH_WIDTH + START_WIDTH;
+    let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH;
     let room = usize::from(area.width).saturating_sub(before) / TRACK_WIDTH;
     let cursor_track = app.song_column.saturating_sub(COLUMNS_BEFORE_TRACKS);
     let first_track = first_shown(cursor_track, song.tracks.len(), room);
     let shown_tracks = first_track..(first_track + room.max(1)).min(song.tracks.len());
 
     let mut heading = format!(
-        "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<START_WIDTH$}",
-        "", "Length", "Start"
+        "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}",
+        "", "Length", "Rpt", "Start"
     );
     for track in shown_tracks.clone() {
         let name = &song.tracks[track].name;
@@ -109,15 +110,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         };
         cell(
             song.section_length(section).to_string(),
-            0,
+            LENGTH_COLUMN,
             LENGTH_WIDTH,
             section.length.is_none(),
+        );
+        cell(
+            section.repeat.get().to_string(),
+            REPEAT_COLUMN,
+            REPEAT_WIDTH,
+            section.repeat.get() == 1,
         );
         let start = match section.start {
             SectionStart::New => "new",
             SectionStart::Reset => "reset",
         };
-        cell(start.to_owned(), 1, START_WIDTH, false);
+        cell(start.to_owned(), START_COLUMN, START_WIDTH, false);
         for track in shown_tracks.clone() {
             let chain = section.chains.get(track).copied().flatten();
             let jam = app.jam.get(track).copied().unwrap_or_default();

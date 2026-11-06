@@ -6,15 +6,20 @@ use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::constants::BAR_STEPS;
 use vt_model::selection::Motion;
-use vt_model::song::{SectionStart, lowest_unused};
+use vt_model::song::{Repeat, SectionStart, lowest_unused};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 
-/// The columns before the tracks': Length and Start.
-pub const COLUMNS_BEFORE_TRACKS: usize = 2;
+/// The columns before the tracks': Length, Rpt and Start.
+pub const LENGTH_COLUMN: usize = 0;
+pub const REPEAT_COLUMN: usize = 1;
+pub const START_COLUMN: usize = 2;
+pub const COLUMNS_BEFORE_TRACKS: usize = 3;
+/// How far a large step moves a repeat count.
+const LARGE_REPEAT: i64 = 4;
 /// How far a large step moves a chain ID: its top digit.
 const LARGE_CHAIN: i64 = 0x10;
 
@@ -57,9 +62,9 @@ impl App {
             Cmd::IncreaseLarge => self.adjust_song(times as i64, true),
             Cmd::DecreaseLarge => self.adjust_song(-(times as i64), true),
             Cmd::ClearField => self.clear_song_field(),
-            Cmd::PickValue if self.song_column == 1 => self.switch_start(),
+            Cmd::PickValue if self.song_column == START_COLUMN => self.switch_start(),
             Cmd::PickValue => self.open_chain_picker(),
-            Cmd::EnterInsert if self.song_column == 1 => self.switch_start(),
+            Cmd::EnterInsert if self.song_column == START_COLUMN => self.switch_start(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.mode = Mode::Insert;
@@ -99,12 +104,19 @@ impl App {
             return;
         };
         match self.song_track() {
-            None if self.song_column == 0 => {
+            None if self.song_column == LENGTH_COLUMN => {
                 let size = if large { BAR_STEPS as i64 } else { 1 };
                 let length = self.song().section_length(&here) as i64 + by * size;
                 self.apply(&Action::SetSectionLength {
                     section,
                     length: Some(length.max(1) as usize),
+                });
+            }
+            None if self.song_column == REPEAT_COLUMN => {
+                let size = if large { LARGE_REPEAT } else { 1 };
+                self.apply(&Action::SetSectionRepeat {
+                    section,
+                    repeat: Repeat::new(i64::from(here.repeat.get()) + by * size),
                 });
             }
             None => self.switch_start(),
@@ -137,18 +149,27 @@ impl App {
         });
     }
 
-    /// Back to following the longest chain, new, or no chain. Nothing changes if it's there.
+    /// Back to following the longest chain, playing once, new, or no chain. Nothing changes if it's
+    /// there.
     fn clear_song_field(&mut self) {
         let section = self.cursor.section;
         let Some(here) = self.section_here().cloned() else {
             return;
         };
         match self.song_track() {
-            None if self.song_column == 0 => {
+            None if self.song_column == LENGTH_COLUMN => {
                 if here.length.is_some() {
                     self.apply(&Action::SetSectionLength {
                         section,
                         length: None,
+                    });
+                }
+            }
+            None if self.song_column == REPEAT_COLUMN => {
+                if here.repeat != Repeat::default() {
+                    self.apply(&Action::SetSectionRepeat {
+                        section,
+                        repeat: Repeat::default(),
                     });
                 }
             }
@@ -169,7 +190,8 @@ impl App {
         }
     }
 
-    /// Type a length in decimal, ending with `Enter`, or a chain ID's two hex digits.
+    /// Type a length or a repeat count in decimal, ending with `Enter`, or a chain ID's two hex
+    /// digits.
     pub(crate) fn insert_song(&mut self, key: KeyCode) {
         match key {
             KeyCode::Esc => {
@@ -182,7 +204,7 @@ impl App {
             KeyCode::Enter => {
                 let text = std::mem::take(&mut self.entry.text);
                 self.mode = Mode::Normal;
-                if self.song_column == 0 {
+                if self.song_column == LENGTH_COLUMN {
                     match text.parse() {
                         Ok(length) if length > 0 => self.apply(&Action::SetSectionLength {
                             section: self.cursor.section,
@@ -190,9 +212,17 @@ impl App {
                         }),
                         _ => self.status = "A length is a number of steps, 1 or more".to_owned(),
                     }
+                } else if self.song_column == REPEAT_COLUMN {
+                    match text.parse::<u16>() {
+                        Ok(times) if times > 0 => self.apply(&Action::SetSectionRepeat {
+                            section: self.cursor.section,
+                            repeat: Repeat::new(i64::from(times)),
+                        }),
+                        _ => self.status = "A repeat is a number of times, 1 or more".to_owned(),
+                    }
                 }
             }
-            KeyCode::Char(c) if self.song_column == 0 && c.is_ascii_digit() => {
+            KeyCode::Char(c) if self.song_column < START_COLUMN && c.is_ascii_digit() => {
                 self.entry.text.push(c);
             }
             KeyCode::Char(c) if c.is_ascii_hexdigit() => {
@@ -419,7 +449,10 @@ impl App {
             });
         }
         self.apply(&Action::Batch(actions));
-        self.handle.send(Command::ContinueIn { section: at });
+        self.handle.send(Command::ContinueIn {
+            section: at,
+            length,
+        });
         self.looping = Some(at);
         self.go_to_section(at);
         self.status = format!("Captured to section {:02}, and staying on it", at + 1);
