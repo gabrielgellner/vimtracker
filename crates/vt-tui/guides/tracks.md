@@ -2,7 +2,8 @@
 
 Press `Space 4` for what a track holds apart from its steps, on two pages: Sound
 has its machine, filter and output, with a bar beside each value showing where
-it sits between the lines at each end of its range, and Mod its envelopes and
+it sits between the lines at each end of its range, and moving with whatever
+plays it, with a dim mark left where it's set, and Mod its envelopes and
 LFOs. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.

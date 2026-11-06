@@ -17,7 +17,7 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, Retrigger, SongTime, TrackState};
+use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState};
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
@@ -571,6 +571,14 @@ impl Engine {
         let now = self.song_time();
         if let Some(track) = self.current.song.tracks.get(index) {
             self.tracks[index].release_envelopes(track, now);
+        }
+    }
+
+    /// What a track is playing with right now.
+    pub fn live(&self, index: usize) -> LiveValues {
+        match (self.tracks.get(index), self.current.song.tracks.get(index)) {
+            (Some(state), Some(track)) => state.live(track.level),
+            _ => LiveValues::default(),
         }
     }
 

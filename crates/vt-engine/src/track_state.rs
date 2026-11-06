@@ -59,6 +59,21 @@ pub struct SongTime {
     pub seed: u64,
 }
 
+/// What a track is playing with right now, after step commands and modulation, on the same `00` to
+/// `FF` scale as its settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LiveValues {
+    pub level: u8,
+    pub pan: u8,
+    pub cutoff: u8,
+    pub resonance: u8,
+    pub delay: u8,
+    pub reverb: u8,
+    pub harmonics: u8,
+    pub timbre: u8,
+    pub morph: u8,
+}
+
 /// The commands whose values last, in the order `TrackState::values` keeps them.
 const VALUE_COMMANDS: [FxCommand; 9] = [
     FxCommand::Vol,
@@ -369,6 +384,35 @@ impl TrackState {
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
+    }
+
+    /// What this track is playing with right now. `VOL` and its modulation are shown on the track's
+    /// `level`, as they both set how loud it is. The first envelope on `Vol` shapes notes, and isn't
+    /// a movement of the level.
+    pub fn live(&self, level: u8) -> LiveValues {
+        let offset = |destination: Destination| self.offsets[destination as usize];
+        let moved = |held: f32, destination| {
+            ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8
+        };
+        let on_level = |held: f32, destination| {
+            (held + offset(destination) * 255.0)
+                .clamp(0.0, 255.0)
+                .round() as u8
+        };
+        let synth = self.synth_settings();
+        let shown = |value: f32| (value * 255.0).round() as u8;
+        let vol = self.vol + offset(Destination::Vol) * 255.0 - f32::from(UNITY_LEVEL);
+        LiveValues {
+            level: (f32::from(level) + vol).clamp(0.0, 255.0).round() as u8,
+            pan: moved(self.pan.target, Destination::Pan),
+            cutoff: moved(self.cutoff.target, Destination::Cut),
+            resonance: moved(self.resonance.target, Destination::Res),
+            delay: on_level(self.delay, Destination::Dly),
+            reverb: on_level(self.reverb, Destination::Rev),
+            harmonics: shown(synth.harmonics),
+            timbre: shown(synth.timbre),
+            morph: shown(synth.morph),
+        }
     }
 
     /// What a synth on this track plays with: the held values and what modulation adds.

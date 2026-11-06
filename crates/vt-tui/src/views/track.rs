@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::lfo::{Destination, depth_text};
@@ -55,8 +56,63 @@ pub fn level_bar(value: u8) -> String {
 
 /// A mark for a value either side of a centre, like pan, filling all of the bar's cells.
 pub fn centre_bar(value: u8) -> String {
-    let cell = usize::from(value) * BAR_CELLS / 256;
-    format!("{:<BAR_CELLS$}", format!("{}│", " ".repeat(cell)))
+    format!(
+        "{:<BAR_CELLS$}",
+        format!("{}│", " ".repeat(bar_cell(value)))
+    )
+}
+
+/// The cell of a bar a value's mark goes in.
+fn bar_cell(value: u8) -> usize {
+    usize::from(value) * BAR_CELLS / 256
+}
+
+/// A value's bar when something is moving it. The fill or bright mark follows what's playing, with
+/// a dim mark for what's set. Over a filled cell, that mark is cut out of the fill.
+pub fn bar_spans(set: u8, live: u8, centred: bool) -> Vec<Span<'static>> {
+    let bright = Style::new().fg(theme::MAUVE);
+    if set == live {
+        let bar = if centred {
+            centre_bar(set)
+        } else {
+            level_bar(set)
+        };
+        return vec![Span::styled(bar, bright)];
+    }
+    let bar = if centred {
+        centre_bar(live)
+    } else {
+        level_bar(live)
+    };
+    let mark = bar_cell(set);
+    bar.chars()
+        .enumerate()
+        .map(|(cell, shown)| {
+            if cell != mark || shown == '│' {
+                Span::styled(shown.to_string(), bright)
+            } else if shown == '█' {
+                Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
+            } else {
+                Span::styled("│", theme::faint())
+            }
+        })
+        .collect()
+}
+
+/// What a control with a bar is playing with right now.
+fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
+    match control {
+        Control::Level => Some(live.level),
+        Control::Base(TrackControl::Pan) => Some(live.pan),
+        Control::Base(TrackControl::Harmonics) => Some(live.harmonics),
+        Control::Base(TrackControl::Timbre) => Some(live.timbre),
+        Control::Base(TrackControl::Morph) => Some(live.morph),
+        Control::Base(TrackControl::Cutoff) => Some(live.cutoff),
+        Control::Base(TrackControl::Resonance) => Some(live.resonance),
+        Control::Base(TrackControl::Delay) => Some(live.delay),
+        Control::Base(TrackControl::Reverb) => Some(live.reverb),
+        _ => None,
+    }
 }
 
 /// The value a control shows a bar for, and how. True is a mark either side of a centre.
@@ -118,15 +174,14 @@ fn sound_row(
         used += text.chars().count();
         spans.push(Span::styled(text, style));
         if let Some((value, centred)) = bar_value(*control, track) {
-            let bar = if centred {
-                centre_bar(value)
-            } else {
-                level_bar(value)
-            };
+            let live = app
+                .live
+                .and_then(|live| live_value(*control, &live))
+                .unwrap_or(value);
             used += 1 + BAR_START.chars().count() + BAR_CELLS + BAR_END.chars().count();
             spans.push(Span::raw(" "));
             spans.push(Span::styled(BAR_START, theme::faint()));
-            spans.push(Span::styled(bar, Style::new().fg(theme::MAUVE)));
+            spans.extend(bar_spans(value, live, centred));
             spans.push(Span::styled(BAR_END, theme::faint()));
         }
     }
