@@ -46,12 +46,13 @@ The project rests on three ideas working together:
     be new, only quicker and closer to the grid.
 3.  Shared phrases, reachable from that same editing language.
 
-Per-note tables are a further idea, and they get their own decision after G1.
+Per-note tables are a further idea, and they get their own decision after the milestones in this plan.
 
 ## Glossary
 
 *   **Track:** one voice's lane through the song. Each track plays one note at a time.
 *   **Section:** one row of the song, holding one chain per track.
+*   **Machine:** what makes a track's sound, under Direction. The sampler is the first.
 *   **Chain:** a list of phrases, each with a transpose.
 *   **Phrase:** one track's sequence of steps, reusable by ID.
 *   **Step:** one position in a phrase. One step is a sixteenth note at normal speed.
@@ -59,6 +60,8 @@ Per-note tables are a further idea, and they get their own decision after G1.
     value.
 *   **Slot:** one FX command and its value. Column group means a slot, or the note, velocity
     or instrument column.
+*   **Insert:** one effect on a track, in the signal path. Not to be confused with a slot, or
+    with Insert mode.
 *   **View:** a screen you can jump to.
 *   **Operator:** a key that combines with a motion or target. **Action:** the recorded edit
     it produces.
@@ -69,7 +72,9 @@ Per-note tables are a further idea, and they get their own decision after G1.
 
 ## Goals
 
-*   **G1: Does it become an instrument the author wants to pick up?** After M3, the author
+*   **G1: Does it become an instrument the author wants to pick up?** **Retired on 2026-11-06,
+    and won't be run:** the author's jams answered it, and they want to continue. The original
+    test is kept here for the record. After M3, the author
     uses vimtracker to make new loops, over at least 5 sessions across 2 weeks, with no
     vimtracker development during those sessions. The reference for feel is the M8 and an
     Elektron box. After each session the author writes a few lines: what broke the flow, what
@@ -111,12 +116,14 @@ Per-note tables are a further idea, and they get their own decision after G1.
 *   Backward compatibility while prototyping. A format change can make older projects
     unloadable. Files carry a version number so the program can say why, and rendering to WAV
     is how to keep a jam.
-*   Track types, such as chord or stage-sequencer columns. Chords and stage sequences are
-    generators that write to ordinary tracks.
+*   Grid column types, such as chord or stage-sequencer columns. Chords and stage sequences are
+    generators that write to ordinary tracks. Machines and bus tracks, under Direction, differ in
+    what a track sounds like or takes in. Every track keeps the same steps and the same grammar.
 *   Matching the sound of any other tracker exactly.
 *   Using the names, logos or visual design of Polyend, Dirtywave or Elektron products.
-*   Synth engines, granular or wavetable playback, sample recording, streaming long samples,
-    MIDI, plugin hosting and live performance mode in the prototype.
+*   Sample recording, streaming long samples, MIDI, plugin hosting and live performance mode for now.
+    Synth engines and granular effects are planned under Direction, and were non-goals for the first prototype.
+*   Becoming a DAW, or an MPC-style workstation. The scale in mind is full songs at about Maschine's size.
 *   Image graphics. Text-mode graphics come first. Kitty's image protocol remains possible
     later if text cannot do what is needed.
 *   Live-coding, where running code generates the music during playback.
@@ -512,7 +519,131 @@ if it is newer, the program offers to restore it.
 **Accepted prototype limits.** Losing the audio device exits the program. A missing or unreadable sample is an error naming the
 path, and the rest of the project still loads. Memory is not bounded beyond track count and sample size.
 
+## Direction: a track is one sound
+
+This section is the plan from the author's design review after playing with the prototype, and it is **decided, not yet built**. Where it differs from
+the rest of this document, this section wins. The rest describes what's built or was planned earlier, and has drifted from the code in places. The author reports the instrument already exceeds their expectations in
+jams, and has drifted toward an Elektron feel on purpose, as those are the machines they know best. The aim is to make full songs at
+about the scale of a Maschine, with the UI as the deciding concern, and not to replace Ableton.
+
+### Machines replace instruments
+
+A track owns everything about its sound, and steps no longer pick an instrument. Sound locks are rarely wanted when tracks are plentiful, and one sound per track makes stems simple. The signal path through a track becomes:
+
+```text
+Machine -> Filter -> Utility filter -> FX inserts -> Level, Pan -> Sends or a bus
+           (2 envelopes and 2 LFOs can reach any of these)
+```
+
+*   A **machine** makes the sound: first the one-shot sampler, then a slicer, then a kick synth, then voices after Plaits, whose code is MIT licensed.
+*   A step becomes `NOTE VEL FX FX FX`. An `SMP` FX could lock a sample later, if it's missed.
+*   Tracks get names, like `BD`, in place of instrument labels. A **kit** becomes a set of track sounds, and a **sound** can be saved and loaded alone.
+*   **Stems:** `:render --stems` writes one file per track.
+*   **Cost:** drum parts spread over several tracks, so editing across tracks and a mixer page come right after this, as M6 and M7.
+*   **Polyphony:** a track stays one voice. The machine interface should allow more, for pads and chords, but none is built until a synth machine needs it. The audio thread still can't allocate, so machines are an enum with state made ahead of time.
+
+### A shared parameter list
+
+Each machine and effect declares its settings: name, range, units and default. The track page, stepping, `x`, `K`, typing, modulation `Dest` lists and FX on steps all read that list, so a new machine or effect needs no new UI. It's built with the first effect, in M9, when something new first needs it. Until then, the existing controls stay as they are.
+
+### Everything is a track
+
+Elektron's newer machines suggest one model for effects. The Syntakt's FX track has its own sequencer, whose locks drive the effects, and audio routed to it doesn't bring locks along. The Tonverk has audio tracks, bus tracks, sends and a mix track, with two insert slots on audio and bus tracks, and LFOs on the buses, sends and mix. The Analog Heat +FX has a Flow page that rearranges up to eight blocks and sets their mix and bypass.
+
+So every place that processes sound is a track of some kind, with the same page, phrases and grammar:
+
+| Track kind | Takes in | Has |
+|---|---|---|
+| **Sound** | Its machine | Filter, FX inserts, sends |
+| **Bus** | Tracks routed to it | FX inserts, sends |
+| **Send** | What tracks send it | FX inserts. Delay and reverb become these |
+| **Mix** | Everything | FX inserts, such as a master compressor |
+
+A bus, send or mix track has steps like any other, so writing `DEC40` on a reverb's track sequences the reverb. Only a track's own steps control it, as on the Syntakt. Locks on other tracks can't reach it, which keeps a track's phrase self-contained.
+
+### FX inserts
+
+A track has 3 inserts, each holding one effect chosen with `K`, and their settings have their own page. Inserts are rows on that page, so `dd` and `p` move an effect to change the order, in place of the Heat's Flow page. A fixed number keeps it readable in a terminal, with no patching. A track can hold two of the same effect, though that won't be common: a step's command reaches the first one, and a second is set from its page and through modulation. Core effects, in order: compressor with sidechain from another track, saturation and bitcrush, 3-band EQ, chorus, then character delay and granular. Delay and reverb move to send tracks, and need real settings: decay, damping and pre-delay on a reverb after Mutable's Griesinger design, replacing the fixed Freeverb, and time, feedback, a filter and ping-pong on the delay.
+
+### Pages
+
+The track page is already full at about 24 rows. It splits into **Sound**, **Mod** and **FX** pages, with `H` and `L` moving between them under the capital-means-wider rule, and `Space 5` becomes a sample browser. Sound and Mod arrive in M5, and FX with the first effect in M9.
+
+### FX columns are the automation lanes
+
+The question was whether tracker FX should give way to Elektron locks or DAW automation lanes. They aren't one thing, and only half of them are parameters.
+
+*   **Events** are `DEL`, `RET`, `KIL`, `OFF` and `CHA`. They do something once, at a moment, to a note. Automation can't express these, and they stay as they are.
+*   **Values** are `CUT`, `PAN` and so on. A column of these already is an automation lane, written as text and edited by the grammar: `d`, `y`, `p`, `.`, rotate and the shape panel all work on it, it's seen beside its notes, and it travels with a phrase when it's shared, copied or drifting against other tracks. Lanes kept apart from the grid would lose all of this, and need a second way to edit.
+
+So keep the columns, and remove what's weak about them:
+
+| Weakness | Fix |
+|---|---|
+| Only a few commands can be named | A slot can name any parameter in the track's list, with `K` to choose |
+| Values always hold | Each value has a **lock**, **hold** or **glide** mark, below, with lock the default as an Elektron p-lock is |
+| Values step, with nothing between rows | A glide moves across the steps between values, which is the line between points in DAW automation. This also answers the sweep smoothing question |
+| 3 slots | The number of slots becomes a per-track setting, and folding hides what isn't needed |
+| Nothing longer than a phrase | Long moves use a long phrase, or a bus or send track's own steps |
+
+The shape panel is already what makes ramps here. It needs only to learn glide.
+
+**Marks.** Each value in a slot has a one-character mark beside it, the author's idea. Marks are meant to be tried in play, and are stored as one small value per slot so the rules can change cheaply.
+
+```text
+    Note V  FX1      FX2
+00  C-4 64  CUT40 .  ---00
+01  --- --  ---00    ---00
+02  C-4 64  CUT80 g  DLY30 h
+03  --- --  ---00    ---00
+04  C-4 64  CUTC0 .  ---00
+```
+
+*   **`.` lock**, the default: lasts until the next note on the track or the next value in that slot, so it covers a whole note rather than snapping back while it rings. A lock on a row with no note works the same way, which changes a sound mid-note.
+*   **`h` hold**: replaces the base until playback next starts from the top, as all values do today.
+*   **`g` glide**: slides from this row to the next value in the slot, wrapping through the loop. With no other value, it stays put.
+*   **Layers:** the track page's value is the base, a hold replaces it, and a lock sits on top of those. LFOs and envelopes add on top of everything, and carry on around whatever the steps do.
+*   **Editing:** `~` cycles the mark on the slot under the cursor, in Visual as well, and `.` repeats it. Marks aren't cursor stops, as those would add a stop per slot to every `l`. A newly typed value copies the mark of the nearest value above it in that column, which gives most of a column mode with no setting. A stop can be added if `~` feels wrong in play.
+*   **Events** have no mark. Empty slots show nothing, and each slot grows by two characters.
+
+### What this changes in the existing plan
+
+*   **G1:** retired, as its question has been answered in play. No test gates the milestones, and "before G1" elsewhere in this document now means as built through M3.
+*   **M3:** `S` already covers most of Issues 17 and 19, leaving plain values. Issue 18's live sweeps stay on hold, with G4 and CUJ 4 parked alongside them. M3's open work doesn't block M4. G7 still runs first, as M4 onward lean on having many tracks.
+*   **After the milestones:** this section goes ahead of that list. Slicing and the song and score views move up from it into the milestones below. Tables, generators and the smaller items stay after them.
+
+### Decisions
+
+Made by the author on 2026-11-05:
+
+1.  **Sections come before effects**, as a project with one looping section can't become a song however good it sounds.
+2.  **3 reorderable inserts** rather than a free signal path or a fixed order.
+3.  **No sample locks at first.** An `SMP` FX can come if they're missed in a jam.
+4.  **Chains and shared phrases stay**, under sections, rather than Elektron-style patterns. They and the grammar are what make this not just another groovebox.
+5.  **Marks** as above: lock by default, lasting until the next note or value, glide from the marked row, and `~` to change them.
+
+Made by the author on 2026-11-06, after a review of this section:
+
+6.  **G1 is retired.** The author wants to continue, so milestones have no gate.
+7.  **The shared parameter list waits** for the first effect, as nothing needs it before then.
+8.  **Two of the same effect are allowed on a track**, though that won't be common.
+9.  **A mixer page comes soon**, before songs, as it's such a common part of a workflow.
+
 ## Alternatives Considered
+
+### Automation lanes apart from the grid
+
+*   **Description**: Give parameters DAW-style lanes in their own view or below the grid, and drop value commands from FX slots.
+*   **Pros**: Any parameter, no slot limit, and values between steps.
+*   **Cons**: A second kind of editing beside the grammar, values out of sight of their notes, and more to carry when a phrase is shared or copied. It also can't replace event commands, so slots would stay anyway.
+*   **Reason for Rejection**: The columns can gain all three pros. See Direction.
+
+### A free FX chain
+
+*   **Description**: Any number of effects on a track, patched freely.
+*   **Pros**: Flexible.
+*   **Cons**: Hard to read in a terminal, with more to manage than the music needs at this scale.
+*   **Reason for Rejection**: 3 reorderable inserts and bus tracks cover the need.
 
 ### Port Polyend Tracker CE to Rust
 
@@ -606,22 +737,22 @@ path, and the rest of the project still loads. Memory is not bounded beyond trac
 *   [Metropolix manual](https://www.analoguehaven.com/intellijel-designs/metropolix-solo/manual.pdf): needs a full read before a stage generator is designed.
 *   Synchronization references: [Ardour `rcu.h`](https://raw.githubusercontent.com/Ardour/ardour/master/libs/pbd/pbd/rcu.h), [Tracktion Engine](https://github.com/Tracktion/tracktion_engine) (GPL or commercial), [Furnace](https://github.com/tildearrow/furnace), [Schism Tracker](https://github.com/schismtracker/schismtracker).
 
-### After G1
+### After the milestones
 
-The G1 outcome decides what happens next. **Continue** works through this list in order. **Redirect** builds the named missing feature first, then reruns the test once. **Stop** ends the project. **Inconclusive** extends the test once. Each entry gets its own short design, informed by the session notes.
+This list comes after Milestones after M3, in order, as jams ask for it. Each entry gets its own short design.
 
 1.  **Tables.** Per-note tables with their own speed, independent column rates, and aux tables, modelled on the M8. The author wants cycles that drift across notes, such as a 5-step table cycle against a 16-step phrase, which the M8's `TIC00` per-note mode allows. Open questions: how transpose and volume columns get a rate and loop point, end-of-table behaviour, when a cycle's position resets, a command that tests whether a note is held (a community M8 tutorial says tables cannot detect note-off, and the manual documents no such test), FX addressing such as `HOP` beyond row `F` and IDs above `FF`, table `00` as an aux table, and a safe rule for zero-time `HOP` loops. First command candidates: `HOP`, `THO`, `TIC`, `TBL`, `TBX`, `RND`, `REP`, `IFC`.
-2.  **Sample slicing and waveform view.** Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
-3.  **Score view.** Full multi-track editing, column folding (`za zc zo zM zR`), and selections across tracks.
-4.  **Song view and looping.** Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
+2.  **Sample slicing and waveform view.** The slicer moves up to M11, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
+3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M11.
+4.  **Song view and looping.** Moved up to M8, apart from per-track speed and grooves, which stay here. Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
 5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
-6.  **Smaller items.** Chasing held values on play, scales and `:set scale`, a fine-timing nudge command, keyframes in sweeps, track groups, macros, marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
+6.  **Smaller items.** Chasing held values on play, scales and `:set scale`, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
 
 --------------------------------------------------------------------------------
 
 ## Detailed Implementation Plan
 
-Work is split into issues, each intended as one pull request. Every issue leaves the workspace building with `cargo test` passing. **Work stops at Issue 23 until the G1 outcome is recorded.** The rest of the work is listed under After G1. The readiness bar applies to M1-M3 only.
+Work is split into issues, each intended as one pull request. Every issue leaves the workspace building with `cargo test` passing. The order after M3 is under Milestones after M3, and the rest is listed under After the milestones. The readiness bar applies to M1-M3 only. **M4 onward aren't ready to implement as written:** each gets a short design with its issues and file lists when it starts.
 
 ### Fixed Specifications
 
@@ -826,7 +957,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `Cargo.toml` (Create): workspace with the three crates, each licensed `GPL-3.0-or-later`.
 *   `README.md` (Modify): build and run steps, and the license line. It currently says there is no code.
 *   `.gitignore`, `LICENSE`, `docs/designs/vimtracker.md`: already exist, and no action is needed.
-*   `docs/g1-result.md` (Create): session notes and the G1 outcome.
+*   `docs/g7-result.md` (Create): the G7 result.
 *   `docs/terminal-notes.md` (Create): `probe-keys` results.
 
 #### `crates/vt-model` (Create)
@@ -899,7 +1030,7 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 *   **Issue 13: Instrument view.** Add `views/instrument.rs` with sample assignment, the current instrument, and volume, attack and release. **Done when:** samples can be assigned and adjusted without `:sample` alone.
 *   **Issue 14: View picker.** Add `input/picker.rs`, `views/picker.rs`, `Space Space`, `Space ff` and `Space 1` to `Space 6`, and use the window for `grr`. **Tests:** with an injected list, `sg` matches `song` but not `groove`; ties go to most recent use; an empty search lists by most recent use; `Esc` leaves the view unchanged.
 
-### Milestone M3: Sweeps, then the G1 test
+### Milestone M3: Sweeps
 
 *   **Issue 15: FX and audio effects.** Add `fx.rs`, `rng.rs`, `dsp/*`, the commands in the FX table, FX entry in Insert mode, `:seed`, held values and equal-power pan. **Tests:** each command on a rendered result or engine state; `RET` with `y=0` does nothing; held values reset as specified; a fixed seed gives the same `CHA` results; adding a track does not change another track's results. **Done when:** the author has listened to a full `CUT` sweep over a sustained sample at 120 and 170 BPM, recorded the result in Open Questions, and added the step-length fallback if it sounds stepped.
 *   **Issue 16: Swing.** Add `:swing` and `:tswing`. **Tests:** 66.7% gives exactly 80 ticks; 50% gives none; a track override does not move another track.
@@ -909,7 +1040,20 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 *   **Issue 20: Scope and meters.** Add the scope tap to `link.rs` and `views/scope.rs`, with a small master scope and per-track level meters using Braille and block characters. **Tests:** the real-time guard stays at zero with the tap active; a full tap drops frames rather than waiting.
 *   **Issue 21: Render command.** Add `vimtracker render` and `:render`. **Tests:** golden hash tests; a render is exactly the loop's length; `--tail` extends it; `VT_BLESS=1` updates hashes. **Done when:** CUJ 7 works.
 *   **Issue 22: Autosave.** Add autosave to `project.rs`. **Tests:** only a changed project is written; a newer autosave is offered on opening; audio is unaffected.
-*   **Issue 23: G7 and G1.** First run G7, and record how many tracks the laptop sustains. Once that passes, run G1 as written in Goals. Record each session and the outcome in `docs/g1-result.md`, including which missing feature was wanted most and whether any bad-sounding sweep was a tuning fault.
+*   **Issue 23: G7.** Run G7, and record how many tracks the laptop sustains in `docs/g7-result.md`. G1 is retired.
+
+### Milestones after M3
+
+These milestones build the section Direction: a track is one sound, in order, and G7 runs before M4. Each gets a short design when it starts, and ends when the author has used it in a jam. M5 comes before M8 so songs aren't made in a format about to break, and M9 comes before M10 as send tracks reuse inserts. The Filters milestone on GitHub stays open for #50 alongside these.
+
+*   **M4: Marks.** Lock and hold on the existing value commands, with `~` to change them, then glide. **Tests:** a lock returns to the value beneath it at the next note or value, a hold stays until playing from the top, and a glide lands exactly on its next value.
+*   **M5: A track is one sound.** Remove instruments from steps, name tracks, kits as sets of sounds, a `Sound` type with the one-shot sampler as its first machine, a sample browser, the Sound and Mod pages, and `:render --stems`. This stops old songs loading. **Tests:** a track's sound saves and loads, stems sum to the full render without sends, and renders stay repeatable.
+*   **M6: Editing across tracks.** Selections and operators that reach across tracks, as drum parts now spread over several.
+*   **M7: Mixer.** One page of level, pan, sends, mute and solo across all tracks. **Tests:** an edit here matches the same edit on the track page, and is one undo step.
+*   **M8: Songs.** Sections, a song view, section lengths, and each section resetting or carrying track positions. **Tests:** a song plays its sections in order, a render covers a whole song, and stems cover a whole song.
+*   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list, and slots naming any parameter on that list. **Tests:** every parameter on the list works with each key from the list alone, an effect's response, reordering, and off costing nothing.
+*   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
+*   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
 ### Known Gaps From Review
 
