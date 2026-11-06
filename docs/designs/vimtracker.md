@@ -1164,7 +1164,7 @@ Made without the author present, on 2026-11-06, following their earlier decision
 
 **Editor.** `Cursor` gains `section`, and the phrase, chain, track and mixer views edit that section. Playheads show only when it's the one playing. Shared phrase and chain counts, and `grr`, cover every section. The status line shows `Sec 2/4` when there's more than one.
 
-**Song view.** `Space 1` shows a row per section with Length, Start and each track's chain. `a` adds a section with new chains, `gc` copies one using the same chains, and `dd` removes one. `gd` opens a chain.
+**Song view.** `Space 1` shows a row per section with Length, Start and each track's chain. `a` adds an empty section, which is skipped until it has a chain or a length, `gc` copies one using the same chains, and `dd` removes one. `gd` opens a chain, adding one on `--`.
 
 **Render.** With more than one section, a render covers the song once. Its warm-up is one silent pass through the song, and one section still renders as its loop.
 

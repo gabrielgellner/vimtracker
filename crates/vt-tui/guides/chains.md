@@ -111,14 +111,15 @@ cursor is on, and `Sec 2/4` on the status line says which.
 | `x` | Length follows the chains, Start carries, or no chain |
 | `K` | On Start, switch between carry and reset |
 | `gd` | Open this track's chain, adding one if it has none |
-| `a` | Add a section after this one, with new chains |
+| `a` | Add an empty section after this one |
 | `gc` | Copy this section after itself, using the same chains |
 | `dd` | Remove this section |
 | `;` | Hear its first row |
 
 Sections play in order, and the song goes round to the first at the end. A
 section lasts as long as its longest chain unless you set its length, which
-cuts its chains short or lets them loop on. A `:reset` belongs to one section.
+cuts its chains short or lets them loop on. An empty section is skipped until
+it has a chain or a length. A `:reset` belongs to one section.
 
 **Start** says what a section does to the tracks. `carry` keeps them counting
 from where they were, and `reset` sends them all back to their start.
