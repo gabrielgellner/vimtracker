@@ -123,6 +123,7 @@ pub struct App {
     pub guide: Option<Guide>,
     pub guide_scroll: usize,
     pub guide_page: usize,
+    pub guide_width: usize,
     pub(crate) table: Table,
     pub(crate) pending: Vec<Key>,
     pub(crate) pending_since: Option<Instant>,
@@ -198,6 +199,7 @@ impl App {
             guide: None,
             guide_scroll: 0,
             guide_page: 16,
+            guide_width: 76,
             table: Table::default(),
             pending: Vec::new(),
             pending_since: None,
@@ -440,7 +442,10 @@ impl App {
             self.mode = Mode::Normal;
             return;
         };
-        let last = guide.lines().len().saturating_sub(self.guide_page);
+        let last = guide
+            .lines(self.guide_width)
+            .len()
+            .saturating_sub(self.guide_page);
         let half = (self.guide_page / 2).max(1);
         self.guide_scroll = match key.code {
             KeyCode::Char('d') if key.ctrl => self.guide_scroll + half,

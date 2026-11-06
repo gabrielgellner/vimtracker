@@ -6,12 +6,23 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
-    BEAT_STEPS, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_PHRASE_STEPS,
+    BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_LEVEL,
+    MAX_PHRASE_STEPS, UNITY_LEVEL,
 };
 use crate::label::is_named_slot;
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::selection::Extent;
 use crate::step::Step;
+
+/// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
+/// past `MAX_LEVEL`, and the value can be between steps, as an LFO moves it.
+pub fn level_gain(level: f32) -> f32 {
+    if level <= 0.0 {
+        return 0.0;
+    }
+    let level = level.min(f32::from(MAX_LEVEL));
+    10.0_f32.powf((level - f32::from(UNITY_LEVEL)) * DB_PER_LEVEL / 20.0)
+}
 
 /// One voice's lane through the song.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,10 +33,10 @@ pub struct Track {
     pub swing: Option<u16>,
     /// The track's level, set outside its patterns. It also scales what the track sends to the
     /// delay and reverb.
-    #[serde(default = "full_level")]
+    #[serde(default = "unity_level")]
     pub level: u8,
     /// What the track's held `CUT` starts from, and what its LFOs move around until a step sets it.
-    #[serde(default = "full_level")]
+    #[serde(default = "open_cutoff")]
     pub cutoff: u8,
     /// Where held `RES` starts.
     #[serde(default)]
@@ -49,8 +60,8 @@ impl Default for Track {
             mute: false,
             solo: false,
             swing: None,
-            level: full_level(),
-            cutoff: full_level(),
+            level: unity_level(),
+            cutoff: open_cutoff(),
             resonance: 0,
             pan: centre(),
             delay: 0,
@@ -60,7 +71,11 @@ impl Default for Track {
     }
 }
 
-fn full_level() -> u8 {
+fn unity_level() -> u8 {
+    UNITY_LEVEL
+}
+
+fn open_cutoff() -> u8 {
     0xFF
 }
 
@@ -269,7 +284,7 @@ impl Default for Instrument {
     fn default() -> Self {
         Self {
             sample: None,
-            volume: 0xFF,
+            volume: UNITY_LEVEL,
             attack_ms: 1,
             release_ms: 50,
             labelled: false,
@@ -459,9 +474,9 @@ mod tests {
     use crate::constants::DEFAULT_TRACKS;
 
     #[test]
-    fn a_track_saved_without_a_level_loads_at_full() {
+    fn a_track_saved_without_a_level_loads_at_0_db() {
         let track: Track = ron::from_str("(mute: false, solo: true, swing: None)").unwrap();
-        assert_eq!(track.level, 0xFF);
+        assert_eq!(track.level, UNITY_LEVEL);
         assert!(track.solo);
     }
 
@@ -605,6 +620,23 @@ mod tests {
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
         assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);
+    }
+
+    #[test]
+    fn level_values_are_even_steps_in_db() {
+        let db = |level: f32| 20.0 * level_gain(level).log10();
+        let close = |a: f32, b: f32| assert!((a - b).abs() < 1e-3, "{a} and {b}");
+        assert_eq!(level_gain(0xE0 as f32), 1.0);
+        close(db(0xF0 as f32), 4.0);
+        close(db(0xF8 as f32), 6.0);
+        close(db(0xFF as f32), 6.0);
+        close(db(0xD0 as f32), -4.0);
+        close(db(0xC0 as f32), -8.0);
+        close(db(0x80 as f32), -24.0);
+        close(db(0x40 as f32), -40.0);
+        close(db(0x01 as f32), -55.75);
+        assert_eq!(level_gain(0.0), 0.0);
+        assert_eq!(level_gain(-3.0), 0.0);
     }
 
     #[test]

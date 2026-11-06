@@ -50,5 +50,7 @@ Playing from the top restarts every LFO. A `:reset` doesn't, since that is
 about patterns. To follow the steps, turn on `Retrig`. While stopped, a track
 sits at its held values, so `;` hears those. Pausing freezes the LFO.
 
-`Vol` can only go as high as `FF`. A track at full volume only moves down for
-half of each cycle, so hold it lower with `VOL` on a step for an even swing.
+`Vol`, `Dly` and `Rev` swing in dB, on the level scale in **Phrases and
+chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
+is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
+on a step.

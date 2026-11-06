@@ -13,7 +13,7 @@ on beside it.
 | `w` `b` | Next or previous group of columns |
 | `0` `$` | Start or end of the row: the Note column, or the last FX value |
 | `}` `{` | Next or previous beat, which is 4 steps |
-| `gg` `G` | First or last step |
+| `gg` `G` | First or last step of the loop |
 | `H` `M` `L` | Top, middle or bottom of the screen |
 | `C-d` `C-u` | Half a screen down or up |
 | `C-e` `C-y` | Scroll the view without moving the cursor |
@@ -26,7 +26,7 @@ A number before a motion repeats it, as in Vim.
 |---|---|
 | `4j` | Down 4 steps |
 | `2}` | Down 2 beats |
-| `8G` | To step 8, counting from the top in decimal |
+| `8G` | To the 8th step of the loop, counting in decimal |
 
 Step numbers on screen are hex, so step `10` on screen is the 17th step.
 

@@ -464,7 +464,7 @@ fn moving_between_instruments_creates_one_only_when_set() {
     assert_eq!(app.instrument, 2);
     assert!(!app.song().instruments.contains_key(&2));
     press(&mut app, "j-");
-    assert_eq!(app.song().instruments[&2].volume, 0xFE);
+    assert_eq!(app.song().instruments[&2].volume, 0xDF);
     press(&mut app, "h");
     assert_eq!(app.instrument, 1);
     press(&mut app, " 3");
@@ -953,7 +953,7 @@ fn a_guide_stops_scrolling_at_its_end() {
     press(&mut app, " ?");
     special(&mut app, KeyCode::Enter);
     app.guide_page = 10;
-    let last = app.guide.unwrap().lines().len() - 10;
+    let last = app.guide.unwrap().lines(app.guide_width).len() - 10;
     press(&mut app, "G");
     assert_eq!(app.guide_scroll, last);
     press(&mut app, "j");
@@ -1149,16 +1149,16 @@ fn other_tracks_light_the_step_they_are_playing() {
 #[test]
 fn tvol_sets_this_tracks_level_and_can_be_undone() {
     let (mut app, _realtime) = app();
-    assert_eq!(app.song().tracks[0].level, 0xFF);
+    assert_eq!(app.song().tracks[0].level, 0xE0);
     press(&mut app, "W");
     command(&mut app, "tvol C0");
-    assert_eq!(app.song().tracks[0].level, 0xFF);
+    assert_eq!(app.song().tracks[0].level, 0xE0);
     assert_eq!(app.song().tracks[1].level, 0xC0);
     assert!(app.dirty);
     press(&mut app, "u");
-    assert_eq!(app.song().tracks[1].level, 0xFF);
+    assert_eq!(app.song().tracks[1].level, 0xE0);
     command(&mut app, "tvol loud");
-    assert_eq!(app.song().tracks[1].level, 0xFF);
+    assert_eq!(app.song().tracks[1].level, 0xE0);
     assert!(app.status.contains(":tvol"));
 }
 
@@ -2257,6 +2257,32 @@ fn the_track_page_sets_base_values_and_undoes() {
     assert_eq!(app.song().tracks[0].pan, 0x80);
     press(&mut app, "hi7F");
     assert_eq!(app.song().tracks[1].level, 0x7F);
+}
+
+#[test]
+fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    // Cut isn't a level, and Res isn't either.
+    press(&mut app, "i10iFF");
+    assert_eq!(track(&app).cutoff, 0xFF);
+    // Level, by typing and by nudging.
+    press(&mut app, "ji");
+    press(&mut app, "FF");
+    assert_eq!(track(&app).level, 0xF8);
+    press(&mut app, "20-");
+    assert_eq!(track(&app).level, 0xE4);
+    press(&mut app, "99+");
+    assert_eq!(track(&app).level, 0xF8);
+    command(&mut app, "tvol FF");
+    assert_eq!(track(&app).level, 0xF8);
+    // Pan runs to FF, and the sends stop at the top.
+    press(&mut app, "liFF");
+    assert_eq!(track(&app).pan, 0xFF);
+    press(&mut app, "liFF");
+    assert_eq!(track(&app).delay, 0xF8);
+    press(&mut app, "liFF");
+    assert_eq!(track(&app).reverb, 0xF8);
 }
 
 #[test]

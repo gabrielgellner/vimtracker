@@ -6,7 +6,7 @@ use vt_model::constants::{
     GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
-use vt_model::song::Track;
+use vt_model::song::{Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
 use crate::dsp::delay::Delay;
@@ -108,7 +108,7 @@ impl Engine {
     /// Move each track's level toward the current version's.
     fn follow_levels(&mut self) {
         for (state, track) in self.tracks.iter_mut().zip(&self.current.song.tracks) {
-            state.level.target = f32::from(track.level) / 255.0;
+            state.level.target = level_gain(f32::from(track.level));
         }
     }
 
@@ -367,7 +367,7 @@ impl Engine {
         Some(NoteOn {
             sample,
             note,
-            gain: step_gain * f32::from(settings.volume) / 255.0,
+            gain: step_gain * level_gain(f32::from(settings.volume)),
             attack_ms: settings.attack_ms,
             release_ms: settings.release_ms,
             release_after: None,

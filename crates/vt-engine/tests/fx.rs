@@ -5,7 +5,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song};
+use vt_model::song::{Instrument, Song, level_gain};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 1000 per groove unit.
@@ -448,16 +448,14 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
     lower.tracks[0].level = 0x80;
     let halved = render(lower, flat(0.02), STEP);
     let (full, halved) = (level_at(&full, STEP - 1), level_at(&halved, STEP - 1));
-    assert!(
-        (halved / full - 128.0 / 255.0).abs() < 1e-3,
-        "{halved} vs {full}"
-    );
+    let down = level_gain(128.0);
+    assert!((halved / full - down).abs() < 1e-3, "{halved} vs {full}");
 
     let soft = ["C-4 40 00 ---00 ---00 ---00"];
     let mut both = song(&soft);
     both.tracks[0].level = 0x80;
     let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
-    let expected = full * (64.0 / 127.0) * (128.0 / 255.0);
+    let expected = full * (64.0 / 127.0) * down;
     assert!((both / expected - 1.0).abs() < 1e-3, "{both} vs {expected}");
 }
 

@@ -11,12 +11,17 @@ only takes effect once its value is typed.
 
 | Command | Sets |
 |---|---|
-| `VOL` | Track gain from the pattern, multiplied with `:tvol` |
+| `VOL` | Track gain from the pattern. `E0` is 0 dB, and starts there |
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
 | `DLY` | Delay send |
 | `REV` | Reverb send |
+
+`VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
+others start from the values on the track page, `Space 4`, each time playback
+starts from the top. An LFO on that page keeps moving a value around wherever
+a step has put it. See **The track page and LFOs**.
 
 ## Things that happen once
 
@@ -40,3 +45,6 @@ gets louder. Use `:seed 7` to choose which results `CHA` gives.
 | `:swing 66.7` | Swing for the project, from 50 to 75 |
 | `:tswing 60` | Swing for the cursor's track |
 | `:tswing off` | That track follows the project again |
+
+Swing follows the song's grid rather than each track's loop, so a track with
+an odd length swings different steps each time round.

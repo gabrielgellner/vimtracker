@@ -25,7 +25,7 @@ To bring them back together on a schedule, set a reset:
 The status line shows `Reset 64` while one is on. A track longer than the
 reset never reaches its end. You can change it while playing: the beat stays
 put, and if the tracks are already past the new reset they go back on the
-next step.
+next step. LFOs keep running through a reset.
 
 ## The chain view
 
@@ -63,9 +63,28 @@ all of them.
 | `:track add 4` | Add 4 tracks |
 | `:track del` | Remove the last track |
 | `:tvol C0` | Set this track's level in hex, shown as `TVol` |
+| `Space 4` | The track page: filter, output and LFOs |
 | `Space m` | Mute or unmute this track |
 | `Space s` | Solo or unsolo this track |
 | `Space M` | Clear all mutes and solos |
+
+## The level scale
+
+Levels work like Ableton's faders: even steps in dB, with room above 0. Track
+level, instrument volume, `VOL`, `DLY` and `REV` all use this scale.
+
+| Value | Level |
+|---|---|
+| `F8` | +6 dB, the top. Anything higher snaps to it |
+| `F0` | +4 dB |
+| `E0` | 0 dB, where tracks and instruments start |
+| `D0` | -4 dB |
+| `C0` | -8 dB |
+| `80` | -24 dB |
+| `40` | -40 dB |
+| `00` | Silent |
+
+Every `10` in hex is 4 dB, so `4+` is 1 dB louder.
 
 ## Velocity and level
 

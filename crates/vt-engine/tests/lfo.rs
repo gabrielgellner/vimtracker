@@ -6,7 +6,7 @@ use vt_engine::render::render_frames;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song};
+use vt_model::song::{Instrument, Song, level_gain};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -14,9 +14,9 @@ const STEP: usize = 6000;
 /// A quarter note, as ticks.
 const QUARTER: u32 = 960;
 /// Held `VOL 80`, which leaves room for an LFO either way.
-const HALF: f32 = 128.0 / 255.0;
-/// What `Depth 40` swings by.
-const SWING: f32 = 64.0 / 255.0;
+const HELD: f32 = 128.0;
+/// What `Depth 40` swings by, in level values.
+const SWING: f32 = 64.0;
 
 fn pool(frames: Vec<[f32; 2]>) -> Arc<SamplePool> {
     let mut pool = SamplePool::default();
@@ -88,8 +88,10 @@ fn left(out: &[f32], frame: usize) -> f32 {
     out[frame * 2]
 }
 
+/// Within a dB and a half, since smoothing means a fast swing lags slightly at its peaks.
 fn close(actual: f32, expected: f32) {
-    assert!((actual - expected).abs() < 0.03, "{actual} and {expected}");
+    let apart = 20.0 * (actual / expected).log10();
+    assert!(apart.abs() < 1.5, "{actual} and {expected}");
 }
 
 #[test]
@@ -99,10 +101,23 @@ fn a_synced_lfo_moves_around_the_held_value_in_time() {
         ..Lfo::default()
     };
     let out = render(moving(lfo), flat(), STEP * 8);
-    close(left(&out, STEP), HALF + SWING);
-    close(left(&out, STEP * 2), HALF);
-    close(left(&out, STEP * 3), HALF - SWING);
-    close(left(&out, STEP * 5), HALF + SWING);
+    close(left(&out, STEP), level_gain(HELD + SWING));
+    close(left(&out, STEP * 2), level_gain(HELD));
+    close(left(&out, STEP * 3), level_gain(HELD - SWING));
+    close(left(&out, STEP * 5), level_gain(HELD + SWING));
+}
+
+#[test]
+fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
+    let out = render(song(&["C-4 -- 00 ---00 ---00 ---00"]), flat(), STEP);
+    assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
+    let out = render(song(&["C-4 -- 00 VOLE0 ---00 ---00"]), flat(), STEP);
+    assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
+    let mut limitless = song(&["C-4 -- 00 VOLFF ---00 ---00"]);
+    limitless.limiter = false;
+    let out = render(limitless, flat(), STEP);
+    let top = left(&out, STEP - 1);
+    assert!((20.0 * top.log10() - 6.0).abs() < 0.01, "{top}");
 }
 
 #[test]
@@ -122,14 +137,14 @@ fn a_synced_rate_follows_the_tempo_and_hertz_does_not() {
         render(song, flat(), RATE as usize)
     };
     let peak = RATE as usize / 4;
-    close(left(&at_60(synced), peak), HALF + SWING);
-    close(left(&at_60(hertz), peak), HALF + SWING);
+    close(left(&at_60(synced), peak), level_gain(HELD + SWING));
+    close(left(&at_60(hertz), peak), level_gain(HELD + SWING));
 
     // At 120 BPM, a quarter note takes half the time and hertz doesn't change.
     let out = render(moving(synced), flat(), RATE as usize);
-    close(left(&out, peak), HALF);
+    close(left(&out, peak), level_gain(HELD));
     let out = render(moving(hertz), flat(), RATE as usize);
-    close(left(&out, peak), HALF + SWING);
+    close(left(&out, peak), level_gain(HELD + SWING));
 }
 
 #[test]
@@ -174,9 +189,9 @@ fn retrig_restarts_it_on_each_note() {
         };
         render(song, flat(), STEP * 6)
     };
-    let frame = STEP * 4 + 1000;
-    close(left(&ramp(false), frame), HALF - SWING * 0.5);
-    close(left(&ramp(true), frame), HALF - SWING);
+    let frame = STEP * 4 + 2000;
+    close(left(&ramp(false), frame), level_gain(HELD - SWING * 0.5));
+    close(left(&ramp(true), frame), level_gain(HELD - SWING));
 }
 
 #[test]
@@ -187,7 +202,7 @@ fn phase_and_negative_depth_move_the_wave() {
         ..Lfo::default()
     };
     let out = render(moving(lfo), flat(), STEP);
-    close(left(&out, 100), HALF + SWING);
+    close(left(&out, 100), level_gain(HELD + SWING));
 
     let mut flipped = moving(Lfo {
         rate: Rate::Note(QUARTER),
@@ -195,7 +210,7 @@ fn phase_and_negative_depth_move_the_wave() {
     });
     flipped.tracks[0].lfos[0].depth = -0x40;
     let out = render(flipped, flat(), STEP * 2);
-    close(left(&out, STEP), HALF - SWING);
+    close(left(&out, STEP), level_gain(HELD - SWING));
 }
 
 #[test]
@@ -208,12 +223,12 @@ fn two_lfos_add_up_and_no_destination_does_nothing() {
     both.tracks[0].lfos[1] = both.tracks[0].lfos[0];
     both.tracks[0].lfos[1].depth = 0x20;
     let out = render(both, flat(), STEP * 5);
-    close(left(&out, STEP * 4), HALF + SWING * 1.5);
+    close(left(&out, STEP * 4), level_gain(HELD + SWING * 1.5));
 
     let mut none = moving(lfo);
     none.tracks[0].lfos[0].destination = None;
     let out = render(none, flat(), STEP * 5);
-    close(left(&out, STEP * 4), HALF);
+    close(left(&out, STEP * 4), level_gain(HELD));
 }
 
 #[test]

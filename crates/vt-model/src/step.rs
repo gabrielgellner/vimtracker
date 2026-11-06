@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::constants::FX_SLOTS;
+use crate::constants::{FX_SLOTS, MAX_LEVEL};
 
 /// Lowest note the format can write, `C-0`.
 pub const MIN_NOTE: u8 = 12;
@@ -41,6 +41,14 @@ pub enum FxCommand {
 }
 
 impl FxCommand {
+    /// The highest value this takes. Those on the level scale stop at its top.
+    pub fn highest(self) -> u8 {
+        match self {
+            Self::Vol | Self::Dly | Self::Rev => MAX_LEVEL,
+            _ => 0xFF,
+        }
+    }
+
     /// The three-letter name used on screen and in files.
     pub fn name(self) -> &'static str {
         match self {

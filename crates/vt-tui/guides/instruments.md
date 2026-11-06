@@ -15,7 +15,7 @@ it.
 | Row | Value |
 |---|---|
 | Sample | A WAV file |
-| Volume | Two hex digits |
+| Volume | Two hex digits. `E0` is 0 dB, as in **Phrases and chains** |
 | Attack | Milliseconds from 0 to 5000, then `Enter` |
 | Release | Milliseconds from 0 to 5000, then `Enter` |
 

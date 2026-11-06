@@ -36,7 +36,8 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 3.  `Enter` plays from the cursor and stops. `Space x` pauses and `Space c` returns to the top.
 4.  `l` moves to the next field. Type an FX name and two hex digits, such as `CUT40` or `RET14`.
 5.  `Space 2` opens the chain view, where `gd` opens a phrase, or adds one on the empty row.
-6.  `:w` saves. `:render loop.wav` writes the loop, ready to drop into Ableton.
+6.  `Space 4` opens the track page: base filter and output values, and two LFOs.
+7.  `:w` saves. `:render loop.wav` writes the loop, ready to drop into Ableton.
 
 `Space Space` jumps between views. `Space ?` opens the guides, short tutorials on each topic,
 and `Space k` lists every key. If you pause after `Space` or another prefix, a popup shows what

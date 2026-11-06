@@ -2,6 +2,12 @@
 
 /// Current `song.ron` format.
 pub const FORMAT_VERSION: u32 = 1;
+/// The level value that leaves a sound as it is, at 0 dB. Above it is headroom.
+pub const UNITY_LEVEL: u8 = 0xE0;
+/// The highest level value, at +6 dB as on Ableton Live's faders. Anything above it snaps to it.
+pub const MAX_LEVEL: u8 = 0xF8;
+/// How many dB one step of a level value is.
+pub const DB_PER_LEVEL: f32 = 0.25;
 /// Tracks the engine prepares state for. Raising this does not affect saved songs.
 pub const MAX_TRACKS: usize = 64;
 /// Tracks in a new project.

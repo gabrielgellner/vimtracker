@@ -8,7 +8,15 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use crate::guides::Guide;
 use crate::theme;
 
-const WIDTH: u16 = 80;
+/// The widest the window gets, since long lines are hard to read.
+const WIDTH: u16 = 100;
+/// The border, and a margin on the right.
+const AROUND_TEXT: u16 = 4;
+
+/// How wide a guide's text is in an area of this width.
+pub fn text_width(width: u16) -> usize {
+    usize::from(WIDTH.min(width).saturating_sub(AROUND_TEXT)).max(1)
+}
 
 /// How many rows of a guide fit in an area of this height, inside the border.
 pub fn page(height: u16) -> usize {
@@ -23,7 +31,11 @@ pub fn draw(frame: &mut Frame, area: Rect, guide: Guide, scroll: usize) {
         width,
         ..area
     };
-    let lines: Vec<_> = guide.lines().into_iter().skip(scroll).collect();
+    let lines: Vec<_> = guide
+        .lines(text_width(area.width))
+        .into_iter()
+        .skip(scroll)
+        .collect();
     frame.render_widget(Clear, window);
     frame.render_widget(
         Paragraph::new(lines).block(

@@ -150,6 +150,7 @@ fn main_loop(
                 views::help::draw_help(frame, body, app);
             }
             app.guide_page = views::guide::page(body.height);
+            app.guide_width = views::guide::text_width(body.width);
             if let Some(guide) = app.guide {
                 views::guide::draw(frame, body, guide, app.guide_scroll);
             }

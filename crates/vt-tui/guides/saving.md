@@ -42,6 +42,10 @@ is on screen now, including mutes, and the screen waits until it finishes.
 | `--rows 8` | Render 8 rows instead of the whole loop |
 | `--tail` | Keep going until delay and reverb die away |
 
+The file starts with every track at its start, and is as long as the `:reset`
+if there is one, or else the longest track. Tracks that don't divide that
+length won't join up when the file repeats, so set a reset or use `--rows`.
+
 From a shell, `vimtracker render my-song out.wav` renders a saved project
 with no sound device. It stops if a sample is missing.
 

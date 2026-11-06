@@ -5,15 +5,15 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::constants::{
-    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MAX_TRANSPOSE,
-    MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
+    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS,
+    MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
 use crate::lfo::Lfo;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
 };
 use crate::song::{Chain, ChainEntry, Instrument, Phrase, Song, lowest_unused};
-use crate::step::{FxSlot, Note, Step};
+use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,6 +234,15 @@ pub enum TrackControl {
     Reverb,
 }
 
+/// An FX slot with its value within what its command takes.
+fn snapped(slot: FxSlot) -> FxSlot {
+    let highest = slot.command.map_or(0xFF, FxCommand::highest);
+    FxSlot {
+        value: slot.value.min(highest),
+        ..slot
+    }
+}
+
 /// Why an edit was refused.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EditError {
@@ -304,7 +313,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
                 FieldValue::Instrument(instrument) => target.instrument = *instrument,
                 FieldValue::Slot(slot, fx) => {
-                    *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = *fx;
+                    *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
                 }
             }
         }
@@ -332,12 +341,16 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     Fill::Instrument(instrument) if has_note => target.instrument = *instrument,
                     Fill::Velocity(_) | Fill::Instrument(_) => {}
                     Fill::Slot(slot, value) => {
-                        *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = *value;
+                        *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
+                            snapped(*value);
                     }
                     Fill::SlotValue(slot, value) => {
                         let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
                         if slot.command.is_some() {
-                            slot.value = *value;
+                            *slot = snapped(FxSlot {
+                                value: *value,
+                                ..*slot
+                            });
                         }
                     }
                 }
@@ -422,14 +435,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?;
-            let base = match control {
-                TrackControl::Cutoff => &mut track.cutoff,
-                TrackControl::Resonance => &mut track.resonance,
-                TrackControl::Pan => &mut track.pan,
-                TrackControl::Delay => &mut track.delay,
-                TrackControl::Reverb => &mut track.reverb,
-            };
-            *base = *value;
+            match control {
+                TrackControl::Cutoff => track.cutoff = *value,
+                TrackControl::Resonance => track.resonance = *value,
+                TrackControl::Pan => track.pan = *value,
+                TrackControl::Delay => track.delay = (*value).min(MAX_LEVEL),
+                TrackControl::Reverb => track.reverb = (*value).min(MAX_LEVEL),
+            }
         }
         Action::SetLfo { track, slot, lfo } => {
             if !lfo.in_range() {
@@ -455,7 +467,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             next.tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
-                .level = *level;
+                .level = (*level).min(MAX_LEVEL);
         }
         Action::SetLength { phrase, length } => {
             let phrase = next
@@ -641,7 +653,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             let instrument = Arc::make_mut(entry);
             match field {
                 InstrumentField::Volume => {
-                    instrument.volume = u8::try_from(*value).map_err(|_| EditError::Volume)?;
+                    let volume = u8::try_from(*value).map_err(|_| EditError::Volume)?;
+                    instrument.volume = volume.min(MAX_LEVEL);
                 }
                 InstrumentField::Attack | InstrumentField::Release => {
                     if *value > MAX_ENVELOPE_MS {

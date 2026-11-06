@@ -332,8 +332,11 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
         step.instrument = Some((i64::from(instrument) + i64::from(by)).max(0) as u32);
     }
     for (index, slot) in step.fx.iter_mut().enumerate() {
-        if scope.covers(3 + index) && slot.command.is_some() {
-            slot.value = (i32::from(slot.value) + by).clamp(0, 0xFF) as u8;
+        if scope.covers(3 + index)
+            && let Some(command) = slot.command
+        {
+            let highest = i32::from(command.highest());
+            slot.value = (i32::from(slot.value) + by).clamp(0, highest) as u8;
         }
     }
 }

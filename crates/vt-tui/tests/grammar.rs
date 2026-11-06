@@ -528,8 +528,9 @@ fn value_entry_commits_two_digits_and_moves_down() {
 fn a_velocity_above_the_top_writes_the_top() {
     check(&[E, E], "liff", &["--- 7F -- ---00 ---00 ---00", E]);
     check(&[FULL], "lrff", &["C-4 7F 00 VOL10 PAN20 CUT30"]);
-    // FX values keep their whole range.
-    check(&[FULL], "llllrff", &["C-4 70 00 VOLFF PAN20 CUT30"]);
+    // Other FX values have their own tops: the level scale's, or their whole range.
+    check(&[FULL], "llllrff", &["C-4 70 00 VOLF8 PAN20 CUT30"]);
+    check(&[FULL], "llllllrff", &["C-4 70 00 VOL10 PANFF CUT30"]);
 }
 
 #[test]
@@ -1184,4 +1185,23 @@ fn rotating_all_the_way_round_leaves_no_undo_step() {
     keys(&mut app, "3[r");
     assert_eq!(steps(&app), [E, A]);
     assert_eq!(app.history.undo_depth(), depth + 1);
+}
+
+#[test]
+fn level_fx_values_snap_to_the_top_of_the_scale() {
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "lllrVOLFF");
+    assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
+    keys(&mut app, "lrFE");
+    assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
+    keys(&mut app, "20+");
+    assert_eq!(steps(&app)[0], "--- -- -- VOLF8 ---00 ---00");
+
+    // Filling a selection snaps too, and other commands keep their whole range.
+    let (mut app, _rt) = app_with(&[E, E]);
+    keys(&mut app, "lllvjrDLYFF");
+    assert_eq!(steps(&app)[1], "--- -- -- DLYF8 ---00 ---00");
+    let (mut app, _rt) = app_with(&[E]);
+    keys(&mut app, "lllrCUTFF");
+    assert_eq!(steps(&app)[0], "--- -- -- CUTFF ---00 ---00");
 }
