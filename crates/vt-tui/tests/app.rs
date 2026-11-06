@@ -3076,3 +3076,114 @@ fn the_status_line_counts_sections_when_there_are_several() {
     press(&mut app, " 1a");
     assert!(status(&app).contains("Sec 2/2"), "{}", status(&app));
 }
+
+/// Run enough audio for reports and a step or more to arrive.
+fn play_on(app: &mut App, realtime: &mut Realtime, steps: usize) {
+    let mut out = vec![0.0; steps * 6000 * 2];
+    realtime.process(&mut out);
+    app.tick();
+}
+
+/// A song view on a second section whose chains differ from the first's.
+fn jamming() -> (App, Realtime) {
+    let (mut app, mut realtime) = app();
+    press(&mut app, " 1allgd 1lgd 1");
+    assert_eq!(app.song().sections[1].chains[..2], [Some(1), Some(1)]);
+    press(&mut app, "\t");
+    special(&mut app, KeyCode::Tab);
+    play_on(&mut app, &mut realtime, 1);
+    assert_eq!(app.transport, Transport::Playing);
+    (app, realtime)
+}
+
+#[test]
+fn enter_cues_this_chain_on_one_track_and_holds_the_section() {
+    let (mut app, mut realtime) = jamming();
+    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.playing_section, 0);
+    press(&mut app, "0ll");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.looping, Some(0), "the jam stays here");
+    play_on(&mut app, &mut realtime, 1);
+    assert_eq!(app.jam[0].cued, Some(Some(1)));
+    assert!(
+        song_text(&app)[4].contains("01~"),
+        "{:?}",
+        song_text(&app)[4]
+    );
+    play_on(&mut app, &mut realtime, 16);
+    assert_eq!(app.jam[0].playing, Some(Some(1)));
+    assert_eq!(app.jam[0].cued, None);
+    assert_eq!(app.jam[1].playing, None, "the other track is untouched");
+    assert!(
+        song_text(&app)[4].contains("01>"),
+        "{:?}",
+        song_text(&app)[4]
+    );
+    assert_eq!(
+        app.song().sections[0].chains[0],
+        Some(0),
+        "the song is unchanged"
+    );
+}
+
+#[test]
+fn enter_and_c_need_the_song_to_be_playing_and_enter_a_track() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains("while playing"), "{}", app.status);
+    press(&mut app, "C");
+    assert!(app.status.contains("start the song"), "{}", app.status);
+    assert_eq!(app.song().sections.len(), 1);
+    let (mut app, _realtime) = jamming();
+    press(&mut app, "0");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains("track's column"), "{}", app.status);
+}
+
+#[test]
+fn c_captures_what_each_track_is_playing_as_one_undo() {
+    let (mut app, mut realtime) = jamming();
+    let depth = app.history.undo_depth();
+    press(&mut app, "0ll");
+    special(&mut app, KeyCode::Enter);
+    play_on(&mut app, &mut realtime, 17);
+    assert_eq!(app.jam[0].playing, Some(Some(1)));
+    press(&mut app, "C");
+    assert_eq!(app.song().sections.len(), 3);
+    assert_eq!(app.song().sections[1].chains[0], Some(1), "launched");
+    assert_eq!(app.song().sections[1].chains[1], Some(0), "from its row");
+    assert_eq!(app.song().sections[1].length, None);
+    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.looping, Some(1));
+    play_on(&mut app, &mut realtime, 1);
+    assert_eq!(app.playing_section, 1, "it carries on in the new row");
+    assert_eq!(app.jam[0].playing, Some(Some(1)), "without restarting");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(app.song().sections.len(), 2);
+}
+
+#[test]
+fn a_stopped_track_captures_as_empty_and_nothing_playing_is_refused() {
+    let (mut app, mut realtime) = jamming();
+    press(&mut app, "0ll");
+    press(&mut app, "x");
+    special(&mut app, KeyCode::Enter);
+    play_on(&mut app, &mut realtime, 17);
+    assert_eq!(app.jam[0].playing, Some(None));
+    press(&mut app, "C");
+    assert_eq!(app.song().sections[1].chains[0], None);
+    assert!(app.song().sections[1].chains[1].is_some());
+
+    let (mut app, mut realtime) = jamming();
+    press(&mut app, "0llx");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "lx");
+    special(&mut app, KeyCode::Enter);
+    play_on(&mut app, &mut realtime, 17);
+    press(&mut app, "C");
+    assert!(app.status.contains("Nothing is playing"), "{}", app.status);
+    assert_eq!(app.song().sections.len(), 2);
+}

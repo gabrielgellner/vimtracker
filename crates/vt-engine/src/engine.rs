@@ -14,9 +14,10 @@ use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::smoother::{coefficient, fast_coefficient};
+use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, Retrigger, SongTime, TrackState};
+use crate::track_state::{DelayedNote, Launched, Retrigger, SongTime, TrackState};
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
@@ -165,6 +166,75 @@ impl Engine {
     /// Send every track back to its start from the next step, leaving the beat where it is.
     pub fn realign(&mut self) {
         self.place = 0;
+        for track in self.tracks.iter_mut() {
+            if let Some(launched) = &mut track.launched {
+                launched.started = 0;
+            }
+        }
+    }
+
+    /// Play a chain on one track when its current one ends, or stop it there.
+    pub fn launch(&mut self, track: usize, chain: Option<u32>) {
+        if let Some(track) = self.tracks.get_mut(track) {
+            track.cued = Some(chain);
+        }
+    }
+
+    /// Carry on in another section as if nothing changed, with launched chains still running.
+    pub fn continue_in(&mut self, section: usize) {
+        self.section = section;
+        self.loop_section = Some(section);
+    }
+
+    /// What a track is launched onto and cued to, while jamming.
+    pub fn jam(&self, track: usize) -> JamState {
+        self.tracks
+            .get(track)
+            .map_or_else(JamState::default, |track| JamState {
+                playing: track.launched.map(|launched| launched.chain),
+                cued: track.cued,
+            })
+    }
+
+    /// Back to every track playing its section's chain.
+    fn clear_launches(&mut self) {
+        for track in self.tracks.iter_mut() {
+            track.launched = None;
+            track.cued = None;
+        }
+    }
+
+    /// The chain a track is playing, and how far into it a place falls.
+    fn track_place(&self, index: usize, section_step: usize) -> Option<(u32, usize)> {
+        if let Some(launched) = self.tracks[index].launched {
+            let place = section_step.saturating_sub(launched.started as usize);
+            return launched.chain.map(|chain| (chain, place));
+        }
+        let section = self.current.song.sections.get(self.section)?;
+        Some(((*section.chains.get(index)?)?, section_step))
+    }
+
+    /// Start what a track has cued, if its chain has just come to an end.
+    fn start_cued(&mut self, index: usize, section_step: usize) {
+        let Some(chain) = self.tracks[index].cued else {
+            return;
+        };
+        let at_end = self
+            .track_place(index, section_step)
+            .is_none_or(|(current, place)| {
+                let length = self.current.song.tracks[index].chain_steps(current);
+                length == 0 || place.is_multiple_of(length)
+            });
+        if at_end {
+            self.tracks[index].cued = None;
+            if chain.is_none() {
+                self.tracks[index].stop();
+            }
+            self.tracks[index].launched = Some(Launched {
+                chain,
+                started: section_step as u64,
+            });
+        }
     }
 
     fn section_steps(&self) -> usize {
@@ -194,6 +264,7 @@ impl Engine {
         self.section = 0;
         self.section_place = 0;
         self.place = 0;
+        self.clear_launches();
     }
 
     /// Move to the next section if this one has played out. False if nothing has any length.
@@ -212,12 +283,15 @@ impl Engine {
                 Some(section) if section < count => section,
                 _ => (self.section + 1) % count,
             };
+            if next != self.section {
+                self.clear_launches();
+            }
             self.section = next;
             self.section_place = 0;
             let section = &song.sections[next];
             if song.section_length(section) > 0 {
                 if section.start == SectionStart::Reset {
-                    self.place = 0;
+                    self.realign();
                 }
                 return true;
             }
@@ -234,6 +308,8 @@ impl Engine {
         self.follow_base(&old);
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
             track.stop();
+            track.launched = None;
+            track.cued = None;
         }
         self.follow_levels();
         self.retune();
@@ -286,6 +362,7 @@ impl Engine {
     /// Start at a step within a section. Only the song's very start resets held values.
     pub fn play_section(&mut self, section: usize, step: usize) {
         self.halt(Transport::Stopped);
+        self.clear_launches();
         if section == 0 && step == 0 {
             self.reset_tracks();
         }
@@ -374,6 +451,7 @@ impl Engine {
     /// Go back to the start, resetting held values and random generators. If playing, stop there.
     pub fn return_to_start(&mut self) {
         self.halt(Transport::Stopped);
+        self.clear_launches();
         self.section = 0;
         self.section_place = 0;
         self.next_step = 0;
@@ -633,7 +711,7 @@ impl Engine {
             return;
         }
         if self.past_reset(self.place) {
-            self.place = 0;
+            self.realign();
         }
         let section_step = self.place as usize;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
@@ -642,6 +720,7 @@ impl Engine {
             if let Some((_, pending)) = self.tracks[index].swung.take() {
                 self.fire_track(index, pending);
             }
+            self.start_cued(index, section_step);
             let delay = self.swing_frames(index, section_step);
             if delay > 0 {
                 self.tracks[index].swung = Some((self.clock + delay, section_step));
@@ -667,16 +746,13 @@ impl Engine {
         self.tracks[index].retrigger = None;
         let current = Arc::clone(&self.current);
         let song = &current.song;
-        let Some(section) = song.sections.get(self.section) else {
-            return;
-        };
-        let Some(Some(chain)) = section.chains.get(index) else {
+        let Some((chain, place)) = self.track_place(index, section_step) else {
             return;
         };
         let Some(owner) = song.tracks.get(index) else {
             return;
         };
-        let Some(position) = owner.chain_position(*chain, section_step) else {
+        let Some(position) = owner.chain_position(chain, place) else {
             return;
         };
         let Some(step) = owner.step_at(position) else {

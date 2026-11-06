@@ -6,7 +6,9 @@
 use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
-use vt_model::constants::{COMMAND_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE};
+use vt_model::constants::{
+    COMMAND_QUEUE, MAX_TRACKS, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
+};
 
 use crate::engine::{Engine, Transport};
 use crate::mixer::Reading;
@@ -38,6 +40,18 @@ pub enum Command {
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
     SetSolo { track: usize, solo: bool },
+    /// Play a chain on one track when its current one ends, or stop it there.
+    Launch { track: usize, chain: Option<u32> },
+    /// Carry on in a captured section, with launched chains still running.
+    ContinueIn { section: usize },
+}
+
+/// What one track is doing while jamming. The outer `None`s mean it's following its section and
+/// nothing is waiting, and the inner ones that it's stopped, or stopping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct JamState {
+    pub playing: Option<Option<u32>>,
+    pub cued: Option<Option<u32>>,
 }
 
 /// What the callback reports back each block.
@@ -55,6 +69,7 @@ pub struct Handle {
     returned: Consumer<Arc<Published>>,
     commands: Producer<Command>,
     telemetry: Consumer<Telemetry>,
+    jam: Consumer<(usize, JamState)>,
     pending: Option<Arc<Published>>,
 }
 
@@ -65,6 +80,9 @@ pub struct Realtime {
     returned: Producer<Arc<Published>>,
     commands: Consumer<Command>,
     telemetry: Producer<Telemetry>,
+    jam: Producer<(usize, JamState)>,
+    /// What the edit thread has been told about each track.
+    reported: [JamState; MAX_TRACKS],
 }
 
 /// Connect an engine to the edit thread.
@@ -73,12 +91,14 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (return_tx, return_rx) = RingBuffer::new(RETURN_QUEUE);
     let (command_tx, command_rx) = RingBuffer::new(COMMAND_QUEUE);
     let (telemetry_tx, telemetry_rx) = RingBuffer::new(TELEMETRY_QUEUE);
+    let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
     (
         Handle {
             versions: version_tx,
             returned: return_rx,
             commands: command_tx,
             telemetry: telemetry_rx,
+            jam: jam_rx,
             pending: None,
         },
         Realtime {
@@ -87,6 +107,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             returned: return_tx,
             commands: command_rx,
             telemetry: telemetry_tx,
+            jam: jam_tx,
+            reported: [JamState::default(); MAX_TRACKS],
         },
     )
 }
@@ -126,6 +148,11 @@ impl Handle {
         latest
     }
 
+    /// The next change in what a track is doing while jamming.
+    pub fn jam_change(&mut self) -> Option<(usize, JamState)> {
+        self.jam.pop().ok()
+    }
+
     /// Whether a version is still waiting to be sent.
     pub fn has_pending(&self) -> bool {
         self.pending.is_some()
@@ -160,6 +187,8 @@ impl Realtime {
                 } => self.engine.audition_section(section, section_step),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
+                Command::Launch { track, chain } => self.engine.launch(track, chain),
+                Command::ContinueIn { section } => self.engine.continue_in(section),
             }
         }
         self.engine.process(out);
@@ -169,6 +198,13 @@ impl Realtime {
             transport: self.engine.transport(),
             reading: self.engine.take_reading(),
         });
+        // A change that doesn't fit stays different, so it goes in a later block.
+        for (track, reported) in self.reported.iter_mut().enumerate() {
+            let state = self.engine.jam(track);
+            if state != *reported && self.jam.push((track, state)).is_ok() {
+                *reported = state;
+            }
+        }
     }
 
     /// The engine, for tests.
@@ -303,6 +339,17 @@ mod tests {
             violations += blocks(&mut rt, 4);
             handle.pump();
         }
+        // Launching, reporting it and capturing don't allocate either.
+        handle.send(Command::PlayFrom { step: 0 });
+        for track in 0..8 {
+            handle.send(Command::Launch {
+                track,
+                chain: (track % 2 == 0).then_some(0),
+            });
+        }
+        handle.send(Command::ContinueIn { section: 0 });
+        violations += blocks(&mut rt, 64);
+        while handle.jam_change().is_some() {}
         let mut removed = song(8, 16);
         removed.tracks[0].phrases.remove(&0);
         handle.publish(published(removed, &pool));

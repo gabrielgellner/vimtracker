@@ -1053,6 +1053,7 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M6: Editing across tracks.** Selections and operators that reach across tracks, as drum parts now spread over several.
 *   **M7: Mixer.** One page of level, pan, sends, mute and solo across all tracks. **Tests:** an edit here matches the same edit on the track page, and is one undo step.
 *   **M8: Songs.** Sections, a song view, section lengths, and each section resetting or carrying track positions. **Tests:** a song plays its sections in order, a render covers a whole song, and stems cover a whole song.
+*   **M8b: Jamming.** Launch a chain on one track while playing, and capture what's playing as a new section. **Tests:** a launch waits for the track's chain to end, stopping a track, a launch ending with its section, capturing without a break, and no allocation in the callback.
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list, and slots naming any parameter on that list. **Tests:** every parameter on the list works with each key from the list alone, an effect's response, reordering, and off costing nothing.
 *   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
 *   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
@@ -1171,6 +1172,20 @@ Made without the author present, on 2026-11-06, following their earlier decision
 **Not included.** Per-track speed, grooves and sections ending mid-step stay in After the milestones.
 
 **Issue.** **Tests:** sections in order and wrapping, lengths, carry and reset, one section unchanged, `:loop`, playing from a section, empty sections, removing the playing one, renders and stems covering a song, and each song view key.
+
+### M8b design: jamming
+
+From the author on 2026-11-06, after Ableton's Capture and Insert Scene, which needs tracks that can be launched one at a time, as in the M8's Live Mode.
+
+**Launching.** `Enter` in the song view, while playing, cues the chain under the cursor on its track. It starts when the track's current chain next ends, the M8's default, and plays from its own start. On a `--` it stops the track at that point and cuts its voice. The first launch keeps the song on the section playing, so the jam doesn't move on.
+
+**State.** Launches live in the engine rather than the song, so undo doesn't touch them. The engine reports what changes to the edit thread, on a queue the callback can't block on. A launch ends when another section starts, or when playing starts again, and survives a section wrapping onto itself. A reset starts a launched chain over with everything else.
+
+**Capture.** `C` adds a section below the one playing, with each track's launched chain, or its row's chain if it has none, as one undo. A stopped track is `--`, and it's refused if everything is stopped. Rows point at the same chains rather than copies, and have no set length. Playback carries on in the new row, with launched chains running, so nothing audible changes.
+
+**Limits to judge in play.** Tracks launched at different times can be out of step, so a captured row can sound different from its start. A launch can't be queued for a whole row at once, and there's no shorter launch quantise than the chain's end. The phrase and chain views' playheads still follow the section's chains rather than a launched one.
+
+**Issue.** **Tests:** as the milestone lists, and each key's refusals.
 
 ### Known Gaps From Review
 
