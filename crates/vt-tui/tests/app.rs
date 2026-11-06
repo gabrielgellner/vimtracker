@@ -4130,3 +4130,32 @@ fn brackets_move_between_tracks_from_every_view() {
         assert_eq!(app.cursor.track, 0, "from {view:?}");
     }
 }
+
+#[test]
+fn the_track_picker_names_a_synths_voice_and_can_find_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4K");
+    press(&mut app, "pl");
+    special(&mut app, KeyCode::Enter);
+    let voice = app.song().tracks[0].synth_voice.name();
+    press(&mut app, " fb");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert!(labels[0].ends_with(voice), "{labels:?}");
+    assert!(!labels[1].ends_with(voice), "{labels:?}");
+
+    press(&mut app, &voice.to_lowercase());
+    assert_eq!(
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|item| item.pick.clone()),
+        Some(Pick::Track(0))
+    );
+}
