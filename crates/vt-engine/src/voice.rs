@@ -1,9 +1,11 @@
 //! Sample playback and its envelope.
 
+use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
 use vt_model::samples::SampleId;
+use vt_model::song::Machine;
 
 use crate::dsp::smoother::fast_coefficient;
 
@@ -25,7 +27,10 @@ enum Stage {
     },
 }
 
-/// One playing sample. It keeps its sample ID until it ends, so replacing an instrument's sample
+/// The frequency of `C-4`, in hertz, for a synth.
+const MIDDLE_C: f64 = 261.625_565_3;
+
+/// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
 /// only affects new notes.
 #[derive(Debug, Clone, Copy)]
 pub struct Voice {
@@ -45,6 +50,9 @@ pub struct Voice {
     elapsed: u64,
     /// Frames until a timed release starts, for previews.
     release_after: Option<u32>,
+    /// A synth to play instead of the sample, and its settings.
+    synth: Option<VirtualAnalog>,
+    settings: Settings,
 }
 
 impl Default for Voice {
@@ -63,6 +71,8 @@ impl Default for Voice {
             rate: 48_000,
             elapsed: 0,
             release_after: None,
+            synth: None,
+            settings: Settings::default(),
         }
     }
 }
@@ -71,6 +81,8 @@ impl Default for Voice {
 #[derive(Debug, Clone, Copy)]
 pub struct NoteOn {
     pub sample: SampleId,
+    /// What plays it. A synth ignores the sample.
+    pub machine: Machine,
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
@@ -96,10 +108,16 @@ impl Voice {
             rate,
             elapsed: 0,
             release_after: note.release_after,
+            synth: (note.machine == Machine::VirtualAnalog).then(VirtualAnalog::new),
+            settings: Settings::default(),
         }
     }
 
     /// Whether it is sounding.
+    pub fn set_synth(&mut self, settings: Settings) {
+        self.settings = settings;
+    }
+
     pub fn active(&self) -> bool {
         self.stage != Stage::Idle
     }
@@ -142,17 +160,27 @@ impl Voice {
         if self.stage == Stage::Idle {
             return [0.0, 0.0];
         }
-        let Some(data) = data else {
-            self.stage = Stage::Idle;
-            return [0.0, 0.0];
+        let source = if let Some(synth) = &mut self.synth {
+            let frequency = MIDDLE_C * self.increment * self.pitch / f64::from(self.rate);
+            let sample = synth.next(frequency as f32, self.settings);
+            [sample, sample]
+        } else {
+            let Some(data) = data else {
+                self.stage = Stage::Idle;
+                return [0.0, 0.0];
+            };
+            let index = self.position as usize;
+            let Some(first) = data.frames.get(index) else {
+                self.stage = Stage::Idle;
+                return [0.0, 0.0];
+            };
+            let second = data.frames.get(index + 1).unwrap_or(first);
+            let fraction = (self.position - index as f64) as f32;
+            [
+                first[0] + (second[0] - first[0]) * fraction,
+                first[1] + (second[1] - first[1]) * fraction,
+            ]
         };
-        let index = self.position as usize;
-        let Some(first) = data.frames.get(index) else {
-            self.stage = Stage::Idle;
-            return [0.0, 0.0];
-        };
-        let second = data.frames.get(index + 1).unwrap_or(first);
-        let fraction = (self.position - index as f64) as f32;
         self.level = match self.stage {
             Stage::Held { from } => self.shape.held(self.elapsed, from, self.rate),
             Stage::Released { from } => self.shape.released(self.elapsed, from, self.rate),
@@ -161,10 +189,7 @@ impl Voice {
         }
         .max(0.0);
         let level = self.level * self.gain;
-        let frame = [
-            (first[0] + (second[0] - first[0]) * fraction) * level,
-            (first[1] + (second[1] - first[1]) * fraction) * level,
-        ];
+        let frame = [source[0] * level, source[1] * level];
         self.pitch += (self.pitch_target - self.pitch) * self.pitch_slew;
         self.position += self.increment * self.pitch;
         if let Some(frames) = &mut self.release_after {

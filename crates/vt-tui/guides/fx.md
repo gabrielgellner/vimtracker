@@ -17,6 +17,9 @@ only takes effect once its value is typed.
 | `RES` | Filter resonance |
 | `DLY` | Delay send |
 | `REV` | Reverb send |
+| `HAR` | A synth's detune |
+| `TIM` | A synth's square |
+| `MOR` | A synth's saw |
 
 `VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback

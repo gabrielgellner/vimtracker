@@ -226,11 +226,14 @@ pub enum Destination {
     Rev,
     /// In semitones, where the others are in their hex units.
     Pitch,
+    Har,
+    Tim,
+    Mor,
 }
 
 impl Destination {
     /// Every destination, in the order `+` goes through them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::Cut,
         Self::Res,
         Self::Pan,
@@ -238,6 +241,9 @@ impl Destination {
         Self::Dly,
         Self::Rev,
         Self::Pitch,
+        Self::Har,
+        Self::Tim,
+        Self::Mor,
     ];
 
     /// The name on screen.
@@ -250,6 +256,9 @@ impl Destination {
             Self::Dly => "Dly",
             Self::Rev => "Rev",
             Self::Pitch => "Pitch",
+            Self::Har => "Har",
+            Self::Tim => "Tim",
+            Self::Mor => "Mor",
         }
     }
 }

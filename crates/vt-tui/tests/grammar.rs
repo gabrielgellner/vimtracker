@@ -1262,7 +1262,7 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "llK");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 12);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 15);
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.mode, Mode::Replace);
     assert_eq!(steps(&app)[0], E, "nothing until the value is typed");

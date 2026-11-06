@@ -1,7 +1,8 @@
 # The track page, envelopes and LFOs
 
 Press `Space 4` for what a track holds apart from its steps, on two pages: Sound
-has its sample, filter and output, and Mod its envelopes and LFOs. FX columns belong
+has its machine, filter and output, with a bar beside each value, and Mod its
+envelopes and LFOs. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -14,7 +15,7 @@ hat pattern.
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
-| `K` | On Dest, Shape, Rate, Retrig or Reset, choose from a list |
+| `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
 
 ## The filter

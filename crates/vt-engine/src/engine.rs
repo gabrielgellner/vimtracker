@@ -8,7 +8,7 @@ use vt_model::constants::{
 };
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
-use vt_model::song::{Launch, Section, SectionStart, Song, Track, level_gain};
+use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 
 use crate::dsp::delay::Delay;
@@ -472,6 +472,9 @@ impl Engine {
                 (FxCommand::Pan, before.pan, track.pan),
                 (FxCommand::Dly, before.delay, track.delay),
                 (FxCommand::Rev, before.reverb, track.reverb),
+                (FxCommand::Har, before.harmonics, track.harmonics),
+                (FxCommand::Tim, before.timbre, track.timbre),
+                (FxCommand::Mor, before.morph, track.morph),
             ];
             for (command, was, now) in controls {
                 if was != now {
@@ -679,12 +682,20 @@ impl Engine {
             0.0,
             1.0,
         );
+        if let Some(state) = self.tracks.get(track) {
+            self.preview.set_synth(state.synth_settings());
+        }
     }
 
     fn note_on(&self, track: usize, note: u8, step_gain: f32, shape: Envelope) -> Option<NoteOn> {
-        let sample = (*self.current.track_samples.get(track)?)?;
+        let machine = self.current.song.tracks.get(track)?.machine;
+        let sample = match machine {
+            Machine::Sample => (*self.current.track_samples.get(track)?)?,
+            Machine::VirtualAnalog => 0,
+        };
         Some(NoteOn {
             sample,
+            machine,
             note,
             gain: step_gain,
             shape,
