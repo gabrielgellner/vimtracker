@@ -1,5 +1,6 @@
 //! Sample playback and its envelope.
 
+use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
 use crate::dsp::kick::Kick;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
@@ -39,6 +40,8 @@ enum Synth {
     VirtualAnalog(VirtualAnalog),
     Fm(Fm),
     Kick(Kick),
+    Snare(Snare),
+    Hat(Hat),
 }
 
 impl Synth {
@@ -48,6 +51,8 @@ impl Synth {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
             SynthVoice::Fm => Self::Fm(Fm::new(rate)),
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
+            SynthVoice::Snare => Self::Snare(Snare::new(rate)),
+            SynthVoice::Hat => Self::Hat(Hat::new(rate)),
         }
     }
 
@@ -57,6 +62,8 @@ impl Synth {
             Self::VirtualAnalog(synth) => synth.next(frequency, settings),
             Self::Fm(synth) => synth.next(frequency, settings),
             Self::Kick(synth) => synth.next(frequency, settings),
+            Self::Snare(synth) => synth.next(frequency, settings),
+            Self::Hat(synth) => synth.next(frequency, settings),
         }
     }
 }
@@ -149,6 +156,20 @@ impl Voice {
     }
 
     /// Whether it is sounding.
+    /// Choose the noise of a synth that uses any, so each hit differs but a render repeats.
+    pub fn seed_noise(&mut self, seed: u32) {
+        match &mut self.synth {
+            Some(Synth::Snare(synth)) => synth.seed(seed),
+            Some(Synth::Hat(synth)) => synth.seed(seed),
+            _ => {}
+        }
+    }
+
+    /// Whether this note's synth draws noise.
+    pub fn uses_noise(&self) -> bool {
+        matches!(self.synth, Some(Synth::Snare(_) | Synth::Hat(_)))
+    }
+
     /// Start the release of a note that would otherwise hold until something ended it.
     pub fn release_if_held(&mut self) {
         if self.holds {

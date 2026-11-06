@@ -1,6 +1,7 @@
 //! Effects, one per file so each can be tested alone.
 
 pub mod delay;
+pub mod drums;
 pub mod filter;
 pub mod fm;
 pub mod kick;

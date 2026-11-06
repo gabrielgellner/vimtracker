@@ -223,3 +223,35 @@ fn a_tailed_render_releases_a_held_note_rather_than_running_on() {
         );
     }
 }
+
+#[test]
+fn the_drums_die_away_by_themselves() {
+    let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
+    for voice in SynthVoice::ALL.into_iter().filter(|voice| !voice.holds()) {
+        let mut drum = on(voice, &steps);
+        drum.tracks[0].morph = 0x20;
+        let out = play(drum, 8);
+        assert!(
+            peak(&out, 7) < peak(&out, 0) * 0.05,
+            "{voice:?}: {} against {}",
+            peak(&out, 7),
+            peak(&out, 0)
+        );
+    }
+}
+
+#[test]
+fn each_snare_hit_has_its_own_noise_and_a_render_repeats() {
+    let mut snare = on(
+        SynthVoice::Snare,
+        &[NOTE, REST, REST, REST, NOTE, REST, REST, REST],
+    );
+    snare.tracks[0].harmonics = 0xC0;
+    let out = play(snare.clone(), 8);
+    let first = &out[..STEP * 2];
+    let second = &out[4 * STEP * 2..5 * STEP * 2];
+    assert!(first != second, "two hits the same");
+    assert!(play(snare.clone(), 8) == out, "the same seed differs");
+    snare.seed = 7;
+    assert!(play(snare, 8) != out, "another seed is the same");
+}
