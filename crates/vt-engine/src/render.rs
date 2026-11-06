@@ -39,18 +39,15 @@ pub fn render_frames(version: Arc<Published>, rate: u32, frames: usize) -> Vec<f
 pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -> Vec<f32> {
     let song = Arc::clone(&version.song);
     let millibpm = song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
-    let Some(section) = song.sections.first() else {
-        return Vec::new();
-    };
     let longest = song.song_steps();
     if longest == 0 {
         return Vec::new();
     }
     // A song with sections is rendered through once, and one section as its loop.
-    let section = if song.sections.len() == 1 {
-        section.reset.unwrap_or(longest)
-    } else {
-        longest
+    let mut playing = song.sections.iter().filter(|s| song.section_length(s) > 0);
+    let section = match (playing.next(), playing.next()) {
+        (Some(only), None) => only.reset.unwrap_or(longest),
+        _ => longest,
     };
     let at_step =
         |step: usize| sample_of_tick(step as u64 * TICKS_PER_STEP, rate, millibpm) as usize;

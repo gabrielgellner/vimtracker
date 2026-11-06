@@ -128,8 +128,8 @@ impl App {
             return;
         };
         let start = match here.start {
-            SectionStart::Carry => SectionStart::Reset,
-            SectionStart::Reset => SectionStart::Carry,
+            SectionStart::New => SectionStart::Reset,
+            SectionStart::Reset => SectionStart::New,
         };
         self.apply(&Action::SetSectionStart {
             section: self.cursor.section,
@@ -137,7 +137,7 @@ impl App {
         });
     }
 
-    /// Back to following the longest chain, carrying, or no chain. Nothing changes if it's there.
+    /// Back to following the longest chain, new, or no chain. Nothing changes if it's there.
     fn clear_song_field(&mut self) {
         let section = self.cursor.section;
         let Some(here) = self.section_here().cloned() else {
@@ -153,7 +153,7 @@ impl App {
                 }
             }
             None => {
-                if here.start != SectionStart::Carry {
+                if here.start != SectionStart::New {
                     self.switch_start();
                 }
             }

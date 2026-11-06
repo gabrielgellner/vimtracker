@@ -231,10 +231,10 @@ fn centre() -> u8 {
 /// What a section does to the tracks when it starts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SectionStart {
-    /// Tracks keep counting from where they are.
+    /// A track given a different chain starts it from its top, and one given the same keeps going.
     #[default]
-    Carry,
-    /// Every track goes back to its start.
+    New,
+    /// Every track goes back to its start, each time the section's length comes round.
     Reset,
 }
 

@@ -114,7 +114,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             section.length.is_none(),
         );
         let start = match section.start {
-            SectionStart::Carry => "carry",
+            SectionStart::New => "new",
             SectionStart::Reset => "reset",
         };
         cell(start.to_owned(), 1, START_WIDTH, false);

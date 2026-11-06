@@ -1068,6 +1068,7 @@ fn other_tracks_light_the_step_they_are_playing() {
         let buffer = terminal.backend().buffer();
         buffer[(41, row + 2)].fg
     };
+    on_the_row_being_edited(&mut app);
     app.playhead = 2;
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
     app.transport = Transport::Playing;
@@ -1595,6 +1596,7 @@ fn the_playhead_marks_where_the_loop_is_playing() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");
     press(&mut app, "2]L");
+    on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     app.playhead = 1;
     app.top = 0;
@@ -1704,6 +1706,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
     assert_eq!(beside(&buffer, 1, 3), note(" D#4", dim));
     assert_eq!(beside(&buffer, 1, 7), note(" G-4", dim));
 
+    on_the_row_being_edited(&mut app);
     // Each track marks where it is in its own loop.
     app.transport = Transport::Playing;
     app.playhead = 5;
@@ -1753,6 +1756,7 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
     assert_eq!(beside(&screen(&app), 0, 0).0, " E-4");
     app.cursor.step = 0;
 
+    on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     app.playhead = 2;
     assert_eq!(beside(&screen(&app), 0, 0).0, ">E-4");
@@ -2891,7 +2895,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
     assert_eq!(app.cursor.section, 0);
     let text = song_text(&app);
     assert!(text[2].contains("Length") && text[2].contains("Start"));
-    assert!(text[3].contains("16") && text[3].contains("carry"));
+    assert!(text[3].contains("16") && text[3].contains("new"));
 }
 
 #[test]
@@ -2919,7 +2923,7 @@ fn the_song_view_edits_length_start_and_chains() {
     assert_eq!(app.song().sections[0].start, SectionStart::Reset);
     assert!(song_text(&app)[3].contains("reset"));
     press(&mut app, "x");
-    assert_eq!(app.song().sections[0].start, SectionStart::Carry);
+    assert_eq!(app.song().sections[0].start, SectionStart::New);
 
     press(&mut app, "ll");
     assert_eq!(column_name(&app), "Track 02 chain");
@@ -3070,6 +3074,39 @@ fn launch_sets_when_launches_start_and_shows_it() {
 }
 
 #[test]
+fn a_playhead_follows_the_chain_a_track_is_on_whichever_row_shows_it() {
+    let (mut app, mut realtime) = jamming();
+    play_on(&mut app, &mut realtime, 3);
+    assert_eq!(app.playing_section, 0);
+    assert_eq!(app.cursor.section, 1);
+    assert_eq!(
+        app.chain_playhead(0, 1),
+        None,
+        "not playing this row's chain"
+    );
+    assert!(app.chain_playhead(0, 0).is_some(), "but this one");
+    press(&mut app, "0ll");
+    special(&mut app, KeyCode::Enter);
+    play_on(&mut app, &mut realtime, 16);
+    assert_eq!(app.jam[0].playing, Some(Some(1)));
+    assert_eq!(app.chain_playhead(0, 0), None, "replaced by the launch");
+    let launched = app.chain_playhead(0, 1).unwrap();
+    assert!(launched < 16, "from the launch's own start: {launched}");
+    assert_eq!(app.chain_playhead(1, 0).map(|step| step < 16), Some(true));
+}
+
+#[test]
+fn space_c_in_a_phrase_plays_from_that_step_of_its_chain() {
+    let (mut app, mut realtime) = app();
+    press(&mut app, "5j c");
+    block(&mut realtime, &mut app);
+    block(&mut realtime, &mut app);
+    app.tick();
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.chain_playhead(0, 0), Some(5));
+}
+
+#[test]
 fn enter_says_when_the_launch_will_start() {
     let (mut app, _realtime) = jamming();
     press(&mut app, "0ll");
@@ -3213,9 +3250,7 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     block(&mut realtime, &mut app);
     app.tick();
     assert_eq!(app.playing_section, 1);
-    assert!(app.playhead_here().is_some());
     press(&mut app, " 1k");
-    assert_eq!(app.playhead_here(), None, "it's playing another section");
     assert!(song_text(&app)[4].contains(">02"), "{:?}", song_text(&app));
     command(&mut app, "loop");
     assert_eq!(app.looping, Some(0));
@@ -3243,6 +3278,14 @@ fn the_status_line_counts_sections_when_there_are_several() {
 }
 
 /// Run enough audio for reports and a step or more to arrive.
+/// Have each track report the chain of the row being edited, for setting a playhead by hand.
+fn on_the_row_being_edited(app: &mut App) {
+    let chains = app.section_here().unwrap().chains.clone();
+    for (jam, chain) in app.jam.iter_mut().zip(chains) {
+        jam.chain = chain;
+    }
+}
+
 fn play_on(app: &mut App, realtime: &mut Realtime, steps: usize) {
     let mut out = vec![0.0; steps * 6000 * 2];
     realtime.process(&mut out);

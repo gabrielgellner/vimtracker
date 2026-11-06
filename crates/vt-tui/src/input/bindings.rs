@@ -325,12 +325,12 @@ const SONG: &[(&str, Cmd, &str)] = &[
     (
         "x",
         Cmd::ClearField,
-        "Follow the longest chain, carry, or no chain",
+        "Follow the longest chain, new, or no chain",
     ),
     (
         "K",
         Cmd::PickValue,
-        "Switch carry and reset, or choose this cell's chain",
+        "Switch new and reset, or choose this cell's chain",
     ),
     (
         "g d",

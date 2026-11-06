@@ -115,14 +115,167 @@ const STEPS: [&str; 3] = [
 ];
 
 #[test]
-fn a_section_carries_positions_by_default_and_can_reset_them() {
-    // Two steps of the first section, so the next carries on from its third step.
-    let mut carry = song(&[&[A, A], &STEPS]);
-    carry.sections[1].length = Some(3);
-    assert_eq!(carry.sections[1].start, SectionStart::Carry);
-    same(&levels(carry.clone(), 5), &[AV, AV, CV, AV, BV]);
-    carry.sections[1].start = SectionStart::Reset;
-    same(&levels(carry, 5), &[AV, AV, AV, BV, CV]);
+fn a_different_chain_starts_from_its_top() {
+    let mut new = song(&[&[A, A], &STEPS]);
+    new.sections[1].length = Some(3);
+    assert_eq!(new.sections[1].start, SectionStart::New);
+    same(&levels(new, 5), &[AV, AV, AV, BV, CV]);
+}
+
+/// A chain of six steps, on two sections of three.
+fn spanning() -> Song {
+    let mut span = song(&[&["C-4 40 ---00 ---00 ---00"], &STEPS]);
+    let steps: Vec<_> = STEPS
+        .iter()
+        .chain(&[A, B, C])
+        .map(|t| t.parse().unwrap())
+        .collect();
+    let track = &mut span.tracks[0];
+    track
+        .phrases
+        .insert(11, Arc::new(Phrase::from_steps(steps)));
+    span.sections[0].chains = vec![Some(11)];
+    span.sections[0].length = Some(3);
+    span.sections[1].chains = vec![Some(11)];
+    span.sections[1].length = Some(3);
+    span
+}
+
+#[test]
+fn the_same_chain_runs_across_sections_and_a_reset_restarts_it() {
+    same(&levels(spanning(), 6), &[AV, BV, CV, AV, BV, CV]);
+    let mut restart = spanning();
+    let steps: Vec<_> = STEPS
+        .iter()
+        .chain(&[C, C, C])
+        .map(|t| t.parse().unwrap())
+        .collect();
+    restart.tracks[0]
+        .phrases
+        .insert(11, Arc::new(Phrase::from_steps(steps)));
+    same(&levels(restart.clone(), 6), &[AV, BV, CV, CV, CV, CV]);
+    restart.sections[1].start = SectionStart::Reset;
+    same(&levels(restart, 6), &[AV, BV, CV, AV, BV, CV]);
+}
+
+#[test]
+fn the_song_wrapping_starts_every_chain_from_its_top() {
+    let mut wrap = song(&[&STEPS, &[C]]);
+    wrap.sections[0].length = Some(2);
+    // The second section keeps the first's chain, which a wrap restarts all the same.
+    wrap.sections[1].chains = wrap.sections[0].chains.clone();
+    wrap.sections[1].length = Some(2);
+    same(&levels(wrap, 8), &[AV, BV, CV, AV, AV, BV, CV, AV]);
+}
+
+#[test]
+fn a_wrap_keeps_the_running_count_so_swing_doesnt_change() {
+    let mut wrap = song(&[&[A, A, A], &[B, B]]);
+    wrap.swing = 667;
+    let frames = |wrap: Song| {
+        let mut engine = Engine::new(RATE, version(wrap));
+        engine.play_from(0);
+        let mut out = vec![0.0; 7 * STEP * 2];
+        engine.process(&mut out);
+        engine.position()
+    };
+    assert!(frames(wrap) >= 6, "the count kept going past the wrap");
+}
+
+#[test]
+fn an_empty_row_doesnt_change_a_song_of_one() {
+    let looped = song(&[&[A], &STEPS]);
+    let mut alone = looped.clone();
+    alone.sections[0].length = Some(4);
+    alone.sections[0].chains = vec![Some(11)];
+    alone.sections.truncate(1);
+    let mut extra = alone.clone();
+    extra.sections.push(Section {
+        chains: vec![None],
+        ..Section::default()
+    });
+    same(&levels(extra.clone(), 9), &levels(alone.clone(), 9));
+    assert_eq!(
+        render_loop(version(extra), RATE, RenderOptions::default()),
+        render_loop(version(alone), RATE, RenderOptions::default()),
+    );
+}
+
+#[test]
+fn a_launch_ending_on_the_same_chain_keeps_going() {
+    let mut moving = song(&[&[A, A, A, A], &STEPS, &[C]]);
+    moving.sections[0].length = Some(4);
+    moving.sections[1].length = Some(2);
+    moving.sections[2].chains = vec![Some(11)];
+    moving.launch = Launch::every(2).unwrap();
+    let mut engine = Engine::new(RATE, version(moving));
+    engine.play_from(0);
+    let mut out = vec![0.0; 3000 * 2];
+    engine.process(&mut out);
+    engine.launch(0, Some(11));
+    let mut rest = vec![0.0; 7 * STEP * 2];
+    engine.process(&mut rest);
+    out.extend_from_slice(&rest);
+    let got: Vec<f32> = (0..7).map(|step| out[(step * STEP + 3000) * 2]).collect();
+    // Launched at step 2, and the second section's chain is the same chain, so it runs on through.
+    same(&got, &[AV, AV, AV, BV, CV, AV, BV]);
+}
+
+/// The levels from a section on, playing from it or playing through to it.
+fn from_and_through(
+    song: Song,
+    section: usize,
+    before: usize,
+    steps: usize,
+) -> (Vec<f32>, Vec<f32>) {
+    let through = levels(song.clone(), before + steps)[before..].to_vec();
+    let mut engine = Engine::new(RATE, version(song));
+    engine.play_section(section, 0);
+    let mut out = vec![0.0; steps * STEP * 2];
+    engine.process(&mut out);
+    let from = (0..steps)
+        .map(|step| out[(step * STEP + 3000) * 2])
+        .collect();
+    (from, through)
+}
+
+#[test]
+fn playing_from_a_row_stands_where_playing_through_would() {
+    let (from, through) = from_and_through(spanning(), 1, 3, 3);
+    same(&from, &through);
+    same(&from, &[AV, BV, CV]);
+}
+
+#[test]
+fn playing_from_a_row_accounts_for_resets_before_it() {
+    let longest = [A, B, C, A, B, C, A, B, C, A, B, C];
+    let cases = [
+        (Some(4), SectionStart::New),
+        (Some(16), SectionStart::New),
+        (None, SectionStart::Reset),
+    ];
+    for (reset, start) in cases {
+        let mut song = song(&[&longest, &[C], &[C]]);
+        song.sections[0].length = Some(5);
+        song.sections[0].reset = reset;
+        song.sections[1].chains = vec![Some(10)];
+        song.sections[1].length = Some(3);
+        song.sections[1].start = start;
+        song.sections[2].chains = vec![Some(10)];
+        song.sections[2].length = Some(3);
+        let (from, through) = from_and_through(song, 2, 8, 3);
+        same(&from, &through);
+    }
+}
+
+#[test]
+fn a_track_can_be_placed_past_where_the_row_has_got_to() {
+    let mut engine = Engine::new(RATE, version(spanning()));
+    engine.play_section(0, 1);
+    engine.place_track(0, 4);
+    let mut out = vec![0.0; 2 * STEP * 2];
+    engine.process(&mut out);
+    same(&[out[3000 * 2], out[(STEP + 3000) * 2]], &[BV, CV]);
 }
 
 #[test]
