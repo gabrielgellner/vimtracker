@@ -10,7 +10,7 @@ use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::Scope;
 use vt_model::step::{FxSlot, Mark, Step};
 
-use crate::app::{App, Field};
+use crate::app::{App, Field, TrackSpan};
 use crate::input::mode::Mode;
 use crate::theme;
 
@@ -142,16 +142,28 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
 
 /// The other tracks' columns on one row. Row `00` is each track's own loop start, and past its
 /// end the column is blank, so it shows the track's real length.
-fn column_spans(columns: &[Option<Column>], row: isize) -> Vec<Span<'static>> {
+fn column_spans(
+    columns: &[Option<Column>],
+    tracks: &[usize],
+    row: isize,
+    selected: Option<(TrackSpan, isize, isize)>,
+) -> Vec<Span<'static>> {
     columns
         .iter()
-        .map(|column| {
+        .zip(tracks)
+        .map(|(column, track)| {
+            let in_selection = selected.is_some_and(|(span, first, last)| {
+                span.contains(*track) && (first..=last).contains(&row)
+            });
             let found = column.as_ref().and_then(|column| {
                 let step = column.steps.get(usize::try_from(row).ok()?)?;
                 Some((step, column.playing == usize::try_from(row).ok()))
             });
             match found {
                 Some((step, true)) => Span::styled(format!(">{}", step.note), theme::active()),
+                Some((step, false)) if in_selection => {
+                    Span::styled(format!(" {}", step.note), theme::selected())
+                }
                 Some((step, false)) => Span::styled(format!(" {}", step.note), theme::dim()),
                 None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH)),
             }
@@ -204,6 +216,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let selection = selection
         .or(app.replacing_selection.map(|(selection, _)| selection))
         .or(app.shape.as_ref().map(|panel| panel.selection));
+    let across = selection.map(|s| {
+        let start = app.extent().start as isize;
+        (
+            s.tracks,
+            s.range.first as isize - start,
+            s.range.last as isize - start,
+        )
+    });
     let playhead = playhead_step(app);
     let body_width = phrase
         .steps()
@@ -279,7 +299,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(format!("{left}{}{right}", fill.repeat(body_width)), edge),
                 Span::raw(" "),
             ];
-            spans.extend(column_spans(&columns, row));
+            spans.extend(column_spans(&columns, &others, row, across));
             lines.push(Line::from(spans));
             continue;
         };
@@ -334,7 +354,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::raw(" ".repeat(padding)));
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
-        spans.extend(column_spans(&columns, row));
+        spans.extend(column_spans(&columns, &others, row, across));
         lines.push(Line::from(spans));
     }
     if !(top..top + height).contains(&stored) || stored >= rows {

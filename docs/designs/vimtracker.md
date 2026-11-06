@@ -1135,7 +1135,16 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 ### M6 design: editing across tracks
 
-To be written when M5 is done.
+Column folding stays in M11. This adds one thing: a Visual selection can reach other tracks with `W` and `B`, and the operators that already work on a selection then work on all of them, as one undo step.
+
+*   **Rows.** A selection is rows of the focused phrase and a run of tracks. `W` and `B` extend the run and leave the cursor on its track, so reaching a shorter track doesn't change the rows. On another track those rows count from that phrase's own loop start, as the neighbour columns show them, on the phrase it's on level with the cursor. Rows a phrase doesn't have are left out.
+*   **Columns.** The same columns on each track. A neighbour column only shows notes, so it lights up by row even when the selection is FX columns.
+*   **Shared phrases.** A phrase two selected tracks share changes once.
+*   **Operators.** `d`, `y`, `>`, `<`, `=`, `-`, `+`, `_`, `r` and `~` work across tracks. Shape refuses, as a shape belongs to one column.
+*   **Copy and paste.** A block keeps each track's steps, and `p` puts them on the tracks from the cursor's onward at the same row. Tracks past the last are dropped.
+*   **Repeat.** `.` repeats on the same number of tracks from the cursor, apart from `r`, which repeats on one track outside Visual.
+
+**Issue.** **Tests:** `d`, `>`, `~` and `r` across tracks, one undo step, a shared phrase changing once, a shorter phrase, a slid loop, `y` then `p`, paste past the last track, `.` repeating, `gv`, Shape refusing, and the neighbour columns lighting up.
 
 ### Known Gaps From Review
 

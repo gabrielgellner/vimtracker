@@ -41,6 +41,34 @@ use crate::tree::{ChainColumn, Place};
 pub struct Selection {
     pub range: StepRange,
     pub scope: Scope,
+    pub tracks: TrackSpan,
+}
+
+/// An inclusive run of tracks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrackSpan {
+    pub first: usize,
+    pub last: usize,
+}
+
+impl TrackSpan {
+    /// A span covering two tracks, in either order.
+    pub fn between(a: usize, b: usize) -> Self {
+        Self {
+            first: a.min(b),
+            last: a.max(b),
+        }
+    }
+
+    /// How many tracks it covers.
+    pub fn count(self) -> usize {
+        self.last - self.first + 1
+    }
+
+    /// Whether it covers a track.
+    pub fn contains(self, track: usize) -> bool {
+        (self.first..=self.last).contains(&track)
+    }
 }
 
 /// How far `c` and `v` move the note velocity in Insert: its top digit.
@@ -133,6 +161,8 @@ pub struct App {
     pub(crate) awaiting_register: bool,
     pub(crate) registers: HashMap<char, Block>,
     pub(crate) anchor: Option<(usize, Scope)>,
+    /// How far a selection reaches across tracks from the cursor's.
+    pub(crate) anchor_track: Option<usize>,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
     /// Changes each time random values are wanted anew.
@@ -212,6 +242,7 @@ impl App {
             awaiting_register: false,
             registers: HashMap::new(),
             anchor: None,
+            anchor_track: None,
             shape: None,
             shape_seed: 0,
             replacing_selection: None,
@@ -758,7 +789,7 @@ impl App {
     }
 
     /// Move to another track, staying at the same position in the section.
-    fn move_track(&mut self, by: isize) {
+    pub(crate) fn move_track(&mut self, by: isize) {
         let last = self.song().tracks.len() as isize - 1;
         let track = (self.cursor.track as isize + by).clamp(0, last) as usize;
         if track == self.cursor.track {

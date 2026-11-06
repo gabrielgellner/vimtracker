@@ -9,7 +9,7 @@ use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target,
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{Note, Step};
 
-use crate::app::{App, Entry, Selection};
+use crate::app::{App, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
@@ -68,8 +68,12 @@ pub enum Cover {
     Target(Target, Option<usize>),
     /// `count` whole steps from the cursor.
     Steps(usize),
-    /// A selection's size, from the cursor, in the columns it covered.
-    Sized { steps: usize, scope: Scope },
+    /// A selection's size, from the cursor, in the columns and tracks it covered.
+    Sized {
+        steps: usize,
+        scope: Scope,
+        tracks: usize,
+    },
 }
 
 impl App {
@@ -157,6 +161,8 @@ impl App {
                 self.count = None;
             }
             Cmd::CycleMark => self.cycle_mark_key(),
+            Cmd::NextTrack if self.mode.is_visual() => self.reach_track(1),
+            Cmd::PreviousTrack if self.mode.is_visual() => self.reach_track(-1),
             Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
                     register: self.register,
@@ -209,12 +215,13 @@ impl App {
         if self.mode.is_visual() {
             let selection = self.current_selection();
             self.count = None;
-            self.apply_operator(op, selection.range, selection.scope);
+            self.apply_operator(op, selection.range, selection.scope, selection.tracks);
             self.last_change = Some(Change::Operator {
                 op,
                 cover: Cover::Sized {
                     steps: selection.range.len(),
                     scope: selection.scope,
+                    tracks: selection.tracks.count(),
                 },
             });
             self.leave_visual(selection);
@@ -282,7 +289,7 @@ impl App {
                 StepRange::between(step, (step + steps - 1).min(extent.last_stored())),
                 Scope::WHOLE,
             ),
-            Cover::Sized { steps, scope } => (
+            Cover::Sized { steps, scope, .. } => (
                 StepRange::between(step, (step + steps - 1).min(extent.last_stored())),
                 scope,
             ),
@@ -297,31 +304,88 @@ impl App {
         self.count = None;
         self.operator_count = None;
         let (range, scope) = self.resolve_cover(cover);
-        self.apply_operator(op, range, scope);
+        self.apply_operator(op, range, scope, self.span_of(cover));
         self.register = None;
         if op != Op::Copy {
             self.last_change = Some(Change::Operator { op, cover });
         }
     }
 
-    /// Do what an operator means, on a resolved range.
-    fn apply_operator(&mut self, op: Op, range: StepRange, scope: Scope) {
-        let Some(phrase) = self.phrase_id() else {
-            return;
+    /// The tracks a recorded change covers, from the cursor's.
+    fn span_of(&self, cover: Cover) -> TrackSpan {
+        let tracks = match cover {
+            Cover::Sized { tracks, .. } => tracks,
+            _ => 1,
         };
+        let last = (self.song().tracks.len()).saturating_sub(1);
+        TrackSpan {
+            first: self.cursor.track,
+            last: (self.cursor.track + tracks - 1).min(last),
+        }
+    }
+
+    /// The phrase a track is on, level with the cursor, and where its loop starts.
+    fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
+        let song = self.song();
+        let id = if track == self.cursor.track {
+            self.phrase_id()?
+        } else {
+            let chain = (*song.sections.first()?.chains.get(track)?)?;
+            song.chain_position(chain, self.section_step())?.phrase
+        };
+        Some((id, song.phrases.get(&id)?.start()))
+    }
+
+    /// Where these rows of the focused phrase fall on a track. Rows count from each phrase's own
+    /// loop start, as they do on screen, and any a phrase doesn't have are left out.
+    fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
+        let (phrase, start) = self.phrase_beside(track)?;
+        let focus = self.extent().start as isize;
+        let stored = self.song().phrases.get(&phrase)?.steps().len() as isize;
+        let first = (range.first as isize - focus + start as isize).max(0);
+        let last = (range.last as isize - focus + start as isize).min(stored - 1);
+        (first <= last).then(|| (phrase, StepRange::between(first as usize, last as usize)))
+    }
+
+    /// Make the same edit on each phrase these tracks cover, once each, as one change.
+    fn edit_across(
+        &mut self,
+        range: StepRange,
+        tracks: TrackSpan,
+        edit: impl Fn(u32, StepRange) -> Action,
+    ) {
+        let mut seen = Vec::new();
+        let mut actions = Vec::new();
+        for track in tracks.first..=tracks.last {
+            if let Some((phrase, range)) = self.place_on(track, range)
+                && !seen.contains(&phrase)
+            {
+                seen.push(phrase);
+                actions.push(edit(phrase, range));
+            }
+        }
+        match actions.len() {
+            0 => {}
+            1 => self.apply(&actions[0]),
+            _ => self.apply(&Action::Batch(actions)),
+        }
+    }
+
+    /// Do what an operator means, on a resolved range.
+    fn apply_operator(&mut self, op: Op, range: StepRange, scope: Scope, tracks: TrackSpan) {
         match op {
             Op::Clear => {
-                self.copy_block(phrase, range, scope, false);
-                self.apply(&Action::Clear {
+                self.copy_block(range, scope, tracks, false);
+                self.edit_across(range, tracks, |phrase, range| Action::Clear {
                     phrase,
                     range,
                     scope,
                 });
             }
-            Op::Copy => self.copy_block(phrase, range, scope, true),
+            Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
-                self.apply(&Action::Shift {
+                self.edit_across(range, tracks, |phrase, range| Action::Shift {
                     phrase,
                     range,
                     scope,
@@ -335,12 +399,21 @@ impl App {
 
     /// Fill the unnamed register, and a named one if chosen. Only a copy reaches register `0`, so
     /// a cut can never overwrite it.
-    fn copy_block(&mut self, phrase: u32, range: StepRange, scope: Scope, copying: bool) {
-        let Some(source) = self.song().phrases.get(&phrase).cloned() else {
-            return;
+    fn copy_block(&mut self, range: StepRange, scope: Scope, tracks: TrackSpan, copying: bool) {
+        let mut copied: Vec<Vec<Step>> = (tracks.first..=tracks.last)
+            .map(|track| {
+                self.place_on(track, range)
+                    .map_or_else(Vec::new, |(phrase, range)| {
+                        self.song().phrases[&phrase].steps()[range.first..=range.last].to_vec()
+                    })
+            })
+            .collect();
+        let steps = copied.remove(0);
+        let block = Block {
+            scope,
+            steps,
+            other_tracks: copied,
         };
-        let steps = source.steps()[range.first..=range.last].to_vec();
-        let block = Block { scope, steps };
         if let Some(name) = self.register.filter(|name| *name != YANK_REGISTER) {
             self.registers.insert(name, block.clone());
         }
@@ -354,11 +427,12 @@ impl App {
         self.count = None;
         if self.mode.is_visual() {
             let selection = self.current_selection();
-            self.cycle_mark(selection.range, selection.scope);
+            self.cycle_mark(selection.range, selection.scope, selection.tracks);
             self.last_change = Some(Change::CycleMark {
                 cover: Cover::Sized {
                     steps: selection.range.len(),
                     scope: selection.scope,
+                    tracks: selection.tracks.count(),
                 },
             });
             self.leave_visual(selection);
@@ -372,25 +446,24 @@ impl App {
     }
 
     /// Move every value covered to the mark after the first one's, so a mix ends up the same.
-    fn cycle_mark(&mut self, range: StepRange, scope: Scope) {
-        let Some(phrase) = self.phrase_id() else {
-            return;
-        };
-        let song = self.song();
-        let steps = song.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
-        let last = range.last.min(steps.len().saturating_sub(1));
-        let first = steps
-            .get(range.first..=last)
-            .and_then(|steps| steps.iter().find_map(|step| first_value(step, scope)));
+    fn cycle_mark(&mut self, range: StepRange, scope: Scope, tracks: TrackSpan) {
+        let first = (tracks.first..=tracks.last).find_map(|track| {
+            let (phrase, range) = self.place_on(track, range)?;
+            let steps = self.song().phrases.get(&phrase)?.steps();
+            steps[range.first..=range.last]
+                .iter()
+                .find_map(|step| first_value(step, scope))
+        });
         let Some(first) = first else {
             self.status = "No value to mark here, as events have no marks".to_owned();
             return;
         };
-        self.apply(&Action::SetMark {
+        let mark = first.mark.next();
+        self.edit_across(range, tracks, |phrase, range| Action::SetMark {
             phrase,
             range,
             scope,
-            mark: first.mark.next(),
+            mark,
         });
     }
 
@@ -399,12 +472,13 @@ impl App {
         let by = sign.saturating_mul(amount);
         if self.mode.is_visual() {
             let selection = self.current_selection();
-            self.apply_increment(by, selection.range, selection.scope, kind);
+            self.apply_increment(by, selection.range, selection.scope, selection.tracks, kind);
             self.last_change = Some(Change::Increment {
                 by,
                 cover: Cover::Sized {
                     steps: selection.range.len(),
                     scope: selection.scope,
+                    tracks: selection.tracks.count(),
                 },
                 kind,
             });
@@ -511,7 +585,7 @@ impl App {
         };
         let mut steps = 1;
         if let Some((selection, depth)) = self.replacing_selection.take() {
-            self.fill(selection.range, field, &value);
+            self.fill(selection.range, selection.tracks, field, &value);
             self.history.squash_to(depth);
             self.cursor.step = selection.range.first;
             steps = selection.range.len();
@@ -524,10 +598,7 @@ impl App {
     }
 
     /// Write a replaced field's value across steps.
-    fn fill(&mut self, range: StepRange, field: Field, value: &Step) {
-        let Some(phrase) = self.phrase_id() else {
-            return;
-        };
+    fn fill(&mut self, range: StepRange, tracks: TrackSpan, field: Field, value: &Step) {
         let fill = match field {
             Field::Note => Fill::Note {
                 note: value.note,
@@ -537,23 +608,28 @@ impl App {
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
         };
-        self.apply(&Action::Fill {
+        self.edit_across(range, tracks, |phrase, range| Action::Fill {
             phrase,
             range,
             fill,
         });
     }
 
-    fn apply_increment(&mut self, by: i32, range: StepRange, scope: Scope, kind: Shift) {
-        if let Some(phrase) = self.phrase_id() {
-            self.apply(&Action::Shift {
-                phrase,
-                range,
-                scope,
-                by,
-                kind,
-            });
-        }
+    fn apply_increment(
+        &mut self,
+        by: i32,
+        range: StepRange,
+        scope: Scope,
+        tracks: TrackSpan,
+        kind: Shift,
+    ) {
+        self.edit_across(range, tracks, |phrase, range| Action::Shift {
+            phrase,
+            range,
+            scope,
+            by,
+            kind,
+        });
     }
 
     /// Run a recorded change at the cursor.
@@ -561,15 +637,15 @@ impl App {
         match change {
             Change::Operator { op, cover } => {
                 let (range, scope) = self.resolve_cover(*cover);
-                self.apply_operator(*op, range, scope);
+                self.apply_operator(*op, range, scope, self.span_of(*cover));
             }
             Change::Increment { by, cover, kind } => {
                 let (range, scope) = self.resolve_cover(*cover);
-                self.apply_increment(*by, range, scope, *kind);
+                self.apply_increment(*by, range, scope, self.span_of(*cover), *kind);
             }
             Change::CycleMark { cover } => {
                 let (range, scope) = self.resolve_cover(*cover);
-                self.cycle_mark(range, scope);
+                self.cycle_mark(range, scope, self.span_of(*cover));
             }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
@@ -597,7 +673,13 @@ impl App {
             } if *steps > 1 => {
                 let last = self.extent().last_stored();
                 let end = self.cursor.step.saturating_add(*steps - 1).min(last);
-                self.fill(StepRange::between(self.cursor.step, end), *field, value);
+                let one = TrackSpan::between(self.cursor.track, self.cursor.track);
+                self.fill(
+                    StepRange::between(self.cursor.step, end),
+                    one,
+                    *field,
+                    value,
+                );
             }
             Change::Replace { field, value, .. } => {
                 let Some(phrase) = self.phrase_id() else {
@@ -637,14 +719,44 @@ impl App {
                 if let Some(phrase) = self.phrase_id() {
                     let length = block.steps.len().saturating_mul(*times);
                     let before = Arc::clone(self.song());
-                    self.apply(&Action::Paste {
+                    let group = self.cursor.field.group();
+                    let row = self.cursor.step as isize - self.extent().start as isize;
+                    let mut actions = vec![Action::Paste {
                         phrase,
                         at: self.cursor.step,
-                        group: self.cursor.field.group(),
-                        block,
+                        group,
+                        block: Block {
+                            other_tracks: Vec::new(),
+                            ..block.clone()
+                        },
                         times: *times,
                         merge: *merge,
-                    });
+                    }];
+                    // Further tracks take theirs at the same row, and past the last are dropped.
+                    for (offset, steps) in block.other_tracks.iter().enumerate() {
+                        let track = self.cursor.track + offset + 1;
+                        if let Some((phrase, start)) = self.phrase_beside(track)
+                            && let Ok(at) = usize::try_from(start as isize + row)
+                        {
+                            actions.push(Action::Paste {
+                                phrase,
+                                at,
+                                group,
+                                block: Block {
+                                    scope: block.scope,
+                                    steps: steps.clone(),
+                                    other_tracks: Vec::new(),
+                                },
+                                times: *times,
+                                merge: *merge,
+                            });
+                        }
+                    }
+                    if actions.len() == 1 {
+                        self.apply(&actions[0]);
+                    } else {
+                        self.apply(&Action::Batch(actions));
+                    }
                     if *advance && !Arc::ptr_eq(&before, self.song()) {
                         self.move_step(length.min(isize::MAX as usize) as isize);
                     }
@@ -664,17 +776,28 @@ impl App {
             let selection = self.current_selection();
             match change {
                 Change::Operator { op, .. } => {
-                    self.apply_operator(op, selection.range, selection.scope);
+                    self.apply_operator(op, selection.range, selection.scope, selection.tracks);
                 }
                 Change::Increment { by, kind, .. } => {
-                    self.apply_increment(by, selection.range, selection.scope, kind);
+                    self.apply_increment(
+                        by,
+                        selection.range,
+                        selection.scope,
+                        selection.tracks,
+                        kind,
+                    );
                 }
-                Change::ClearField => {
-                    self.apply_operator(Op::Clear, selection.range, selection.scope)
+                Change::ClearField => self.apply_operator(
+                    Op::Clear,
+                    selection.range,
+                    selection.scope,
+                    selection.tracks,
+                ),
+                Change::CycleMark { .. } => {
+                    self.cycle_mark(selection.range, selection.scope, selection.tracks)
                 }
-                Change::CycleMark { .. } => self.cycle_mark(selection.range, selection.scope),
                 Change::Replace { field, value, .. } => {
-                    self.fill(selection.range, field, &value);
+                    self.fill(selection.range, selection.tracks, field, &value);
                 }
                 Change::Shape { column, shape, .. } => {
                     self.shape_again(selection.range, column, shape);
@@ -687,6 +810,14 @@ impl App {
         }
     }
 
+    /// Reach another track from a selection. The cursor stays where it is, so moving between
+    /// tracks of different lengths doesn't change which rows are selected.
+    fn reach_track(&mut self, by: isize) {
+        let last = self.song().tracks.len() as isize - 1;
+        let from = self.anchor_track.unwrap_or(self.cursor.track) as isize;
+        self.anchor_track = Some((from + by).clamp(0, last) as usize);
+    }
+
     fn enter_visual(&mut self, mode: Mode) {
         let scope = if mode == Mode::VisualStep {
             Scope::WHOLE
@@ -694,6 +825,7 @@ impl App {
             Scope::column(self.cursor.field.group())
         };
         self.anchor = Some((self.cursor.step, scope));
+        self.anchor_track = Some(self.cursor.track);
         self.selection_scope = None;
         self.mode = mode;
         self.count = None;
@@ -715,9 +847,11 @@ impl App {
                 }
             }
         };
+        let anchor_track = self.anchor_track.unwrap_or(self.cursor.track);
         Selection {
             range: StepRange::between(start, self.cursor.step),
             scope,
+            tracks: TrackSpan::between(anchor_track, self.cursor.track),
         }
     }
 
@@ -740,6 +874,8 @@ impl App {
         self.cursor.step = selection.range.first;
         self.mode = Mode::Normal;
         self.anchor = None;
+        self.anchor_track = None;
+        self.move_track(selection.tracks.first as isize - self.cursor.track as isize);
         self.selection_scope = None;
         self.clamp_cursor();
     }
@@ -750,7 +886,9 @@ impl App {
             return;
         };
         self.anchor = Some((selection.range.first, selection.scope));
+        self.anchor_track = Some(selection.tracks.last);
         self.selection_scope = Some(selection.scope);
+        self.move_track(selection.tracks.first as isize - self.cursor.track as isize);
         self.cursor.step = selection.range.last;
         self.mode = if selection.scope.is_whole() {
             Mode::VisualStep

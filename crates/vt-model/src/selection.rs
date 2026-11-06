@@ -374,6 +374,8 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
 pub struct Block {
     pub scope: Scope,
     pub steps: Vec<Step>,
+    /// What came from the tracks after the first, if it covered several.
+    pub other_tracks: Vec<Vec<Step>>,
 }
 
 /// Why a paste was refused.

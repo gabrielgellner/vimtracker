@@ -299,6 +299,8 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
 
 /// Keys that act on a selection.
 const VISUAL: &[(&str, Cmd, &str)] = &[
+    ("W", Cmd::NextTrack, "Reach the next track"),
+    ("B", Cmd::PreviousTrack, "Reach the previous track"),
     ("d", Cmd::Operator(Op::Clear), "Clear the selection"),
     ("y", Cmd::Operator(Op::Copy), "Copy the selection"),
     (">", Cmd::Operator(Op::ShiftUp), "Shift the selection up"),

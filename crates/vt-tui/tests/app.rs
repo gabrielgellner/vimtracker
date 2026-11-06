@@ -2715,3 +2715,19 @@ fn render_stems_writes_a_named_file_per_track() {
     assert!(app.status.contains("1 stem to"), "{}", app.status);
     assert!(!quieter.join("01-BD.wav").exists());
 }
+
+#[test]
+fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let selected = vt_tui::theme::selected().bg;
+
+    press(&mut app, "lVW");
+    assert!(app.mode.is_visual());
+    let buffer = screen(&app);
+    assert_eq!(buffer[(42, 2)].bg, selected.unwrap());
+    assert_ne!(
+        buffer[(42, 3)].bg,
+        selected.unwrap(),
+        "only the rows selected"
+    );
+}

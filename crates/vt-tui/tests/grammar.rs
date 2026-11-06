@@ -1641,3 +1641,155 @@ fn w_stops_at_the_last_slot_and_a_row_end_operator_covers_it() {
     assert_eq!(app.cursor.field, Field::FxCommand(2));
     check(&[FULL], "d$", &["--- -- ---00 ---00 ---00"]);
 }
+
+/// An app with these steps on each of several tracks, each with its own phrase.
+fn tracks_with(rows: &[&[&str]]) -> (App, Realtime) {
+    let mut song = Song::new(rows.len());
+    for (id, steps) in rows.iter().enumerate() {
+        let steps: Vec<Step> = steps.iter().map(|s| s.parse().unwrap()).collect();
+        song.phrases
+            .insert(id as u32, Arc::new(Phrase::from_steps(steps)));
+    }
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+fn track_steps(app: &App, phrase: u32) -> Vec<String> {
+    app.song().phrases[&phrase]
+        .steps()
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+const N: &str = "C-4 40 CUT20 ---00 ---00";
+const GONE: &str = "--- -- ---00 ---00 ---00";
+
+#[test]
+fn a_selection_reaches_other_tracks_and_clears_them_as_one_undo() {
+    let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N, N, N], &[N, N, N]]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "VjWd");
+    assert_eq!(track_steps(&app, 0), [GONE, GONE, N]);
+    assert_eq!(track_steps(&app, 1), [GONE, GONE, N]);
+    assert_eq!(track_steps(&app, 2), [N, N, N], "the third wasn't reached");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.cursor.track, 0, "it lands on the first track");
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 1), [N, N, N]);
+}
+
+#[test]
+fn b_reaches_backwards_and_operators_change_each_track() {
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "WlvB=");
+    assert_eq!(app.cursor.track, 0, "it lands on the first track");
+    assert_eq!(track_steps(&app, 0), ["C-4 41 CUT20 ---00 ---00"]);
+    assert_eq!(track_steps(&app, 1), ["C-4 41 CUT20 ---00 ---00"]);
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "VW>");
+    assert_eq!(track_steps(&app, 1), ["C#4 40 CUT20 ---00 ---00"]);
+    assert_eq!(track_steps(&app, 0), ["C#4 40 CUT20 ---00 ---00"]);
+}
+
+#[test]
+fn replace_and_marks_work_across_tracks() {
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "llvW~");
+    assert_eq!(track_steps(&app, 0), ["C-4 40 CUT20h ---00 ---00"]);
+    assert_eq!(track_steps(&app, 1), ["C-4 40 CUT20h ---00 ---00"]);
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "lvWr11");
+    assert_eq!(track_steps(&app, 0), ["C-4 11 CUT20 ---00 ---00"]);
+    assert_eq!(track_steps(&app, 1), ["C-4 11 CUT20 ---00 ---00"]);
+}
+
+#[test]
+fn a_shorter_phrase_keeps_what_it_has_and_a_shared_one_changes_once() {
+    let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N]]);
+    keys(&mut app, "VjjW>");
+    assert_eq!(track_steps(&app, 0)[2], "C#4 40 CUT20 ---00 ---00");
+    assert_eq!(track_steps(&app, 1), ["C#4 40 CUT20 ---00 ---00"]);
+
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, " 2");
+    let mut shared = Song::clone(app.song());
+    shared.chains.insert(1, Arc::clone(&shared.chains[&0]));
+    let samples = Arc::clone(&app.samples);
+    let version = Arc::new(Published::new(
+        Arc::new(shared.clone()),
+        Arc::clone(&samples),
+    ));
+    let (handle, _rt2) = connect(Engine::new(48_000, version));
+    let mut app = App::new(shared, None, samples, handle, 48_000);
+    keys(&mut app, "VW=");
+    assert_eq!(
+        track_steps(&app, 0),
+        ["C#4 40 CUT20 ---00 ---00"],
+        "once, not twice"
+    );
+}
+
+#[test]
+fn rows_count_from_each_phrases_own_loop_start() {
+    let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N, N, N]]);
+    let mut slid = Song::clone(app.song());
+    Arc::make_mut(slid.phrases.get_mut(&1).unwrap()).set_len(2);
+    Arc::make_mut(slid.phrases.get_mut(&1).unwrap()).slide(1);
+    let samples = Arc::clone(&app.samples);
+    let version = Arc::new(Published::new(Arc::new(slid.clone()), Arc::clone(&samples)));
+    let (handle, _rt2) = connect(Engine::new(48_000, version));
+    app = App::new(slid, None, samples, handle, 48_000);
+    keys(&mut app, "VW>");
+    assert_eq!(track_steps(&app, 0)[0], "C#4 40 CUT20 ---00 ---00");
+    assert_eq!(
+        track_steps(&app, 1),
+        [N, "C#4 40 CUT20 ---00 ---00", N],
+        "row 00 of a slid loop is its second step"
+    );
+}
+
+#[test]
+fn yank_and_paste_keep_each_tracks_part() {
+    let a = "C-4 40 ---00 ---00 ---00";
+    let b = "D-4 50 ---00 ---00 ---00";
+    let (mut app, _rt) = tracks_with(&[&[a, GONE], &[b, GONE], &[GONE, GONE]]);
+    keys(&mut app, "VWy");
+    assert_eq!(app.cursor.track, 0);
+    keys(&mut app, "jp");
+    assert_eq!(track_steps(&app, 0), [a, a]);
+    assert_eq!(track_steps(&app, 1), [b, b]);
+    assert_eq!(track_steps(&app, 2), [GONE, GONE]);
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 1), [b, GONE], "one undo");
+    // Past the last track, the rest is dropped.
+    keys(&mut app, "WWkp");
+    assert_eq!(track_steps(&app, 2), [a, GONE]);
+}
+
+#[test]
+fn dot_repeats_across_as_many_tracks_and_gv_comes_back() {
+    let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N], &[N, N]]);
+    keys(&mut app, "VW>j.");
+    let up = "C#4 40 CUT20 ---00 ---00";
+    assert_eq!(track_steps(&app, 0), [up, up]);
+    assert_eq!(track_steps(&app, 1), [up, up]);
+    assert_eq!(track_steps(&app, 2), [N, N]);
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "VW<Esc>");
+    assert_eq!(app.cursor.track, 0, "Esc stays where it is");
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "VW>gv");
+    assert!(app.mode.is_visual());
+    assert_eq!(app.current_selection().tracks.count(), 2);
+}
+
+#[test]
+fn shape_refuses_several_tracks() {
+    let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N]]);
+    keys(&mut app, "lvjWS");
+    assert_ne!(app.mode, Mode::Shape);
+    assert!(app.status.contains("one track"), "{}", app.status);
+}

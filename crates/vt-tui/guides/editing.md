@@ -30,6 +30,7 @@ Follow one with a motion or a target, or double it for this whole step:
 |---|---|
 | `v` | Select fields, starting from this one |
 | `V` | Select whole steps |
+| `W` `B` | In a selection, reach the next or previous track |
 | `gv` | Select the last selection again |
 | `Esc` | Stop selecting |
 
@@ -40,6 +41,14 @@ Move to grow the selection. The cursor shows which end is moving. Then press
 a C on every step to the end of the loop. Notes already there keep their
 velocity. A velocity only goes on steps with a
 note, an FX value only on steps with a command, and `.` repeats it.
+
+## Across tracks
+
+In `v` or `V`, `W` and `B` reach other tracks, so `VGWWW` covers a whole drum
+part. `d`, `y`, `p`, `>`, `<`, `=`, `-`, `+`, `_`, `r` and `~` then act on each of them as one
+undo. Rows count from each phrase's own loop start, as on screen, and a phrase two
+tracks share only changes once. `p` puts each track's part on the track the
+same distance along from the cursor.
 
 ## Shaping a column
 
