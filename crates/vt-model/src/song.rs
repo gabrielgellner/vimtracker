@@ -262,17 +262,28 @@ pub enum Machine {
     Sample,
     /// A square and a saw, after the virtual analog model of Mutable Instruments' Plaits.
     VirtualAnalog,
+    /// Two-operator FM, after the same module.
+    Fm,
+    /// An 808-style bass drum, after the same module.
+    Kick,
 }
 
 impl Machine {
     /// Every machine, in the order a list shows them.
-    pub const ALL: [Self; 2] = [Self::Sample, Self::VirtualAnalog];
+    pub const ALL: [Self; 4] = [Self::Sample, Self::VirtualAnalog, Self::Fm, Self::Kick];
+
+    /// Whether a note keeps sounding until something ends it.
+    pub fn holds(self) -> bool {
+        matches!(self, Self::VirtualAnalog | Self::Fm)
+    }
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
         match self {
             Self::Sample => "Sample",
             Self::VirtualAnalog => "VA",
+            Self::Fm => "FM",
+            Self::Kick => "Kick",
         }
     }
 
@@ -281,6 +292,8 @@ impl Machine {
         match self {
             Self::Sample => "Plays a sample",
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
+            Self::Fm => "Two-operator FM, for bass, bells and keys",
+            Self::Kick => "An 808-style bass drum, tuned by its note",
         }
     }
 }

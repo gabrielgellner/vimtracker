@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::lfo::{Destination, depth_text};
-use vt_model::song::Track;
+use vt_model::song::{Machine, Track};
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -57,9 +57,12 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     match control {
         Control::Level => level(track.level),
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
-        Control::Base(TrackControl::Harmonics) => Some((track.harmonics, true)),
+        // Those with a middle that's a setting of its own show where they are around it.
+        Control::Base(TrackControl::Harmonics) => {
+            Some((track.harmonics, track.machine == Machine::VirtualAnalog))
+        }
         Control::Base(TrackControl::Timbre) => level(track.timbre),
-        Control::Base(TrackControl::Morph) => level(track.morph),
+        Control::Base(TrackControl::Morph) => Some((track.morph, track.machine == Machine::Fm)),
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),
         Control::Base(TrackControl::Resonance) => level(track.resonance),
         Control::Base(TrackControl::Delay) => level(track.delay),
@@ -80,7 +83,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         if column > 0 {
             spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
         }
-        let label = format!("{:<SOUND_LABEL$}", control.label());
+        let label = format!("{:<SOUND_LABEL$}", control.label_on(track.machine));
         used = SOUND_LABEL;
         spans.push(Span::styled(label, theme::dim()));
         let typing = *control == current && app.mode == Mode::Insert;

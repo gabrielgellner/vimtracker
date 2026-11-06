@@ -4,11 +4,13 @@ A track makes one sound at a time, from its machine: a sample, or a synth. Every
 else about its sound is on the track page, `Space 4`: see **The track page, envelopes
 and LFOs**.
 
-## The synth
+## The synths
 
-`K` on Machine, at the top of the Sound page, chooses `VA`: a square and a saw, after
-the virtual analog model of Mutable Instruments' Plaits. It suits bass and leads, so
-try a note around `C-2`, and bring `Cut` down.
+`K` on Machine, at the top of the Sound page, chooses a synth. They come from Mutable
+Instruments' Plaits, and each has three settings, named on the page.
+
+`VA` is a square and a saw, for bass and leads. Try a note around `C-2`, and bring
+`Cut` down.
 
 | Setting | Does |
 |---|---|
@@ -16,9 +18,26 @@ try a note around `C-2`, and bring `Cut` down.
 | `Timbre` | The square: none at `00`, then a pulse, a square and hard sync |
 | `Morph` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
 
-Steps set them with `HAR`, `TIM` and `MOR`, and LFOs and envelopes can move them. A note holds until
-the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for
-plucks. A track plays one note at a time.
+`FM` is two sine waves, one bending the other, for bass, bells and keys.
+
+| Setting | Does |
+|---|---|
+| `Ratio` | The second wave's pitch, in steps that catch: from 1/2 to 8 times |
+| `Index` | How hard it bends: a pure sine at `00`, and brighter going up |
+| `Feedback` | None at `80`, gritty above, and unstable pitch below |
+
+`Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
+
+| Setting | Does |
+|---|---|
+| `Punch` | The attack's pitch sweep, then its self-modulation and drive |
+| `Tone` | How bright it is |
+| `Decay` | How long it rings |
+
+The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
+and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA` or `FM` note holds
+until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
+Sustain for plucks. A `Kick` dies away by itself. A track plays one note at a time.
 
 ## Choosing a sample
 

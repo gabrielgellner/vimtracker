@@ -20,7 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /// How many frames are worked out at once, with settings moving in a line across them.
-const BLOCK: usize = 16;
+pub(super) const BLOCK: usize = 16;
 /// The highest frequency an oscillator runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;
 const NOTCH_DEPTH: f32 = 0.2;
@@ -84,14 +84,14 @@ fn semitones(interval: f32) -> f32 {
 
 /// A setting moving in a line across a block, and where it was left.
 #[derive(Debug, Clone, Copy)]
-struct Moving {
+pub(super) struct Moving {
     value: f32,
     step: f32,
 }
 
 impl Moving {
     #[inline]
-    fn towards(state: f32, target: f32) -> Self {
+    pub(super) fn towards(state: f32, target: f32) -> Self {
         Self {
             value: state,
             step: (target - state) / BLOCK as f32,
@@ -99,7 +99,7 @@ impl Moving {
     }
 
     #[inline]
-    fn next(&mut self) -> f32 {
+    pub(super) fn next(&mut self) -> f32 {
         self.value += self.step;
         self.value
     }

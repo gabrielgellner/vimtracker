@@ -620,6 +620,9 @@ impl Engine {
     /// Stop sequencing but let everything sounding finish on its own, for a render's tail.
     pub fn let_ring(&mut self) {
         self.transport = Transport::Stopped;
+        for track in self.tracks.iter_mut() {
+            track.voice.release_if_held();
+        }
     }
 
     /// Stop moving. Voices fade so stopping doesn't click, and effect tails keep ringing.
@@ -691,7 +694,7 @@ impl Engine {
         let machine = self.current.song.tracks.get(track)?.machine;
         let sample = match machine {
             Machine::Sample => (*self.current.track_samples.get(track)?)?,
-            Machine::VirtualAnalog => 0,
+            _ => 0,
         };
         Some(NoteOn {
             sample,
