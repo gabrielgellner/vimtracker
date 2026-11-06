@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Destination;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song};
+use vt_model::song::{FilterType, Instrument, Song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -261,4 +262,51 @@ fn depth_zero_and_off_do_nothing() {
     let mut off = song(&[NOTE], adsr(5, 20, 50, 10));
     off.tracks[0].envelopes[1].destination = None;
     assert_eq!(plain, render(off, flat(), STEP));
+}
+
+#[test]
+fn a_tracks_filter_type_and_drive_change_what_it_sounds_like() {
+    let with = |filter, drive| {
+        let mut note = song(&[NOTE], adsr(0, 0, 100, 0));
+        note.tracks[0].filter = filter;
+        note.tracks[0].drive = drive;
+        note.tracks[0].cutoff = 0x80;
+        render(note, buzz(), STEP)
+    };
+    let level = |out: &[f32]| -> f32 {
+        (1000..5000)
+            .map(|frame| left(out, frame).abs())
+            .sum::<f32>()
+            / 4000.0
+    };
+    let low = with(FilterType::LowPass, 0);
+    let high = with(FilterType::HighPass, 0);
+    assert!(level(&high) > level(&low) * 20.0, "a buzz is all highs");
+    assert_ne!(low, with(FilterType::LowPass, 0x80));
+    assert_ne!(low, with(FilterType::Ladder, 0));
+    // The same again gives the same, and every frame is sound.
+    let ladder = with(FilterType::Ladder, 0xFF);
+    assert_eq!(ladder, with(FilterType::Ladder, 0xFF));
+    assert!(ladder.iter().all(|sample| sample.is_finite()));
+}
+
+#[test]
+fn a_changed_filter_type_is_heard_while_playing() {
+    let start = song(&[NOTE], adsr(0, 0, 100, 0));
+    let samples = buzz();
+    let mut changed = start.clone();
+    changed.tracks[0].cutoff = 0x20;
+    changed.tracks[0].filter = FilterType::HighPass;
+    let mut engine = Engine::new(
+        RATE,
+        Arc::new(Published::new(Arc::new(start), Arc::clone(&samples))),
+    );
+    engine.play_from(0);
+    let mut out = vec![0.0; 4000 * 2];
+    engine.process(&mut out);
+    engine.swap(Arc::new(Published::new(Arc::new(changed), samples)));
+    engine.process(&mut out);
+    assert!(out.iter().all(|sample| sample.is_finite()));
+    let level = out.iter().map(|sample| sample.abs()).sum::<f32>();
+    assert!(level > 1000.0, "{level}");
 }

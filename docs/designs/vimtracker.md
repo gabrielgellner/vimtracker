@@ -365,6 +365,10 @@ whose depth is in semitones. A second envelope on `Vol` moves the level by its d
 *   **Times:** milliseconds up to `MAX_ENVELOPE_MS`, 8 seconds, as on Peaks. Not tempo-synced for now, and neither are Elektron's as far as is known.
 *   **Diagram:** the track page draws each envelope in Braille, on a square-root time scale so a 1 ms attack shows beside a long release.
 
+**Filter.** A track has one, with `Cut`, `Res`, `Drive` and `Type` on its page. `LP`, `HP`, `BP` and `Notch` are outputs of one TPT state-variable filter, the same design as Mutable Instruments' `stmlib::Svf`, so they cost about the same. `Ladder` is the
+character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it.
+``Drive` turns up the input, soft-clips the feedback and the output at 2x, and compensates for level. At `00` the state-variable path is untouched and not oversampled. Changing `Type` starts the new filter from silence. A low-pass with nothing to do is skipped.
+
 **Randomness.** Each track has its own PCG32 generator, seeded from the project seed and the track's index.
 Generators restart when playback starts from the top. Because tracks are only added or removed at the end
 of the list, this does not change other tracks.

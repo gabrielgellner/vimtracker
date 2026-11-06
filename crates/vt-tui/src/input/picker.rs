@@ -7,6 +7,7 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 use vt_model::envelope::Envelope;
 use vt_model::lfo::Lfo;
 use vt_model::shape::{FillKind, Where};
+use vt_model::song::FilterType;
 use vt_model::step::FxCommand;
 
 use crate::guides::Guide;
@@ -32,6 +33,11 @@ pub enum Pick {
         track: usize,
         slot: usize,
         lfo: Lfo,
+    },
+    /// Choose a track's filter.
+    FilterType {
+        track: usize,
+        filter: FilterType,
     },
     /// Replace one of a track's envelopes.
     Envelope {

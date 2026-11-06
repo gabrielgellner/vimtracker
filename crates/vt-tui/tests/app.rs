@@ -10,7 +10,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, Phrase, Song};
+use vt_model::song::{Chain, ChainEntry, FilterType, Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
@@ -2460,6 +2460,46 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 fn typed_rate_on_second_lfo(app: &mut App) {
     press(app, "ll");
     typed(app, "7st");
+}
+
+#[test]
+fn the_track_page_sets_the_filters_type_and_drive() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    // Cut, Res, Drive, then Type.
+    press(&mut app, "ll");
+    press(&mut app, "i40");
+    assert_eq!(track(&app).drive, 0x40);
+    press(&mut app, "+");
+    assert_eq!(track(&app).drive, 0x50);
+    press(&mut app, "iFF");
+    assert_eq!(track(&app).drive, 0xFF, "drive isn't on the level scale");
+    press(&mut app, "x");
+    assert_eq!(track(&app).drive, 0);
+
+    press(&mut app, "l");
+    assert_eq!(track(&app).filter, FilterType::LowPass);
+    press(&mut app, "=");
+    assert_eq!(track(&app).filter, FilterType::HighPass);
+    press(&mut app, "-");
+    assert_eq!(track(&app).filter, FilterType::LowPass);
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
+    press(&mut app, "ladder");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).filter, FilterType::Ladder);
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker, "i lists it too");
+    assert_eq!(
+        app.picker.as_ref().unwrap().selected,
+        4,
+        "opens on what's set"
+    );
+    special(&mut app, KeyCode::Esc);
+    assert!(track_page_text(&app)[3].contains("Ladder"));
+    press(&mut app, "u");
+    assert_eq!(track(&app).filter, FilterType::LowPass);
 }
 
 #[test]

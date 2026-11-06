@@ -15,9 +15,22 @@ hat pattern.
 | `K` | On Dest, Shape, Rate, Retrig or Reset, choose from a list |
 | `x` | Back to its default: centre pan, 0 dB and so on |
 
-## Filter and output
+## The filter
 
-`Cut`, `Res`, `Pan`, `Delay` and `Reverb` are where those values start when
+| Setting | Value |
+|---|---|
+| Cut, Res | Where `CUT` and `RES` start |
+| Drive | How hard it's driven, from `00` for clean. Level stays about even |
+| Type | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
+
+`LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
+it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
+rises, and near `FF` it sings by itself while a note lasts. It costs more than
+the others, which matters only for tracks using it.
+
+## Output
+
+`Pan`, `Delay` and `Reverb` are where those values start when
 playback starts from the top. A step's FX changes them until the next start,
 and changing one here is heard straight away. `Level` scales the whole track.
 Dimmed `Swing` is the project's, which this track follows. Changing it gives the

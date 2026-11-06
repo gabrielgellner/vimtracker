@@ -33,6 +33,8 @@ fn value(control: Control, track: &Track, project_swing: u16) -> String {
         Control::Base(TrackControl::Pan) => hex(track.pan),
         Control::Base(TrackControl::Delay) => hex(track.delay),
         Control::Base(TrackControl::Reverb) => hex(track.reverb),
+        Control::Base(TrackControl::Drive) => hex(track.drive),
+        Control::FilterType => track.filter.name().to_owned(),
         Control::Level => hex(track.level),
         Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
         Control::Envelope(slot, field) => {

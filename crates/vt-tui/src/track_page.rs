@@ -6,7 +6,7 @@ use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::Track;
+use vt_model::song::{FilterType, Track};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -56,6 +56,7 @@ pub enum Control {
     Base(TrackControl),
     Level,
     Swing,
+    FilterType,
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
 }
@@ -84,9 +85,11 @@ const fn envelope_row(slot: usize) -> [Control; 7] {
 }
 
 /// The filter's row.
-pub const FILTER: [Control; 2] = [
+pub const FILTER: [Control; 4] = [
     Control::Base(TrackControl::Cutoff),
     Control::Base(TrackControl::Resonance),
+    Control::Base(TrackControl::Drive),
+    Control::FilterType,
 ];
 /// The output's row.
 pub const OUTPUT: [Control; 5] = [
@@ -120,6 +123,8 @@ impl Control {
             Self::Base(TrackControl::Pan) => "Pan",
             Self::Base(TrackControl::Delay) => "Delay",
             Self::Base(TrackControl::Reverb) => "Reverb",
+            Self::Base(TrackControl::Drive) => "Drive",
+            Self::FilterType => "Type",
             Self::Level => "Level",
             Self::Swing => "Swing",
             Self::Lfo(_, LfoField::Destination) => "Dest",
@@ -147,10 +152,12 @@ impl Control {
     fn is_choice(self) -> bool {
         matches!(
             self,
-            Self::Lfo(
-                _,
-                LfoField::Destination | LfoField::Shape | LfoField::Retrig
-            ) | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
+            Self::FilterType
+                | Self::Lfo(
+                    _,
+                    LfoField::Destination | LfoField::Shape | LfoField::Retrig
+                )
+                | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
         )
     }
 }
@@ -217,10 +224,19 @@ impl App {
                     TrackControl::Pan => track.pan,
                     TrackControl::Delay => track.delay,
                     TrackControl::Reverb => track.reverb,
+                    TrackControl::Drive => track.drive,
                 };
                 self.set_hex(control, change(value));
             }
             Control::Level => self.set_hex(control, change(track.level)),
+            Control::FilterType => {
+                // One way at a time, as a large step would skip through a short list.
+                let filter = next_in(&FilterType::ALL, track.filter, up);
+                self.apply(&Action::SetFilterType {
+                    track: self.cursor.track,
+                    filter,
+                });
+            }
             Control::Swing => {
                 let from = track.swing.unwrap_or(self.song().swing);
                 let size = if large { SWING_JUMP } else { SWING_NUDGE };
@@ -308,6 +324,7 @@ impl App {
                     TrackControl::Pan => track.pan,
                     TrackControl::Delay => track.delay,
                     TrackControl::Reverb => track.reverb,
+                    TrackControl::Drive => track.drive,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));
@@ -322,6 +339,14 @@ impl App {
                 });
             }
             Control::Swing => {}
+            Control::FilterType => {
+                if track.filter != fresh.filter {
+                    self.apply(&Action::SetFilterType {
+                        track: self.cursor.track,
+                        filter: fresh.filter,
+                    });
+                }
+            }
             Control::Lfo(slot, field) => {
                 let (lfo, default) = (track.lfos[slot], Lfo::default());
                 let reset = match field {
@@ -395,12 +420,17 @@ impl App {
 
     /// List what an LFO's setting can be, with the current one highlighted.
     fn open_control_picker(&mut self) {
+        if self.track_control() == Control::FilterType {
+            self.open_filter_picker();
+            return;
+        }
         if let Control::Envelope(slot, field) = self.track_control() {
             self.open_envelope_picker(slot, field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
-            self.status = "K chooses from a list on Dest, Shape, Rate, Retrig and Reset".to_owned();
+            self.status =
+                "K chooses from a list on Type, Dest, Shape, Rate, Retrig and Reset".to_owned();
             return;
         };
         let track = self.cursor.track;
@@ -446,7 +476,7 @@ impl App {
             }
             LfoField::Depth | LfoField::Phase => {
                 self.status =
-                    "K chooses from a list on Dest, Shape, Rate, Retrig and Reset".to_owned();
+                    "K chooses from a list on Type, Dest, Shape, Rate, Retrig and Reset".to_owned();
                 return;
             }
         };
@@ -459,6 +489,23 @@ impl App {
             })
             .collect();
         let mut picker = Picker::new(title, items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List the filter types, with what each does and the current one highlighted.
+    fn open_filter_picker(&mut self) {
+        let track = self.cursor.track;
+        let current = self.page_track().filter;
+        let items = FilterType::ALL
+            .map(|filter| Item {
+                label: format!("{}  {}", filter.name(), filter.meaning()),
+                pick: Pick::FilterType { track, filter },
+            })
+            .to_vec();
+        let position = FilterType::ALL.iter().position(|filter| *filter == current);
+        let mut picker = Picker::new("Filter type", items);
         picker.move_highlight(position.unwrap_or(0) as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
@@ -609,7 +656,7 @@ impl App {
                 }
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
-            Control::Lfo(..) => {}
+            Control::Lfo(..) | Control::FilterType => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);

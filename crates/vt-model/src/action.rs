@@ -14,7 +14,7 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
 };
 use crate::shape::{Shape, ShapeColumn, values};
-use crate::song::{Chain, ChainEntry, Instrument, Phrase, Song, lowest_unused};
+use crate::song::{Chain, ChainEntry, FilterType, Instrument, Phrase, Song, lowest_unused};
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// A new value for one field.
@@ -188,6 +188,11 @@ pub enum Action {
         id: u32,
         volume: u8,
     },
+    /// Choose a track's filter.
+    SetFilterType {
+        track: usize,
+        filter: FilterType,
+    },
     /// Replace one of a track's envelopes.
     SetEnvelope {
         track: usize,
@@ -242,6 +247,7 @@ pub enum TrackControl {
     Pan,
     Delay,
     Reverb,
+    Drive,
 }
 
 /// An FX slot with its value within what its command takes.
@@ -463,6 +469,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Pan => track.pan = *value,
                 TrackControl::Delay => track.delay = (*value).min(MAX_LEVEL),
                 TrackControl::Reverb => track.reverb = (*value).min(MAX_LEVEL),
+                TrackControl::Drive => track.drive = *value,
             }
         }
         Action::SetLfo { track, slot, lfo } => {
@@ -678,6 +685,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .entry(*id)
                 .or_insert_with(|| Arc::new(Instrument::default()));
             Arc::make_mut(entry).volume = (*volume).min(MAX_LEVEL);
+        }
+        Action::SetFilterType { track, filter } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .filter = *filter;
         }
         Action::SetEnvelope {
             track,

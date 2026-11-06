@@ -3,10 +3,10 @@
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK};
-use vt_model::song::{Track, level_gain};
+use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::FxCommand;
 
-use crate::dsp::filter::{Coefficients, Svf};
+use crate::dsp::filter::{Channel, Coefficients};
 use crate::dsp::lfo::wave;
 use crate::dsp::smoother::Smoothed;
 use crate::rng::Pcg32;
@@ -103,7 +103,9 @@ pub struct TrackState {
     resonance: Smoothed,
     delay_send: Smoothed,
     reverb_send: Smoothed,
-    filter: [Svf; 2],
+    filter: [Channel; 2],
+    filter_type: FilterType,
+    drive: Smoothed,
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
     pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
@@ -170,7 +172,9 @@ impl TrackState {
             resonance: Smoothed::at(0.0),
             delay_send: Smoothed::at(0.0),
             reverb_send: Smoothed::at(0.0),
-            filter: [Svf::default(); 2],
+            filter: [Channel::default(); 2],
+            filter_type: FilterType::LowPass,
+            drive: Smoothed::at(0.0),
             coefficients: None,
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
@@ -224,6 +228,13 @@ impl TrackState {
             let value = wave(lfo.shape, cycles + f64::from(lfo.phase) / 360.0, key);
             offsets[destination as usize] += value * f32::from(lfo.depth) / 255.0;
         }
+        // A different filter starts from silence rather than from another's state.
+        if self.filter_type != track.filter {
+            self.filter_type = track.filter;
+            self.filter = [Channel::default(); 2];
+            self.coefficients = None;
+        }
+        self.drive.target = f32::from(track.drive) / 255.0;
         self.cut_offset.target = offsets[Destination::Cut as usize];
         self.res_offset.target = offsets[Destination::Res as usize];
         self.pan_offset.target = offsets[Destination::Pan as usize];
@@ -370,6 +381,7 @@ impl TrackState {
         self.cut_envelope.settle();
         self.res_envelope.settle();
         self.pan_envelope.settle();
+        self.drive.settle();
         self.coefficients = None;
         self.filter_countdown = 0;
     }
@@ -389,7 +401,13 @@ impl TrackState {
             + self.pan_offset.next(smoothing)
             + self.pan_envelope.next(fast))
         .clamp(0.0, 1.0);
-        let filtered = if cutoff > 0.999 && resonance < 0.001 && !self.filter_moving {
+        let drive = self.drive.next(smoothing);
+        let open = self.filter_type == FilterType::LowPass
+            && cutoff > 0.999
+            && resonance < 0.001
+            && drive < 0.001
+            && !self.filter_moving;
+        let filtered = if open {
             self.coefficients = None;
             input
         } else {
@@ -398,10 +416,12 @@ impl TrackState {
                 self.filter_countdown = FILTER_UPDATE_FRAMES;
             }
             self.filter_countdown -= 1;
+            // A drive this small takes the clean path rather than a very slight clip.
+            let drive = if drive < 0.001 { 0.0 } else { drive };
             match &self.coefficients {
                 Some(c) => [
-                    self.filter[0].low_pass(input[0], c),
-                    self.filter[1].low_pass(input[1], c),
+                    self.filter[0].process(input[0], self.filter_type, drive, c),
+                    self.filter[1].process(input[1], self.filter_type, drive, c),
                 ],
                 None => input,
             }

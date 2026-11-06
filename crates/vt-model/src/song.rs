@@ -25,6 +25,51 @@ pub fn level_gain(level: f32) -> f32 {
     10.0_f32.powf((level - f32::from(UNITY_LEVEL)) * DB_PER_LEVEL / 20.0)
 }
 
+/// A track's filter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FilterType {
+    #[default]
+    LowPass,
+    HighPass,
+    BandPass,
+    Notch,
+    /// A saturating four-pole ladder, which self-oscillates and costs more.
+    Ladder,
+}
+
+impl FilterType {
+    /// Every type, in the order a list shows them.
+    pub const ALL: [Self; 5] = [
+        Self::LowPass,
+        Self::HighPass,
+        Self::BandPass,
+        Self::Notch,
+        Self::Ladder,
+    ];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::LowPass => "LP",
+            Self::HighPass => "HP",
+            Self::BandPass => "BP",
+            Self::Notch => "Notch",
+            Self::Ladder => "Ladder",
+        }
+    }
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::LowPass => "Low-pass, clean, 12 dB",
+            Self::HighPass => "High-pass, clean, 12 dB",
+            Self::BandPass => "Band-pass, clean",
+            Self::Notch => "Notch, clean",
+            Self::Ladder => "Saturating low-pass, 24 dB, self-oscillates",
+        }
+    }
+}
+
 /// One voice's lane through the song.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
@@ -42,6 +87,11 @@ pub struct Track {
     /// Where held `RES` starts.
     #[serde(default)]
     pub resonance: u8,
+    #[serde(default)]
+    pub filter: FilterType,
+    /// How hard the filter is driven.
+    #[serde(default)]
+    pub drive: u8,
     /// Where held `PAN` starts.
     #[serde(default = "centre")]
     pub pan: u8,
@@ -66,6 +116,8 @@ impl Default for Track {
             level: unity_level(),
             cutoff: open_cutoff(),
             resonance: 0,
+            filter: FilterType::default(),
+            drive: 0,
             pan: centre(),
             delay: 0,
             reverb: 0,
