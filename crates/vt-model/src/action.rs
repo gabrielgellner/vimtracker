@@ -60,6 +60,8 @@ pub enum Action {
         step: usize,
         value: Step,
     },
+    /// Several edits as one change, or none if any is refused.
+    Batch(Vec<Action>),
     /// Set the mark on every value in a selection.
     SetMark {
         phrase: u32,
@@ -285,8 +287,16 @@ pub enum EditError {
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
 pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
+    if let Action::Batch(actions) = action {
+        let mut current = Arc::clone(song);
+        for action in actions {
+            current = edit(&current, action)?;
+        }
+        return Ok(current);
+    }
     let mut next = Song::clone(song);
     match action {
+        Action::Batch(_) => {}
         Action::SetNote { phrase, step, note } => {
             step_mut(&mut next, *phrase, *step)?.note = *note;
         }

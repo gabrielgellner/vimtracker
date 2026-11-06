@@ -106,6 +106,9 @@ impl App {
         if selection.range.len() < 2 {
             return Err("Select at least 2 rows to shape");
         }
+        if selection.tracks.count() > 1 {
+            return Err("Shape works on one track at a time");
+        }
         if selection.scope.first != selection.scope.last {
             return Err("Shape works on one column at a time. Select with v");
         }
