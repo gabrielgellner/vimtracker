@@ -6,12 +6,14 @@ use vt_model::constants::{
     GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
+use vt_model::envelope::Envelope;
+use vt_model::lfo::Destination;
 use vt_model::song::{Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
-use crate::dsp::smoother::coefficient;
+use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::mixer::{Reading, master};
 use crate::published::Published;
 use crate::track_state::{DelayedNote, Retrigger, SongTime, TrackState};
@@ -65,6 +67,7 @@ pub struct Engine {
     clock: u64,
     millibpm: u32,
     smoothing: f32,
+    fast_smoothing: f32,
     delay: Delay,
     reverb: Reverb,
     /// The master's levels since the last report.
@@ -92,6 +95,7 @@ impl Engine {
             clock: 0,
             millibpm,
             smoothing: coefficient(rate),
+            fast_smoothing: fast_coefficient(rate),
             delay: Delay::new(delay_frames),
             reverb: Reverb::new(rate),
             reading: Reading::default(),
@@ -251,13 +255,14 @@ impl Engine {
         }
     }
 
-    /// Restart a track's LFOs that follow its notes, and put it on their new values.
-    fn retrigger_lfos(&mut self, index: usize) {
+    /// Start a note's modulation: the track's envelopes, and LFOs that follow its notes.
+    fn start_modulation(&mut self, index: usize) {
         let now = self.song_time();
         let Some(track) = self.current.song.tracks.get(index) else {
             return;
         };
         let state = &mut self.tracks[index];
+        state.trigger_envelopes(track, now);
         for (lfo, start) in track.lfos.iter().zip(&mut state.lfo_starts) {
             if lfo.retrig {
                 start.tick = now.tick;
@@ -265,6 +270,25 @@ impl Engine {
             }
         }
         state.modulate(track, index, now, false);
+    }
+
+    /// Begin the release of a track's envelopes, when its note ends.
+    fn release_modulation(&mut self, index: usize) {
+        let now = self.song_time();
+        if let Some(track) = self.current.song.tracks.get(index) {
+            self.tracks[index].release_envelopes(track, now);
+        }
+    }
+
+    /// The shape of a track's notes: its first envelope if that's on `Vol`.
+    fn note_shape(&self, index: usize) -> Envelope {
+        self.current
+            .song
+            .tracks
+            .get(index)
+            .map(|track| track.envelopes[0])
+            .filter(|envelope| envelope.destination == Some(Destination::Vol))
+            .unwrap_or_default()
     }
 
     /// Pause in place, or resume from the stored position.
@@ -341,7 +365,7 @@ impl Engine {
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
     pub fn preview(&mut self, instrument: u32, note: u8, velocity: u8) {
         let gain = velocity_gain(velocity);
-        let Some(on) = self.note_on(instrument, note, gain) else {
+        let Some(on) = self.note_on(instrument, note, gain, Envelope::note_shape()) else {
             return;
         };
         let frames = PREVIEW_MS * self.rate / 1000;
@@ -351,18 +375,25 @@ impl Engine {
                 ..on
             },
             self.rate,
+            0.0,
+            1.0,
         );
     }
 
-    fn note_on(&self, instrument: u32, note: u8, step_gain: f32) -> Option<NoteOn> {
+    fn note_on(
+        &self,
+        instrument: u32,
+        note: u8,
+        step_gain: f32,
+        shape: Envelope,
+    ) -> Option<NoteOn> {
         let sample = *self.current.instrument_samples.get(&instrument)?;
         let settings = self.current.song.instruments.get(&instrument)?;
         Some(NoteOn {
             sample,
             note,
             gain: step_gain * level_gain(f32::from(settings.volume)),
-            attack_ms: settings.attack_ms,
-            release_ms: settings.release_ms,
+            shape,
             release_after: None,
         })
     }
@@ -465,7 +496,7 @@ impl Engine {
                 && delayed.at <= clock
             {
                 self.tracks[index].delayed = None;
-                self.retrigger_lfos(index);
+                self.start_modulation(index);
                 if self.audible(index) {
                     let (kill, off, retrigger) = {
                         let t = &self.tracks[index];
@@ -480,10 +511,12 @@ impl Engine {
             }
             if self.tracks[index].kill_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].kill_at = None;
+                self.release_modulation(index);
                 self.tracks[index].cut_to_tail();
             }
             if self.tracks[index].off_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].off_at = None;
+                self.release_modulation(index);
                 self.tracks[index].voice.release();
             }
             if let Some(retrigger) = self.tracks[index].retrigger
@@ -497,6 +530,9 @@ impl Engine {
     fn fire_retrigger(&mut self, index: usize, retrigger: Retrigger) {
         let rate = self.rate;
         let audible = self.audible(index);
+        if self.tracks[index].last_note.is_some() {
+            self.start_modulation(index);
+        }
         let track = &mut self.tracks[index];
         let Some(note) = track.last_note else {
             track.retrigger = None;
@@ -593,7 +629,7 @@ impl Engine {
             }
         }
         if plays && delay_units.is_none() && matches!(step.note, Note::On(_)) {
-            self.retrigger_lfos(index);
+            self.start_modulation(index);
         }
         if !self.tracks[index].sounding() {
             self.tracks[index].settle();
@@ -603,6 +639,7 @@ impl Engine {
         match step.note {
             Note::Empty => {}
             Note::Off if plays => {
+                self.release_modulation(index);
                 self.tracks[index].voice.release();
                 self.tracks[index].retrigger = None;
             }
@@ -615,7 +652,7 @@ impl Engine {
                 let gain = step.velocity.map_or(1.0, velocity_gain);
                 let on = self.tracks[index]
                     .instrument
-                    .and_then(|i| self.note_on(i, note, gain));
+                    .and_then(|i| self.note_on(i, note, gain, self.note_shape(index)));
                 match on {
                     Some(on) if start_frames > 0 => {
                         self.tracks[index].last_note = Some(on);
@@ -685,7 +722,8 @@ impl Engine {
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
             let gain = step.velocity.map_or(1.0, velocity_gain);
             let instrument = step.instrument.or(self.tracks[index].instrument);
-            let Some(on) = instrument.and_then(|i| self.note_on(i, note, gain)) else {
+            let shape = self.note_shape(index);
+            let Some(on) = instrument.and_then(|i| self.note_on(i, note, gain, shape)) else {
                 continue;
             };
             let track = &mut self.tracks[index];
@@ -716,6 +754,7 @@ impl Engine {
                 let shaped = track.shape(
                     [main[0] + tail[0], main[1] + tail[1]],
                     self.smoothing,
+                    self.fast_smoothing,
                     self.rate,
                 );
                 mix[0] += shaped.dry[0];

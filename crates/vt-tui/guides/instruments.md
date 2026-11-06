@@ -1,8 +1,8 @@
 # Instruments and samples
 
 Press `Space 5` for the instrument view. An instrument is a sample with a
-volume and an envelope. It is created the first time you set something on
-it.
+volume. It is created the first time you set something on it. A note's shape
+comes from its track: see **The track page, envelopes and LFOs**.
 
 | Keys | Does |
 |---|---|
@@ -18,8 +18,6 @@ it.
 |---|---|
 | Sample | A WAV file |
 | Volume | Two hex digits. `E0` is 0 dB, as in **Phrases and chains** |
-| Attack | Milliseconds from 0 to 5000, then `Enter` |
-| Release | Milliseconds from 0 to 5000, then `Enter` |
 
 ## Finding samples
 

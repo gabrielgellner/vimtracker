@@ -21,7 +21,7 @@ only takes effect once its value is typed.
 `VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
-a step has put it. See **The track page and LFOs**.
+a step has put it. See **The track page, envelopes and LFOs**.
 
 ## Things that happen once
 
@@ -29,7 +29,7 @@ a step has put it. See **The track page and LFOs**.
 |---|---|
 | `DEL` | Delay this step by `xx` units |
 | `KIL` | Cut the note after `xx` units |
-| `OFF` | Start the release after `xx` units |
+| `OFF` | Start the envelopes' release after `xx` units |
 | `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 

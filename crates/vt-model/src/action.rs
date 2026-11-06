@@ -8,6 +8,7 @@ use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS,
     MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
+use crate::envelope::Envelope;
 use crate::lfo::Lfo;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, merge_step, paste_step, shift_step,
@@ -182,11 +183,16 @@ pub enum Action {
         id: u32,
         labelled: bool,
     },
-    /// Set an instrument's setting, creating the instrument if needed.
-    SetInstrument {
+    /// Set an instrument's volume, creating the instrument if needed.
+    SetInstrumentVolume {
         id: u32,
-        field: InstrumentField,
-        value: u16,
+        volume: u8,
+    },
+    /// Replace one of a track's envelopes.
+    SetEnvelope {
+        track: usize,
+        slot: usize,
+        envelope: Envelope,
     },
     /// Set a step's instrument to a new one.
     AssignNewInstrument {
@@ -228,14 +234,6 @@ pub enum Action {
     },
 }
 
-/// An instrument setting with a number.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InstrumentField {
-    Volume,
-    Attack,
-    Release,
-}
-
 /// One of the values a track holds, set from its page rather than a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackControl {
@@ -270,9 +268,7 @@ pub enum EditError {
     LastTrack,
     #[error("those columns don't match here")]
     ColumnMismatch,
-    #[error("volume goes up to FF")]
-    Volume,
-    #[error("attack and release go up to {MAX_ENVELOPE_MS} ms")]
+    #[error("an envelope's times go up to {MAX_ENVELOPE_MS} ms, and its sustain to 100%")]
     Envelope,
     #[error("no chain {0:02X}")]
     NoChain(u32),
@@ -676,28 +672,28 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?;
             *slot = Some(*chain);
         }
-        Action::SetInstrument { id, field, value } => {
+        Action::SetInstrumentVolume { id, volume } => {
             let entry = next
                 .instruments
                 .entry(*id)
                 .or_insert_with(|| Arc::new(Instrument::default()));
-            let instrument = Arc::make_mut(entry);
-            match field {
-                InstrumentField::Volume => {
-                    let volume = u8::try_from(*value).map_err(|_| EditError::Volume)?;
-                    instrument.volume = volume.min(MAX_LEVEL);
-                }
-                InstrumentField::Attack | InstrumentField::Release => {
-                    if *value > MAX_ENVELOPE_MS {
-                        return Err(EditError::Envelope);
-                    }
-                    if *field == InstrumentField::Attack {
-                        instrument.attack_ms = *value;
-                    } else {
-                        instrument.release_ms = *value;
-                    }
-                }
+            Arc::make_mut(entry).volume = (*volume).min(MAX_LEVEL);
+        }
+        Action::SetEnvelope {
+            track,
+            slot,
+            envelope,
+        } => {
+            if !envelope.in_range() {
+                return Err(EditError::Envelope);
             }
+            *next
+                .tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .envelopes
+                .get_mut(*slot)
+                .ok_or(EditError::Envelope)? = *envelope;
         }
     }
     Ok(Arc::new(next))

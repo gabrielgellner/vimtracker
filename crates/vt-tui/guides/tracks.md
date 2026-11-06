@@ -1,4 +1,4 @@
-# The track page and LFOs
+# The track page, envelopes and LFOs
 
 Press `Space 4` for what a track holds apart from its steps. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
@@ -12,7 +12,7 @@ hat pattern.
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
-| `K` | On Dest, Shape, Rate or Retrig, choose from a list |
+| `K` | On Dest, Shape, Rate, Retrig or Reset, choose from a list |
 | `x` | Back to its default: centre pan, 0 dB and so on |
 
 ## Filter and output
@@ -23,6 +23,32 @@ and changing one here is heard straight away. `Level` scales the whole track.
 Dimmed `Swing` is the project's, which this track follows. Changing it gives the
 track its own, and `x` follows the project again.
 
+## Envelopes
+
+Each track has two, which start with each note. The page draws their shapes.
+Time is stretched in the drawing, so a short attack still shows.
+
+| Setting | Value |
+|---|---|
+| Dest | `Vol` `Cut` `Res` `Pan` `Dly` `Rev` `Pitch`, or `---` for off |
+| Attack, Decay | Milliseconds, up to 8000 |
+| Sustain | The percent it holds at while the note lasts |
+| Release | Milliseconds, after the note ends |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Reset | `on` starts from zero on each note. `off` goes on from there |
+
+`Env 1` starts on `Vol` and shapes each note, so it has no depth. `Env 2` starts
+on `Cut` with no depth, so raise its depth to open the filter on each note. On
+`Pitch`, depth is in semitones and in hex, so `+0C` is an octave.
+
+A note lasts until the next note on its track or an `OFF`, and the next note
+fades the last one quickly rather than running its release. So a drum is often
+a Decay with Sustain at `0%`, and Release only runs on an `OFF`. To make notes
+shorter, use `OFF` on a step or the `OFF` command.
+
+Decays and releases fall fast and then slow, as an analog envelope does, and an
+attack starts slowly. Tracks with several instruments share these shapes.
+
 ## LFOs
 
 Each track has two. An LFO moves around the current value, so `CUT40` on a
@@ -30,7 +56,7 @@ step moves the centre and the LFO carries on around it.
 
 | Setting | Value |
 |---|---|
-| Dest | `Cut` `Res` `Pan` `Vol` `Dly` `Rev`, or `---` for off |
+| Dest | `Cut` `Res` `Pan` `Vol` `Dly` `Rev` `Pitch`, or `---` for off |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |

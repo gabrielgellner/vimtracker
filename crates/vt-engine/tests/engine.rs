@@ -29,8 +29,6 @@ fn pool(entries: &[(&str, SampleData)]) -> Arc<SamplePool> {
 fn instrument(sample: &str) -> Arc<Instrument> {
     Arc::new(Instrument {
         sample: Some(sample.to_owned()),
-        attack_ms: 0,
-        release_ms: 0,
         ..Instrument::default()
     })
 }
@@ -39,6 +37,10 @@ fn instrument(sample: &str) -> Arc<Instrument> {
 fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
     let mut song = Song::new(tracks);
     song.instruments.insert(0, instrument("flat"));
+    for track in &mut song.tracks {
+        track.envelopes[0].attack_ms = 0;
+        track.envelopes[0].release_ms = 0;
+    }
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     for step in steps {
         *phrase.step_mut(*step).unwrap() = Step {

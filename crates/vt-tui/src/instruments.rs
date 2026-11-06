@@ -2,8 +2,7 @@
 
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::link::Command;
-use vt_model::action::{Action, InstrumentField};
-use vt_model::constants::MAX_ENVELOPE_MS;
+use vt_model::action::Action;
 use vt_model::selection::Motion;
 use vt_model::song::Instrument;
 use vt_model::step::MAX_VELOCITY;
@@ -17,30 +16,17 @@ use crate::input::mode::Mode;
 pub enum Row {
     Sample,
     Volume,
-    Attack,
-    Release,
 }
 
 impl Row {
     /// Every row, top to bottom.
-    pub const ALL: [Self; 4] = [Self::Sample, Self::Volume, Self::Attack, Self::Release];
+    pub const ALL: [Self; 2] = [Self::Sample, Self::Volume];
 
     /// The row's name on screen.
     pub fn label(self) -> &'static str {
         match self {
             Self::Sample => "Sample",
             Self::Volume => "Volume",
-            Self::Attack => "Attack",
-            Self::Release => "Release",
-        }
-    }
-
-    fn field(self) -> Option<InstrumentField> {
-        match self {
-            Self::Sample => None,
-            Self::Volume => Some(InstrumentField::Volume),
-            Self::Attack => Some(InstrumentField::Attack),
-            Self::Release => Some(InstrumentField::Release),
         }
     }
 
@@ -49,41 +35,21 @@ impl Row {
     }
 }
 
-/// How far a small step moves a volume.
-const VOLUME_STEP: u16 = 1;
-
-/// How many small steps a large one is. A volume's is `10` in hex.
-const LARGE_STEP: u16 = 0x10;
-
-/// How far a small step moves an envelope time. Short times need finer steps than long ones.
-fn envelope_step(value: u16) -> u16 {
-    match value {
-        0..=9 => 1,
-        10..=99 => 5,
-        _ => 25,
-    }
-}
+/// How many small steps a large one moves a volume, which is `10` in hex.
+const LARGE_STEP: i32 = 0x10;
 
 impl App {
-    fn instrument_value(&self, field: InstrumentField) -> u16 {
-        let fallback = Instrument::default();
-        let current = self
-            .song()
+    fn instrument_volume(&self) -> u8 {
+        self.song()
             .instruments
             .get(&self.instrument)
-            .map_or(&fallback, |i| i.as_ref());
-        match field {
-            InstrumentField::Volume => u16::from(current.volume),
-            InstrumentField::Attack => current.attack_ms,
-            InstrumentField::Release => current.release_ms,
-        }
+            .map_or(Instrument::default().volume, |i| i.volume)
     }
 
-    fn set_instrument_value(&mut self, field: InstrumentField, value: u16) {
-        self.apply(&Action::SetInstrument {
+    fn set_instrument_volume(&mut self, volume: u8) {
+        self.apply(&Action::SetInstrumentVolume {
             id: self.instrument,
-            field,
-            value,
+            volume,
         });
     }
 
@@ -92,20 +58,13 @@ impl App {
     }
 
     fn adjust_instrument(&mut self, up: bool, count: usize, large: bool) {
-        let Some(field) = self.instrument_row.field() else {
+        if self.instrument_row != Row::Volume {
             return;
-        };
-        let mut value = self.instrument_value(field);
-        for _ in 0..count {
-            let times = if large { LARGE_STEP } else { 1 };
-            value = match (field, up) {
-                (InstrumentField::Volume, true) => (value + VOLUME_STEP * times).min(0xFF),
-                (InstrumentField::Volume, false) => value.saturating_sub(VOLUME_STEP * times),
-                (_, true) => (value + envelope_step(value) * times).min(MAX_ENVELOPE_MS),
-                (_, false) => value.saturating_sub(envelope_step(value.saturating_sub(1)) * times),
-            };
         }
-        self.set_instrument_value(field, value);
+        let size = if large { LARGE_STEP } else { 1 };
+        let by = size.saturating_mul(count.min(0x100) as i32);
+        let moved = i32::from(self.instrument_volume()) + if up { by } else { -by };
+        self.set_instrument_volume(moved.clamp(0, 0xFF) as u8);
     }
 
     /// Put this row back to its default. An instrument nothing has been set on stays that way, and
@@ -114,22 +73,20 @@ impl App {
         let Some(current) = self.song().instruments.get(&self.instrument).cloned() else {
             return;
         };
-        let Some(field) = self.instrument_row.field() else {
-            if current.sample.is_some() {
-                self.apply(&Action::ClearSample {
-                    instrument: self.instrument,
-                });
+        match self.instrument_row {
+            Row::Sample => {
+                if current.sample.is_some() {
+                    self.apply(&Action::ClearSample {
+                        instrument: self.instrument,
+                    });
+                }
             }
-            return;
-        };
-        let fresh = Instrument::default();
-        let value = match field {
-            InstrumentField::Volume => u16::from(fresh.volume),
-            InstrumentField::Attack => fresh.attack_ms,
-            InstrumentField::Release => fresh.release_ms,
-        };
-        if self.instrument_value(field) != value {
-            self.set_instrument_value(field, value);
+            Row::Volume => {
+                let volume = Instrument::default().volume;
+                if current.volume != volume {
+                    self.set_instrument_volume(volume);
+                }
+            }
         }
     }
 
@@ -189,13 +146,12 @@ impl App {
         true
     }
 
-    /// Type a value: two hex digits for volume, and milliseconds then `Enter` for envelope times.
+    /// Type a volume: two hex digits.
     pub(crate) fn insert_instrument_row(&mut self, key: KeyCode) {
-        let Some(field) = self.instrument_row.field() else {
+        if self.instrument_row != Row::Volume {
             self.mode = Mode::Normal;
             return;
-        };
-        let volume = field == InstrumentField::Volume;
+        }
         match key {
             KeyCode::Esc => {
                 self.entry = Entry::default();
@@ -204,31 +160,17 @@ impl App {
             KeyCode::Backspace => {
                 self.entry.text.pop();
             }
-            KeyCode::Enter if !volume => self.commit_instrument_row(field),
-            KeyCode::Char(c) if volume && c.is_ascii_hexdigit() => {
+            KeyCode::Char(c) if c.is_ascii_hexdigit() => {
                 self.entry.text.push(c.to_ascii_uppercase());
                 if self.entry.text.len() == 2 {
-                    self.commit_instrument_row(field);
+                    let text = std::mem::take(&mut self.entry.text);
+                    if let Ok(volume) = u8::from_str_radix(&text, 16) {
+                        self.set_instrument_volume(volume);
+                    }
+                    self.mode = Mode::Normal;
                 }
-            }
-            KeyCode::Char(c) if !volume && c.is_ascii_digit() && self.entry.text.len() < 5 => {
-                self.entry.text.push(c);
             }
             _ => {}
         }
-    }
-
-    fn commit_instrument_row(&mut self, field: InstrumentField) {
-        let text = std::mem::take(&mut self.entry.text);
-        let radix = if field == InstrumentField::Volume {
-            16
-        } else {
-            10
-        };
-        // Five digits can pass a u16's limit, and that still has to reach the range check.
-        if let Ok(value) = u32::from_str_radix(&text, radix) {
-            self.set_instrument_value(field, value.min(u32::from(u16::MAX)) as u16);
-        }
-        self.mode = Mode::Normal;
     }
 }

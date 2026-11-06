@@ -2,7 +2,8 @@
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, TrackControl};
-use vt_model::constants::{MAX_SWING, MIN_SWING};
+use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
+use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
 use vt_model::song::Track;
@@ -21,6 +22,10 @@ const SWING_NUDGE: i32 = 10;
 const SWING_JUMP: i32 = 50;
 /// How many small steps a large one is for a value in hex.
 const HEX_JUMP: i64 = 0x10;
+/// How many small steps a large one is for an envelope time.
+const TIME_JUMP: u16 = 10;
+/// How far a large step moves a sustain, in percent.
+const SUSTAIN_JUMP: i16 = 10;
 
 /// One setting of an LFO.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +38,18 @@ pub enum LfoField {
     Retrig,
 }
 
+/// One setting of an envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvelopeField {
+    Destination,
+    Attack,
+    Decay,
+    Sustain,
+    Release,
+    Depth,
+    Reset,
+}
+
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
@@ -40,6 +57,7 @@ pub enum Control {
     Level,
     Swing,
     Lfo(usize, LfoField),
+    Envelope(usize, EnvelopeField),
 }
 
 const fn lfo_row(slot: usize) -> [Control; 6] {
@@ -50,6 +68,18 @@ const fn lfo_row(slot: usize) -> [Control; 6] {
         Control::Lfo(slot, LfoField::Depth),
         Control::Lfo(slot, LfoField::Phase),
         Control::Lfo(slot, LfoField::Retrig),
+    ]
+}
+
+const fn envelope_row(slot: usize) -> [Control; 7] {
+    [
+        Control::Envelope(slot, EnvelopeField::Destination),
+        Control::Envelope(slot, EnvelopeField::Attack),
+        Control::Envelope(slot, EnvelopeField::Decay),
+        Control::Envelope(slot, EnvelopeField::Sustain),
+        Control::Envelope(slot, EnvelopeField::Release),
+        Control::Envelope(slot, EnvelopeField::Depth),
+        Control::Envelope(slot, EnvelopeField::Reset),
     ]
 }
 
@@ -66,11 +96,20 @@ pub const OUTPUT: [Control; 5] = [
     Control::Base(TrackControl::Reverb),
     Control::Swing,
 ];
+/// Each envelope's row.
+pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelope_row(1)];
 /// Each LFO's row.
 pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
 
 /// Every row, top to bottom.
-pub const ROWS: [&[Control]; 2 + LFOS_PER_TRACK] = [&FILTER, &OUTPUT, &LFOS[0], &LFOS[1]];
+pub const ROWS: [&[Control]; 2 + TRACK_ENVELOPES + LFOS_PER_TRACK] = [
+    &FILTER,
+    &OUTPUT,
+    &ENVELOPES[0],
+    &ENVELOPES[1],
+    &LFOS[0],
+    &LFOS[1],
+];
 
 impl Control {
     /// The setting's name on screen.
@@ -89,6 +128,13 @@ impl Control {
             Self::Lfo(_, LfoField::Depth) => "Depth",
             Self::Lfo(_, LfoField::Phase) => "Phase",
             Self::Lfo(_, LfoField::Retrig) => "Retrig",
+            Self::Envelope(_, EnvelopeField::Destination) => "Dest",
+            Self::Envelope(_, EnvelopeField::Attack) => "Attack",
+            Self::Envelope(_, EnvelopeField::Decay) => "Decay",
+            Self::Envelope(_, EnvelopeField::Sustain) => "Sustain",
+            Self::Envelope(_, EnvelopeField::Release) => "Release",
+            Self::Envelope(_, EnvelopeField::Depth) => "Depth",
+            Self::Envelope(_, EnvelopeField::Reset) => "Reset",
         }
     }
 
@@ -104,7 +150,7 @@ impl Control {
             Self::Lfo(
                 _,
                 LfoField::Destination | LfoField::Shape | LfoField::Retrig
-            )
+            ) | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
         )
     }
 }
@@ -192,7 +238,22 @@ impl App {
                 }
                 self.set_lfo(slot, lfo);
             }
+            Control::Envelope(slot, field) => {
+                let mut envelope = track.envelopes[slot];
+                for _ in 0..count.min(0x200) {
+                    adjust_envelope(&mut envelope, field, up, large);
+                }
+                self.set_envelope(slot, envelope);
+            }
         }
+    }
+
+    fn set_envelope(&mut self, slot: usize, envelope: Envelope) {
+        self.apply(&Action::SetEnvelope {
+            track: self.cursor.track,
+            slot,
+            envelope,
+        });
     }
 
     fn move_control(&mut self, row: usize, field: usize) {
@@ -293,13 +354,53 @@ impl App {
                     self.set_lfo(slot, reset);
                 }
             }
+            Control::Envelope(slot, field) => {
+                let (envelope, default) = (track.envelopes[slot], fresh.envelopes[slot]);
+                let reset = match field {
+                    EnvelopeField::Destination => Envelope {
+                        destination: default.destination,
+                        ..envelope
+                    },
+                    EnvelopeField::Attack => Envelope {
+                        attack_ms: default.attack_ms,
+                        ..envelope
+                    },
+                    EnvelopeField::Decay => Envelope {
+                        decay_ms: default.decay_ms,
+                        ..envelope
+                    },
+                    EnvelopeField::Sustain => Envelope {
+                        sustain: default.sustain,
+                        ..envelope
+                    },
+                    EnvelopeField::Release => Envelope {
+                        release_ms: default.release_ms,
+                        ..envelope
+                    },
+                    EnvelopeField::Depth => Envelope {
+                        depth: default.depth,
+                        ..envelope
+                    },
+                    EnvelopeField::Reset => Envelope {
+                        reset: default.reset,
+                        ..envelope
+                    },
+                };
+                if reset != envelope {
+                    self.set_envelope(slot, reset);
+                }
+            }
         }
     }
 
     /// List what an LFO's setting can be, with the current one highlighted.
     fn open_control_picker(&mut self) {
+        if let Control::Envelope(slot, field) = self.track_control() {
+            self.open_envelope_picker(slot, field);
+            return;
+        }
         let Control::Lfo(slot, field) = self.track_control() else {
-            self.status = "K chooses from a list on Dest, Shape, Rate and Retrig".to_owned();
+            self.status = "K chooses from a list on Dest, Shape, Rate, Retrig and Reset".to_owned();
             return;
         };
         let track = self.cursor.track;
@@ -344,7 +445,8 @@ impl App {
                 ("LFO retrig", choices.to_vec())
             }
             LfoField::Depth | LfoField::Phase => {
-                self.status = "K chooses from a list on Dest, Shape, Rate and Retrig".to_owned();
+                self.status =
+                    "K chooses from a list on Dest, Shape, Rate, Retrig and Reset".to_owned();
                 return;
             }
         };
@@ -354,6 +456,67 @@ impl App {
             .map(|(label, lfo)| Item {
                 label,
                 pick: Pick::Lfo { track, slot, lfo },
+            })
+            .collect();
+        let mut picker = Picker::new(title, items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List what an envelope's setting can be, with the current one highlighted.
+    fn open_envelope_picker(&mut self, slot: usize, field: EnvelopeField) {
+        let track = self.cursor.track;
+        let envelope = self.page_track().envelopes[slot];
+        let (title, choices): (&'static str, Vec<(String, Envelope)>) = match field {
+            EnvelopeField::Destination => {
+                let off = (
+                    "---  Off".to_owned(),
+                    Envelope {
+                        destination: None,
+                        ..envelope
+                    },
+                );
+                let on = Destination::ALL.map(|destination| {
+                    (
+                        format!("{}  {}", destination.name(), meaning(destination)),
+                        Envelope {
+                            destination: Some(destination),
+                            ..envelope
+                        },
+                    )
+                });
+                (
+                    "Envelope destination",
+                    std::iter::once(off).chain(on).collect(),
+                )
+            }
+            EnvelopeField::Reset => {
+                let choices = [true, false].map(|reset| {
+                    let name = if reset {
+                        "on  Each note starts it from zero"
+                    } else {
+                        "off  Each note goes on from where it is"
+                    };
+                    (name.to_owned(), Envelope { reset, ..envelope })
+                });
+                ("Envelope reset", choices.to_vec())
+            }
+            _ => {
+                self.status = "K chooses from a list on Dest and Reset".to_owned();
+                return;
+            }
+        };
+        let position = choices.iter().position(|(_, choice)| *choice == envelope);
+        let items = choices
+            .into_iter()
+            .map(|(label, envelope)| Item {
+                label,
+                pick: Pick::Envelope {
+                    track,
+                    slot,
+                    envelope,
+                },
             })
             .collect();
         let mut picker = Picker::new(title, items);
@@ -447,6 +610,45 @@ impl App {
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
             Control::Lfo(..) => {}
+            Control::Envelope(slot, field) => {
+                let current = track.envelopes[slot];
+                let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
+                let changed = match field {
+                    EnvelopeField::Attack => ms.map(|attack_ms| Envelope {
+                        attack_ms,
+                        ..current
+                    }),
+                    EnvelopeField::Decay => ms.map(|decay_ms| Envelope {
+                        decay_ms,
+                        ..current
+                    }),
+                    EnvelopeField::Release => ms.map(|release_ms| Envelope {
+                        release_ms,
+                        ..current
+                    }),
+                    EnvelopeField::Sustain => text
+                        .trim_end_matches('%')
+                        .parse::<u8>()
+                        .ok()
+                        .filter(|sustain| *sustain <= 100)
+                        .map(|sustain| Envelope { sustain, ..current }),
+                    EnvelopeField::Depth => {
+                        parse_depth(text).map(|depth| Envelope { depth, ..current })
+                    }
+                    EnvelopeField::Destination | EnvelopeField::Reset => None,
+                };
+                match changed {
+                    Some(envelope) => self.set_envelope(slot, envelope),
+                    None => {
+                        self.status = match field {
+                            EnvelopeField::Sustain => "Sustain is a percent from 0 to 100",
+                            EnvelopeField::Depth => "Depth is hex from -FF to +FF",
+                            _ => "Times are milliseconds from 0 to 8000",
+                        }
+                        .to_owned();
+                    }
+                }
+            }
         }
     }
 }
@@ -460,6 +662,49 @@ fn meaning(destination: Destination) -> &'static str {
         Destination::Vol => "Volume",
         Destination::Dly => "Delay send",
         Destination::Rev => "Reverb send",
+        Destination::Pitch => "Pitch, with depth in semitones",
+    }
+}
+
+/// How far a small step moves an envelope time. Short times need finer steps than long ones.
+fn time_step(value: u16) -> u16 {
+    match value {
+        0..=9 => 1,
+        10..=99 => 5,
+        _ => 25,
+    }
+}
+
+/// Move one setting of an envelope one notch.
+fn adjust_envelope(envelope: &mut Envelope, field: EnvelopeField, up: bool, large: bool) {
+    let time = |value: u16| {
+        let size = if large { TIME_JUMP } else { 1 };
+        if up {
+            (value + time_step(value) * size).min(MAX_ENVELOPE_MS)
+        } else {
+            value.saturating_sub(time_step(value.saturating_sub(1)) * size)
+        }
+    };
+    match field {
+        EnvelopeField::Destination => {
+            let mut choices = vec![None];
+            choices.extend(Destination::ALL.map(Some));
+            envelope.destination = next_in(&choices, envelope.destination, up);
+        }
+        EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
+        EnvelopeField::Decay => envelope.decay_ms = time(envelope.decay_ms),
+        EnvelopeField::Release => envelope.release_ms = time(envelope.release_ms),
+        EnvelopeField::Sustain => {
+            let size = if large { SUSTAIN_JUMP } else { 1 };
+            let by = if up { size } else { -size };
+            envelope.sustain = (i16::from(envelope.sustain) + by).clamp(0, 100) as u8;
+        }
+        EnvelopeField::Depth => {
+            let size = if large { HEX_JUMP as i16 } else { 1 };
+            let moved = envelope.depth + if up { size } else { -size };
+            envelope.depth = moved.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH);
+        }
+        EnvelopeField::Reset => envelope.reset = !envelope.reset,
     }
 }
 

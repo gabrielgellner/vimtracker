@@ -29,11 +29,11 @@ fn song(texts: &[&str]) -> Song {
         0,
         Arc::new(Instrument {
             sample: Some("s".to_owned()),
-            attack_ms: 0,
-            release_ms: 0,
             ..Instrument::default()
         }),
     );
+    song.tracks[0].envelopes[0].attack_ms = 0;
+    song.tracks[0].envelopes[0].release_ms = 0;
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
@@ -172,15 +172,7 @@ fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
 #[test]
 fn off_starts_the_instruments_release() {
     let mut with_release = song(&["C-4 -- 00 OFF01 ---00 ---00"]);
-    with_release.instruments.insert(
-        0,
-        Arc::new(Instrument {
-            sample: Some("s".to_owned()),
-            attack_ms: 0,
-            release_ms: 20,
-            ..Instrument::default()
-        }),
-    );
+    with_release.tracks[0].envelopes[0].release_ms = 20;
     let out = render(with_release, flat(0.5), STEP);
     let at_off = level_at(&out, UNIT - 1);
     let during = level_at(&out, UNIT + 480);
@@ -416,6 +408,9 @@ fn a_tracks_swing_replaces_the_projects_and_leaves_others_alone() {
     // Pan the tracks apart, so each channel shows one track's timing.
     let mut two = Song::new(2);
     two.instruments = song(&[]).instruments;
+    for track in &mut two.tracks {
+        track.envelopes[0].attack_ms = 0;
+    }
     for (id, pan) in [(0, "PAN00"), (1, "PANFF")] {
         let phrase = Arc::make_mut(two.phrases.get_mut(&id).unwrap());
         for step in 0..4 {

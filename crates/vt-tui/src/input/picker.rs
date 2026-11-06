@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
+use vt_model::envelope::Envelope;
 use vt_model::lfo::Lfo;
 use vt_model::shape::{FillKind, Where};
 use vt_model::step::FxCommand;
@@ -31,6 +32,12 @@ pub enum Pick {
         track: usize,
         slot: usize,
         lfo: Lfo,
+    },
+    /// Replace one of a track's envelopes.
+    Envelope {
+        track: usize,
+        slot: usize,
+        envelope: Envelope,
     },
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),

@@ -1,6 +1,7 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
-use vt_model::constants::UNITY_LEVEL;
+use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
+use vt_model::envelope::Envelope;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK};
 use vt_model::song::{Track, level_gain};
 use vt_model::step::FxCommand;
@@ -19,6 +20,31 @@ const FILTER_UPDATE_FRAMES: u32 = 32;
 pub struct LfoStart {
     pub tick: f64,
     pub clock: u64,
+}
+
+/// Where one of a track's envelopes has got to.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+enum EnvelopeRun {
+    #[default]
+    Idle,
+    Held {
+        at: u64,
+        from: f32,
+    },
+    Released {
+        at: u64,
+        from: f32,
+    },
+}
+
+impl EnvelopeRun {
+    fn level(self, envelope: &Envelope, clock: u64, rate: u32) -> f32 {
+        match self {
+            Self::Idle => 0.0,
+            Self::Held { at, from } => envelope.held(clock.saturating_sub(at), from, rate),
+            Self::Released { at, from } => envelope.released(clock.saturating_sub(at), from, rate),
+        }
+    }
 }
 
 /// Where the song is, for working out LFOs.
@@ -87,6 +113,13 @@ pub struct TrackState {
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
+    /// What envelopes add, which moves fast and needs to keep its snap.
+    cut_envelope: Smoothed,
+    res_envelope: Smoothed,
+    pan_envelope: Smoothed,
+    envelopes: [EnvelopeRun; TRACK_ENVELOPES],
+    /// What modulation multiplies a note's speed by.
+    pitch: f64,
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
 }
@@ -145,6 +178,11 @@ impl TrackState {
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
             pan_offset: Smoothed::at(0.0),
+            cut_envelope: Smoothed::at(0.0),
+            res_envelope: Smoothed::at(0.0),
+            pan_envelope: Smoothed::at(0.0),
+            envelopes: [EnvelopeRun::Idle; TRACK_ENVELOPES],
+            pitch: 1.0,
             filter_moving: false,
         }
     }
@@ -186,11 +224,64 @@ impl TrackState {
             let value = wave(lfo.shape, cycles + f64::from(lfo.phase) / 360.0, key);
             offsets[destination as usize] += value * f32::from(lfo.depth) / 255.0;
         }
-        self.offsets = offsets;
         self.cut_offset.target = offsets[Destination::Cut as usize];
         self.res_offset.target = offsets[Destination::Res as usize];
         self.pan_offset.target = offsets[Destination::Pan as usize];
+        let mut moved = [0.0_f32; Destination::ALL.len()];
+        for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
+            let Some(destination) = envelope.destination else {
+                continue;
+            };
+            // The first one on `Vol` is each note's own shape, which the voice follows itself.
+            if envelope.depth == 0 || (slot == 0 && destination == Destination::Vol) {
+                continue;
+            }
+            self.filter_moving |= matches!(destination, Destination::Cut | Destination::Res);
+            if stopped {
+                continue;
+            }
+            let level = run.level(envelope, now.clock, now.rate);
+            moved[destination as usize] += level * f32::from(envelope.depth) / 255.0;
+        }
+        self.cut_envelope.target = moved[Destination::Cut as usize];
+        self.res_envelope.target = moved[Destination::Res as usize];
+        self.pan_envelope.target = moved[Destination::Pan as usize];
+        for (offset, envelope) in offsets.iter_mut().zip(moved) {
+            *offset += envelope;
+        }
+        self.offsets = offsets;
+        let semitones = offsets[Destination::Pitch as usize] * 255.0;
+        self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
+        self.voice.set_pitch(self.pitch);
         self.update_gains();
+    }
+
+    /// Start the track's envelopes for a note.
+    pub fn trigger_envelopes(&mut self, track: &Track, now: SongTime) {
+        for (envelope, run) in track.envelopes.iter().zip(&mut self.envelopes) {
+            let from = if envelope.reset {
+                0.0
+            } else {
+                run.level(envelope, now.clock, now.rate)
+            };
+            *run = EnvelopeRun::Held {
+                at: now.clock,
+                from,
+            };
+        }
+    }
+
+    /// Start the release of the track's envelopes, when a note ends.
+    pub fn release_envelopes(&mut self, track: &Track, now: SongTime) {
+        for (envelope, run) in track.envelopes.iter().zip(&mut self.envelopes) {
+            if matches!(run, EnvelopeRun::Held { .. }) {
+                let from = run.level(envelope, now.clock, now.rate);
+                *run = EnvelopeRun::Released {
+                    at: now.clock,
+                    from,
+                };
+            }
+        }
     }
 
     /// Work out the gains of the held values that are heard on a level scale.
@@ -210,12 +301,17 @@ impl TrackState {
 
     /// Start a new note, cancelling anything pending for the old one.
     pub fn start(&mut self, note: NoteOn, rate: u32) {
+        let from = if note.shape.reset {
+            0.0
+        } else {
+            self.voice.level()
+        };
         self.cut_to_tail();
         self.delayed = None;
         self.kill_at = None;
         self.off_at = None;
         self.last_note = Some(note);
-        self.voice = Voice::start(note, rate);
+        self.voice = Voice::start(note, rate, from, self.pitch);
     }
 
     /// Fade the playing note.
@@ -235,6 +331,7 @@ impl TrackState {
         self.off_at = None;
         self.retrigger = None;
         self.swung = None;
+        self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }
 
     /// Set a held value from an FX command.
@@ -270,18 +367,28 @@ impl TrackState {
         self.cut_offset.settle();
         self.res_offset.settle();
         self.pan_offset.settle();
+        self.cut_envelope.settle();
+        self.res_envelope.settle();
+        self.pan_envelope.settle();
         self.coefficients = None;
         self.filter_countdown = 0;
     }
 
     /// Filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
-    pub fn shape(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> ShapedFrame {
-        let cutoff =
-            (self.cutoff.next(smoothing) + self.cut_offset.next(smoothing)).clamp(0.0, 1.0);
-        let resonance =
-            (self.resonance.next(smoothing) + self.res_offset.next(smoothing)).clamp(0.0, 1.0);
-        let position = (self.pan.next(smoothing) + self.pan_offset.next(smoothing)).clamp(0.0, 1.0);
+    pub fn shape(&mut self, input: [f32; 2], smoothing: f32, fast: f32, rate: u32) -> ShapedFrame {
+        let cutoff = (self.cutoff.next(smoothing)
+            + self.cut_offset.next(smoothing)
+            + self.cut_envelope.next(fast))
+        .clamp(0.0, 1.0);
+        let resonance = (self.resonance.next(smoothing)
+            + self.res_offset.next(smoothing)
+            + self.res_envelope.next(fast))
+        .clamp(0.0, 1.0);
+        let position = (self.pan.next(smoothing)
+            + self.pan_offset.next(smoothing)
+            + self.pan_envelope.next(fast))
+        .clamp(0.0, 1.0);
         let filtered = if cutoff > 0.999 && resonance < 0.001 && !self.filter_moving {
             self.coefficients = None;
             input

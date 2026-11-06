@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{
     BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION, MAX_LEVEL,
-    MAX_PHRASE_STEPS, UNITY_LEVEL,
+    MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
+use crate::envelope::{Envelope, default_envelopes};
 use crate::label::is_named_slot;
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::selection::Extent;
@@ -52,6 +53,8 @@ pub struct Track {
     pub reverb: u8,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
+    #[serde(default = "default_envelopes")]
+    pub envelopes: [Envelope; TRACK_ENVELOPES],
 }
 
 impl Default for Track {
@@ -67,6 +70,7 @@ impl Default for Track {
             delay: 0,
             reverb: 0,
             lfos: Default::default(),
+            envelopes: default_envelopes(),
         }
     }
 }
@@ -273,8 +277,6 @@ pub struct Instrument {
     /// Relative to the project folder.
     pub sample: Option<String>,
     pub volume: u8,
-    pub attack_ms: u16,
-    pub release_ms: u16,
     /// Whether this slot's name is a label rather than just its number.
     #[serde(default)]
     pub labelled: bool,
@@ -285,8 +287,6 @@ impl Default for Instrument {
         Self {
             sample: None,
             volume: UNITY_LEVEL,
-            attack_ms: 1,
-            release_ms: 50,
             labelled: false,
         }
     }

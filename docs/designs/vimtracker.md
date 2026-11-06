@@ -353,6 +353,18 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
 *   **The filter stays running** while an LFO moves `Cut` or `Res`, even at the top of its range, or it would come back
     with old state and jump.
 
+**Envelopes.** Each track has two ADSR envelopes on its page, as Elektron's tracks do, rather than on instruments as on the M8 and Polyend. `Env 1` defaults to
+`Vol`, where it shapes each note in the voice, and replaced the instrument's attack and release. `Env 2` defaults to `Cut` with no depth. Both can go to any LFO destination or to `Pitch`,
+whose depth is in semitones. A second envelope on `Vol` moves the level by its depth on the level scale. The shape of `Env 1`, if it's not on `Vol`, is a plain 1 ms attack and 50 ms release.
+
+*   **Curves:** taken from Mutable Instruments' Peaks rather than Polyend's straight segments, which on level hang on and then drop. An attack follows `t^3.32`, and decay and release
+    `(1 - e^-4t) / (1 - e^-4)`, so times are exact and stages land exactly on their levels.
+*   **Reset:** on by default, as on Elektron, starting each note's envelope from zero. Off goes on from the current level, as Peaks does without its hard reset. Release starts from the current level either way.
+*   **Notes:** a note holds until the next note or an `OFF`. The next note fades the last with the usual short fade rather than running its release, so `Sustain 0%` suits a drum. `OFF` and `KIL` start the release of mod envelopes.
+*   **Speed:** position is worked out from frames played, like LFOs. What envelopes add to `Cut`, `Res` and `Pan` passes through a `FAST_SMOOTHING_MS` smoother rather than `SMOOTHING_MS`, and `Pitch` slews per frame, so a fast snap survives.
+*   **Times:** milliseconds up to `MAX_ENVELOPE_MS`, 8 seconds, as on Peaks. Not tempo-synced for now, and neither are Elektron's as far as is known.
+*   **Diagram:** the track page draws each envelope in Braille, on a square-root time scale so a 1 ms attack shows beside a long release.
+
 **Randomness.** Each track has its own PCG32 generator, seeded from the project seed and the track's index.
 Generators restart when playback starts from the top. Because tracks are only added or removed at the end
 of the list, this does not change other tracks.

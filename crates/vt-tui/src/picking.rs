@@ -397,6 +397,17 @@ impl App {
                     Some(Pick::Lfo { track, slot, lfo }) => {
                         self.apply(&Action::SetLfo { track, slot, lfo });
                     }
+                    Some(Pick::Envelope {
+                        track,
+                        slot,
+                        envelope,
+                    }) => {
+                        self.apply(&Action::SetEnvelope {
+                            track,
+                            slot,
+                            envelope,
+                        });
+                    }
                     Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
                     Some(Pick::ShapeFill(kind)) => self.pick_shape_fill(kind),
                     Some(Pick::ShapeWhere(place)) => self.pick_shape_where(place),

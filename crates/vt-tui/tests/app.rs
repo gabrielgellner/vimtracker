@@ -479,31 +479,24 @@ fn the_instrument_view_sets_volume_attack_and_release() {
     press(&mut app, "jia0");
     assert_eq!(app.song().instruments[&0].volume, 0xA0);
     assert_eq!(app.mode, Mode::Normal);
-    // Attack is typed in milliseconds and needs Enter.
-    press(&mut app, "ji25");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().instruments[&0].attack_ms, 25);
-    // Each adjustment is one undo step.
-    press(&mut app, "j=");
-    assert_eq!(app.song().instruments[&0].release_ms, 55);
+    // Each adjustment is one undo step, and it stops at the top of the scale.
+    press(&mut app, "=");
+    assert_eq!(app.song().instruments[&0].volume, 0xA1);
     press(&mut app, "u");
-    assert_eq!(app.song().instruments[&0].release_ms, 50);
-    // Step sizes shrink for short times, and values stop at the ends.
-    press(&mut app, "k");
+    assert_eq!(app.song().instruments[&0].volume, 0xA0);
+    press(&mut app, "99+");
+    assert_eq!(app.song().instruments[&0].volume, 0xF8);
     press(&mut app, "3-");
-    assert_eq!(app.song().instruments[&0].attack_ms, 10);
-    press(&mut app, "99-");
-    assert_eq!(app.song().instruments[&0].attack_ms, 0);
+    assert_eq!(app.song().instruments[&0].volume, 0xF5);
 }
 
 #[test]
 fn the_instrument_view_refuses_values_out_of_range_and_keeps_notes_safe() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 5jj");
-    press(&mut app, "i99999");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().instruments[&0].attack_ms, 1);
-    assert!(app.status.contains("5000"), "{}", app.status);
+    press(&mut app, " 5j");
+    press(&mut app, "izz");
+    assert_eq!(app.song().instruments[&0].volume, 0xE0);
+    special(&mut app, KeyCode::Esc);
     // These keys mean something else in the phrase view, and must not touch a step here.
     let before = notes(&app);
     press(&mut app, "kk");
@@ -2366,13 +2359,13 @@ fn the_track_page_types_lfo_settings() {
     let (mut app, _realtime) = on_track_page();
     let lfo = |app: &App| app.song().tracks[0].lfos[0];
     // Down to LFO 1, on Dest.
-    press(&mut app, "jj0");
+    press(&mut app, "jjjj0");
     press(&mut app, "=");
     assert_eq!(lfo(&app).destination, Some(Destination::Cut));
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
-    assert_eq!(lfo(&app).destination, Some(Destination::Rev));
+    assert_eq!(lfo(&app).destination, Some(Destination::Pitch));
 
     press(&mut app, "l=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
@@ -2425,10 +2418,10 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 
     // The second LFO's Dest, on the next track.
     press(&mut app, "W");
-    press(&mut app, "jjj0K");
+    press(&mut app, "jjjjj0K");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.shown().count(), 7);
+    assert_eq!(picker.shown().count(), 8);
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
     special(&mut app, KeyCode::Enter);
@@ -2470,6 +2463,105 @@ fn typed_rate_on_second_lfo(app: &mut App) {
 }
 
 #[test]
+fn the_track_page_sets_envelopes() {
+    let (mut app, _realtime) = on_track_page();
+    let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];
+    // Env 1, on its Attack.
+    press(&mut app, "jj0l");
+    typed(&mut app, "20");
+    assert_eq!(env(&app, 0).attack_ms, 20);
+    press(&mut app, "=");
+    assert_eq!(env(&app, 0).attack_ms, 25);
+    press(&mut app, "+");
+    assert_eq!(env(&app, 0).attack_ms, 75);
+    typed(&mut app, "9000");
+    assert_eq!(env(&app, 0).attack_ms, 75);
+    assert!(app.status.contains("8000"), "{}", app.status);
+    typed(&mut app, "8000");
+    assert_eq!(env(&app, 0).attack_ms, 8000);
+    press(&mut app, "=");
+    assert_eq!(env(&app, 0).attack_ms, 8000);
+    press(&mut app, "x");
+    assert_eq!(env(&app, 0).attack_ms, 1);
+
+    press(&mut app, "l");
+    typed(&mut app, "180");
+    assert_eq!(env(&app, 0).decay_ms, 180);
+    press(&mut app, "l");
+    typed(&mut app, "40");
+    assert_eq!(env(&app, 0).sustain, 40);
+    typed(&mut app, "101");
+    assert_eq!(env(&app, 0).sustain, 40);
+    assert!(app.status.contains("percent"), "{}", app.status);
+    press(&mut app, "+");
+    assert_eq!(env(&app, 0).sustain, 50);
+    press(&mut app, "l");
+    typed(&mut app, "300");
+    assert_eq!(env(&app, 0).release_ms, 300);
+
+    // Env 2, its depth in hex and its destination from a list.
+    press(&mut app, "j0K");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().selected, 1, "opens on Cut");
+    press(&mut app, "pitch");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(env(&app, 1).destination, Some(Destination::Pitch));
+    press(&mut app, "lllll");
+    typed(&mut app, "+18");
+    assert_eq!(env(&app, 1).depth, 0x18);
+    press(&mut app, "lK");
+    press(&mut app, "off");
+    special(&mut app, KeyCode::Enter);
+    assert!(!env(&app, 1).reset);
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker, "i lists a setting that is a list");
+    special(&mut app, KeyCode::Esc);
+
+    // Each is one undo, and the first envelope was left alone.
+    press(&mut app, "u");
+    assert!(env(&app, 1).reset);
+    assert_eq!(env(&app, 0).release_ms, 300);
+}
+
+#[test]
+fn the_track_page_draws_each_envelopes_shape() {
+    let (mut app, _realtime) = on_track_page();
+    let page = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..24)
+            .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+    };
+    let lines = page(&app);
+    let heading = lines.iter().position(|l| l.contains("Env 1  Vol")).unwrap();
+    assert!(lines[heading].contains("Env 2  Cut"));
+    let dots = |line: &String| {
+        line.chars()
+            .filter(|c| ('\u{2801}'..='\u{28FF}').contains(c))
+            .count()
+    };
+    assert!(dots(&lines[heading + 1]) > 0);
+
+    // Changing a value redraws it.
+    press(&mut app, "jj0lll");
+    typed(&mut app, "0");
+    assert_ne!(page(&app)[heading + 1], lines[heading + 1]);
+    assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
+
+    // The first envelope on Vol has no depth to show, and off it, it does.
+    assert!(page(&app)[9].contains("--"));
+    press(&mut app, "0K");
+    press(&mut app, "cut");
+    special(&mut app, KeyCode::Enter);
+    assert!(page(&app)[9].contains("00"));
+}
+
+#[test]
 fn every_list_setting_on_the_track_page_has_a_picker() {
     let (mut app, _realtime) = on_track_page();
     let lfo = |app: &App| app.song().tracks[0].lfos[0];
@@ -2480,7 +2572,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
         special(app, KeyCode::Enter);
         assert_eq!(app.mode, Mode::Normal);
     };
-    press(&mut app, "jj0");
+    press(&mut app, "jjjj0");
     choose(&mut app, "cut");
     assert_eq!(lfo(&app).destination, Some(Destination::Cut));
 
@@ -2530,7 +2622,7 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     typed(&mut app, "60");
     press(&mut app, "+");
     assert_eq!(track(&app).swing, Some(650));
-    press(&mut app, "j0ll");
+    press(&mut app, "jjj0ll");
     press(&mut app, "+");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
     press(&mut app, "_");
@@ -2553,10 +2645,8 @@ fn large_steps_and_k_in_the_instrument_view() {
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.status.contains("Sample"), "{}", app.status);
-    press(&mut app, "j=");
-    assert_eq!(app.song().instruments[&0].attack_ms, 2);
-    press(&mut app, "+");
-    assert_eq!(app.song().instruments[&0].attack_ms, 18);
+    press(&mut app, "=");
+    assert_eq!(app.song().instruments[&0].volume, 0xD1);
     press(&mut app, "gg");
     press(&mut app, "K");
     assert_ne!(app.instrument_row, vt_tui::instruments::Row::Volume);
@@ -2621,7 +2711,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).reverb, 0);
 
     // Only the setting under the cursor goes back.
-    press(&mut app, "j0=");
+    press(&mut app, "jjj0=");
     press(&mut app, "l=");
     press(&mut app, "l");
     typed(&mut app, "7st");
@@ -2700,12 +2790,6 @@ fn x_in_the_instrument_view_and_chain() {
     assert_eq!(app.song().instruments[&slot].volume, 0x40);
     press(&mut app, "x");
     assert_eq!(app.song().instruments[&slot].volume, 0xE0);
-    press(&mut app, "j");
-    press(&mut app, "=");
-    press(&mut app, "x");
-    assert_eq!(app.song().instruments[&slot].attack_ms, 1);
-    press(&mut app, "j=x");
-    assert_eq!(app.song().instruments[&slot].release_ms, 50);
 
     // The Sample row empties it.
     command(&mut app, &format!("kit {}", labelled_kit().display()));
@@ -2733,7 +2817,7 @@ fn x_in_the_instrument_view_and_chain() {
 #[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "jj0ll");
+    press(&mut app, "jjjj0ll");
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
     typed(&mut app, "7st");
@@ -2747,7 +2831,7 @@ fn plus_makes_a_rate_faster_of_any_kind() {
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "jj0=ll");
+    press(&mut app, "jjjj0=ll");
     typed(&mut app, "1/8d");
     press(&mut app, "l");
     typed(&mut app, "+40");
@@ -2758,10 +2842,13 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[2].contains("Cut") && lines[2].contains("Res"));
     assert!(lines[3].starts_with("Filter") && lines[3].contains("FF"));
     assert!(lines[5].contains("Level") && lines[5].contains("Swing"));
-    assert!(lines[8].contains("Dest") && lines[8].contains("Retrig"));
-    let lfo: Vec<&str> = lines[9].split_whitespace().collect();
+    assert!(lines[8].contains("Attack") && lines[8].contains("Reset"));
+    assert!(lines[9].starts_with("Env 1") && lines[9].contains("Vol"));
+    assert!(lines[10].starts_with("Env 2") && lines[10].contains("Cut"));
+    assert!(lines[12].contains("Dest") && lines[12].contains("Retrig"));
+    let lfo: Vec<&str> = lines[13].split_whitespace().collect();
     assert_eq!(lfo, ["LFO", "1", "Cut", "Tri", "1/8d", "+40", "90°", "off"]);
-    assert!(lines[10].starts_with("LFO 2"));
+    assert!(lines[14].starts_with("LFO 2"));
 }
 
 #[test]

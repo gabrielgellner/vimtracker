@@ -21,8 +21,6 @@ fn value(row: Row, instrument: &Instrument) -> String {
             .clone()
             .unwrap_or_else(|| "(no sample: press i)".to_owned()),
         Row::Volume => format!("{:02X}", instrument.volume),
-        Row::Attack => format!("{} ms", instrument.attack_ms),
-        Row::Release => format!("{} ms", instrument.release_ms),
     }
 }
 

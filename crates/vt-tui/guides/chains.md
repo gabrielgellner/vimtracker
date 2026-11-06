@@ -67,7 +67,7 @@ all of them.
 | `:track add 4` | Add 4 tracks |
 | `:track del` | Remove the last track |
 | `:tvol C0` | Set this track's level in hex, shown as `TVol` |
-| `Space 4` | The track page: filter, output and LFOs |
+| `Space 4` | The track page: filter, envelopes, LFOs |
 | `Space m` | Mute or unmute this track |
 | `Space s` | Solo or unsolo this track |
 | `Space M` | Clear all mutes and solos |

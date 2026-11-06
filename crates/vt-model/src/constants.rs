@@ -47,6 +47,8 @@ pub const TELEMETRY_QUEUE: usize = 64;
 
 /// Tuning: smoother time for filter, volume and pan changes.
 pub const SMOOTHING_MS: u32 = 10;
+/// Tuning: smoothing on what envelopes move, short enough to keep a fast snap.
+pub const FAST_SMOOTHING_MS: u32 = 1;
 /// Tuning: fade length when a voice is cut.
 pub const DECLICK_FRAMES: u32 = 64;
 /// The velocity new notes are written with until changed, leaving room above it for accents.
@@ -66,7 +68,9 @@ pub const MIN_SWING: u16 = 500;
 pub const MAX_SWING: u16 = 750;
 
 /// The longest attack or release, in milliseconds.
-pub const MAX_ENVELOPE_MS: u16 = 5000;
+pub const MAX_ENVELOPE_MS: u16 = 8000;
+/// How many envelopes a track has.
+pub const TRACK_ENVELOPES: usize = 2;
 
 /// The lowest chain transpose, in semitones.
 pub const MIN_TRANSPOSE: i8 = -48;
