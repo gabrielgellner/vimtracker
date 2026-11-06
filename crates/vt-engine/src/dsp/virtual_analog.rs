@@ -60,7 +60,7 @@ fn next_blep(t: f32) -> f32 {
 }
 
 #[inline]
-fn next_integrated_blep(t: f32) -> f32 {
+pub(super) fn next_integrated_blep(t: f32) -> f32 {
     let t1 = 0.5 * t;
     let t2 = t1 * t1;
     let t4 = t2 * t2;
@@ -68,7 +68,7 @@ fn next_integrated_blep(t: f32) -> f32 {
 }
 
 #[inline]
-fn this_integrated_blep(t: f32) -> f32 {
+pub(super) fn this_integrated_blep(t: f32) -> f32 {
     next_integrated_blep(1.0 - t)
 }
 

@@ -4,6 +4,7 @@ use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
 use crate::dsp::kick::Kick;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
+use crate::dsp::waveshaping::Waveshaping;
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
@@ -42,6 +43,7 @@ enum Synth {
     Kick(Kick),
     Snare(Snare),
     Hat(Hat),
+    Waveshaping(Waveshaping),
 }
 
 impl Synth {
@@ -50,6 +52,7 @@ impl Synth {
         match voice {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
             SynthVoice::Fm => Self::Fm(Fm::new(rate)),
+            SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
             SynthVoice::Snare => Self::Snare(Snare::new(rate)),
             SynthVoice::Hat => Self::Hat(Hat::new(rate)),
@@ -64,6 +67,7 @@ impl Synth {
             Self::Kick(synth) => synth.next(frequency, settings),
             Self::Snare(synth) => synth.next(frequency, settings),
             Self::Hat(synth) => synth.next(frequency, settings),
+            Self::Waveshaping(synth) => synth.next(frequency, settings),
         }
     }
 }
