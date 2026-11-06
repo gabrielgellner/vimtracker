@@ -13,11 +13,14 @@ use vt_model::constants::{
 use crate::engine::{Engine, Transport};
 use crate::mixer::Reading;
 use crate::published::Published;
+use crate::track_state::LiveValues;
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
 /// presses can't act on an out-of-date view of whether it is playing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
+    /// Which track's live values to report.
+    Watch { track: usize },
     /// `Space c` and `Shift-Tab`: play from a section step, whatever is happening now.
     PlayFrom { step: usize },
     /// `Space c`: play from a step of a section, with a track's chain at that step if it's given.
@@ -69,6 +72,9 @@ pub struct Telemetry {
     pub position: usize,
     pub transport: Transport,
     pub reading: Reading,
+    /// The track being watched, and what it's playing with.
+    pub watched: usize,
+    pub live: LiveValues,
 }
 
 /// The edit thread's end.
@@ -91,6 +97,8 @@ pub struct Realtime {
     jam: Producer<(usize, JamState)>,
     /// What the edit thread has been told about each track.
     reported: [JamState; MAX_TRACKS],
+    /// The track whose live values are reported.
+    watched: usize,
 }
 
 /// Connect an engine to the edit thread.
@@ -117,6 +125,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             telemetry: telemetry_tx,
             jam: jam_tx,
             reported: [JamState::default(); MAX_TRACKS],
+            watched: 0,
         },
     )
 }
@@ -179,6 +188,7 @@ impl Realtime {
         }
         while let Ok(command) = self.commands.pop() {
             match command {
+                Command::Watch { track } => self.watched = track,
                 Command::PlayFrom { step } => self.engine.play_from(step),
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
@@ -216,6 +226,8 @@ impl Realtime {
             position: self.engine.position(),
             transport: self.engine.transport(),
             reading: self.engine.take_reading(),
+            watched: self.watched,
+            live: self.engine.live(self.watched),
         });
         // A change that doesn't fit stays different, so it goes in a later block.
         for (track, reported) in self.reported.iter_mut().enumerate() {

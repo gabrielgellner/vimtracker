@@ -639,6 +639,7 @@ Made by the author on 2026-11-06, after a review of this section:
 18. **Snare and Hat complete a synth kit** with Kick. Their noise comes from the track's seeded generator, so each hit differs while a render repeats for a seed. Added on 2026-11-06.
 19. **Fold adds a third tone colour**, from Plaits' waveshaping model, its main output. Its tables are generated from the formulas in `lookup_tables.py` and kept in the source. Added on 2026-11-06.
 20. **Small drawings use kitty's graphics protocol where it's available**, as plain one-colour lines of solid dots, after Elektron's screens: the envelopes, each LFO's shape, and the filter's curve, worked out from the filter's exact response. Other terminals get Braille diagrams and no icons, as does `--no-graphics`. Inside tmux, this needs `allow-passthrough on`. Placeholder characters mark where an image goes, so it stays in its pane and windows can draw over it. A changed image takes a new id, because kitty doesn't reconnect unchanged placeholders to a replaced image. Added on 2026-11-06.
+21. **A value's bar moves with what's playing**, as in modern plugins: its fill follows the value after step commands and modulation, with a dim mark where it's set, and its number stays the setting. The callback reports these values for the track the cursor is on. Added on 2026-11-06.
 
 ## Alternatives Considered
 

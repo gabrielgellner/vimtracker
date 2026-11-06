@@ -12,6 +12,7 @@ use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
+use vt_engine::track_state::LiveValues;
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRACK_ENVELOPES,
@@ -130,6 +131,9 @@ pub struct App {
     pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
     /// The id of the image of the filter's curve, likewise.
     pub filter_image: Option<u32>,
+    /// What the cursor's track is playing with right now, and the track the engine reports.
+    pub live: Option<LiveValues>,
+    watched: usize,
     pub track_row: usize,
     pub track_field: usize,
     /// Most recently used first, starting with the view on screen.
@@ -225,6 +229,8 @@ impl App {
             envelope_images: None,
             lfo_images: None,
             filter_image: None,
+            live: None,
+            watched: 0,
             track_row: 0,
             track_field: 0,
             recent_views: View::ALL.to_vec(),
@@ -424,6 +430,10 @@ impl App {
         let now = Instant::now();
         let seconds = now.saturating_duration_since(self.last_tick).as_secs_f32();
         self.last_tick = now;
+        let track = self.cursor.track;
+        if self.watched != track && self.handle.send(Command::Watch { track }) {
+            self.watched = track;
+        }
         let report = self.handle.latest();
         self.meter
             .update(report.map(|report| report.reading), seconds);
@@ -431,6 +441,7 @@ impl App {
             self.playhead = report.position;
             self.playing_section = report.section;
             self.transport = report.transport;
+            self.live = (report.watched == track).then_some(report.live);
         }
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;

@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
+use vt_engine::link::{Command, connect};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_engine::track_state::LiveValues;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -341,4 +343,124 @@ fn a_page_change_is_heard_now_and_leaves_what_a_step_set() {
     engine.process(&mut out);
     assert!(out[out.len() - 2].abs() < 1e-3, "{}", out[out.len() - 2]);
     assert!(out[out.len() - 1] > 0.5);
+}
+
+/// A running engine's live values for a track, after this many steps.
+fn live_after(song: Song, steps: usize) -> LiveValues {
+    let mut engine = Engine::new(RATE, version(song, flat()));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    for _ in 0..steps {
+        engine.process(&mut out);
+    }
+    engine.live(0)
+}
+
+#[test]
+fn live_values_are_the_settings_when_nothing_moves_them() {
+    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    let track = &mut song.tracks[0];
+    (track.level, track.pan, track.cutoff, track.resonance) = (0x90, 0x30, 0x70, 0x20);
+    (track.delay, track.reverb) = (0x11, 0x22);
+    (track.harmonics, track.timbre, track.morph) = (0x33, 0x44, 0x55);
+    let expected = LiveValues {
+        level: 0x90,
+        pan: 0x30,
+        cutoff: 0x70,
+        resonance: 0x20,
+        delay: 0x11,
+        reverb: 0x22,
+        harmonics: 0x33,
+        timbre: 0x44,
+        morph: 0x55,
+    };
+    assert_eq!(live_after(song, 3), expected);
+}
+
+#[test]
+fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
+    // A square LFO a quarter long is at its top for the first two steps, and bottom for the next.
+    let moved = |destination, base: fn(&mut Song)| {
+        let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+        base(&mut song);
+        song.tracks[0].lfos[0] = Lfo {
+            destination: Some(destination),
+            shape: Shape::Square,
+            rate: Rate::Note(QUARTER),
+            depth: 0x20,
+            ..Lfo::default()
+        };
+        song
+    };
+    let cut = moved(Destination::Cut, |song| song.tracks[0].cutoff = 0x80);
+    assert_eq!(live_after(cut.clone(), 1).cutoff, 0xA0);
+    assert_eq!(live_after(cut.clone(), 3).cutoff, 0x60);
+
+    let har = moved(Destination::Har, |song| song.tracks[0].harmonics = 0x80);
+    assert_eq!(live_after(har, 1).harmonics, 0xA0);
+
+    let dly = moved(Destination::Dly, |song| song.tracks[0].delay = 0x40);
+    assert_eq!(live_after(dly, 1).delay, 0x60);
+
+    // `Vol` shows on the track's level, around its own setting.
+    let vol = moved(Destination::Vol, |song| song.tracks[0].level = 0x90);
+    assert_eq!(live_after(vol, 1).level, 0xB0);
+
+    // It clamps at the ends of the range.
+    let high = moved(Destination::Cut, |song| song.tracks[0].cutoff = 0xF0);
+    assert_eq!(live_after(high, 1).cutoff, 0xFF);
+
+    // A step's command is what's playing as well.
+    let stepped = song(&["C-4 -- CUT40 ---00 ---00"]);
+    assert_eq!(live_after(stepped, 1).cutoff, 0x40);
+
+    // Once stopped, an LFO adds nothing.
+    let mut engine = Engine::new(RATE, version(cut, flat()));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.live(0).cutoff, 0xA0);
+    engine.return_to_start();
+    engine.process(&mut out);
+    assert_eq!(engine.live(0).cutoff, 0x80);
+}
+
+#[test]
+fn the_first_envelope_on_vol_does_not_move_the_level() {
+    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    song.tracks[0].level = 0x90;
+    song.tracks[0].envelopes[0].attack_ms = 500;
+    assert_eq!(live_after(song, 1).level, 0x90);
+}
+
+#[test]
+fn an_envelope_on_cut_moves_the_live_value() {
+    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    song.tracks[0].cutoff = 0x40;
+    song.tracks[0].envelopes[1].destination = Some(Destination::Cut);
+    song.tracks[0].envelopes[1].attack_ms = 0;
+    song.tracks[0].envelopes[1].decay_ms = 0;
+    song.tracks[0].envelopes[1].sustain = 100;
+    song.tracks[0].envelopes[1].depth = 0x40;
+    assert_eq!(live_after(song, 1).cutoff, 0x80);
+}
+
+#[test]
+fn the_callback_reports_the_watched_tracks_live_values() {
+    let mut song = Song::new(2);
+    song.tracks[0].cutoff = 0x10;
+    song.tracks[1].cutoff = 0x20;
+    let (mut handle, mut realtime) = connect(Engine::new(RATE, version(song, flat())));
+    let mut out = vec![0.0; 256];
+    realtime.process(&mut out);
+    let report = handle.latest().unwrap();
+    assert_eq!((report.watched, report.live.cutoff), (0, 0x10));
+    assert!(handle.send(Command::Watch { track: 1 }));
+    realtime.process(&mut out);
+    let report = handle.latest().unwrap();
+    assert_eq!((report.watched, report.live.cutoff), (1, 0x20));
+    // A track that doesn't exist is safe to ask about.
+    assert!(handle.send(Command::Watch { track: 99 }));
+    realtime.process(&mut out);
+    assert_eq!(handle.latest().unwrap().live, LiveValues::default());
 }

@@ -1552,6 +1552,114 @@ fn bars_show_where_a_value_is() {
 }
 
 #[test]
+fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
+    use ratatui::style::Style;
+    use vt_tui::theme;
+    use vt_tui::views::track::bar_spans;
+    let text = |spans: &[ratatui::text::Span]| {
+        spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>()
+    };
+    let style_at = |spans: &[ratatui::text::Span], cell: usize| spans[cell].style;
+    // Nothing moving: only the bar, in one piece.
+    let still = bar_spans(0x80, 0x80, false);
+    assert_eq!((still.len(), text(&still).as_str()), (1, "████▌    "));
+    assert_eq!(text(&bar_spans(0x80, 0x80, true)), "    │    ");
+
+    // Moved below the setting: the fill follows, and a dim mark stays where it's set.
+    let below = bar_spans(0xC0, 0x40, false);
+    assert_eq!(text(&below), "██▎   │  ");
+    assert_eq!(style_at(&below, 6), theme::faint());
+    assert_eq!(style_at(&below, 0).fg, Some(theme::MAUVE));
+
+    // Moved above it: the mark is cut out of the fill, so it still shows.
+    let above = bar_spans(0x40, 0xC0, false);
+    assert_eq!(text(&above), "██│███▊  ");
+    assert_eq!(
+        style_at(&above, 2),
+        Style::new().fg(theme::BASE).bg(theme::MAUVE)
+    );
+
+    // Around a centre: a bright mark for what plays and a dim one for what's set.
+    let centred = bar_spans(0x80, 0xC0, true);
+    assert_eq!(text(&centred), "    │ │  ");
+    assert_eq!(style_at(&centred, 4), theme::faint());
+    assert_eq!(style_at(&centred, 6).fg, Some(theme::MAUVE));
+    // A small move that stays in the set value's cell keeps the bright mark.
+    let near = bar_spans(0x80, 0x82, true);
+    assert_eq!(text(&near), "    │    ");
+    assert_eq!(style_at(&near, 4).fg, Some(theme::MAUVE));
+}
+
+#[test]
+fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
+    use vt_tui::views::track::{bar_spans, level_bar};
+    let text = |set, live| -> String {
+        bar_spans(set, live, false)
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    };
+    for set in 0..=u8::MAX {
+        for live in 0..u8::MAX {
+            // Each step the plain bar takes shows, wherever the mark is.
+            if level_bar(live) != level_bar(live + 1) {
+                assert_ne!(
+                    text(set, live),
+                    text(set, live + 1),
+                    "set {set:02X}, from {live:02X}"
+                );
+            }
+        }
+    }
+    // A slow rise across a mark at 80: the edge goes through its cell, with no mark to hide it.
+    let frames =
+        [0x70, 0x74, 0x78, 0x7B, 0x7E, 0x82, 0x85, 0x89, 0x8D, 0x92].map(|live| text(0x80, live));
+    assert_eq!(
+        frames,
+        [
+            "███▉│    ",
+            "████│    ",
+            "████▏    ",
+            "████▎    ",
+            "████▍    ",
+            "████▌    ",
+            "████▋    ",
+            "████▊    ",
+            "████▉    ",
+            "████│▏   ",
+        ]
+    );
+}
+
+#[test]
+fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    let cut = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.starts_with("Cut"))
+            .unwrap()
+    };
+    assert!(cut(&app).contains("FF ▕█████████▏"), "{}", cut(&app));
+    app.live = Some(vt_engine::track_state::LiveValues {
+        level: 0xE0,
+        pan: 0x80,
+        cutoff: 0x40,
+        resonance: 0,
+        delay: 0,
+        reverb: 0,
+        harmonics: 0x80,
+        timbre: 0,
+        morph: 0x80,
+    });
+    assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
+}
+
+#[test]
 fn the_ends_of_bars_line_up_down_each_column() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
