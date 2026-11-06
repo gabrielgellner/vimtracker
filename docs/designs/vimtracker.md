@@ -629,6 +629,9 @@ Made by the author on 2026-11-06, after a review of this section:
 8.  **Two of the same effect are allowed on a track**, though that won't be common.
 9.  **A mixer page comes soon**, before songs, as it's such a common part of a workflow.
 10. **Each track owns its chains and phrases**, numbered `00` to `FF` within it. A track is one sound, so a phrase's notes and values only mean something on its own track, unlike the M8, whose phrases name their instruments. Parts can be shared within a track, and copied but not linked between tracks. Made on 2026-11-06, along with keeping sections rather than the M8's per-track lists, and adding a row leaving it empty.
+11. **The song view is a restricted Session View:** a row is a scene, a chain is a clip, and phrases are reusable parts inside it. There is no linear timeline, as detailed arrangement happens in Ableton from stems.
+12. **No time signature in the model.** Meter comes from lengths, as on the M8, Polyend Tracker and Elektron machines. A bar is 16 steps, from one constant, until a song-wide setting is needed.
+13. **A render is one performance of the song.** Random trigs, step chances and any later chance on rows may differ between seeds, but all stems of one render take the same route.
 
 ## Alternatives Considered
 
@@ -1054,6 +1057,8 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M7: Mixer.** One page of level, pan, sends, mute and solo across all tracks. **Tests:** an edit here matches the same edit on the track page, and is one undo step.
 *   **M8: Songs.** Sections, a song view, section lengths, and each section resetting or carrying track positions. **Tests:** a song plays its sections in order, a render covers a whole song, and stems cover a whole song.
 *   **M8b: Jamming.** Launch a chain on one track while playing, and capture what's playing as a new section. **Tests:** a launch waits for the track's chain to end, stopping a track, a launch ending with its section, capturing without a break, and no allocation in the callback.
+*   **M8d: Session workflow (proposed).** Launch timing on a beat or bar grid, one-phrase chains opening straight to their phrase, chain labels, and cloning a chain with its phrases from the song view. **Tests:** as [its design](song-flow.md) lists.
+*   **M8c: Song flow (proposed).** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list, and slots naming any parameter on that list. **Tests:** every parameter on the list works with each key from the list alone, an effect's response, reordering, and off costing nothing.
 *   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
 *   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
@@ -1186,6 +1191,10 @@ From the author on 2026-11-06, after Ableton's Capture and Insert Scene, which n
 **Limits to judge in play.** Tracks launched at different times can be out of step, so a captured row can sound different from its start. A launch can't be queued for a whole row at once, and there's no shorter launch quantise than the chain's end. The phrase and chain views' playheads still follow the section's chains rather than a launched one.
 
 **Issue.** **Tests:** as the milestone lists, and each key's refusals.
+
+### M8d and M8c designs
+
+Proposed in [Song flow and session workflow](song-flow.md), which replaces parts of the M8 and M8b designs above once built.
 
 ### Known Gaps From Review
 
