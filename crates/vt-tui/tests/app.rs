@@ -2848,10 +2848,15 @@ fn the_song_view_adds_copies_and_removes_sections() {
     press(&mut app, "a");
     assert_eq!(app.song().sections.len(), 2);
     assert_eq!(app.cursor.section, 1);
-    assert_ne!(
+    assert_eq!(
         app.song().sections[1].chains,
-        app.song().sections[0].chains,
-        "new chains"
+        vec![None; app.song().tracks.len()],
+        "no chains"
+    );
+    assert_eq!(
+        app.song().chains.len(),
+        app.song().tracks.len(),
+        "none made"
     );
     press(&mut app, "gc");
     assert_eq!(app.song().sections.len(), 3);
@@ -2922,7 +2927,7 @@ fn the_song_view_edits_length_start_and_chains() {
 #[test]
 fn other_views_edit_the_section_under_the_cursor() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 1a 3");
+    press(&mut app, " 1allgd 3");
     let two = app.song().sections[1].chains[0].unwrap();
     let phrase = app.song().chains[&two].entries[0].phrase;
     press(&mut app, "ia");
@@ -2935,6 +2940,30 @@ fn other_views_edit_the_section_under_the_cursor() {
     press(&mut app, " 1k");
     assert_eq!(app.cursor.section, 0);
     assert_eq!(app.phrase_id(), Some(0));
+}
+
+#[test]
+fn an_empty_section_can_be_visited_from_every_view_and_filled() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1a");
+    assert!(song_text(&app)[4].contains("--"));
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            vt_tui::views::chain::draw(frame, frame.area(), &app);
+            vt_tui::views::phrase::draw(frame, frame.area(), &app);
+            vt_tui::views::track::draw(frame, frame.area(), &app);
+            vt_tui::views::mixer::draw(frame, frame.area(), &app);
+        })
+        .unwrap();
+    press(&mut app, " 3ia");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.song().sections[1].chains[0], None);
+    press(&mut app, " 1llgd");
+    assert_eq!(app.view, View::Chain);
+    assert!(app.song().sections[1].chains[0].is_some());
+    assert_eq!(app.song().sections[1].chains[1], None, "only this track");
 }
 
 #[test]

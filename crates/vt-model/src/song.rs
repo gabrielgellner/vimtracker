@@ -465,25 +465,12 @@ impl Song {
         self.sections.iter().map(|s| self.section_length(s)).sum()
     }
 
-    /// Add a section after this position, with its own new chain and phrase per track.
+    /// Add a section after this position, with no chains.
     pub fn insert_section(&mut self, at: usize) {
-        let mut section = Section::default();
-        for _ in 0..self.tracks.len() {
-            let phrase = lowest_unused(&self.phrases);
-            self.phrases
-                .insert(phrase, Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
-            let chain = lowest_unused(&self.chains);
-            self.chains.insert(
-                chain,
-                Arc::new(Chain {
-                    entries: vec![ChainEntry {
-                        phrase,
-                        transpose: 0,
-                    }],
-                }),
-            );
-            section.chains.push(Some(chain));
-        }
+        let section = Section {
+            chains: vec![None; self.tracks.len()],
+            ..Section::default()
+        };
         self.sections.insert(at.min(self.sections.len()), section);
     }
 

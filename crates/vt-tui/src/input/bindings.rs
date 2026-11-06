@@ -325,7 +325,7 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ),
     ("K", Cmd::PickValue, "Switch between carry and reset"),
     ("g d", Cmd::OpenItem, "Open this chain, or add one"),
-    ("a", Cmd::AddSection, "Add a section after this one"),
+    ("a", Cmd::AddSection, "Add an empty section after this one"),
     ("g c", Cmd::CloneSection, "Copy this section after itself"),
     ("d d", Cmd::RemoveRow, "Remove this section"),
     (";", Cmd::Audition, "Hear the start of this section"),

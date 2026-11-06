@@ -149,7 +149,7 @@ pub enum Action {
         section: usize,
         reset: Option<usize>,
     },
-    /// Add a section after a position, with new empty chains.
+    /// Add a section after a position, with no chains.
     AddSection {
         at: usize,
     },
