@@ -113,8 +113,9 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `=` `-` `+` `_` | Change the value |
 | `i` | Type a length then `Enter`, or a chain's two hex digits |
 | `x` | Length follows the chains, Start carries, or no chain |
-| `K` | On Start, switch between carry and reset |
-| `gd` | Open this track's chain, adding one if it has none |
+| `K` | On Start, switch carry and reset. On a track, choose its chain |
+| `gd` | Open this chain's phrase, or its rows if several, or add a chain |
+| `gC` | Copy this chain and its phrases, for this cell alone |
 | `a` | Add an empty section after this one |
 | `gc` | Copy this section after itself, using the same chains |
 | `dd` | Remove this section |
@@ -138,11 +139,32 @@ it once through, and `--stems` does too.
 ## Jamming
 
 While the song plays, `Enter` on any chain, on any row, plays it on that track
-once the track's current chain ends. `~` marks a chain waiting to start, `>` one
+at the next line of the launch grid. `~` marks a chain waiting to start, `>` one
 that's been launched, and the song stays on the section it's on. A launch doesn't
-change the song, and it ends when the song moves on or plays again.
+change the song, and it ends when the song moves on or plays again. A chain still
+waiting when the song moves on starts with the new section.
+
+`:launch` sets the grid for the whole song, counted from the start of the section:
+
+| Command | A launch starts |
+|---|---|
+| `:launch step` | On the next step |
+| `:launch 1/4`, `1/2` | On the next beat, or half bar |
+| `:launch 1bar`, `2bar`, `4bar`, `8bar` | On a bar, or so many |
+| `:launch 12` | Every so many steps |
+| `:launch chain` | When the track's own chain ends |
+| `:launch` | Show which it is |
+
+`1bar` is the default. A longer chain is cut at the line, and a shorter one loops
+until it. Launching the chain already playing starts it again.
+
+`:label verse bass` names the chain under the cursor, in the song and chain views,
+and `:label` alone clears it. Its number stays what rows refer to. The status line
+shows the label of the chain under the cursor, and `K` searches labels as well as
+numbers. Each chain's label stays with it wherever it's used.
 
 When you like what you hear, `C` adds a section below with what each track is
-playing, and carries on in it without a break. A stopped track becomes `--`. Keep
-going to build up an arrangement a row at a time. Tracks launched at different
-times can be out of step, so a row can sound different played from its start.
+playing, and carries on in it without a break. It keeps the length, Start and
+`:reset` of the section it came from. A stopped track becomes `--`. Keep going to
+build up an arrangement a row at a time. Tracks launched at different times can be
+out of step, so a row can sound different played from its start.

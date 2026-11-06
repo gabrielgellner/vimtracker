@@ -10,7 +10,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, FilterType, Phrase, Song};
+use vt_model::song::{Chain, ChainEntry, FilterType, Launch, Phrase, SectionStart, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
@@ -1734,7 +1734,13 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
         transpose: 0,
     };
     let entries = vec![entry(1), entry(2)];
-    song.tracks[1].chains.insert(1, Arc::new(Chain { entries }));
+    song.tracks[1].chains.insert(
+        1,
+        Arc::new(Chain {
+            entries,
+            label: String::new(),
+        }),
+    );
     song.sections[0].chains[1] = Some(1);
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -2890,7 +2896,6 @@ fn the_song_view_adds_copies_and_removes_sections() {
 
 #[test]
 fn the_song_view_edits_length_start_and_chains() {
-    use vt_model::song::SectionStart;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 1");
@@ -3008,21 +3013,181 @@ fn an_empty_section_can_be_visited_from_every_view_and_filled() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.song().sections[1].chains[0], None);
     press(&mut app, " 1llgd");
-    assert_eq!(app.view, View::Chain);
+    assert_eq!(app.view, View::Phrase);
     assert!(app.song().sections[1].chains[0].is_some());
     assert_eq!(app.song().sections[1].chains[1], None, "only this track");
 }
 
 #[test]
-fn gd_in_the_song_view_opens_a_chain_and_adds_one_if_needed() {
+fn gd_in_the_song_view_opens_a_new_chains_phrase_as_one_undo() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1gd");
     assert_eq!(app.view, View::Song, "{}", app.status);
     assert!(app.status.contains("track"));
-    press(&mut app, "lllxgd");
-    assert_eq!(app.view, View::Chain);
+    press(&mut app, "lllx");
+    let depth = app.history.undo_depth();
+    press(&mut app, "gd");
+    assert_eq!(app.view, View::Phrase);
     assert_eq!(app.cursor.track, 1);
     assert!(app.chain_id().is_some());
+    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+}
+
+#[test]
+fn gd_in_the_song_view_goes_by_how_many_phrases_a_chain_has() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1llgd");
+    assert_eq!(app.view, View::Phrase, "one phrase");
+    press(&mut app, " 2jgd");
+    assert_eq!(app.chain_entries().len(), 2);
+    press(&mut app, " 1gd");
+    assert_eq!(app.view, View::Chain, "several");
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(app.view, View::Song, "C-o comes back");
+}
+
+#[test]
+fn launch_sets_when_launches_start_and_shows_it() {
+    let (mut app, _realtime) = app();
+    assert_eq!(app.song().launch, Launch::every(16).unwrap());
+    command(&mut app, "launch");
+    assert!(app.status.contains("1bar"), "{}", app.status);
+    let depth = app.history.undo_depth();
+    command(&mut app, "launch 1/4");
+    assert_eq!(app.song().launch, Launch::every(4).unwrap());
+    assert!(app.status.contains("1/4"), "{}", app.status);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    command(&mut app, "launch 12");
+    assert!(app.status.contains("12-step"), "{}", app.status);
+    command(&mut app, "launch chain");
+    assert_eq!(app.song().launch, Launch::ChainEnd);
+    assert!(app.status.contains("chain ends"), "{}", app.status);
+    press(&mut app, "uu");
+    assert_eq!(app.song().launch, Launch::every(4).unwrap());
+    command(&mut app, "launch soon");
+    assert_eq!(app.song().launch, Launch::every(4).unwrap());
+}
+
+#[test]
+fn enter_says_when_the_launch_will_start() {
+    let (mut app, _realtime) = jamming();
+    press(&mut app, "0ll");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains("on the 1bar grid"), "{}", app.status);
+    command(&mut app, "launch chain");
+    press(&mut app, " 1");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains("when its chain ends"), "{}", app.status);
+}
+
+#[test]
+fn a_label_names_the_chain_under_the_cursor() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1ll");
+    assert_eq!(column_name(&app), "Track 01 chain");
+    let depth = app.history.undo_depth();
+    command(&mut app, "label verse bass");
+    assert_eq!(app.song().tracks[0].chains[&0].label, "verse bass");
+    assert_eq!(column_name(&app), "Track 01 chain: verse bass");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "gc");
+    assert_eq!(
+        column_name(&app),
+        "Track 01 chain: verse bass",
+        "same chain"
+    );
+    press(&mut app, "u");
+    command(&mut app, "label");
+    assert_eq!(column_name(&app), "Track 01 chain");
+    press(&mut app, " 2");
+    command(&mut app, "label from chain view");
+    assert_eq!(
+        app.song().tracks[0].chains[&0].label,
+        "from chain view",
+        "{}",
+        app.status
+    );
+}
+
+#[test]
+fn label_is_refused_without_a_chain_to_name() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "label nope");
+    assert!(app.status.contains("song and chain"), "{}", app.status);
+    press(&mut app, " 1");
+    command(&mut app, "label nope");
+    assert!(app.status.contains("track's column"), "{}", app.status);
+    press(&mut app, "llx");
+    command(&mut app, "label nope");
+    assert!(app.status.contains("no chain"), "{}", app.status);
+    assert!(app.song().tracks[0].chains[&0].label.is_empty());
+}
+
+#[test]
+fn k_chooses_a_cells_chain_by_number_or_label() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1aaj");
+    press(&mut app, "ll");
+    press(&mut app, "=");
+    assert_eq!(app.song().sections[2].chains[0], Some(1));
+    command(&mut app, "label bass");
+    press(&mut app, "kK");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.shown().count(), 3, "-- and both chains");
+    press(&mut app, "bass");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 1);
+    let depth = app.history.undo_depth();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().sections[1].chains[0], Some(1));
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "K");
+    assert_eq!(
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|i| i.label.as_str()),
+        Some("01  bass"),
+        "the cell's own is highlighted"
+    );
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "K");
+    press(&mut app, "--");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().sections[1].chains[0], None);
+    press(&mut app, "0K");
+    assert!(app.status.contains("track's column"), "{}", app.status);
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn g_upper_c_copies_the_chain_in_the_cursors_column_alone() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1lll");
+    command(&mut app, "label bass");
+    press(&mut app, "gc");
+    assert_eq!(app.cursor.section, 1);
+    let depth = app.history.undo_depth();
+    let old = app.song().tracks[1].chains[&0].clone();
+    press(&mut app, "gC");
+    assert_eq!(app.song().sections[1].chains[1], Some(1), "this cell");
+    assert_eq!(app.song().sections[0].chains[1], Some(0), "the other row");
+    assert_eq!(app.song().sections[1].chains[0], Some(0), "the other track");
+    assert_eq!(app.song().tracks[1].chains[&0], old);
+    let copy = &app.song().tracks[1].chains[&1];
+    assert_eq!(copy.label, "bass");
+    assert_ne!(copy.entries[0].phrase, old.entries[0].phrase);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(app.song().sections[1].chains[1], Some(0));
+
+    press(&mut app, "0gC");
+    assert!(app.status.contains("track's column"), "{}", app.status);
+    press(&mut app, "lllx");
+    press(&mut app, "gC");
+    assert!(app.status.contains("no chain"), "{}", app.status);
 }
 
 #[test]
@@ -3154,7 +3319,11 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
     assert_eq!(app.song().sections.len(), 3);
     assert_eq!(app.song().sections[1].chains[0], Some(1), "launched");
     assert_eq!(app.song().sections[1].chains[1], Some(0), "from its row");
-    assert_eq!(app.song().sections[1].length, None);
+    assert_eq!(
+        app.song().sections[1].length,
+        Some(16),
+        "the row it came from"
+    );
     assert_eq!(app.cursor.section, 1);
     assert_eq!(app.looping, Some(1));
     play_on(&mut app, &mut realtime, 1);
@@ -3163,6 +3332,19 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
     assert_eq!(app.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(app.song().sections.len(), 2);
+}
+
+#[test]
+fn c_copies_the_settings_of_the_row_it_came_from() {
+    let (mut app, mut realtime) = jamming();
+    press(&mut app, "k0");
+    command(&mut app, "reset 8");
+    press(&mut app, "lK");
+    assert_eq!(app.song().sections[0].start, SectionStart::Reset);
+    play_on(&mut app, &mut realtime, 1);
+    press(&mut app, "C");
+    assert_eq!(app.song().sections[1].reset, Some(8));
+    assert_eq!(app.song().sections[1].start, SectionStart::Reset);
 }
 
 #[test]

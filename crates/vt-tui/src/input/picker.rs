@@ -43,6 +43,8 @@ pub enum Pick {
     },
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),
+    /// A chain, or none, for the song view cell under the cursor.
+    SectionChain(Option<u32>),
     /// What the shape panel fills with.
     ShapeFill(FillKind),
     /// Which rows the shape panel fills.

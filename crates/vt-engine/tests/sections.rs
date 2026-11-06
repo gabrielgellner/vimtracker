@@ -7,7 +7,7 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, Phrase, Section, SectionStart, Song};
+use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Section, SectionStart, Song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -32,6 +32,7 @@ fn song(chains: &[&[&str]]) -> Song {
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     song.limiter = false;
+    song.launch = Launch::ChainEnd;
     song.sections.clear();
     for (id, steps) in chains.iter().enumerate() {
         let id = id as u32 + 10;
@@ -46,6 +47,7 @@ fn song(chains: &[&[&str]]) -> Song {
                     phrase: id,
                     transpose: 0,
                 }],
+                label: String::new(),
             }),
         );
         song.sections.push(Section {
@@ -308,4 +310,117 @@ fn continuing_in_a_captured_section_doesnt_change_what_plays() {
         out
     };
     assert_eq!(play(true), play(false));
+}
+
+/// Play from the top with the song held on its row, launching after the first step, and give the
+/// level in each step.
+fn on_grid(mut song: Song, every: usize, steps: usize, chain: Option<u32>) -> Vec<f32> {
+    song.launch = Launch::every(every).unwrap();
+    jam(song, steps, 0, |engine| engine.launch(0, chain))
+}
+
+#[test]
+fn a_launch_starts_on_the_next_grid_line_and_cuts_its_chain_there() {
+    let out = on_grid(song(&[&[A, A, A, A, A, A], &[B, C]]), 4, 8, Some(11));
+    same(&out, &[AV, AV, AV, AV, BV, CV, BV, CV]);
+}
+
+#[test]
+fn every_step_is_a_line_on_a_grid_of_one() {
+    let out = on_grid(song(&[&[A, A, A, A], &[B, C]]), 1, 4, Some(11));
+    same(&out, &[AV, BV, CV, BV]);
+}
+
+#[test]
+fn a_stop_waits_for_the_grid_too() {
+    let out = on_grid(song(&[&[A, A, A, A]]), 2, 4, None);
+    same(&out, &[AV, AV, 0.0, 0.0]);
+}
+
+#[test]
+fn a_short_chain_loops_until_the_grid_line() {
+    let mut short = song(&[&[A], &[B, C]]);
+    short.sections[0].length = Some(8);
+    let out = on_grid(short, 4, 7, Some(11));
+    same(&out, &[AV, AV, AV, AV, BV, CV, BV]);
+}
+
+#[test]
+fn a_row_shorter_than_the_grid_only_has_a_line_at_its_start() {
+    let mut twelve = song(&[&[A, A, A], &[B, C]]);
+    twelve.sections[0].length = Some(3);
+    let out = on_grid(twelve, 16, 6, Some(11));
+    same(&out, &[AV, AV, AV, BV, CV, BV]);
+}
+
+#[test]
+fn launching_the_chain_playing_restarts_it_on_the_grid() {
+    let out = on_grid(song(&[&[A, B, C, A, B, C]]), 4, 6, Some(10));
+    same(&out, &[AV, BV, CV, AV, AV, BV]);
+}
+
+#[test]
+fn the_grid_counts_from_the_row_so_a_reset_doesnt_move_it() {
+    let mut reset = song(&[&[A, A, A, A, A, A, A, A], &[B, C]]);
+    reset.sections[0].reset = Some(3);
+    reset.launch = Launch::every(4).unwrap();
+    let mut engine = Engine::new(RATE, version(reset));
+    engine.set_loop_section(Some(0));
+    engine.play_from(0);
+    let mut out = vec![0.0; 3000 * 2];
+    engine.process(&mut out);
+    engine.launch(0, Some(11));
+    let mut out = vec![0.0; 3 * STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.jam(0).cued, Some(Some(11)), "not at the reset");
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert_eq!(engine.jam(0).playing, Some(Some(11)), "on the row's step 4");
+}
+
+#[test]
+fn a_cue_survives_the_song_moving_on_and_starts_with_the_new_row() {
+    for launch in [Launch::ChainEnd, Launch::every(128).unwrap()] {
+        let mut moving = song(&[&[A, A, A], &[C, C, C, C], &[B, C]]);
+        moving.sections[0].length = Some(2);
+        moving.launch = launch;
+        let mut engine = Engine::new(RATE, version(moving));
+        engine.play_from(0);
+        let mut out = vec![0.0; 3000 * 2];
+        engine.process(&mut out);
+        engine.launch(0, Some(12));
+        let mut rest = vec![0.0; 4 * STEP * 2];
+        engine.process(&mut rest);
+        out.extend_from_slice(&rest);
+        let got: Vec<f32> = (0..4).map(|step| out[(step * STEP + 3000) * 2]).collect();
+        same(&got, &[AV, AV, BV, CV]);
+        assert_eq!(engine.jam(0).playing, Some(Some(12)));
+    }
+}
+
+#[test]
+fn a_cue_into_a_reset_row_plays_from_its_top() {
+    let mut moving = song(&[&[A, A, A], &[C, C, C, C], &[B, C]]);
+    moving.sections[0].length = Some(3);
+    moving.sections[1].start = SectionStart::Reset;
+    moving.launch = Launch::every(128).unwrap();
+    let mut engine = Engine::new(RATE, version(moving));
+    engine.play_from(0);
+    let mut out = vec![0.0; 3000 * 2];
+    engine.process(&mut out);
+    engine.launch(0, Some(12));
+    let mut rest = vec![0.0; 4 * STEP * 2];
+    engine.process(&mut rest);
+    out.extend_from_slice(&rest);
+    let got: Vec<f32> = (0..4).map(|step| out[(step * STEP + 3000) * 2]).collect();
+    same(&got, &[AV, AV, AV, BV]);
+}
+
+#[test]
+fn playing_again_forgets_what_was_cued() {
+    let mut engine = Engine::new(RATE, version(song(&[&[A, A], &[B, C]])));
+    engine.play_from(0);
+    engine.launch(0, Some(11));
+    engine.play_from(0);
+    assert_eq!(engine.jam(0).cued, None);
 }

@@ -9,7 +9,7 @@ use vt_model::project::{
 };
 use vt_model::sample::{SampleError, load_wav};
 use vt_model::samples::SamplePool;
-use vt_model::song::Song;
+use vt_model::song::{Launch, Song};
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -51,10 +51,27 @@ fn a_song_round_trips() {
     let dir = folder();
     let mut song = Song::new(3);
     song.millibpm = 137_630;
+    song.launch = Launch::every(12).unwrap();
+    Arc::get_mut(song.tracks[0].chains.get_mut(&0).unwrap())
+        .unwrap()
+        .label = "bass".to_owned();
     let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
     *phrase.step_mut(2).unwrap() = "C-4 64 CUT40 ---00 RET14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
+}
+
+#[test]
+fn a_launch_grid_of_nothing_is_refused_on_load() {
+    let dir = folder();
+    let mut song = Song::new(1);
+    song.launch = Launch::every(12).unwrap();
+    save_song(&dir, &song).unwrap();
+    let path = dir.join("song.ron");
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("Every(12)"), "{text}");
+    fs::write(&path, text.replace("Every(12)", "Every(0)")).unwrap();
+    assert!(load_song(&dir).is_err());
 }
 
 #[test]

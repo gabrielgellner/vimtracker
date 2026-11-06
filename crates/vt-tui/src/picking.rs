@@ -366,6 +366,7 @@ impl App {
                         });
                     }
                     Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
+                    Some(Pick::SectionChain(chain)) => self.pick_section_chain(chain),
                     Some(Pick::ShapeFill(kind)) => self.pick_shape_fill(kind),
                     Some(Pick::ShapeWhere(place)) => self.pick_shape_where(place),
                     Some(Pick::Guide(guide)) => {

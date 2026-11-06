@@ -4,17 +4,17 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::action::Action;
+use vt_model::constants::BAR_STEPS;
 use vt_model::selection::Motion;
 use vt_model::song::{SectionStart, lowest_unused};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use crate::input::picker::{Item, Pick, Picker};
 
 /// The columns before the tracks': Length and Start.
 pub const COLUMNS_BEFORE_TRACKS: usize = 2;
-/// How far a large step moves a length: a bar.
-const LARGE_LENGTH: i64 = 16;
 /// How far a large step moves a chain ID: its top digit.
 const LARGE_CHAIN: i64 = 0x10;
 
@@ -58,7 +58,7 @@ impl App {
             Cmd::DecreaseLarge => self.adjust_song(-(times as i64), true),
             Cmd::ClearField => self.clear_song_field(),
             Cmd::PickValue if self.song_column == 1 => self.switch_start(),
-            Cmd::PickValue => self.status = "K switches carry and reset on Start".to_owned(),
+            Cmd::PickValue => self.open_chain_picker(),
             Cmd::EnterInsert if self.song_column == 1 => self.switch_start(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
@@ -72,6 +72,7 @@ impl App {
                 self.apply(&Action::CloneSection { at: section });
                 self.go_to_section(section + 1);
             }
+            Cmd::CloneChain => self.clone_section_chain(),
             Cmd::Launch => self.launch(),
             Cmd::Capture => self.capture(),
             Cmd::RemoveRow => {
@@ -99,7 +100,7 @@ impl App {
         };
         match self.song_track() {
             None if self.song_column == 0 => {
-                let size = if large { LARGE_LENGTH } else { 1 };
+                let size = if large { BAR_STEPS as i64 } else { 1 };
                 let length = self.song().section_length(&here) as i64 + by * size;
                 self.apply(&Action::SetSectionLength {
                     section,
@@ -214,7 +215,101 @@ impl App {
         }
     }
 
-    /// `gd`: open the chain under the cursor, adding one if it has none.
+    /// The chain under the cursor, on a track's column.
+    fn cell_chain(&self, track: usize) -> Option<u32> {
+        self.section_here()?.chains.get(track).copied().flatten()
+    }
+
+    /// The label of the chain under the cursor, or nothing.
+    pub fn song_label(&self) -> &str {
+        self.song_track()
+            .and_then(|track| {
+                let chain = self.cell_chain(track)?;
+                self.song().tracks.get(track)?.chains.get(&chain)
+            })
+            .map_or("", |chain| chain.label.as_str())
+    }
+
+    /// `K`: list this track's chains to choose from, with the one in this cell highlighted.
+    fn open_chain_picker(&mut self) {
+        let Some(track) = self.song_track() else {
+            self.status = "K chooses a chain from a track's column".to_owned();
+            return;
+        };
+        let current = self.cell_chain(track);
+        let mut chains = vec![None];
+        chains.extend(self.song().tracks[track].chains.keys().copied().map(Some));
+        let position = chains.iter().position(|chain| *chain == current);
+        let items = chains
+            .iter()
+            .map(|chain| Item {
+                label: chain.map_or_else(
+                    || "--".to_owned(),
+                    |id| {
+                        let label = &self.song().tracks[track].chains[&id].label;
+                        format!("{id:02X}  {label}")
+                    },
+                ),
+                pick: Pick::SectionChain(*chain),
+            })
+            .collect();
+        let mut picker = Picker::new("Chains", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Put a chosen chain in the cell under the cursor.
+    pub(crate) fn pick_section_chain(&mut self, chain: Option<u32>) {
+        let Some(track) = self.song_track() else {
+            return;
+        };
+        if self.cell_chain(track) != chain {
+            self.apply(&Action::SetSectionChain {
+                section: self.cursor.section,
+                track,
+                chain,
+            });
+        }
+    }
+
+    /// `gC`: copy the chain under the cursor and its phrases, for this cell alone.
+    fn clone_section_chain(&mut self) {
+        let Some(track) = self.song_track() else {
+            self.status = "gC copies a chain from a track's column".to_owned();
+            return;
+        };
+        self.cursor.track = track;
+        self.clone_chain();
+    }
+
+    /// `:label`: name the chain under the cursor, in the song and chain views.
+    pub(crate) fn label_chain(&mut self, label: Option<String>) {
+        let track = match self.view {
+            View::Song => self.song_track(),
+            View::Chain => Some(self.cursor.track),
+            _ => {
+                self.status = ":label works in the song and chain views".to_owned();
+                return;
+            }
+        };
+        let Some(track) = track else {
+            self.status = ":label names a chain from a track's column".to_owned();
+            return;
+        };
+        let Some(chain) = self.cell_chain(track) else {
+            self.status = "This track has no chain".to_owned();
+            return;
+        };
+        self.apply(&Action::SetChainLabel {
+            track,
+            chain,
+            label: label.unwrap_or_default(),
+        });
+    }
+
+    /// `gd`: open the phrase of a chain with just one, or the rows of one with several. A cell with
+    /// no chain gets a new one, and a chain with no phrase gets a new one.
     pub(crate) fn open_section_chain(&mut self) {
         let Some(track) = self.song_track() else {
             self.status = "gd opens a chain from a track's column".to_owned();
@@ -235,12 +330,16 @@ impl App {
         }
         self.cursor.track = track;
         self.cursor.slot = 0;
-        self.view = View::Chain;
-        self.note_view(View::Chain);
+        if self.chain_entries().len() > 1 {
+            self.view = View::Chain;
+            self.note_view(View::Chain);
+        } else if let Some(chain) = self.chain_id() {
+            self.enter_row(chain, 0);
+        }
     }
 
-    /// `Enter`: play the chain under the cursor on its track once its current one ends, or stop
-    /// the track there on a `--`. The song stays on this section, so the jam doesn't move on.
+    /// `Enter`: play the chain under the cursor on its track when its launch timing next allows, or
+    /// stop the track then on a `--`. The song stays on this section, so the jam doesn't move on.
     fn launch(&mut self) {
         if self.transport != Transport::Playing {
             self.status = "Enter launches a chain while playing".to_owned();
@@ -258,14 +357,15 @@ impl App {
             self.looping = Some(self.playing_section);
             self.handle.send(Command::LoopSection(self.looping));
         }
+        let when = self.song().launch.when();
         self.status = match chain {
             Some(chain) => format!(
-                "Track {:02} plays chain {chain:02X} when its chain ends. Staying on section {:02}",
+                "Track {:02} plays chain {chain:02X} {when}. Staying on section {:02}",
                 track + 1,
                 self.playing_section + 1
             ),
             None => format!(
-                "Track {:02} stops when its chain ends. Staying on section {:02}",
+                "Track {:02} stops {when}. Staying on section {:02}",
                 track + 1,
                 self.playing_section + 1
             ),
@@ -297,7 +397,20 @@ impl App {
             return;
         }
         let at = self.playing_section + 1;
-        let mut actions = vec![Action::AddSection { at }];
+        // Playing on with the source's settings keeps its timing and realigning as they were.
+        let length = song.section_length(playing);
+        let (start, reset) = (playing.start, playing.reset);
+        let mut actions = vec![
+            Action::AddSection { at },
+            Action::SetSectionStart { section: at, start },
+            Action::SetReset { section: at, reset },
+        ];
+        if length > 0 {
+            actions.push(Action::SetSectionLength {
+                section: at,
+                length: Some(length),
+            });
+        }
         for (track, chain) in chains.into_iter().enumerate() {
             actions.push(Action::SetSectionChain {
                 section: at,

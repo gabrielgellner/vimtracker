@@ -327,8 +327,17 @@ const SONG: &[(&str, Cmd, &str)] = &[
         Cmd::ClearField,
         "Follow the longest chain, carry, or no chain",
     ),
-    ("K", Cmd::PickValue, "Switch between carry and reset"),
-    ("g d", Cmd::OpenItem, "Open this chain, or add one"),
+    (
+        "K",
+        Cmd::PickValue,
+        "Switch carry and reset, or choose this cell's chain",
+    ),
+    (
+        "g d",
+        Cmd::OpenItem,
+        "Open this chain's phrase, its rows, or add one",
+    ),
+    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
     ("a", Cmd::AddSection, "Add an empty section after this one"),
     ("g c", Cmd::CloneSection, "Copy this section after itself"),
     (

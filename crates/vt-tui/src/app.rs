@@ -1380,6 +1380,15 @@ impl App {
                 reset,
             }),
             Line::Loop => self.toggle_loop(),
+            Line::Launch(Some(launch)) => {
+                self.apply(&Action::SetLaunch(launch));
+                self.status = format!("Launches start {}", launch.when());
+            }
+            Line::Launch(None) => {
+                let launch = self.song().launch;
+                self.status = format!("Launches start {}", launch.when());
+            }
+            Line::Label(label) => self.label_chain(label),
             Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
                 track: self.cursor.track,
                 level,
