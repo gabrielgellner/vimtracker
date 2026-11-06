@@ -1536,19 +1536,40 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
 #[test]
 fn bars_show_where_a_value_is() {
     use vt_tui::views::track::{centre_bar, level_bar};
-    assert_eq!(level_bar(0x00), "▏");
-    assert_eq!(level_bar(0x01), "▏");
-    assert_eq!(level_bar(0x80), "████");
-    assert_eq!(level_bar(0xFF), "████████");
-    assert_eq!(level_bar(0x40), "██");
-    assert_eq!(level_bar(0x48), "██▎");
-    assert_eq!(centre_bar(0x00), "│");
-    assert_eq!(centre_bar(0x80), "    │");
-    assert_eq!(centre_bar(0xFF), "       │");
+    assert_eq!(level_bar(0x00), "         ");
+    assert_eq!(level_bar(0x01), "▏        ");
+    assert_eq!(level_bar(0x40), "██▎      ");
+    assert_eq!(level_bar(0x80), "████▌    ");
+    assert_eq!(level_bar(0xFE), "████████▉");
+    assert_eq!(level_bar(0xFF), "█████████");
+    assert_eq!(centre_bar(0x00), "│        ");
+    assert_eq!(centre_bar(0x80), "    │    ");
+    assert_eq!(centre_bar(0xFF), "        │");
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     let text = track_text(&app).join("\n");
-    assert!(text.contains("Pan") && text.contains("    │"), "{text}");
+    assert!(text.contains("80 ▕    │    ▏"), "{text}");
+}
+
+#[test]
+fn the_ends_of_bars_line_up_down_each_column() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    for mark in ['▕', '▏'] {
+        let mut columns: Vec<usize> = track_text(&app)
+            .iter()
+            .flat_map(|line| {
+                line.chars()
+                    .enumerate()
+                    .filter(|(_, c)| *c == mark)
+                    .map(|(x, _)| x)
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        columns.sort_unstable();
+        columns.dedup();
+        assert_eq!(columns.len(), 2, "{mark}: {columns:?}");
+    }
 }
 
 #[test]
@@ -2629,7 +2650,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
     assert!(lines[4].starts_with("Type") && lines[4].contains("Delay"));
-    assert!(lines[5].starts_with("Cut") && lines[5].contains("FF ████████"));
+    assert!(lines[5].starts_with("Cut") && lines[5].contains("FF ▕█████████▏"));
     assert!(lines[6].starts_with("Res") && lines[6].contains("Swing"));
 }
 

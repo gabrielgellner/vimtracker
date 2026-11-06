@@ -23,8 +23,11 @@ const DIAGRAM_HEIGHT: usize = 4;
 
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
-/// Cells in a value's bar, each split into eighths.
-const BAR_CELLS: usize = 8;
+/// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
+const BAR_CELLS: usize = 9;
+/// The lines at each end of a bar's range, touching the cells between them.
+const BAR_START: &str = "▕";
+const BAR_END: &str = "▏";
 /// The Sound page's columns: a label, then a value and its bar.
 const SOUND_LABEL: usize = 10;
 const SOUND_COLUMN: usize = 36;
@@ -33,22 +36,20 @@ const FILE_WIDTH: usize = 24;
 /// The characters for a cell partly full, from one eighth to seven.
 const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
-/// A bar for a value, full at `FF`. `00` is still a thin line, so there's always something to see.
+/// A bar for a value, full at `FF`, filling all of its cells. Only `00` leaves them empty.
 pub fn level_bar(value: u8) -> String {
-    let eighths = usize::from(value) * BAR_CELLS * 8 / 255;
+    let eighths = (usize::from(value) * BAR_CELLS * 8 / 255).max(usize::from(value > 0));
     let mut bar = "█".repeat(eighths / 8);
-    match eighths % 8 {
-        0 if eighths == 0 => bar.push('▏'),
-        0 => {}
-        part => bar.push(EIGHTHS[part - 1]),
+    if eighths % 8 > 0 {
+        bar.push(EIGHTHS[eighths % 8 - 1]);
     }
-    bar
+    format!("{bar:<BAR_CELLS$}")
 }
 
-/// A mark for a value either side of a centre, like pan.
+/// A mark for a value either side of a centre, like pan, filling all of the bar's cells.
 pub fn centre_bar(value: u8) -> String {
     let cell = usize::from(value) * BAR_CELLS / 256;
-    format!("{}│", " ".repeat(cell))
+    format!("{:<BAR_CELLS$}", format!("{}│", " ".repeat(cell)))
 }
 
 /// The value a control shows a bar for, and how. True is a mark either side of a centre.
@@ -110,9 +111,11 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             } else {
                 level_bar(value)
             };
-            used += 1 + bar.chars().count();
+            used += 1 + BAR_START.chars().count() + BAR_CELLS + BAR_END.chars().count();
             spans.push(Span::raw(" "));
+            spans.push(Span::styled(BAR_START, theme::faint()));
             spans.push(Span::styled(bar, Style::new().fg(theme::MAUVE)));
+            spans.push(Span::styled(BAR_END, theme::faint()));
         }
     }
     Line::from(spans)
