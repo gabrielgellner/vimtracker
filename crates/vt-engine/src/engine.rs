@@ -145,7 +145,7 @@ impl Engine {
 
     /// The place last fired, or the next to fire if none has yet.
     pub fn position(&self) -> usize {
-        if self.section_steps() == 0 {
+        if !self.has_steps() {
             return 0;
         }
         let fired = self.transport == Transport::Playing && self.frames_since_origin > 0;
@@ -255,9 +255,11 @@ impl Engine {
         });
     }
 
-    fn section_steps(&self) -> usize {
+    /// Whether any section has a length, so there's a next step to fire. One with a length and no
+    /// chains is a rest, and one with neither is skipped.
+    fn has_steps(&self) -> bool {
         let song = &self.current.song;
-        self.playing_section().map_or(0, |s| song.section_steps(s))
+        song.sections.iter().any(|s| song.section_length(s) > 0)
     }
 
     /// The section playing. Removing one while playing moves to whichever takes its place.
@@ -622,7 +624,7 @@ impl Engine {
 
     /// Frames until the next step fires.
     fn frames_until_next_step(&self) -> u64 {
-        if self.section_steps() == 0 {
+        if !self.has_steps() {
             return u64::MAX;
         }
         let tick = (self.next_step * TICKS_PER_STEP).saturating_sub(self.origin_tick);

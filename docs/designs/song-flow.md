@@ -26,7 +26,7 @@ Each track owns its chains and phrases. A chain is a list of phrases, each with 
 *   **Row step (`section_place`):** how far the current row has played, counted from its start across its repeats. Only starting a row sets it back to 0.
 *   **Chain position:** where a track is in its chain.
 *   **Part:** a musical idea on one track, such as a bassline, played by one chain.
-*   **Empty row:** a row with no chains and no set length. It's skipped.
+*   **Empty row:** a row with no length, as it has no set length and its chains have no steps. It's skipped. A row with a set length and no chains is a rest.
 *   **Self-loop:** a row playing again after itself, through `:loop`, or because it's the song's only non-empty row.
 *   **Wrap:** moving from the last non-empty row to the first, when they differ.
 *   **`Start` `reset` and `:reset N`:** two different settings on a row. See M8c.
@@ -235,11 +235,9 @@ The review's last stage ended with these not applied to the design above. Where 
 | Finding | Milestone | Treatment |
 |---|---|---|
 | Capture from a row with `Rpt` can end its row at once, as `continue_in` leaves the row step alone. M8d settled the same problem without `Rpt` by copying the effective length. | M8c | `ContinueIn` wraps the row step to fit, with a test from a repeated source. |
-| A row with a set length and only `--` cells appears to stall playback, as `frames_until_next_step` waits forever when the row has no chain steps (`engine.rs:598`). Not yet reproduced. | Before M8c | Reproduce it with a test first. Then test the row's length there. It may be its own small PR. |
 | Playing from a chain step can need a negative `started`, which breaks `started <= place`. | M8c | Make `started` signed, use `rem_euclid`, and drop the invariant and saturation. Chain step 40 from an earlier row's cell plays that row against the chain's second half, which is an accepted limit. |
 | The play-from-row walk starts wrongly at a `:reset N` row, and copies the transition rules. | M8c | Start from the top or the last `Start` `reset`. Share one pure, non-allocating row-entry function with the engine, and test that the walk's state equals playing through. A row with no set length costs tracks times `chain_steps` in the walk, so correct the risk wording. |
 | `Rpt` puts bar lines mid-pass. | M8c | Test the grid against `section_place % length`, and count a self-loop as a row starting. |
-| `Start` `reset` and `:reset N` overlap within a row. | M8c | Decide before building. The current lean is to keep both, as `:reset N` longer than a row still has a use on a self-loop. |
 | The playing chain can't be read back from the previous row, as `self.section` is an index. | M8c | Keep a per-track scalar for the playing chain, which playheads also need. |
 | `repeat` has two defences against 0. | M8c | Use `NonZeroU16`, so serde rejects it and the engine needs no case. |
 | Audition (`engine.rs:880`, `tree.rs:414`) and moving between tracks (`app.rs:883`) treat one row step as every chain's position. | M8c | Decide per case. A spanning row otherwise differs from playback. `PlaySection` needs a track field. |
@@ -271,13 +269,12 @@ The review's last stage ended with these not applied to the design above. Where 
 
 ### M8c: outline
 
-1.  Fix the silent row, if the test reproduces it.
-2.  Decide the `Start` `reset` and `:reset N` overlap.
-3.  Add `started` and the playing chain per track, replacing `Launched.started`, with a row-entry function the engine and the walk share.
-4.  Change `SectionStart` to `New` and `Reset`, and update `sections.rs:116`.
-5.  Add `repeat`, the `Rpt` column and `song_steps`, and move the grid to each pass.
-6.  Add the play-from-row walk and playheads per track.
-7.  Update render, the guide and both design documents.
+1.  Keep both `Start` `reset` and `:reset N`, as `:reset N` longer than a row still has a use on a self-loop.
+2.  Add `started` and the playing chain per track, replacing `Launched.started`, with a row-entry function the engine and the walk share.
+3.  Change `SectionStart` to `New` and `Reset`, and update `sections.rs:116`.
+4.  Add `repeat`, the `Rpt` column and `song_steps`, and move the grid to each pass.
+5.  Add the play-from-row walk and playheads per track.
+6.  Update render, the guide and both design documents.
 
 ### Verification
 

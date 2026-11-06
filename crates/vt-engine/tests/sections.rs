@@ -424,3 +424,27 @@ fn playing_again_forgets_what_was_cued() {
     engine.play_from(0);
     assert_eq!(engine.jam(0).cued, None);
 }
+
+#[test]
+fn a_row_of_nothing_with_a_set_length_is_a_rest() {
+    let mut rest = song(&[&[A, A], &[B], &[C, C]]);
+    rest.sections[1].chains = vec![None];
+    rest.sections[1].length = Some(2);
+    // Nothing plays over the last note, so it rings on until the next row's.
+    same(&levels(rest, 6), &[AV, AV, AV, AV, CV, CV]);
+}
+
+#[test]
+fn a_song_can_start_on_a_row_of_nothing() {
+    let mut rest = song(&[&[A], &[B]]);
+    rest.sections[0].chains = vec![None];
+    rest.sections[0].length = Some(2);
+    same(&levels(rest, 3), &[0.0, 0.0, BV]);
+}
+
+#[test]
+fn a_song_starting_on_an_empty_row_plays_the_next() {
+    let mut empty = song(&[&[A], &[B]]);
+    empty.sections[0].chains = vec![None];
+    same(&levels(empty, 2), &[BV, BV]);
+}

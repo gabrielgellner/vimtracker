@@ -126,7 +126,7 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 Sections play in order, and the song goes round to the first at the end. A
 section lasts as long as its longest chain unless you set its length, which
 cuts its chains short or lets them loop on. An empty section is skipped until
-it has a chain or a length. A `:reset` belongs to one section.
+it has a chain or a length, and one with only a length is a rest. A `:reset` belongs to one section.
 
 **Start** says what a section does to the tracks. `carry` keeps them counting
 from where they were, and `reset` sends them all back to their start.
