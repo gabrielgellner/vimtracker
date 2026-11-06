@@ -74,6 +74,8 @@ pub enum Cmd {
     Guides,
     ShowView(View),
     Picker,
+    /// Choose a track to go to, like a buffer.
+    TrackPicker,
     OpenItem,
     JumpBack,
     JumpForward,
@@ -176,6 +178,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
+    ("Space f b", Cmd::TrackPicker, "Open the track picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
     ("Space k", Cmd::Help, "Show every key"),
     ("C-o", Cmd::JumpBack, "Jump back"),

@@ -41,6 +41,13 @@ pub enum Pick {
         slot: usize,
         envelope: Envelope,
     },
+    /// A sound from the current kit, for this track, and the name the track takes.
+    KitSound {
+        path: PathBuf,
+        name: String,
+    },
+    /// Go to this track.
+    Track(usize),
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),
     /// A chain, or none, for the song view cell under the cursor.

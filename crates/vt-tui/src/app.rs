@@ -17,6 +17,7 @@ use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRANSPORT_GUARD_MS,
 };
 use vt_model::history::History;
+use vt_model::kit::KitEntry;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -32,6 +33,7 @@ use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
+use crate::picking::kit_path;
 use crate::shaping::ShapePanel;
 use crate::track_page::Page;
 use crate::tree::{ChainColumn, Place};
@@ -177,6 +179,8 @@ pub struct App {
     pub shape: Option<ShapePanel>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
+    /// The sounds of the kit in use, to choose from for a track.
+    pub kit: Vec<KitEntry>,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -261,6 +265,7 @@ impl App {
             anchor_track: None,
             shape: None,
             shape_seed: 0,
+            kit: Vec::new(),
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,
@@ -591,6 +596,7 @@ impl App {
             Cmd::EndLoopHere => self.end_loop_here(),
             Cmd::ShowView(view) => self.jump_to_view(view),
             Cmd::Picker => self.open_view_picker(),
+            Cmd::TrackPicker => self.open_track_picker(),
             Cmd::Help => {
                 self.help_scroll = 0;
                 self.mode = Mode::Help;
@@ -1335,7 +1341,8 @@ impl App {
             Line::Edit(path) => self.open(&path),
             Line::New(path) => self.new_project(&path),
             Line::Sample(path) => self.sample(&path),
-            Line::Kit(Some(name)) => self.load_named_kit(&name),
+            Line::Kit(Some(name)) => self.use_kit(&kit_path(&name)),
+            Line::KitTracks(name) => self.load_kit(&kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.apply(&Action::SetTrackName {
                 track: self.cursor.track,
@@ -1561,6 +1568,12 @@ impl App {
     }
 
     pub(crate) fn sample(&mut self, source: &Path) {
+        self.sample_named(source, None);
+    }
+
+    /// Put a sample on the current track and name the track after it, if there's a name, as one
+    /// undo step.
+    pub(crate) fn sample_named(&mut self, source: &Path, name: Option<&str>) {
         if source.is_dir() {
             self.open_sample_picker(&[source.to_path_buf()]);
             return;
@@ -1578,10 +1591,18 @@ impl App {
                 let mut pool = SamplePool::clone(&self.samples);
                 pool.insert(&stored, data);
                 self.samples = Arc::new(pool);
-                self.apply(&Action::SetTrackSample {
-                    track: self.cursor.track,
+                let track = self.cursor.track;
+                let mut actions = vec![Action::SetTrackSample {
+                    track,
                     sample: Some(stored),
-                });
+                }];
+                if let Some(name) = name {
+                    actions.push(Action::SetTrackName {
+                        track,
+                        name: name.to_owned(),
+                    });
+                }
+                self.apply(&Action::Batch(actions));
                 if self.status.is_empty() {
                     self.status = format!("Track {:02} sample loaded", self.cursor.track + 1);
                 }
