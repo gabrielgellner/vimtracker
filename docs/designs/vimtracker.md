@@ -599,12 +599,12 @@ The shape panel is already what makes ramps here. It needs only to learn glide.
 04  C-4 64  CUTC0 .  ---00
 ```
 
-*   **`.` lock**, the default: lasts until the next note on the track or the next value in that slot, so it covers a whole note rather than snapping back while it rings. A lock on a row with no note works the same way, which changes a sound mid-note.
+*   **`.` lock**, the default: lasts until the next note on the track or the next value of that parameter, so it covers a whole note rather than snapping back while it rings. A lock on a row with no note works the same way, which changes a sound mid-note.
 *   **`h` hold**: replaces the base until playback next starts from the top, as all values do today.
-*   **`g` glide**: slides from this row to the next value in the slot, wrapping through the loop. With no other value, it stays put.
-*   **Layers:** the track page's value is the base, a hold replaces it, and a lock sits on top of those. LFOs and envelopes add on top of everything, and carry on around whatever the steps do.
+*   **`g` glide**: slides from this row to the next value of that parameter in the slot, wrapping through the phrase's loop. With no other value, it stays put.
+*   **Layers:** the track page's value is the base, a hold replaces it, and a lock or glide sits on top of those. M4's design has the full rules. LFOs and envelopes add on top of everything, and carry on around whatever the steps do.
 *   **Editing:** `~` cycles the mark on the slot under the cursor, in Visual as well, and `.` repeats it. Marks aren't cursor stops, as those would add a stop per slot to every `l`. A newly typed value copies the mark of the nearest value above it in that column, which gives most of a column mode with no setting. A stop can be added if `~` feels wrong in play.
-*   **Events** have no mark. Empty slots show nothing, and each slot grows by two characters.
+*   **Events** and empty slots show no mark, and each slot grows by two characters.
 
 ### What this changes in the existing plan
 
@@ -1054,6 +1054,57 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list, and slots naming any parameter on that list. **Tests:** every parameter on the list works with each key from the list alone, an effect's response, reordering, and off costing nothing.
 *   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
 *   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
+
+### M4 design: marks
+
+Marks are meant to be judged in play, so these rules are the simplest that can be built and heard, and they may change. Anything not covered follows the Fallback rule. This applies only to the six value commands, `VOL`, `PAN`, `CUT`, `RES`, `DLY` and `REV`. There is no shared parameter list yet.
+
+**Data.** `FxSlot` gains `mark: Mark`, one of `Lock`, `Hold` or `Glide`, with `Lock` the default. An empty slot or an event always has the default. In step text, a lock adds nothing, and the others add one letter: `CUT40`, `CUT40h`, `CUT40g`. A mark on an event or empty slot is a load error. `FORMAT_VERSION` stays at 1, so existing songs load but their values become locks and sound different.
+
+**Layers.** For each of the six values, `TrackState` keeps a base, an optional lock and an optional glide. What's heard is the glide if there is one, then the lock, then the base. The result goes through today's `set_held` targets and smoothers, and LFOs and envelopes still add on top.
+
+| Event | Effect |
+|---|---|
+| A `.` value | Sets that parameter's lock, and ends its glide |
+| An `h` value | Sets its base, and ends its lock and glide |
+| A `g` value | Starts a glide from this value, and ends its lock |
+| A row with a note that plays | Ends every lock on the track, before that row's values run. It doesn't end a glide, so a sweep can cross notes |
+| A note a failed `CHA` skips, `OFF`, `RET`, `KIL` | Ends nothing, as the same note is still ringing or fading |
+| A `DEL` note | Ends locks at its row, not when it sounds |
+| An edit on the track page | Sets the base, replacing a hold. A lock or glide stays on top until it ends |
+| Starting from the top | Clears locks and glides, and bases return to the page's values, as held values do today |
+| Pause and resume, `:reset`, wrapping, chain moves | No effect |
+
+Since `CHA` decides whether a row's note plays, it is read before locks end. It draws its random numbers in the same order as today. Slots still run left to right, so when two slots on a row name a parameter, the rightmost wins. Locks and holds on a track are per parameter, so `DLY30` doesn't end a `CUT` lock.
+
+**Glide.** At a `g` value, the engine looks forward through the phrase's loop in that slot, wrapping, for the next value with the same command, and skips other commands. With none, the value stays where it is, as a lock would. Otherwise the value moves in a straight line in slot units, from this row to that row, following song position so it keeps up with tempo changes. It updates on the same schedule as the LFOs, through the existing smoothers.
+
+*   **Arrival:** the arrival row runs as normal, with its own mark. It lands exactly, as the row's value replaces the glide.
+*   **Chains:** the search stays in the phrase's own loop, so a phrase means the same everywhere. If a chain moves on first, the glide finishes on time and takes the mark of the value it was heading for.
+*   **Cost:** the search is at most `MAX_PHRASE_STEPS` rows, doesn't allocate, and runs only on a glide row. If that shows up on the CPU readout, it can be worked out when a version is published.
+
+**Editing.**
+
+*   **`~`** in Normal cycles lock, hold, glide on the slot under the cursor, on either of its fields. On an event or empty slot it does nothing and says why.
+*   **`~` in Visual** moves every value in the selection to the mark after the first value's, so a mixed selection ends up the same.
+*   **`.` and undo:** `~` repeats with `.`, and each use is one undo step.
+*   **New values:** a value typed into an empty slot copies the mark of the nearest value above it in that column in the phrase, without wrapping, or is a lock if there is none. A value typed over another keeps its mark.
+*   **Moving and clearing:** `y`, `p`, `d`, rotate and slide carry marks, as they move whole slots. `x` clears the mark with the slot.
+*   **Shape panel:** it keeps a mark already on a row, and otherwise writes locks. Writing glides is left out for now.
+
+**Display.** Each slot grows by two characters: `CUT40 . ---00   CUT80 g`. A lock's `.` is dim, `h` and `g` are normal, and events and empty slots show a space. Marks aren't cursor stops.
+
+**To judge by ear, as they may change the rules:**
+
+*   A sweep ending in a lock jumps back at the next note. If that's wrong most of the time, a glide's arrival could hold instead.
+*   A lock ending on a drum's attack passes through the 10 ms smoother, which may soften the hit.
+*   Whether lock is the right default in practice, and whether a column of dim dots is too busy.
+
+**Issues.**
+
+1.  **Marks in the model and phrase view:** the data, step text, display and editing above, with marks stored but not yet heard. **Tests:** step text round-trips each mark, a mark on an event is refused, `~` cycles and is one undo step, `.` repeats it, Visual `~` makes a mixed selection the same, and a new value copies the mark above.
+2.  **Lock and hold in the engine:** the layers and the table above. Existing tests that expect values to hold gain `h`, and goldens are re-blessed. **Tests:** each row of the table, the rightmost slot winning, an LFO carrying on around a lock, and renders staying repeatable. The author plays this before glide starts.
+3.  **Glide in the engine.** **Tests:** the value at the halfway row, landing exactly, wrapping, a skipped command, no other value, crossing a note, a tempo change, a chain moving on, and no allocation under the real-time guard.
 
 ### Known Gaps From Review
 
