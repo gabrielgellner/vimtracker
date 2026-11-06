@@ -20,5 +20,6 @@ ratatui.workspace = true
 cpal.workspace = true
 clap.workspace = true
 thiserror.workspace = true
+base64.workspace = true
 nucleo-matcher.workspace = true
 hound.workspace = true

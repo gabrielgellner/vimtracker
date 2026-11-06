@@ -22,6 +22,7 @@ use crate::app::App;
 use crate::audio::{AudioError, AudioStats, Output};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::kitty::{self, Graphics, Support};
 use crate::theme;
 use crate::views;
 
@@ -115,7 +116,7 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
 }
 
 /// Open a project, or start an unsaved one, and run until the user quits.
-pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
+pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let output = Output::open()?;
     let rate = output.rate();
     let mut status = String::new();
@@ -140,9 +141,21 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let mut app = App::new(song, path, samples, handle, rate);
     app.status = status;
     app.offer_restore();
+    let support = if no_graphics {
+        Support::NoTerminal
+    } else {
+        kitty::support()
+    };
+    if support == Support::NoPassthrough && app.status.is_empty() {
+        app.status = kitty::PASSTHROUGH_HINT.to_owned();
+    }
+    let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
-    let result = main_loop(&mut terminal, &mut app, &stats);
+    let result = main_loop(&mut terminal, &mut app, &stats, graphics.as_mut());
+    if let Some(graphics) = &graphics {
+        graphics.forget(&mut std::io::stdout())?;
+    }
     ratatui::restore();
     result
 }
@@ -151,6 +164,7 @@ fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
     stats: &AudioStats,
+    mut graphics: Option<&mut Graphics>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
     while !app.should_quit {
@@ -161,6 +175,9 @@ fn main_loop(
         app.cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
         app.autosave_if_due(Instant::now());
+        if let Some(graphics) = graphics.as_deref_mut() {
+            graphics.sync(app, &mut std::io::stdout())?;
+        }
         terminal.draw(|frame| {
             frame.render_widget(Block::new().style(theme::screen()), frame.area());
             let [body, status] =

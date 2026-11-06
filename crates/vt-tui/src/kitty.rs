@@ -1,0 +1,756 @@
+//! Small drawings in pixels, using kitty's graphics protocol. An image is sent ahead of time, and
+//! placeholder characters say where it goes. As they're text, they stay inside a tmux
+//! pane, and a window can be drawn over them.
+
+use std::io::{self, Write};
+use std::process::Command;
+
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use ratatui::style::Color;
+use vt_engine::dsp::filter::track_response_db;
+use vt_engine::dsp::lfo::wave;
+use vt_model::constants::TRACK_ENVELOPES;
+use vt_model::envelope::Envelope;
+use vt_model::lfo::{LFOS_PER_TRACK, Shape};
+use vt_model::song::{FilterType, Track};
+
+use crate::app::App;
+use crate::input::mode::View;
+use crate::theme;
+use crate::track_page::Page;
+use crate::views::braille::{envelope_columns, line_columns};
+use crate::views::track::{
+    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
+    envelope_being_edited, filter_being_edited, lfo_being_edited,
+};
+
+/// The character that stands for a piece of an image.
+const PLACEHOLDER: char = '\u{10EEEE}';
+/// The marks that give a placeholder's row and column, from kitty's `rowcolumn-diacritics.txt`.
+const POSITIONS: [char; 28] = [
+    '\u{305}', '\u{30D}', '\u{30E}', '\u{310}', '\u{312}', '\u{33D}', '\u{33E}', '\u{33F}',
+    '\u{346}', '\u{34A}', '\u{34B}', '\u{34C}', '\u{350}', '\u{351}', '\u{352}', '\u{357}',
+    '\u{35B}', '\u{363}', '\u{364}', '\u{365}', '\u{366}', '\u{367}', '\u{368}', '\u{369}',
+    '\u{36A}', '\u{36B}', '\u{36C}', '\u{36D}',
+];
+/// The most base64 the protocol takes in one command.
+const CHUNK: usize = 4096;
+/// The grid of dots an envelope is drawn on, for each character.
+const CELL_DOTS_ACROSS: usize = 6;
+const CELL_DOTS_DOWN: usize = 12;
+/// The pixels across and down each dot. Kitty smooths an image it scales, so a dot is a solid block
+/// that's already near its final size, which keeps its edges crisp.
+const DOT_PIXELS: usize = 3;
+
+/// How much of a row an LFO's icon stays inside, so the icons of two rows don't touch.
+const ICON_HEIGHT: f32 = 0.8;
+/// The random values an LFO's icon shows, and how many a random shape's icon shows.
+const ICON_KEY: u64 = 148;
+const RANDOM_ICON_CYCLES: f64 = 4.0;
+
+/// What a filter curve's height covers, in dB, with the frequency across it from 20 Hz to 20 kHz. It
+/// has more room below than above, as a filter takes away more than it adds.
+const CURVE_BOTTOM_DB: f32 = -36.0;
+const CURVE_TOP_DB: f32 = 24.0;
+
+/// Lines of placeholders for an image of this size.
+pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
+    (0..height)
+        .map(|row| {
+            (0..width)
+                .flat_map(|column| [PLACEHOLDER, POSITIONS[row], POSITIONS[column]])
+                .collect()
+        })
+        .collect()
+}
+
+/// The colour that tells the terminal which image a placeholder belongs to.
+pub fn id_color(id: u32) -> Color {
+    Color::Rgb((id >> 16) as u8, (id >> 8) as u8, id as u8)
+}
+
+/// The CRC that PNG chunks end with.
+fn crc32(parts: &[&[u8]]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in parts.iter().copied().flatten() {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
+/// The checksum that zlib data ends with.
+fn adler32(data: &[u8]) -> u32 {
+    let (a, b) = data.iter().fold((1_u32, 0_u32), |(a, b), byte| {
+        let a = (a + u32::from(*byte)) % 65_521;
+        (a, (b + a) % 65_521)
+    });
+    (b << 16) | a
+}
+
+/// A PNG of solid dots in one colour on nothing. With one bit for each pixel it's small enough
+/// without compressing it, so its data is stored as it is.
+fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
+    let (width, height) = (dots[0].len(), dots.len());
+    let mut lines = Vec::with_capacity((width.div_ceil(8) + 1) * height);
+    for row in dots {
+        lines.push(0);
+        lines.extend(row.chunks(8).map(|bits| {
+            bits.iter().enumerate().fold(0_u8, |byte, (index, bit)| {
+                byte | (u8::from(*bit) << (7 - index))
+            })
+        }));
+    }
+    let mut stored = vec![0x78, 0x01];
+    let mut blocks = lines.chunks(usize::from(u16::MAX)).peekable();
+    while let Some(block) = blocks.next() {
+        let length = block.len() as u16;
+        stored.push(u8::from(blocks.peek().is_none()));
+        stored.extend(length.to_le_bytes());
+        stored.extend((!length).to_le_bytes());
+        stored.extend(block);
+    }
+    stored.extend(adler32(&lines).to_be_bytes());
+
+    let mut header = Vec::new();
+    header.extend((width as u32).to_be_bytes());
+    header.extend((height as u32).to_be_bytes());
+    // One bit deep, with colours from a palette, and the usual settings for the rest.
+    header.extend([1, 3, 0, 0, 0]);
+    let mut palette = vec![0; 3];
+    palette.extend(color);
+    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+    let chunks: [(&[u8; 4], &[u8]); 5] = [
+        (b"IHDR", &header),
+        (b"PLTE", &palette),
+        // The first colour is see-through.
+        (b"tRNS", &[0]),
+        (b"IDAT", &stored),
+        (b"IEND", &[]),
+    ];
+    for (name, data) in chunks {
+        out.extend((data.len() as u32).to_be_bytes());
+        out.extend(*name);
+        out.extend(data);
+        out.extend(crc32(&[name, data]).to_be_bytes());
+    }
+    out
+}
+
+/// A line as a PNG of solid dots, with each dot a block of pixels.
+fn line_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
+    let mut dots = vec![vec![false; spans.len() * DOT_PIXELS]; rows * DOT_PIXELS];
+    for (column, (high, low)) in spans.iter().enumerate() {
+        for row in *high..=*low {
+            for line in &mut dots[row * DOT_PIXELS..(row + 1) * DOT_PIXELS] {
+                line[column * DOT_PIXELS..(column + 1) * DOT_PIXELS].fill(true);
+            }
+        }
+    }
+    png(&dots, color)
+}
+
+/// An envelope's shape as a PNG: a plain line of solid dots, as on a small LCD.
+pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&envelope_columns(envelope, across, down), down, color)
+}
+
+/// An LFO's wave as a PNG, to show which shape it is. It uses the real wave, with one cycle or, for
+/// a random one, a few, since one cycle of `Random` is only flat.
+pub fn shape_png(shape: Shape, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let cycles = match shape {
+        Shape::Random | Shape::Smooth => RANDOM_ICON_CYCLES,
+        _ => 1.0,
+    };
+    let level = |x: f32| {
+        // Stopping just short of the end, or a saw would jump back up there.
+        let value = wave(shape, f64::from(x.min(0.999)) * cycles, ICON_KEY);
+        0.5 + value * 0.5 * ICON_HEIGHT
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
+}
+
+/// A track's filter and utility filter as a PNG, showing what they let through at each frequency.
+pub fn filter_png(
+    track: &Track,
+    rate: u32,
+    color: [u8; 3],
+    columns: usize,
+    rows: usize,
+) -> Vec<u8> {
+    let level = |x: f32| {
+        let db = track_response_db(track, rate, 20.0 * 1000_f32.powf(x));
+        (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
+}
+
+/// Write one command, wrapped so tmux passes it on.
+fn command(out: &mut impl Write, controls: &str, data: &[u8], in_tmux: bool) -> io::Result<()> {
+    if in_tmux {
+        out.write_all(b"\x1bPtmux;\x1b\x1b_G")?;
+    } else {
+        out.write_all(b"\x1b_G")?;
+    }
+    out.write_all(controls.as_bytes())?;
+    out.write_all(b";")?;
+    out.write_all(data)?;
+    if in_tmux {
+        out.write_all(b"\x1b\x1b\\\x1b\\")
+    } else {
+        out.write_all(b"\x1b\\")
+    }
+}
+
+/// A PNG to send, and how many characters it covers.
+pub struct Image<'a> {
+    pub id: u32,
+    pub png: &'a [u8],
+    pub columns: usize,
+    pub rows: usize,
+}
+
+/// Send an image, in pieces. `q=2` keeps the terminal from answering, as its answers would arrive as key presses.
+pub fn transmit(out: &mut impl Write, image: &Image, in_tmux: bool) -> io::Result<()> {
+    let encoded = STANDARD.encode(image.png);
+    let mut chunks = encoded.as_bytes().chunks(CHUNK).peekable();
+    let mut first = true;
+    while let Some(chunk) = chunks.next() {
+        let more = u8::from(chunks.peek().is_some());
+        let controls = if first {
+            let Image {
+                id, columns, rows, ..
+            } = image;
+            format!("a=T,U=1,f=100,i={id},c={columns},r={rows},q=2,m={more}")
+        } else {
+            format!("q=2,m={more}")
+        };
+        command(out, &controls, chunk, in_tmux)?;
+        first = false;
+    }
+    Ok(())
+}
+
+/// Whether images can reach the terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Support {
+    Images,
+    /// The terminal isn't known to draw them.
+    NoTerminal,
+    /// It's kitty, but tmux won't pass them on.
+    NoPassthrough,
+}
+
+/// What the status line says when tmux is what's in the way.
+pub const PASSTHROUGH_HINT: &str =
+    "Drawing in Braille: `tmux set -g allow-passthrough on` lets images through";
+
+/// Work out support from the terminal's name and, in tmux, whether it passes images on.
+fn judge(terminal: &str, passthrough: Option<&str>) -> Support {
+    if !terminal.contains("kitty") {
+        Support::NoTerminal
+    } else if passthrough.is_none_or(|setting| matches!(setting, "on" | "all")) {
+        Support::Images
+    } else {
+        Support::NoPassthrough
+    }
+}
+
+/// What tmux says about this pane, or nothing if it can't be asked.
+fn ask_tmux(args: &[&str]) -> String {
+    Command::new("tmux")
+        .args(args)
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .unwrap_or_default()
+}
+
+/// Whether images can reach this terminal. Inside tmux, its client is the terminal that counts.
+pub fn support() -> Support {
+    if std::env::var_os("TMUX").is_some() {
+        let terminal = ask_tmux(&["display-message", "-p", "#{client_termname}"]);
+        let setting = ask_tmux(&["show", "-Apv", "allow-passthrough"]);
+        return judge(&terminal, Some(&setting));
+    }
+    let terminal = std::env::var("TERM").unwrap_or_default();
+    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
+        return Support::Images;
+    }
+    judge(&terminal, None)
+}
+
+/// The settings a filter curve is drawn from.
+type FilterSettings = (FilterType, u8, u8, u8, u8, u8);
+
+/// The colour of a drawing, with the cursor on it or not.
+fn color(active: bool) -> [u8; 3] {
+    let style = if active {
+        theme::active()
+    } else {
+        theme::dim()
+    };
+    match style.fg {
+        Some(Color::Rgb(red, green, blue)) => [red, green, blue],
+        _ => [255; 3],
+    }
+}
+
+/// The images the terminal has. Each envelope keeps one with the cursor on it and one without, so
+/// moving the cursor sends nothing, and each LFO shape has the same two, sent once when first shown.
+///
+/// A changed image gets a new id, rather than replacing the one with the old id. Kitty only looks at
+/// placeholders on lines that have changed, and replacing an image disconnects them, so it would stay
+/// blank. A new id changes the placeholders' colour, which makes kitty look again.
+pub struct Graphics {
+    base: u32,
+    next: u32,
+    images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
+    shapes: [[Option<u32>; 2]; Shape::ALL.len()],
+    filter: [Option<(FilterSettings, u32)>; 2],
+    /// Images to forget once the screen has moved on from them.
+    retired: Vec<u32>,
+    in_tmux: bool,
+}
+
+impl Graphics {
+    /// Ready to send images, with ids another running copy won't be using.
+    pub fn new() -> Self {
+        Self {
+            base: (std::process::id() & 0xFFFF) << 8,
+            next: 0,
+            images: [[None; 2]; TRACK_ENVELOPES],
+            shapes: [[None; 2]; Shape::ALL.len()],
+            filter: [None; 2],
+            retired: Vec::new(),
+            in_tmux: std::env::var_os("TMUX").is_some(),
+        }
+    }
+
+    /// An id no image has at the moment.
+    fn new_id(&mut self) -> u32 {
+        loop {
+            self.next = self.next % 0xFF + 1;
+            let id = self.base | self.next;
+            let in_use = self
+                .shapes
+                .iter()
+                .flatten()
+                .flatten()
+                .any(|shape| *shape == id)
+                || self
+                    .images
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(|image| image.1 == id)
+                || self.filter.iter().flatten().any(|image| image.1 == id)
+                || self.retired.contains(&id);
+            if !in_use {
+                return id;
+            }
+        }
+    }
+
+    /// Send the images the screen is about to show, if the terminal lacks them, and say which to use.
+    pub fn sync(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
+        for id in self.retired.drain(..) {
+            command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
+        }
+        if app.view == View::Track
+            && let Some(track) = app.song().tracks.get(app.cursor.track).cloned()
+        {
+            match app.track_page {
+                Page::Sound => self.sync_sound(app, &track, out)?,
+                Page::Mod => self.sync_mod(app, &track, out)?,
+            }
+        }
+        out.flush()
+    }
+
+    /// Send the Sound page's filter curve, if the terminal lacks it.
+    fn sync_sound(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let settings = (
+            track.filter,
+            track.cutoff,
+            track.resonance,
+            track.drive,
+            track.low_cut,
+            track.high_cut,
+        );
+        let active = filter_being_edited(app);
+        let held = self.filter[usize::from(active)];
+        let id = match held {
+            Some((drawn, id)) if drawn == settings => id,
+            _ => {
+                let id = self.new_id();
+                let png = filter_png(
+                    track,
+                    app.rate,
+                    color(active),
+                    FILTER_CURVE_WIDTH,
+                    FILTER_CURVE_HEIGHT,
+                );
+                self.send(out, id, &png, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)?;
+                self.retired.extend(held.map(|(_, old)| old));
+                self.filter[usize::from(active)] = Some((settings, id));
+                id
+            }
+        };
+        app.filter_image = Some(id);
+        Ok(())
+    }
+
+    /// Send the Mod page's envelopes and LFO shapes, if the terminal lacks them.
+    fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let (envelopes, lfos) = (track.envelopes, track.lfos);
+        let edited = envelope_being_edited(app);
+        let mut envelope_ids = [0; TRACK_ENVELOPES];
+        for (slot, envelope) in envelopes.iter().enumerate() {
+            let active = edited == Some(slot);
+            let held = self.images[slot][usize::from(active)];
+            envelope_ids[slot] = match held {
+                Some((drawn, id)) if drawn == *envelope => id,
+                _ => {
+                    let id = self.new_id();
+                    let png = envelope_png(envelope, color(active), DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
+                    self.send(out, id, &png, DIAGRAM_WIDTH, DIAGRAM_HEIGHT)?;
+                    self.retired.extend(held.map(|(_, old)| old));
+                    self.images[slot][usize::from(active)] = Some((*envelope, id));
+                    id
+                }
+            };
+        }
+        let edited = lfo_being_edited(app);
+        let mut lfo_ids = [0; LFOS_PER_TRACK];
+        for (slot, lfo) in lfos.iter().enumerate() {
+            let active = edited == Some(slot);
+            let index = Shape::ALL
+                .iter()
+                .position(|shape| *shape == lfo.shape)
+                .unwrap_or(0);
+            lfo_ids[slot] = match self.shapes[index][usize::from(active)] {
+                Some(id) => id,
+                None => {
+                    let id = self.new_id();
+                    let png = shape_png(lfo.shape, color(active), LFO_ICON_WIDTH, 1);
+                    self.send(out, id, &png, LFO_ICON_WIDTH, 1)?;
+                    self.shapes[index][usize::from(active)] = Some(id);
+                    id
+                }
+            };
+        }
+        app.envelope_images = Some(envelope_ids);
+        app.lfo_images = Some(lfo_ids);
+        Ok(())
+    }
+
+    /// Send one image.
+    fn send(
+        &self,
+        out: &mut impl Write,
+        id: u32,
+        png: &[u8],
+        columns: usize,
+        rows: usize,
+    ) -> io::Result<()> {
+        let image = Image {
+            id,
+            png,
+            columns,
+            rows,
+        };
+        transmit(out, &image, self.in_tmux)
+    }
+
+    /// Have the terminal forget the images.
+    pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
+        let held = self.images.iter().flatten().flatten().map(|image| &image.1);
+        let shapes = self.shapes.iter().flatten().flatten();
+        let filter = self.filter.iter().flatten().map(|image| &image.1);
+        for id in held.chain(shapes).chain(filter).chain(&self.retired) {
+            command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
+        }
+        out.flush()
+    }
+}
+
+impl Default for Graphics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Chunks = Vec<(String, Vec<u8>)>;
+
+    /// A PNG's chunks, having checked their CRCs, and its pixels.
+    fn decode(png: &[u8]) -> (Chunks, Vec<Vec<bool>>) {
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        let mut chunks = Vec::new();
+        let mut at = 8;
+        while at < png.len() {
+            let length = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+            let (name, data) = (&png[at + 4..at + 8], &png[at + 8..at + 8 + length]);
+            let crc =
+                u32::from_be_bytes(png[at + 8 + length..at + 12 + length].try_into().unwrap());
+            assert_eq!(crc32(&[name, data]), crc);
+            chunks.push((String::from_utf8(name.to_vec()).unwrap(), data.to_vec()));
+            at += 12 + length;
+        }
+        let header = &chunks[0].1;
+        let width = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let idat = &chunks.iter().find(|(name, _)| name == "IDAT").unwrap().1;
+        let mut lines = Vec::new();
+        let mut at = 2;
+        loop {
+            let last = idat[at] == 1;
+            let length = usize::from(u16::from_le_bytes([idat[at + 1], idat[at + 2]]));
+            let check = u16::from_le_bytes([idat[at + 3], idat[at + 4]]);
+            assert_eq!(check, !(length as u16));
+            lines.extend(&idat[at + 5..at + 5 + length]);
+            at += 5 + length;
+            if last {
+                break;
+            }
+        }
+        assert_eq!(&idat[at..], adler32(&lines).to_be_bytes());
+        let stride = width.div_ceil(8) + 1;
+        let pixels = lines
+            .chunks(stride)
+            .map(|line| {
+                assert_eq!(line[0], 0);
+                (0..width)
+                    .map(|x| line[1 + x / 8] & (0x80 >> (x % 8)) != 0)
+                    .collect()
+            })
+            .collect();
+        (chunks, pixels)
+    }
+
+    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
+        Envelope {
+            attack_ms,
+            decay_ms,
+            sustain,
+            release_ms,
+            ..Envelope::default()
+        }
+    }
+
+    fn sent(in_tmux: bool, png: &[u8]) -> Vec<u8> {
+        let image = Image {
+            id: 7,
+            png,
+            columns: 28,
+            rows: 4,
+        };
+        let mut out = Vec::new();
+        transmit(&mut out, &image, in_tmux).unwrap();
+        out
+    }
+
+    #[test]
+    fn placeholders_are_one_column_each_and_say_where_they_are() {
+        let lines = placeholder_lines(28, 4);
+        assert_eq!(lines.len(), 4);
+        for (row, line) in lines.iter().enumerate() {
+            let chars: Vec<char> = line.chars().collect();
+            assert_eq!(chars.len(), 28 * 3);
+            for (column, cell) in chars.chunks(3).enumerate() {
+                assert_eq!(cell, [PLACEHOLDER, POSITIONS[row], POSITIONS[column]]);
+            }
+            assert_eq!(ratatui::text::Line::raw(line.as_str()).width(), 28);
+        }
+    }
+
+    #[test]
+    fn images_go_to_kitty_when_tmux_lets_them_through() {
+        assert_eq!(judge("xterm-kitty", None), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("on")), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("all")), Support::Images);
+        assert_eq!(judge("xterm-kitty", Some("off")), Support::NoPassthrough);
+        assert_eq!(judge("xterm-256color", None), Support::NoTerminal);
+        assert_eq!(judge("alacritty", Some("on")), Support::NoTerminal);
+        assert_eq!(judge("", Some("")), Support::NoTerminal);
+    }
+
+    #[test]
+    fn each_lfo_shape_has_its_own_small_icon() {
+        let icons = Shape::ALL.map(|shape| shape_png(shape, [255; 3], 4, 1));
+        for (index, icon) in icons.iter().enumerate() {
+            assert!(icon.len() < 1000, "{}", icon.len());
+            let (_, pixels) = decode(icon);
+            let (across, down) = (4 * CELL_DOTS_ACROSS, CELL_DOTS_DOWN);
+            assert_eq!(
+                (pixels[0].len(), pixels.len()),
+                (across * DOT_PIXELS, down * DOT_PIXELS)
+            );
+            assert!(
+                !icons[index + 1..].contains(icon),
+                "{:?}",
+                Shape::ALL[index]
+            );
+            // It stays off the top and bottom of its row, so two rows' icons don't touch.
+            assert!(pixels[0].iter().all(|pixel| !pixel));
+            assert!(pixels[down * DOT_PIXELS - 1].iter().all(|pixel| !pixel));
+        }
+    }
+
+    #[test]
+    fn a_saw_falls_and_a_ramp_rises_with_no_jump_at_the_end() {
+        let spans = |shape| {
+            let level = |x: f32| 0.5 + wave(shape, f64::from(x.min(0.999)), 0) * 0.4;
+            line_columns(level, level(0.0), 24, 12)
+        };
+        let (saw, ramp) = (spans(Shape::Saw), spans(Shape::Ramp));
+        assert!(saw[0].0 < saw[23].0);
+        assert!(ramp[0].0 > ramp[23].0);
+        assert_eq!(saw[23].0, saw[23].1, "a single dot, with no line back up");
+    }
+
+    /// A filter curve's height at points across it, from 0 at the bottom to 1.
+    fn curve(track: &Track) -> Vec<f32> {
+        let level = |x: f32| {
+            let db = track_response_db(track, 48_000, 20.0 * 1000_f32.powf(x));
+            (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
+        };
+        (0..=10).map(|step| level(step as f32 / 10.0)).collect()
+    }
+
+    fn open_track() -> Track {
+        Track {
+            filter: FilterType::LowPass,
+            cutoff: 0xFF,
+            resonance: 0,
+            drive: 0,
+            low_cut: 0,
+            high_cut: 0xFF,
+            ..Track::default()
+        }
+    }
+
+    #[test]
+    fn a_filter_curve_is_small_and_flat_when_the_filter_is_open() {
+        let track = open_track();
+        let png = filter_png(&track, 48_000, [255; 3], 24, 3);
+        assert!(png.len() < 7000, "{}", png.len());
+        let (_, pixels) = decode(&png);
+        let (across, down) = (24 * CELL_DOTS_ACROSS, 3 * CELL_DOTS_DOWN);
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        let flat = (0.0 - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB);
+        for level in curve(&track) {
+            assert!((level - flat).abs() < 0.001, "{level}");
+        }
+    }
+
+    #[test]
+    fn a_filter_curve_goes_where_the_filter_does() {
+        let mut track = Track {
+            cutoff: 0x80,
+            ..open_track()
+        };
+        let low = curve(&track);
+        assert!(low[0] > low[10]);
+        track.filter = FilterType::HighPass;
+        let high = curve(&track);
+        assert!(high[0] < high[10]);
+        // Resonance raises a peak above the plain low-pass.
+        track.filter = FilterType::LowPass;
+        track.resonance = 0xC0;
+        let peak = curve(&track).into_iter().fold(0.0, f32::max);
+        assert!(peak > low.into_iter().fold(0.0, f32::max) + 0.1);
+    }
+
+    #[test]
+    fn a_color_holds_an_images_id() {
+        assert_eq!(id_color(0x12_34_56), Color::Rgb(0x12, 0x34, 0x56));
+    }
+
+    #[test]
+    fn the_checksums_match_known_values() {
+        assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
+        assert_eq!(adler32(b"Wikipedia"), 0x11E6_0398);
+    }
+
+    #[test]
+    fn an_envelope_is_a_small_png_of_one_colour_on_nothing() {
+        let png = envelope_png(&adsr(1, 200, 0, 50), [1, 2, 3], 28, 4);
+        assert!(png.len() < 10_000, "{}", png.len());
+        let (chunks, _) = decode(&png);
+        let names: Vec<&str> = chunks.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
+        assert_eq!(chunks[1].1, [0, 0, 0, 1, 2, 3]);
+        assert_eq!(chunks[2].1, [0]);
+    }
+
+    #[test]
+    fn the_pixels_are_the_envelopes_line_as_solid_dots() {
+        // A held half has one line part way up, with nothing above or below it.
+        let envelope = adsr(0, 0, 50, 0);
+        let (_, pixels) = decode(&envelope_png(&envelope, [255; 3], 28, 4));
+        let (across, down) = (28 * CELL_DOTS_ACROSS, 4 * CELL_DOTS_DOWN);
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        let spans = envelope_columns(&envelope, across, down);
+        for (y, line) in pixels.iter().enumerate() {
+            for (x, pixel) in line.iter().enumerate() {
+                let (column, row) = (x / DOT_PIXELS, y / DOT_PIXELS);
+                let (high, low) = spans[column];
+                assert_eq!(*pixel, (high..=low).contains(&row), "dot {column}, {row}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_image_is_sent_in_pieces_the_protocol_takes() {
+        let pixels = vec![9; 10_000];
+        let out = String::from_utf8(sent(false, &pixels)).unwrap();
+        let commands: Vec<&str> = out
+            .split("\x1b\\")
+            .filter(|command| !command.is_empty())
+            .collect();
+        assert!(commands.len() > 1);
+        assert!(commands[0].starts_with("\x1b_Ga=T,U=1,f=100,i=7,c=28,r=4,q=2,m=1;"));
+        let mut data = String::new();
+        for (index, command) in commands.iter().enumerate() {
+            let (controls, chunk) = command.split_once(';').unwrap();
+            let last = index == commands.len() - 1;
+            assert!(
+                controls.ends_with(if last { "m=0" } else { "m=1" }),
+                "{controls}"
+            );
+            assert!(controls.contains("q=2"), "{controls}");
+            assert!(chunk.len() <= CHUNK);
+            if !last {
+                assert_eq!(chunk.len() % 4, 0);
+            }
+            data.push_str(chunk);
+        }
+        assert_eq!(STANDARD.decode(data).unwrap(), pixels);
+    }
+
+    #[test]
+    fn tmux_gets_each_piece_wrapped_with_its_escapes_doubled() {
+        let out = String::from_utf8(sent(true, &[1, 2, 3, 4])).unwrap();
+        assert!(out.starts_with("\x1bPtmux;\x1b\x1b_Ga=T"), "{out:?}");
+        assert!(out.ends_with("\x1b\x1b\\\x1b\\"), "{out:?}");
+    }
+}

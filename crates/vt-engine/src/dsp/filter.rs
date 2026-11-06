@@ -1,7 +1,7 @@
 //! Each track's filter. The clean modes share a TPT state-variable filter, which stays stable near
 //! the top of the range. The ladder is the character filter, and costs more.
 
-use vt_model::song::FilterType;
+use vt_model::song::{FilterType, Track};
 
 /// How far `Drive` turns up what goes into the filter, at full.
 const DRIVE_GAIN: f32 = 7.0;
@@ -222,6 +222,55 @@ impl Channel {
     }
 }
 
+/// How much a filter lets through at a frequency, in dB, for a quiet signal. This is the filter's
+/// exact response, so a drawing of it shows what's heard.
+pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, hertz: f32) -> f32 {
+    let c = Coefficients::new(cutoff, resonance, rate);
+    let hertz = hertz.min(rate as f32 * 0.499);
+    let power = if kind == FilterType::Ladder {
+        // Four one-poles in a loop: 1 / ((1 + jw)^4 + k).
+        let w = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
+        let w2 = w * w;
+        let real = 1.0 - 6.0 * w2 + w2 * w2 + c.ladder_k;
+        let imaginary = 4.0 * w - 4.0 * w * w2;
+        1.0 / (real * real + imaginary * imaginary)
+    } else {
+        let w = (std::f32::consts::PI * hertz / rate as f32).tan() / c.g;
+        let (w2, k2) = (w * w, c.k * c.k);
+        let rest = (1.0 - w2) * (1.0 - w2);
+        let top = match kind {
+            FilterType::HighPass => w2 * w2,
+            FilterType::BandPass => k2 * w2,
+            FilterType::Notch => rest,
+            FilterType::LowPass | FilterType::Ladder => 1.0,
+        };
+        top / (rest + k2 * w2)
+    };
+    10.0 * power.max(1e-12).log10()
+}
+
+/// How much a track's filter and utility filter let through at a frequency, in dB, from their
+/// settings alone. A filter with nothing to do is out of the way, as it is when playing.
+pub fn track_response_db(track: &Track, rate: u32, hertz: f32) -> f32 {
+    let value = |setting: u8| f32::from(setting) / 255.0;
+    let open = track.filter == FilterType::LowPass
+        && track.cutoff == u8::MAX
+        && track.resonance == 0
+        && track.drive == 0;
+    let mut db = 0.0;
+    if !open {
+        let (cutoff, resonance) = (value(track.cutoff), value(track.resonance));
+        db += response_db(track.filter, cutoff, resonance, rate, hertz);
+    }
+    if track.low_cut > 0 {
+        db += response_db(FilterType::HighPass, value(track.low_cut), 0.0, rate, hertz);
+    }
+    if track.high_cut < u8::MAX {
+        db += response_db(FilterType::LowPass, value(track.high_cut), 0.0, rate, hertz);
+    }
+    db
+}
+
 /// One channel of a track's utility filter: a high-pass and a low-pass, flat and without resonance,
 /// for thinning out a sound after its main filter.
 #[derive(Debug, Clone, Copy, Default)]
@@ -306,6 +355,50 @@ mod tests {
             (actual - expected).abs() < within,
             "{actual} and {expected}"
         );
+    }
+
+    #[test]
+    fn the_worked_out_response_matches_the_filter_itself() {
+        use FilterType::{BandPass, HighPass, Ladder, LowPass, Notch};
+        for kind in [LowPass, HighPass, BandPass, Notch, Ladder] {
+            for res in [0.0, 0.5, 0.8] {
+                for hertz in [100.0, 400.0, 1000.0, 2500.0, 8000.0] {
+                    let worked_out = response_db(kind, cutoff(1000.0), res, RATE, hertz);
+                    // A notch at its very centre is too deep to measure.
+                    if worked_out < -60.0 {
+                        continue;
+                    }
+                    let measured = gain_db(kind, 1000.0, res, 0.0, hertz, 0.01);
+                    assert!(
+                        (worked_out - measured).abs() < 0.5,
+                        "{kind:?} res {res} at {hertz}: {worked_out} and {measured}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_tracks_response_includes_its_utility_filter_and_is_flat_when_open() {
+        let mut track = Track {
+            filter: FilterType::LowPass,
+            cutoff: 0xFF,
+            resonance: 0,
+            drive: 0,
+            low_cut: 0,
+            high_cut: 0xFF,
+            ..Track::default()
+        };
+        for hertz in [20.0, 1000.0, 20_000.0] {
+            near(track_response_db(&track, RATE, hertz), 0.0, 0.001);
+        }
+        track.low_cut = 0x80;
+        assert!(track_response_db(&track, RATE, 20.0) < -20.0);
+        near(track_response_db(&track, RATE, 20_000.0), 0.0, 0.1);
+        track.low_cut = 0;
+        track.high_cut = 0x80;
+        assert!(track_response_db(&track, RATE, 20_000.0) < -20.0);
+        near(track_response_db(&track, RATE, 20.0), 0.0, 0.1);
     }
 
     #[test]

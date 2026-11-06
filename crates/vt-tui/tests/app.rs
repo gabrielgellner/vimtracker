@@ -3729,3 +3729,228 @@ fn a_stopped_track_captures_as_empty_and_nothing_playing_is_refused() {
     assert!(app.status.contains("Nothing is playing"), "{}", app.status);
     assert_eq!(app.song().sections.len(), 2);
 }
+
+#[test]
+fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
+    let (mut app, _realtime) = app();
+    app.envelope_images = Some([0x01_02_03, 0x04_05_06]);
+    press(&mut app, " 4L");
+    let buffer = {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let at = |text: &str| {
+        (0..24).find(|y| {
+            (0..80)
+                .map(|x| buffer[(x, *y)].symbol())
+                .collect::<String>()
+                .contains(text)
+        })
+    };
+    let label = at("Env 1  Vol").unwrap();
+    let first = &buffer[(0, label + 1)];
+    assert!(
+        first.symbol().starts_with('\u{10EEEE}'),
+        "{:?}",
+        first.symbol()
+    );
+    assert_eq!(first.fg, ratatui::style::Color::Rgb(1, 2, 3));
+    // The second envelope is one image width and a gap along, and holds its row and column.
+    let second = &buffer[(30, label + 2)];
+    assert_eq!(second.symbol(), "\u{10EEEE}\u{30D}\u{305}");
+    assert_eq!(second.fg, ratatui::style::Color::Rgb(4, 5, 6));
+    assert_eq!(buffer[(27, label + 1)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
+}
+
+#[test]
+fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        (out.matches(",c=28,").count(), out)
+    };
+    // Nothing is sent until the page that shows them.
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    press(&mut app, " 4L");
+    assert_eq!(sync(&mut app, &mut graphics).0, 2);
+    let first = app.envelope_images.unwrap();
+    assert_ne!(first[0], first[1]);
+    assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
+
+    // Each envelope's other look is sent once, and after that the cursor only swaps between them.
+    press(&mut app, "j");
+    assert_eq!(sync(&mut app, &mut graphics).0, 2);
+    let moved = app.envelope_images.unwrap();
+    assert!(moved[0] != first[0] && moved[1] != first[1]);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    assert_eq!(app.envelope_images.unwrap(), first);
+    press(&mut app, "j");
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    assert_eq!(app.envelope_images.unwrap(), moved);
+
+    // A change makes a new image, and the old one is forgotten only after the screen moves on.
+    press(&mut app, "=");
+    let (sent, out) = sync(&mut app, &mut graphics);
+    assert_eq!(sent, 1);
+    let changed = app.envelope_images.unwrap();
+    assert_ne!(changed[1], moved[1]);
+    assert_eq!(changed[0], moved[0]);
+    let forget = format!("a=d,d=I,i={},q=2", moved[1]);
+    assert!(!out.contains(&forget));
+    assert!(sync(&mut app, &mut graphics).1.contains(&forget));
+}
+
+#[test]
+fn an_lfos_shape_has_an_icon_sent_once_and_shared() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out).unwrap().matches(",c=4,").count()
+    };
+    press(&mut app, " 4L");
+    // Both LFOs start on the same shape, so one image serves both.
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let plain = app.lfo_images.unwrap();
+    assert_eq!(plain[0], plain[1]);
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+
+    // The cursor picks one out, once. After that, moving it sends nothing.
+    press(&mut app, "jj");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.lfo_images.unwrap();
+    assert_ne!(picked[0], picked[1]);
+    assert_eq!(picked[1], plain[1]);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.lfo_images.unwrap(), plain);
+
+    // A new shape has its own image, and coming back to the old one needs nothing sent.
+    press(&mut app, "jl=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.lfo_images.unwrap()[0], picked[0]);
+    press(&mut app, "-");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.lfo_images.unwrap(), picked);
+}
+
+#[test]
+fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let plain = draw(&app);
+    app.lfo_images = Some([0x01_02_03, 0x04_05_06]);
+    let drawn = draw(&app);
+    let row = (0..24)
+        .find(|y| {
+            (0..80)
+                .map(|x| plain[(x, *y)].symbol())
+                .collect::<String>()
+                .starts_with("LFO 1")
+        })
+        .unwrap();
+    let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
+    // Name column, then the icon, with the same text after it either way.
+    assert_eq!(text(&drawn, 24), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(24, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(text(&drawn, 27), "\u{10EEEE}\u{305}\u{310}");
+    assert_eq!(text(&drawn, 28), " ");
+    for x in 30..80 {
+        assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
+    }
+}
+
+#[test]
+fn the_filter_curve_follows_its_settings_and_the_cursor() {
+    use vt_tui::kitty::Graphics;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out).unwrap().matches(",c=24,").count()
+    };
+    press(&mut app, " 4");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let plain = app.filter_image.unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+
+    // On the filter's rows it's picked out, once.
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Filter");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.filter_image.unwrap();
+    assert_ne!(picked, plain);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.filter_image.unwrap(), plain);
+
+    // A new setting draws it again.
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Cut");
+    press(&mut app, "-");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.filter_image.unwrap(), picked);
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+}
+
+#[test]
+fn the_filter_curve_sits_on_the_right_beside_the_last_rows() {
+    use vt_tui::track_page::{SAMPLE_ROWS, SYNTH_ROWS};
+    for rows in [&SAMPLE_ROWS[..], &SYNTH_ROWS[..]] {
+        assert!(rows[rows.len() - 3..].iter().all(|row| row.len() == 1));
+    }
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    let plain = draw(&app);
+    app.filter_image = Some(0x01_02_03);
+    let drawn = draw(&app);
+    let row_of = |text: &str| {
+        (0..24)
+            .find(|y| {
+                (0..80)
+                    .map(|x| plain[(x, *y)].symbol())
+                    .collect::<String>()
+                    .starts_with(text)
+            })
+            .unwrap()
+    };
+    let (top, bottom) = (row_of("Drive"), row_of("High cut"));
+    assert_eq!(bottom, top + 2);
+    assert_eq!(drawn[(36, top)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(36, top)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(drawn[(59, bottom)].symbol(), "\u{10EEEE}\u{30E}\u{369}");
+    assert_eq!(drawn[(60, bottom)].symbol(), " ");
+    // The left column is as it was.
+    for x in 0..36 {
+        assert_eq!(drawn[(x, top)].symbol(), plain[(x, top)].symbol());
+    }
+}

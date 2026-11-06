@@ -12,14 +12,21 @@ use vt_model::song::Track;
 
 use crate::app::App;
 use crate::input::mode::Mode;
+use crate::kitty;
 use crate::theme;
 use crate::track_page::{Control, ENVELOPES, EnvelopeField, LFOS, LfoField, Page};
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
 /// The size of an envelope's diagram, in characters.
-const DIAGRAM_WIDTH: usize = 28;
-const DIAGRAM_HEIGHT: usize = 4;
+pub(crate) const DIAGRAM_WIDTH: usize = 28;
+pub(crate) const DIAGRAM_HEIGHT: usize = 4;
+/// The size of an LFO's icon, in characters, and the room for its shape's name before it.
+pub(crate) const LFO_ICON_WIDTH: usize = 4;
+const LFO_SHAPE_NAME: usize = 7;
+/// The size of the filter's curve, in characters. It's as wide as a value with its bar.
+pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
+pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
@@ -75,8 +82,13 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     }
 }
 
-/// A row of the Sound page: a control on the left, and perhaps one on the right.
-fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
+/// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
+fn sound_row(
+    app: &App,
+    track: &Track,
+    controls: &[Control],
+    beside: Option<Span<'static>>,
+) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
     let mut used = 0;
@@ -117,6 +129,10 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             spans.push(Span::styled(bar, Style::new().fg(theme::MAUVE)));
             spans.push(Span::styled(BAR_END, theme::faint()));
         }
+    }
+    if let Some(beside) = beside {
+        spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
+        spans.push(beside);
     }
     Line::from(spans)
 }
@@ -187,7 +203,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
 fn width(control: Control) -> usize {
     match control {
         Control::Lfo(_, LfoField::Rate) => 9,
-        Control::Lfo(_, LfoField::Shape) => 8,
+        Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + LFO_ICON_WIDTH + 2,
         Control::Base(TrackControl::Reverb) | Control::Lfo(_, LfoField::Retrig) => 8,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
@@ -234,22 +250,63 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
             Style::new()
         };
         let room = width(*control);
-        let gap = room.saturating_sub(text.chars().count());
+        let mut gap = room.saturating_sub(text.chars().count());
+        let length = text.chars().count();
         spans.push(Span::styled(text, style));
+        // A drawing of an LFO's shape follows its name, with the column the same width without one.
+        if let (Control::Lfo(slot, LfoField::Shape), Some(ids)) = (*control, app.lfo_images) {
+            let before = LFO_SHAPE_NAME.saturating_sub(length);
+            spans.push(Span::raw(" ".repeat(before)));
+            let icon = kitty::placeholder_lines(LFO_ICON_WIDTH, 1).concat();
+            spans.push(Span::styled(
+                icon,
+                Style::new().fg(kitty::id_color(ids[slot])),
+            ));
+            gap = room.saturating_sub(length + before + LFO_ICON_WIDTH);
+        }
         spans.push(Span::raw(" ".repeat(gap)));
     }
     Line::from(spans)
 }
 
-/// Each envelope's shape, side by side, with the one being edited picked out.
-fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
-    let current = match app.track_control() {
+/// Which envelope the cursor is on, if any.
+pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
+    match app.track_control() {
         Control::Envelope(slot, _) => Some(slot),
         _ => None,
-    };
-    let shapes = track
-        .envelopes
-        .map(|envelope| envelope_lines(&envelope, DIAGRAM_WIDTH, DIAGRAM_HEIGHT));
+    }
+}
+
+/// Whether the cursor is on something the filter's curve shows.
+pub(crate) fn filter_being_edited(app: &App) -> bool {
+    matches!(
+        app.track_control(),
+        Control::FilterType
+            | Control::Base(
+                TrackControl::Cutoff
+                    | TrackControl::Resonance
+                    | TrackControl::Drive
+                    | TrackControl::LowCut
+                    | TrackControl::HighCut
+            )
+    )
+}
+
+/// Which LFO the cursor is on, if any.
+pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
+    match app.track_control() {
+        Control::Lfo(slot, _) => Some(slot),
+        _ => None,
+    }
+}
+
+/// Each envelope's shape, side by side, with the one being edited picked out.
+fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
+    let current = envelope_being_edited(app);
+    let shapes = track.envelopes.map(|envelope| match app.envelope_images {
+        Some(_) => kitty::placeholder_lines(DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+        None => envelope_lines(&envelope, DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+    });
     let style = |slot: usize| {
         if current == Some(slot) {
             theme::active()
@@ -274,7 +331,14 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines.extend((0..DIAGRAM_HEIGHT).map(|row| {
         Line::from(
             (0..TRACK_ENVELOPES)
-                .map(|slot| Span::styled(format!("{}  ", shapes[slot][row]), style(slot)))
+                .map(|slot| {
+                    // A placeholder's colour says which image it's part of.
+                    let shape = match app.envelope_images {
+                        Some(ids) => Style::new().fg(kitty::id_color(ids[slot])),
+                        None => style(slot),
+                    };
+                    Span::styled(format!("{}  ", shapes[slot][row]), shape)
+                })
                 .collect::<Vec<_>>(),
         )
     }));
@@ -304,12 +368,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines = vec![Line::from(title), Line::raw("")];
     match app.track_page {
         Page::Sound => {
-            for controls in app.page_rows() {
+            let rows = app.page_rows();
+            // The filter's curve sits beside its last rows, with nothing else on the right there.
+            let curve = rows.len().saturating_sub(FILTER_CURVE_HEIGHT);
+            for (index, controls) in rows.iter().enumerate() {
                 // The filter stands apart from the machine above it.
                 if controls.first() == Some(&Control::FilterType) {
                     lines.push(Line::raw(""));
                 }
-                lines.push(sound_row(app, track, controls));
+                let beside = app.filter_image.filter(|_| index >= curve).map(|id| {
+                    let row = &kitty::placeholder_lines(FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)
+                        [index - curve];
+                    Span::styled(row.clone(), Style::new().fg(kitty::id_color(id)))
+                });
+                lines.push(sound_row(app, track, controls, beside));
             }
         }
         Page::Mod => {

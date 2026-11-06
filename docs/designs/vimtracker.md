@@ -370,7 +370,7 @@ whose depth is in semitones. A second envelope on `Vol` moves the level by its d
 *   **Notes:** a note holds until the next note or an `OFF`. The next note fades the last with the usual short fade rather than running its release, so `Sustain 0%` suits a drum. `OFF` and `KIL` start the release of mod envelopes.
 *   **Speed:** position is worked out from frames played, like LFOs. What envelopes add to `Cut`, `Res` and `Pan` passes through a `FAST_SMOOTHING_MS` smoother rather than `SMOOTHING_MS`, and `Pitch` slews per frame, so a fast snap survives.
 *   **Times:** milliseconds up to `MAX_ENVELOPE_MS`, 8 seconds, as on Peaks. Not tempo-synced for now, and neither are Elektron's as far as is known.
-*   **Diagram:** the track page draws each envelope in Braille, on a square-root time scale so a 1 ms attack shows beside a long release.
+*   **Diagram:** the track page draws each envelope. A stage's width depends only on its own time, on a log scale so a 1 ms attack shows beside a long release, and changing a stage only moves what comes after it.
 
 **Filter.** A track has one, with `Filter`, `Cut`, `Res` and `Drive` on its page. `LP`, `HP`, `BP` and `Notch` are outputs of one TPT state-variable filter, the same design as Mutable Instruments' `stmlib::Svf`, so they cost about the same. `Ladder` is the
 character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it.
@@ -638,6 +638,7 @@ Made by the author on 2026-11-06, after a review of this section:
 17. **Plaits is one machine with a choice of voices**, as the M8 has Macrosynth with its `SHAPE`, rather than each voice being a machine. Added on 2026-11-06.
 18. **Snare and Hat complete a synth kit** with Kick. Their noise comes from the track's seeded generator, so each hit differs while a render repeats for a seed. Added on 2026-11-06.
 19. **Fold adds a third tone colour**, from Plaits' waveshaping model, its main output. Its tables are generated from the formulas in `lookup_tables.py` and kept in the source. Added on 2026-11-06.
+20. **Small drawings use kitty's graphics protocol where it's available**, as plain one-colour lines of solid dots, after Elektron's screens: the envelopes, each LFO's shape, and the filter's curve, worked out from the filter's exact response. Other terminals get Braille diagrams and no icons, as does `--no-graphics`. Inside tmux, this needs `allow-passthrough on`. Placeholder characters mark where an image goes, so it stays in its pane and windows can draw over it. A changed image takes a new id, because kitty doesn't reconnect unchanged placeholders to a replaced image. Added on 2026-11-06.
 
 ## Alternatives Considered
 

@@ -6,6 +6,7 @@ pub mod autosave;
 pub mod grammar;
 pub mod guides;
 pub mod input;
+pub mod kitty;
 pub mod meter;
 pub mod picking;
 pub mod probe;

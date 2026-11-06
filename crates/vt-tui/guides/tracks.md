@@ -39,6 +39,11 @@ it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
 rises, and near `FF` it sings by itself while a note lasts. It costs more than
 the others, which matters only for tracks using it.
 
+In kitty, a curve beside the last rows shows what the filter and utility filter
+let through, from 20 Hz on the left to 20 kHz on the right. It's drawn from these
+settings, so it doesn't follow `Drive`'s saturation, step commands, LFOs or
+envelopes.
+
 ## Output
 
 `Pan`, `Delay` and `Reverb` are where those values start when
@@ -50,7 +55,8 @@ track its own, and `x` follows the project again.
 ## Envelopes
 
 Each track has two, which start with each note. The page draws their shapes.
-Time is stretched in the drawing, so a short attack still shows.
+Time is stretched in the drawing, so a short attack still shows, and a stage's
+width depends only on its own time.
 
 | Setting | Value |
 |---|---|
