@@ -632,6 +632,7 @@ Made by the author on 2026-11-06, after a review of this section:
 11. **The song view is a restricted Session View:** a row is a scene, a chain is a clip, and phrases are reusable parts inside it. There is no linear timeline, as detailed arrangement happens in Ableton from stems.
 12. **No time signature in the model.** Meter comes from lengths, as on the M8, Polyend Tracker and Elektron machines. A bar is 16 steps, from one constant, until a song-wide setting is needed.
 13. **A render is one performance of the song.** Random trigs, step chances and any later chance on rows may differ between seeds, but all stems of one render take the same route.
+14. **A kit is a list of sounds to choose from**, so `:kit 909` adds no tracks and `:kit 909 all` does. Direct jumps are what keep lots of sounds quick on Elektron and Maschine, so tracks get a picker, `Space fb`, like Vim buffers. A drum rack would reverse "a track is one sound", so it waits for evidence from play.
 
 ## Alternatives Considered
 
@@ -917,7 +918,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:swing n`, `:tswing n`, `:tswing off` | Project swing, track swing, clear track swing. 50-75 |
 | `:tvol xx` | This track's level in hex |
 | `:reset n`, `:reset off` | Send every track to its start every `n` steps, or let them run. Off by default |
-| `:kit [name or path]` | Fill instruments from `00` with the sounds a kit file lists, in order, as one undo step. A labelled sound goes in its label's slot and others fill upward from `00`, and replacing a different sample is reported. With no argument, choose from `samples/kits` |
+| `:kit [name or path]` | Make a kit's sounds the ones `Space 5` lists first, or choose a kit. With `all` after it, put them on tracks from the first as one undo step. See Decision 14 |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert |

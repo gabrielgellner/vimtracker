@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, KitSound};
-use vt_model::kit::load_kit;
+use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
@@ -16,6 +16,7 @@ use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::song_view::COLUMNS_BEFORE_TRACKS;
 
 /// How many files the sample browser lists, and how many folders deep it looks.
 const MAX_SAMPLES: usize = 2000;
@@ -42,7 +43,8 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
             continue;
         }
         if path.is_dir() {
-            if depth < MAX_DEPTH {
+            // A Rust build folder holds no samples, and takes a noticeable time to walk.
+            if depth < MAX_DEPTH && !path.ends_with("target") {
                 walk(&path, depth + 1, found);
             }
         } else if is_wav(&path) {
@@ -90,6 +92,30 @@ fn kit_name(path: &Path) -> String {
 /// Where kits are looked for by name, from where the program ran.
 const KITS_DIR: &str = "samples/kits";
 
+/// A kit named in `samples/kits`, or at a path.
+pub(crate) fn kit_path(name: &Path) -> PathBuf {
+    if name.is_file() {
+        name.to_path_buf()
+    } else {
+        Path::new(KITS_DIR).join(name).with_extension("ron")
+    }
+}
+
+/// A row for a kit's sound: its name and its file.
+fn kit_item(entry: &KitEntry) -> Item {
+    let file = entry
+        .path
+        .file_name()
+        .map_or_else(String::new, |file| file.to_string_lossy().into_owned());
+    Item {
+        label: format!("{:<4}{file}", entry.name),
+        pick: Pick::KitSound {
+            path: entry.path.clone(),
+            name: entry.name.clone(),
+        },
+    }
+}
+
 impl App {
     /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
     pub(crate) fn open_view_picker(&mut self) {
@@ -106,6 +132,38 @@ impl App {
         picker.move_highlight(1);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
+    }
+
+    /// Open the list of tracks, like Vim's buffers, with this one highlighted.
+    pub(crate) fn open_track_picker(&mut self) {
+        self.count = None;
+        let items = self
+            .song()
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(track, state)| {
+                let sound = state
+                    .sample
+                    .as_deref()
+                    .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample));
+                Item {
+                    label: format!("{:02}  {:<4}{sound}", track + 1, state.name),
+                    pick: Pick::Track(track),
+                }
+            })
+            .collect();
+        let mut picker = Picker::new("Tracks", items);
+        picker.move_highlight(self.cursor.track as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Go to a track chosen from the list, which `C-o` comes back from.
+    fn go_to_track(&mut self, track: usize) {
+        self.record_jump();
+        self.move_track(track as isize - self.cursor.track as isize);
+        self.song_column = COLUMNS_BEFORE_TRACKS + track;
     }
 
     /// Open the list of guides, in the order to learn them.
@@ -138,12 +196,21 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// Load a kit named in `samples/kits`, or at a path.
-    pub(crate) fn load_named_kit(&mut self, name: &Path) {
-        if name.is_file() {
-            self.load_kit(name);
-        } else {
-            self.load_kit(&Path::new(KITS_DIR).join(name).with_extension("ron"));
+    /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
+    pub(crate) fn use_kit(&mut self, path: &Path) {
+        match load_kit(path) {
+            Ok(entries) if entries.is_empty() => {
+                self.status = format!("{} has no sounds", path.display());
+            }
+            Ok(entries) => {
+                self.status = format!(
+                    "Kit {}: {} sounds. Space 5 chooses one for this track",
+                    kit_name(path),
+                    entries.len()
+                );
+                self.kit = entries;
+            }
+            Err(error) => self.status = error.to_string(),
         }
     }
 
@@ -279,24 +346,28 @@ impl App {
     /// Choose this track's sample from the usual places.
     pub(crate) fn open_default_sample_picker(&mut self) {
         let roots = self.sample_roots();
-        self.open_sample_picker(&roots);
+        self.open_samples(&roots, true);
     }
 
     /// Open the sample browser on a folder. If nothing is there, offer a typed path instead.
     pub(crate) fn open_sample_picker(&mut self, roots: &[PathBuf]) {
-        let items: Vec<Item> = roots
-            .iter()
-            .flat_map(|root| {
-                find_wavs(root).into_iter().map(move |path| Item {
-                    label: path
-                        .strip_prefix(root)
-                        .unwrap_or(&path)
-                        .display()
-                        .to_string(),
-                    pick: Pick::Sample(path),
-                })
+        self.open_samples(roots, false);
+    }
+
+    /// Open the sample browser, with the kit's sounds first if asked.
+    fn open_samples(&mut self, roots: &[PathBuf], with_kit: bool) {
+        let kit = self.kit.iter().filter(|_| with_kit).map(kit_item);
+        let files = roots.iter().flat_map(|root| {
+            find_wavs(root).into_iter().map(move |path| Item {
+                label: path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string(),
+                pick: Pick::Sample(path),
             })
-            .collect();
+        });
+        let items: Vec<Item> = kit.chain(files).collect();
         if items.is_empty() {
             self.status = "No WAV files found here: type a path, or a folder of them".to_owned();
             self.command_line = "sample ".to_owned();
@@ -346,7 +417,12 @@ impl App {
                         slot,
                     }) => self.open_use(section, track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
-                    Some(Pick::Kit(path)) => self.load_kit(&path),
+                    Some(Pick::Kit(path)) => self.use_kit(&path),
+                    Some(Pick::KitSound { path, name }) => {
+                        let name = (!name.is_empty()).then_some(name.as_str());
+                        self.sample_named(&path, name);
+                    }
+                    Some(Pick::Track(track)) => self.go_to_track(track),
                     Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
                     Some(Pick::Lfo { track, slot, lfo }) => {
                         self.apply(&Action::SetLfo { track, slot, lfo });

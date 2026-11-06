@@ -44,15 +44,18 @@ A kit fills tracks in one go. It is a file in `samples/kits`, such as `909.ron`:
 )
 ```
 
-Sounds go on tracks from the first, in order, and a label becomes the track's
-name. Paths are relative to the kit file, or absolute, or start with `~/`.
+A kit is a list of sounds to choose from, so it adds no tracks of its own. Use one
+with `:kit 909`, then `Space 5` on a track lists its sounds first. Choosing one puts
+it on this track, and its label becomes the track's name. Paths are relative to the
+kit file, or absolute, or start with `~/`.
 
 | Command | Does |
 |---|---|
 | `:kit` | Choose a kit from `samples/kits` |
-| `:kit 909` | Load that kit |
-| `:kit path/drums.ron` | Load a kit file anywhere |
+| `:kit 909` | Choose sounds from that kit |
+| `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
+| `:kit 909 all` | Put every sound on tracks from the first, in order |
 
-A kit keeps a track's other settings, leaves later tracks alone, and adds tracks
+`all` keeps a track's other settings, leaves later tracks alone, and adds tracks
 if it has more sounds than you have. If it replaces a different sample, the
 status line says which, and `u` undoes the whole load.

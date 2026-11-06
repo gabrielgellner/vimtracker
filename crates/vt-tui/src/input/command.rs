@@ -17,8 +17,10 @@ pub enum Line {
     },
     New(PathBuf),
     Sample(PathBuf),
-    /// Load a kit by name or path, or choose one.
+    /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
+    /// Put a kit's sounds on tracks, by name or path.
+    KitTracks(PathBuf),
     /// Name this track, or clear its name.
     Name(Option<String>),
     /// Keep playing the section being edited, or go back to playing the song.
@@ -187,7 +189,10 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "q!" => Ok(Line::Quit { force: true }),
         "new" => needed(":new").map(Line::New),
         "sample" => needed(":sample").map(Line::Sample),
-        "kit" => Ok(Line::Kit((!argument.is_empty()).then(|| path(argument)))),
+        "kit" => Ok(match argument.strip_suffix(" all") {
+            Some(kit) => Line::KitTracks(path(kit.trim_end())),
+            None => Line::Kit((!argument.is_empty()).then(|| path(argument))),
+        }),
         "name" if argument.is_empty() => Ok(Line::Name(None)),
         "name" if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
         "name" => Err(LineError::Name),
@@ -376,6 +381,7 @@ mod tests {
         assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));
         assert_eq!(parse("kit"), Ok(Line::Kit(None)));
         assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
+        assert_eq!(parse("kit 909 all"), Ok(Line::KitTracks("909".into())));
     }
 
     #[test]

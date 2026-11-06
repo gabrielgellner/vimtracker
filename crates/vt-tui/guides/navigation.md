@@ -48,6 +48,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 5` | Choose this track's sample |
 | `Space 6` | Mixer |
 | `Space Space` | Pick a view. `Enter` flips back to the last one |
+| `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-n` | Jump back or forward, like Vim's jump list |
 
 ## When you forget

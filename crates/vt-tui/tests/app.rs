@@ -15,6 +15,7 @@ use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
+use vt_tui::input::picker::Pick;
 
 fn app() -> (App, Realtime) {
     let song = Song::new(2);
@@ -489,6 +490,8 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
     wav(&folder.join("kit/kick.wav"));
     wav(&folder.join("kit/snare.WAV"));
     wav(&folder.join("kit/.hidden/secret.wav"));
+    std::fs::create_dir_all(folder.join("target")).unwrap();
+    wav(&folder.join("target/built.wav"));
     std::fs::write(folder.join("kit/notes.txt"), "not audio").unwrap();
 
     command(&mut app, &format!("sample {}", folder.display()));
@@ -1292,18 +1295,18 @@ fn a_kit_with_a_bad_sound_changes_nothing_and_names_it() {
         r#"(sounds: [(path: "drums/kick.wav"), (path: "drums/broken.wav")])"#,
     )
     .unwrap();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
     assert!(!app.dirty);
     assert!(app.status.contains("broken"), "{}", app.status);
 
     std::fs::write(&kit, r#"(sounds: [(path: "drums/gone.wav")])"#).unwrap();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
     assert!(app.status.contains("gone"), "{}", app.status);
 
     std::fs::write(&kit, "not a kit").unwrap();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
     assert!(app.status.contains("909.ron"), "{}", app.status);
 }
@@ -1315,7 +1318,7 @@ fn a_kit_is_referred_to_and_saving_elsewhere_gathers_its_sounds() {
     command(&mut app, &format!("w {}", project.display()));
     let kit = kit_file();
     let snare = kit.parent().unwrap().join("drums/snare.wav");
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert!(std::path::Path::new(&sample_of(&app, 0).unwrap()).is_absolute());
     assert!(!project.join("samples").exists());
 
@@ -1330,6 +1333,100 @@ fn a_kit_is_referred_to_and_saving_elsewhere_gathers_its_sounds() {
     command(&mut app, &format!("w {}", bundle.display()));
     assert_eq!(sample_of(&app, 0).unwrap(), "samples/snare.wav");
     assert!(bundle.join("samples/hat.wav").exists());
+}
+
+#[test]
+fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 2");
+    let kit = kit_file();
+    let named = kit.parent().unwrap().join("named.ron");
+    std::fs::write(
+        &named,
+        r#"(sounds: [(label: "SD", path: "drums/snare.wav"), (path: "drums/hat.wav")])"#,
+    )
+    .unwrap();
+    let tracks = app.song().tracks.len();
+    let depth = app.history.undo_depth();
+    command(&mut app, &format!("kit {}", named.display()));
+    assert_eq!(app.song().tracks.len(), tracks);
+    assert_eq!(sample_of(&app, 0), None);
+    assert_eq!(app.history.undo_depth(), depth);
+    assert!(app.status.contains("2 sounds"), "{}", app.status);
+
+    press(&mut app, "WW 5");
+    assert_eq!(app.mode, Mode::Picker);
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(
+        labels[..2],
+        ["SD  snare.wav", "    hat.wav"],
+        "the kit first"
+    );
+    special(&mut app, KeyCode::Enter);
+    assert!(sample_of(&app, 2).unwrap().ends_with("snare.wav"));
+    assert_eq!(app.song().tracks[2].name, "SD");
+    assert_eq!(sample_of(&app, 0), None, "only this track");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 2), None);
+    assert_eq!(app.song().tracks[2].name, "");
+
+    press(&mut app, " 5");
+    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
+    special(&mut app, KeyCode::Enter);
+    assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
+    assert_eq!(app.song().tracks[2].name, "", "no label, no name");
+}
+
+#[test]
+fn a_kit_with_all_fills_tracks_and_a_bad_one_keeps_the_last() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {} all", kit.display()));
+    assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
+    command(&mut app, &format!("kit {}", kit.display()));
+    assert_eq!(app.kit.len(), 3);
+    command(&mut app, "kit nothing-here");
+    assert_eq!(app.kit.len(), 3, "still the last one");
+}
+
+#[test]
+fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 2");
+    press(&mut app, "W");
+    command(&mut app, "name BD");
+    press(&mut app, "W");
+    press(&mut app, " fb");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(
+        picker.current().map(|item| item.pick.clone()),
+        Some(Pick::Track(2))
+    );
+    assert_eq!(picker.shown().count(), app.song().tracks.len());
+    press(&mut app, "bd");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 1);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.view, View::Phrase);
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(app.cursor.track, 2, "C-o comes back");
+
+    press(&mut app, " fb04");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, " 1 fb");
+    press(&mut app, "02");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Song);
+    assert_eq!(app.cursor.track, 1);
+    assert_eq!(vt_tui::views::status::column_name(&app), "Track 02 chain");
 }
 
 #[test]
@@ -2549,7 +2646,7 @@ fn x_in_a_chain_only_resets_transpose() {
 fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
     let (mut app, _realtime) = app();
     let kit = kit_file();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
     assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
     assert_eq!(app.status, "Kit 909: 3 tracks");
@@ -2574,7 +2671,7 @@ fn a_kit_names_tracks_keeps_their_settings_and_leaves_later_ones_alone() {
     command(&mut app, &format!("sample {}", later.display()));
     let kit = labelled_kit();
     let before = app.song().tracks[0].cutoff;
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(app.song().tracks[0].name, "BD");
     assert_eq!(app.song().tracks[1].name, "CH");
     assert_eq!(app.song().tracks[2].name, "");
@@ -2586,9 +2683,9 @@ fn a_kit_names_tracks_keeps_their_settings_and_leaves_later_ones_alone() {
 fn a_kit_warns_only_when_it_changes_a_tracks_sample() {
     let (mut app, _realtime) = app();
     let kit = labelled_kit();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert!(!app.status.contains("Replaced"), "{}", app.status);
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert!(
         !app.status.contains("Replaced"),
         "the same again: {}",
@@ -2599,7 +2696,7 @@ fn a_kit_warns_only_when_it_changes_a_tracks_sample() {
         r#"(sounds: [(label: "BD", path: "drums/snare.wav")])"#,
     )
     .unwrap();
-    command(&mut app, &format!("kit {}", kit.display()));
+    command(&mut app, &format!("kit {} all", kit.display()));
     assert!(app.status.contains("Replaced 01"), "{}", app.status);
 }
 
@@ -2615,7 +2712,7 @@ fn a_kit_refuses_a_bad_name_and_changes_nothing() {
         ),
     ] {
         std::fs::write(&kit, text).unwrap();
-        command(&mut app, &format!("kit {}", kit.display()));
+        command(&mut app, &format!("kit {} all", kit.display()));
         assert!(app.status.contains(expected), "{}", app.status);
         assert!(!app.dirty);
     }
