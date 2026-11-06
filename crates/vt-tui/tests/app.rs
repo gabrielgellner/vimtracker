@@ -2696,3 +2696,22 @@ fn page_text(app: &App) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[test]
+fn render_stems_writes_a_named_file_per_track() {
+    let (mut app, _realtime) = app();
+    with_a_sound(&mut app);
+    command(&mut app, "name bd");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let out = folder().join("stems");
+    command(&mut app, &format!("render {} --stems", out.display()));
+    assert!(app.status.contains("2 stems"), "{}", app.status);
+    assert!(out.join("01-BD.wav").exists());
+    assert!(out.join("02.wav").exists());
+    command(&mut app, "mute");
+    let quieter = folder().join("stems");
+    command(&mut app, &format!("render {} --stems", quieter.display()));
+    assert!(app.status.contains("1 stem to"), "{}", app.status);
+    assert!(!quieter.join("01-BD.wav").exists());
+}

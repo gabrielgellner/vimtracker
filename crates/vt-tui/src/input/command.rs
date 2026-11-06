@@ -36,6 +36,8 @@ pub enum Line {
         path: PathBuf,
         rows: Option<usize>,
         tail: bool,
+        /// Write one file per track into the path, as a folder.
+        stems: bool,
     },
     TrackSwing(Option<u16>),
     TrackLevel(u8),
@@ -61,7 +63,7 @@ pub enum LineError {
     Set,
     #[error(":chain takes a chain ID in hex")]
     Chain,
-    #[error(":render takes a path, --rows n and --tail")]
+    #[error(":render takes a path, --rows n, --tail and --stems")]
     Render,
     #[error(":seed takes a number")]
     Seed,
@@ -128,10 +130,12 @@ fn render(argument: &str) -> Result<Line, LineError> {
     let mut words = Vec::new();
     let mut rows = None;
     let mut tail = false;
+    let mut stems = false;
     let mut parts = argument.split_whitespace();
     while let Some(part) = parts.next() {
         match part {
             "--tail" => tail = true,
+            "--stems" => stems = true,
             "--rows" => {
                 let count = parts.next().and_then(|n| n.parse().ok());
                 rows = Some(count.filter(|n| *n > 0).ok_or(LineError::Render)?);
@@ -146,6 +150,7 @@ fn render(argument: &str) -> Result<Line, LineError> {
         path: path(&words.join(" ")),
         rows,
         tail,
+        stems,
     })
 }
 
@@ -247,6 +252,16 @@ mod tests {
                 path: "a b.wav".into(),
                 rows: Some(8),
                 tail: true,
+                stems: false,
+            })
+        );
+        assert_eq!(
+            parse("render out --stems"),
+            Ok(Line::Render {
+                path: "out".into(),
+                rows: None,
+                tail: false,
+                stems: true,
             })
         );
         assert!(parse("render").is_err());

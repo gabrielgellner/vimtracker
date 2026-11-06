@@ -1241,7 +1241,15 @@ impl App {
                 }
             }
             Line::Chain(chain) => self.set_track_chain(chain),
-            Line::Render { path, rows, tail } => self.render(&path, rows, tail),
+            Line::Render {
+                path,
+                rows,
+                tail,
+                stems: true,
+            } => self.render_stems(&path, rows, tail),
+            Line::Render {
+                path, rows, tail, ..
+            } => self.render(&path, rows, tail),
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
@@ -1290,6 +1298,16 @@ impl App {
                 samples.len() as f64 / 2.0 / f64::from(self.rate)
             ),
             Err(error) => format!("Couldn't write {}: {error}", path.display()),
+        };
+    }
+
+    /// Render one file per track that would be heard, into a folder.
+    fn render_stems(&mut self, folder: &Path, rows: Option<usize>, tail: bool) {
+        let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
+        let options = RenderOptions { rows, tail };
+        self.status = match crate::run::write_stems(&version, folder, self.rate, options) {
+            Ok(count) => crate::run::stems_written(count, folder),
+            Err(error) => format!("Couldn't write {}: {error}", folder.display()),
         };
     }
 

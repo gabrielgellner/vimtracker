@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use vt_model::constants::{MAX_MILLIBPM, MIN_MILLIBPM, TICKS_PER_STEP};
+use vt_model::song::{Song, Track};
 
 use crate::engine::{Engine, sample_of_tick};
 use crate::published::Published;
@@ -69,6 +70,46 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
 }
 
 /// Stop sequencing and keep what rings until it stays silent, up to the limit.
+/// One track's part of a song.
+#[derive(Debug)]
+pub struct Stem {
+    pub track: usize,
+    pub samples: Vec<f32>,
+}
+
+/// Render each track that would be heard on its own, with the limiter off so the stems add up to
+/// the whole. Each keeps its own delay and reverb, and they all end together.
+pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> Vec<Stem> {
+    let song = &version.song;
+    let any_solo = song.tracks.iter().any(|track| track.solo);
+    let heard = |track: &Track| if any_solo { track.solo } else { !track.mute };
+    let mut stems: Vec<Stem> = (0..song.tracks.len())
+        .filter(|index| heard(&song.tracks[*index]))
+        .map(|index| {
+            let mut alone = Song::clone(song);
+            alone.limiter = false;
+            for (other, track) in alone.tracks.iter_mut().enumerate() {
+                track.mute = false;
+                track.solo = other == index;
+            }
+            let alone = Published::new(Arc::new(alone), Arc::clone(&version.samples));
+            Stem {
+                track: index,
+                samples: render_loop(Arc::new(alone), rate, options),
+            }
+        })
+        .collect();
+    let longest = stems
+        .iter()
+        .map(|stem| stem.samples.len())
+        .max()
+        .unwrap_or(0);
+    for stem in &mut stems {
+        stem.samples.resize(longest, 0.0);
+    }
+    stems
+}
+
 fn append_tail(engine: &mut Engine, rate: u32, out: &mut Vec<f32>) {
     engine.let_ring();
     let quiet_limit = (SILENT_SECONDS * rate as f32) as usize;

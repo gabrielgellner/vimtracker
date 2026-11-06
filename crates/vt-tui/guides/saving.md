@@ -41,6 +41,11 @@ is on screen now, including mutes, and the screen waits until it finishes.
 |---|---|
 | `--rows 8` | Render 8 rows instead of the whole loop |
 | `--tail` | Keep going until delay and reverb die away |
+| `--stems` | Write one file per track, with the path as a folder |
+
+`:render out --stems` writes `01-BD.wav`, `02.wav` and so on, one for each track
+that would be heard. Each keeps its own delay and reverb, with the limiter off,
+so together they add up to the loop, and they all end together.
 
 The file starts with every track at its start, and is as long as the `:reset`
 if there is one, or else the longest track. Tracks that don't divide that
