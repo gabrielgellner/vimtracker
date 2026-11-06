@@ -1152,6 +1152,26 @@ Column folding stays in M11. This adds one thing: a Visual selection can reach o
 
 **Issue.** **Tests:** moving, stepping, typing and `x` on each kind of column, one undo step matching the track page's edit, mute and solo reaching the engine, and a long list scrolling.
 
+### M8 design: songs
+
+Made without the author present, on 2026-11-06, following their earlier decisions: each section has a length, and either resets tracks or carries their positions on, with carry the default. These choices can change once played.
+
+**Data.** `Section` gains `length: Option<usize>`, with none meaning its longest chain, and `start`, carry or reset. `reset` stays, as the periodic realign `:reset` sets, and now belongs to one section.
+
+**Playback.** Sections play in order, and the song wraps to the first. A set length cuts chains short, or lets them loop on. The engine's global step keeps counting, so timing and swing don't change at a boundary. **Carry** means a track's position stays that count modulo its new chain's length, which is exact and repeatable, but a chain of a different length lands wherever the count falls. **Reset** sends the count to 0. Held values, locks and glides cross boundaries untouched. A section with no length is skipped. One section wrapping onto itself behaves exactly as before, as the goldens confirm.
+
+**Transport.** `Shift-Tab` plays the song from the top, `Space c` from the cursor in the section being edited, and `Tab` pauses in place. `:loop` keeps playing the section being edited.
+
+**Editor.** `Cursor` gains `section`, and the phrase, chain, track and mixer views edit that section. Playheads show only when it's the one playing. Shared phrase and chain counts, and `grr`, cover every section. The status line shows `Sec 2/4` when there's more than one.
+
+**Song view.** `Space 1` shows a row per section with Length, Start and each track's chain. `a` adds a section with new chains, `gc` copies one using the same chains, and `dd` removes one. `gd` opens a chain.
+
+**Render.** With more than one section, a render covers the song once. Its warm-up is one silent pass through the song, and one section still renders as its loop.
+
+**Not included.** Per-track speed, grooves and sections ending mid-step stay in After the milestones.
+
+**Issue.** **Tests:** sections in order and wrapping, lengths, carry and reset, one section unchanged, `:loop`, playing from a section, empty sections, removing the playing one, renders and stems covering a song, and each song view key.
+
 ### Known Gaps From Review
 
 The EGM review concluded on 2026-11-05 with its re-audit limit used, and these findings were not resolved. They are accepted for now, and must be decided in the issue named before that issue is done. They override anything above that they contradict.

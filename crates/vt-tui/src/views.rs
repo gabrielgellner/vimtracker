@@ -9,6 +9,7 @@ pub mod mixer;
 pub mod phrase;
 pub mod picker;
 pub mod shape;
+pub mod song;
 pub mod status;
 pub mod system;
 pub mod track;

@@ -14,7 +14,9 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::shape::{Shape, ShapeColumn, values};
-use crate::song::{Chain, ChainEntry, FilterType, Phrase, Song, lowest_unused};
+use crate::song::{
+    Chain, ChainEntry, FilterType, Phrase, Section, SectionStart, Song, lowest_unused,
+};
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
 /// A new value for one field.
@@ -143,7 +145,38 @@ pub enum Action {
         lfo: Lfo,
     },
     /// Send every track back to its start after this many steps, or `None` to let them run.
-    SetReset(Option<usize>),
+    SetReset {
+        section: usize,
+        reset: Option<usize>,
+    },
+    /// Add a section after a position, with new empty chains.
+    AddSection {
+        at: usize,
+    },
+    /// Copy a section after itself, using the same chains.
+    CloneSection {
+        at: usize,
+    },
+    /// Remove a section, keeping at least one. Its chains stay for reuse.
+    RemoveSection {
+        at: usize,
+    },
+    /// Set how long a section plays, or follow its longest chain.
+    SetSectionLength {
+        section: usize,
+        length: Option<usize>,
+    },
+    /// Set what a section does to the tracks when it starts.
+    SetSectionStart {
+        section: usize,
+        start: SectionStart,
+    },
+    /// Choose a section's chain for a track, or none.
+    SetSectionChain {
+        section: usize,
+        track: usize,
+        chain: Option<u32>,
+    },
     /// Set a track's level.
     SetTrackLevel {
         track: usize,
@@ -218,10 +251,12 @@ pub enum Action {
     },
     /// Copy a track's chain and its phrases to new IDs, and point the track at the copy.
     CloneChain {
+        section: usize,
         track: usize,
     },
     /// Point a track at a chain. A chain that doesn't exist yet gets a new phrase.
     SetTrackChain {
+        section: usize,
         track: usize,
         chain: u32,
     },
@@ -250,9 +285,34 @@ fn snapped(slot: FxSlot) -> FxSlot {
     .with_valid_mark()
 }
 
+fn section_mut(song: &mut Song, section: usize) -> Result<&mut Section, EditError> {
+    song.sections
+        .get_mut(section)
+        .ok_or(EditError::NoSection(section))
+}
+
+/// Make a chain with this ID and one new phrase.
+fn new_chain(song: &mut Song, chain: u32) {
+    let phrase = lowest_unused(&song.phrases);
+    ensure_phrase(song, phrase);
+    song.chains.insert(
+        chain,
+        Arc::new(Chain {
+            entries: vec![ChainEntry {
+                phrase,
+                transpose: 0,
+            }],
+        }),
+    );
+}
+
 /// Why an edit was refused.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EditError {
+    #[error("no section {0}")]
+    NoSection(usize),
+    #[error("a song needs at least one section")]
+    LastSection,
     #[error("no phrase {0:02X}")]
     NoPhrase(u32),
     #[error("phrase {phrase:02X} has no step {step}")]
@@ -479,13 +539,47 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*slot)
                 .ok_or(EditError::Lfo)? = *lfo;
         }
-        Action::SetReset(reset) => {
+        Action::SetReset { section, reset } => {
             if *reset == Some(0) {
                 return Err(EditError::Reset);
             }
-            for section in &mut next.sections {
-                section.reset = *reset;
+            section_mut(&mut next, *section)?.reset = *reset;
+        }
+        Action::AddSection { at } => next.insert_section(*at),
+        Action::CloneSection { at } => {
+            let copy = section_mut(&mut next, *at)?.clone();
+            next.sections.insert(*at + 1, copy);
+        }
+        Action::RemoveSection { at } => {
+            if next.sections.len() <= 1 {
+                return Err(EditError::LastSection);
             }
+            section_mut(&mut next, *at)?;
+            next.sections.remove(*at);
+        }
+        Action::SetSectionLength { section, length } => {
+            if *length == Some(0) {
+                return Err(EditError::Reset);
+            }
+            section_mut(&mut next, *section)?.length = *length;
+        }
+        Action::SetSectionStart { section, start } => {
+            section_mut(&mut next, *section)?.start = *start;
+        }
+        Action::SetSectionChain {
+            section,
+            track,
+            chain,
+        } => {
+            if let Some(chain) = chain
+                && !next.chains.contains_key(chain)
+            {
+                new_chain(&mut next, *chain);
+            }
+            *section_mut(&mut next, *section)?
+                .chains
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))? = *chain;
         }
         Action::SetTrackLevel { track, level } => {
             next.tracks
@@ -611,9 +705,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoPhrase(old))?;
             next.phrases.insert(*new, copy);
         }
-        Action::CloneChain { track } => {
-            let section = next.sections.first().ok_or(EditError::NoTrack(*track))?;
-            let old = section
+        Action::CloneChain { section, track } => {
+            let old = section_mut(&mut next, *section)?
                 .chains
                 .get(*track)
                 .copied()
@@ -639,28 +732,20 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
             let new = lowest_unused(&next.chains);
             next.chains.insert(new, Arc::new(copy));
-            next.sections[0].chains[*track] = Some(new);
+            next.sections[*section].chains[*track] = Some(new);
         }
-        Action::SetTrackChain { track, chain } => {
+        Action::SetTrackChain {
+            section,
+            track,
+            chain,
+        } => {
             if !next.chains.contains_key(chain) {
-                let phrase = lowest_unused(&next.phrases);
-                ensure_phrase(&mut next, phrase);
-                next.chains.insert(
-                    *chain,
-                    Arc::new(Chain {
-                        entries: vec![ChainEntry {
-                            phrase,
-                            transpose: 0,
-                        }],
-                    }),
-                );
+                new_chain(&mut next, *chain);
             }
-            let slot = next
-                .sections
-                .first_mut()
-                .and_then(|section| section.chains.get_mut(*track))
-                .ok_or(EditError::NoTrack(*track))?;
-            *slot = Some(*chain);
+            *section_mut(&mut next, *section)?
+                .chains
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))? = Some(*chain);
         }
         Action::SetFilterType { track, filter } => {
             next.tracks

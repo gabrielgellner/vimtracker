@@ -194,7 +194,14 @@ mod tree {
             },
         )
         .unwrap();
-        let cloned = edit(&song, &Action::CloneChain { track: 0 }).unwrap();
+        let cloned = edit(
+            &song,
+            &Action::CloneChain {
+                section: 0,
+                track: 0,
+            },
+        )
+        .unwrap();
         // Tracks took chains and phrases 0 and 1, so the lowest unused are 2.
         assert_eq!(cloned.sections[0].chains[0], Some(2));
         assert_eq!(cloned.sections[0].chains[1], Some(1));
@@ -241,7 +248,15 @@ mod tree {
     #[test]
     fn pointing_a_track_at_a_new_chain_creates_it_with_a_phrase() {
         let song = Arc::new(Song::new(1));
-        let song = edit(&song, &Action::SetTrackChain { track: 0, chain: 5 }).unwrap();
+        let song = edit(
+            &song,
+            &Action::SetTrackChain {
+                section: 0,
+                track: 0,
+                chain: 5,
+            },
+        )
+        .unwrap();
         assert_eq!(song.sections[0].chains[0], Some(5));
         assert_eq!(song.chains[&5].entries[0].phrase, 1);
         assert!(song.phrases.contains_key(&1));

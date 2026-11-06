@@ -19,6 +19,8 @@ pub enum Line {
     Kit(Option<PathBuf>),
     /// Name this track, or clear its name.
     Name(Option<String>),
+    /// Keep playing the section being edited, or go back to playing the song.
+    Loop,
     Bpm(u32),
     Len(usize),
     TrackAdd(usize),
@@ -220,6 +222,7 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             Some(("limiter", "off")) => Ok(Line::SetLimiter(false)),
             _ => Err(LineError::Set),
         },
+        "loop" => Ok(Line::Loop),
         "mute" => Ok(Line::Mute),
         "solo" => Ok(Line::Solo),
         other => Err(LineError::Unknown(other.to_owned())),

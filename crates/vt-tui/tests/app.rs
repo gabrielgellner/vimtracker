@@ -624,7 +624,10 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
         .shown()
         .map(|item| item.label.clone())
         .collect();
-    assert_eq!(uses, ["Track 01 slot 00", "Track 01 slot 01"]);
+    assert_eq!(
+        uses,
+        ["Section 01 track 01 slot 00", "Section 01 track 01 slot 01"]
+    );
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.slot, 0);
     assert_eq!(app.view, View::Phrase);
@@ -2477,7 +2480,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 4);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
@@ -2822,4 +2825,178 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
     let text = mixer_text(&app);
     assert!(text.iter().any(|line| line.starts_with("32 ")), "{text:?}");
     assert!(!text.iter().any(|line| line.starts_with("01 ")), "{text:?}");
+}
+
+fn song_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 12);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::song::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..12)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect()
+}
+
+#[test]
+fn the_song_view_adds_copies_and_removes_sections() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1");
+    assert_eq!(app.view, View::Song);
+    assert_eq!(app.song().sections.len(), 1);
+    press(&mut app, "a");
+    assert_eq!(app.song().sections.len(), 2);
+    assert_eq!(app.cursor.section, 1);
+    assert_ne!(
+        app.song().sections[1].chains,
+        app.song().sections[0].chains,
+        "new chains"
+    );
+    press(&mut app, "gc");
+    assert_eq!(app.song().sections.len(), 3);
+    assert_eq!(app.cursor.section, 2);
+    assert_eq!(
+        app.song().sections[2].chains,
+        app.song().sections[1].chains,
+        "the same chains"
+    );
+    press(&mut app, "dd");
+    assert_eq!(app.song().sections.len(), 2);
+    assert_eq!(app.cursor.section, 1);
+    press(&mut app, "u");
+    assert_eq!(app.song().sections.len(), 3);
+    press(&mut app, "ddddddd");
+    assert_eq!(app.song().sections.len(), 1, "one always stays");
+    assert!(app.status.contains("at least one"), "{}", app.status);
+    assert_eq!(app.cursor.section, 0);
+    let text = song_text(&app);
+    assert!(text[2].contains("Length") && text[2].contains("Start"));
+    assert!(text[3].contains("16") && text[3].contains("carry"));
+}
+
+#[test]
+fn the_song_view_edits_length_start_and_chains() {
+    use vt_model::song::SectionStart;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1");
+    assert_eq!(column_name(&app), "Length");
+    press(&mut app, "=");
+    assert_eq!(app.song().sections[0].length, Some(17));
+    press(&mut app, "-_");
+    assert_eq!(app.song().sections[0].length, Some(1));
+    press(&mut app, "i32");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().sections[0].length, Some(32));
+    press(&mut app, "x");
+    assert_eq!(app.song().sections[0].length, None);
+    press(&mut app, "i0");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().sections[0].length, None, "{}", app.status);
+
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Start");
+    press(&mut app, "K");
+    assert_eq!(app.song().sections[0].start, SectionStart::Reset);
+    assert!(song_text(&app)[3].contains("reset"));
+    press(&mut app, "x");
+    assert_eq!(app.song().sections[0].start, SectionStart::Carry);
+
+    press(&mut app, "ll");
+    assert_eq!(column_name(&app), "Track 02 chain");
+    press(&mut app, "x");
+    assert_eq!(app.song().sections[0].chains[1], None);
+    assert!(song_text(&app)[3].contains("--"));
+    press(&mut app, "i05");
+    assert_eq!(app.song().sections[0].chains[1], Some(5));
+    assert!(app.song().chains.contains_key(&5), "made as needed");
+    press(&mut app, "=");
+    assert_eq!(app.song().sections[0].chains[1], Some(6));
+    press(&mut app, "$");
+    assert_eq!(column_name(&app), "Track 02 chain");
+    press(&mut app, "0");
+    assert_eq!(column_name(&app), "Length");
+}
+
+#[test]
+fn other_views_edit_the_section_under_the_cursor() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1a 3");
+    let two = app.song().sections[1].chains[0].unwrap();
+    let phrase = app.song().chains[&two].entries[0].phrase;
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.song().phrases[&phrase].steps()[0].note, Note::On(60));
+    assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
+    command(&mut app, "reset 8");
+    assert_eq!(app.song().sections[1].reset, Some(8));
+    assert_eq!(app.song().sections[0].reset, None, "only this section");
+    press(&mut app, " 1k");
+    assert_eq!(app.cursor.section, 0);
+    assert_eq!(app.phrase_id(), Some(0));
+}
+
+#[test]
+fn gd_in_the_song_view_opens_a_chain_and_adds_one_if_needed() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 1gd");
+    assert_eq!(app.view, View::Song, "{}", app.status);
+    assert!(app.status.contains("track"));
+    press(&mut app, "lllxgd");
+    assert_eq!(app.view, View::Chain);
+    assert_eq!(app.cursor.track, 1);
+    assert!(app.chain_id().is_some());
+}
+
+#[test]
+fn a_chain_used_by_another_section_counts_as_shared() {
+    let (mut app, _realtime) = app();
+    assert_eq!(app.chain_uses(), 1);
+    press(&mut app, " 1gc");
+    assert_eq!(app.chain_uses(), 2);
+    assert_eq!(app.phrase_uses(app.phrase_id().unwrap()).len(), 2);
+}
+
+#[test]
+fn loop_and_transport_keys_reach_the_section_being_edited() {
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    press(&mut app, " 1a");
+    block(&mut realtime, &mut app);
+    command(&mut app, "loop");
+    assert_eq!(app.looping, Some(1));
+    assert!(app.status.contains("section 02"), "{}", app.status);
+    press(&mut app, " c");
+    block(&mut realtime, &mut app);
+    block(&mut realtime, &mut app);
+    app.tick();
+    assert_eq!(app.playing_section, 1);
+    assert!(app.playhead_here().is_some());
+    press(&mut app, " 1k");
+    assert_eq!(app.playhead_here(), None, "it's playing another section");
+    assert!(song_text(&app)[4].contains(">02"), "{:?}", song_text(&app));
+    command(&mut app, "loop");
+    assert_eq!(app.looping, Some(0));
+    command(&mut app, "loop");
+    assert_eq!(app.looping, None);
+}
+
+#[test]
+fn the_status_line_counts_sections_when_there_are_several() {
+    let (mut app, _realtime) = app();
+    let status = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(120, 2);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..120)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>()
+    };
+    assert!(!status(&app).contains("Sec "));
+    press(&mut app, " 1a");
+    assert!(status(&app).contains("Sec 2/2"), "{}", status(&app));
 }

@@ -48,6 +48,7 @@ pub enum Pick {
     /// Which rows the shape panel fills.
     ShapeWhere(Where),
     Use {
+        section: usize,
         track: usize,
         slot: usize,
     },

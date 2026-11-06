@@ -22,7 +22,7 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Scope, StepRange};
-use vt_model::song::{ChainEntry, Song};
+use vt_model::song::{ChainEntry, Section, Song};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 use crate::grammar::Change;
@@ -85,6 +85,8 @@ pub struct Entry {
 /// Where the cursor is: a step in a chain slot on a track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {
+    /// The section being edited, which needn't be the one playing.
+    pub section: usize,
     pub track: usize,
     pub slot: usize,
     pub step: usize,
@@ -110,6 +112,11 @@ pub struct App {
     pub view: View,
     /// The track page's row and setting.
     pub mixer_column: usize,
+    pub song_column: usize,
+    /// The section the engine is on.
+    pub playing_section: usize,
+    /// A section being kept playing, set with `:loop`.
+    pub looping: Option<usize>,
     pub track_page: Page,
     pub track_row: usize,
     pub track_field: usize,
@@ -196,6 +203,9 @@ impl App {
             mode: Mode::Normal,
             view: View::Phrase,
             mixer_column: 0,
+            song_column: 0,
+            playing_section: 0,
+            looping: None,
             track_page: Page::Sound,
             track_row: 0,
             track_field: 0,
@@ -208,6 +218,7 @@ impl App {
             last_autosave: None,
             autosaved: None,
             cursor: Cursor {
+                section: 0,
                 track: 0,
                 slot: 0,
                 step: 0,
@@ -286,10 +297,22 @@ impl App {
         self.history.current()
     }
 
+    /// The section being edited.
+    pub fn section_here(&self) -> Option<&Section> {
+        let sections = &self.song().sections;
+        sections.get(self.cursor.section).or(sections.last())
+    }
+
+    /// Where the playhead is, if it's moving through the section being edited.
+    pub fn playhead_here(&self) -> Option<usize> {
+        let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
+        (moving && self.playing_section == self.cursor.section).then_some(self.playhead)
+    }
+
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
         let song = self.song();
-        let chain = (*song.sections.first()?.chains.get(self.cursor.track)?)?;
+        let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
         Some(
             song.chains
                 .get(&chain)?
@@ -314,9 +337,8 @@ impl App {
     /// The position in the section where the cursor's phrase starts playing.
     pub fn slot_start(&self) -> usize {
         let song = self.song();
-        let Some(chain) = song
-            .sections
-            .first()
+        let Some(chain) = self
+            .section_here()
             .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
             .and_then(|id| song.chains.get(&id))
         else {
@@ -334,6 +356,9 @@ impl App {
     /// The cursor's position within the section. Only the loop has one, so a step outside it
     /// counts as the loop's first.
     pub fn section_step(&self) -> usize {
+        if self.view == View::Song {
+            return 0;
+        }
         let extent = self.extent();
         // The chain view has no step of its own, so it plays from the row's first.
         let row = if self.view != View::Chain && extent.plays(self.cursor.step) {
@@ -368,6 +393,7 @@ impl App {
             .update(report.map(|report| report.reading), seconds);
         if let Some(report) = report {
             self.playhead = report.position;
+            self.playing_section = report.section;
             self.transport = report.transport;
         }
     }
@@ -390,7 +416,8 @@ impl App {
             | Mode::VisualStep
             | Mode::Chain
             | Mode::Track
-            | Mode::Mixer => {
+            | Mode::Mixer
+            | Mode::Song => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key, now),
@@ -418,6 +445,7 @@ impl App {
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
+            (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,
         }
     }
@@ -470,7 +498,10 @@ impl App {
         if self.transport == Transport::Playing {
             self.status = "Audition works while stopped or paused".to_owned();
         } else {
-            self.handle.send(Command::Audition { section_step });
+            self.handle.send(Command::Audition {
+                section: self.cursor.section,
+                section_step,
+            });
         }
     }
 
@@ -512,6 +543,7 @@ impl App {
             View::Chain => self.run_chain(cmd),
             View::Track => self.run_track_page(cmd),
             View::Mixer => self.run_mixer(cmd),
+            View::Song => self.run_song(cmd),
             View::Phrase => false,
         };
         if handled || self.run_tree(cmd) || self.run_grammar(cmd) {
@@ -557,7 +589,10 @@ impl App {
             }
             Cmd::PlayFromCursor => {
                 let step = self.section_step();
-                self.handle.send(Command::PlayFrom { step });
+                self.handle.send(Command::PlaySection {
+                    section: self.cursor.section,
+                    step,
+                });
                 self.guard = Some((key, now));
             }
             Cmd::PlayFromStart => {
@@ -808,7 +843,7 @@ impl App {
         let song = Arc::clone(self.song());
         let position = song
             .sections
-            .first()
+            .get(self.cursor.section)
             .and_then(|s| s.chains.get(track).copied().flatten())
             .and_then(|chain| song.chain_position(chain, section_step));
         match position {
@@ -867,6 +902,8 @@ impl App {
 
     /// Keep the cursor on something that exists. Only the chain view has a row past the end.
     pub(crate) fn clamp_cursor(&mut self) {
+        let sections = self.song().sections.len();
+        self.cursor.section = self.cursor.section.min(sections.saturating_sub(1));
         let rows = self.chain_entries().len();
         let last = if self.view == View::Chain {
             rows
@@ -929,6 +966,7 @@ impl App {
             if !key.ctrl {
                 match self.view {
                     View::Chain => self.insert_chain_row(key.code),
+                    View::Song => self.insert_song(key.code),
                     _ => self.insert_track_page(key.code),
                 }
             }
@@ -1304,7 +1342,11 @@ impl App {
                 track: self.cursor.track,
                 swing,
             }),
-            Line::Reset(reset) => self.apply(&Action::SetReset(reset)),
+            Line::Reset(reset) => self.apply(&Action::SetReset {
+                section: self.cursor.section,
+                reset,
+            }),
+            Line::Loop => self.toggle_loop(),
             Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
                 track: self.cursor.track,
                 level,

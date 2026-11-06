@@ -95,3 +95,35 @@ Every `10` in hex is 4 dB, so `+` is 4 dB louder, and `4=` is 1 dB.
 Velocity belongs to each note in a phrase. A track's level is separate and
 stays out of its patterns, so you can rebalance a track without touching a
 note. It also turns down what the track sends to the delay and reverb.
+
+## Songs
+
+A song is a list of sections, each giving every track a chain. Press `Space 1`
+for the song view, with a row per section. The other views edit the section the
+cursor is on, and `Sec 2/4` on the status line says which.
+
+| Keys | Does |
+|---|---|
+| `j` `k` | Next or previous section |
+| `h` `l` | Previous or next column |
+| `=` `-` `+` `_` | Change the value |
+| `i` | Type a length then `Enter`, or a chain's two hex digits |
+| `x` | Length follows the chains, Start carries, or no chain |
+| `K` | On Start, switch between carry and reset |
+| `gd` | Open this track's chain, adding one if it has none |
+| `a` | Add a section after this one, with new chains |
+| `gc` | Copy this section after itself, using the same chains |
+| `dd` | Remove this section |
+| `;` | Hear its first row |
+
+Sections play in order, and the song goes round to the first at the end. A
+section lasts as long as its longest chain unless you set its length, which
+cuts its chains short or lets them loop on. A `:reset` belongs to one section.
+
+**Start** says what a section does to the tracks. `carry` keeps them counting
+from where they were, and `reset` sends them all back to their start.
+
+`Shift-Tab` plays the song from the top. `Space c` plays from the cursor, in the
+section being edited. `:loop` keeps playing the section being edited while you
+work on it, and `:loop` again goes back to the song. A `:render` of a song covers
+it once through, and `--stems` does too.

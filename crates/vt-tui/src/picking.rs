@@ -340,7 +340,11 @@ impl App {
                 self.mode = self.mode_after_picker();
                 match pick {
                     Some(Pick::View(view)) => self.jump_to_view(view),
-                    Some(Pick::Use { track, slot }) => self.open_use(track, slot),
+                    Some(Pick::Use {
+                        section,
+                        track,
+                        slot,
+                    }) => self.open_use(section, track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.load_kit(&path),
                     Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
