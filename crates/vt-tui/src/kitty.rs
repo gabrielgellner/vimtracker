@@ -379,10 +379,14 @@ impl Graphics {
 
     /// Send the Sound page's filter curve, if the terminal lacks it.
     fn sync_sound(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        // It shows what's playing, as a value's bar does.
+        let (cutoff, resonance) = app.live.map_or((track.cutoff, track.resonance), |live| {
+            (live.cutoff, live.resonance)
+        });
         let settings = (
             track.filter,
-            track.cutoff,
-            track.resonance,
+            cutoff,
+            resonance,
             track.drive,
             track.low_cut,
             track.high_cut,
@@ -394,7 +398,11 @@ impl Graphics {
             _ => {
                 let id = self.new_id();
                 let png = filter_png(
-                    track,
+                    &Track {
+                        cutoff,
+                        resonance,
+                        ..track.clone()
+                    },
                     app.rate,
                     color(active),
                     FILTER_CURVE_WIDTH,

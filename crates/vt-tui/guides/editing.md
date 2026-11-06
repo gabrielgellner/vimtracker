@@ -30,7 +30,7 @@ Follow one with a motion or a target, or double it for this whole step:
 |---|---|
 | `v` | Select fields, starting from this one |
 | `V` | Select whole steps |
-| `W` `B` | In a selection, reach the next or previous track |
+| `W` `B`, `]b` `[b` | In a selection, reach the next or previous track |
 | `gv` | Select the last selection again |
 | `Esc` | Stop selecting |
 

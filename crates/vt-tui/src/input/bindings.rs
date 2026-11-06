@@ -185,6 +185,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("C-n", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
     ("B", Cmd::PreviousTrack, "Previous track"),
+    ("] b", Cmd::NextTrack, "Next track"),
+    ("[ b", Cmd::PreviousTrack, "Previous track"),
 ];
 
 /// One beat, as a slide.
@@ -380,6 +382,8 @@ const MIXER: &[(&str, Cmd, &str)] = &[
 const VISUAL: &[(&str, Cmd, &str)] = &[
     ("W", Cmd::NextTrack, "Reach the next track"),
     ("B", Cmd::PreviousTrack, "Reach the previous track"),
+    ("] b", Cmd::NextTrack, "Reach the next track"),
+    ("[ b", Cmd::PreviousTrack, "Reach the previous track"),
     ("d", Cmd::Operator(Op::Clear), "Clear the selection"),
     ("y", Cmd::Operator(Op::Copy), "Copy the selection"),
     (">", Cmd::Operator(Op::ShiftUp), "Shift the selection up"),

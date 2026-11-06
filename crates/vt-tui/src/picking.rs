@@ -9,6 +9,7 @@ use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
+use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot};
 
 use crate::app::{App, Entry, Field};
@@ -143,10 +144,13 @@ impl App {
             .iter()
             .enumerate()
             .map(|(track, state)| {
-                let sound = state
-                    .sample
-                    .as_deref()
-                    .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample));
+                let sound = match state.machine {
+                    Machine::Sample => state
+                        .sample
+                        .as_deref()
+                        .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample)),
+                    Machine::Plaits => state.synth_voice.name(),
+                };
                 Item {
                     label: format!("{:02}  {:<4}{sound}", track + 1, state.name),
                     pick: Pick::Track(track),

@@ -66,7 +66,7 @@ an edit changes all of them.
 
 | Keys | Does |
 |---|---|
-| `W` `B` | Next or previous track |
+| `W` `B`, `]b` `[b` | Next or previous track |
 | `:chain 2` | Choose which of its chains this track plays |
 | `:track add 4` | Add 4 tracks |
 | `:track del` | Remove the last track, with its chains and phrases |
