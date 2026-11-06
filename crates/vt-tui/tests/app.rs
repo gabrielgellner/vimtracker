@@ -198,6 +198,24 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
 }
 
 #[test]
+fn quick_taps_of_tab_all_count() {
+    let (mut app, mut rt) = app();
+    let mut now = Instant::now();
+    let mut expected = Transport::Playing;
+    for _ in 0..6 {
+        app.key(Key::new(KeyCode::Tab), now);
+        block(&mut rt, &mut app);
+        assert_eq!(app.transport, expected);
+        expected = if expected == Transport::Playing {
+            Transport::Paused
+        } else {
+            Transport::Playing
+        };
+        now += Duration::from_millis(150);
+    }
+}
+
+#[test]
 fn repeats_after_a_leader_transport_key_dont_reach_normal_keys() {
     let (mut app, mut rt) = app();
     let start = Instant::now();

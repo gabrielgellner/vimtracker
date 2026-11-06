@@ -55,8 +55,9 @@ pub const DEFAULT_NOTE_VELOCITY: u8 = 0x64;
 pub const PREVIEW_MS: u32 = 250;
 /// Tuning: time between redraws.
 pub const FRAME_MS: u64 = 33;
-/// Tuning: how long a transport key ignores its own repeats.
-pub const TRANSPORT_GUARD_MS: u64 = 450;
+/// Tuning: a transport key this soon after itself is taken as key repeat and ignored. A terminal
+/// can't say which it is, so this sits between a held key's repeats and quick tapping by hand.
+pub const TRANSPORT_GUARD_MS: u64 = 120;
 
 /// The lowest swing, in tenths of a percent, which is straight time.
 pub const MIN_SWING: u16 = 500;
