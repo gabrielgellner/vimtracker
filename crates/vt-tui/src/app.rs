@@ -22,7 +22,7 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Scope, StepRange};
-use vt_model::song::{ChainEntry, Section, Song};
+use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 use crate::grammar::Change;
@@ -309,17 +309,27 @@ impl App {
         (moving && self.playing_section == self.cursor.section).then_some(self.playhead)
     }
 
+    /// The track under the cursor.
+    pub fn track_here(&self) -> Option<&Track> {
+        self.song().tracks.get(self.cursor.track)
+    }
+
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
-        let song = self.song();
         let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
         Some(
-            song.chains
+            self.track_here()?
+                .chains
                 .get(&chain)?
                 .entries
                 .get(self.cursor.slot)?
                 .phrase,
         )
+    }
+
+    /// The contents of the phrase under the cursor.
+    pub fn phrase_here(&self) -> Option<&Arc<Phrase>> {
+        self.track_here()?.phrases.get(&self.phrase_id()?)
     }
 
     /// The keys typed so far in a sequence.
@@ -329,18 +339,19 @@ impl App {
 
     /// Where the cursor's phrase's loop sits.
     pub fn extent(&self) -> Extent {
-        self.phrase_id()
-            .and_then(|id| self.song().phrases.get(&id))
+        self.phrase_here()
             .map_or(Extent::whole(0), |phrase| phrase.extent())
     }
 
     /// The position in the section where the cursor's phrase starts playing.
     pub fn slot_start(&self) -> usize {
-        let song = self.song();
+        let Some(track) = self.track_here() else {
+            return 0;
+        };
         let Some(chain) = self
             .section_here()
             .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
-            .and_then(|id| song.chains.get(&id))
+            .and_then(|id| track.chains.get(&id))
         else {
             return 0;
         };
@@ -348,7 +359,7 @@ impl App {
             .entries
             .iter()
             .take(self.cursor.slot)
-            .filter_map(|e| song.phrases.get(&e.phrase))
+            .filter_map(|e| track.phrases.get(&e.phrase))
             .map(|p| p.len())
             .sum()
     }
@@ -653,7 +664,10 @@ impl App {
         if let Some(phrase) = self.phrase_id()
             && self.can_change_length()
         {
-            self.apply(&Action::Double { phrase });
+            self.apply(&Action::Double {
+                track: self.cursor.track,
+                phrase,
+            });
         }
     }
 
@@ -677,7 +691,11 @@ impl App {
     fn slide_loop(&mut self, by: isize) {
         if let Some(phrase) = self.phrase_id() {
             let before = self.loop_place();
-            self.apply(&Action::SlideLoop { phrase, by });
+            self.apply(&Action::SlideLoop {
+                track: self.cursor.track,
+                phrase,
+                by,
+            });
             self.keep_row(before);
             self.clamp_cursor();
         }
@@ -691,7 +709,11 @@ impl App {
             && by.rem_euclid(length) != 0
             && let Some(phrase) = self.phrase_id()
         {
-            self.apply(&Action::RotateLoop { phrase, by });
+            self.apply(&Action::RotateLoop {
+                track: self.cursor.track,
+                phrase,
+                by,
+            });
         }
     }
 
@@ -701,7 +723,11 @@ impl App {
         if by != 0
             && let Some(phrase) = self.phrase_id()
         {
-            self.apply(&Action::SlideLoop { phrase, by });
+            self.apply(&Action::SlideLoop {
+                track: self.cursor.track,
+                phrase,
+                by,
+            });
         }
     }
 
@@ -718,7 +744,11 @@ impl App {
             && length != extent.length
             && self.can_change_length()
         {
-            self.apply(&Action::SetLength { phrase, length });
+            self.apply(&Action::SetLength {
+                track: self.cursor.track,
+                phrase,
+                length,
+            });
         }
     }
 
@@ -730,8 +760,7 @@ impl App {
             return;
         }
         let Some(step) = self
-            .phrase_id()
-            .and_then(|id| self.song().phrases.get(&id))
+            .phrase_here()
             .and_then(|phrase| phrase.steps().get(self.cursor.step))
         else {
             return;
@@ -845,7 +874,7 @@ impl App {
             .sections
             .get(self.cursor.section)
             .and_then(|s| s.chains.get(track).copied().flatten())
-            .and_then(|chain| song.chain_position(chain, section_step));
+            .and_then(|chain| song.tracks[track].chain_position(chain, section_step));
         match position {
             Some(position) => {
                 self.cursor.slot = position.slot;
@@ -883,17 +912,13 @@ impl App {
     }
 
     pub(crate) fn slots(&self) -> usize {
-        self.phrase_id()
-            .and_then(|id| self.song().phrases.get(&id))
+        self.phrase_here()
             .and_then(|p| p.steps().get(self.cursor.step))
             .map_or(0, |step| step.fx.len())
     }
 
     pub(crate) fn move_step(&mut self, by: isize) {
-        let Some(phrase) = self
-            .phrase_id()
-            .and_then(|id| self.song().phrases.get(&id).cloned())
-        else {
+        let Some(phrase) = self.phrase_here().cloned() else {
             return;
         };
         let last = phrase.steps().len() as isize - 1;
@@ -1001,8 +1026,8 @@ impl App {
                     let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
                     let midi = midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8;
                     let on_step = self
-                        .phrase_id()
-                        .and_then(|id| self.song().phrases.get(&id).cloned())
+                        .phrase_here()
+                        .cloned()
                         .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
                     let velocity = on_step
                         .as_ref()
@@ -1055,12 +1080,13 @@ impl App {
             self.status = "This track has no phrase here".to_owned();
             return;
         };
-        let current = self.song().phrases.get(&id);
+        let current = self.phrase_here();
         let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
             return;
         };
         let velocity = self.played_with(&step);
         self.apply(&Action::SetStep {
+            track: self.cursor.track,
             phrase: id,
             step: self.cursor.step,
             value: Step {
@@ -1085,11 +1111,12 @@ impl App {
         let Some(id) = self.phrase_id() else {
             return;
         };
-        let current = self.song().phrases.get(&id);
+        let current = self.phrase_here();
         let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
             return;
         };
         self.apply(&Action::SetStep {
+            track: self.cursor.track,
             phrase: id,
             step: self.cursor.step,
             value: Step {
@@ -1117,6 +1144,7 @@ impl App {
             return;
         };
         self.apply(&Action::SetField {
+            track: self.cursor.track,
             phrase,
             step: self.cursor.step,
             value,
@@ -1182,8 +1210,7 @@ impl App {
     /// The mark a value typed here gets: the one it's typed over, or else the nearest value's
     /// above it in this column.
     pub(crate) fn mark_for_typed_value(&self, slot: usize) -> Mark {
-        let song = self.song();
-        let phrase = self.phrase_id().and_then(|id| song.phrases.get(&id));
+        let phrase = self.phrase_here();
         let Some(steps) = phrase.map(|phrase| phrase.steps()) else {
             return Mark::default();
         };
@@ -1195,8 +1222,7 @@ impl App {
     }
 
     pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
-        let id = self.phrase_id()?;
-        let phrase = self.song().phrases.get(&id)?;
+        let phrase = self.phrase_here()?;
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
     }
 
@@ -1245,6 +1271,7 @@ impl App {
             return;
         };
         self.apply(&Action::SetNote {
+            track: self.cursor.track,
             phrase,
             step: self.cursor.step,
             note,
@@ -1357,7 +1384,11 @@ impl App {
                 if let Some(phrase) = self.phrase_id()
                     && self.can_change_length()
                 {
-                    self.apply(&Action::SetLength { phrase, length });
+                    self.apply(&Action::SetLength {
+                        track: self.cursor.track,
+                        phrase,
+                        length,
+                    });
                     self.clamp_cursor();
                 }
             }

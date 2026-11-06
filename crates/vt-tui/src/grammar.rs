@@ -331,9 +331,11 @@ impl App {
             self.phrase_id()?
         } else {
             let chain = (*self.section_here()?.chains.get(track)?)?;
-            song.chain_position(chain, self.section_step())?.phrase
+            song.tracks[track]
+                .chain_position(chain, self.section_step())?
+                .phrase
         };
-        Some((id, song.phrases.get(&id)?.start()))
+        Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))
     }
 
     /// Where these rows of the focused phrase fall on a track. Rows count from each phrase's own
@@ -341,27 +343,27 @@ impl App {
     fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
         let (phrase, start) = self.phrase_beside(track)?;
         let focus = self.extent().start as isize;
-        let stored = self.song().phrases.get(&phrase)?.steps().len() as isize;
+        let stored = self.song().tracks[track]
+            .phrases
+            .get(&phrase)?
+            .steps()
+            .len() as isize;
         let first = (range.first as isize - focus + start as isize).max(0);
         let last = (range.last as isize - focus + start as isize).min(stored - 1);
         (first <= last).then(|| (phrase, StepRange::between(first as usize, last as usize)))
     }
 
-    /// Make the same edit on each phrase these tracks cover, once each, as one change.
+    /// Make the same edit on the phrase each of these tracks is on, as one change.
     fn edit_across(
         &mut self,
         range: StepRange,
         tracks: TrackSpan,
-        edit: impl Fn(u32, StepRange) -> Action,
+        edit: impl Fn(usize, u32, StepRange) -> Action,
     ) {
-        let mut seen = Vec::new();
         let mut actions = Vec::new();
         for track in tracks.first..=tracks.last {
-            if let Some((phrase, range)) = self.place_on(track, range)
-                && !seen.contains(&phrase)
-            {
-                seen.push(phrase);
-                actions.push(edit(phrase, range));
+            if let Some((phrase, range)) = self.place_on(track, range) {
+                actions.push(edit(track, phrase, range));
             }
         }
         match actions.len() {
@@ -376,7 +378,8 @@ impl App {
         match op {
             Op::Clear => {
                 self.copy_block(range, scope, tracks, false);
-                self.edit_across(range, tracks, |phrase, range| Action::Clear {
+                self.edit_across(range, tracks, |track, phrase, range| Action::Clear {
+                    track,
                     phrase,
                     range,
                     scope,
@@ -385,7 +388,8 @@ impl App {
             Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
-                self.edit_across(range, tracks, |phrase, range| Action::Shift {
+                self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
+                    track,
                     phrase,
                     range,
                     scope,
@@ -404,7 +408,8 @@ impl App {
             .map(|track| {
                 self.place_on(track, range)
                     .map_or_else(Vec::new, |(phrase, range)| {
-                        self.song().phrases[&phrase].steps()[range.first..=range.last].to_vec()
+                        self.song().tracks[track].phrases[&phrase].steps()[range.first..=range.last]
+                            .to_vec()
                     })
             })
             .collect();
@@ -449,7 +454,7 @@ impl App {
     fn cycle_mark(&mut self, range: StepRange, scope: Scope, tracks: TrackSpan) {
         let first = (tracks.first..=tracks.last).find_map(|track| {
             let (phrase, range) = self.place_on(track, range)?;
-            let steps = self.song().phrases.get(&phrase)?.steps();
+            let steps = self.song().tracks[track].phrases.get(&phrase)?.steps();
             steps[range.first..=range.last]
                 .iter()
                 .find_map(|step| first_value(step, scope))
@@ -459,7 +464,8 @@ impl App {
             return;
         };
         let mark = first.mark.next();
-        self.edit_across(range, tracks, |phrase, range| Action::SetMark {
+        self.edit_across(range, tracks, |track, phrase, range| Action::SetMark {
+            track,
             phrase,
             range,
             scope,
@@ -518,10 +524,7 @@ impl App {
     fn begin_selection_replace(&mut self) {
         let selection = self.current_selection();
         let field = self.cursor.field;
-        let Some(phrase) = self
-            .phrase_id()
-            .and_then(|id| self.song().phrases.get(&id).cloned())
-        else {
+        let Some(phrase) = self.phrase_here().cloned() else {
             return;
         };
         let takes = |step: &usize| {
@@ -577,8 +580,8 @@ impl App {
         };
         self.cursor.field = field;
         let value = self
-            .phrase_id()
-            .and_then(|id| self.song().phrases.get(&id).cloned())
+            .phrase_here()
+            .cloned()
             .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
         let Some(value) = value else {
             return;
@@ -608,7 +611,8 @@ impl App {
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
         };
-        self.edit_across(range, tracks, |phrase, range| Action::Fill {
+        self.edit_across(range, tracks, |track, phrase, range| Action::Fill {
+            track,
             phrase,
             range,
             fill,
@@ -623,7 +627,8 @@ impl App {
         tracks: TrackSpan,
         kind: Shift,
     ) {
-        self.edit_across(range, tracks, |phrase, range| Action::Shift {
+        self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
+            track,
             phrase,
             range,
             scope,
@@ -651,6 +656,7 @@ impl App {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::Clear {
+                        track: self.cursor.track,
                         phrase,
                         range,
                         scope,
@@ -688,16 +694,19 @@ impl App {
                 let step = self.cursor.step;
                 let action = match field {
                     Field::Note => Action::SetNote {
+                        track: self.cursor.track,
                         phrase,
                         step,
                         note: value.note,
                     },
                     Field::Velocity => Action::SetField {
+                        track: self.cursor.track,
                         phrase,
                         step,
                         value: FieldValue::Velocity(value.velocity),
                     },
                     Field::FxCommand(slot) | Field::FxValue(slot) => Action::SetField {
+                        track: self.cursor.track,
                         phrase,
                         step,
                         value: FieldValue::Slot(*slot, value.fx[*slot]),
@@ -722,6 +731,7 @@ impl App {
                     let group = self.cursor.field.group();
                     let row = self.cursor.step as isize - self.extent().start as isize;
                     let mut actions = vec![Action::Paste {
+                        track: self.cursor.track,
                         phrase,
                         at: self.cursor.step,
                         group,
@@ -739,6 +749,7 @@ impl App {
                             && let Ok(at) = usize::try_from(start as isize + row)
                         {
                             actions.push(Action::Paste {
+                                track,
                                 phrase,
                                 at,
                                 group,

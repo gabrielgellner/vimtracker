@@ -50,7 +50,7 @@ fn song(texts: &[&str], shape: Envelope) -> Song {
     for track in &mut song.tracks {
         track.sample = Some("s".to_owned());
     }
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
     }

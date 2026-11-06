@@ -4,6 +4,10 @@ A **phrase** is a run of steps. A **chain** is the list of phrases one track
 plays in order, each with its own transpose. Tracks can loop at different
 lengths.
 
+Each track has its own chains and phrases, numbered from `00` to `FF`. Chain
+`03` on one track has nothing to do with chain `03` on another. To use a part
+on another track, copy its steps with `y` and `p`.
+
 ## Tracks of different lengths
 
 Each track loops at its own length, for as long as the song plays. A 3-step
@@ -49,23 +53,23 @@ in semitones, up to 48 either way.
 
 ## Sharing and copying
 
-A `*` means a phrase or chain plays in more than one place, so an edit changes
-all of them.
+A `*` means a phrase or chain plays in more than one place on this track, so
+an edit changes all of them.
 
 | Keys | Does |
 |---|---|
 | `gc` | Copy this phrase, and use the copy here |
 | `gC` | Copy this chain and all its phrases |
-| `grr` | List where this phrase plays, in a phrase or chain view |
+| `grr` | List where this track plays this phrase, in a phrase or chain view |
 
 ## Tracks
 
 | Keys | Does |
 |---|---|
 | `W` `B` | Next or previous track |
-| `:chain 2` | Choose which chain this track plays |
+| `:chain 2` | Choose which of its chains this track plays |
 | `:track add 4` | Add 4 tracks |
-| `:track del` | Remove the last track |
+| `:track del` | Remove the last track, with its chains and phrases |
 | `:tvol C0` | Set this track's level in hex, shown as `TVol` |
 | `Space 4` | The track page: filter, envelopes, LFOs |
 | `Space m` | Mute or unmute this track |
@@ -98,7 +102,7 @@ note. It also turns down what the track sends to the delay and reverb.
 
 ## Songs
 
-A song is a list of sections, each giving every track a chain. Press `Space 1`
+A song is a list of sections, each choosing one of every track's chains. Press `Space 1`
 for the song view, with a row per section. The other views edit the section the
 cursor is on, and `Sec 2/4` on the status line says which.
 

@@ -15,7 +15,7 @@ use crate::selection::{
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Phrase, Section, SectionStart, Song, lowest_unused,
+    Chain, ChainEntry, FilterType, Phrase, Section, SectionStart, Song, Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
@@ -52,12 +52,14 @@ pub struct KitSound {
 pub enum Action {
     /// Write a note.
     SetNote {
+        track: usize,
         phrase: u32,
         step: usize,
         note: Note,
     },
     /// Replace a whole step.
     SetStep {
+        track: usize,
         phrase: u32,
         step: usize,
         value: Step,
@@ -66,6 +68,7 @@ pub enum Action {
     Batch(Vec<Action>),
     /// Set the mark on every value in a selection.
     SetMark {
+        track: usize,
         phrase: u32,
         range: StepRange,
         scope: Scope,
@@ -73,12 +76,14 @@ pub enum Action {
     },
     /// Set one field of a step.
     SetField {
+        track: usize,
         phrase: u32,
         step: usize,
         value: FieldValue,
     },
     /// Fill a column across steps with a ramp or random values.
     Shape {
+        track: usize,
         phrase: u32,
         range: StepRange,
         column: ShapeColumn,
@@ -86,18 +91,21 @@ pub enum Action {
     },
     /// Write one value across steps.
     Fill {
+        track: usize,
         phrase: u32,
         range: StepRange,
         fill: Fill,
     },
     /// Clear fields across steps.
     Clear {
+        track: usize,
         phrase: u32,
         range: StepRange,
         scope: Scope,
     },
     /// Move values across steps.
     Shift {
+        track: usize,
         phrase: u32,
         range: StepRange,
         scope: Scope,
@@ -108,6 +116,7 @@ pub enum Action {
     /// more without changing the loop. Merging leaves steps alone where the copy is empty, and
     /// otherwise the copy overwrites them.
     Paste {
+        track: usize,
         phrase: u32,
         at: usize,
         group: usize,
@@ -117,6 +126,7 @@ pub enum Action {
     },
     /// Double a phrase's loop by repeating it.
     Double {
+        track: usize,
         phrase: u32,
     },
     /// Set how far Insert moves down after a note.
@@ -184,24 +194,27 @@ pub enum Action {
     },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
+        track: usize,
         phrase: u32,
         length: usize,
     },
     /// Move a phrase's loop by some steps, keeping its length.
     SlideLoop {
+        track: usize,
         phrase: u32,
         by: isize,
     },
     /// Move a phrase's loop steps later or earlier, wrapping round within the loop.
     RotateLoop {
+        track: usize,
         phrase: u32,
         by: isize,
     },
     /// Change the tempo, in thousandths of a BPM.
     SetMilliBpm(u32),
-    /// Add tracks at the end, each with its own new chain and phrase.
+    /// Add tracks at the end, each with a new chain and phrase in the first section.
     AddTracks(usize),
-    /// Remove the last track, keeping at least one. Its chain and phrase stay for reuse.
+    /// Remove the last track and its chains and phrases, keeping at least one.
     RemoveLastTrack,
     /// Set a track's sample, or leave it with none.
     SetTrackSample {
@@ -228,23 +241,27 @@ pub enum Action {
     },
     /// Change a chain row. A phrase that doesn't exist yet is created.
     SetChainEntry {
+        track: usize,
         chain: u32,
         slot: usize,
         entry: ChainEntry,
     },
     /// Add a chain row. A phrase that doesn't exist yet is created.
     InsertChainEntry {
+        track: usize,
         chain: u32,
         at: usize,
         entry: ChainEntry,
     },
     /// Remove a chain row, keeping at least one. Its phrase stays for reuse.
     RemoveChainEntry {
+        track: usize,
         chain: u32,
         at: usize,
     },
     /// Copy the phrase in a chain row to a new ID, and point the row at the copy.
     ClonePhrase {
+        track: usize,
         chain: u32,
         slot: usize,
         new: u32,
@@ -291,19 +308,8 @@ fn section_mut(song: &mut Song, section: usize) -> Result<&mut Section, EditErro
         .ok_or(EditError::NoSection(section))
 }
 
-/// Make a chain with this ID and one new phrase.
-fn new_chain(song: &mut Song, chain: u32) {
-    let phrase = lowest_unused(&song.phrases);
-    ensure_phrase(song, phrase);
-    song.chains.insert(
-        chain,
-        Arc::new(Chain {
-            entries: vec![ChainEntry {
-                phrase,
-                transpose: 0,
-            }],
-        }),
-    );
+fn track_mut(song: &mut Song, track: usize) -> Result<&mut Track, EditError> {
+    song.tracks.get_mut(track).ok_or(EditError::NoTrack(track))
 }
 
 /// Why an edit was refused.
@@ -357,22 +363,29 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
     let mut next = Song::clone(song);
     match action {
         Action::Batch(_) => {}
-        Action::SetNote { phrase, step, note } => {
-            step_mut(&mut next, *phrase, *step)?.note = *note;
+        Action::SetNote {
+            track,
+            phrase,
+            step,
+            note,
+        } => {
+            step_mut(&mut next, *track, *phrase, *step)?.note = *note;
         }
         Action::SetStep {
+            track,
             phrase,
             step,
             value,
         } => {
-            *step_mut(&mut next, *phrase, *step)? = value.clone();
+            *step_mut(&mut next, *track, *phrase, *step)? = value.clone();
         }
         Action::SetField {
+            track,
             phrase,
             step,
             value,
         } => {
-            let target = step_mut(&mut next, *phrase, *step)?;
+            let target = step_mut(&mut next, *track, *phrase, *step)?;
             match value {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
                 FieldValue::Slot(slot, fx) => {
@@ -381,26 +394,29 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::Shape {
+            track,
             phrase,
             range,
             column,
             shape,
         } => {
-            let found = next
+            let found = track_mut(&mut next, *track)?
                 .phrases
                 .get(phrase)
+                .cloned()
                 .ok_or(EditError::NoPhrase(*phrase))?;
             for (row, value) in values(found.steps(), *range, *column, shape) {
-                column.write(step_mut(&mut next, *phrase, row)?, value);
+                column.write(step_mut(&mut next, *track, *phrase, row)?, value);
             }
         }
         Action::Fill {
+            track,
             phrase,
             range,
             fill,
         } => {
             for index in range.first..=range.last {
-                let target = step_mut(&mut next, *phrase, index)?;
+                let target = step_mut(&mut next, *track, *phrase, index)?;
                 let has_note = matches!(target.note, Note::On(_));
                 match fill {
                     Fill::Note { note, velocity } => {
@@ -428,25 +444,28 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::SetMark {
+            track,
             phrase,
             range,
             scope,
             mark,
         } => {
             for index in range.first..=range.last {
-                mark_step(step_mut(&mut next, *phrase, index)?, *scope, *mark);
+                mark_step(step_mut(&mut next, *track, *phrase, index)?, *scope, *mark);
             }
         }
         Action::Clear {
+            track,
             phrase,
             range,
             scope,
         } => {
             for index in range.first..=range.last {
-                clear_step(step_mut(&mut next, *phrase, index)?, *scope);
+                clear_step(step_mut(&mut next, *track, *phrase, index)?, *scope);
             }
         }
         Action::Shift {
+            track,
             phrase,
             range,
             scope,
@@ -454,10 +473,16 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             kind,
         } => {
             for index in range.first..=range.last {
-                shift_step(step_mut(&mut next, *phrase, index)?, *scope, *by, *kind);
+                shift_step(
+                    step_mut(&mut next, *track, *phrase, index)?,
+                    *scope,
+                    *by,
+                    *kind,
+                );
             }
         }
         Action::Paste {
+            track,
             phrase,
             at,
             group,
@@ -465,11 +490,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             times,
             merge,
         } => {
-            let target = next
-                .phrases
-                .get_mut(phrase)
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            let target = Arc::make_mut(target);
+            let target = phrase_mut(&mut next, *track, *phrase)?;
             let write = if *merge { merge_step } else { paste_step };
             let total = block.steps.len().saturating_mul(*times);
             target.grow_to(at.saturating_add(total));
@@ -481,12 +502,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 write(step, source, block.scope, *group).map_err(|_| EditError::ColumnMismatch)?;
             }
         }
-        Action::Double { phrase } => {
-            let target = next
-                .phrases
-                .get_mut(phrase)
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            Arc::make_mut(target).double();
+        Action::Double { track, phrase } => {
+            phrase_mut(&mut next, *track, *phrase)?.double();
         }
         Action::SetStepSize(size) => next.step = *size,
         Action::SetSkipSize(size) => next.skip = *size,
@@ -571,10 +588,11 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             track,
             chain,
         } => {
+            let owner = track_mut(&mut next, *track)?;
             if let Some(chain) = chain
-                && !next.chains.contains_key(chain)
+                && !owner.chains.contains_key(chain)
             {
-                new_chain(&mut next, *chain);
+                owner.add_chain(*chain);
             }
             *section_mut(&mut next, *section)?
                 .chains
@@ -587,26 +605,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .level = (*level).min(MAX_LEVEL);
         }
-        Action::SetLength { phrase, length } => {
-            let phrase = next
-                .phrases
-                .get_mut(phrase)
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            Arc::make_mut(phrase).set_len(*length);
+        Action::SetLength {
+            track,
+            phrase,
+            length,
+        } => {
+            phrase_mut(&mut next, *track, *phrase)?.set_len(*length);
         }
-        Action::SlideLoop { phrase, by } => {
-            let phrase = next
-                .phrases
-                .get_mut(phrase)
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            Arc::make_mut(phrase).slide(*by);
+        Action::SlideLoop { track, phrase, by } => {
+            phrase_mut(&mut next, *track, *phrase)?.slide(*by);
         }
-        Action::RotateLoop { phrase, by } => {
-            let phrase = next
-                .phrases
-                .get_mut(phrase)
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            Arc::make_mut(phrase).rotate(*by);
+        Action::RotateLoop { track, phrase, by } => {
+            phrase_mut(&mut next, *track, *phrase)?.rotate(*by);
         }
         Action::SetMilliBpm(millibpm) => {
             if !(MIN_MILLIBPM..=MAX_MILLIBPM).contains(millibpm) {
@@ -655,28 +665,37 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 track.name = sound.name.clone();
             }
         }
-        Action::SetChainEntry { chain, slot, entry } => {
+        Action::SetChainEntry {
+            track,
+            chain,
+            slot,
+            entry,
+        } => {
             check_transpose(entry)?;
-            ensure_phrase(&mut next, entry.phrase);
-            let target =
-                chain_mut(&mut next, *chain)?
-                    .entries
-                    .get_mut(*slot)
-                    .ok_or(EditError::NoRow {
-                        chain: *chain,
-                        slot: *slot,
-                    })?;
+            ensure_phrase(track_mut(&mut next, *track)?, entry.phrase);
+            let target = chain_mut(&mut next, *track, *chain)?
+                .entries
+                .get_mut(*slot)
+                .ok_or(EditError::NoRow {
+                    chain: *chain,
+                    slot: *slot,
+                })?;
             *target = *entry;
         }
-        Action::InsertChainEntry { chain, at, entry } => {
+        Action::InsertChainEntry {
+            track,
+            chain,
+            at,
+            entry,
+        } => {
             check_transpose(entry)?;
-            ensure_phrase(&mut next, entry.phrase);
-            let entries = &mut chain_mut(&mut next, *chain)?.entries;
+            ensure_phrase(track_mut(&mut next, *track)?, entry.phrase);
+            let entries = &mut chain_mut(&mut next, *track, *chain)?.entries;
             let at = (*at).min(entries.len());
             entries.insert(at, *entry);
         }
-        Action::RemoveChainEntry { chain, at } => {
-            let entries = &mut chain_mut(&mut next, *chain)?.entries;
+        Action::RemoveChainEntry { track, chain, at } => {
+            let entries = &mut chain_mut(&mut next, *track, *chain)?.entries;
             if entries.len() <= 1 {
                 return Err(EditError::LastRow);
             }
@@ -688,22 +707,27 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
             entries.remove(*at);
         }
-        Action::ClonePhrase { chain, slot, new } => {
-            let entry =
-                chain_mut(&mut next, *chain)?
-                    .entries
-                    .get_mut(*slot)
-                    .ok_or(EditError::NoRow {
-                        chain: *chain,
-                        slot: *slot,
-                    })?;
+        Action::ClonePhrase {
+            track,
+            chain,
+            slot,
+            new,
+        } => {
+            let entry = chain_mut(&mut next, *track, *chain)?
+                .entries
+                .get_mut(*slot)
+                .ok_or(EditError::NoRow {
+                    chain: *chain,
+                    slot: *slot,
+                })?;
             let old = std::mem::replace(&mut entry.phrase, *new);
-            let copy = next
+            let owner = track_mut(&mut next, *track)?;
+            let copy = owner
                 .phrases
                 .get(&old)
                 .cloned()
                 .ok_or(EditError::NoPhrase(old))?;
-            next.phrases.insert(*new, copy);
+            owner.phrases.insert(*new, copy);
         }
         Action::CloneChain { section, track } => {
             let old = section_mut(&mut next, *section)?
@@ -712,7 +736,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .copied()
                 .flatten()
                 .ok_or(EditError::NoTrack(*track))?;
-            let mut copy = Chain::clone(next.chains.get(&old).ok_or(EditError::NoChain(old))?);
+            let owner = track_mut(&mut next, *track)?;
+            let mut copy = Chain::clone(owner.chains.get(&old).ok_or(EditError::NoChain(old))?);
             // A phrase used twice in the chain stays one phrase in the copy.
             let mut made: Vec<(u32, u32)> = Vec::new();
             for entry in &mut copy.entries {
@@ -720,18 +745,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     entry.phrase = *new;
                     continue;
                 }
-                let phrase = next
+                let phrase = owner
                     .phrases
                     .get(&entry.phrase)
                     .cloned()
                     .ok_or(EditError::NoPhrase(entry.phrase))?;
-                let new = lowest_unused(&next.phrases);
-                next.phrases.insert(new, phrase);
+                let new = lowest_unused(&owner.phrases);
+                owner.phrases.insert(new, phrase);
                 made.push((entry.phrase, new));
                 entry.phrase = new;
             }
-            let new = lowest_unused(&next.chains);
-            next.chains.insert(new, Arc::new(copy));
+            let new = lowest_unused(&owner.chains);
+            owner.chains.insert(new, Arc::new(copy));
             next.sections[*section].chains[*track] = Some(new);
         }
         Action::SetTrackChain {
@@ -739,8 +764,9 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             track,
             chain,
         } => {
-            if !next.chains.contains_key(chain) {
-                new_chain(&mut next, *chain);
+            let owner = track_mut(&mut next, *track)?;
+            if !owner.chains.contains_key(chain) {
+                owner.add_chain(*chain);
             }
             *section_mut(&mut next, *section)?
                 .chains
@@ -781,26 +807,36 @@ fn check_transpose(entry: &ChainEntry) -> Result<(), EditError> {
     }
 }
 
-fn ensure_phrase(song: &mut Song, phrase: u32) {
-    song.phrases
+fn ensure_phrase(track: &mut Track, phrase: u32) {
+    track
+        .phrases
         .entry(phrase)
         .or_insert_with(|| Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
 }
 
-fn chain_mut(song: &mut Song, chain: u32) -> Result<&mut Chain, EditError> {
-    let target = song
+fn chain_mut(song: &mut Song, track: usize, chain: u32) -> Result<&mut Chain, EditError> {
+    let target = track_mut(song, track)?
         .chains
         .get_mut(&chain)
         .ok_or(EditError::NoChain(chain))?;
     Ok(Arc::make_mut(target))
 }
 
-fn step_mut(song: &mut Song, phrase: u32, step: usize) -> Result<&mut Step, EditError> {
-    let target = song
+fn phrase_mut(song: &mut Song, track: usize, phrase: u32) -> Result<&mut Phrase, EditError> {
+    let target = track_mut(song, track)?
         .phrases
         .get_mut(&phrase)
         .ok_or(EditError::NoPhrase(phrase))?;
-    Arc::make_mut(target)
+    Ok(Arc::make_mut(target))
+}
+
+fn step_mut(
+    song: &mut Song,
+    track: usize,
+    phrase: u32,
+    step: usize,
+) -> Result<&mut Step, EditError> {
+    phrase_mut(song, track, phrase)?
         .step_mut(step)
         .ok_or(EditError::NoStep { phrase, step })
 }

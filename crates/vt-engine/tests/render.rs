@@ -30,7 +30,7 @@ fn song(texts: &[&str]) -> Song {
     for track in &mut song.tracks {
         track.sample = Some("tone".to_owned());
     }
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
     }
@@ -180,7 +180,7 @@ fn with_the_limiter_off_a_render_keeps_levels_over_full() {
         track.sample = sample.clone();
     }
     for id in 0..8 {
-        let phrase = Arc::make_mut(loud.phrases.get_mut(&id).unwrap());
+        let phrase = Arc::make_mut(loud.tracks[id as usize].phrases.get_mut(&0).unwrap());
         *phrase.step_mut(0).unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
     }
     let limited = peak(&render(loud.clone(), RenderOptions::default()));
@@ -230,7 +230,7 @@ fn three_tracks() -> Song {
         (1, "G-4 40 CHA80 DLY90h ---00"),
         (2, "C-3 7F CUT40 ---00 ---00"),
     ] {
-        let phrase = Arc::make_mut(mix.phrases.get_mut(&id).unwrap());
+        let phrase = Arc::make_mut(mix.tracks[id as usize].phrases.get_mut(&0).unwrap());
         for step in 0..4 {
             *phrase.step_mut(step * 4).unwrap() = text.parse().unwrap();
         }

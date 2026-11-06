@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use vt_model::constants::FORMAT_VERSION;
 use vt_model::project::{
     ProjectError, create_project, import_sample, load_samples, load_song, save_as, save_song,
 };
@@ -50,7 +51,7 @@ fn a_song_round_trips() {
     let dir = folder();
     let mut song = Song::new(3);
     song.millibpm = 137_630;
-    let phrase = Arc::get_mut(song.phrases.get_mut(&0).unwrap()).unwrap();
+    let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
     *phrase.step_mut(2).unwrap() = "C-4 64 CUT40 ---00 RET14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
@@ -67,7 +68,7 @@ fn a_different_format_names_both_versions() {
     match load_song(&dir) {
         Err(ProjectError::Version {
             found, expected, ..
-        }) => assert_eq!((found, expected), (99, 2)),
+        }) => assert_eq!((found, expected), (99, FORMAT_VERSION)),
         other => panic!("expected a version error, got {other:?}"),
     }
 }

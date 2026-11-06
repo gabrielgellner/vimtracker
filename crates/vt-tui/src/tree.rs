@@ -38,7 +38,7 @@ impl App {
     /// The rows in the cursor's chain.
     pub fn chain_entries(&self) -> &[ChainEntry] {
         self.chain_id()
-            .and_then(|id| self.song().chains.get(&id))
+            .and_then(|id| self.track_here()?.chains.get(&id))
             .map_or(&[], |chain| chain.entries.as_slice())
     }
 
@@ -105,8 +105,11 @@ impl App {
         let slot = self.cursor.slot;
         self.record_jump();
         if slot >= self.chain_entries().len() {
-            let phrase = lowest_unused(&self.song().phrases);
+            let phrase = self
+                .track_here()
+                .map_or(0, |track| lowest_unused(&track.phrases));
             self.apply(&Action::InsertChainEntry {
+                track: self.cursor.track,
                 chain,
                 at: slot,
                 entry: ChainEntry {
@@ -122,32 +125,35 @@ impl App {
         self.say_if_shared();
     }
 
-    /// Which sections, tracks and slots play a phrase.
-    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize, usize)> {
-        let song = self.song();
+    /// Which sections and slots play a phrase of the cursor's track.
+    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
+        let Some(track) = self.track_here() else {
+            return Vec::new();
+        };
         let mut uses = Vec::new();
-        for (number, section) in song.sections.iter().enumerate() {
-            for (track, chain) in section.chains.iter().enumerate() {
-                let Some(chain) = chain.and_then(|id| song.chains.get(&id)) else {
-                    continue;
-                };
-                for (slot, entry) in chain.entries.iter().enumerate() {
-                    if entry.phrase == phrase {
-                        uses.push((number, track, slot));
-                    }
+        for (number, section) in self.song().sections.iter().enumerate() {
+            let chain = section.chains.get(self.cursor.track).copied().flatten();
+            let Some(chain) = chain.and_then(|id| track.chains.get(&id)) else {
+                continue;
+            };
+            for (slot, entry) in chain.entries.iter().enumerate() {
+                if entry.phrase == phrase {
+                    uses.push((number, slot));
                 }
             }
         }
         uses
     }
 
-    /// How many places in the song play the cursor's chain.
+    /// How many sections play the cursor's chain.
     pub fn chain_uses(&self) -> usize {
         let Some(chain) = self.chain_id() else {
             return 0;
         };
         let sections = &self.song().sections;
-        let chains = sections.iter().flat_map(|section| &section.chains);
+        let chains = sections
+            .iter()
+            .filter_map(|section| section.chains.get(self.cursor.track));
         chains.filter(|c| **c == Some(chain)).count()
     }
 
@@ -167,8 +173,11 @@ impl App {
             self.status = "There is no phrase here to clone".to_owned();
             return;
         };
-        let new = lowest_unused(&self.song().phrases);
+        let new = self
+            .track_here()
+            .map_or(0, |track| lowest_unused(&track.phrases));
         self.apply(&Action::ClonePhrase {
+            track: self.cursor.track,
             chain,
             slot: self.cursor.slot,
             new,
@@ -203,15 +212,12 @@ impl App {
             self.status = "There is no phrase here".to_owned();
             return;
         };
+        let track = self.cursor.track;
         let items = self
             .phrase_uses(phrase)
             .into_iter()
-            .map(|(section, track, slot)| Item {
-                label: format!(
-                    "Section {:02} track {:02} slot {slot:02X}",
-                    section + 1,
-                    track + 1
-                ),
+            .map(|(section, slot)| Item {
+                label: format!("Section {:02} slot {slot:02X}", section + 1),
                 pick: Pick::Use {
                     section,
                     track,
@@ -277,7 +283,9 @@ impl App {
                 ..entry
             },
             ChainColumn::Phrase => {
-                let phrases = &self.song().phrases;
+                let Some(phrases) = self.track_here().map(|track| &track.phrases) else {
+                    return;
+                };
                 let distance = if large { by.unsigned_abs() * 0x10 } else { 1 };
                 let next = if by > 0 {
                     phrases
@@ -296,6 +304,7 @@ impl App {
             }
         };
         self.apply(&Action::SetChainEntry {
+            track: self.cursor.track,
             chain,
             slot: self.cursor.slot,
             entry,
@@ -314,6 +323,7 @@ impl App {
         ) && entry.transpose != 0
         {
             self.apply(&Action::SetChainEntry {
+                track: self.cursor.track,
                 chain,
                 slot: self.cursor.slot,
                 entry: ChainEntry {
@@ -335,12 +345,13 @@ impl App {
             return;
         };
         let current = self.chain_entries().get(self.cursor.slot).map(|e| e.phrase);
-        let phrases: Vec<(u32, usize)> = self
-            .song()
-            .phrases
-            .iter()
-            .map(|(id, phrase)| (*id, phrase.len()))
-            .collect();
+        let phrases: Vec<(u32, usize)> = self.track_here().map_or_else(Vec::new, |track| {
+            track
+                .phrases
+                .iter()
+                .map(|(id, phrase)| (*id, phrase.len()))
+                .collect()
+        });
         let position = phrases.iter().position(|(id, _)| Some(*id) == current);
         let items = phrases
             .iter()
@@ -370,11 +381,13 @@ impl App {
         let slot = self.cursor.slot;
         let action = match self.chain_entries().get(slot).copied() {
             Some(entry) => Action::SetChainEntry {
+                track: self.cursor.track,
                 chain,
                 slot,
                 entry: ChainEntry { phrase, ..entry },
             },
             None => Action::InsertChainEntry {
+                track: self.cursor.track,
                 chain,
                 at: slot,
                 entry: ChainEntry {
@@ -418,6 +431,7 @@ impl App {
                 {
                     self.yanked_row = Some(entry);
                     self.apply(&Action::RemoveChainEntry {
+                        track: self.cursor.track,
                         chain,
                         at: self.cursor.slot,
                     });
@@ -433,7 +447,12 @@ impl App {
             Cmd::Paste => match (chain, self.yanked_row) {
                 (Some(chain), Some(entry)) => {
                     let at = (self.cursor.slot + 1).min(rows);
-                    self.apply(&Action::InsertChainEntry { chain, at, entry });
+                    self.apply(&Action::InsertChainEntry {
+                        track: self.cursor.track,
+                        chain,
+                        at,
+                        entry,
+                    });
                     self.cursor.slot = at;
                 }
                 _ => self.status = "No chain row copied yet".to_owned(),
@@ -496,11 +515,13 @@ impl App {
                 };
                 match existing {
                     Some(entry) => Action::SetChainEntry {
+                        track: self.cursor.track,
                         chain,
                         slot,
                         entry: ChainEntry { phrase, ..entry },
                     },
                     None => Action::InsertChainEntry {
+                        track: self.cursor.track,
                         chain,
                         at: slot,
                         entry: ChainEntry {
@@ -519,6 +540,7 @@ impl App {
                     return;
                 };
                 Action::SetChainEntry {
+                    track: self.cursor.track,
                     chain,
                     slot,
                     entry: ChainEntry { transpose, ..entry },

@@ -54,7 +54,7 @@ fn song(texts: &[&str]) -> Song {
     }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
-    let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
     }
