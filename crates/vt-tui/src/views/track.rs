@@ -305,6 +305,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     match app.track_page {
         Page::Sound => {
             for controls in app.page_rows() {
+                // The filter stands apart from the machine above it.
+                if controls.first() == Some(&Control::FilterType) {
+                    lines.push(Line::raw(""));
+                }
                 lines.push(sound_row(app, track, controls));
             }
         }

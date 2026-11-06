@@ -2282,9 +2282,28 @@ fn the_track_page_sets_the_filters_type_and_drive() {
         "opens on what's set"
     );
     special(&mut app, KeyCode::Esc);
-    assert!(track_page_text(&app)[4].contains("Ladder"));
+    assert!(track_page_text(&app)[5].contains("Ladder"));
     press(&mut app, "u");
     assert_eq!(track(&app).filter, FilterType::LowPass);
+}
+
+#[test]
+fn the_gap_above_the_filter_is_only_on_screen() {
+    use vt_tui::track_page::Control;
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "kk");
+    assert_eq!(app.track_control(), Control::Sample);
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::FilterType);
+
+    // A synth has more above its filter, and the gap stays just above it.
+    press(&mut app, "kkK");
+    press(&mut app, "pl");
+    special(&mut app, KeyCode::Enter);
+    let lines = track_page_text(&app);
+    assert!(lines[6].starts_with("Morph"), "{}", lines[6]);
+    assert!(lines[7].trim().is_empty(), "{}", lines[7]);
+    assert!(lines[8].starts_with("Type"), "{}", lines[8]);
 }
 
 #[test]
@@ -2293,8 +2312,8 @@ fn the_track_page_sets_the_utility_filter() {
     let track = |app: &App| app.song().tracks[0].clone();
     assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
     let lines = track_page_text(&app);
-    assert!(lines[8].contains("Low cut") && lines[8].contains("00"));
-    assert!(lines[9].contains("High cut") && lines[9].contains("FF"));
+    assert!(lines[9].contains("Low cut") && lines[9].contains("00"));
+    assert!(lines[10].contains("High cut") && lines[10].contains("FF"));
 
     press(&mut app, "jjj");
     press(&mut app, "i40");
@@ -2591,11 +2610,11 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 6)].symbol() == "S")
+            .position(|x| buffer[(x, 7)].symbol() == "S")
             .unwrap() as u16
             + 10;
-        let text: String = (at..at + 2).map(|x| buffer[(x, 6)].symbol()).collect();
-        (text, buffer[(at, 6)].fg)
+        let text: String = (at..at + 2).map(|x| buffer[(x, 7)].symbol()).collect();
+        (text, buffer[(at, 7)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].swing, None);
@@ -2649,9 +2668,10 @@ fn the_track_page_shows_its_settings_in_columns() {
     let lines = track_page_text(&app);
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
-    assert!(lines[4].starts_with("Type") && lines[4].contains("Delay"));
-    assert!(lines[5].starts_with("Cut") && lines[5].contains("FF ▕█████████▏"));
-    assert!(lines[6].starts_with("Res") && lines[6].contains("Swing"));
+    assert!(lines[4].trim().is_empty(), "{}", lines[4]);
+    assert!(lines[5].starts_with("Type") && lines[5].contains("Delay"));
+    assert!(lines[6].starts_with("Cut") && lines[6].contains("FF ▕█████████▏"));
+    assert!(lines[7].starts_with("Res") && lines[7].contains("Swing"));
 }
 
 #[test]
