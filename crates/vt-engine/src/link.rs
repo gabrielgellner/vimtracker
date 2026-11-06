@@ -460,9 +460,11 @@ mod tests {
     #[test]
     fn synths_stay_off_the_allocator() {
         let pool = samples();
-        let mut played = Song::new(4);
-        for (track, machine) in played.tracks.iter_mut().zip(vt_model::song::Machine::ALL) {
-            track.machine = machine;
+        let voices = vt_model::song::SynthVoice::ALL;
+        let mut played = Song::new(voices.len());
+        for (track, voice) in played.tracks.iter_mut().zip(voices) {
+            track.machine = vt_model::song::Machine::Plaits;
+            track.synth_voice = voice;
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
             *phrase.step_mut(0).unwrap() = "C-2 7F TIM40 ---00 ---00".parse().unwrap();
             *phrase.step_mut(4).unwrap() = "G-2 7F MOR20 HAR90 ---00".parse().unwrap();

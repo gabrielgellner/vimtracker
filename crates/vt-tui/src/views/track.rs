@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::lfo::{Destination, depth_text};
-use vt_model::song::{Machine, Track};
+use vt_model::song::Track;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -59,10 +59,10 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
         // Those with a middle that's a setting of its own show where they are around it.
         Control::Base(TrackControl::Harmonics) => {
-            Some((track.harmonics, track.machine == Machine::VirtualAnalog))
+            Some((track.harmonics, track.synth_voice.centred()[0]))
         }
         Control::Base(TrackControl::Timbre) => level(track.timbre),
-        Control::Base(TrackControl::Morph) => Some((track.morph, track.machine == Machine::Fm)),
+        Control::Base(TrackControl::Morph) => Some((track.morph, track.synth_voice.centred()[2])),
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),
         Control::Base(TrackControl::Resonance) => level(track.resonance),
         Control::Base(TrackControl::Delay) => level(track.delay),
@@ -83,7 +83,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         if column > 0 {
             spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
         }
-        let label = format!("{:<SOUND_LABEL$}", control.label_on(track.machine));
+        let label = format!("{:<SOUND_LABEL$}", control.label_on(track.synth_voice));
         used = SOUND_LABEL;
         spans.push(Span::styled(label, theme::dim()));
         let typing = *control == current && app.mode == Mode::Insert;
@@ -123,6 +123,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Machine => track.machine.name().to_owned(),
+        Control::SynthVoice => track.synth_voice.name().to_owned(),
         Control::Base(TrackControl::Harmonics) => hex(track.harmonics),
         Control::Base(TrackControl::Timbre) => hex(track.timbre),
         Control::Base(TrackControl::Morph) => hex(track.morph),

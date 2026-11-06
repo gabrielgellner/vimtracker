@@ -7,7 +7,7 @@ use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
 use vt_model::samples::SampleId;
-use vt_model::song::Machine;
+use vt_model::song::SynthVoice;
 
 use crate::dsp::smoother::fast_coefficient;
 
@@ -42,13 +42,12 @@ enum Synth {
 }
 
 impl Synth {
-    /// A new note on a machine, if it's a synth.
-    fn new(machine: Machine, rate: u32) -> Option<Self> {
-        match machine {
-            Machine::Sample => None,
-            Machine::VirtualAnalog => Some(Self::VirtualAnalog(VirtualAnalog::new())),
-            Machine::Fm => Some(Self::Fm(Fm::new(rate))),
-            Machine::Kick => Some(Self::Kick(Kick::new(rate))),
+    /// A new note on a voice.
+    fn new(voice: SynthVoice, rate: u32) -> Self {
+        match voice {
+            SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
+            SynthVoice::Fm => Self::Fm(Fm::new(rate)),
+            SynthVoice::Kick => Self::Kick(Kick::new(rate)),
         }
     }
 
@@ -85,6 +84,8 @@ pub struct Voice {
     /// A synth to play instead of the sample, and its settings.
     synth: Option<Synth>,
     settings: Settings,
+    /// Whether it sounds until something ends it.
+    holds: bool,
 }
 
 impl Default for Voice {
@@ -105,6 +106,7 @@ impl Default for Voice {
             release_after: None,
             synth: None,
             settings: Settings::default(),
+            holds: false,
         }
     }
 }
@@ -113,8 +115,8 @@ impl Default for Voice {
 #[derive(Debug, Clone, Copy)]
 pub struct NoteOn {
     pub sample: SampleId,
-    /// What plays it. A synth ignores the sample.
-    pub machine: Machine,
+    /// A synth to play it, which ignores the sample.
+    pub synth: Option<SynthVoice>,
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
@@ -140,7 +142,8 @@ impl Voice {
             rate,
             elapsed: 0,
             release_after: note.release_after,
-            synth: Synth::new(note.machine, rate),
+            synth: note.synth.map(|voice| Synth::new(voice, rate)),
+            holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
         }
     }
@@ -148,8 +151,7 @@ impl Voice {
     /// Whether it is sounding.
     /// Start the release of a note that would otherwise hold until something ended it.
     pub fn release_if_held(&mut self) {
-        let holds = matches!(self.synth, Some(Synth::VirtualAnalog(_) | Synth::Fm(_)));
-        if holds {
+        if self.holds {
             self.release();
         }
     }

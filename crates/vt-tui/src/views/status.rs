@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
-use vt_model::song::Machine;
+use vt_model::song::SynthVoice;
 
 use crate::app::{App, Field};
 use crate::input::keys::Key;
@@ -51,12 +51,12 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
         View::Track | View::Mixer => {
-            let machine = app
+            let voice = app
                 .song()
                 .tracks
                 .get(app.cursor.track)
-                .map_or(Machine::Sample, |track| track.machine);
-            app.track_control().label_on(machine).to_owned()
+                .map_or(SynthVoice::default(), |track| track.synth_voice);
+            app.track_control().label_on(voice).to_owned()
         }
         View::Song => match app.song_column {
             LENGTH_COLUMN => "Length".to_owned(),

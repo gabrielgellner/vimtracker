@@ -9,7 +9,7 @@ use vt_model::project::{
 };
 use vt_model::sample::{SampleError, load_wav};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Launch, Machine, Repeat, Song};
+use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice};
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -52,7 +52,8 @@ fn a_song_round_trips() {
     let mut song = Song::new(3);
     song.millibpm = 137_630;
     song.launch = Launch::every(12).unwrap();
-    song.tracks[1].machine = Machine::VirtualAnalog;
+    song.tracks[1].machine = Machine::Plaits;
+    song.tracks[1].synth_voice = SynthVoice::Fm;
     song.tracks[1].timbre = 0x40;
     Arc::get_mut(song.tracks[0].chains.get_mut(&0).unwrap())
         .unwrap()
