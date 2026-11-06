@@ -15,7 +15,7 @@ use crate::app::App;
 use crate::input::mode::View;
 use crate::theme;
 use crate::track_page::Page;
-use crate::views::braille::level_at;
+use crate::views::braille::envelope_columns;
 use crate::views::track::{DIAGRAM_HEIGHT, DIAGRAM_WIDTH, envelope_being_edited};
 
 /// The character that stands for a piece of an image.
@@ -29,16 +29,12 @@ const POSITIONS: [char; 28] = [
 ];
 /// The most base64 the protocol takes in one command.
 const CHUNK: usize = 4096;
-/// The pixels drawn for each character. The terminal scales them to fit.
-const CELL_WIDTH: usize = 16;
-const CELL_HEIGHT: usize = 32;
-/// Room above and below a curve, so its line isn't cut off.
-const MARGIN: f32 = 3.0;
-/// How wide a curve's line is, in pixels.
-const LINE: f32 = 3.0;
-/// How strong the fill under a curve is just below it, and at the bottom.
-const FILL_TOP: f32 = 0.35;
-const FILL_BOTTOM: f32 = 0.06;
+/// The grid of dots an envelope is drawn on, for each character.
+const CELL_DOTS_ACROSS: usize = 4;
+const CELL_DOTS_DOWN: usize = 8;
+/// The pixels across and down each dot. Kitty smooths an image it scales, so a dot is a solid block
+/// that's already near its final size, which keeps its edges crisp.
+const DOT_PIXELS: usize = 4;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -56,56 +52,95 @@ pub fn id_color(id: u32) -> Color {
     Color::Rgb((id >> 16) as u8, (id >> 8) as u8, id as u8)
 }
 
-/// How far a point is from a line between two others.
-fn distance(point: (f32, f32), from: (f32, f32), to: (f32, f32)) -> f32 {
-    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
-    let length = dx * dx + dy * dy;
-    let along = if length > 0.0 {
-        (((point.0 - from.0) * dx + (point.1 - from.1) * dy) / length).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    (point.0 - from.0 - along * dx).hypot(point.1 - from.1 - along * dy)
-}
-
-/// An envelope's shape as RGBA pixels: a smooth line with a soft fill under it.
-pub fn envelope_pixels(
-    envelope: &Envelope,
-    color: [u8; 3],
-    width: usize,
-    height: usize,
-) -> Vec<u8> {
-    let (top, bottom) = (MARGIN, height as f32 - 1.0 - MARGIN);
-    let last = (width - 1) as f32;
-    let curve: Vec<f32> = (0..width)
-        .map(|x| bottom - level_at(envelope, x as f32 / last) * (bottom - top))
-        .collect();
-    // It rises from silence and returns to it, even if its first or last stage takes no time.
-    let mut points = vec![(0.0, bottom)];
-    points.extend(curve.iter().enumerate().map(|(x, y)| (x as f32, *y)));
-    points.push((last, bottom));
-
-    let mut pixels = Vec::with_capacity(width * height * 4);
-    for y in 0..height {
-        for (x, curve_y) in curve.iter().enumerate() {
-            let point = (x as f32, y as f32);
-            // Only the parts of the line close to this column can reach it.
-            let near = x.saturating_sub(2)..(x + 4).min(points.len() - 1);
-            let closest = near.fold(f32::MAX, |closest, index| {
-                closest.min(distance(point, points[index], points[index + 1]))
-            });
-            let line = (LINE / 2.0 + 0.5 - closest).clamp(0.0, 1.0);
-            let fill = if point.1 >= *curve_y && point.1 <= bottom {
-                let depth = (point.1 - curve_y) / (bottom - top);
-                FILL_TOP + (FILL_BOTTOM - FILL_TOP) * depth
+/// The CRC that PNG chunks end with.
+fn crc32(parts: &[&[u8]]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in parts.iter().copied().flatten() {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
             } else {
-                0.0
+                crc >> 1
             };
-            let alpha = line.max(fill);
-            pixels.extend([color[0], color[1], color[2], (alpha * 255.0) as u8]);
         }
     }
-    pixels
+    !crc
+}
+
+/// The checksum that zlib data ends with.
+fn adler32(data: &[u8]) -> u32 {
+    let (a, b) = data.iter().fold((1_u32, 0_u32), |(a, b), byte| {
+        let a = (a + u32::from(*byte)) % 65_521;
+        (a, (b + a) % 65_521)
+    });
+    (b << 16) | a
+}
+
+/// A PNG of solid dots in one colour on nothing. With one bit for each pixel it's small enough
+/// without compressing it, so its data is stored as it is.
+fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
+    let (width, height) = (dots[0].len(), dots.len());
+    let mut lines = Vec::with_capacity((width.div_ceil(8) + 1) * height);
+    for row in dots {
+        lines.push(0);
+        lines.extend(row.chunks(8).map(|bits| {
+            bits.iter().enumerate().fold(0_u8, |byte, (index, bit)| {
+                byte | (u8::from(*bit) << (7 - index))
+            })
+        }));
+    }
+    let mut stored = vec![0x78, 0x01];
+    let mut blocks = lines.chunks(usize::from(u16::MAX)).peekable();
+    while let Some(block) = blocks.next() {
+        let length = block.len() as u16;
+        stored.push(u8::from(blocks.peek().is_none()));
+        stored.extend(length.to_le_bytes());
+        stored.extend((!length).to_le_bytes());
+        stored.extend(block);
+    }
+    stored.extend(adler32(&lines).to_be_bytes());
+
+    let mut header = Vec::new();
+    header.extend((width as u32).to_be_bytes());
+    header.extend((height as u32).to_be_bytes());
+    // One bit deep, with colours from a palette, and the usual settings for the rest.
+    header.extend([1, 3, 0, 0, 0]);
+    let mut palette = vec![0; 3];
+    palette.extend(color);
+    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+    let chunks: [(&[u8; 4], &[u8]); 5] = [
+        (b"IHDR", &header),
+        (b"PLTE", &palette),
+        // The first colour is see-through.
+        (b"tRNS", &[0]),
+        (b"IDAT", &stored),
+        (b"IEND", &[]),
+    ];
+    for (name, data) in chunks {
+        out.extend((data.len() as u32).to_be_bytes());
+        out.extend(*name);
+        out.extend(data);
+        out.extend(crc32(&[name, data]).to_be_bytes());
+    }
+    out
+}
+
+/// An envelope's shape as a PNG: a plain line of solid dots, as on a small LCD.
+pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    let mut dots = vec![vec![false; across * DOT_PIXELS]; down * DOT_PIXELS];
+    for (column, (high, low)) in envelope_columns(envelope, across, down)
+        .into_iter()
+        .enumerate()
+    {
+        for row in high..=low {
+            for line in &mut dots[row * DOT_PIXELS..(row + 1) * DOT_PIXELS] {
+                line[column * DOT_PIXELS..(column + 1) * DOT_PIXELS].fill(true);
+            }
+        }
+    }
+    png(&dots, color)
 }
 
 /// Write one command, wrapped so tmux passes it on.
@@ -125,34 +160,26 @@ fn command(out: &mut impl Write, controls: &str, data: &[u8], in_tmux: bool) -> 
     }
 }
 
-/// Where an image's pixels are from, and how many characters it covers.
+/// A PNG to send, and how many characters it covers.
 pub struct Image<'a> {
     pub id: u32,
-    pub pixels: &'a [u8],
-    pub width: usize,
-    pub height: usize,
+    pub png: &'a [u8],
     pub columns: usize,
     pub rows: usize,
 }
 
-/// Send an image, in pieces. An image already sent with this id is replaced. `q=2` keeps the
-/// terminal from answering, as its answers would arrive as key presses.
+/// Send an image, in pieces. `q=2` keeps the terminal from answering, as its answers would arrive as key presses.
 pub fn transmit(out: &mut impl Write, image: &Image, in_tmux: bool) -> io::Result<()> {
-    let encoded = STANDARD.encode(image.pixels);
+    let encoded = STANDARD.encode(image.png);
     let mut chunks = encoded.as_bytes().chunks(CHUNK).peekable();
     let mut first = true;
     while let Some(chunk) = chunks.next() {
         let more = u8::from(chunks.peek().is_some());
         let controls = if first {
             let Image {
-                id,
-                width,
-                height,
-                columns,
-                rows,
-                ..
+                id, columns, rows, ..
             } = image;
-            format!("a=T,U=1,f=32,s={width},v={height},i={id},c={columns},r={rows},q=2,m={more}")
+            format!("a=T,U=1,f=100,i={id},c={columns},r={rows},q=2,m={more}")
         } else {
             format!("q=2,m={more}")
         };
@@ -233,7 +260,6 @@ impl Graphics {
         }
         let envelopes = track.envelopes;
         let edited = envelope_being_edited(app);
-        let (width, height) = (DIAGRAM_WIDTH * CELL_WIDTH, DIAGRAM_HEIGHT * CELL_HEIGHT);
         let mut ids = [0; TRACK_ENVELOPES];
         for (slot, envelope) in envelopes.iter().enumerate() {
             let active = edited == Some(slot);
@@ -251,12 +277,10 @@ impl Graphics {
                         _ => [255; 3],
                     };
                     let id = self.new_id();
-                    let pixels = envelope_pixels(envelope, color, width, height);
+                    let png = envelope_png(envelope, color, DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
                     let image = Image {
                         id,
-                        pixels: &pixels,
-                        width,
-                        height,
+                        png: &png,
                         columns: DIAGRAM_WIDTH,
                         rows: DIAGRAM_HEIGHT,
                     };
@@ -291,11 +315,50 @@ impl Default for Graphics {
 mod tests {
     use super::*;
 
-    const WIDTH: usize = 112;
-    const HEIGHT: usize = 64;
+    type Chunks = Vec<(String, Vec<u8>)>;
 
-    fn alpha(pixels: &[u8], x: usize, y: usize) -> u8 {
-        pixels[(y * WIDTH + x) * 4 + 3]
+    /// A PNG's chunks, having checked their CRCs, and its pixels.
+    fn decode(png: &[u8]) -> (Chunks, Vec<Vec<bool>>) {
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        let mut chunks = Vec::new();
+        let mut at = 8;
+        while at < png.len() {
+            let length = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+            let (name, data) = (&png[at + 4..at + 8], &png[at + 8..at + 8 + length]);
+            let crc =
+                u32::from_be_bytes(png[at + 8 + length..at + 12 + length].try_into().unwrap());
+            assert_eq!(crc32(&[name, data]), crc);
+            chunks.push((String::from_utf8(name.to_vec()).unwrap(), data.to_vec()));
+            at += 12 + length;
+        }
+        let header = &chunks[0].1;
+        let width = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let idat = &chunks.iter().find(|(name, _)| name == "IDAT").unwrap().1;
+        let mut lines = Vec::new();
+        let mut at = 2;
+        loop {
+            let last = idat[at] == 1;
+            let length = usize::from(u16::from_le_bytes([idat[at + 1], idat[at + 2]]));
+            let check = u16::from_le_bytes([idat[at + 3], idat[at + 4]]);
+            assert_eq!(check, !(length as u16));
+            lines.extend(&idat[at + 5..at + 5 + length]);
+            at += 5 + length;
+            if last {
+                break;
+            }
+        }
+        assert_eq!(&idat[at..], adler32(&lines).to_be_bytes());
+        let stride = width.div_ceil(8) + 1;
+        let pixels = lines
+            .chunks(stride)
+            .map(|line| {
+                assert_eq!(line[0], 0);
+                (0..width)
+                    .map(|x| line[1 + x / 8] & (0x80 >> (x % 8)) != 0)
+                    .collect()
+            })
+            .collect();
+        (chunks, pixels)
     }
 
     fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
@@ -308,12 +371,10 @@ mod tests {
         }
     }
 
-    fn sent(in_tmux: bool, pixels: &[u8]) -> Vec<u8> {
+    fn sent(in_tmux: bool, png: &[u8]) -> Vec<u8> {
         let image = Image {
             id: 7,
-            pixels,
-            width: 2,
-            height: 2,
+            png,
             columns: 28,
             rows: 4,
         };
@@ -342,24 +403,39 @@ mod tests {
     }
 
     #[test]
-    fn the_pixels_follow_the_envelope() {
-        let pixels = envelope_pixels(&adsr(0, 0, 50, 0), [1, 2, 3], WIDTH, HEIGHT);
-        assert_eq!(pixels.len(), WIDTH * HEIGHT * 4);
-        assert_eq!(&pixels[..3], &[1, 2, 3]);
-        let middle = HEIGHT / 2;
-        // A held half: its line is halfway up, with nothing above and a fill below.
-        assert_eq!(alpha(&pixels, WIDTH / 2, middle), 255);
-        assert_eq!(alpha(&pixels, WIDTH / 2, middle - 10), 0);
-        let fill = alpha(&pixels, WIDTH / 2, middle + 10);
-        assert!(fill > 0 && fill < 255, "{fill}");
+    fn the_checksums_match_known_values() {
+        assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
+        assert_eq!(adler32(b"Wikipedia"), 0x11E6_0398);
     }
 
     #[test]
-    fn the_line_has_no_gap_where_it_rises_quickly() {
-        let pixels = envelope_pixels(&adsr(0, 200, 0, 0), [255; 3], WIDTH, HEIGHT);
-        for y in 4..HEIGHT - 4 {
-            let widest = (0..WIDTH).map(|x| alpha(&pixels, x, y)).max().unwrap();
-            assert!(widest > 100, "row {y} is at {widest}");
+    fn an_envelope_is_a_small_png_of_one_colour_on_nothing() {
+        let png = envelope_png(&adsr(1, 200, 0, 50), [1, 2, 3], 28, 4);
+        assert!(png.len() < 8000, "{}", png.len());
+        let (chunks, _) = decode(&png);
+        let names: Vec<&str> = chunks.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
+        assert_eq!(chunks[1].1, [0, 0, 0, 1, 2, 3]);
+        assert_eq!(chunks[2].1, [0]);
+    }
+
+    #[test]
+    fn the_pixels_are_the_envelopes_line_as_solid_dots() {
+        // A held half has one line part way up, with nothing above or below it.
+        let envelope = adsr(0, 0, 50, 0);
+        let (_, pixels) = decode(&envelope_png(&envelope, [255; 3], 28, 4));
+        let (across, down) = (28 * CELL_DOTS_ACROSS, 4 * CELL_DOTS_DOWN);
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        let spans = envelope_columns(&envelope, across, down);
+        for (y, line) in pixels.iter().enumerate() {
+            for (x, pixel) in line.iter().enumerate() {
+                let (column, row) = (x / DOT_PIXELS, y / DOT_PIXELS);
+                let (high, low) = spans[column];
+                assert_eq!(*pixel, (high..=low).contains(&row), "dot {column}, {row}");
+            }
         }
     }
 
@@ -372,7 +448,7 @@ mod tests {
             .filter(|command| !command.is_empty())
             .collect();
         assert!(commands.len() > 1);
-        assert!(commands[0].starts_with("\x1b_Ga=T,U=1,f=32,s=2,v=2,i=7,c=28,r=4,q=2,m=1;"));
+        assert!(commands[0].starts_with("\x1b_Ga=T,U=1,f=100,i=7,c=28,r=4,q=2,m=1;"));
         let mut data = String::new();
         for (index, command) in commands.iter().enumerate() {
             let (controls, chunk) = command.split_once(';').unwrap();
