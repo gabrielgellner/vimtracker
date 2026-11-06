@@ -9,7 +9,7 @@ use vt_model::project::{
 };
 use vt_model::sample::{SampleError, load_wav};
 use vt_model::samples::SamplePool;
-use vt_model::song::{Launch, Song};
+use vt_model::song::{Launch, Repeat, Song};
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -59,6 +59,31 @@ fn a_song_round_trips() {
     *phrase.step_mut(2).unwrap() = "C-4 64 CUT40 ---00 RET14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
+}
+
+#[test]
+fn a_repeat_of_nothing_is_refused_on_load() {
+    let dir = folder();
+    let mut song = Song::new(1);
+    song.sections[0].repeat = Repeat::new(3);
+    save_song(&dir, &song).unwrap();
+    assert_eq!(load_song(&dir).unwrap(), song);
+    let path = dir.join("song.ron");
+    let text = fs::read_to_string(&path).unwrap();
+    let saved = written_repeat(&text);
+    assert!(text.contains(&saved), "{text}");
+    fs::write(&path, text.replace(&saved, &saved.replace('3', "0"))).unwrap();
+    assert!(load_song(&dir).is_err());
+}
+
+/// How a repeat of 3 is written in a saved song.
+fn written_repeat(text: &str) -> String {
+    if text.contains("repeat: 3") {
+        "repeat: 3"
+    } else {
+        "repeat:3"
+    }
+    .to_owned()
 }
 
 #[test]

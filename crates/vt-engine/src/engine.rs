@@ -233,12 +233,17 @@ impl Engine {
                 continue;
             }
             self.start_row(row);
-            let steps = if at == section {
-                within = step as u64 % length;
+            let plays = song.section_plays(row) as u64;
+            let mut steps = if at == section {
+                within = step as u64 % plays;
                 within
             } else {
-                length
+                plays
             };
+            // A resetting section's earlier repeats leave nothing behind.
+            if row.start == SectionStart::Reset && steps > length {
+                steps = (steps - 1) % length + 1;
+            }
             let (place, reset) = after_steps(self.place, steps, row.reset);
             if reset {
                 self.realign();
@@ -262,9 +267,11 @@ impl Engine {
         }
     }
 
-    /// Carry on in another section as if nothing changed, with launched chains still running.
-    pub fn continue_in(&mut self, section: usize) {
+    /// Carry on in another section as if nothing changed, with launched chains still running. It
+    /// has this length, so the place in it is the place in the last section's current repeat.
+    pub fn continue_in(&mut self, section: usize, length: usize) {
         self.section = section;
+        self.section_place %= (length as u64).max(1);
         self.loop_section = Some(section);
     }
 
@@ -318,7 +325,13 @@ impl Engine {
             return;
         }
         let due = match self.current.song.launch {
-            Launch::Every(steps) => self.section_place.is_multiple_of(u64::from(steps.get())),
+            Launch::Every(steps) => {
+                // Each repeat of a section starts the grid again.
+                let length = self
+                    .playing_section()
+                    .map_or(0, |s| self.current.song.section_length(s));
+                (self.section_place % (length as u64).max(1)).is_multiple_of(u64::from(steps.get()))
+            }
             Launch::ChainEnd => {
                 self.track_place(index, section_step)
                     .is_none_or(|(current, place)| {
@@ -384,7 +397,16 @@ impl Engine {
             return false;
         }
         self.section = self.section.min(count - 1);
-        if self.section_place < song.section_length(&song.sections[self.section]) as u64 {
+        let here = &song.sections[self.section];
+        if self.section_place < song.section_plays(here) as u64 {
+            // Each repeat of a resetting section starts it over.
+            let length = song.section_length(here) as u64;
+            if here.start == SectionStart::Reset
+                && self.section_place > 0
+                && self.section_place.is_multiple_of(length.max(1))
+            {
+                self.realign();
+            }
             return true;
         }
         let from = self.section;

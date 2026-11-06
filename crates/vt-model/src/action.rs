@@ -15,7 +15,7 @@ use crate::selection::{
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Launch, Phrase, Section, SectionStart, Song, Track,
+    Chain, ChainEntry, FilterType, Launch, Phrase, Repeat, Section, SectionStart, Song, Track,
     lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
@@ -184,6 +184,11 @@ pub enum Action {
     SetSectionLength {
         section: usize,
         length: Option<usize>,
+    },
+    /// Set how many times a section plays before moving on.
+    SetSectionRepeat {
+        section: usize,
+        repeat: Repeat,
     },
     /// Set what a section does to the tracks when it starts.
     SetSectionStart {
@@ -600,6 +605,9 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 return Err(EditError::Reset);
             }
             section_mut(&mut next, *section)?.length = *length;
+        }
+        Action::SetSectionRepeat { section, repeat } => {
+            section_mut(&mut next, *section)?.repeat = *repeat;
         }
         Action::SetSectionStart { section, start } => {
             section_mut(&mut next, *section)?.start = *start;

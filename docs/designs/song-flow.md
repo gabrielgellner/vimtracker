@@ -1,6 +1,6 @@
 # Song flow and session workflow
 
-**Status:** proposed on 2026-11-06, with its choices approved by the author after a review. M8d is built. M8c's position rule is built, and its repeats aren't. **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
+**Status:** built on 2026-11-06, with its choices approved by the author after a review. How it feels in play is still to be judged. See "Choices to judge in play". **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
 
 **Replaces:** the main design's carry rule and default, launches waiting for a chain's end, its limits on playheads, `gd` on `--` opening a chain, and captured rows having no set length. Where the two documents differ, this one wins. Tests that pin the old behaviour change with it, such as `tests/sections.rs:116`, which pins carry as the default.
 
@@ -71,13 +71,13 @@ This comes first. It's cheaper, it needs nothing from M8c, and playing with it i
 
 `:launch` takes `step`, `1/4` (4 steps), `1/2` (8), `1bar` (16), `2bar`, `4bar`, `8bar`, a step count, or `chain`. The default is `1bar`. A bare `:launch` shows the value, and a bad argument gets an error like `:reset`'s.
 
-A cued launch or stop happens on the next step whose row step is a multiple of that length. Every row start is therefore a grid line. A line past the row's end doesn't arrive, so `1bar` on a 12-step row fires only at its start. `:reset` doesn't touch the row step, so it doesn't move the grid.
+A cued launch or stop happens on the next step whose row step, within the current repeat once M8c adds them, is a multiple of that length. Every row start is therefore a grid line. A line past the row's end doesn't arrive, so `1bar` on a 12-step row fires only at its start. `:reset` doesn't touch the row step, so it doesn't move the grid.
 
 `chain` is the current behaviour, waiting for the track's own chain to end, and a track playing nothing fires on the next step. It's also the [Dirtywave M8's default `LIVE QUANTIZE`](https://cdn.shopify.com/s/files/1/0455/0485/6229/files/m8_operation_manual_v20230630.pdf). The grid belongs to the row rather than the chain, so a chain shorter than the grid loops until the line, and a longer one is cut there. A pending cue uses a new `:launch` value at once.
 
 ### Launching rules
 
-*   A launched chain always plays from its top. This uses the existing `Launched.started` (`engine.rs:233`).
+*   A launched chain always plays from its top.
 *   Launching the chain a track is already playing restarts it from its top at the next launch time. It needs no special case, as the cue simply fires.
 *   The first launch holds the song on the playing row, as `:loop` does, which is unchanged from M8b.
 *   Turning `:loop` off hands back to the song. The row plays to its end, then moves on.
@@ -122,7 +122,7 @@ Each `:launch` value, a stop on the grid, the grid unmoved by `:reset`, a chain 
 
 ## M8c: song flow
 
-**Data.** In `vt-model`, `Section` gains `repeat`, a `u16` of at least 1, default 1. Loading rejects 0, as actions reject a zero length, and the engine treats it as 1. `SectionStart` becomes `New`, the default, and `Reset`. In `vt-engine`, each track gains `started`, signed, and `playing`, the chain it played last, replacing `Launched`. `JamState` gains both, as `started` and `chain`. Removing `Carry` bumps `FORMAT_VERSION` to 4.
+**Data.** In `vt-model`, `Section` gains `repeat`, which can't hold 0 even in a saved song, default 1. `SectionStart` becomes `New`, the default, and `Reset`. In `vt-engine`, each track gains `started`, signed, and `playing`, the chain it played last, replacing `Launched`. `JamState` gains both, as `started` and `chain`. Removing `Carry` bumps `FORMAT_VERSION` to 4.
 
 ### One position rule
 
@@ -156,7 +156,9 @@ This works as it does now: when `place` reaches N, `place` and every `started` g
 
 The song view gains an `Rpt` column after `Length`, with the same keys: `=` and `-`, `+` and `_`, and `i` to type. `x` goes back to 1. `K` and `x` on `Start` follow `new` and `reset`.
 
-There's no pass counter. A row ends when its row step reaches at least `length x repeat`, so lowering `repeat` while playing ends the row at the next step if it's already past. A hold or `:loop` overrides this, and the row loops after `length x repeat`. Undo and row changes follow the existing rules for the playing section. Capture sets `repeat` to 1.
+There's no pass counter. A row ends when its row step reaches at least `length x repeat`, so lowering `repeat` while playing ends the row at the next step if it's already past. A hold or `:loop` overrides this, and the row loops after `length x repeat`. Undo and row changes follow the existing rules for the playing section.
+
+The launch grid restarts on each repeat, so `1bar` on a 12-step row with `Rpt 4` fires at each pass's start. Capture sets `repeat` to 1, and the row step wraps to the captured row's length, so capturing partway through a repeat carries on from the same place in the pass.
 
 ### Launches meeting rows
 
@@ -176,14 +178,14 @@ If the song has one non-empty row, it still renders as its loop: the row's `:res
 
 ### Tests
 
-Each `Start` value, a chain spanning two rows, a different-length chain starting from its top, `reset` on each repeat, wrapping with swing unchanged, one section unchanged, an added empty row changing nothing, `:reset N` including entering past it, repeats, lowering `repeat` while playing, `gc` copying `repeat`, `:loop` overriding it, `:loop` to another row, playing from each row of a spanning part and from a chain step, playheads per track and on a launched chain, a launch ending into a matching row, a captured row reached later, render content matching a second pass, render length and stems with repeats, `--rows`, loading `repeat` 0, and no allocation in the callback.
+Each `Start` value, a chain spanning two rows, a different-length chain starting from its top, `reset` on each repeat, wrapping with swing unchanged, one section unchanged, an added empty row changing nothing, `:reset N` including entering past it, repeats, lowering `repeat` while playing, `gc` copying `repeat`, `:loop` overriding it, `:loop` to another row, playing from each row of a spanning part and from a chain step, playheads per track and on a launched chain, a launch ending into a matching row, a captured row reached later, render content the same each time, render length and stems with repeats, `--rows`, loading `repeat` 0, and no allocation in the callback.
 
 ## Risks and limits
 
 | Risk or limit | Treatment |
 |---|---|
 | New logic in the audio callback | Only scalars are added and every walk is bounded by the song's size, so nothing allocates. Both milestones test this. |
-| A bad value in a song file | `repeat` 0 is rejected on load, and the engine treats it as 1. |
+| A bad value in a song file | `repeat` 0 and a launch grid of 0 are rejected on load. |
 | A jam-state report delayed by a full queue | A playhead may be stale until the next report, and sound isn't affected. |
 | A jam's phase is lost on capture | Chains launched on different bars are often out of phase, and this is lost when the captured row is reached in order, including in stems. It's an accepted cost of `1bar`, to judge in play. |
 | A spanning row can't be looped alone | `:loop` on a spanning row lets its chain run on. `Start` `reset` restarts it instead. To judge in play. |
@@ -226,20 +228,7 @@ A row could gain `then`, an optional row to go to next, and a second `then` with
 
 ## Detailed Implementation Plan
 
-M8d is planned to the file. M8c is an outline, as it should be finished once M8d has been played. Each is one issue and one PR, on its own branch.
-
-### Findings left open by the review
-
-The review's last stage ended with these not applied to the design above. Where they differ, the plan's treatment applies when the work is built, and the design text is updated in the same PR.
-
-| Finding | Milestone | Treatment |
-|---|---|---|
-| Capture from a row with `Rpt` can end its row at once, as `continue_in` leaves the row step alone. M8d settled the same problem without `Rpt` by copying the effective length. | M8c | `ContinueIn` wraps the row step to fit, with a test from a repeated source. |
-| `Rpt` puts bar lines mid-pass. | M8c | Test the grid against `section_place % length`, and count a self-loop as a row starting. |
-| `repeat` has two defences against 0. | M8c | Use `NonZeroU16`, so serde rejects it and the engine needs no case. |
-| Audition and moving between tracks treat one row step as every chain's position, so on a spanning row they differ from playback. | M8c | Accepted: both act on the row being edited while stopped, where nothing has played to differ from. |
-| "Render content matching a second pass" holds only for even song lengths or no swing. | M8c | Use an even length, or no swing, in that test. |
-| The milestone names run against the build order. | M8c | The author's call. |
+M8d was built as #72, a fix for rows with no chains as #73, and M8c as #75 and the PR that adds repeats. Audition and moving between tracks still treat one row step as every chain's position, so on a spanning row they differ from playback. That's accepted, as both act on the row being edited while stopped, where nothing has played to differ from.
 
 ### M8d: files
 
@@ -263,15 +252,6 @@ The review's last stage ended with these not applied to the design above. Where 
 | `docs/designs/song-flow.md`, `docs/designs/vimtracker.md` | Apply the findings handled here, and mark M8d built. |
 
 `Track::add_chain` already gives a new chain a phrase, so `gd` on `--` only changes which view opens.
-
-### M8c: outline
-
-1.  Keep both `Start` `reset` and `:reset N`, as `:reset N` longer than a row still has a use on a self-loop.
-2.  Add `started` and the playing chain per track, replacing `Launched.started`, with a row-entry function the engine and the walk share.
-3.  Change `SectionStart` to `New` and `Reset`, and update `sections.rs:116`.
-4.  Add `repeat`, the `Rpt` column and `song_steps`, and move the grid to each pass.
-5.  Add the play-from-row walk and playheads per track.
-6.  Update render, the guide and both design documents.
 
 ### Verification
 

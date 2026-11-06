@@ -111,8 +111,8 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `j` `k` | Next or previous section |
 | `h` `l` | Previous or next column |
 | `=` `-` `+` `_` | Change the value |
-| `i` | Type a length then `Enter`, or a chain's two hex digits |
-| `x` | Length follows the chains, Start is new, or no chain |
+| `i` | Type a length or repeat then `Enter`, or a chain's two hex digits |
+| `x` | Length follows the chains, Rpt is 1, Start is new, or no chain |
 | `K` | On Start, switch new and reset. On a track, choose its chain |
 | `gd` | Open this chain's phrase, or its rows if several, or add a chain |
 | `gC` | Copy this chain and its phrases, for this cell alone |
@@ -128,11 +128,15 @@ section lasts as long as its longest chain unless you set its length, which
 cuts its chains short or lets them loop on. An empty section is skipped until
 it has a chain or a length, and one with only a length is a rest. A `:reset` belongs to one section.
 
+**Rpt** is how many times a section plays before the song moves on. Its chains keep
+going across repeats unless Start is `reset`. A hold or `:loop` keeps it going
+after its last repeat.
+
 **Start** says what a section does to the tracks. With `new`, a track given a
 different chain starts it from its top, and one given the same chain keeps going,
 so a part can run across sections. Give the same chain to two sections of 32 steps
 and a 64-step chain plays through once. `reset` sends every track back to its start
-each time the section's length comes round. At the end of the song, every chain
+each time the section's length comes round, so each repeat is the same. At the end of the song, every chain
 starts from its top, and a section looping on itself leaves its chains running.
 
 `Shift-Tab` plays the song from the top. `Space c` in the song view plays from the
