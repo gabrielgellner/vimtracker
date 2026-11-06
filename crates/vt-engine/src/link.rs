@@ -16,11 +16,11 @@ use crate::published::Published;
 /// presses can't act on an out-of-date view of whether it is playing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
-    /// `Enter`: play from a section step, or stop if playing.
-    PlayOrStop { from: usize },
-    /// `Space x`: pause in place, or resume.
+    /// `Space c` and `Shift-Tab`: play from a section step, whatever is happening now.
+    PlayFrom { step: usize },
+    /// `Tab`: pause in place, or play from there.
     PauseOrResume,
-    /// `Space c`: return to the start, and stop if playing.
+    /// Opening a project: stop, and go back to the start.
     Return,
     /// Play an entered note on the preview voice.
     Preview {
@@ -139,7 +139,7 @@ impl Realtime {
         }
         while let Ok(command) = self.commands.pop() {
             match command {
-                Command::PlayOrStop { from } => self.engine.play_or_stop(from),
+                Command::PlayFrom { step } => self.engine.play_from(step),
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
                 Command::Preview {
@@ -234,7 +234,7 @@ mod tests {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(8, 16), &pool));
         let (mut handle, mut rt) = connect(engine);
-        assert!(handle.send(Command::PlayOrStop { from: 0 }));
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
         let mut violations = blocks(&mut rt, 4);
         for round in 0..1000u32 {
             let mut next = song(8, 16);
@@ -251,7 +251,7 @@ mod tests {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(8, 16), &pool));
         let (mut handle, mut rt) = connect(engine);
-        handle.send(Command::PlayOrStop { from: 0 });
+        handle.send(Command::PlayFrom { step: 0 });
         let mut violations = blocks(&mut rt, 4);
         for tracks in [MAX_TRACKS, 1, 8] {
             handle.publish(published(song(tracks, 16), &pool));
@@ -291,7 +291,7 @@ mod tests {
         }
         let engine = Engine::new(48_000, published(fx, &pool));
         let (mut handle, mut rt) = connect(engine);
-        handle.send(Command::PlayOrStop { from: 0 });
+        handle.send(Command::PlayFrom { step: 0 });
         assert_eq!(blocks(&mut rt, 2000), 0);
     }
 
@@ -366,15 +366,14 @@ mod tests {
     }
 
     #[test]
-    fn enter_then_enter_stops_and_returns_to_stopped() {
+    fn playing_again_restarts_and_tab_pauses() {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(1, 1), &pool));
         let (mut handle, mut rt) = connect(engine);
-        handle.send(Command::PlayOrStop { from: 0 });
-        handle.send(Command::PlayOrStop { from: 0 });
+        handle.send(Command::PlayFrom { step: 0 });
+        handle.send(Command::PlayFrom { step: 0 });
         blocks(&mut rt, 1);
-        assert_eq!(rt.engine().transport(), Transport::Stopped);
-        handle.send(Command::PauseOrResume);
+        assert_eq!(rt.engine().transport(), Transport::Playing);
         handle.send(Command::PauseOrResume);
         blocks(&mut rt, 1);
         assert_eq!(rt.engine().transport(), Transport::Paused);
@@ -385,7 +384,7 @@ mod tests {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(1, 1), &pool));
         let (mut handle, mut rt) = connect(engine);
-        handle.send(Command::PlayOrStop { from: 3 });
+        handle.send(Command::PlayFrom { step: 3 });
         blocks(&mut rt, 1);
         let report = handle.latest().unwrap();
         assert_eq!(report.transport, Transport::Playing);
@@ -421,7 +420,7 @@ mod tests {
         for tracks in [1, 8, 64] {
             let engine = Engine::new(48_000, published(song(tracks, 16), &pool));
             let (mut handle, mut rt) = connect(engine);
-            handle.send(Command::PlayOrStop { from: 0 });
+            handle.send(Command::PlayFrom { step: 0 });
             let mut out = vec![0.0; BLOCK * 2];
             rt.process(&mut out);
             assert!(out.iter().any(|s| *s != 0.0), "{tracks} tracks");

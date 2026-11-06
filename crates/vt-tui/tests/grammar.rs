@@ -760,7 +760,7 @@ fn the_popup_waits_and_lists_next_keys() {
     let delay = Duration::from_millis(300);
     assert!(app.popup_rows(start, delay).is_empty());
     let rows = app.popup_rows(start + delay, delay);
-    assert!(rows.iter().any(|(k, _)| k == "x"));
+    assert!(rows.iter().any(|(k, _)| k == "c"));
     assert!(rows.iter().any(|(k, _)| k == "p d"));
 }
 
@@ -772,7 +772,7 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     let rows = app.help_rows();
     assert!(
         rows.iter()
-            .any(|r| r.contains("Space x") && r.contains("Pause"))
+            .any(|r| r.contains("S-Tab") && r.contains("from the start"))
     );
     assert!(rows.iter().any(|r| r.contains("i b")));
     keys(&mut app, "j");

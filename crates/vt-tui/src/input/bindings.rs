@@ -50,9 +50,9 @@ pub enum Cmd {
     Reselect,
     EnterInsert,
     EnterCommand,
-    PlayOrStop,
     PauseOrResume,
-    ReturnToStart,
+    PlayFromStart,
+    PlayFromCursor,
     Quit,
     NextTrack,
     PreviousTrack,
@@ -146,9 +146,9 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("C-r", Cmd::Redo, "Redo"),
     (":", Cmd::EnterCommand, "Command"),
     ("i", Cmd::EnterInsert, "Insert"),
-    ("Enter", Cmd::PlayOrStop, "Play from the cursor, or stop"),
-    ("Space x", Cmd::PauseOrResume, "Pause in place, or resume"),
-    ("Space c", Cmd::ReturnToStart, "Return to the start"),
+    ("Tab", Cmd::PauseOrResume, "Play, or pause in place"),
+    ("S-Tab", Cmd::PlayFromStart, "Play from the start"),
+    ("Space c", Cmd::PlayFromCursor, "Play from the cursor"),
     ("Space q q", Cmd::Quit, "Quit"),
     ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
     ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
@@ -171,7 +171,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Choose the current instrument",
     ),
     ("C-o", Cmd::JumpBack, "Jump back"),
-    ("Tab", Cmd::JumpForward, "Jump forward"),
+    ("C-n", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
     ("B", Cmd::PreviousTrack, "Previous track"),
 ];
@@ -542,7 +542,7 @@ mod tests {
         let table = Table::default();
         let space = parse_sequence("Space").unwrap();
         let next = table.continuations(Mode::Normal, &space);
-        assert!(next.iter().any(|(k, d)| k == "x" && d.contains("Pause")));
+        assert!(next.iter().any(|(k, d)| k == "c" && d.contains("cursor")));
         assert!(next.iter().any(|(k, _)| k == "q q"));
     }
 

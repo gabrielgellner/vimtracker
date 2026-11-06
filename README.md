@@ -33,7 +33,7 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
     `a` to `;` are white keys, `w` to `p` black keys, `z` and `x` change octave, `c` and `v` set
     the velocity written, and the arrows move without writing. `Esc` leaves Insert.
-3.  `Enter` plays from the cursor and stops. `Space x` pauses and `Space c` returns to the top.
+3.  `Tab` plays and pauses. `Shift-Tab` plays from the start, and `Space c` from the cursor.
 4.  `l` moves to the next field. Type an FX name and two hex digits, such as `CUT40` or `RET14`.
 5.  `Space 2` opens the chain view, where `gd` opens a phrase, or adds one on the empty row.
 6.  `Space 4` opens the track page: base filter and output values, and two LFOs.

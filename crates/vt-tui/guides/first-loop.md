@@ -27,8 +27,8 @@ Run `:set step=1` afterwards to go back to one step at a time.
 
 ## 3. Play it
 
-Press `Enter` to play from the cursor and `Enter` again to stop. Press
-`Space c` to return to the top. You can keep editing while it plays, and an
+Press `Tab` to play and `Tab` again to pause. `Shift-Tab` plays from the start,
+and `Space c` from the cursor. You can keep editing while it plays, and an
 edit is heard the next time the loop comes round.
 
 ## 4. Keep it

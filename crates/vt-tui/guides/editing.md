@@ -104,13 +104,13 @@ the notes move under it. Sliding past either end adds empty steps.
 Rotating wraps whole steps round within the loop, and leaves dim steps
 alone. It works while playing, and counts work: `3]r`.
 
-`ge`, `:len` and `:double` wait until you stop, since a new length moves where playback
+`ge`, `:len` and `:double` wait until you pause, since a new length moves where playback
 lands. The loop is saved with the phrase, along with what is outside it.
 
 A phrase used in two places shares one loop. Copy it with `gc` to give one
 place its own.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
-`j` and `k` carry on past its edges. `Enter` on a dim row plays from `00`, and
+`j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and
 `;` there plays just that row's note.
 

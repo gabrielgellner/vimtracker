@@ -359,7 +359,6 @@ fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     let mut out = vec![0.0; 2 * 4000];
     engine.process(&mut out);
     assert!(out[2 * 3999].abs() > 0.1, "from step 1 no VOL has fired");
-    engine.play_or_stop(0);
     engine.play_from(0);
     engine.process(&mut out);
     assert!(out[2 * 3999].abs() < 0.001, "VOL00 applies at the top");

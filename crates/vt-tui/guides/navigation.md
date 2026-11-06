@@ -46,7 +46,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 4` | Track page: filter, output and LFOs |
 | `Space 5` | Instrument view |
 | `Space Space` | Pick a view. `Enter` flips back to the last one |
-| `C-o` `Tab` | Jump back or forward, like Vim's jump list |
+| `C-o` `C-n` | Jump back or forward, like Vim's jump list |
 
 ## When you forget
 

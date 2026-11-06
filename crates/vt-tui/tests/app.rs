@@ -126,29 +126,66 @@ fn the_cursor_stops_at_phrase_edges() {
 }
 
 #[test]
-fn enter_plays_from_the_cursor_and_stops() {
+fn the_transport_keys_play_pause_and_restart() {
     let (mut app, mut rt) = app();
     press(&mut app, "jjj");
-    let start = Instant::now();
-    app.key(Key::new(KeyCode::Enter), start);
+    let mut now = Instant::now();
+    let mut hit = |app: &mut App, rt: &mut Realtime, key: Key| {
+        now += Duration::from_millis(1000);
+        app.key(key, now);
+        block(rt, app);
+    };
+    let space_c = |app: &mut App| press(app, " c");
+    let (tab, back_tab) = (Key::new(KeyCode::Tab), Key::new(KeyCode::BackTab));
+
+    // Space c plays from the cursor, and restarts there.
+    space_c(&mut app);
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
     assert_eq!(app.playhead, 3);
-    app.key(
-        Key::new(KeyCode::Enter),
-        start + Duration::from_millis(1000),
-    );
-    block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
+
+    // Tab pauses, and carries on from there even if the cursor moves.
+    hit(&mut app, &mut rt, tab);
+    assert_eq!(app.transport, Transport::Paused);
+    press(&mut app, "jj");
+    hit(&mut app, &mut rt, tab);
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.playhead, 3);
+
+    // Shift-Tab plays from the start, playing or paused.
+    hit(&mut app, &mut rt, back_tab);
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.playhead, 0);
+    hit(&mut app, &mut rt, tab);
+    assert_eq!(app.transport, Transport::Paused);
+    hit(&mut app, &mut rt, back_tab);
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.playhead, 0);
+
+    // Enter is only for confirming.
+    hit(&mut app, &mut rt, Key::new(KeyCode::Enter));
+    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.mode, Mode::Normal);
 }
 
+#[test]
+fn enter_does_not_play_from_any_mode() {
+    let (mut app, mut rt) = app();
+    let enter = Key::new(KeyCode::Enter);
+    app.key(enter, Instant::now());
+    press(&mut app, "i");
+    app.key(enter, Instant::now() + Duration::from_millis(1000));
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.mode, Mode::Insert);
+}
 #[test]
 fn a_held_transport_key_is_ignored_while_it_repeats() {
     let (mut app, mut rt) = app();
     let start = Instant::now();
     for gap in 0..20 {
         app.key(
-            Key::new(KeyCode::Enter),
+            Key::new(KeyCode::Tab),
             start + Duration::from_millis(gap * 40),
         );
     }
@@ -166,7 +203,7 @@ fn repeats_after_a_leader_transport_key_dont_reach_normal_keys() {
     let start = Instant::now();
     app.key(Key::char(' '), start);
     for gap in 0..10 {
-        app.key(Key::char('x'), start + Duration::from_millis(gap * 40));
+        app.key(Key::char('c'), start + Duration::from_millis(gap * 40));
     }
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
@@ -586,12 +623,12 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     assert_eq!(app.song().phrases[&0].steps()[0].note, Note::Empty);
     assert_eq!(app.song().phrases[&2].steps()[0].note, Note::On(60));
     assert_eq!(app.chain_entries()[0].phrase, 0);
-    // Ctrl-O returns to where the jump started, and Tab goes forward again.
+    // Ctrl-O returns to where the jump started, and Ctrl-N goes forward again.
     let back = parse_sequence("C-o").unwrap()[0];
     app.key(back, Instant::now());
     assert_eq!(app.view, View::Chain);
     assert_eq!(app.cursor.slot, 1);
-    special(&mut app, KeyCode::Tab);
+    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
     assert_eq!(app.view, View::Phrase);
     // Undo removes the clone's use again.
     press(&mut app, "uu");
@@ -1301,22 +1338,26 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
 }
 
 #[test]
-fn enter_plays_and_stops_from_insert_and_keeps_writing() {
+fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     let (mut app, mut rt) = app();
     press(&mut app, "i");
     let start = Instant::now();
-    app.key(Key::new(KeyCode::Enter), start);
+    app.key(Key::new(KeyCode::Tab), start);
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Insert);
     press(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
+    app.key(Key::new(KeyCode::Tab), start + Duration::from_millis(1000));
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.mode, Mode::Insert);
     app.key(
-        Key::new(KeyCode::Enter),
-        start + Duration::from_millis(1000),
+        Key::new(KeyCode::BackTab),
+        start + Duration::from_millis(2000),
     );
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Insert);
 }
 
@@ -1648,7 +1689,7 @@ fn p_no_longer_plays_in_the_instrument_view() {
 #[test]
 fn semicolon_while_playing_says_why_it_did_nothing() {
     let (mut app, mut rt) = app();
-    special(&mut app, KeyCode::Enter);
+    special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
     press(&mut app, ";");
@@ -2053,32 +2094,35 @@ fn the_playhead_marks_where_the_loop_is_playing() {
 }
 
 #[test]
-fn ge_waits_until_stopped_like_other_length_changes() {
+fn ge_waits_until_paused_like_other_length_changes() {
     let (mut app, _realtime) = app();
     press(&mut app, "jj");
     app.transport = Transport::Playing;
     let length = app.song().phrases[&0].len();
     press(&mut app, "ge");
     assert_eq!(app.song().phrases[&0].len(), length);
-    assert!(app.status.contains("until stopped"), "{}", app.status);
-    app.transport = Transport::Stopped;
+    assert!(app.status.contains("until paused"), "{}", app.status);
+    app.transport = Transport::Paused;
     press(&mut app, "ge");
     assert_eq!(app.song().phrases[&0].len(), 3);
 }
 
 #[test]
-fn length_changes_wait_until_stopped_and_slides_dont() {
+fn length_changes_wait_until_paused_and_slides_dont() {
     let (mut app, _realtime) = app();
-    for transport in [Transport::Playing, Transport::Paused] {
-        app.transport = transport;
-        command(&mut app, "len 4");
-        assert_eq!(app.song().phrases[&0].len(), 16);
-        assert!(app.status.contains("stopped"), "{}", app.status);
-        command(&mut app, "double");
-        assert_eq!(app.song().phrases[&0].len(), 16);
-        press(&mut app, " pd");
-        assert_eq!(app.song().phrases[&0].len(), 16);
-    }
+    app.transport = Transport::Playing;
+    command(&mut app, "len 4");
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    assert!(app.status.contains("paused"), "{}", app.status);
+    command(&mut app, "double");
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    press(&mut app, " pd");
+    assert_eq!(app.song().phrases[&0].len(), 16);
+    app.transport = Transport::Paused;
+    command(&mut app, "len 8");
+    assert_eq!(app.song().phrases[&0].len(), 8);
+    command(&mut app, "double");
+    assert_eq!(app.song().phrases[&0].len(), 16);
     app.transport = Transport::Playing;
     press(&mut app, "]L");
     assert_eq!(app.song().phrases[&0].start(), 4);

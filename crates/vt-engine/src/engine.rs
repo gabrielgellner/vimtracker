@@ -209,17 +209,10 @@ impl Engine {
         self.millibpm = millibpm;
     }
 
-    /// Play from a step. Enter stops if already playing.
-    pub fn play_or_stop(&mut self, from_step: usize) {
-        if self.transport == Transport::Playing {
-            self.halt(Transport::Stopped);
-        } else {
-            self.play_from(from_step);
-        }
-    }
-
-    /// Start at a step within the section. Starting from the top resets held values.
+    /// Start at a step within the section, whatever is happening now. Anything sounding fades, and
+    /// starting from the top resets held values.
     pub fn play_from(&mut self, step: usize) {
+        self.halt(Transport::Stopped);
         if step == 0 {
             self.reset_tracks();
         }

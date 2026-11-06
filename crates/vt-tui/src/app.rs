@@ -516,9 +516,13 @@ impl App {
                 self.command_line.clear();
                 self.mode = Mode::Command;
             }
-            Cmd::PlayOrStop => {
-                let from = self.section_step();
-                self.handle.send(Command::PlayOrStop { from });
+            Cmd::PlayFromCursor => {
+                let step = self.section_step();
+                self.handle.send(Command::PlayFrom { step });
+                self.guard = Some((key, now));
+            }
+            Cmd::PlayFromStart => {
+                self.handle.send(Command::PlayFrom { step: 0 });
                 self.guard = Some((key, now));
             }
             Cmd::Audition => {
@@ -531,10 +535,6 @@ impl App {
             }
             Cmd::PauseOrResume => {
                 self.handle.send(Command::PauseOrResume);
-                self.guard = Some((key, now));
-            }
-            Cmd::ReturnToStart => {
-                self.handle.send(Command::Return);
                 self.guard = Some((key, now));
             }
             Cmd::Quit => self.quit(false),
@@ -568,11 +568,11 @@ impl App {
     /// Whether a phrase's length can change now. A new length moves where playback lands, so it
     /// has to wait until playback has stopped, unlike a slide.
     fn can_change_length(&mut self) -> bool {
-        let stopped = self.transport == Transport::Stopped;
-        if !stopped {
-            self.status = "Length changes wait until stopped. Slides work now: ]l [l".to_owned();
+        let allowed = self.transport != Transport::Playing;
+        if !allowed {
+            self.status = "Length changes wait until paused. Slides work now: ]l [l".to_owned();
         }
-        stopped
+        allowed
     }
 
     fn double(&mut self) {
@@ -866,11 +866,11 @@ impl App {
     }
 
     fn insert_key(&mut self, key: Key, now: Instant) {
-        // Instrument IDs can have any number of digits, so `Enter` finishes one.
-        let finishing_id = self.cursor.field == Field::Instrument && !self.entry.text.is_empty();
-        if key.code == KeyCode::Enter && self.view == View::Phrase && !finishing_id {
-            self.run(Cmd::PlayOrStop, key, now);
-            return;
+        // You can start and pause while writing, as `Tab` and `Shift-Tab` are never typed.
+        match key.code {
+            KeyCode::Tab => return self.run(Cmd::PauseOrResume, key, now),
+            KeyCode::BackTab => return self.run(Cmd::PlayFromStart, key, now),
+            _ => {}
         }
         let skip = self.song().skip as usize;
         let arrow = match (key.code, key.shift) {

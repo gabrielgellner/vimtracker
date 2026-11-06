@@ -141,7 +141,7 @@ Per-note tables are a further idea, and they get their own decision after G1.
 
 *   **Given**: A new project with 8 tracks and a folder of WAV files.
 *   **When**: The user assigns samples to instruments, enters notes on several tracks using the
-    keyboard, and presses `Enter`.
+    keyboard, and presses `Tab`.
 *   **Then**: The loop plays in time, a playhead follows it, the other tracks' notes are visible
     beside the focused track, and edits during playback are heard on the next pass.
 
@@ -289,8 +289,9 @@ memory until the project is reloaded.
 
 Before G1 there is one scope: the current section, on all tracks, looping. Transport actions are
 commands that the engine resolves against its own state, so two quick presses cannot act on an
-out-of-date view. `Enter` plays from the cursor's step when stopped, and stops when playing. `Space x`
-pauses in place and resumes. `Space c` returns to the start, and stops if playing.
+out-of-date view. `Tab` plays and pauses in place, like a DAW's transport or an Elektron's `PLAY`. `Shift-Tab` plays
+from the start and `Space c` from the cursor's step, restarting if already playing. There is no stop key: pausing does that job,
+and opening a project is what returns to stopped. `Enter` only ever confirms what is being typed or picked.
 
 Playing from the cursor does not chase held FX values or tails. The cursor and playhead are
 independent, so playback never moves the cursor.
@@ -327,7 +328,7 @@ after G1.
 One interpreter runs FX commands, once per step before G1. It must not assume it is only running for a
 phrase, because tables will use it at their own rate. Slots run left to right. Held values start at `VOL
 E0`, and at the track page's `Cut`, `Res`, `Pan`, `Delay` and `Reverb`, which default to `FF`, `00`, `80`, `00`
-and `00`. They reset on `Space c` and when playback starts from the top. `Space x` resume and `Enter` keep them.
+and `00`. They reset when playback starts from the top, by `Shift-Tab` or `Space c` on row `00`. `Tab` resuming keeps them.
 Changing one of those on the track page sets its held value straight away, until a step sets it again.
 
 **LFOs.** Added ahead of the M3 sweeps, by a change of plan: the author reached for this while playing, and
@@ -408,9 +409,9 @@ Actions are plain data, so `.` can replay them and tests can run editing without
     separate play marker as in Ableton: the loop's start is the 1. Internally the cursor and edits use stored positions,
     and only the view, the beat motions and `chain_position` convert. `]l` `[l` and `]L` `[L` slide it, keeping its
     length, `gs` starts it on the cursor, and `ge` ends it there, so the row can be chosen rather than read off and converted. `]r` `[r` rotate whole steps within the loop, wrapping round and leaving steps outside it alone. Slides work during playback and stay in time, since position comes from
-    the section's step count. Length changes are refused until stopped, as a new length moves where playback lands.
+    the section's step count. Length changes are refused while playing, as a new length moves where playback lands.
 *   **Moving through the tree.** `gd` opens the item under the cursor, and on an empty reference it creates the
-    next unused ID, assigns it and opens it. `Ctrl-O` jumps back, `Tab` jumps forward, and `grr` lists uses in the
+    next unused ID, assigns it and opens it. `Ctrl-O` jumps back, `Ctrl-N` jumps forward, and `grr` lists uses in the
     picker window.
 *   **Cloning.** `gc` copies a phrase to a new ID. If you arrived through `gd`, it repoints that reference and stays
     in the clone. Otherwise it opens the clone, changes no references, and a status message says so. If the parent
@@ -688,15 +689,15 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `x` | Clear a step's field. On the track page, instrument view and chain Transpose, back to the default |
 | Normal | `K` | Choose the field from a list: Instrument and FX columns, a chain row's phrase, a sample, and an LFO's `Dest`, `Shape`, `Rate` and `Retrig` |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
-| Normal | `gd`, `Ctrl-O`, `Tab`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |
+| Normal | `gd`, `Ctrl-O`, `Ctrl-N`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |
 | Normal | `gc`, `gC` | Clone, deep-clone |
 | Normal | `gv` | Reselect the last selection |
 | Normal | `gl` | Reopen controls for the live generator under the cursor |
 | Normal | `Space ga` | Apply the live generator under the cursor |
 | Normal | `Space pd` | Double the current phrase |
-| Normal | `Enter` | Play from the cursor's step, or stop if playing |
-| Normal | `Space x` | Pause in place, or resume |
-| Normal | `Space c` | Return to the start. If playing, stop there |
+| Normal | `Tab` | Play, or pause in place |
+| Normal | `Shift-Tab` | Play from the start |
+| Normal | `Space c` | Play from the cursor's step |
 | Normal | `i`, `v`, `V`, `:` | Insert, field Visual, step Visual, Command |
 | Visual | Motions, targets, `d y > < = - + _ .` | Extend, then apply to the selection |
 | Visual | `r`, then a value | Fill the cursor's column across the selection, as one undo. `vGra` writes C on each step. Velocity and instrument only go on notes, and FX values only on commands |
@@ -712,7 +713,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `1` | Note-off |
 | Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
 | Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves by the top digit from `04` up to `74`, then `7F`. The note heard while typing uses it |
-| Insert | `Enter` | In the phrase view, play from the cursor or stop, except that it finishes an instrument ID that has been typed |
+| Insert | `Tab`, `Shift-Tab` | Play or pause, and play from the start |
 | Insert | `Up Down` | Move one step without writing |
 | Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |
 | Insert | `Shift-Left Shift-Right` | Move to the previous or next multiple of the skip setting, without writing |

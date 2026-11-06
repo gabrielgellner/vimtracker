@@ -18,7 +18,8 @@ by the step setting.
 | `c` `v` | Lower or raise the velocity written. The status line shows `Vel` |
 | `1` | Note off |
 | `Backspace` | Clear this note and move up |
-| `Enter` | Play from the cursor, or stop, and stay in Insert |
+| `Tab` | Play or pause, and stay in Insert |
+| `Shift-Tab` | Play from the start, and stay in Insert |
 | `Esc` | Back to Normal mode |
 
 Our octave numbers are one above Live's: `a` starts on `C-4`, the same pitch

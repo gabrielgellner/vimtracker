@@ -72,6 +72,7 @@ impl std::fmt::Display for Key {
             KeyCode::Char(c) => write!(f, "{c}"),
             KeyCode::Enter => f.write_str("Enter"),
             KeyCode::Tab => f.write_str("Tab"),
+            KeyCode::BackTab => f.write_str("S-Tab"),
             KeyCode::Backspace => f.write_str("Backspace"),
             KeyCode::Esc => f.write_str("Esc"),
             KeyCode::Up => f.write_str("Up"),
@@ -101,6 +102,7 @@ pub fn parse(text: &str) -> Result<Key, KeyParseError> {
             "Space" => KeyCode::Char(' '),
             "Enter" => KeyCode::Enter,
             "Tab" => KeyCode::Tab,
+            "S-Tab" => KeyCode::BackTab,
             "Backspace" => KeyCode::Backspace,
             "Esc" => KeyCode::Esc,
             "Up" => KeyCode::Up,
@@ -136,7 +138,17 @@ mod tests {
 
     #[test]
     fn names_round_trip() {
-        for name in ["x", "C-r", "Enter", "Space", "Esc", "G", "Tab", "Backspace"] {
+        for name in [
+            "x",
+            "C-r",
+            "Enter",
+            "Space",
+            "Esc",
+            "G",
+            "Tab",
+            "S-Tab",
+            "Backspace",
+        ] {
             assert_eq!(parse(name).unwrap().to_string(), name);
         }
     }
