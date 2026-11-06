@@ -6,7 +6,7 @@ use vt_engine::render::render_frames;
 use vt_model::lfo::{Destination, Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song, level_gain};
+use vt_model::song::{Song, level_gain};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -49,13 +49,9 @@ fn buzz() -> Arc<SamplePool> {
 
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(1);
-    song.instruments.insert(
-        0,
-        Arc::new(Instrument {
-            sample: Some("s".to_owned()),
-            ..Instrument::default()
-        }),
-    );
+    for track in &mut song.tracks {
+        track.sample = Some("s".to_owned());
+    }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
@@ -67,7 +63,7 @@ fn song(texts: &[&str]) -> Song {
 
 /// A song holding `VOL 80` on one long note, with this LFO moving the volume.
 fn moving(lfo: Lfo) -> Song {
-    let mut song = song(&["C-4 -- 00 VOL80 ---00 ---00"]);
+    let mut song = song(&["C-4 -- VOL80 ---00 ---00"]);
     song.tracks[0].lfos[0] = Lfo {
         destination: Some(Destination::Vol),
         depth: 0x40,
@@ -109,11 +105,11 @@ fn a_synced_lfo_moves_around_the_held_value_in_time() {
 
 #[test]
 fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
-    let out = render(song(&["C-4 -- 00 ---00 ---00 ---00"]), flat(), STEP);
+    let out = render(song(&["C-4 -- ---00 ---00 ---00"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let out = render(song(&["C-4 -- 00 VOLE0 ---00 ---00"]), flat(), STEP);
+    let out = render(song(&["C-4 -- VOLE0 ---00 ---00"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let mut limitless = song(&["C-4 -- 00 VOLFF ---00 ---00"]);
+    let mut limitless = song(&["C-4 -- VOLFF ---00 ---00"]);
     limitless.limiter = false;
     let out = render(limitless, flat(), STEP);
     let top = left(&out, STEP - 1);
@@ -171,11 +167,11 @@ fn a_reset_leaves_lfos_running() {
 #[test]
 fn retrig_restarts_it_on_each_note() {
     let texts = [
-        "C-4 -- 00 VOL80h ---00 ---00",
-        "--- -- -- ---00 ---00 ---00",
-        "--- -- -- ---00 ---00 ---00",
-        "--- -- -- ---00 ---00 ---00",
-        "C-4 -- 00 ---00 ---00 ---00",
+        "C-4 -- VOL80h ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "C-4 -- ---00 ---00 ---00",
     ];
     let ramp = |retrig| {
         let mut song = song(&texts);
@@ -269,7 +265,7 @@ fn block_size_does_not_change_the_result() {
 fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
     // Half of each cycle sits at the top of the range. If the filter stopped there, it would come
     // back with old state and jump.
-    let mut moved = song(&["C-4 -- 00 ---00 ---00 ---00"]);
+    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
     moved.tracks[0].cutoff = 0xFF;
     moved.tracks[0].lfos[0] = Lfo {
         destination: Some(Destination::Cut),
@@ -292,8 +288,8 @@ fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
 
 #[test]
 fn a_tracks_base_is_where_its_held_values_start() {
-    let from_step = render(song(&["C-4 -- 00 CUT40 PAN20 ---00"]), buzz(), STEP);
-    let mut from_page = song(&["C-4 -- 00 ---00 ---00 ---00"]);
+    let from_step = render(song(&["C-4 -- CUT40 PAN20 ---00"]), buzz(), STEP);
+    let mut from_page = song(&["C-4 -- ---00 ---00 ---00"]);
     from_page.tracks[0].cutoff = 0x40;
     from_page.tracks[0].pan = 0x20;
     assert_eq!(from_step, render(from_page, buzz(), STEP));
@@ -301,7 +297,7 @@ fn a_tracks_base_is_where_its_held_values_start() {
 
 #[test]
 fn a_page_change_is_heard_now_and_leaves_what_a_step_set() {
-    let start = song(&["C-4 -- 00 PAN00h ---00 ---00"]);
+    let start = song(&["C-4 -- PAN00h ---00 ---00"]);
     let samples = flat();
     let mut engine = Engine::new(RATE, version(start.clone(), Arc::clone(&samples)));
     engine.play_from(0);

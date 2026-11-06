@@ -7,7 +7,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::constants::BEAT_STEPS;
-use vt_model::label::name_of;
 use vt_model::selection::Scope;
 use vt_model::step::{FxSlot, Mark, Step};
 
@@ -30,13 +29,12 @@ const SLOT_WIDTH: usize = 8;
 /// The gap and mark after a slot's value.
 const MARK_WIDTH: usize = 2;
 
-/// A step's text on screen, which shows a named slot by its name rather than its number.
+/// A step's text on screen.
 fn step_text(step: &Step) -> String {
-    let instrument = step.instrument.map_or("--".to_owned(), name_of);
     let velocity = step
         .velocity
         .map_or("--".to_owned(), |v| format!("{v:02X}"));
-    let mut text = format!("{} {velocity} {instrument}", step.note);
+    let mut text = format!("{} {velocity}", step.note);
     for slot in &step.fx {
         let bare = FxSlot {
             mark: Mark::Lock,
@@ -66,13 +64,11 @@ fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
 }
 
 /// The character range of a field within a step's text.
-fn field_range(step: &Step, field: Field) -> (usize, usize) {
-    let instrument_width = step.instrument.map_or(2, |id| name_of(id).len());
-    let fx_start = |slot: usize| 7 + instrument_width + 1 + slot * SLOT_WIDTH;
+fn field_range(field: Field) -> (usize, usize) {
+    let fx_start = |slot: usize| 7 + slot * SLOT_WIDTH;
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
-        Field::Instrument => (7, 7 + instrument_width),
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + 3),
         Field::FxValue(slot) => (fx_start(slot) + 3, fx_start(slot) + 5),
     }
@@ -84,11 +80,11 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
         return (0, length);
     }
     let slots = step.fx.len();
-    let last = scope.last.min(2 + slots);
-    let (start, _) = field_range(step, Field::of_group(scope.first.min(last)));
+    let last = scope.last.min(1 + slots);
+    let (start, _) = field_range(Field::of_group(scope.first.min(last)));
     let end = match Field::of_group(last) {
-        Field::FxCommand(slot) => field_range(step, Field::FxValue(slot)).1 + MARK_WIDTH,
-        field => field_range(step, field).1,
+        Field::FxCommand(slot) => field_range(Field::FxValue(slot)).1 + MARK_WIDTH,
+        field => field_range(field).1,
     };
     (start.min(length), end.min(length))
 }
@@ -188,7 +184,12 @@ fn track_label(app: &App, track: usize) -> String {
     } else {
         ' '
     };
-    format!("{:02}{flag} ", track + 1)
+    let name = app.song().tracks.get(track).map_or("", |t| t.name.as_str());
+    if name.is_empty() {
+        format!("{:02}{flag} ", track + 1)
+    } else {
+        format!("{name}{flag} ")
+    }
 }
 
 /// Draw the view.
@@ -306,14 +307,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::faint()
         };
         let mut styles = vec![body; text.len()];
-        if plays && step.instrument.is_some_and(|id| app.song().is_labelled(id)) {
-            let (start, end) = field_range(step, Field::Instrument);
-            let label = body.patch(theme::label());
-            styles[start..end.min(text.len())].fill(label);
-        }
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.is_value() && fx.mark == Mark::Lock {
-                let at = field_range(step, Field::FxValue(slot)).1 + MARK_WIDTH - 1;
+                let at = field_range(Field::FxValue(slot)).1 + MARK_WIDTH - 1;
                 styles[at] = body.patch(theme::dim());
             }
         }
@@ -324,7 +320,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         // The cursor stays visible inside a selection, so the moving end can be seen.
         if index == app.cursor.step {
-            let (start, end) = field_range(step, app.cursor.field);
+            let (start, end) = field_range(app.cursor.field);
             let end = end.min(text.len());
             let start = start.min(end);
             let (first, last) = selected.map_or((start, end), |selected| {

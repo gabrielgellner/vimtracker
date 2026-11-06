@@ -12,14 +12,12 @@ use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Not
 /// Why a step's text could not be read.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum StepTextError {
-    #[error("a step needs a note, a velocity and an instrument: {0:?}")]
+    #[error("a step needs a note and a velocity: {0:?}")]
     TooFewFields(String),
     #[error("not a note: {0:?}")]
     Note(String),
     #[error("not a velocity: {0:?}")]
     Velocity(String),
-    #[error("not an instrument: {0:?}")]
-    Instrument(String),
     #[error("not an FX slot: {0:?}")]
     Slot(String),
     #[error("unknown FX command: {0:?}")]
@@ -142,25 +140,8 @@ impl FromStr for Step {
                     .ok_or_else(|| StepTextError::Velocity(other.to_owned()))?,
             ),
         };
-        let instrument = fields.next().ok_or_else(few)?;
-        let instrument = match instrument {
-            "--" => None,
-            other => {
-                let valid = other.len() >= 2
-                    && other
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b));
-                let parsed = valid.then(|| u32::from_str_radix(other, 16).ok()).flatten();
-                Some(parsed.ok_or_else(|| StepTextError::Instrument(other.to_owned()))?)
-            }
-        };
         let fx = fields.map(str::parse).collect::<Result<Vec<_>, _>>()?;
-        Ok(Self {
-            note,
-            velocity,
-            instrument,
-            fx,
-        })
+        Ok(Self { note, velocity, fx })
     }
 }
 
@@ -169,10 +150,6 @@ impl fmt::Display for Step {
         write!(f, "{}", self.note)?;
         match self.velocity {
             Some(velocity) => write!(f, " {velocity:02X}")?,
-            None => f.write_str(" --")?,
-        }
-        match self.instrument {
-            Some(instrument) => write!(f, " {instrument:02X}")?,
             None => f.write_str(" --")?,
         }
         for slot in &self.fx {
@@ -189,13 +166,13 @@ mod tests {
     #[test]
     fn every_field_form_round_trips() {
         for text in [
-            "C-4 64 01 CUT40 ---00 RET14",
-            "--- -- -- ---00 ---00 ---00",
-            "OFF 7F 1A2B VOL00 PAN80 CHAFF",
-            "C-0 00 00 DEL01 KIL02 OFF03",
-            "G-9 -- -- RES10 DLY20 REV30",
-            "C#3 -- 00",
-            "C-4 64 01 CUT40h DLY20g PAN80",
+            "C-4 64 ---00 RET14",
+            "--- -- ---00 ---00 ---00",
+            "OFF 7F PAN80 CHAFF",
+            "C-0 00 KIL02 OFF03",
+            "G-9 -- DLY20 REV30",
+            "C#3 --",
+            "C-4 64 CUT40h DLY20g PAN80",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);
@@ -228,16 +205,15 @@ mod tests {
     #[test]
     fn invalid_fields_give_errors() {
         for (text, expected) in [
-            ("G#9 -- --", StepTextError::Note("G#9".into())),
+            ("G#9 --", StepTextError::Note("G#9".into())),
             ("H-4 -- --", StepTextError::Note("H-4".into())),
             ("C-44 -- --", StepTextError::Note("C-44".into())),
             ("C-4 6 --", StepTextError::Velocity("6".into())),
             ("C-4 ab --", StepTextError::Velocity("ab".into())),
-            ("C-4 80 --", StepTextError::Velocity("80".into())),
-            ("C-4 -- 1", StepTextError::Instrument("1".into())),
-            ("C-4 -- -- CUT4", StepTextError::Slot("CUT4".into())),
-            ("C-4 -- -- ---01", StepTextError::Slot("---01".into())),
-            ("C-4 -- -- XXX00", StepTextError::Command("XXX".into())),
+            ("C-4 80", StepTextError::Velocity("80".into())),
+            ("C-4 -- CUT4", StepTextError::Slot("CUT4".into())),
+            ("C-4 -- ---01", StepTextError::Slot("---01".into())),
+            ("C-4 -- XXX00", StepTextError::Command("XXX".into())),
             ("C-4", StepTextError::TooFewFields("C-4".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");

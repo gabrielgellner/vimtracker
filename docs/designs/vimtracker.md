@@ -1107,6 +1107,36 @@ Since `CHA` decides whether a row's note plays, it is read before locks end. It 
 2.  **Lock and hold in the engine:** the layers and the table above. Existing tests that expect values to hold gain `h`, which also leaves the goldens unchanged. **Tests:** each row of the table, the rightmost slot winning, an LFO carrying on around a lock, and renders staying repeatable. The author plays this before glide starts.
 3.  **Glide in the engine.** **Tests:** the value at the halfway row, landing exactly, wrapping, a skipped command, no other value, crossing a note, a tempo change, a chain moving on, and no allocation under the real-time guard.
 
+### M5 design: a track is one sound
+
+Made with the author's agreement on 2026-11-06. It keeps each change small, and leaves anything a later machine or file format would decide until then.
+
+**Data.** `Track` gains `sample: Option<String>` and `name: String`. `Step.instrument`, `Song.instruments`, `Instrument` and instrument volume go, as `Level` already does that job. A note's gain is its velocity times the track's values. `FORMAT_VERSION` becomes 2, and older songs are refused with a message, with no conversion. A track that played several samples has to be rebuilt as several tracks.
+
+**No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M11, or sooner if a jam asks.
+
+**Step text.** `NOTE VEL FX FX FX`, as in `C-4 64 CUT40 ---00 RET14`. Field and column numbers shift down by one.
+
+**Names and kits.** `:name BD` names the current track, under the existing label rule of two characters starting with a letter, and `:name` alone clears it. A named track shows its name where its number was. `:kit` puts a kit's sounds on tracks from the first in order, as one undo step, adding tracks if it has more sounds than there are tracks. A sound's `label` becomes its track's name, and other settings on those tracks stay.
+
+**Retired.** `:inst`, `:label`, `Space i K`, the Instrument column and its `K`, `gd` to an instrument, the instrument view, its mode and guide, and `Space 5`'s old meaning. `:sample` now sets the current track's sample.
+
+**Audition.** `;` and notes played while editing go through the current track's own filter, levels and sends, so what's heard matches what plays.
+
+**Pages.** The track page splits into Sound (Sample, Filter, Output) and Mod (Envelopes, LFOs, diagrams), and `H` and `L` move between them there, overriding their usual meaning on this page only. The FX page arrives with inserts in M9. `Space 5` opens the existing sample picker for the current track, as a picker rather than a new view, following the picker-first rule. On the Sample row, `K` opens it too, and `x` clears the sample.
+
+**Stems.** `vimtracker render <project> <folder> --stems` and `:render <folder> --stems` write `01-BD.wav`, `02.wav` and so on, one file per track that would be heard. Each is a render of the song with only that track soloed and the limiter off, so it carries its own delay and reverb, and needs no new engine path. They sum to a full render with the limiter off, to within a small tolerance. With `--tail`, shorter stems are padded with silence so they all end together.
+
+**Issues.**
+
+1.  **Tracks own their sounds:** the data, step text, names, kits, retired items and audition above. **Tests:** golden renders unchanged, a song older than version 2 refused, kit loading adds tracks and is one undo step, `:name` refuses bad names, each track plays its own sample, audition goes through the track's filter and allocates nothing.
+2.  **Sound and Mod pages, and the sample picker.** **Tests:** `H` and `L` change pages and the cursor stays valid, every control is on exactly one page, `Space 5` and `K` set this track's sample, and `x` clears it.
+3.  **Stems.** **Tests:** the stems sum to the full render, a muted track gets no file, a soloed project writes only those tracks, tails end together, and renders stay repeatable.
+
+### M6 design: editing across tracks
+
+To be written when M5 is done.
+
 ### Known Gaps From Review
 
 The EGM review concluded on 2026-11-05 with its re-audit limit used, and these findings were not resolved. They are accepted for now, and must be decided in the issue named before that issue is done. They override anything above that they contradict.

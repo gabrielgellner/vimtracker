@@ -3,7 +3,7 @@
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
 use vt_model::constants::{MAX_TRANSPOSE, MIN_TRANSPOSE};
-use vt_model::selection::{Field, Motion};
+use vt_model::selection::Motion;
 use vt_model::song::{ChainEntry, lowest_unused};
 
 use crate::app::{App, Cursor, Entry};
@@ -26,7 +26,6 @@ pub enum ChainColumn {
 pub struct Place {
     view: View,
     cursor: Cursor,
-    instrument: u32,
 }
 
 impl App {
@@ -47,7 +46,6 @@ impl App {
         Place {
             view: self.view,
             cursor: self.cursor,
-            instrument: self.instrument,
         }
     }
 
@@ -65,7 +63,6 @@ impl App {
         self.view = place.view;
         self.note_view(place.view);
         self.cursor = place.cursor;
-        self.instrument = place.instrument;
         self.clamp_cursor();
     }
 
@@ -95,13 +92,7 @@ impl App {
     fn open_item(&mut self) {
         match self.view {
             View::Chain => self.open_row(),
-            View::Phrase if matches!(self.cursor.field, Field::Instrument) => {
-                self.open_step_instrument();
-            }
-            View::Phrase => {
-                self.status = "gd opens an instrument from its column here".to_owned();
-            }
-            View::Instrument | View::Track => {}
+            View::Phrase | View::Track => {}
         }
     }
 
@@ -128,32 +119,6 @@ impl App {
         self.note_view(View::Phrase);
         self.go_to_loop_start();
         self.say_if_shared();
-    }
-
-    fn open_step_instrument(&mut self) {
-        let Some(phrase) = self.phrase_id() else {
-            return;
-        };
-        let step = self.cursor.step;
-        let current = self
-            .song()
-            .phrases
-            .get(&phrase)
-            .and_then(|p| p.steps().get(step))
-            .and_then(|s| s.instrument);
-        self.record_jump();
-        let id = match current {
-            Some(id) => id,
-            None => {
-                let id = lowest_unused(&self.song().instruments);
-                self.apply(&Action::AssignNewInstrument { phrase, step, id });
-                self.status = format!("New instrument {id:02X}");
-                id
-            }
-        };
-        self.instrument = id;
-        self.view = View::Instrument;
-        self.note_view(View::Instrument);
     }
 
     /// How many track and slot positions play a phrase.

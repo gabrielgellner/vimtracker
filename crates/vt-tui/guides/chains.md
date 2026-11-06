@@ -75,13 +75,13 @@ all of them.
 ## The level scale
 
 Levels work like Ableton's faders: even steps in dB, with room above 0. Track
-level, instrument volume, `VOL`, `DLY` and `REV` all use this scale.
+level, `VOL`, `DLY` and `REV` all use this scale.
 
 | Value | Level |
 |---|---|
 | `F8` | +6 dB, the top. Anything higher snaps to it |
 | `F0` | +4 dB |
-| `E0` | 0 dB, where tracks and instruments start |
+| `E0` | 0 dB, where tracks start |
 | `D0` | -4 dB |
 | `C0` | -8 dB |
 | `80` | -24 dB |

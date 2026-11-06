@@ -5,7 +5,6 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
-use vt_model::label::is_named_slot;
 use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target, first_value};
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{Note, Step};
@@ -271,7 +270,7 @@ impl App {
                 StepRange::between(step, step),
                 Scope {
                     first: self.cursor.field.group(),
-                    last: 2 + self.slots(),
+                    last: 1 + self.slots(),
                 },
             ),
             Cover::Motion(motion, count) => (
@@ -412,33 +411,6 @@ impl App {
             self.leave_visual(selection);
             return;
         }
-        // As on the M8, editing an empty cell starts from the value last used there.
-        if self.cursor.field == Field::Instrument && self.step_instrument().is_none() {
-            if let Some(phrase) = self.phrase_id() {
-                self.apply(&Action::SetField {
-                    phrase,
-                    step: self.cursor.step,
-                    value: FieldValue::Instrument(Some(self.instrument)),
-                });
-            }
-            return;
-        }
-        if self.cursor.field == Field::Instrument
-            && let Some(current) = self.step_instrument().filter(|id| is_named_slot(*id))
-            && let Some(phrase) = self.phrase_id()
-        {
-            let mut id = current;
-            for _ in 0..amount {
-                id = self.song().next_instrument(id, sign > 0);
-            }
-            self.apply(&Action::SetField {
-                phrase,
-                step: self.cursor.step,
-                value: FieldValue::Instrument(Some(id)),
-            });
-            self.instrument = id;
-            return;
-        }
         let change = Change::Increment {
             by,
             cover: Cover::Cursor,
@@ -446,11 +418,6 @@ impl App {
         };
         self.do_change(&change);
         self.last_change = Some(change);
-        if self.cursor.field == Field::Instrument
-            && let Some(instrument) = self.step_instrument()
-        {
-            self.instrument = instrument;
-        }
     }
 
     /// Wait for what replaces the field under the cursor, as Vim's `r` does: no move, and back
@@ -473,7 +440,7 @@ impl App {
     }
 
     /// Replace across a selection: the value is typed as usual on its first step that can take it,
-    /// then goes on the rest. A velocity or instrument needs a note, and an FX value a command.
+    /// then goes on the rest. A velocity needs a note, and an FX value a command.
     fn begin_selection_replace(&mut self) {
         let selection = self.current_selection();
         let field = self.cursor.field;
@@ -488,7 +455,7 @@ impl App {
                 return false;
             };
             match field {
-                Field::Velocity | Field::Instrument => matches!(step.note, Note::On(_)),
+                Field::Velocity => matches!(step.note, Note::On(_)),
                 Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
                 Field::Note | Field::FxCommand(_) => true,
             }
@@ -564,11 +531,9 @@ impl App {
         let fill = match field {
             Field::Note => Fill::Note {
                 note: value.note,
-                instrument: self.instrument,
                 velocity: self.note_velocity,
             },
             Field::Velocity => Fill::Velocity(value.velocity),
-            Field::Instrument => Fill::Instrument(value.instrument),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
         };
@@ -577,13 +542,6 @@ impl App {
             range,
             fill,
         });
-    }
-
-    /// The instrument on the cursor's step.
-    pub(crate) fn step_instrument(&self) -> Option<u32> {
-        let id = self.phrase_id()?;
-        let phrase = self.song().phrases.get(&id)?;
-        phrase.steps().get(self.cursor.step)?.instrument
     }
 
     fn apply_increment(&mut self, by: i32, range: StepRange, scope: Scope, kind: Shift) {
@@ -651,17 +609,11 @@ impl App {
                         phrase,
                         step,
                         note: value.note,
-                        instrument: self.step_instrument().or(value.instrument),
                     },
                     Field::Velocity => Action::SetField {
                         phrase,
                         step,
                         value: FieldValue::Velocity(value.velocity),
-                    },
-                    Field::Instrument => Action::SetField {
-                        phrase,
-                        step,
-                        value: FieldValue::Instrument(value.instrument),
                     },
                     Field::FxCommand(slot) | Field::FxValue(slot) => Action::SetField {
                         phrase,
@@ -811,12 +763,12 @@ impl App {
     /// Move between fields or column groups, within the step's slots.
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
-        let last = 2 + slots * 2;
+        let last = 1 + slots * 2;
         let order = self.cursor.field.order();
         self.cursor.field = match motion {
             Motion::Right => Field::from_order((order + 1).min(last)),
             Motion::Left => Field::from_order(order.saturating_sub(1)),
-            Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(2 + slots)),
+            Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(1 + slots)),
             Motion::RowStart => Field::Note,
             Motion::RowEnd => Field::from_order(last),
             _ => Field::of_group(self.cursor.field.group().saturating_sub(1)),

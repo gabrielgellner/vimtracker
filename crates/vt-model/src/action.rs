@@ -14,50 +14,45 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::shape::{Shape, ShapeColumn, values};
-use crate::song::{Chain, ChainEntry, FilterType, Instrument, Phrase, Song, lowest_unused};
+use crate::song::{Chain, ChainEntry, FilterType, Phrase, Song, lowest_unused};
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldValue {
     Velocity(Option<u8>),
-    Instrument(Option<u32>),
     Slot(usize, FxSlot),
 }
 
-/// A value written across a selection. A velocity or instrument means nothing without a note, and
+/// A value written across a selection. A velocity means nothing without a note, and
 /// an FX value nothing without a command, so those only go on steps that have one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fill {
-    /// A note, with an instrument and velocity for steps that don't have them.
+    /// A note, with a velocity for steps that don't have one.
     Note {
         note: Note,
-        instrument: u32,
         velocity: u8,
     },
     Velocity(Option<u8>),
-    Instrument(Option<u32>),
     Slot(usize, FxSlot),
     SlotValue(usize, u8),
 }
 
-/// A sample going into a slot.
+/// A sound from a kit going on a track.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SlotSample {
-    pub id: u32,
+pub struct KitSound {
     pub sample: String,
-    pub labelled: bool,
+    pub name: String,
 }
 
 /// One edit, as plain data so it can be replayed and tested without a terminal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    /// Write a note, and an instrument if the note plays.
+    /// Write a note.
     SetNote {
         phrase: u32,
         step: usize,
         note: Note,
-        instrument: Option<u32>,
     },
     /// Replace a whole step.
     SetStep {
@@ -173,28 +168,18 @@ pub enum Action {
     AddTracks(usize),
     /// Remove the last track, keeping at least one. Its chain and phrase stay for reuse.
     RemoveLastTrack,
-    /// Set an instrument's sample, creating the instrument if needed.
-    SetSample {
-        instrument: u32,
-        sample: String,
+    /// Set a track's sample, or leave it with none.
+    SetTrackSample {
+        track: usize,
+        sample: Option<String>,
     },
-    /// Set several instruments' samples as one change, creating them if needed. A slot marked
-    /// as labelled becomes so, and others stay as they were.
-    SetSamples(Vec<SlotSample>),
-    /// Leave an instrument with no sample.
-    ClearSample {
-        instrument: u32,
+    /// Name a track, or leave it with no name.
+    SetTrackName {
+        track: usize,
+        name: String,
     },
-    /// Mark whether a slot's name is a label, creating the instrument if needed.
-    SetLabelled {
-        id: u32,
-        labelled: bool,
-    },
-    /// Set an instrument's volume, creating the instrument if needed.
-    SetInstrumentVolume {
-        id: u32,
-        volume: u8,
-    },
+    /// Put a kit's sounds on tracks from the first, as one change, adding tracks if it needs more.
+    LoadKit(Vec<KitSound>),
     /// Choose a track's filter.
     SetFilterType {
         track: usize,
@@ -205,12 +190,6 @@ pub enum Action {
         track: usize,
         slot: usize,
         envelope: Envelope,
-    },
-    /// Set a step's instrument to a new one.
-    AssignNewInstrument {
-        phrase: u32,
-        step: usize,
-        id: u32,
     },
     /// Change a chain row. A phrase that doesn't exist yet is created.
     SetChainEntry {
@@ -308,17 +287,8 @@ pub enum EditError {
 pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
     let mut next = Song::clone(song);
     match action {
-        Action::SetNote {
-            phrase,
-            step,
-            note,
-            instrument,
-        } => {
-            let target = step_mut(&mut next, *phrase, *step)?;
-            target.note = *note;
-            if instrument.is_some() {
-                target.instrument = *instrument;
-            }
+        Action::SetNote { phrase, step, note } => {
+            step_mut(&mut next, *phrase, *step)?.note = *note;
         }
         Action::SetStep {
             phrase,
@@ -335,7 +305,6 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             let target = step_mut(&mut next, *phrase, *step)?;
             match value {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
-                FieldValue::Instrument(instrument) => target.instrument = *instrument,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
                 }
@@ -364,20 +333,14 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 let target = step_mut(&mut next, *phrase, index)?;
                 let has_note = matches!(target.note, Note::On(_));
                 match fill {
-                    Fill::Note {
-                        note,
-                        instrument,
-                        velocity,
-                    } => {
+                    Fill::Note { note, velocity } => {
                         target.note = *note;
                         if matches!(note, Note::On(_)) {
-                            target.instrument.get_or_insert(*instrument);
                             target.velocity.get_or_insert(*velocity);
                         }
                     }
                     Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
-                    Fill::Instrument(instrument) if has_note => target.instrument = *instrument,
-                    Fill::Velocity(_) | Fill::Instrument(_) => {}
+                    Fill::Velocity(_) => {}
                     Fill::Slot(slot, value) => {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);
@@ -564,41 +527,29 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 section.chains.pop();
             }
         }
-        Action::SetSample { instrument, sample } => {
-            let entry = next
-                .instruments
-                .entry(*instrument)
-                .or_insert_with(|| Arc::new(Instrument::default()));
-            Arc::make_mut(entry).sample = Some(sample.clone());
+        Action::SetTrackSample { track, sample } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .sample = sample.clone();
         }
-        Action::ClearSample { instrument } => {
-            if let Some(entry) = next.instruments.get_mut(instrument) {
-                Arc::make_mut(entry).sample = None;
+        Action::SetTrackName { track, name } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .name = name.clone();
+        }
+        Action::LoadKit(sounds) => {
+            if sounds.len() > MAX_TRACKS {
+                return Err(EditError::TooManyTracks);
             }
-        }
-        Action::SetSamples(samples) => {
-            for slot in samples {
-                let entry = next
-                    .instruments
-                    .entry(slot.id)
-                    .or_insert_with(|| Arc::new(Instrument::default()));
-                let instrument = Arc::make_mut(entry);
-                instrument.sample = Some(slot.sample.clone());
-                instrument.labelled |= slot.labelled;
+            while next.tracks.len() < sounds.len() {
+                next.add_track();
             }
-        }
-        Action::SetLabelled { id, labelled } => {
-            let entry = next
-                .instruments
-                .entry(*id)
-                .or_insert_with(|| Arc::new(Instrument::default()));
-            Arc::make_mut(entry).labelled = *labelled;
-        }
-        Action::AssignNewInstrument { phrase, step, id } => {
-            step_mut(&mut next, *phrase, *step)?.instrument = Some(*id);
-            next.instruments
-                .entry(*id)
-                .or_insert_with(|| Arc::new(Instrument::default()));
+            for (track, sound) in next.tracks.iter_mut().zip(sounds) {
+                track.sample = Some(sound.sample.clone());
+                track.name = sound.name.clone();
+            }
         }
         Action::SetChainEntry { chain, slot, entry } => {
             check_transpose(entry)?;
@@ -700,13 +651,6 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .and_then(|section| section.chains.get_mut(*track))
                 .ok_or(EditError::NoTrack(*track))?;
             *slot = Some(*chain);
-        }
-        Action::SetInstrumentVolume { id, volume } => {
-            let entry = next
-                .instruments
-                .entry(*id)
-                .or_insert_with(|| Arc::new(Instrument::default()));
-            Arc::make_mut(entry).volume = (*volume).min(MAX_LEVEL);
         }
         Action::SetFilterType { track, filter } => {
             next.tracks

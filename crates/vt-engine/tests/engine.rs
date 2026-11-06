@@ -6,7 +6,7 @@ use vt_engine::render::{RenderOptions, render_frames, render_loop};
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, Instrument, Phrase, Song};
+use vt_model::song::{Chain, ChainEntry, Phrase, Song};
 use vt_model::step::{Note, Step};
 
 const SECOND: usize = 48_000;
@@ -26,18 +26,11 @@ fn pool(entries: &[(&str, SampleData)]) -> Arc<SamplePool> {
     Arc::new(pool)
 }
 
-fn instrument(sample: &str) -> Arc<Instrument> {
-    Arc::new(Instrument {
-        sample: Some(sample.to_owned()),
-        ..Instrument::default()
-    })
-}
-
 /// A song with one sample, and notes at these steps on the first track.
 fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
     let mut song = Song::new(tracks);
-    song.instruments.insert(0, instrument("flat"));
     for track in &mut song.tracks {
+        track.sample = Some("flat".to_owned());
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
     }
@@ -45,7 +38,6 @@ fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
     for step in steps {
         *phrase.step_mut(*step).unwrap() = Step {
             note: Note::On(60),
-            instrument: Some(0),
             ..Step::default()
         };
     }
@@ -137,14 +129,13 @@ fn two_renders_match() {
 #[test]
 fn a_new_note_fades_the_old_one() {
     let mut song = song_with_notes(1, &[0]);
-    song.instruments.insert(1, instrument("quiet"));
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     *phrase.step_mut(1).unwrap() = Step {
         note: Note::On(60),
-        instrument: Some(1),
+        velocity: Some(0x19),
         ..Step::default()
     };
-    let samples = pool(&[("flat", flat(SECOND, 1.0)), ("quiet", flat(SECOND, 0.2))]);
+    let samples = pool(&[("flat", flat(SECOND, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 7000);
     let left: Vec<f32> = out.as_chunks::<2>().0.iter().map(|f| f[0]).collect();
     // The change at step 1 ramps over several frames rather than jumping all at once.
@@ -166,7 +157,6 @@ fn sixteen_and_seven() -> Song {
                 if s == 0 {
                     Step {
                         note: Note::On(60),
-                        instrument: Some(0),
                         ..Step::default()
                     }
                 } else {
@@ -309,7 +299,7 @@ fn replacing_a_sample_doesnt_move_a_playing_voice() {
     let mut first = vec![0.0; 2000];
     engine.process(&mut first);
     let mut changed = song;
-    changed.instruments.insert(0, instrument("other"));
+    changed.tracks[0].sample = Some("other".to_owned());
     engine.swap(version(changed, samples));
     let mut second = vec![0.0; 2000];
     engine.process(&mut second);

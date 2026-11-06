@@ -67,7 +67,7 @@ a Decay with Sustain at `0%`, and Release only runs on an `OFF`. To make notes
 shorter, use `OFF` on a step or the `OFF` command.
 
 Decays and releases fall fast and then slow, as an analog envelope does, and an
-attack starts slowly. Tracks with several instruments share these shapes.
+attack starts slowly.
 
 ## LFOs
 

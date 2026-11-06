@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use vt_model::action::{Action, EditError, edit};
+use vt_model::action::{Action, EditError, KitSound, edit};
+use vt_model::constants::MAX_TRACKS;
 use vt_model::history::History;
 use vt_model::song::Song;
 use vt_model::step::Note;
@@ -10,7 +11,6 @@ fn set_note(phrase: u32, step: usize, midi: u8) -> Action {
         phrase,
         step,
         note: Note::On(midi),
-        instrument: Some(0),
     }
 }
 
@@ -48,7 +48,6 @@ fn unchanged_items_stay_the_same_arc() {
     assert!(!Arc::ptr_eq(&song.phrases[&0], &next.phrases[&0]));
     assert!(Arc::ptr_eq(&song.phrases[&1], &next.phrases[&1]));
     assert!(Arc::ptr_eq(&song.chains[&0], &next.chains[&0]));
-    assert!(Arc::ptr_eq(&song.instruments[&0], &next.instruments[&0]));
     assert_eq!(song.phrases[&0].steps()[0].note, Note::Empty);
 }
 
@@ -86,20 +85,53 @@ fn bad_edits_are_refused() {
 }
 
 #[test]
-fn set_sample_creates_the_instrument() {
-    let song = Arc::new(Song::new(1));
+fn a_tracks_sample_and_name_are_set_on_it() {
+    let song = Arc::new(Song::new(2));
     let next = edit(
         &song,
-        &Action::SetSample {
-            instrument: 5,
-            sample: "samples/a.wav".into(),
+        &Action::SetTrackSample {
+            track: 1,
+            sample: Some("samples/a.wav".into()),
         },
     )
     .unwrap();
-    assert_eq!(
-        next.instruments[&5].sample.as_deref(),
-        Some("samples/a.wav")
-    );
+    assert_eq!(next.tracks[1].sample.as_deref(), Some("samples/a.wav"));
+    assert_eq!(next.tracks[0].sample, None);
+    let next = edit(
+        &next,
+        &Action::SetTrackName {
+            track: 1,
+            name: "BD".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(next.tracks[1].name, "BD");
+    let bad = Action::SetTrackSample {
+        track: 9,
+        sample: None,
+    };
+    assert_eq!(edit(&next, &bad), Err(EditError::NoTrack(9)));
+}
+
+#[test]
+fn a_kit_fills_tracks_from_the_first_and_adds_what_it_needs() {
+    let mut start = Song::new(1);
+    start.tracks[0].cutoff = 0x40;
+    let start = Arc::new(start);
+    let sound = |sample: &str, name: &str| KitSound {
+        sample: sample.into(),
+        name: name.into(),
+    };
+    let kit = Action::LoadKit(vec![sound("a.wav", "BD"), sound("b.wav", "")]);
+    let next = edit(&start, &kit).unwrap();
+    assert_eq!(next.tracks.len(), 2);
+    assert_eq!(next.sections[0].chains.len(), 2);
+    assert_eq!(next.tracks[0].sample.as_deref(), Some("a.wav"));
+    assert_eq!(next.tracks[0].name, "BD");
+    assert_eq!(next.tracks[0].cutoff, 0x40, "other settings stay");
+    assert_eq!(next.tracks[1].sample.as_deref(), Some("b.wav"));
+    let huge = Action::LoadKit(vec![sound("a.wav", ""); MAX_TRACKS + 1]);
+    assert_eq!(edit(&start, &huge), Err(EditError::TooManyTracks));
 }
 
 mod tree {

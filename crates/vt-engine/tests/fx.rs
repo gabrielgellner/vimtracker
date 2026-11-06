@@ -5,7 +5,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song, level_gain};
+use vt_model::song::{Song, level_gain};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 1000 per groove unit.
@@ -25,13 +25,9 @@ fn flat(level: f32) -> Arc<SamplePool> {
 /// A song with one track playing these step texts, and instant envelopes.
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(1);
-    song.instruments.insert(
-        0,
-        Arc::new(Instrument {
-            sample: Some("s".to_owned()),
-            ..Instrument::default()
-        }),
-    );
+    for track in &mut song.tracks {
+        track.sample = Some("s".to_owned());
+    }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
@@ -55,9 +51,9 @@ fn level_at(out: &[[f32; 2]], frame: usize) -> f32 {
 fn vol_changes_track_gain_and_holds() {
     let out = render(
         song(&[
-            "C-4 -- 00 ---00 ---00 ---00",
-            "--- -- -- VOL40 ---00 ---00",
-            "--- -- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- VOL40 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
         ]),
         flat(0.5),
         STEP * 3,
@@ -72,7 +68,7 @@ fn vol_changes_track_gain_and_holds() {
 #[test]
 fn vol_changes_are_smoothed() {
     let out = render(
-        song(&["C-4 -- 00 ---00 ---00 ---00", "--- -- -- VOL00 ---00 ---00"]),
+        song(&["C-4 -- ---00 ---00 ---00", "--- -- VOL00 ---00 ---00"]),
         flat(0.5),
         STEP * 2,
     );
@@ -87,13 +83,13 @@ fn vol_changes_are_smoothed() {
 
 #[test]
 fn pan_moves_between_channels() {
-    let out = render(song(&["C-4 -- 00 PAN00 ---00 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- PAN00 ---00 ---00"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!(last[0] > 0.3 && last[1].abs() < 1e-3, "{last:?}");
-    let out = render(song(&["C-4 -- 00 PANFF ---00 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- PANFF ---00 ---00"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!(last[1] > 0.3 && last[0].abs() < 1e-3, "{last:?}");
-    let out = render(song(&["C-4 -- 00 PAN80 ---00 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- PAN80 ---00 ---00"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!((last[0] - last[1]).abs() < 1e-5, "{last:?}");
 }
@@ -107,11 +103,11 @@ fn cut_filters_high_frequencies() {
         })
         .collect();
     let open = render(
-        song(&["C-4 -- 00 ---00 ---00 ---00"]),
+        song(&["C-4 -- ---00 ---00 ---00"]),
         pool(tone.clone()),
         STEP,
     );
-    let closed = render(song(&["C-4 -- 00 CUT40 ---00 ---00"]), pool(tone), STEP);
+    let closed = render(song(&["C-4 -- CUT40 ---00 ---00"]), pool(tone), STEP);
     let peak = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert!(
         peak(&closed) < peak(&open) * 0.1,
@@ -131,11 +127,11 @@ fn resonance_raises_a_tone_at_the_cutoff() {
         })
         .collect();
     let flat_response = render(
-        song(&["C-4 -- 00 CUT80 RES00 ---00"]),
+        song(&["C-4 -- CUT80 RES00 ---00"]),
         pool(tone.clone()),
         STEP,
     );
-    let resonant = render(song(&["C-4 -- 00 CUT80 RESFF ---00"]), pool(tone), STEP);
+    let resonant = render(song(&["C-4 -- CUT80 RESFF ---00"]), pool(tone), STEP);
     let peak = |out: &[[f32; 2]]| out[3000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert!(peak(&resonant) > peak(&flat_response) * 2.0);
     assert!(peak(&resonant).is_finite());
@@ -143,17 +139,17 @@ fn resonance_raises_a_tone_at_the_cutoff() {
 
 #[test]
 fn del_delays_the_note_by_groove_units() {
-    let out = render(song(&["C-4 -- 00 DEL02 ---00 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- DEL02 ---00 ---00"]), flat(0.5), STEP);
     let first = out.iter().position(|f| f[0] != 0.0);
     assert_eq!(first, Some(UNIT * 2));
 }
 
 #[test]
 fn kil_cuts_after_groove_units_counted_from_a_delayed_start() {
-    let out = render(song(&["C-4 -- 00 KIL03 ---00 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- KIL03 ---00 ---00"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 3 - 1][0], 0.0);
     assert_eq!(out[UNIT * 3 + 100][0], 0.0);
-    let out = render(song(&["C-4 -- 00 DEL02 KIL01 ---00"]), flat(0.5), STEP);
+    let out = render(song(&["C-4 -- DEL02 KIL01 ---00"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 2 + 100][0], 0.0);
     assert_eq!(out[UNIT * 3 + 100][0], 0.0);
 }
@@ -161,7 +157,7 @@ fn kil_cuts_after_groove_units_counted_from_a_delayed_start() {
 #[test]
 fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
     let out = render(
-        song(&["C-4 -- 00 ---00 ---00 ---00", "--- -- -- KIL01 ---00 ---00"]),
+        song(&["C-4 -- ---00 ---00 ---00", "--- -- KIL01 ---00 ---00"]),
         flat(0.5),
         STEP * 2,
     );
@@ -170,8 +166,8 @@ fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
 }
 
 #[test]
-fn off_starts_the_instruments_release() {
-    let mut with_release = song(&["C-4 -- 00 OFF01 ---00 ---00"]);
+fn off_starts_the_notes_release() {
+    let mut with_release = song(&["C-4 -- OFF01 ---00 ---00"]);
     with_release.tracks[0].envelopes[0].release_ms = 20;
     let out = render(with_release, flat(0.5), STEP);
     let at_off = level_at(&out, UNIT - 1);
@@ -183,7 +179,7 @@ fn off_starts_the_instruments_release() {
 #[test]
 fn a_new_note_cancels_a_pending_cut() {
     let out = render(
-        song(&["C-4 -- 00 KILFF ---00 ---00", "C-4 -- 00 ---00 ---00 ---00"]),
+        song(&["C-4 -- KILFF ---00 ---00", "C-4 -- ---00 ---00 ---00"]),
         flat(0.5),
         STEP * 3,
     );
@@ -198,7 +194,7 @@ fn a_new_note_cancels_a_pending_cut() {
 fn ret_retriggers_every_y_units_and_stops_at_the_next_step() {
     // A short sample, so each retrigger shows up separately.
     let out = render(
-        song(&["C-4 -- 00 RET02 ---00 ---00"]),
+        song(&["C-4 -- RET02 ---00 ---00"]),
         pool(vec![[1.0, 1.0]; 10]),
         STEP * 2,
     );
@@ -209,7 +205,7 @@ fn ret_retriggers_every_y_units_and_stops_at_the_next_step() {
 #[test]
 fn ret_with_y_zero_does_nothing() {
     let out = render(
-        song(&["C-4 -- 00 RET10 ---00 ---00"]),
+        song(&["C-4 -- RET10 ---00 ---00"]),
         pool(vec![[1.0, 1.0]; 10]),
         STEP,
     );
@@ -220,7 +216,7 @@ fn ret_with_y_zero_does_nothing() {
 #[test]
 fn ret_x_changes_level_on_each_retrigger() {
     let out = render(
-        song(&["C-4 -- 00 RET52 ---00 ---00"]),
+        song(&["C-4 -- RET52 ---00 ---00"]),
         pool(vec![[0.5, 0.5]; 10]),
         STEP,
     );
@@ -235,7 +231,7 @@ fn ret_x_changes_level_on_each_retrigger() {
 }
 
 fn fire_pattern(seed: u64, track_count: usize) -> Vec<bool> {
-    let mut song = song(&vec!["C-4 -- 00 CHA80 ---00 ---00"; 16]);
+    let mut song = song(&vec!["C-4 -- CHA80 ---00 ---00"; 16]);
     song.seed = seed;
     for _ in 1..track_count {
         song.add_track();
@@ -259,10 +255,10 @@ fn adding_a_track_doesnt_change_another_tracks_results() {
 
 #[test]
 fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
-    let out = render(song(&["C-4 -- 00 CHAFF ---00 ---00"]), flat(0.5), 100);
+    let out = render(song(&["C-4 -- CHAFF ---00 ---00"]), flat(0.5), 100);
     assert_ne!(out[50][0], 0.0);
     let out = render(
-        song(&["C-4 -- 00 ---00 ---00 ---00", "C-4 -- 00 CHA00 VOL00 ---00"]),
+        song(&["C-4 -- ---00 ---00 ---00", "C-4 -- CHA00 VOL00 ---00"]),
         flat(0.5),
         STEP * 2,
     );
@@ -272,7 +268,7 @@ fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
 
 #[test]
 fn chance_varies_across_loop_passes() {
-    let mut song = song(&["C-4 -- 00 CHA80 ---00 ---00"]);
+    let mut song = song(&["C-4 -- CHA80 ---00 ---00"]);
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     phrase.set_len(1);
     let out = render(song, pool(vec![[1.0, 1.0]; 10]), STEP * 32);
@@ -284,14 +280,14 @@ fn chance_varies_across_loop_passes() {
 fn delay_and_reverb_sends_add_a_tail() {
     // Without sends a short hit ends, and with them it keeps sounding.
     let dry = render(
-        song(&["C-4 -- 00 ---00 ---00 ---00"]),
+        song(&["C-4 -- ---00 ---00 ---00"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
     let late = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert_eq!(late(&dry), 0.0);
     let delayed = render(
-        song(&["C-4 -- 00 DLYFF ---00 ---00"]),
+        song(&["C-4 -- DLYFF ---00 ---00"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -300,7 +296,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     assert_eq!(delayed[17_000][0], 0.0);
     assert_ne!(delayed[18_100][0], 0.0);
     let reverbed = render(
-        song(&["C-4 -- 00 REVFF ---00 ---00"]),
+        song(&["C-4 -- REVFF ---00 ---00"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -312,7 +308,7 @@ fn delay_and_reverb_sends_add_a_tail() {
 fn held_values_reset_on_return_and_keep_on_resume() {
     let samples = flat(0.5);
     let version = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- 00 VOL00 ---00 ---00"])),
+        Arc::new(song(&["C-4 -- VOL00 ---00 ---00"])),
         samples,
     ));
     let mut engine = Engine::new(RATE, Arc::clone(&version));
@@ -328,7 +324,7 @@ fn held_values_reset_on_return_and_keep_on_resume() {
     // Going back to the top resets it, so a step with no VOL plays at full level.
     engine.return_to_start();
     let plain = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- 00 ---00 ---00 ---00"])),
+        Arc::new(song(&["C-4 -- ---00 ---00 ---00"])),
         flat(0.5),
     ));
     engine.swap(plain);
@@ -341,8 +337,8 @@ fn held_values_reset_on_return_and_keep_on_resume() {
 fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     let version = Arc::new(Published::new(
         Arc::new(song(&[
-            "C-4 -- 00 VOL00h ---00 ---00",
-            "C-4 -- 00 ---00 ---00 ---00",
+            "C-4 -- VOL00h ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
         ])),
         flat(0.5),
     ));
@@ -359,7 +355,7 @@ fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     assert!(out[2 * 3999].abs() < 0.001, "not from the top, so it holds");
     engine.play_from(0);
     let plain = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- 00 ---00 ---00 ---00"])),
+        Arc::new(song(&["C-4 -- ---00 ---00 ---00"])),
         flat(0.5),
     ));
     engine.swap(plain);
@@ -378,10 +374,10 @@ fn hits(song: Song, channel: usize) -> Vec<usize> {
 }
 
 const FOUR: [&str; 4] = [
-    "C-4 -- 00 ---00 ---00 ---00",
-    "C-4 -- 00 ---00 ---00 ---00",
-    "C-4 -- 00 ---00 ---00 ---00",
-    "C-4 -- 00 ---00 ---00 ---00",
+    "C-4 -- ---00 ---00 ---00",
+    "C-4 -- ---00 ---00 ---00",
+    "C-4 -- ---00 ---00 ---00",
+    "C-4 -- ---00 ---00 ---00",
 ];
 
 #[test]
@@ -407,15 +403,14 @@ fn a_tracks_swing_replaces_the_projects_and_leaves_others_alone() {
 
     // Pan the tracks apart, so each channel shows one track's timing.
     let mut two = Song::new(2);
-    two.instruments = song(&[]).instruments;
     for track in &mut two.tracks {
+        track.sample = Some("s".to_owned());
         track.envelopes[0].attack_ms = 0;
     }
     for (id, pan) in [(0, "PAN00"), (1, "PANFF")] {
         let phrase = Arc::make_mut(two.phrases.get_mut(&id).unwrap());
         for step in 0..4 {
-            *phrase.step_mut(step).unwrap() =
-                format!("C-4 -- 00 {pan} ---00 ---00").parse().unwrap();
+            *phrase.step_mut(step).unwrap() = format!("C-4 -- {pan} ---00 ---00").parse().unwrap();
         }
     }
     two.tracks[1].swing = Some(750);
@@ -425,7 +420,7 @@ fn a_tracks_swing_replaces_the_projects_and_leaves_others_alone() {
 
 #[test]
 fn a_swung_steps_fx_move_with_its_note() {
-    let mut swung = song(&["C-4 -- 00 ---00 ---00 ---00", "--- -- -- VOL00 ---00 ---00"]);
+    let mut swung = song(&["C-4 -- ---00 ---00 ---00", "--- -- VOL00 ---00 ---00"]);
     swung.swing = 750;
     let out = render(swung, flat(0.5), STEP * 3);
     // 120 ticks is 3000 frames: VOL00 hasn't started just before then.
@@ -436,7 +431,7 @@ fn a_swung_steps_fx_move_with_its_note() {
 #[test]
 fn track_level_scales_the_track_and_multiplies_with_velocity() {
     // Quiet enough that the master limiter is doing nothing.
-    let text = ["C-4 -- 00 ---00 ---00 ---00"];
+    let text = ["C-4 -- ---00 ---00 ---00"];
     let full = render(song(&text), flat(0.02), STEP);
     let mut lower = song(&text);
     lower.tracks[0].level = 0x80;
@@ -445,7 +440,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
     let down = level_gain(128.0);
     assert!((halved / full - down).abs() < 1e-3, "{halved} vs {full}");
 
-    let soft = ["C-4 40 00 ---00 ---00 ---00"];
+    let soft = ["C-4 40 ---00 ---00 ---00"];
     let mut both = song(&soft);
     both.tracks[0].level = 0x80;
     let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
@@ -455,7 +450,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
 
 #[test]
 fn track_level_also_turns_down_the_sends() {
-    let text = ["C-4 -- 00 DLYFF REVFF ---00"];
+    let text = ["C-4 -- DLYFF REVFF ---00"];
     let mut silent = song(&text);
     silent.tracks[0].level = 0;
     let out = render(silent, flat(0.5), STEP * 8);
@@ -468,7 +463,7 @@ fn track_level_also_turns_down_the_sends() {
 
 #[test]
 fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
-    let text = ["C-4 -- 00 ---00 ---00 ---00"];
+    let text = ["C-4 -- ---00 ---00 ---00"];
     let mut quiet = song(&text);
     quiet.tracks[0].level = 0x40;
     Arc::make_mut(quiet.phrases.get_mut(&0).unwrap()).set_len(1);
@@ -480,13 +475,14 @@ fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
 
 /// Two tracks with a note each on step 0, one on track 1 on step 1, and nothing on step 2.
 fn two_tracks() -> Song {
-    let mut song = song(&["C-4 -- 00 ---00 ---00 ---00"]);
+    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
     song.add_track();
+    song.tracks[1].sample = song.tracks[0].sample.clone();
     let chain = song.sections[0].chains[1].unwrap();
     let phrase = song.chains[&chain].entries[0].phrase;
     let steps = Arc::make_mut(song.phrases.get_mut(&phrase).unwrap());
-    *steps.step_mut(0).unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
-    *steps.step_mut(1).unwrap() = "C-4 40 00 ---00 ---00 ---00".parse().unwrap();
+    *steps.step_mut(0).unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
+    *steps.step_mut(1).unwrap() = "C-4 40 ---00 ---00 ---00".parse().unwrap();
     song
 }
 
@@ -516,12 +512,8 @@ fn audition_sounds_every_track_on_the_row_and_stays_stopped() {
 
 #[test]
 fn audition_uses_velocity_and_is_cut_by_the_next_one() {
-    let full = auditioned(song(&["C-4 -- 00 ---00 ---00 ---00"]), 0.02, |e| {
-        e.audition(0)
-    });
-    let soft = auditioned(song(&["C-4 40 00 ---00 ---00 ---00"]), 0.02, |e| {
-        e.audition(0)
-    });
+    let full = auditioned(song(&["C-4 -- ---00 ---00 ---00"]), 0.02, |e| e.audition(0));
+    let soft = auditioned(song(&["C-4 40 ---00 ---00 ---00"]), 0.02, |e| e.audition(0));
     assert!(
         (soft / full - 64.0 / 127.0).abs() < 1e-3,
         "{soft} vs {full}"
@@ -550,13 +542,13 @@ fn audition_respects_mute_and_solo() {
 
 #[test]
 fn audition_does_not_run_fx_or_change_later_playback() {
-    let text = ["C-4 -- 00 VOL00 ---00 ---00", "--- -- -- ---00 ---00 ---00"];
+    let text = ["C-4 -- VOL00 ---00 ---00", "--- -- ---00 ---00 ---00"];
     let heard = auditioned(song(&text), 0.02, |engine| engine.audition(0));
     assert!(heard > 0.0, "VOL00 did not run");
 
     let play = |audition: bool| {
         let version = Arc::new(Published::new(
-            Arc::new(song(&["C-4 -- 00 ---00 ---00 ---00"])),
+            Arc::new(song(&["C-4 -- ---00 ---00 ---00"])),
             flat(0.02),
         ));
         let mut engine = Engine::new(RATE, version);
@@ -585,4 +577,29 @@ fn audition_does_nothing_while_playing() {
     let mut out = vec![0.0; 2000];
     engine.process(&mut out);
     assert!(out.iter().all(|sample| *sample == 0.0));
+}
+
+#[test]
+fn a_preview_goes_through_its_tracks_sound() {
+    let hear = |change: fn(&mut Song)| {
+        let mut start = song(&[]);
+        change(&mut start);
+        let version = Arc::new(Published::new(Arc::new(start), flat(0.5)));
+        let mut engine = Engine::new(RATE, version);
+        engine.preview(0, 60, 0x7F);
+        let mut out = vec![0.0; 2000 * 2];
+        engine.process(&mut out);
+        level_at(out.as_chunks::<2>().0, 1999)
+    };
+    let open = hear(|_| {});
+    assert!(open > 0.1, "{open}");
+    let quiet = hear(|song| song.tracks[0].level = 0x80);
+    assert!((quiet - open * level_gain(128.0)).abs() < 0.001, "{quiet}");
+    let panned = hear(|song| song.tracks[0].pan = 0x00);
+    assert!(
+        (panned - open * std::f32::consts::FRAC_1_SQRT_2).abs() < 0.01,
+        "{panned}"
+    );
+    let no_sample = hear(|song| song.tracks[0].sample = None);
+    assert_eq!(no_sample, 0.0);
 }

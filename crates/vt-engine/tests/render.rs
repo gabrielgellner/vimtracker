@@ -5,7 +5,7 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Instrument, Song};
+use vt_model::song::Song;
 
 const RATE: u32 = 48_000;
 /// 16 steps at 120 BPM.
@@ -27,13 +27,9 @@ fn pool() -> Arc<SamplePool> {
 
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(2);
-    song.instruments.insert(
-        0,
-        Arc::new(Instrument {
-            sample: Some("tone".to_owned()),
-            ..Instrument::default()
-        }),
-    );
+    for track in &mut song.tracks {
+        track.sample = Some("tone".to_owned());
+    }
     let phrase = Arc::make_mut(song.phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
@@ -86,10 +82,10 @@ fn golden(name: &str, samples: &[f32]) {
 }
 
 const FX_LOOP: [&str; 4] = [
-    "C-4 60 00 CUT60h RES40h PAN40h",
-    "--- -- -- DLY80h ---00 ---00",
-    "G-4 40 00 REV60h RET14 ---00",
-    "C-3 -- 00 CHA80 DEL02 KIL04",
+    "C-4 60 CUT60h RES40h PAN40h",
+    "--- -- DLY80h ---00 ---00",
+    "G-4 40 REV60h RET14 ---00",
+    "C-3 -- CHA80 DEL02 KIL04",
 ];
 
 #[test]
@@ -97,7 +93,7 @@ fn golden_renders_stay_the_same() {
     golden(
         "plain",
         &render(
-            song(&["C-4 -- 00 ---00 ---00 ---00"]),
+            song(&["C-4 -- ---00 ---00 ---00"]),
             RenderOptions::default(),
         ),
     );
@@ -124,7 +120,7 @@ fn rows_set_the_length_and_start_from_the_top() {
         rows: Some(4),
         tail: false,
     };
-    let out = render(song(&["C-4 -- 00 ---00 ---00 ---00"]), options);
+    let out = render(song(&["C-4 -- ---00 ---00 ---00"]), options);
     assert_eq!(out.len(), 24_000 * 2);
     assert!(
         peak(&out[..200]) > 0.0,
@@ -135,8 +131,8 @@ fn rows_set_the_length_and_start_from_the_top() {
 #[test]
 fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
     // A delay tail only sounds at the top if something came before it.
-    let mut texts = vec!["--- -- -- ---00 ---00 ---00"; 16];
-    texts[15] = "C-4 -- 00 DLYFF ---00 ---00";
+    let mut texts = vec!["--- -- ---00 ---00 ---00"; 16];
+    texts[15] = "C-4 -- DLYFF ---00 ---00";
     let out = render(song(&texts), RenderOptions::default());
     assert!(
         peak(&out[..2 * 18_000]) > 0.01,
@@ -148,8 +144,8 @@ fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
 #[test]
 fn the_tail_extends_the_render_and_ends_at_silence() {
     // A hit on the last step is still ringing when the capture ends.
-    let mut texts = vec!["--- -- -- ---00 ---00 ---00"; 16];
-    texts[15] = "C-4 -- 00 REVFF ---00 ---00";
+    let mut texts = vec!["--- -- ---00 ---00 ---00"; 16];
+    texts[15] = "C-4 -- REVFF ---00 ---00";
     let plain = render(song(&texts), RenderOptions::default());
     let tailed = render(
         song(&texts),
@@ -166,7 +162,7 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
     );
     // With nothing ringing, there is no tail at all.
     let dry = render(
-        song(&["--- -- -- ---00 ---00 ---00"]),
+        song(&["--- -- ---00 ---00 ---00"]),
         RenderOptions {
             rows: None,
             tail: true,
@@ -178,14 +174,14 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
 #[test]
 fn with_the_limiter_off_a_render_keeps_levels_over_full() {
     // The same tone on eight tracks at once adds up to well past full level.
-    let mut loud = song(&[]);
-    loud = Song {
-        instruments: loud.instruments,
-        ..Song::new(8)
-    };
+    let sample = song(&[]).tracks[0].sample.clone();
+    let mut loud = Song::new(8);
+    for track in &mut loud.tracks {
+        track.sample = sample.clone();
+    }
     for id in 0..8 {
         let phrase = Arc::make_mut(loud.phrases.get_mut(&id).unwrap());
-        *phrase.step_mut(0).unwrap() = "C-4 -- 00 ---00 ---00 ---00".parse().unwrap();
+        *phrase.step_mut(0).unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
     }
     let limited = peak(&render(loud.clone(), RenderOptions::default()));
     assert_eq!(limited, 1.0);

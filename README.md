@@ -28,8 +28,8 @@ Use the release build for playing: the debug build uses far more of the audio de
 vimtracker my-song        # opens my-song, or creates it on the first :w
 ```
 
-1.  `Space 5` opens the instrument view. `i` on the Sample row lists WAV files under the
-    project and the folder you ran from. `:sample path` takes a file, or a folder to browse.
+1.  `Space 5` lists WAV files under the project and the folder you ran from, for the current
+    track. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
     `a` to `;` are white keys, `w` to `p` black keys, `z` and `x` change octave, `c` and `v` set
     the velocity written, and the arrows move without writing. `Esc` leaves Insert.
@@ -45,8 +45,8 @@ can come next.
 
 No samples come with the repo. Put your own WAV files in `samples/`, which git ignores, and run
 from the repo root to see them in the browser. A file in `samples/kits/` listing sounds, such as
-`909.ron`, is a kit: `:kit 909` fills instrument slots from it. Slots can have two-character labels
-like `BD` and `CH`, and `K` on the Instrument column lists them. See the instruments guide.
+`909.ron`, is a kit: `:kit 909` puts its sounds on tracks from the first. Tracks can have
+two-character names like `BD` and `CH`. See the sounds guide.
 
 Samples stay where they are, and a project refers to them. `:w new-folder` saves a copy with every
 sample gathered into it, ready to move or share.
@@ -56,8 +56,7 @@ sample gathered into it, ready to move or share.
 | `:bpm 137.63` | Tempo |
 | `:swing 66.7`, `:tswing 60`, `:tswing off` | Project swing, this track's swing, follow the project |
 | `:tvol C0` | This track's level, separate from each note's velocity |
-| `:inst 1A`, `:inst bd`, `:chain 2` | Current instrument, by number or label, and which chain this track plays |
-| `:label BD`, `:label off` | Mark a numbered slot as labelled, or stop |
+| `:name BD`, `:name`, `:chain 2` | Name this track or clear its name, and which chain it plays |
 | `:len 32`, `:double` | Phrase length, and repeat the phrase to double it |
 | `:track add 4`, `:track del` | Add tracks, or remove the last |
 | `:set step=2`, `:set skip=8`, `:seed 7` | How far a note moves, how far the left and right arrows jump, and the random seed for `CHA` |

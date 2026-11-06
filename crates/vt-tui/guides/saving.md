@@ -26,8 +26,8 @@ moved or shared, and you carry on working in that folder.
 | `;` | Audition: hear this row on every track, while stopped |
 | `:bpm 137.63` | Set the tempo |
 
-`;` means the same in every view: in a chain it plays the start of that row,
-and in the instrument view that instrument. Press `j` then `;` to step
+`;` means the same in the phrase and chain views: in a chain it plays the start
+of that row. Press `j` then `;` to step
 through a pattern. Each audition cuts the last, and an empty row silences
 it. FX on a row don't run, so `DEL`, `CUT` and the like are only heard in
 playback.

@@ -3,7 +3,6 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use serde::Deserialize;
 use thiserror::Error;
@@ -11,7 +10,7 @@ use thiserror::Error;
 use crate::constants::FORMAT_VERSION;
 use crate::sample::{SampleError, load_wav};
 use crate::samples::SamplePool;
-use crate::song::{Instrument, Song};
+use crate::song::Song;
 
 const SONG_FILE: &str = "song.ron";
 const AUTOSAVE_FILE: &str = "song.autosave.ron";
@@ -160,7 +159,7 @@ pub fn import_sample(folder: &Path, source: &Path) -> Result<String, ProjectErro
     unreachable!("the import loop always returns")
 }
 
-/// Where an instrument's sample path points. Paths in an unsaved project are absolute.
+/// Where a track's sample path points. Paths in an unsaved project are absolute.
 pub fn resolve_sample(folder: Option<&Path>, sample: &str) -> PathBuf {
     match folder {
         Some(folder) => folder.join(sample),
@@ -176,21 +175,17 @@ pub fn save_as(from: Option<&Path>, to: &Path, song: &Song) -> Result<Song, Proj
     }
     fs::create_dir_all(to).map_err(io_at(to))?;
     let mut saved = song.clone();
-    for instrument in saved.instruments.values_mut() {
-        if let Some(sample) = &instrument.sample {
+    for track in &mut saved.tracks {
+        if let Some(sample) = &track.sample {
             let source = resolve_sample(from, sample);
-            let path = import_sample(to, &source)?;
-            *instrument = Arc::new(Instrument {
-                sample: Some(path),
-                ..(**instrument).clone()
-            });
+            track.sample = Some(import_sample(to, &source)?);
         }
     }
     save_song(to, &saved)?;
     Ok(saved)
 }
 
-/// Load every instrument's sample that isn't already in the pool. Samples that can't be read are
+/// Load every track's sample that isn't already in the pool. Samples that can't be read are
 /// reported, and the rest still load.
 pub fn load_samples(
     folder: Option<&Path>,
@@ -199,8 +194,8 @@ pub fn load_samples(
     pool: &mut SamplePool,
 ) -> Vec<SampleError> {
     let mut errors = Vec::new();
-    for instrument in song.instruments.values() {
-        let Some(sample) = &instrument.sample else {
+    for track in &song.tracks {
+        let Some(sample) = &track.sample else {
             continue;
         };
         if pool.id_of(sample).is_some() {

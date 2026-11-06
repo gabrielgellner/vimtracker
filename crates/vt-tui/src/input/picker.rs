@@ -19,10 +19,6 @@ pub enum Pick {
     View(View),
     Sample(PathBuf),
     Kit(PathBuf),
-    /// Put this instrument on the step, and make it current.
-    Instrument(u32),
-    /// Make this instrument current, and write nothing.
-    CurrentInstrument(u32),
     /// Put this command in an FX slot, or empty it.
     FxCommand {
         slot: usize,

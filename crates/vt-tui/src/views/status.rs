@@ -6,7 +6,6 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
-use vt_model::label::name_of;
 
 use crate::app::{App, Field};
 use crate::input::keys::Key;
@@ -42,7 +41,6 @@ pub fn column_name(app: &App) -> String {
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
-            Field::Instrument => "Instrument".to_owned(),
             Field::FxCommand(slot) => format!("FX{} command", slot + 1),
             Field::FxValue(slot) => format!("FX{} value", slot + 1),
         },
@@ -50,7 +48,6 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Phrase => "Phrase".to_owned(),
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
-        View::Instrument => app.instrument_row.label().to_owned(),
         View::Track => app.track_control().label().to_owned(),
     }
 }
@@ -65,9 +62,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {
-            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Instrument | Mode::Track => {
-                theme::BLUE
-            }
+            Mode::Normal | Mode::OperatorPending | Mode::Chain | Mode::Track => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
@@ -113,11 +108,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X} Inst {}  TVol {level:02X}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,
-            name_of(app.instrument),
         )),
     ]);
     let message = if app.mode == Mode::Command {
