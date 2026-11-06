@@ -35,10 +35,27 @@ settings, named on the page.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
+`Snare` is an 808-style snare drum. Try `G-3`, or wherever it sits best.
+
+| Setting | Does |
+|---|---|
+| `Snappy` | The mix of drum and noise: all drum at `00` |
+| `Tone` | The drum's overtones, with more of them near the top |
+| `Decay` | How long it rings |
+
+`Hat` is an 808-style hi-hat, of six square waves and noise. Try `C-5` for a closed
+hat, and raise `Decay` for an open one.
+
+| Setting | Does |
+|---|---|
+| `Noise` | How much plain noise replaces the metal |
+| `Tone` | How bright it is |
+| `Decay` | How long it rings |
+
 The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
 and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA` or `FM` note holds
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
-Sustain for plucks. A `Kick` dies away by itself. A track plays one note at a time.
+Sustain for plucks. The drums die away by themselves. A track plays one note at a time.
 
 ## Choosing a sample
 

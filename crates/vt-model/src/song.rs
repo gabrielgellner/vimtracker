@@ -299,11 +299,21 @@ pub enum SynthVoice {
     Fm,
     /// An 808-style bass drum.
     Kick,
+    /// An 808-style snare drum.
+    Snare,
+    /// An 808-style hi-hat.
+    Hat,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 3] = [Self::VirtualAnalog, Self::Fm, Self::Kick];
+    pub const ALL: [Self; 5] = [
+        Self::VirtualAnalog,
+        Self::Fm,
+        Self::Kick,
+        Self::Snare,
+        Self::Hat,
+    ];
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
@@ -311,6 +321,8 @@ impl SynthVoice {
             Self::VirtualAnalog => "VA",
             Self::Fm => "FM",
             Self::Kick => "Kick",
+            Self::Snare => "Snare",
+            Self::Hat => "Hat",
         }
     }
 
@@ -320,6 +332,8 @@ impl SynthVoice {
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
             Self::Fm => "Two-operator FM, for bass, bells and keys",
             Self::Kick => "An 808-style bass drum, tuned by its note",
+            Self::Snare => "An 808-style snare drum, tuned by its note",
+            Self::Hat => "An 808-style hi-hat, tuned by its note",
         }
     }
 
@@ -329,6 +343,8 @@ impl SynthVoice {
             Self::VirtualAnalog => ["Harm", "Timbre", "Morph"],
             Self::Fm => ["Ratio", "Index", "Feedback"],
             Self::Kick => ["Punch", "Tone", "Decay"],
+            Self::Snare => ["Snappy", "Tone", "Decay"],
+            Self::Hat => ["Noise", "Tone", "Decay"],
         }
     }
 
@@ -337,7 +353,7 @@ impl SynthVoice {
         match self {
             Self::VirtualAnalog => [true, false, false],
             Self::Fm => [false, false, true],
-            Self::Kick => [false, false, false],
+            Self::Kick | Self::Snare | Self::Hat => [false, false, false],
         }
     }
 

@@ -636,6 +636,7 @@ Made by the author on 2026-11-06, after a review of this section:
 15. **The first synth comes before FX inserts**, so a song can have bass as well as drums while song mode is tested: Plaits' virtual analog model, its main output, as the `VA` machine, one note at a time. A track holds a `machine`, and its Harm, Timbre and Morph work as `Cut` does, with step commands, LFOs and envelopes. The Sound page is two columns with a bar beside each value, after the M8's instrument page. The M8's Macrosynth is a port of Braids, an earlier Mutable module, so this differs from it. Added on 2026-11-06, ahead of M9.
 16. **FM and Kick follow it**, ported from Plaits as well, for a wider palette with no large tables: FM for bass, bells and keys, and an 808-style bass drum. The page names a synth's three settings for what they do on each machine, and step commands stay `HAR`, `TIM` and `MOR` across all of them. Added on 2026-11-06.
 17. **Plaits is one machine with a choice of voices**, as the M8 has Macrosynth with its `SHAPE`, rather than each voice being a machine. Added on 2026-11-06.
+18. **Snare and Hat complete a synth kit** with Kick. Their noise comes from the track's seeded generator, so each hit differs while a render repeats for a seed. Added on 2026-11-06.
 
 ## Alternatives Considered
 

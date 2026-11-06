@@ -440,6 +440,9 @@ impl TrackState {
         self.last_note = Some(note);
         self.voice = Voice::start(note, rate, from, self.pitch);
         self.voice.set_synth(self.synth_settings());
+        if self.voice.uses_noise() {
+            self.voice.seed_noise(self.rng.next_u32());
+        }
     }
 
     /// Fade the playing note.
