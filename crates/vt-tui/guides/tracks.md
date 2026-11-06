@@ -25,7 +25,7 @@ hat pattern.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Type | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple

@@ -2303,7 +2303,7 @@ fn the_gap_above_the_filter_is_only_on_screen() {
     let lines = track_page_text(&app);
     assert!(lines[6].starts_with("Morph"), "{}", lines[6]);
     assert!(lines[7].trim().is_empty(), "{}", lines[7]);
-    assert!(lines[8].starts_with("Type"), "{}", lines[8]);
+    assert!(lines[8].starts_with("Filter"), "{}", lines[8]);
 }
 
 #[test]
@@ -2669,7 +2669,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
     assert!(lines[4].trim().is_empty(), "{}", lines[4]);
-    assert!(lines[5].starts_with("Type") && lines[5].contains("Delay"));
+    assert!(lines[5].starts_with("Filter") && lines[5].contains("Delay"));
     assert!(lines[6].starts_with("Cut") && lines[6].contains("FF ▕█████████▏"));
     assert!(lines[7].starts_with("Res") && lines[7].contains("Swing"));
 }
