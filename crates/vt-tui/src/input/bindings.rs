@@ -164,6 +164,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
     ("Space 4", Cmd::ShowView(View::Track), "Track page"),
     ("Space 5", Cmd::PickSample, "Choose this track's sample"),
+    ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
@@ -297,6 +298,25 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("K", Cmd::PickValue, "Choose this setting from a list"),
 ];
 
+const MIXER: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next track"),
+    ("k", Cmd::Move(Motion::Up), "Previous track"),
+    ("g g", Cmd::Move(Motion::First), "First track"),
+    ("G", Cmd::Move(Motion::Last), "Last track"),
+    ("h", Cmd::Move(Motion::Left), "Previous setting"),
+    ("l", Cmd::Move(Motion::Right), "Next setting"),
+    ("0", Cmd::Move(Motion::RowStart), "First setting"),
+    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+    ("=", Cmd::Increase, "Increase the value, or switch on"),
+    ("-", Cmd::Decrease, "Decrease the value, or switch off"),
+    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+    ("C-a", Cmd::Increase, "Increase the value"),
+    ("C-x", Cmd::Decrease, "Decrease the value"),
+    ("x", Cmd::ClearField, "Back to its default"),
+    ("K", Cmd::PickValue, "Switch mute or solo"),
+];
+
 /// Keys that act on a selection.
 const VISUAL: &[(&str, Cmd, &str)] = &[
     ("W", Cmd::NextTrack, "Reach the next track"),
@@ -367,6 +387,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
     add(Mode::Track, EVERY_VIEW);
+    add(Mode::Mixer, MIXER);
+    add(Mode::Mixer, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

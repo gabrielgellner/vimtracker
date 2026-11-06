@@ -1146,6 +1146,12 @@ Column folding stays in M11. This adds one thing: a Visual selection can reach o
 
 **Issue.** **Tests:** `d`, `>`, `~` and `r` across tracks, one undo step, a shared phrase changing once, a shorter phrase, a slid loop, `y` then `p`, paste past the last track, `.` repeating, `gv`, Shape refusing, and the neighbour columns lighting up.
 
+### M7 design: mixer
+
+`Space 6` shows a row per track with `Level`, `Pan`, `Delay`, `Reverb`, mute and solo, scrolling to keep the cursor's track in view. It edits the same settings with the same keys as the track page, with `j` and `k` moving between tracks. A row per track rather than a strip per track, as that fits the 64-track limit and the grammar in a terminal. There's no new engine work, and level meters per track can follow if a jam asks.
+
+**Issue.** **Tests:** moving, stepping, typing and `x` on each kind of column, one undo step matching the track page's edit, mute and solo reaching the engine, and a long list scrolling.
+
 ### Known Gaps From Review
 
 The EGM review concluded on 2026-11-05 with its re-audit limit used, and these findings were not resolved. They are accepted for now, and must be decided in the issue named before that issue is done. They override anything above that they contradict.

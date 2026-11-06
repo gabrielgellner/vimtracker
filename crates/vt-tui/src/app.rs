@@ -109,6 +109,7 @@ pub struct App {
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
+    pub mixer_column: usize,
     pub track_page: Page,
     pub track_row: usize,
     pub track_field: usize,
@@ -194,6 +195,7 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
+            mixer_column: 0,
             track_page: Page::Sound,
             track_row: 0,
             track_field: 0,
@@ -387,7 +389,8 @@ impl App {
             | Mode::VisualField
             | Mode::VisualStep
             | Mode::Chain
-            | Mode::Track => {
+            | Mode::Track
+            | Mode::Mixer => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key, now),
@@ -414,6 +417,7 @@ impl App {
         match (self.mode, self.view) {
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
+            (Mode::Normal, View::Mixer) => Mode::Mixer,
             (mode, _) => mode,
         }
     }
@@ -507,6 +511,7 @@ impl App {
         let handled = match self.view {
             View::Chain => self.run_chain(cmd),
             View::Track => self.run_track_page(cmd),
+            View::Mixer => self.run_mixer(cmd),
             View::Phrase => false,
         };
         if handled || self.run_tree(cmd) || self.run_grammar(cmd) {
@@ -816,7 +821,7 @@ impl App {
         }
     }
 
-    fn toggle_mute(&mut self) {
+    pub(crate) fn toggle_mute(&mut self) {
         let track = self.cursor.track;
         if let Some(live) = self.levels.get_mut(track) {
             live.mute = !live.mute;
@@ -826,7 +831,7 @@ impl App {
         }
     }
 
-    fn toggle_solo(&mut self) {
+    pub(crate) fn toggle_solo(&mut self) {
         let track = self.cursor.track;
         if let Some(live) = self.levels.get_mut(track) {
             live.solo = !live.solo;

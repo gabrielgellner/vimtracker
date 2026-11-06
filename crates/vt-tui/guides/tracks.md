@@ -111,3 +111,10 @@ sits at its held values, so `;` hears those. Pausing freezes the LFO.
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
 is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
 on a step.
+
+## The mixer
+
+Press `Space 6` for every track's `Level`, `Pan`, `Delay`, `Reverb`, mute and
+solo on one page. `j` and `k` move between tracks, `h` and `l` between settings,
+and values edit as they do on the track page. On mute and solo, `=` switches on,
+`-` switches off, and `K` or `i` changes it.

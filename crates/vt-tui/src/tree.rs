@@ -92,7 +92,7 @@ impl App {
     fn open_item(&mut self) {
         match self.view {
             View::Chain => self.open_row(),
-            View::Phrase | View::Track => {}
+            View::Phrase | View::Track | View::Mixer => {}
         }
     }
 
