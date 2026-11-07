@@ -1366,11 +1366,21 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 
 **Done when** the author has used it in a jam, and the cost of a track with its slots full and moving is measured in a release build.
 
+Measured on 2026-11-07 by timing a render in a release build on an M5, as a share of real time:
+
+| Song | CPU |
+|---|---|
+| 1 track, no effects | 0.33% |
+| 1 track, 3 `Soft` moving | 0.78% |
+| 8 tracks, 3 `Soft` moving on each | 3.54% |
+| 8 tracks, 3 `Sine` moving on each | 5.06% |
+| 64 silent tracks with moving slots | 1.01% |
+
 ### M10 design: tracks that process
 
 Made with the author's agreement on 2026-11-07. Not built yet. A send is a track, as a return track is in Ableton, and the output goes through a master track.
 
-**Prior art.** Ableton's return tracks are empty tracks at the end, with whatever devices are put on them, and each track has a send knob per return. The Digitakt II and M8 have one fixed global delay and reverb, and the M8 has commands any step can use to change them. The Digitakt II's reverb has `PRE`, `DEC`, `FREQ`, `GAIN`, `HPF`, `LPF` and `VOL`, and its delay has `TIME` in 128ths, ping-pong and width among others. Vital's delay filters and saturates its feedback, and its reverb is a 16-line network. The Griesinger reverb in `clouds/dsp/fx/reverb.h`, MIT, is about 180 lines, and Rings, Elements and Beads use the same design.
+**Prior art.** Ableton's return tracks are empty tracks at the end, with whatever devices are put on them, and each track has a send knob per return. The Digitakt II and M8 have fixed global send effects, chorus as well as delay and reverb. The M8 has commands any step can use to change them, like `XDT` for delay time and `XRD` for reverb decay, and `XDR` sends its delay into its reverb. The Digitakt II's reverb has `PRE`, `DEC`, `FREQ`, `GAIN`, `HPF`, `LPF` and `VOL`, and its delay has `TIME` in 128ths, ping-pong and width among others. Vital's delay filters and saturates its feedback, and its reverb is a 16-line network. The Griesinger reverb in `clouds/dsp/fx/reverb.h`, MIT, is about 180 lines, and Rings, Elements and Beads use the same design.
 
 **Tracks.** Three fixed tracks sit after the others and can't be removed: `A` and `B`, which are returns, and `M`, the master.
 
@@ -1403,7 +1413,7 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 
 **Idle cost.** A return with silence going in and nothing ringing skips its effects. This, and the cost of a whole song, get measured in a release build.
 
-**Left out.** Buses, which are M11. Sends between returns. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
+**Left out.** Buses, which are M11. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
 
 **Issues.**
 
