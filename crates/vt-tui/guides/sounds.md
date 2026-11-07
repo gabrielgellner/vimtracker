@@ -6,9 +6,11 @@ and LFOs**.
 
 ## The synths
 
-`K` on Machine, at the top of the Sound page, chooses `Plaits`, and `K` on Voice below
-it chooses a synth. They come from Mutable Instruments' Plaits, and each has three
-settings, named on the page.
+`K` on Machine, at the top of the Sound page, chooses `Sample` or one of the synths, by
+typing its name. They come from Mutable Instruments' Plaits, and each has its own
+settings, named on the page below Machine. A track keeps each synth's settings, so
+trying another and coming back finds the first as you left it. One you haven't played on
+the track starts from its own defaults.
 
 `VA` is a square and a saw, for bass and leads. Try a note around `C-2`, and bring
 `Cut` down.
@@ -48,9 +50,9 @@ vocal, then the harsher waves of older digital synths, then all of them shuffled
 
 `6-op` is six-operator FM playing 96 DX7 patches, from basses and electric pianos to
 bells, organs, pads and brass. Each patch has envelopes of its own, which the track's
-first envelope shapes again, so give it a long Release to hear a patch's tail. A new
-track's `Bright` starts at `00`, which is dark, so set it to `80` to hear a patch as it was
-made. A new patch takes over on the next note.
+first envelope shapes again, so give it a long Release to hear a patch's tail. It starts
+on `E.PIANO 1`, with `Bright` and `Time` at `80`, as each patch was made. A new patch
+takes over on the next note.
 
 | Setting | Does |
 |---|---|
@@ -119,17 +121,18 @@ hat, and raise `Decay` for an open one.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
-The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
-and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves`, `6-op`, `Dust` or `Noise` note holds
+The first three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any
+synth, and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves`, `6-op`, `Dust` or `Noise` note holds
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
 Sustain for plucks. The drums, `String` and `Modal` die away by themselves. A track plays one note at a time.
 
 ## Accent
 
-`Accent`, below the three settings, is how hard a synth is struck, as Plaits has it. On
+`Accent`, the fourth setting of the voices that have it, is how hard a synth is struck,
+as Plaits has it. On
 `Kick`, `Snare` and `Hat` a harder strike is punchier and louder. On `String` and `Modal`
 it's brighter and rings longer, and on `6-op` it's the patch's own response to how hard a
-key is played. The other voices ignore it, and it's dimmed on them.
+key is played. The other voices don't have it.
 
 It starts at `CC`, Plaits' own strength, and it's apart from velocity: velocity is only
 how loud a note is, so a quiet note can still be struck hard. `ACC` sets it from a step,

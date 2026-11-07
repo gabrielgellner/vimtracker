@@ -997,6 +997,9 @@ mod tests {
         assert_eq!(patch_index(95.0 / 255.0), 95);
         assert_eq!(patch_index(1.0), 95, "past the last plays the last");
         assert_eq!(patch_name(patch_index(index_of("MARIMBA"))), "MARIMBA");
+        for (index, name) in vt_model::patch_names::PATCH_NAMES.iter().enumerate() {
+            assert_eq!(patch_name(index), *name, "the model's names are the bank's");
+        }
     }
 
     #[test]

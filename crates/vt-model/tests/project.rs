@@ -52,9 +52,13 @@ fn a_song_round_trips() {
     let mut song = Song::new(3);
     song.millibpm = 137_630;
     song.launch = Launch::every(12).unwrap();
-    song.tracks[1].machine = Machine::Plaits;
-    song.tracks[1].synth_voice = SynthVoice::Fm;
-    song.tracks[1].timbre = 0x40;
+    song.tracks[1].machine = Machine::Plaits(SynthVoice::Fm);
+    let index = vt_model::settings::SettingId::voice(SynthVoice::Fm, 1).unwrap();
+    song.tracks[1].set_setting(index, 0x40);
+    assert!(
+        !song.tracks[1].settings.is_empty(),
+        "a changed setting is kept"
+    );
     Arc::get_mut(song.tracks[0].chains.get_mut(&0).unwrap())
         .unwrap()
         .label = "bass".to_owned();

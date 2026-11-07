@@ -9,7 +9,7 @@ use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Machine, Song, level_gain};
+use vt_model::song::{Machine, Song, SynthVoice, level_gain};
 use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
@@ -364,8 +364,10 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
     let track = &mut song.tracks[0];
     (track.level, track.pan, track.cutoff, track.resonance) = (0x90, 0x30, 0x70, 0x20);
     (track.send_a, track.send_b) = (0x11, 0x22);
-    (track.harmonics, track.timbre, track.morph) = (0x33, 0x44, 0x55);
-    track.accent = 0x66;
+    track.machine = Machine::Plaits(SynthVoice::Kick);
+    for (setting, value) in [0x33, 0x44, 0x55, 0x66].into_iter().enumerate() {
+        track.set_machine_value(setting, value);
+    }
     let expected = LiveValues {
         level: 0x90,
         pan: 0x30,
@@ -373,10 +375,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         resonance: 0x20,
         send_a: 0x11,
         send_b: 0x22,
-        harmonics: 0x33,
-        timbre: 0x44,
-        morph: 0x55,
-        accent: 0x66,
+        machine: [0x33, 0x44, 0x55, 0x66],
         inserts: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
@@ -402,10 +401,10 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
     assert_eq!(live_after(cut.clone(), 3).cutoff, 0x60);
 
     let har = moved(Target::Har, |song| {
-        song.tracks[0].machine = Machine::Plaits;
-        song.tracks[0].harmonics = 0x80;
+        song.tracks[0].machine = Machine::Plaits(SynthVoice::default());
+        song.tracks[0].set_machine_value(0, 0x80);
     });
-    assert_eq!(live_after(har, 1).harmonics, 0xA0);
+    assert_eq!(live_after(har, 1).machine[0], 0xA0);
 
     let dly = moved(Target::SendA, |song| song.tracks[0].send_a = 0x40);
     assert_eq!(live_after(dly, 1).send_a, 0x60);

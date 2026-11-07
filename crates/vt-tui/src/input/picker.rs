@@ -4,13 +4,13 @@ use std::path::PathBuf;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
-use vt_model::action::TrackControl;
 use vt_model::envelope::Envelope;
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::scale::ScaleKind;
+use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Where};
-use vt_model::song::{FilterType, Machine, SynthVoice};
+use vt_model::song::{FilterType, Machine};
 use vt_model::step::{FxCommand, GateKind};
 
 use crate::guides::Guide;
@@ -58,15 +58,10 @@ pub enum Pick {
         track: usize,
         machine: Machine,
     },
-    /// Which synth a track plays.
-    SynthVoice {
+    /// A value for one of a track's machine's settings, such as 6-op's patch.
+    Setting {
         track: usize,
-        voice: SynthVoice,
-    },
-    /// A value for one of a track's settings, such as 6-op's patch.
-    Base {
-        track: usize,
-        control: TrackControl,
+        setting: SettingId,
         value: u8,
     },
     /// Play this phrase on a row of the chain.

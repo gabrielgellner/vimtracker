@@ -4,6 +4,7 @@ use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
+use vt_model::settings::MAX_MACHINE_SETTINGS;
 use vt_model::song::{DEFAULT_ACCENT, FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 use vt_model::target::Target;
@@ -77,10 +78,8 @@ pub struct LiveValues {
     pub resonance: u8,
     pub send_a: u8,
     pub send_b: u8,
-    pub harmonics: u8,
-    pub timbre: u8,
-    pub morph: u8,
-    pub accent: u8,
+    /// The machine's settings, in its order.
+    pub machine: [u8; MAX_MACHINE_SETTINGS],
     /// What each slot's settings are playing with, in the effect's order.
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
 }
@@ -383,10 +382,10 @@ impl TrackState {
             track.resonance,
             track.send_a,
             track.send_b,
-            track.harmonics,
-            track.timbre,
-            track.morph,
-            track.accent,
+            track.machine_value(0),
+            track.machine_value(1),
+            track.machine_value(2),
+            track.machine_value(3),
         ];
         for (command, base) in VALUE_COMMANDS.into_iter().zip(bases) {
             self.values[value_index(command)] = ValueLayers::at(base);
@@ -526,10 +525,7 @@ impl TrackState {
             resonance: moved(self.resonance.target, Target::Res),
             send_a: on_level(self.send_a, Target::SendA),
             send_b: on_level(self.send_b, Target::SendB),
-            harmonics: shown(synth.harmonics),
-            timbre: shown(synth.timbre),
-            morph: shown(synth.morph),
-            accent: shown(synth.accent),
+            machine: [synth.harmonics, synth.timbre, synth.morph, synth.accent].map(shown),
             inserts: self.resolved.map(|insert| {
                 let mut values = [0; MAX_PARAMS];
                 for (param, value) in values.iter_mut().enumerate() {

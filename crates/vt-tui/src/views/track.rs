@@ -5,13 +5,13 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_engine::dsp::six_op;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
-use vt_model::song::{SynthVoice, Track};
+use vt_model::settings::Kind;
+use vt_model::song::Track;
 use vt_model::target::Target;
 
 use crate::app::App;
@@ -137,10 +137,7 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
     match control {
         Control::Level => Some(live.level),
         Control::Base(TrackControl::Pan) => Some(live.pan),
-        Control::Base(TrackControl::Harmonics) => Some(live.harmonics),
-        Control::Base(TrackControl::Timbre) => Some(live.timbre),
-        Control::Base(TrackControl::Morph) => Some(live.morph),
-        Control::Base(TrackControl::Accent) => Some(live.accent),
+        Control::Setting(setting) => live.machine.get(setting).copied(),
         Control::Base(TrackControl::Cutoff) => Some(live.cutoff),
         Control::Base(TrackControl::Resonance) => Some(live.resonance),
         Control::Base(TrackControl::SendA) => Some(live.send_a),
@@ -149,10 +146,15 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
     }
 }
 
-/// The name of the patch a 6-op track's `Patch` chooses, shown on its row.
-fn patch_name(control: Control, track: &Track) -> Option<String> {
-    (control == Control::Base(TrackControl::Harmonics) && track.synth_voice == SynthVoice::SixOp)
-        .then(|| six_op::patch_name(usize::from(track.harmonics)))
+/// The choice a machine's setting that's a list is on, such as 6-op's patch, shown on its row.
+fn choice_name(control: Control, track: &Track) -> Option<String> {
+    let id = control.setting_on(track)?;
+    let Kind::List { choices, .. } = id.entry().kind else {
+        return None;
+    };
+    choices
+        .get(usize::from(track.setting(id)))
+        .map(|choice| (*choice).to_owned())
 }
 
 /// The value a control shows a bar for, and how. True is a mark either side of a centre.
@@ -162,12 +164,14 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Level => level(track.level),
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
         // Those with a middle that's a setting of its own show where they are around it.
-        Control::Base(TrackControl::Harmonics) => {
-            Some((track.harmonics, track.synth_voice.centred()[0]))
+        Control::Setting(_) => {
+            let id = control.setting_on(track)?;
+            match id.entry().kind {
+                Kind::Level { .. } => level(track.setting(id)),
+                Kind::Centred => Some((track.setting(id), true)),
+                Kind::List { .. } => None,
+            }
         }
-        Control::Base(TrackControl::Timbre) => level(track.timbre),
-        Control::Base(TrackControl::Morph) => Some((track.morph, track.synth_voice.centred()[2])),
-        Control::Base(TrackControl::Accent) => level(track.accent),
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),
         Control::Base(TrackControl::Resonance) => level(track.resonance),
         Control::Base(TrackControl::SendA) => level(track.send_a),
@@ -229,8 +233,10 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
     let mut used = 0;
-    for (column, control) in controls.iter().enumerate() {
-        if column > 0 {
+    for control in controls {
+        // A sound track's output is always on the right, even on a row with nothing on the left. A
+        // return or the master has only output, so it's all on the left.
+        if control.column() > 0 && track.is_sound() {
             spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
         }
         let label = app
@@ -239,7 +245,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             .and_then(|jump| jump.label(*control));
         spans.extend(name_spans(
             app,
-            control.label_on(track.synth_voice),
+            control.label_on(track),
             &label.map_or_else(String::new, String::from),
             SOUND_LABEL,
         ));
@@ -257,17 +263,12 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             theme::cursor(app.mode)
         } else if *control == Control::Swing && track.swing.is_none() {
             theme::dim()
-        } else if *control == Control::Base(TrackControl::Accent)
-            && !track.synth_voice.uses_accent()
-        {
-            // This voice ignores how hard it's struck.
-            theme::dim()
         } else {
             Style::new()
         };
         used += text.chars().count();
         spans.extend(value_spans(app, *control, text, style));
-        if let Some(name) = patch_name(*control, track) {
+        if let Some(name) = choice_name(*control, track) {
             // A patch number says nothing as a bar, so its name takes the bar's place.
             used += 1 + name.chars().count();
             spans.push(Span::raw(" "));
@@ -292,13 +293,9 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Machine => track.machine.name().to_owned(),
-        Control::SynthVoice => track.synth_voice.name().to_owned(),
-        Control::Base(TrackControl::Harmonics) => {
-            hex(track.harmonics.min(track.synth_voice.harmonics_top()))
-        }
-        Control::Base(TrackControl::Timbre) => hex(track.timbre),
-        Control::Base(TrackControl::Morph) => hex(track.morph),
-        Control::Base(TrackControl::Accent) => hex(track.accent),
+        Control::Setting(_) => control
+            .setting_on(track)
+            .map_or_else(String::new, |id| hex(track.setting(id))),
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
         Control::Base(TrackControl::Resonance) => hex(track.resonance),
         Control::Base(TrackControl::Pan) => hex(track.pan),

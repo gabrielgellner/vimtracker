@@ -3,14 +3,14 @@
 use ratatui::crossterm::event::KeyCode;
 use std::sync::Arc;
 
-use vt_engine::dsp::six_op;
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::{FilterType, Machine, SIX_OP_PATCHES, SynthVoice, Track, TrackKind};
+use vt_model::settings::{Kind, SettingId, voice_entries};
+use vt_model::song::{FilterType, Machine, Track, TrackKind};
 use vt_model::target::Target;
 
 use crate::app::{App, Entry};
@@ -60,8 +60,8 @@ pub enum EnvelopeField {
 pub enum Control {
     /// What makes the sound.
     Machine,
-    /// Which synth it plays.
-    SynthVoice,
+    /// One of the machine's settings, by its place among them.
+    Setting(usize),
     /// The file it plays.
     Sample,
     Mute,
@@ -175,14 +175,28 @@ pub const SAMPLE_ROWS: [&[Control]; 8] = [
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
-/// The Sound page of a track playing a synth.
-pub const SYNTH_ROWS: [&[Control]; 12] = [
+/// The Sound page of a track playing a synth with four settings: its settings down the left, and
+/// output on the right.
+pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[Control::Machine, Control::Level],
-    &[Control::SynthVoice, base(TrackControl::Pan)],
-    &[base(TrackControl::Harmonics), base(TrackControl::SendA)],
-    &[base(TrackControl::Timbre), base(TrackControl::SendB)],
-    &[base(TrackControl::Morph), Control::Swing],
-    &[base(TrackControl::Accent)],
+    &[Control::Setting(0), base(TrackControl::Pan)],
+    &[Control::Setting(1), base(TrackControl::SendA)],
+    &[Control::Setting(2), base(TrackControl::SendB)],
+    &[Control::Setting(3), Control::Swing],
+    &[Control::FilterType],
+    &[base(TrackControl::Cutoff)],
+    &[base(TrackControl::Resonance)],
+    &[base(TrackControl::Drive)],
+    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::HighCut)],
+];
+/// The same for a synth with three, whose last row has only its swing, on the right.
+pub const SYNTH3_ROWS: [&[Control]; 11] = [
+    &[Control::Machine, Control::Level],
+    &[Control::Setting(0), base(TrackControl::Pan)],
+    &[Control::Setting(1), base(TrackControl::SendA)],
+    &[Control::Setting(2), base(TrackControl::SendB)],
+    &[Control::Swing],
     &[Control::FilterType],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
@@ -240,7 +254,8 @@ impl Page {
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
             (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
-            (Self::Sound, Machine::Plaits) => &SYNTH_ROWS,
+            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
+            (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
             (Self::Fx, _) => &FX_ROWS,
         }
@@ -260,11 +275,7 @@ impl Control {
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Machine => "Machine",
-            Self::SynthVoice => "Voice",
-            Self::Base(TrackControl::Harmonics) => "Harm",
-            Self::Base(TrackControl::Timbre) => "Timbre",
-            Self::Base(TrackControl::Morph) => "Morph",
-            Self::Base(TrackControl::Accent) => "Accent",
+            Self::Setting(_) => "Setting",
             Self::Sample => "File",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
@@ -296,7 +307,25 @@ impl Control {
                 .params()
                 .get(param)
                 .map_or_else(|| self.label(), |found| found.name),
-            _ => self.label_on(track.synth_voice),
+            _ => self.label_on(track),
+        }
+    }
+
+    /// Which column of the Sound page it's in: output on the right, everything else on the left.
+    pub fn column(self) -> usize {
+        match self {
+            Self::Level
+            | Self::Swing
+            | Self::Base(TrackControl::Pan | TrackControl::SendA | TrackControl::SendB) => 1,
+            _ => 0,
+        }
+    }
+
+    /// The setting of the track's machine this is, if it's one.
+    pub fn setting_on(self, track: &Track) -> Option<SettingId> {
+        match self {
+            Self::Setting(setting) => track.machine_setting(setting),
+            _ => None,
         }
     }
 
@@ -309,25 +338,23 @@ impl Control {
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
+            Self::Setting(_) => self.setting_on(track).is_some(),
             _ => true,
         }
     }
 
-    /// The setting's name on screen, for a track playing this voice. A synth's three settings do
-    /// different things on each.
-    pub fn label_on(self, voice: SynthVoice) -> &'static str {
-        let [first, second, third] = voice.settings();
-        match self {
-            Self::Base(TrackControl::Harmonics) => first,
-            Self::Base(TrackControl::Timbre) => second,
-            Self::Base(TrackControl::Morph) => third,
-            _ => self.label(),
-        }
+    /// The setting's name on screen, on this track, as each machine names its own.
+    pub fn label_on(self, track: &Track) -> &'static str {
+        self.setting_on(track)
+            .map_or_else(|| self.label(), SettingId::name)
     }
 
     /// Whether this is two hex digits, entered as soon as the second is typed.
     fn is_hex(self) -> bool {
-        matches!(self, Self::Base(_) | Self::Level | Self::InsertParam(..))
+        matches!(
+            self,
+            Self::Base(_) | Self::Level | Self::InsertParam(..) | Self::Setting(_)
+        )
     }
 
     /// Whether this is picked from a list rather than typed, on this track.
@@ -342,7 +369,6 @@ impl Control {
             self,
             Self::Insert(_)
                 | Self::Machine
-                | Self::SynthVoice
                 | Self::Sample
                 | Self::Mute
                 | Self::Solo
@@ -470,13 +496,14 @@ impl App {
         if tracks.get(track).is_some_and(|t| !control.exists_on(t)) {
             return;
         }
-        let top = match control {
-            Control::Base(TrackControl::Harmonics) => tracks
-                .get(track)
-                .map_or(0xFF, |t| t.synth_voice.harmonics_top()),
-            _ => 0xFF,
-        };
-        let value = value.min(top);
+        if let Some(setting) = tracks.get(track).and_then(|t| control.setting_on(t)) {
+            self.apply(&Action::SetTrackSetting {
+                track,
+                setting,
+                value,
+            });
+            return;
+        }
         match control {
             Control::Base(control) => self.apply(&Action::SetTrackBase {
                 track,
@@ -494,11 +521,10 @@ impl App {
     fn adjust_control(&mut self, up: bool, count: usize, large: bool) {
         let control = self.track_control();
         let track = self.page_track();
-        // 6-op's `Patch` is a patch number, so it moves from the patch shown and stops at the last.
-        let top = match control {
-            Control::Base(TrackControl::Harmonics) => track.synth_voice.harmonics_top(),
-            _ => 0xFF,
-        };
+        // A machine's setting stops at its own top, as a list stops at its last choice.
+        let top = control
+            .setting_on(&track)
+            .map_or(0xFF, |id| id.entry().kind.top());
         let change = |value: u8| {
             let size = if large { HEX_JUMP } else { 1 };
             let moved = i64::from(value.min(top)) + if up { size } else { -size } * count as i64;
@@ -520,12 +546,10 @@ impl App {
                     self.toggle_control(control);
                 }
             }
-            Control::SynthVoice => {
-                let voice = next_in(&SynthVoice::ALL, track.synth_voice, up);
-                self.apply(&Action::SetTrackSynthVoice {
-                    track: self.cursor.track,
-                    voice,
-                });
+            Control::Setting(_) => {
+                if let Some(id) = control.setting_on(&track) {
+                    self.set_hex(control, change(track.setting(id)));
+                }
             }
             Control::Machine => {
                 let machine = next_in(&Machine::ALL, track.machine, up);
@@ -547,10 +571,6 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
-                    TrackControl::Harmonics => track.harmonics,
-                    TrackControl::Timbre => track.timbre,
-                    TrackControl::Morph => track.morph,
-                    TrackControl::Accent => track.accent,
                 };
                 self.set_hex(control, change(value));
             }
@@ -817,10 +837,6 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
-                    TrackControl::Harmonics => track.harmonics,
-                    TrackControl::Timbre => track.timbre,
-                    TrackControl::Morph => track.morph,
-                    TrackControl::Accent => track.accent,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));
@@ -838,12 +854,11 @@ impl App {
                     self.toggle_control(control);
                 }
             }
-            Control::SynthVoice => {
-                if track.synth_voice != fresh.synth_voice {
-                    self.apply(&Action::SetTrackSynthVoice {
-                        track: self.cursor.track,
-                        voice: fresh.synth_voice,
-                    });
+            Control::Setting(_) => {
+                if let Some(id) = control.setting_on(&track)
+                    && track.setting(id) != id.entry().default
+                {
+                    self.set_hex(control, id.entry().default);
                 }
             }
             Control::Machine => {
@@ -998,14 +1013,10 @@ impl App {
             self.open_machine_picker();
             return;
         }
-        if self.track_control() == Control::SynthVoice {
-            self.open_voice_picker();
-            return;
-        }
-        if self.track_control() == Control::Base(TrackControl::Harmonics)
-            && self.page_track().synth_voice == SynthVoice::SixOp
+        if let Some(id) = self.track_control().setting_on(&self.page_track())
+            && let Kind::List { choices, .. } = id.entry().kind
         {
-            self.open_patch_picker();
+            self.open_setting_picker(id, choices);
             return;
         }
         if let Control::Envelope(slot, field) = self.track_control() {
@@ -1185,38 +1196,22 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// List the synth voices, with what each does and the current one highlighted.
-    fn open_voice_picker(&mut self) {
+    /// List what a machine's setting can be, such as 6-op's patches, with the current one
+    /// highlighted.
+    fn open_setting_picker(&mut self, setting: SettingId, choices: &'static [&'static str]) {
         let track = self.cursor.track;
-        let current = self.page_track().synth_voice;
-        let items = SynthVoice::ALL
-            .map(|voice| Item {
-                label: format!("{:<8}{}", voice.name(), voice.meaning()),
-                pick: Pick::SynthVoice { track, voice },
-            })
-            .to_vec();
-        let position = SynthVoice::ALL.iter().position(|voice| *voice == current);
-        let mut picker = Picker::new("Voice", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
-    }
-
-    /// List 6-op's patches by name, with the current one highlighted.
-    fn open_patch_picker(&mut self) {
-        let track = self.cursor.track;
-        let current = self.page_track().harmonics.min(SIX_OP_PATCHES - 1);
-        let items = (0..SIX_OP_PATCHES)
-            .map(|patch| Item {
-                label: format!("{patch:02X}  {}", six_op::patch_name(usize::from(patch))),
-                pick: Pick::Base {
+        let current = self.page_track().setting(setting);
+        let items = (0..choices.len().min(0x100))
+            .map(|at| Item {
+                label: format!("{at:02X}  {}", choices[at]),
+                pick: Pick::Setting {
                     track,
-                    control: TrackControl::Harmonics,
-                    value: patch,
+                    setting,
+                    value: at as u8,
                 },
             })
             .collect();
-        let mut picker = Picker::new("Patch", items);
+        let mut picker = Picker::new(setting.name(), items);
         picker.move_highlight(isize::from(current));
         self.picker = Some(picker);
         self.mode = Mode::Picker;
@@ -1341,7 +1336,7 @@ impl App {
                     self.set_insert(slot, insert.with_value(param, value));
                 }
             }
-            Control::Base(_) | Control::Level => {
+            Control::Base(_) | Control::Level | Control::Setting(_) => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {
                     self.set_hex(control, value);
                 }
@@ -1389,7 +1384,7 @@ impl App {
                 }
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
-            Control::Lfo(..) | Control::FilterType | Control::Machine | Control::SynthVoice => {}
+            Control::Lfo(..) | Control::FilterType | Control::Machine => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);

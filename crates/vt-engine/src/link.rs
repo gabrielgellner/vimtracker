@@ -686,8 +686,7 @@ mod tests {
         let voices = vt_model::song::SynthVoice::ALL;
         let mut played = Song::new(voices.len());
         for (track, voice) in played.tracks.iter_mut().zip(voices) {
-            track.machine = vt_model::song::Machine::Plaits;
-            track.synth_voice = voice;
+            track.machine = vt_model::song::Machine::Plaits(voice);
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
             *phrase.step_mut(0).unwrap() = "C-2 7F TIM40 ---00 ---00".parse().unwrap();
             *phrase.step_mut(4).unwrap() = "G-2 7F MOR20 HAR90 ---00".parse().unwrap();

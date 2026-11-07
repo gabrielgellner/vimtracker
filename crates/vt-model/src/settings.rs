@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS};
 use crate::lfo::LFOS_PER_TRACK;
 use crate::patch_names::PATCH_NAMES;
-use crate::song::{DEFAULT_ACCENT, Machine, SynthVoice, Track};
+use crate::song::{DEFAULT_ACCENT, SynthVoice, Track};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
@@ -25,6 +25,17 @@ pub enum Kind {
         choices: &'static [&'static str],
         wraps: bool,
     },
+}
+
+impl Kind {
+    /// The highest value it takes: a list's last choice, or a level's top.
+    pub fn top(self) -> u8 {
+        match self {
+            Self::Level { top } => top,
+            Self::Centred => 0xFF,
+            Self::List { choices, .. } => choices.len().saturating_sub(1).min(0xFF) as u8,
+        }
+    }
 }
 
 /// One setting, as its owner declares it.
@@ -471,6 +482,21 @@ impl SettingId {
     }
 }
 
+/// Songs store a setting by its key, which never changes.
+impl serde::Serialize for SettingId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.key())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SettingId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let key = String::deserialize(deserializer)?;
+        Self::from_key(&key)
+            .ok_or_else(|| serde::de::Error::custom(format!("there's no setting called {key}")))
+    }
+}
+
 /// The events, which act on a note and aren't settings. Their labels share the grid with
 /// settings', so none may match one.
 pub const EVENTS: [FxCommand; 5] = [
@@ -484,10 +510,7 @@ pub const EVENTS: [FxCommand; 5] = [
 impl FxCommand {
     /// The setting this command locks on a track, if it's one in the table.
     pub fn setting_on(self, track: &Track) -> Option<SettingId> {
-        let voice = |setting| match track.machine {
-            Machine::Plaits if track.is_sound() => SettingId::voice(track.synth_voice, setting),
-            _ => None,
-        };
+        let voice = |setting| track.machine_setting(setting);
         match self {
             Self::Vol => SettingId::track(0),
             Self::Pan => SettingId::track(1),
@@ -525,6 +548,7 @@ mod tests {
 
     use super::*;
     use crate::insert::{DistortType, Insert};
+    use crate::song::Machine;
 
     fn labels(ids: impl Iterator<Item = SettingId>) -> Vec<String> {
         ids.filter_map(SettingId::label).collect()
@@ -636,15 +660,14 @@ mod tests {
     #[test]
     fn commands_show_the_label_of_what_they_lock_on_the_track() {
         let mut track = Track {
-            machine: Machine::Plaits,
-            synth_voice: SynthVoice::Kick,
+            machine: Machine::Plaits(SynthVoice::Kick),
             ..Track::default()
         };
         assert_eq!(FxCommand::Cut.label_on(&track), "CUT");
         assert_eq!(FxCommand::Har.label_on(&track), "PNCH");
         assert_eq!(FxCommand::Acc.label_on(&track), "ACC");
         assert_eq!(FxCommand::Del.label_on(&track), "DEL");
-        track.synth_voice = SynthVoice::VirtualAnalog;
+        track.machine = Machine::Plaits(SynthVoice::VirtualAnalog);
         assert_eq!(
             FxCommand::Acc.label_on(&track),
             "ACC",

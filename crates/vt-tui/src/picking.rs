@@ -171,7 +171,7 @@ impl App {
                         .sample
                         .as_deref()
                         .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample)),
-                    Machine::Plaits => state.synth_voice.name(),
+                    Machine::Plaits(voice) => voice.name(),
                 };
                 let number = if state.is_sound() {
                     format!("{:02}", track + 1)
@@ -537,17 +537,14 @@ impl App {
                     Some(Pick::Machine { track, machine }) => {
                         self.apply(&Action::SetTrackMachine { track, machine });
                     }
-                    Some(Pick::SynthVoice { track, voice }) => {
-                        self.apply(&Action::SetTrackSynthVoice { track, voice });
-                    }
-                    Some(Pick::Base {
+                    Some(Pick::Setting {
                         track,
-                        control,
+                        setting,
                         value,
                     }) => {
-                        self.apply(&Action::SetTrackBase {
+                        self.apply(&Action::SetTrackSetting {
                             track,
-                            control,
+                            setting,
                             value,
                         });
                     }

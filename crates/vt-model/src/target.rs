@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::insert::{INSERTS, MAX_PARAMS};
 use crate::lfo::LFOS_PER_TRACK;
-use crate::song::{Machine, Track, TrackKind};
+use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// Something an LFO or an envelope can move, in the same units as its FX command.
@@ -140,6 +140,7 @@ impl Target {
             Self::Har => Some(0),
             Self::Tim => Some(1),
             Self::Mor => Some(2),
+            Self::Acc => Some(3),
             _ => None,
         }
     }
@@ -150,14 +151,10 @@ impl Target {
     /// work.
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
-            Self::Har | Self::Tim | Self::Mor => {
-                track.is_sound() && track.machine == Machine::Plaits
-            }
-            Self::Acc => {
-                track.is_sound()
-                    && track.machine == Machine::Plaits
-                    && track.synth_voice.uses_accent()
-            }
+            Self::Har | Self::Tim | Self::Mor | Self::Acc => self
+                .machine_setting()
+                .and_then(|setting| track.machine_setting(setting))
+                .is_some(),
             Self::Cut | Self::Res | Self::SendA | Self::SendB | Self::Pitch => track.is_sound(),
             Self::Pan => track.kind != TrackKind::Master,
             Self::Slot { slot, param } => track
@@ -172,8 +169,8 @@ impl Target {
     /// longer there says so.
     pub fn name_on(self, track: &Track) -> String {
         if let Some(setting) = self.machine_setting() {
-            return if self.exists_on(track) {
-                track.synth_voice.settings()[setting].to_owned()
+            return if let Some(id) = track.machine_setting(setting) {
+                id.name().to_owned()
             } else {
                 format!("{} ---", self.info().name)
             };
@@ -202,7 +199,7 @@ impl Target {
     /// What it does, for a list to choose from, on this track.
     pub fn meaning_on(self, track: &Track) -> String {
         if self.machine_setting().is_some() {
-            return format!("A setting of {}", track.synth_voice.name());
+            return format!("A setting of {}", track.machine.name());
         }
         let Self::Slot { slot, .. } = self else {
             return self.info().meaning.to_owned();
@@ -318,13 +315,12 @@ impl FxCommand {
 mod tests {
     use super::*;
     use crate::insert::Insert;
-    use crate::song::{Song, SynthVoice};
+    use crate::song::{Machine, Song, SynthVoice};
 
     #[test]
     fn every_target_has_its_own_place() {
         let track = Track {
-            machine: Machine::Plaits,
-            synth_voice: SynthVoice::String,
+            machine: Machine::Plaits(SynthVoice::String),
             inserts: [Insert::ALL[2]; INSERTS],
             ..Track::default()
         };
@@ -339,13 +335,12 @@ mod tests {
     fn only_a_voice_that_is_struck_offers_accent() {
         for voice in SynthVoice::ALL {
             let track = Track {
-                machine: Machine::Plaits,
-                synth_voice: voice,
+                machine: Machine::Plaits(voice),
                 ..Track::default()
             };
             assert_eq!(
                 Target::Acc.exists_on(&track),
-                voice.uses_accent(),
+                crate::settings::SettingId::voice(voice, 3).is_some(),
                 "{voice:?}"
             );
         }
@@ -391,8 +386,7 @@ mod tests {
     #[test]
     fn a_track_only_offers_the_settings_of_what_is_in_its_slots() {
         let mut track = Track {
-            machine: Machine::Plaits,
-            synth_voice: SynthVoice::String,
+            machine: Machine::Plaits(SynthVoice::String),
             ..Track::default()
         };
         assert_eq!(Target::on_track(&track), Target::ALL.to_vec());
@@ -438,14 +432,14 @@ mod tests {
         assert_eq!(Target::Har.name_on(&track), "Har ---");
         assert_eq!(FxCommand::Har.name_on(&track), "HAR");
 
-        track.machine = Machine::Plaits;
+        track.machine = Machine::Plaits(SynthVoice::default());
         assert!(Target::on_track(&track).contains(&Target::Har));
-        track.synth_voice = SynthVoice::Fm;
+        track.machine = Machine::Plaits(SynthVoice::Fm);
         assert_eq!(Target::Har.name_on(&track), "Ratio");
         assert_eq!(Target::Mor.name_on(&track), "Feedback");
         assert_eq!(FxCommand::Tim.name_on(&track), "Index");
         assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
-        track.synth_voice = SynthVoice::Kick;
+        track.machine = Machine::Plaits(SynthVoice::Kick);
         assert_eq!(Target::Har.name_on(&track), "Punch");
     }
 

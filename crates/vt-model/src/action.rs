@@ -15,10 +15,11 @@ use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
+use crate::settings::SettingId;
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
     Chain, ChainEntry, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section, SectionStart,
-    Song, SynthVoice, Track, lowest_unused,
+    Song, Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
 
@@ -273,10 +274,11 @@ pub enum Action {
         track: usize,
         machine: Machine,
     },
-    /// Choose which synth a track plays.
-    SetTrackSynthVoice {
+    /// Set one of a track's machine's settings.
+    SetTrackSetting {
         track: usize,
-        voice: SynthVoice,
+        setting: SettingId,
+        value: u8,
     },
     /// Choose a track's filter.
     SetFilterType {
@@ -340,10 +342,6 @@ pub enum TrackControl {
     Drive,
     LowCut,
     HighCut,
-    Harmonics,
-    Timbre,
-    Morph,
-    Accent,
 }
 
 /// An FX slot with its value within what its command takes.
@@ -629,10 +627,6 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Drive => track.drive = *value,
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
-                TrackControl::Harmonics => track.harmonics = *value,
-                TrackControl::Timbre => track.timbre = *value,
-                TrackControl::Morph => track.morph = *value,
-                TrackControl::Accent => track.accent = *value,
             }
         }
         Action::SetInsert {
@@ -905,11 +899,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .machine = *machine;
         }
-        Action::SetTrackSynthVoice { track, voice } => {
+        Action::SetTrackSetting {
+            track,
+            setting,
+            value,
+        } => {
             next.tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
-                .synth_voice = *voice;
+                .set_setting(*setting, *value);
         }
         Action::SetFilterType { track, filter } => {
             next.tracks
