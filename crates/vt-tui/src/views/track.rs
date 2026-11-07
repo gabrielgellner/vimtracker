@@ -137,6 +137,46 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     }
 }
 
+/// A setting's value, with a jump's label over its first letter if it has one.
+fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<Span<'static>> {
+    let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
+    match label {
+        Some(label) => vec![
+            Span::styled(label.to_string(), theme::jump_label()),
+            Span::styled(text.chars().skip(1).collect::<String>(), style),
+        ],
+        None => vec![Span::styled(text, style)],
+    }
+}
+
+/// A setting's name in its column, with any labels from a jump over the letters just after what's
+/// been typed, as flash.nvim draws them, since that's where the eye is while searching.
+fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Vec<Span<'static>> {
+    let letters: Vec<char> = name.chars().collect();
+    let typed = app.field_jump.as_ref().and_then(|jump| {
+        let at = name.to_lowercase().find(&jump.query)?;
+        Some(at + jump.query.len())
+    });
+    let Some(typed) = typed.filter(|_| !labels.is_empty()) else {
+        return vec![Span::styled(format!("{name:<room$}"), theme::dim())];
+    };
+    let count = labels.chars().count();
+    let before = typed.min(room.saturating_sub(count));
+    let after: String = letters.iter().skip(before + count).collect();
+    let used = before + count + after.chars().count();
+    vec![
+        Span::styled(
+            letters[..before.min(letters.len())]
+                .iter()
+                .collect::<String>(),
+            theme::dim(),
+        ),
+        Span::styled(labels.to_owned(), theme::jump_label()),
+        Span::styled(after, theme::dim()),
+        Span::raw(" ".repeat(room.saturating_sub(used))),
+    ]
+}
+
 /// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
 fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
     let current = app.track_control();
@@ -146,9 +186,17 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         if column > 0 {
             spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
         }
-        let label = format!("{:<SOUND_LABEL$}", control.label_on(track.synth_voice));
+        let label = app
+            .field_jump
+            .as_ref()
+            .and_then(|jump| jump.label(*control));
+        spans.extend(name_spans(
+            app,
+            control.label_on(track.synth_voice),
+            &label.map_or_else(String::new, String::from),
+            SOUND_LABEL,
+        ));
         used = SOUND_LABEL;
-        spans.push(Span::styled(label, theme::dim()));
         let typing = *control == current && app.mode == Mode::Insert;
         let mut text = if typing {
             format!("{}_", app.entry.text)
@@ -166,7 +214,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             Style::new()
         };
         used += text.chars().count();
-        spans.push(Span::styled(text, style));
+        spans.extend(value_spans(app, *control, text, style));
         if let Some((value, centred)) = bar_value(*control, track) {
             let live = app
                 .live
@@ -262,17 +310,18 @@ fn width(control: Control) -> usize {
     }
 }
 
-/// The column names over a row.
-fn heading(controls: &[Control]) -> Line<'static> {
-    let mut text = " ".repeat(NAME_WIDTH);
-    for control in controls {
-        text.push_str(&format!(
-            "{:<width$}",
-            control.label(),
-            width = width(*control)
-        ));
+/// The column names over some rows, with a jump's labels for those rows on each name.
+fn heading<const N: usize>(app: &App, rows: &[[Control; N]]) -> Line<'static> {
+    let mut spans = vec![Span::raw(" ".repeat(NAME_WIDTH))];
+    for column in 0..N {
+        let control = rows[0][column];
+        let labels: String = rows
+            .iter()
+            .filter_map(|row| app.field_jump.as_ref()?.label(row[column]))
+            .collect();
+        spans.extend(name_spans(app, control.label(), &labels, width(control)));
     }
-    Line::styled(text, theme::dim())
+    Line::from(spans)
 }
 
 /// A row of settings, with the cursor on one of them.
@@ -297,7 +346,7 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let room = width(*control);
         let mut gap = room.saturating_sub(text.chars().count());
         let length = text.chars().count();
-        spans.push(Span::styled(text, style));
+        spans.extend(value_spans(app, *control, text, style));
         // A drawing of an LFO's shape follows its name, with the column the same width without one.
         if let (Control::Lfo(slot, LfoField::Shape), Some(ids)) = (*control, app.lfo_images) {
             let before = LFO_SHAPE_NAME.saturating_sub(length);
@@ -439,12 +488,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
         }
         Page::Mod => {
-            lines.push(heading(&ENVELOPES[0]));
+            lines.push(heading(app, &ENVELOPES));
             for (slot, controls) in ENVELOPES.iter().enumerate() {
                 lines.push(row(app, track, &format!("Env {}", slot + 1), controls));
             }
             lines.push(Line::raw(""));
-            lines.push(heading(&LFOS[0]));
+            lines.push(heading(app, &LFOS));
             for (slot, controls) in LFOS.iter().enumerate() {
                 lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
             }

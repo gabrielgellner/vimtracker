@@ -14,6 +14,7 @@ hat pattern.
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row |
 | `h` `l` | Previous or next setting. `0` and `$` go to the ends |
+| `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
@@ -44,6 +45,17 @@ In kitty, a curve in a box under the filter's rows shows what the filter and uti
 let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's
 playing `Cut` and `Res`, including step commands, LFOs and envelopes, but it
 doesn't show `Drive`'s saturation.
+
+## Jumping to a setting
+
+Press `/` and type part of a setting's name, like `cu`, and each match on this page
+gets a label over its value, and again in its name, just after what you've typed. Press a label to land on
+that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `Ctrl-O`
+comes back after a jump.
+
+A label is never a letter that could carry on your search, so you can keep typing to
+narrow it, and a match keeps its label as you do. `/` searches the page you're on,
+and `H` and `L` change page.
 
 ## Output
 
