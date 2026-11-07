@@ -176,23 +176,23 @@ place its own.
 
 An FX column can loop on its own, apart from the notes: a lane. It keeps
 counting across the phrase's repeats, so a lane of 3 against a loop of 16 lands
-somewhere new each pass, as tracks of different lengths do.
+somewhere new each pass, as tracks of different lengths do. A column follows
+the notes until you give it a lane, so changing the phrase's loop changes it too.
 
 | Keys | Does, on an FX column |
 |---|---|
-| `gs` | Start the column's lane on the cursor's step |
-| `ge` | End the lane on the cursor's step |
-| `:len 3` | Make the lane 3 steps long |
-| `:len` | Follow the phrase's loop again |
+| `:lane 3` | Make it a lane of 3 steps, from the cursor's step |
+| `:lane` | Follow the notes again |
+| `gs`, `ge`, `:len 3` | On a lane, set its start, end or length |
 
-On the note or velocity column these set the phrase's loop, as above. On a
-column with a lane, `gg` and `G` go to its first and last steps, and `5G` to
-its fifth. A
-column with a lane shows its length in the title, like `FX1:3`, dims the steps
-outside its lane, and has its own `>` while playing. Editing works on rows as
-usual, whatever loop a column plays. Anything that starts a track's chain over
-starts its lanes over too, so playing from a step hears what playing to it
-would. A glide in a lane goes to the next value in that lane.
+On a column without a lane, and on the note and velocity columns, `gs`, `ge`
+and `:len` set the phrase's loop. On a lane, `gg` and `G` go to its first and
+last steps, and `5G` to its fifth. A lane shows its length in the title, like
+`FX1:3`, dims the steps outside it, and has its own `>` while playing. Sliding
+the loop with `]l` moves lanes with it. Editing works on rows as usual,
+whatever loop a column plays. Anything that starts a track's chain over starts
+its lanes over too, so playing from a step hears what playing to it would. A
+glide in a lane goes to the next value in that lane.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and

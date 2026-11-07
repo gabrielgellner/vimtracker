@@ -825,12 +825,14 @@ impl Phrase {
     pub fn slide(&mut self, by: isize) {
         let room = MAX_PHRASE_STEPS.saturating_sub(self.steps.len());
         let to = (self.start as isize).saturating_add(by);
+        // Where the loop started, counted in the steps stored after any are added in front.
+        let mut was = self.start;
         if to < 0 {
             let added = to.unsigned_abs().min(room);
             self.steps
                 .splice(0..0, std::iter::repeat_n(Step::default(), added));
             self.start = 0;
-            // Lanes stay on the steps they had.
+            was += added;
             for lane in self.lanes.iter_mut().flatten() {
                 lane.start += added;
             }
@@ -841,6 +843,16 @@ impl Phrase {
             self.start = (to as usize).min(highest);
         }
         self.store_up_to(self.start + self.length);
+        // Lanes move with the loop, as they're set where it is. One that would go above the first
+        // step stops there.
+        let moved = self.start as isize - was as isize;
+        let mut lanes = self.lanes;
+        for lane in lanes.iter_mut().flatten() {
+            lane.start = lane.start.saturating_add_signed(moved);
+        }
+        for (slot, lane) in lanes.into_iter().enumerate() {
+            self.set_lane(slot, lane);
+        }
     }
 
     /// Move the loop's steps later, wrapping round within it. Negative moves them earlier, and steps
@@ -1066,9 +1078,17 @@ mod tests {
             }),
         );
         assert_eq!(phrase.steps().len(), 20);
-        // Sliding steps in front, or doubling the loop over it, moves it with its steps.
+        // Sliding the loop moves it with the loop, whether steps are added in front or not.
         phrase.slide(-2);
-        assert_eq!(phrase.lane(1).unwrap().start, 6);
+        assert_eq!(
+            phrase.lane(1).unwrap().start,
+            4,
+            "on the same step of the loop"
+        );
+        assert_eq!(phrase.start(), 0);
+        phrase.slide(3);
+        assert_eq!(phrase.lane(1).unwrap().start, 7);
+        // Doubling the loop moves one after it down with its steps.
         let mut doubled = Phrase::new(4);
         doubled.grow_to(8);
         doubled.set_lane(

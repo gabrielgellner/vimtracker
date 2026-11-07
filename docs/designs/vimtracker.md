@@ -1508,7 +1508,9 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. E
 
 **An example.** A phrase loop of 16, with FX 1's loop rows 0 to 2. FX 1 reads rows 0, 1, 2, 0 and so on. The phrase's second pass starts at place 16, and FX 1 reads row `16 % 3 = 1` there. If instead the chain goes on to a phrase of 8 rows with its own FX 1 loop of 3, that phrase starts at place 16, and FX 1 reads its row `16 % 3 = 1`.
 
-**Built** as designed, with the keys and display agreed: on an FX column, `gs` and `ge` set its lane, `:len 3` its length and `:len` alone follows the phrase again. A lane shows its length in the title, like `FX1:3`, dims the rows outside it, and has its own `>`.
+**Built** as designed. A lane shows its length in the title, like `FX1:3`, dims the rows outside it, and has its own `>`.
+
+**Making a lane, revised with the author after using it.** At first `gs`, `ge` and `:len` on an FX column made it a lane. That turned out to catch a habit: reaching for `ge` to shorten the phrase while on an FX column quietly gave that column a lane, and it stopped following the notes. So a lane is now asked for by name. `:lane 3` makes the cursor's FX column a lane of 3 steps from the cursor's step, and `:lane` alone puts it back to following the notes. On a column that's already a lane, `gs`, `ge` and `:len` set the lane. On one that isn't, they set the phrase's loop, as on the notes. Sliding the loop moves lanes with it, as a lane is set where the loop is. Doubling the loop leaves a lane's length alone.
 
 **To decide with the author** before issue 1: the keys that set a column's loop, likely `gs`, `ge` and `:len` on an FX column, and how the playheads and dimmed rows look.
 
