@@ -20,12 +20,13 @@ only takes effect once its value is typed.
 | `HAR` | A synth's first setting |
 | `TIM` | A synth's second setting |
 | `MOR` | A synth's third setting |
-| `1AM` `2MX` `3GN` | A setting in a slot on the FX page, below |
+| `1 Amount` | A setting in a slot on the FX page, below |
 
-A slot's settings are `TY` for `Type`, by its place in the list from `00`, `AM` for
-`Amount`, `BI` for `Bits` in whole bits, `MX` for `Mix` and `GN` for `Gain`. So `1AM80` sets
-`Amount` in slot 1, and `1BI06` sets 6 bits. A command belongs to the slot rather than the
-effect, and does nothing if what's in the slot doesn't have that setting.
+A slot's settings can be set from a step, the same way as the rest. `K` on a command lists them
+while the slot holds something, under the names they have in an LFO's `Dest`, like `1 Amount`, or
+type the slot's number and the first letters, like `1am`. `Bits` takes whole bits, so `06` is 6 bits,
+and `Type` takes its place in the list, from `00`. A step's setting belongs to the slot and its place
+in the effect's list, so it reads as whatever's now there, and does nothing in an empty slot.
 
 `VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback

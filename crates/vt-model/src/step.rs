@@ -1,6 +1,6 @@
 //! One position in a phrase, and the fields it holds.
 
-use crate::insert::{INSERTS, Setting};
+use crate::insert::{INSERTS, MAX_PARAMS};
 use std::fmt;
 use std::str::FromStr;
 
@@ -42,23 +42,24 @@ pub enum FxCommand {
     Off,
     Ret,
     Cha,
-    /// Sets a setting of what's in a slot, by the slot's number and the setting's two letters.
+    /// Sets a setting of what's in a slot, by its place in the effect's list. It reads as the
+    /// setting's name on screen, and a file holds the slot and place, like `1.2`.
     Slot {
         slot: u8,
-        setting: Setting,
+        param: u8,
     },
 }
 
-/// The names of the commands for slots' settings, by slot and then by `Setting`.
-const SLOT_NAMES: [[&str; Setting::ALL.len()]; INSERTS] = [
-    ["1TY", "1AM", "1BI", "1MX", "1GN"],
-    ["2TY", "2AM", "2BI", "2MX", "2GN"],
-    ["3TY", "3AM", "3BI", "3MX", "3GN"],
+/// How a file names the commands for slots' settings.
+const SLOT_NAMES: [[&str; MAX_PARAMS]; INSERTS] = [
+    ["1.0", "1.1", "1.2", "1.3"],
+    ["2.0", "2.1", "2.2", "2.3"],
+    ["3.0", "3.1", "3.2", "3.3"],
 ];
 
 impl FxCommand {
     /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 14 + INSERTS * Setting::ALL.len()] = [
+    pub const ALL: [Self; 14 + INSERTS * MAX_PARAMS] = [
         Self::Vol,
         Self::Pan,
         Self::Cut,
@@ -73,25 +74,22 @@ impl FxCommand {
         Self::Off,
         Self::Ret,
         Self::Cha,
-        Self::slot(0, Setting::Type),
-        Self::slot(0, Setting::Amount),
-        Self::slot(0, Setting::Bits),
-        Self::slot(0, Setting::Mix),
-        Self::slot(0, Setting::Gain),
-        Self::slot(1, Setting::Type),
-        Self::slot(1, Setting::Amount),
-        Self::slot(1, Setting::Bits),
-        Self::slot(1, Setting::Mix),
-        Self::slot(1, Setting::Gain),
-        Self::slot(2, Setting::Type),
-        Self::slot(2, Setting::Amount),
-        Self::slot(2, Setting::Bits),
-        Self::slot(2, Setting::Mix),
-        Self::slot(2, Setting::Gain),
+        Self::slot(0, 0),
+        Self::slot(0, 1),
+        Self::slot(0, 2),
+        Self::slot(0, 3),
+        Self::slot(1, 0),
+        Self::slot(1, 1),
+        Self::slot(1, 2),
+        Self::slot(1, 3),
+        Self::slot(2, 0),
+        Self::slot(2, 1),
+        Self::slot(2, 2),
+        Self::slot(2, 3),
     ];
 
-    const fn slot(slot: u8, setting: Setting) -> Self {
-        Self::Slot { slot, setting }
+    const fn slot(slot: u8, param: u8) -> Self {
+        Self::Slot { slot, param }
     }
 
     /// What it does, for a list to show.
@@ -111,13 +109,7 @@ impl FxCommand {
             Self::Off => "Start the release after xx units",
             Self::Ret => "Retrigger. x is the fade, y the units between",
             Self::Cha => "Play the note with a chance of xx out of FF",
-            Self::Slot { setting, .. } => match setting {
-                Setting::Type => "A slot's effect's Type, by its place in the list",
-                Setting::Amount => "A slot's effect's Amount",
-                Setting::Bits => "A slot's effect's Bits, in whole bits",
-                Setting::Mix => "A slot's effect's Mix",
-                Setting::Gain => "A slot's effect's Gain",
-            },
+            Self::Slot { .. } => "A setting of what's in a slot on the FX page",
         }
     }
 
@@ -125,7 +117,6 @@ impl FxCommand {
     pub fn highest(self) -> u8 {
         match self {
             Self::Vol | Self::Dly | Self::Rev => MAX_LEVEL,
-            Self::Slot { setting, .. } => setting.highest(),
             _ => 0xFF,
         }
     }
@@ -147,7 +138,7 @@ impl FxCommand {
             Self::Off => "OFF",
             Self::Ret => "RET",
             Self::Cha => "CHA",
-            Self::Slot { slot, setting } => SLOT_NAMES[slot as usize][setting as usize],
+            Self::Slot { slot, param } => SLOT_NAMES[slot as usize][param as usize],
         }
     }
 

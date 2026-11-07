@@ -357,7 +357,7 @@ mod tests {
         song.tracks[0].envelopes[1].depth = 0x40;
         let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
         for step in 0..8 {
-            *phrase.step_mut(step).unwrap() = "C-4 -- 1AM80g 2GN40 3MX20h".parse().unwrap();
+            *phrase.step_mut(step).unwrap() = "C-4 -- 1.180g 2.340 3.220h".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(song, &pool));
         let (mut handle, mut rt) = connect(engine);

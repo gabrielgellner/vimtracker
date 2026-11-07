@@ -7,7 +7,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::Scope;
-use vt_model::step::{FxSlot, Mark, Note, Step};
+use vt_model::song::Track;
+use vt_model::step::{Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
 use crate::input::mode::Mode;
@@ -22,29 +23,34 @@ const GUTTER: usize = 9;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
-/// A slot on screen: its text, its mark, and the gap before the next.
-const SLOT_WIDTH: usize = 8;
+/// Room for a slot's command on screen, which can be a setting's name like `1 Amount`.
+const COMMAND_WIDTH: usize = 8;
+
+/// A slot on screen: its command and value, its mark, and the gap before the next.
+const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
 
 /// The gap and mark after a slot's value.
 const MARK_WIDTH: usize = 2;
 
-/// A step's text on screen.
-fn step_text(step: &Step) -> String {
+/// A step's text on screen, naming a slot's settings from what's on this track.
+fn step_text(step: &Step, track: Option<&Track>) -> String {
     let velocity = step
         .velocity
         .map_or("--".to_owned(), |v| format!("{v:02X}"));
     let mut text = format!("{} {velocity}", step.note);
     for slot in &step.fx {
-        let bare = FxSlot {
-            mark: Mark::Lock,
-            ..*slot
+        let name = match (slot.command, track) {
+            (Some(command), Some(track)) => command.name_on(track),
+            (Some(command), None) => command.name().to_owned(),
+            (None, _) => "---".to_owned(),
         };
+        let name: String = name.chars().take(COMMAND_WIDTH).collect();
         let mark = if slot.is_value() {
             slot.mark.glyph()
         } else {
             ' '
         };
-        text.push_str(&format!(" {bare} {mark}"));
+        text.push_str(&format!(" {name:<COMMAND_WIDTH$}{:02X} {mark}", slot.value));
     }
     text
 }
@@ -68,8 +74,11 @@ fn field_range(field: Field) -> (usize, usize) {
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
-        Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + 3),
-        Field::FxValue(slot) => (fx_start(slot) + 3, fx_start(slot) + 5),
+        Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + COMMAND_WIDTH),
+        Field::FxValue(slot) => (
+            fx_start(slot) + COMMAND_WIDTH,
+            fx_start(slot) + COMMAND_WIDTH + 2,
+        ),
     }
 }
 
@@ -221,7 +230,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let body_width = phrase
         .steps()
         .iter()
-        .map(|step| step_text(step).len())
+        .map(|step| step_text(step, app.track_here()).len())
         .max()
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
@@ -296,7 +305,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(spans));
             continue;
         };
-        let text = step_text(step);
+        let text = step_text(step, app.track_here());
         let marker = if playhead == Some(index) { ">" } else { " " };
         let plays = extent.plays(index);
         let on_beat = row.rem_euclid(BEAT_STEPS as isize) == 0;

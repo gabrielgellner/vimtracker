@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::insert::{INSERTS, MAX_PARAMS};
 use crate::song::Track;
+use crate::step::FxCommand;
 
 /// Something an LFO or an envelope can move, in the same units as its FX command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -149,11 +150,40 @@ impl Target {
     }
 }
 
+impl FxCommand {
+    /// The name on screen, on this track: a slot's setting reads as it does in `Dest`, from what's
+    /// in the slot.
+    pub fn name_on(self, track: &Track) -> String {
+        match self {
+            Self::Slot { slot, param } => Target::Slot { slot, param }.name_on(track),
+            command => command.name().to_owned(),
+        }
+    }
+
+    /// The command for typed text: its name, or a slot's number and the start of a setting's name.
+    pub fn typed(text: &str, track: &Track) -> Option<Self> {
+        if let Some(command) = Self::from_name(text).filter(|command| command.name() == text) {
+            return Some(command);
+        }
+        let slot = usize::from(text.bytes().next()?.checked_sub(b'1')?);
+        let start = text.get(1..)?.to_lowercase();
+        let param = track
+            .inserts
+            .get(slot)?
+            .params()
+            .iter()
+            .position(|param| param.name.to_lowercase().starts_with(&start))?;
+        Some(Self::Slot {
+            slot: slot as u8,
+            param: param as u8,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::insert::Insert;
-    use crate::step::FxCommand;
 
     #[test]
     fn every_target_has_its_own_place() {
@@ -222,6 +252,21 @@ mod tests {
         // What's chosen still reads if the slot empties.
         track.inserts[1] = Insert::Empty;
         assert_eq!(Target::Slot { slot: 1, param: 2 }.name_on(&track), "2 ---");
+    }
+
+    #[test]
+    fn a_command_reads_as_its_setting_and_can_be_typed() {
+        let mut track = Track::default();
+        track.inserts[0] = Insert::ALL[1];
+        let amount = FxCommand::Slot { slot: 0, param: 1 };
+        assert_eq!(amount.name_on(&track), "1 Amount");
+        assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
+        assert_eq!(FxCommand::typed("1AM", &track), Some(amount));
+        assert_eq!(FxCommand::typed("CUT", &track), Some(FxCommand::Cut));
+        // An empty slot has no settings to type, and nor does a name that isn't there.
+        assert_eq!(FxCommand::typed("2AM", &track), None);
+        assert_eq!(FxCommand::typed("1ZZ", &track), None);
+        assert_eq!(FxCommand::typed("9AM", &track), None);
     }
 
     #[test]

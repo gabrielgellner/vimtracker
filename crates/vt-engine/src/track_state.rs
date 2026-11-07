@@ -2,7 +2,7 @@
 
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
-use vt_model::insert::{INSERTS, Insert, MAX_PARAMS, Setting};
+use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
@@ -80,9 +80,9 @@ pub struct LiveValues {
 }
 
 /// The commands whose values last, in the order `TrackState::values` keeps them.
-const VALUE_COMMANDS: [FxCommand; 24] = {
+const VALUE_COMMANDS: [FxCommand; 9 + INSERTS * MAX_PARAMS] = {
     let slots = FxCommand::ALL;
-    let mut commands = [FxCommand::Vol; 24];
+    let mut commands = [FxCommand::Vol; 9 + INSERTS * MAX_PARAMS];
     let first = [
         FxCommand::Vol,
         FxCommand::Pan,
@@ -101,8 +101,8 @@ const VALUE_COMMANDS: [FxCommand; 24] = {
     }
     // The commands for slots' settings come last in the full list, and they all hold.
     let mut slot = 0;
-    while slot < INSERTS * Setting::ALL.len() {
-        commands[first.len() + slot] = slots[slots.len() - INSERTS * Setting::ALL.len() + slot];
+    while slot < INSERTS * MAX_PARAMS {
+        commands[first.len() + slot] = slots[slots.len() - INSERTS * MAX_PARAMS + slot];
         slot += 1;
     }
     commands
@@ -201,7 +201,7 @@ pub struct TrackState {
     /// What each of its effects keeps.
     inserts: [InsertState; INSERTS],
     /// What's heard for each setting of each slot, before modulation, as a step command gives it.
-    slot_values: [[f32; Setting::ALL.len()]; INSERTS],
+    slot_values: [[f32; MAX_PARAMS]; INSERTS],
     /// What each slot's effect is playing with now.
     resolved: [Insert; INSERTS],
     high_cut: Smoothed,
@@ -254,10 +254,15 @@ fn pan_position(value: f32) -> f32 {
 /// first place, as nothing that calls this passes them.
 /// Where a slot's setting starts, from what's on the track. Nothing if the slot's empty.
 pub fn slot_base(command: FxCommand, track: &Track) -> u8 {
-    let FxCommand::Slot { slot, setting } = command else {
+    let FxCommand::Slot { slot, param } = command else {
         return 0;
     };
-    track.inserts[usize::from(slot)].read(setting).unwrap_or(0)
+    let insert = track.inserts[usize::from(slot)];
+    insert
+        .params()
+        .get(usize::from(param))
+        .and_then(|found| insert.read(found.setting))
+        .unwrap_or(0)
 }
 
 fn value_index(command: FxCommand) -> usize {
@@ -308,9 +313,6 @@ impl TrackState {
                 ValueLayers::at(0),
                 ValueLayers::at(0),
                 ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
             ],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
@@ -329,7 +331,7 @@ impl TrackState {
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: [InsertState::default(); INSERTS],
-            slot_values: [[0.0; Setting::ALL.len()]; INSERTS],
+            slot_values: [[0.0; MAX_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
@@ -449,7 +451,7 @@ impl TrackState {
                 };
                 let setting = found.setting;
                 let added = offsets[target.index()] * setting.span();
-                let value = self.slot_values[slot][setting as usize] + added;
+                let value = self.slot_values[slot][param] + added;
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
@@ -682,8 +684,8 @@ impl TrackState {
             FxCommand::Har => self.synth[0] = value / 255.0,
             FxCommand::Tim => self.synth[1] = value / 255.0,
             FxCommand::Mor => self.synth[2] = value / 255.0,
-            FxCommand::Slot { slot, setting } => {
-                self.slot_values[usize::from(slot)][setting as usize] = value;
+            FxCommand::Slot { slot, param } => {
+                self.slot_values[usize::from(slot)][usize::from(param)] = value;
                 return;
             }
             _ => {}

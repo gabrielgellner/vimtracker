@@ -499,7 +499,7 @@ fn a_slots_settings_read_as_set_with_nothing_moving_them() {
 #[test]
 fn a_step_locks_a_slots_setting_until_the_next_note() {
     let locked = song(&[
-        "C-4 -- 1AM80 ---00 ---00",
+        "C-4 -- 1.180 ---00 ---00",
         "--- -- ---00 ---00 ---00",
         "C-4 -- ---00 ---00 ---00",
     ]);
@@ -512,7 +512,7 @@ fn a_step_locks_a_slots_setting_until_the_next_note() {
 #[test]
 fn a_step_holds_a_slots_setting_past_the_next_note() {
     let held = song(&[
-        "C-4 -- 1MX20h ---00 ---00",
+        "C-4 -- 1.220h ---00 ---00",
         "--- -- ---00 ---00 ---00",
         "C-4 -- ---00 ---00 ---00",
     ]);
@@ -525,11 +525,11 @@ fn a_step_holds_a_slots_setting_past_the_next_note() {
 #[test]
 fn a_step_glides_a_slots_setting() {
     let glide = song(&[
-        "C-4 -- 1GN00g ---00 ---00",
+        "C-4 -- 1.300g ---00 ---00",
         "--- -- ---00 ---00 ---00",
         "--- -- ---00 ---00 ---00",
         "--- -- ---00 ---00 ---00",
-        "--- -- 1GN80 ---00 ---00",
+        "--- -- 1.380 ---00 ---00",
     ]);
     let glide = with_distort(glide, DistortType::Soft);
     let halfway = slot_live(glide.clone(), 2)[GAIN];
@@ -539,7 +539,7 @@ fn a_step_glides_a_slots_setting() {
 
 #[test]
 fn only_the_slot_a_command_names_changes() {
-    let mut other = with_distort(song(&["C-4 -- 2AM80 ---00 ---00"]), DistortType::Soft);
+    let mut other = with_distort(song(&["C-4 -- 2.180 ---00 ---00"]), DistortType::Soft);
     other.tracks[0].inserts[1] = other.tracks[0].inserts[0];
     let live = live_after(other, 1);
     assert_eq!(live.inserts[0][AMOUNT], 0x40);
@@ -547,21 +547,15 @@ fn only_the_slot_a_command_names_changes() {
 }
 
 #[test]
-fn a_command_does_nothing_without_its_setting() {
-    // An empty slot, and Bits on a type with an Amount, and the reverse.
-    let empty = song(&["C-4 -- 1AM80 ---00 ---00"]);
+fn a_command_does_nothing_in_an_empty_slot() {
+    let empty = song(&["C-4 -- 1.180 ---00 ---00"]);
     assert_eq!(slot_live(empty, 1), [0; 4]);
-    let bits_on_soft = with_distort(song(&["C-4 -- 1BI02 ---00 ---00"]), DistortType::Soft);
-    assert_eq!(slot_live(bits_on_soft, 1)[AMOUNT], 0x40);
-    let amount_on_crush = with_distort(song(&["C-4 -- 1AMFF ---00 ---00"]), DistortType::Crush);
-    let plain = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Crush);
-    assert_eq!(slot_live(amount_on_crush, 1), slot_live(plain, 1));
 }
 
 #[test]
-fn a_step_sets_whole_bits_in_bits() {
+fn a_command_goes_by_its_place_so_it_means_bits_on_crush() {
     // Bits show as a place in the list, from 2 up, so 6 bits is the fifth.
-    let crushed = with_distort(song(&["C-4 -- 1BI06 ---00 ---00"]), DistortType::Crush);
+    let crushed = with_distort(song(&["C-4 -- 1.106 ---00 ---00"]), DistortType::Crush);
     assert_eq!(slot_live(crushed, 1)[AMOUNT], 4);
 }
 

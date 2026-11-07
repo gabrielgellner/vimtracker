@@ -44,8 +44,7 @@ impl DistortType {
     }
 }
 
-/// A setting a slot can have, for step commands to name. Each has its own two letters, across every
-/// effect, and a command does nothing in a slot whose effect doesn't have that setting.
+/// What a slot's setting is, for what moves it to read and write it on its own scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Setting {
     Type,
@@ -58,17 +57,6 @@ pub enum Setting {
 impl Setting {
     /// Every setting.
     pub const ALL: [Self; 5] = [Self::Type, Self::Amount, Self::Bits, Self::Mix, Self::Gain];
-
-    /// Its two letters, after the slot's number in a step command.
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::Type => "TY",
-            Self::Amount => "AM",
-            Self::Bits => "BI",
-            Self::Mix => "MX",
-            Self::Gain => "GN",
-        }
-    }
 
     /// The highest value a step can give it.
     pub const fn highest(self) -> u8 {
@@ -95,7 +83,7 @@ impl Setting {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
     pub name: &'static str,
-    /// What step commands call it.
+    /// What it is, on its own scale.
     pub setting: Setting,
     /// What it chooses between, in order, or nothing for a value in hex.
     pub choices: &'static [&'static str],
@@ -262,8 +250,8 @@ impl Insert {
         })
     }
 
-    /// A setting as a step command gives it: whole bits for `Bits`, and a place for `Type`. Nothing
-    /// if there's no effect here.
+    /// A setting as a step gives it: whole bits for `Bits`, and a place for `Type`. Nothing if
+    /// there's no effect here.
     pub fn read(self, setting: Setting) -> Option<u8> {
         let Self::Distort(distort) = self else {
             return None;
@@ -408,16 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn no_two_settings_share_a_code_and_each_is_declared_once_per_effect() {
-        for (at, setting) in Setting::ALL.into_iter().enumerate() {
-            for other in &Setting::ALL[at + 1..] {
-                assert_ne!(setting.code(), other.code());
-            }
-        }
+    fn no_two_settings_of_an_effect_share_a_name() {
         for params in [&DISTORT_PARAMS, &CRUSH_PARAMS] {
             for (at, param) in params.iter().enumerate() {
                 for other in &params[at + 1..] {
-                    assert_ne!(param.setting, other.setting);
+                    assert_ne!(param.name, other.name);
                 }
             }
         }

@@ -1371,7 +1371,8 @@ impl App {
                 self.entry.text.push(c.to_ascii_uppercase());
                 if self.entry.text.len() == 3 {
                     let name = std::mem::take(&mut self.entry.text);
-                    match FxCommand::from_name(&name) {
+                    let track = self.song().tracks.get(self.cursor.track);
+                    match track.and_then(|track| FxCommand::typed(&name, track)) {
                         Some(command) => {
                             self.entry.command = Some(command);
                             self.cursor.field = Field::FxValue(slot);

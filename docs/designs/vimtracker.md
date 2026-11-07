@@ -1305,17 +1305,17 @@ LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan,
                                                       An LFO's Depth and Phase
 ```
 
-**Registering.** An owner declares its targets in a static table: name, group, short code, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two share a code.
+**Registering.** An owner declares its targets in a static table: name, group, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two settings of an effect share a name.
 
 **Targets at first.**
 
 | Target | `Dest` | Step command |
 |---|---|---|
 | The existing ten | `Cut`, `Pan` and so on | `CUT`, `PAN` and so on |
-| A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | `1AM`, `2MX`, `3GN`, `1BI`, `1TY` |
+| A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | Named the same |
 | An LFO's settings | `LFO 1 Depth`, `LFO 1 Phase` | None |
 
-A step command is the slot's number and the setting's two letters, so its text always says where it goes. It does nothing if what's in the slot doesn't have that setting, and it takes locks, holds and glides. Targets belong to the slot and not the effect: after moving an effect, `1AM80` still goes to slot 1.
+A step can set any of these. A slot's setting has one command, holding the slot and its place in the effect's list, and it reads as the setting's name, as `Dest` does, so nothing has to be generated or learned, and a new effect adds no commands. FX columns are 8 characters wide for this, as small terminals aren't supported. A file holds the slot and place, like `1.1`. It takes locks, holds and glides, and `K` lists what's on the track, or `1am` types it by the slot and the start of a name. A command belongs to the slot and place, and not the effect: after changing what's in a slot, it reads as whatever's now there, and does nothing in an empty slot.
 
 There's no special case for what moves a target. A stepped setting rounds the result to a whole step, so an LFO on `Bits` just steps, and one on `Type` jumps between types. Choosing to do that is the author's.
 
