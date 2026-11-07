@@ -57,11 +57,28 @@ loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
 | Row | Does |
 |---|---|
+| Fill | `Ramp` between the ends, `Random`, `Wave` or `Alternate`. `r` picks anew |
 | From, To | The ends. `~` swaps them |
-| Curve | Bends the line. Above 0 it moves early, and below 0 late |
-| S | Eases both ends. Above 0 makes an S, and below 0 the reverse |
-| Fill | `Ramp` between them, or `Random`. `r` picks anew |
+| Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
+| S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
 | Where | Which rows change, with `Amount` below it for some |
+
+`Wave` swings between the ends, for movement like a pulse across a hat's
+velocities, and shows these in place of Curve and S:
+
+| Row | Does |
+|---|---|
+| Shape | `Sine`, `Tri`, `Saw`, `Ramp` or `Square`, as on an LFO |
+| Rate | How long one swing takes, like `1/2`, `1/8d`, `2 bars` or `7st` |
+| Phase | Where in the swing the first row selected falls, in degrees |
+
+Each row's value comes from where it falls in time, counting from the first row
+selected, so the movement keeps its timing however the notes are spaced. As on an
+LFO, `Sine` and `Tri` start half way and head for `To`.
+
+`Alternate` gives the rows it changes one value and then the other, so every
+other hit flips however they're spaced. `Run` sets how many rows each value gets
+in a row: `1` gives `70 40 70 40` and `2` gives `70 70 40 40`.
 
 The ends start as the first and last values selected, or if those match, the
 lowest and highest.
@@ -82,7 +99,8 @@ selected, and a row holding a different command keeps it.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+`, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
-`.` applies the same shape to another selection, with its own ends.
+`.` applies the same shape to another selection. A ramp or random fill takes that
+selection's own ends, and `Wave` and `Alternate` keep theirs.
 
 ## Values and small edits
 

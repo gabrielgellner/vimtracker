@@ -9,6 +9,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::samples::SamplePool;
+use vt_model::shape::FillKind;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::{App, Field};
@@ -1344,7 +1345,7 @@ fn s_opens_on_the_first_and_last_values_and_previews_a_ramp() {
 fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
     let start = velocities("10", "7F", "40");
     let (mut app, _rt) = app_of(&start);
-    keys(&mut app, "lvGS+=<Enter>");
+    keys(&mut app, "lvGSj+=<Enter>");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.shape.is_none());
     assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
@@ -1369,7 +1370,7 @@ fn panel_keys_move_rows_change_values_and_swap_the_ends() {
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
     keys(&mut app, "lvGS");
     let shape = |app: &App| app.shape.as_ref().unwrap().shape;
-    keys(&mut app, "~");
+    keys(&mut app, "j~");
     assert_eq!((shape(&app).from, shape(&app).to), (0x40, 0x10));
     assert_eq!(vel(&app), ["40", "30", "--", "10"]);
     keys(&mut app, "~j");
@@ -1413,12 +1414,12 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
         |app: &App| -> Vec<String> { steps(app).iter().map(|s| s[7..12].to_owned()).collect() };
     assert_eq!(fx(&app), ["CUT10", "---00", "---00", "CUT30"]);
 
-    keys(&mut app, "K");
+    keys(&mut app, "jK");
     assert_eq!(app.mode, Mode::Shape, "K isn't a list on From");
     assert!(app.status.contains("Fill"), "{}", app.status);
 
     // Where, from Commands to All rows, writes the command on the empty rows.
-    keys(&mut app, "jjjjjKall<Enter>");
+    keys(&mut app, "jjjjKall<Enter>");
     assert_eq!(app.mode, Mode::Shape);
     assert_eq!(fx(&app), ["CUT10", "CUT1B", "CUT25", "CUT30"]);
 
@@ -1462,7 +1463,7 @@ fn random_fill_stays_in_range_and_rerolls() {
     let rows = vec!["C-4 40 ---00 ---00 ---00".to_owned(); 64];
     let (mut app, _rt) = app_of(&rows);
     keys(&mut app, "lvGS");
-    keys(&mut app, "ji20jjjKrandom<Enter>");
+    keys(&mut app, "Krandom<Enter>jji20");
     assert_eq!(app.mode, Mode::Shape);
     let before = vel(&app);
     assert!(
@@ -1476,6 +1477,106 @@ fn random_fill_stays_in_range_and_rerolls() {
     keys(&mut app, "u");
     assert_eq!(steps(&app).len(), 64);
     assert!(vel(&app).iter().all(|v| v == "40"));
+}
+
+#[test]
+fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    assert!(panel(&app).rows().contains(&ShapeRow::Curve));
+    // It opens on Fill, and `=` goes on past Random.
+    assert_eq!(panel(&app).row, ShapeRow::Fill);
+    keys(&mut app, "==");
+    assert_eq!(panel(&app).shape.kind, FillKind::Wave);
+    let rows = panel(&app).rows();
+    assert!(!rows.contains(&ShapeRow::Curve));
+    assert!(rows.contains(&ShapeRow::Rate));
+    assert_eq!(panel(&app).row, ShapeRow::Fill, "the cursor stays on Fill");
+
+    keys(&mut app, "jjj=");
+    assert_eq!(panel(&app).row, ShapeRow::Wave);
+    assert_eq!(panel(&app).shape.wave.name(), "Tri");
+    keys(&mut app, "j");
+    assert_eq!(panel(&app).shape.rate.to_string(), "1/2");
+    keys(&mut app, "i1/4<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "1/4");
+    keys(&mut app, "i2hz<Enter>");
+    assert_eq!(
+        panel(&app).shape.rate.to_string(),
+        "1/4",
+        "not free of the grid"
+    );
+    keys(&mut app, "i7st<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "7st");
+    keys(&mut app, "x+");
+    assert_eq!(
+        panel(&app).shape.rate.to_string(),
+        "1/4",
+        "faster, as on an LFO"
+    );
+    keys(&mut app, "j=_");
+    assert_eq!(panel(&app).shape.phase, 285, "it goes round");
+    keys(&mut app, "i90<Enter>");
+    assert_eq!(panel(&app).shape.phase, 90);
+    keys(&mut app, "i360<Enter>");
+    assert_eq!(panel(&app).shape.phase, 90, "that's refused");
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.phase, 0);
+
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.history.undo_depth(), 1);
+}
+
+#[test]
+fn the_panel_alternates_and_a_list_chooses_a_wave() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    keys(&mut app, "K");
+    keys(&mut app, "alt<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Alternate);
+    assert_eq!(vel(&app), ["10", "40", "--", "10"]);
+    keys(&mut app, "jjj");
+    assert_eq!(panel(&app).row, ShapeRow::Run);
+    keys(&mut app, "=");
+    assert_eq!(panel(&app).shape.run, 2);
+    assert_eq!(vel(&app), ["10", "10", "--", "40"]);
+    keys(&mut app, "i0<Enter>");
+    assert_eq!(panel(&app).shape.run, 2, "that's refused");
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.run, 1);
+
+    // Fill's list also goes to Wave, and Shape and Rate have lists of their own.
+    keys(&mut app, "kkk");
+    keys(&mut app, "Kwav<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Wave);
+    keys(&mut app, "jjjKsquare<Enter>");
+    assert_eq!(panel(&app).shape.wave.name(), "Square");
+    keys(&mut app, "jK");
+    assert!(app.picker.is_some());
+    keys(&mut app, "<Esc><Esc>");
+}
+
+#[test]
+fn dot_keeps_the_two_values_a_wave_or_alternate_moves_between() {
+    let (mut app, _rt) = app_with(&[
+        "C-4 10 ---00 ---00 ---00",
+        "C-4 10 ---00 ---00 ---00",
+        "C-4 70 ---00 ---00 ---00",
+        "C-4 7F ---00 ---00 ---00",
+        "C-4 00 ---00 ---00 ---00",
+        "C-4 30 ---00 ---00 ---00",
+    ]);
+    keys(&mut app, "lvjjS");
+    keys(&mut app, "Kalt<Enter>");
+    keys(&mut app, "ji20ji60<Enter>");
+    assert_eq!(vel(&app)[..3], ["20", "60", "20"]);
+    keys(&mut app, "3jvjj.");
+    assert_eq!(vel(&app)[3..], ["20", "60", "20"]);
 }
 
 #[test]
@@ -1530,7 +1631,7 @@ fn the_transport_keys_work_with_the_panel_open() {
 fn a_shape_on_an_fx_column_snaps_to_its_commands_top() {
     let (mut app, _rt) = app_with(&["--- -- VOL10 ---00 ---00", "--- -- VOL20 ---00 ---00"]);
     keys(&mut app, "llvGS");
-    keys(&mut app, "jiFF");
+    keys(&mut app, "jjiFF");
     assert_eq!(app.shape.as_ref().unwrap().shape.to, 0xF8);
     keys(&mut app, "<Enter>");
     assert_eq!(steps(&app)[1], "--- -- VOLF8 ---00 ---00");

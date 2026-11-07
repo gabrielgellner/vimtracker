@@ -2,12 +2,11 @@
 
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
-use vt_model::lfo::{Destination, LFOS_PER_TRACK};
+use vt_model::lfo::{Destination, LFOS_PER_TRACK, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 
 use crate::dsp::filter::{Channel, Coefficients, Trim};
-use crate::dsp::lfo::wave;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::rng::Pcg32;
