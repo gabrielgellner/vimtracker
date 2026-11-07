@@ -643,7 +643,7 @@ Made by the author on 2026-11-06, after a review of this section:
 14. **A kit is a list of sounds to choose from**, so `:kit 909` adds no tracks and `:kit 909 all` does. Direct jumps are what keep lots of sounds quick on Elektron and Maschine, so tracks get a picker, `Space fb`, like Vim buffers. A drum rack would reverse "a track is one sound", so it waits for evidence from play.
 15. **The first synth comes before FX inserts**, so a song can have bass as well as drums while song mode is tested: Plaits' virtual analog model, its main output, as the `VA` machine, one note at a time. A track holds a `machine`, and its Harm, Timbre and Morph work as `Cut` does, with step commands, LFOs and envelopes. The Sound page is two columns with a bar beside each value, after the M8's instrument page. The M8's Macrosynth is a port of Braids, an earlier Mutable module, so this differs from it. Added on 2026-11-06, ahead of M9.
 16. **FM and Kick follow it**, ported from Plaits as well, for a wider palette with no large tables: FM for bass, bells and keys, and an 808-style bass drum. The page names a synth's three settings for what they do on each machine, and step commands stay `HAR`, `TIM` and `MOR` across all of them. Added on 2026-11-06.
-17. **Plaits is one machine with a choice of voices**, as the M8 has Macrosynth with its `SHAPE`, rather than each voice being a machine. Added on 2026-11-06.
+17. **Plaits is one machine with a choice of voices**, as the M8 has Macrosynth with its `SHAPE`, rather than each voice being a machine. Added on 2026-11-06. Reversed by decision 29.
 18. **Snare and Hat complete a synth kit** with Kick. Their noise comes from the track's seeded generator, so each hit differs while a render repeats for a seed. Added on 2026-11-06.
 19. **Fold adds a third tone colour**, from Plaits' waveshaping model, its main output. Its tables are generated from the formulas in `lookup_tables.py` and kept in the source. Added on 2026-11-06.
 20. **Small drawings use kitty's graphics protocol where it's available**, as plain one-colour lines of solid dots, after Elektron's screens: the envelopes, each LFO's shape, and the filter's curve, worked out from the filter's exact response. Other terminals get Braille diagrams and no icons, as does `--no-graphics`. Inside tmux, this needs `allow-passthrough on`. Placeholder characters mark where an image goes, so it stays in its pane and windows can draw over it. A changed image takes a new id, because kitty doesn't reconnect unchanged placeholders to a replaced image. Added on 2026-11-06.
@@ -655,6 +655,7 @@ Made by the author on 2026-11-06, after a review of this section:
 26. **Waves and 6-op follow from issue #134**, from Plaits' wavetable and six-operator engines, their main outputs. Their waves and DX7 patch banks are taken from Plaits' generated `resources.cc` into binary files built into the program, as regenerating them needs Plaits' Python 2 scripts. 6-op plays one note with no second voice for overlapping tails, which the track's envelope gives instead, and it releases its own envelopes when the track's does. `Patch` is the patch's number, `00` to `5F` across the three banks, rather than a level cut into 96 pieces, so `=` moves one patch and a step's `HAR20` plays patch `20`; the track page names the one chosen, and `K` lists them by name. Each costs about 0.2% of a core on an M5, less than `FM`, as both read a sine table. Added on 2026-11-07.
 27. **String, Modal, Dust and Noise follow from issue #134**, Plaits' struck and noisy voices, their main outputs, through Plaits' limiter as it has them. String and Modal ring out from a strike and die away by themselves, as the drums do. Dust and Noise sound until the note ends, shaped by the track's envelope rather than Plaits' low-pass gate. Plaits keeps three strings so one rings under the next note, and here a track plays one, as it does every voice. Each new note starts with its settings where they are, rather than sweeping from the last note's, as each note is a new voice. A pluck puts little into Plaits' string, so it's about 20 dB quieter than the other voices; a gain of 8 before the limiter brings it level, and the limiter catches the brightest plucks. Their shared parts of stmlib, with the drums' filter, are in one file. Each costs at most 0.5% of a core on an M5, and Dust's diffuser takes a voice to 16.8 KB, allocated ahead of time like the rest. Added on 2026-11-07.
 28. **Accent is a synth's own setting, apart from velocity**, after Elektron, where velocity and tone lock apart. It's Plaits' accent, how hard a sound is struck, which Plaits takes from its level input along with its loudness. Here velocity stays loudness alone, so a quiet note can be struck hard. Accent is a track setting below the three, from `00` to `FF`, starting at `CC`, Plaits' 0.8 with nothing patched, so songs made before it sound the same. `ACC` sets it from a step and holds, and LFOs and envelopes can move it. It changes the voices Plaits gives an accent to: the drums' strike, `String` and `Modal`'s brightness and ring, and `6-op`'s velocity. The others ignore it, so it's dimmed on them and isn't offered as a destination. Added on 2026-11-07.
+29. **Settings are registered once, and steps lock them by id**, after Elektron's locks and DAW automation, rather than through a list of named commands. Each has a long name for finding it and a label of up to 4 characters for the grid, and each Plaits voice registers its own settings under their real names, so a lock belongs to its voice. Events stay a short list of their own. The [M14 design](#m14-design-one-list-of-settings) has the rest. Added on 2026-11-07.
 
 ## Alternatives Considered
 
@@ -769,8 +770,8 @@ Made by the author on 2026-11-06, after a review of this section:
 This list comes after Milestones after M3, in order, as jams ask for it. Each entry gets its own short design.
 
 1.  **Tables.** Per-note tables with their own speed, independent column rates, and aux tables, modelled on the M8. The author wants cycles that drift across notes, such as a 5-step table cycle against a 16-step phrase, which the M8's `TIC00` per-note mode allows. Open questions: how transpose and volume columns get a rate and loop point, end-of-table behaviour, when a cycle's position resets, a command that tests whether a note is held (a community M8 tutorial says tables cannot detect note-off, and the manual documents no such test), FX addressing such as `HOP` beyond row `F` and IDs above `FF`, table `00` as an aux table, and a safe rule for zero-time `HOP` loops. First command candidates: `HOP`, `THO`, `TIC`, `TBL`, `TBX`, `RND`, `REP`, `IFC`.
-2.  **Sample slicing and waveform view.** The slicer moves up to M14, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
-3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M14.
+2.  **Sample slicing and waveform view.** The slicer moves up to M15, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
+3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M15.
 4.  **Song view and looping.** Moved up to M8, apart from per-track speed and grooves, which stay here. Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
 5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
 6.  **Smaller items.** Chasing held values on play, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
@@ -1094,7 +1095,8 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M11: Live lengths.** A track's length changes while it plays, and the playhead stays on its row. **Tests:** as [its design](#m11-design-live-lengths) lists.
 *   **M12: Lanes.** FX columns with their own loops, which drift against the notes. **Tests:** as [its design](#m12-design-lanes) lists.
 *   **M13: Pulses.** A note gets a length in pulses and a gate type, so rows take their own time. **Tests:** as [its design](#m13-design-pulses) lists.
-*   **M14: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
+*   **M14: One list of settings.** Every setting a step can lock or a source can move registers once, with a long name and a short label for the grid, and each machine, Plaits' voices included, registers its own. **Tests:** as [its design](#m14-design-one-list-of-settings) lists.
+*   **M15: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
 ### M4 design: marks
 
@@ -1153,7 +1155,7 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 **Data.** `Track` gains `sample: Option<String>` and `name: String`. `Step.instrument`, `Song.instruments`, `Instrument` and instrument volume go, as `Level` already does that job. A note's gain is its velocity times the track's values. `FORMAT_VERSION` becomes 2, and older songs are refused with a message, with no conversion. A track that played several samples has to be rebuilt as several tracks.
 
-**No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M14, or sooner if a jam asks.
+**No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M15, or sooner if a jam asks.
 
 **Step text.** `NOTE VEL FX FX FX`, as in `C-4 64 CUT40 ---00 RET14`. Field and column numbers shift down by one.
 
@@ -1175,7 +1177,7 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 ### M6 design: editing across tracks
 
-Column folding stays in M14. This adds one thing: a Visual selection can reach other tracks with `W` and `B`, and the operators that already work on a selection then work on all of them, as one undo step.
+Column folding stays in M15. This adds one thing: a Visual selection can reach other tracks with `W` and `B`, and the operators that already work on a selection then work on all of them, as one undo step.
 
 *   **Rows.** A selection is rows of the focused phrase and a run of tracks. `W` and `B` extend the run and leave the cursor on its track, so reaching a shorter track doesn't change the rows. On another track those rows count from that phrase's own loop start, as the neighbour columns show them, on the phrase it's on level with the cursor. Rows a phrase doesn't have are left out.
 *   **Columns.** The same columns on each track. A neighbour column only shows notes, so it lights up by row even when the selection is FX columns.
@@ -1285,7 +1287,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 **Steps and modulation.** See the modulation table below. This replaces the first plan, of `DST` and `DMX` commands reaching only the first `Distort`, by the author's decision.
 
-**Left out.** Other effects, which are M14. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Moving `Drive` onto the list.
+**Left out.** Other effects, which are M15. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Moving `Drive` onto the list.
 
 **To judge by ear, as they may change the rules:**
 
@@ -1439,7 +1441,7 @@ Measured on 2026-11-07 by timing a render in a release build on an M5, 8 tracks 
 
 Sleeping doesn't save anything overall yet, as checking every slot of every track each frame costs about what it saves. It's still needed, for a slot's tail to carry on after its note ends.
 
-**Left out.** Buses, which are M14. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
+**Left out.** Buses, which are M15. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
 
 **Issues.**
 
@@ -1622,6 +1624,127 @@ Made with the author's agreement on 2026-11-07, after a review, and revised with
 | 4096 rows, the most a phrase stores | 4.45% | 4.45% |
 
 The walk costs nothing to see at ordinary lengths, and about 2.7% of a core across 8 tracks of the longest phrases, as each step adds up every row's pulses. Running totals worked out in `Published::new` would remove that, if long phrases come up in use.
+
+### M14 design: one list of settings
+
+Made with the author's agreement on 2026-11-07. Not built yet. Every setting that a step can lock or a source can move is registered once, with a long name for finding it and a short label for the grid. Step commands that only set a parameter stop being a list of their own, and each machine, Plaits' voices included, registers its own settings under their real names.
+
+**Prior art.**
+
+*   **Elektron:** any parameter on a page can be locked on a trig, with no list of commands.
+*   **Ableton and Bitwig:** any parameter can be automated, chosen by its name.
+*   **Renoise:** keeps tracker effect commands, and locks a device's parameters by device and parameter number beside them, so it has two systems.
+*   **The M8 and Polyend Tracker:** keep three-letter commands for a small screen with no keyboard.
+*   **Vital:** registers named controls, which modulation connects to by name, as M9's modulation table already does here.
+
+**The problem.** The FX column holds two kinds of thing:
+
+*   **Events:** `DEL`, `KIL`, `OFF`, `RET` and `CHA`. They do something to a note, and aren't parameters.
+*   **Locks:** `VOL`, `PAN`, `CUT`, `RES`, `SNA`, `SNB`, `HAR`, `TIM`, `MOR` and `ACC`, and the slots' settings. These only set a parameter.
+
+The slots' settings are already the general way: a lock names its target, shows the setting's name, and is typed by the start of that name. The named commands are a second, hand-made way of doing the same for a few parameters. Each new one needs an `FxCommand` variant, a name, parsing and a list entry, as `ACC` just did.
+
+Plaits has the same problem in its settings. Its voices share the hardware's three knobs, so a track keeps `harmonics`, `timbre` and `morph`, and each voice gives them a meaning. Real ranges and defaults need special cases: `harmonics_top` for 6-op's patches, `centred` for bars, `uses_accent`, and Bright starting dark on 6-op.
+
+**The registry.** A setting is registered once, by what owns it:
+
+| Owner | Its settings |
+|---|---|
+| The track | Volume, pan, cutoff, resonance, sends |
+| A machine | Its own, as many as it has |
+| An effect in a slot | Its own, as effects declare them now |
+| An LFO | Its depth and phase |
+
+Each entry has:
+
+*   **An id that never changes,** which songs store. Relabelling a setting never breaks a song.
+*   **A long name and a group,** for `K`, `Dest`, the track page and the status line, such as `Feedback` in `FX 2: Delay`.
+*   **A short label** of up to 4 characters, for the grid.
+*   **Its kind:** a level `00` to `FF`, a level with a middle of its own, or a list of choices, which either wraps or stops. Patch is a list of 96 named patches.
+*   **Its default,** and **whether a step's value holds** after its step, as `FxCommand::holds` says now.
+
+The editing thread builds what a track offers from the registry, for what's on the track. The callback sees only places in an array, as with M9's modulation table.
+
+**Events stay apart.** They're a short fixed list, not settings. Their labels come from the same pool, so the grid reads the same for both.
+
+**Labels.** A label is up to 4 characters: an optional slot digit, then 3 letters. Three letters cover the track's settings, the events, the LFOs and every machine's settings. A slot's settings need its digit, as one effect can be in two slots, and 3 characters would leave 2 letters for the word.
+
+| Owner | Labels |
+|---|---|
+| Events | `DEL` `KIL` `OFF` `RET` `CHA` |
+| The track | `VOL` `PAN` `CUT` `RES` `SNA` `SNB` |
+| LFOs | `L1D` `L1P` `L2D` `L2P` |
+| Distort in slot 1 | `1TYP` `1AMT` `1BIT` `1MIX` `1GAN` |
+| Delay in slot 2 | `2TIM` `2FBK` `2PNG` `2WID` `2LCT` `2HCT` `2DRV` `2MIX` `2GAN` |
+| Reverb in slot 3 | `3PRE` `3DEC` `3DMP` `3LCT` `3HCT` `3MIX` `3GAN` |
+
+*   **Labels can't clash on a track.** Everything one track can show at once must differ: the events, the track's settings, its machine's settings and its LFOs'. A slot's settings can't clash with these, as their digit sets them apart. A test checks every machine against the rest, and every effect against itself.
+*   **The grid gets narrower.** A command takes 9 columns now, for names like `1 Amount`. With labels it takes 5, which saves 12 columns a track across three FX slots.
+
+**Machines and Plaits' voices.** Each Plaits voice registers its own settings, as if it were a machine of its own. The DSP doesn't change, as each voice's code already takes exactly these values.
+
+| Voice | Settings and labels |
+|---|---|
+| VA | Detune `DET`, Square `SQR`, Saw `SAW` |
+| FM | Ratio `RAT`, Index `IDX`, Feedback `FBK` |
+| Fold | Shape `SHP`, Fold `FLD`, Slope `SLP` |
+| Waves | Bank `BNK`, Wave `WAV`, Row `ROW` |
+| 6-op | Patch `PAT`, Bright `BRT`, Time `TIM`, Accent `ACC` |
+| String, Modal | Material `MAT`, Bright `BRT`, Decay `DEC`, Accent `ACC` |
+| Dust | Spread `SPR`, Density `DNS`, Filter `FLT` |
+| Noise | Type `TYP`, Clock `CLK`, Ring `RNG` |
+| Kick | Punch `PUN`, Tone `TON`, Decay `DEC`, Accent `ACC` |
+| Snare | Snappy `SNP`, Tone `TON`, Decay `DEC`, Accent `ACC` |
+| Hat | Noise `NOI`, Tone `TON`, Decay `DEC`, Accent `ACC` |
+
+*   **Real names, ranges and defaults.** VA's settings are named for what they move, as Harm, Timbre and Morph name Plaits' knobs. Noise's third is Ring, as Res would clash with the filter's `RES`. Patch is a list, 6-op's Bright starts at `80`, and String's Material at its plain `40`. Accent is a setting of the voices that use it, so the dimming and `uses_accent` go.
+*   **Each voice keeps its own settings.** A track remembers each voice's settings, so switching from String to Kick and back finds String as it was. A voice it hasn't played starts from its defaults. Today the three values carry over to the next voice.
+*   **A lock belongs to its voice.** `DEC40` written for String is String's Decay. On a Kick track it shows `---` and does nothing, as a slot's setting does with nothing in the slot, and nothing is lost if the voice comes back. An LFO's `Dest` works the same way.
+*   **Picking a machine.** `K` on Machine lists Sample, then the Plaits voices grouped under Plaits, so the Voice row goes. This reverses decision 17.
+
+**Steps.** An FX cell holds an event or a lock of a setting, and a value with its mark, as now.
+
+*   **On screen:** its label and value, like `CUT40`, `MAT80` or `2FBK60`. The status line names the cell under the cursor in full: `Delay feedback, slot 2`.
+*   **Typing a command:** a whole label goes straight in, so `cut` or `2fbk`. Otherwise the start of a long name matches, as slots' settings do now, so `fee`. Otherwise `K` opens the list, which searches long names and groups and shows each label beside its name, so labels are learnt by using it.
+*   **In files:** a step stores the setting's id and value, such as `cut:40` or `string.decay:80g`, as an id can end in what looks like hex. Songs saved before this don't load, which the author has agreed to.
+*   **The track page, `/`, the mixer and the modulation lists** read names and kinds from the registry, so the Sound page's rows for a machine come from its settings rather than a fixed list.
+
+**Values in the engine.** `TrackState` keeps a value per setting a track has, with its base, hold, lock and glide as now, but by setting rather than by `FxCommand`. A synth gets its machine's values as one array, in the order the machine registers them, so `Settings` with its four named fields goes, and `Synth::next` takes the array.
+
+**Alternatives considered.**
+
+*   **Keep the named commands** and add one for each new parameter, as `ACC` did. Every new setting needs special cases, and the slots already show the general way.
+*   **Long names in the grid.** They read well, but a command takes 9 columns, and three FX slots with notes don't fit a track in the score view.
+*   **Labels of 3 characters.** A slot's settings would need 2-letter words, like `2FB`.
+*   **Plaits' three knobs, renamed by each voice.** A lock would carry to the next voice, but its meaning would change under it, and ranges and defaults would still need special cases. On a computer, real settings are worth more than knobs.
+*   **Settings that mean the same sharing an id across voices,** so String's Decay lock plays on a Kick. Left out until one phrase playing on different voices needs it.
+
+**Left out.** Making Drive, Low cut, High cut and Pitch lockable, which the registry makes a few lines each once a reason comes up. A list of settings saved as presets. Locks carrying between voices.
+
+**Issues.**
+
+1.  **The registry and labels:** the registry type in `vt-model`, entries for the track, events, LFOs and effects, labels, and the clash test. The grid shows labels and gets narrower. Steps still store `FxCommand`, so this doesn't change files.
+    **Tests:**
+    *   Golden renders unchanged.
+    *   No two labels clash on any track, for every machine and effect.
+    *   Every label is at most 4 characters, and every long name says what it does.
+    *   The grid shows `CUT40` and `2FBK60`, and a command takes 5 columns.
+2.  **Steps name settings:** an FX cell holds an event or a setting's id, the file format, typing by label and by name, `K` and the status line. `FxCommand`'s value commands go.
+    **Tests:**
+    *   Golden renders unchanged, with their songs saved again in the new format.
+    *   A step saves and loads with every kind of cell.
+    *   Typing `cut`, `2fbk` and `fee` gives the right setting, and a label that isn't on the track gives nothing.
+    *   `K` finds a setting by its long name and by its group.
+    *   No allocation in the callback.
+3.  **Machines register their settings:** each Plaits voice's settings with their defaults, a track keeping each voice's settings, the Sound page's rows from the registry, picking a voice from Machine, and `Synth::next` taking an array. `harmonics`, `timbre`, `morph`, `accent`, `harmonics_top`, `centred` and `uses_accent` go.
+    **Tests:**
+    *   Every voice sounds as it did with the same values.
+    *   Switching voices and back keeps each voice's settings.
+    *   A lock and an LFO's `Dest` for another voice show `---` and do nothing.
+    *   6-op's Patch lists its 96 patches, and Bright starts at `80`.
+    *   No allocation in the callback.
+
+**Done when** the author has used locks of track, effect and voice settings in a jam, typing and `K` feel quick to them, and the grid stays readable.
 
 ### Known Gaps From Review
 
