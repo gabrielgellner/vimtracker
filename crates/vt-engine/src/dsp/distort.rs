@@ -4,7 +4,7 @@
 //! program's own.
 
 use vt_model::constants::UNITY_LEVEL;
-use vt_model::insert::{Delay, Distort, DistortType, Insert, Reverb, crush_bits};
+use vt_model::insert::{Delay, Distort, DistortType, Insert, Reverb};
 use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
@@ -143,6 +143,14 @@ impl InsertState {
     pub fn set(&mut self, insert: Insert) {
         let (amount, mix, gain) = match insert {
             Insert::Empty => (0, 0, UNITY_LEVEL),
+            // `Down` sweeps how long it holds as the shaping modes sweep how hard they drive.
+            Insert::Distort(Distort {
+                kind: DistortType::Down,
+                rate,
+                mix,
+                gain,
+                ..
+            }) => (rate, mix, gain),
             Insert::Distort(Distort {
                 amount, mix, gain, ..
             }) => (amount, mix, gain),
@@ -207,7 +215,7 @@ impl InsertState {
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
         let (kind, set) = match self.insert {
             Insert::Empty => return input,
-            Insert::Distort(Distort { kind, amount, .. }) => (Some(kind), amount),
+            Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
             Insert::Delay(_) | Insert::Reverb(_) => (None, 0),
         };
         let amount = self.amount.next(smoothing);
@@ -223,7 +231,7 @@ impl InsertState {
         let wet = match kind {
             DistortType::Crush => {
                 // Whole bits change at once, so this isn't smoothed.
-                let step = crush_step(crush_bits(set));
+                let step = crush_step(set);
                 input.map(|sample| (sample / step).round() * step)
             }
             DistortType::Down => {
@@ -269,11 +277,15 @@ mod tests {
     /// Settings take effect at once, as the smoother has nothing to do.
     const NO_SMOOTHING: f32 = 1.0;
 
+    /// A distortion with `amount` as how hard each mode goes: its drive, `Down`'s hold, or fewer
+    /// of `Crush`'s bits, from 12 at `00` to 2 at `FF`.
     fn state(kind: DistortType, amount: u8, mix: u8) -> InsertState {
         let mut state = InsertState::default();
         state.set(Insert::Distort(Distort {
             kind,
             amount,
+            bits: 12 - (f32::from(amount) / 25.5).round() as u8,
+            rate: amount,
             mix,
             ..Distort::default()
         }));
@@ -427,12 +439,12 @@ mod tests {
         let mut state = state(DistortType::Crush, 0x00, 0xFF);
         let settings = Insert::Distort(Distort {
             kind: DistortType::Crush,
-            amount: 0xFF,
+            bits: 2,
             mix: 0xFF,
             ..Distort::default()
         });
         state.set(settings);
-        // The smoother is still at the old amount, but the steps are already a half.
+        // The steps are already a half, with nothing to smooth.
         let out = state.process([0.3; 2], 0.0001, RATE)[0];
         assert_eq!(out, 0.5);
     }
@@ -487,6 +499,7 @@ mod tests {
                 amount: 0xFF,
                 mix,
                 gain,
+                ..Distort::DEFAULT
             }));
             sine(220.0, 0.5, RATE as usize / 10)
                 .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE)[0])

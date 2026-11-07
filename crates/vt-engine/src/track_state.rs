@@ -256,12 +256,9 @@ pub fn base_of(id: SettingId, track: &Track) -> u8 {
         (Owner::Voice(_), _) => track.setting(id),
         (Owner::Slot { slot, effect }, at) => {
             let insert = track.inserts[slot];
+            // A distortion keeps every mode's settings, so one its mode doesn't show still reads.
             if Effect::of(insert) == Some(effect) {
-                insert
-                    .params()
-                    .get(at)
-                    .and_then(|param| insert.read(param.setting))
-                    .unwrap_or(0)
+                insert.read(effect.params()[at].setting).unwrap_or(0)
             } else {
                 id.entry().default
             }
@@ -490,12 +487,21 @@ impl TrackState {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
             let effect = Effect::of(insert);
-            for (param, found) in insert.params().iter().enumerate() {
-                let id = effect.and_then(|effect| SettingId::slot(slot, effect, param));
+            // A mode shows some of its effect's settings, so each is found by what it is.
+            for found in insert.params() {
                 let setting = found.setting;
-                let added = id.map_or(0.0, |id| offsets[id.index()]) * setting.span();
+                let Some((at, id)) = effect.and_then(|effect| {
+                    let at = effect
+                        .params()
+                        .iter()
+                        .position(|param| param.setting == setting)?;
+                    Some((at, SettingId::slot(slot, effect, at)?))
+                }) else {
+                    continue;
+                };
+                let added = offsets[id.index()] * setting.span();
                 self.slot_moving[slot] |= added != 0.0;
-                let value = self.slot_values[slot][param] + added;
+                let value = self.slot_values[slot][at] + added;
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;

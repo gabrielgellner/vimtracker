@@ -80,11 +80,13 @@ next slot, and on the effect they go straight between slots. `2j` goes to the sa
 step commands stay with the slot, so they reach whatever's there now.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
-on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Amount` is
-how much, and on `Crush` it's `Bits`, whole numbers from `12` to `2`, where anything
-quieter than half a step drops out. Low settings gate quiet sounds, so one press back
-brings them in, and `Mix` blends it with the sound going in, from `00` dry to `FF` wet. `Gain`
-turns down what comes out, as `Amount` can make it much louder, on the level scale,
+on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. Each mode has its
+own setting: `Amount` for how hard the four shaping modes drive, `Bits` on `Crush`, whole
+numbers from `12` to `2`, where anything quieter than half a step drops out, and `Rate` on
+`Down`, how long each sample is held. A mode keeps its own as you change to another and back.
+Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the sound
+going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can make it
+much louder, on the level scale,
 where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
 An LFO can move another: `LFO 1`'s `Dest` has `L2 Depth` and `L2 Phase`, and an envelope's has

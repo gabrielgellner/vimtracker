@@ -35,9 +35,11 @@ until its voice or effect is back.
 A slot's settings can be set from a step, the same way as the rest, while the
 slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`
 or `2FDBK`, and `K` lists them under the effect's group with the names they have
-in an LFO's `Dest`, like `1 Amount`. `Bits` takes whole bits, so `06` is 6 bits,
-and `Type` takes its place in the list, from `00`. A step's setting belongs to
-that effect, so a `2FDBK` lock does nothing once slot 2 holds a Reverb.
+in an LFO's `Dest`, like `1 Amount`. `Bits` takes its place among the depths,
+from 2 bits at `00`, so `04` is 6 bits. A step's setting belongs to that effect,
+and a mode's to that mode, so a `2FDBK` lock does nothing once slot 2 holds a
+Reverb, and a `1BITS` lock waits for `Crush`. A Distort's `Type` isn't set from
+a step, as choosing a mode chooses a sound.
 
 `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback

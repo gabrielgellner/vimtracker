@@ -224,8 +224,8 @@ pub enum Effect {
 impl Effect {
     pub const ALL: [Self; 3] = [Self::Distort, Self::Delay, Self::Reverb];
 
-    /// Its settings, in the order its slot keeps them. Distort's Amount is shown as Bits on
-    /// Crush, and is the same setting.
+    /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
+    /// show only their own.
     pub const fn params(self) -> &'static [Param] {
         match self {
             Self::Distort => &DISTORT_PARAMS,
@@ -266,7 +266,7 @@ fn param_entry(param: &Param) -> Entry {
     Entry {
         key: param.key,
         name: param.name,
-        label: Some(param.label),
+        label: param.label,
         kind: if param.choices.is_empty() {
             Kind::Level {
                 top: param.setting.highest(),
@@ -605,7 +605,9 @@ mod tests {
         for effect in Effect::ALL {
             let mut seen = HashSet::new();
             for at in 0..effect.params().len() {
-                let label = SettingId::slot(0, effect, at).unwrap().label().unwrap();
+                let Some(label) = SettingId::slot(0, effect, at).unwrap().label() else {
+                    continue;
+                };
                 assert!(seen.insert(label.clone()), "{label} twice on {effect:?}");
             }
         }

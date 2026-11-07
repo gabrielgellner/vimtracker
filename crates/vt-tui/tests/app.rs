@@ -5473,7 +5473,7 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
         "{}",
         fx_line(&app, 0)
     );
-    // Another type shows how hard that was, and a jump finds it by name.
+    // Another mode has its own setting, as it was.
     press(&mut app, "k-");
     assert!(
         fx_line(&app, 0).contains("Type     Sine"),
@@ -5481,7 +5481,7 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
         fx_line(&app, 0)
     );
     assert!(
-        fx_line(&app, 0).contains("Amount   99"),
+        fx_line(&app, 0).contains("Amount   40"),
         "{}",
         fx_line(&app, 0)
     );
@@ -5593,7 +5593,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     press(&mut app, "ggj0llli1mix");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
-    assert_eq!(command(&app, 1), Some(setting(2)));
+    assert_eq!(command(&app, 1), Some(setting(4)));
 
     // A label that isn't there says so, and opens the list searching for it.
     special(&mut app, KeyCode::Esc);
@@ -5817,7 +5817,7 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 2).unwrap())
+        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap())
     );
 
     // It opens on what's chosen, and Esc leaves it.
@@ -5828,7 +5828,7 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 2).unwrap()),
+        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap()),
         "changing nothing"
     );
 

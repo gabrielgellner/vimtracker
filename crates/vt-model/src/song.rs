@@ -1534,6 +1534,7 @@ mod tests {
             amount: 0x80,
             mix: 0x40,
             gain: 0xD0,
+            ..Distort::DEFAULT
         });
         let text = ron::to_string(&track).unwrap();
         let loaded: Track = ron::from_str(&text).unwrap();

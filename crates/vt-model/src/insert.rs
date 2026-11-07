@@ -53,6 +53,8 @@ pub enum Setting {
     Type,
     Amount,
     Bits,
+    /// How long `Down` holds each sample.
+    Rate,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -73,7 +75,7 @@ impl Setting {
     pub const fn highest(self) -> u8 {
         match self {
             Self::Type => DistortType::ALL.len() as u8 - 1,
-            Self::Bits => MOST_BITS,
+            Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::PingPong => 1,
@@ -100,8 +102,9 @@ pub struct Param {
     pub name: &'static str,
     /// The name songs store it by, which never changes.
     pub key: &'static str,
-    /// The grid's short label, 3 or 4 letters, after the slot's digit.
-    pub label: &'static str,
+    /// The grid's short label, 3 or 4 letters, after the slot's digit. Without one, a step can't
+    /// lock it.
+    pub label: Option<&'static str>,
     /// What it is, on its own scale.
     pub setting: Setting,
     /// What it chooses between, in order, or nothing for a value in hex.
@@ -119,7 +122,8 @@ const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", 
 const TYPE_PARAM: Param = Param {
     name: "Type",
     key: "type",
-    label: "TYPE",
+    // Choosing a mode chooses a sound, so steps don't lock it.
+    label: None,
     setting: Setting::Type,
     choices: &DISTORT_TYPE_NAMES,
     wraps: true,
@@ -128,7 +132,7 @@ const TYPE_PARAM: Param = Param {
 const MIX_PARAM: Param = Param {
     name: "Mix",
     key: "mix",
-    label: "MIX",
+    label: Some("MIX"),
     setting: Setting::Mix,
     choices: &[],
     wraps: false,
@@ -137,26 +141,57 @@ const MIX_PARAM: Param = Param {
 const GAIN_PARAM: Param = Param {
     name: "Gain",
     key: "gain",
-    label: "GAIN",
+    label: Some("GAIN"),
     setting: Setting::Gain,
     choices: &[],
     wraps: false,
     default: UNITY_LEVEL,
 };
-pub(crate) const DISTORT_PARAMS: [Param; 4] = [
+const AMOUNT_PARAM: Param = Param {
+    name: "Amount",
+    key: "amount",
+    label: Some("AMNT"),
+    setting: Setting::Amount,
+    choices: &[],
+    wraps: false,
+    default: 0x40,
+};
+/// `Crush`'s bit depth, as a place among the depths it chooses between.
+const BITS_PARAM: Param = Param {
+    name: "Bits",
+    key: "bits",
+    label: Some("BITS"),
+    setting: Setting::Bits,
+    choices: &BIT_NAMES,
+    wraps: false,
+    // 9 bits.
+    default: 7,
+};
+const RATE_PARAM: Param = Param {
+    name: "Rate",
+    key: "rate",
+    label: Some("RATE"),
+    setting: Setting::Rate,
+    choices: &[],
+    wraps: false,
+    default: 0x40,
+};
+/// Every setting a distortion has in any of its modes, in the order songs number them. Each mode
+/// shows only its own.
+pub(crate) const DISTORT_PARAMS: [Param; 6] = [
     TYPE_PARAM,
-    Param {
-        name: "Amount",
-        key: "amount",
-        label: "AMNT",
-        setting: Setting::Amount,
-        choices: &[],
-        wraps: false,
-        default: 0x40,
-    },
+    AMOUNT_PARAM,
+    BITS_PARAM,
+    RATE_PARAM,
     MIX_PARAM,
     GAIN_PARAM,
 ];
+/// What the shaping modes have: how hard it drives.
+const SHAPING_PARAMS: [Param; 4] = [TYPE_PARAM, AMOUNT_PARAM, MIX_PARAM, GAIN_PARAM];
+/// `Crush` has whole bits in place of an `Amount`.
+const CRUSH_PARAMS: [Param; 4] = [TYPE_PARAM, BITS_PARAM, MIX_PARAM, GAIN_PARAM];
+/// `Down` has how long it holds each sample.
+const DOWN_PARAMS: [Param; 4] = [TYPE_PARAM, RATE_PARAM, MIX_PARAM, GAIN_PARAM];
 
 /// A delay or reverb's mix. It starts half wet in a slot, so the sound stays under it.
 const WET_MIX_PARAM: Param = Param {
@@ -174,7 +209,7 @@ const fn hex_param(
     Param {
         name,
         key,
-        label,
+        label: Some(label),
         setting,
         choices: &[],
         wraps: false,
@@ -214,7 +249,7 @@ pub(crate) const DELAY_PARAMS: [Param; 9] = [
     Param {
         name: "Time",
         key: "time",
-        label: "TIME",
+        label: Some("TIME"),
         setting: Setting::Time,
         choices: &DIVISION_NAMES,
         wraps: false,
@@ -230,7 +265,7 @@ pub(crate) const DELAY_PARAMS: [Param; 9] = [
     Param {
         name: "Ping-pong",
         key: "pingpong",
-        label: "PING",
+        label: Some("PING"),
         setting: Setting::PingPong,
         choices: &["Off", "On"],
         wraps: true,
@@ -273,39 +308,12 @@ const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
 const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
     ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
-/// How much of `amount` is one bit, as `Crush` shares it with the other types.
-const AMOUNT_PER_BIT: f32 = 255.0 / (MOST_BITS - LEAST_BITS) as f32;
-/// `Crush` has whole bits in place of an `Amount`. It moves from steps, with no in-between to sweep.
-const CRUSH_PARAMS: [Param; 4] = [
-    TYPE_PARAM,
-    Param {
-        name: "Bits",
-        key: "amount",
-        label: "AMNT",
-        setting: Setting::Bits,
-        choices: &BIT_NAMES,
-        wraps: false,
-        default: 7,
-    },
-    MIX_PARAM,
-    GAIN_PARAM,
-];
-
-/// The bit depth for an `amount`, so a low one stays gentle and a high one harsh across types.
-pub fn crush_bits(amount: u8) -> u8 {
-    MOST_BITS - (f32::from(amount) / AMOUNT_PER_BIT).round() as u8
-}
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
     pub const ALL: [Self; 4] = [
         Self::Empty,
-        Self::Distort(Distort {
-            kind: DistortType::Soft,
-            amount: DISTORT_PARAMS[1].default,
-            mix: MIX_PARAM.default,
-            gain: GAIN_PARAM.default,
-        }),
+        Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
         Self::Reverb(Reverb::DEFAULT),
     ];
@@ -342,92 +350,39 @@ impl Insert {
         }
     }
 
-    /// The settings it has.
+    /// The settings it has, in the mode it's in.
     pub fn params(self) -> &'static [Param] {
         match self {
             Self::Empty => &[],
-            Self::Distort(Distort {
-                kind: DistortType::Crush,
-                ..
-            }) => &CRUSH_PARAMS,
-            Self::Distort(_) => &DISTORT_PARAMS,
+            Self::Distort(distort) => match distort.kind {
+                DistortType::Crush => &CRUSH_PARAMS,
+                DistortType::Down => &DOWN_PARAMS,
+                _ => &SHAPING_PARAMS,
+            },
             Self::Delay(_) => &DELAY_PARAMS,
             Self::Reverb(_) => &REVERB_PARAMS,
         }
     }
 
-    /// A setting's value: a place in its choices, or the value itself.
+    /// A setting's value, by its place among those it has now: a place in its choices, or the
+    /// value itself.
     pub fn value(self, param: usize) -> u8 {
-        match (self, param) {
-            (Self::Distort(distort), 0) => DistortType::ALL
-                .iter()
-                .position(|kind| *kind == distort.kind)
-                .unwrap_or(0) as u8,
-            (Self::Distort(distort), 1) if distort.kind == DistortType::Crush => {
-                crush_bits(distort.amount) - LEAST_BITS
-            }
-            (Self::Distort(distort), 1) => distort.amount,
-            (Self::Distort(distort), 2) => distort.mix,
-            (Self::Distort(distort), 3) => distort.gain,
-            (Self::Delay(delay), param) => DELAY_PARAMS
-                .get(param)
-                .map_or(0, |found| delay.read(found.setting)),
-            (Self::Reverb(reverb), param) => REVERB_PARAMS
-                .get(param)
-                .map_or(0, |found| reverb.read(found.setting)),
-            _ => 0,
-        }
+        self.params()
+            .get(param)
+            .and_then(|found| self.read(found.setting))
+            .unwrap_or(0)
     }
 
-    /// The same with a setting changed.
+    /// The same with a setting changed, by its place among those it has now.
     #[must_use]
     pub fn with_value(self, param: usize, value: u8) -> Self {
-        let distort = match self {
-            Self::Distort(distort) => distort,
-            Self::Delay(delay) => {
-                return DELAY_PARAMS.get(param).map_or(self, |found| {
-                    Self::Delay(delay.written(found.setting, value))
-                });
-            }
-            Self::Reverb(reverb) => {
-                return REVERB_PARAMS.get(param).map_or(self, |found| {
-                    Self::Reverb(reverb.written(found.setting, value))
-                });
-            }
-            Self::Empty => return self,
-        };
-        Self::Distort(match param {
-            0 => Distort {
-                kind: DistortType::ALL
-                    .get(usize::from(value))
-                    .copied()
-                    .unwrap_or(distort.kind),
-                ..distort
-            },
-            1 if distort.kind == DistortType::Crush => Distort {
-                amount: (f32::from(MOST_BITS - LEAST_BITS - value.min(MOST_BITS - LEAST_BITS))
-                    * AMOUNT_PER_BIT)
-                    .round() as u8,
-                ..distort
-            },
-            1 => Distort {
-                amount: value,
-                ..distort
-            },
-            2 => Distort {
-                mix: value,
-                ..distort
-            },
-            3 => Distort {
-                gain: value,
-                ..distort
-            },
-            _ => distort,
-        })
+        self.params()
+            .get(param)
+            .map_or(self, |found| self.write(found.setting, f32::from(value)))
     }
 
-    /// A setting as a step gives it: whole bits for `Bits`, and a place for `Type`. Nothing if
-    /// there's no effect here.
+    /// A setting as a step gives it: a place for `Type` and `Bits`. Nothing if there's no effect
+    /// here that has it. A distortion keeps every mode's, so one not shown now still reads.
     pub fn read(self, setting: Setting) -> Option<u8> {
         let distort = match self {
             Self::Distort(distort) => distort,
@@ -448,7 +403,8 @@ impl Insert {
         Some(match setting {
             Setting::Type => distort.kind as u8,
             Setting::Amount => distort.amount,
-            Setting::Bits => crush_bits(distort.amount),
+            Setting::Bits => distort.bits - LEAST_BITS,
+            Setting::Rate => distort.rate,
             Setting::Mix => distort.mix,
             Setting::Gain => distort.gain,
             _ => return None,
@@ -466,30 +422,17 @@ impl Insert {
             Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
             Self::Empty => return self,
         };
-        Self::Distort(match setting {
-            Setting::Type => Distort {
-                kind: DistortType::ALL[usize::from(whole)],
-                ..distort
-            },
-            Setting::Amount => Distort {
-                amount: whole,
-                ..distort
-            },
-            Setting::Bits => Distort {
-                amount: (f32::from(MOST_BITS - whole.max(LEAST_BITS)) * AMOUNT_PER_BIT).round()
-                    as u8,
-                ..distort
-            },
-            Setting::Mix => Distort {
-                mix: whole,
-                ..distort
-            },
-            Setting::Gain => Distort {
-                gain: whole,
-                ..distort
-            },
-            _ => distort,
-        })
+        let mut distort = distort;
+        match setting {
+            Setting::Type => distort.kind = DistortType::ALL[usize::from(whole)],
+            Setting::Amount => distort.amount = whole,
+            Setting::Bits => distort.bits = whole + LEAST_BITS,
+            Setting::Rate => distort.rate = whole,
+            Setting::Mix => distort.mix = whole,
+            Setting::Gain => distort.gain = whole,
+            _ => {}
+        }
+        Self::Distort(distort)
     }
 
     /// The next or previous effect, as it starts, going round. It's the same kind of slot if the
@@ -505,12 +448,19 @@ impl Insert {
     }
 }
 
-/// A distortion's settings.
+/// A distortion's settings. It keeps every mode's own, so changing mode and back finds them as
+/// they were.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Distort {
     pub kind: DistortType,
-    /// More of what its type does, which for `Crush` is fewer whole bits.
+    /// How hard the shaping modes drive.
     pub amount: u8,
+    /// `Crush`'s bit depth, from 2 to 12.
+    #[serde(default = "default_bits")]
+    pub bits: u8,
+    /// How long `Down` holds each sample.
+    #[serde(default = "default_rate")]
+    pub rate: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     /// What comes out, on the level scale, so `E0` leaves it as it is. It's right there to turn
@@ -671,14 +621,29 @@ fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
 
+fn default_bits() -> u8 {
+    BITS_PARAM.default + LEAST_BITS
+}
+
+fn default_rate() -> u8 {
+    RATE_PARAM.default
+}
+
+impl Distort {
+    /// As it starts.
+    pub const DEFAULT: Self = Self {
+        kind: DistortType::Soft,
+        amount: AMOUNT_PARAM.default,
+        bits: BITS_PARAM.default + LEAST_BITS,
+        rate: RATE_PARAM.default,
+        mix: MIX_PARAM.default,
+        gain: GAIN_PARAM.default,
+    };
+}
+
 impl Default for Distort {
     fn default() -> Self {
-        Self {
-            kind: DistortType::default(),
-            amount: 0x40,
-            mix: 0xFF,
-            gain: UNITY_LEVEL,
-        }
+        Self::DEFAULT
     }
 }
 
@@ -806,17 +771,17 @@ mod tests {
         assert_eq!(Insert::Empty.with_value(1, 0x12), Insert::Empty);
     }
 
-    fn crush(amount: u8) -> Insert {
+    fn distort(kind: DistortType) -> Insert {
         Insert::Distort(Distort {
-            kind: DistortType::Crush,
-            amount,
-            ..Distort::default()
+            kind,
+            ..Distort::DEFAULT
         })
     }
 
     #[test]
     fn no_two_settings_of_an_effect_share_a_name() {
-        for params in [&DISTORT_PARAMS, &CRUSH_PARAMS] {
+        let modes = DistortType::ALL.map(|kind| distort(kind).params());
+        for params in modes.into_iter().chain([&DISTORT_PARAMS[..]]) {
             for (at, param) in params.iter().enumerate() {
                 for other in &params[at + 1..] {
                     assert_ne!(param.name, other.name);
@@ -827,7 +792,7 @@ mod tests {
 
     #[test]
     fn writing_lands_on_whole_values_inside_the_range() {
-        let effect = crush(0x40);
+        let effect = distort(DistortType::Crush);
         assert_eq!(
             effect.write(Setting::Bits, 6.4).read(Setting::Bits),
             Some(6)
@@ -838,11 +803,11 @@ mod tests {
         );
         assert_eq!(
             effect.write(Setting::Bits, -3.0).read(Setting::Bits),
-            Some(LEAST_BITS)
+            Some(0)
         );
         assert_eq!(
             effect.write(Setting::Bits, 99.0).read(Setting::Bits),
-            Some(MOST_BITS)
+            Some(MOST_BITS - LEAST_BITS)
         );
         assert_eq!(
             effect.write(Setting::Type, 2.2).read(Setting::Type),
@@ -855,38 +820,38 @@ mod tests {
     }
 
     #[test]
-    fn crush_has_whole_bits_in_place_of_an_amount() {
-        let names: Vec<&str> = crush(0).params().iter().map(|param| param.name).collect();
-        assert_eq!(names, ["Type", "Bits", "Mix", "Gain"]);
-        assert_eq!(Insert::ALL[1].params()[1].name, "Amount");
-        assert_eq!(
-            (crush_bits(0x00), crush_bits(0xFF)),
-            (MOST_BITS, LEAST_BITS)
-        );
+    fn each_mode_has_its_own_setting_beside_mix_and_gain() {
+        let names = |kind| -> Vec<&str> {
+            distort(kind)
+                .params()
+                .iter()
+                .map(|param| param.name)
+                .collect()
+        };
+        assert_eq!(names(DistortType::Soft), ["Type", "Amount", "Mix", "Gain"]);
+        assert_eq!(names(DistortType::Fold), ["Type", "Amount", "Mix", "Gain"]);
+        assert_eq!(names(DistortType::Crush), ["Type", "Bits", "Mix", "Gain"]);
+        assert_eq!(names(DistortType::Down), ["Type", "Rate", "Mix", "Gain"]);
         // Bits read as their names, and every one goes there and back.
-        let bits = crush(0).params()[1];
+        let bits = distort(DistortType::Crush).params()[1];
+        assert_eq!(bits.choices[usize::from(bits.default)], "9");
         for index in 0..bits.choices.len() as u8 {
-            let set = crush(0).with_value(1, index);
-            assert_eq!(set.value(1), index);
-            let Insert::Distort(distort) = set else {
-                unreachable!();
-            };
             assert_eq!(
-                bits.choices[usize::from(index)],
-                crush_bits(distort.amount).to_string()
+                distort(DistortType::Crush).with_value(1, index).value(1),
+                index
             );
         }
-        // A default that means what the other types' does.
-        assert_eq!(crush(DISTORT_PARAMS[1].default).value(1), bits.default);
         assert!(!bits.wraps);
+        assert_eq!(TYPE_PARAM.label, None, "a mode isn't locked from a step");
     }
 
     #[test]
-    fn changing_type_keeps_how_hard_it_is() {
-        let hard = Insert::ALL[1].with_value(1, 0xF0);
-        let crushed = hard.with_value(0, DistortType::Crush as u8);
-        assert_eq!(BIT_NAMES[usize::from(crushed.value(1))], "3");
-        assert_eq!(crushed.with_value(0, 0).value(1), 0xF0);
+    fn changing_mode_keeps_each_modes_own_setting() {
+        let crushed = distort(DistortType::Crush).with_value(1, 3);
+        let soft = crushed.write(Setting::Type, 0.0).with_value(1, 0xF0);
+        let back = soft.write(Setting::Type, DistortType::Crush as u8 as f32);
+        assert_eq!(back.value(1), 3, "Bits as it was");
+        assert_eq!(back.read(Setting::Amount), Some(0xF0));
     }
 
     #[test]

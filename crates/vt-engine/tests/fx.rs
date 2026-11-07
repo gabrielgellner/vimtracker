@@ -608,10 +608,13 @@ fn distorted(inserts: [Insert; 3]) -> Vec<[f32; 2]> {
     render(song, pool(sine.collect()), 4800)
 }
 
+/// A distortion going as hard as `amount` says in its mode: its drive, or fewer of `Crush`'s
+/// bits, from 12 at `00` to 2 at `FF`.
 fn distort(kind: DistortType, amount: u8) -> Insert {
     Insert::Distort(Distort {
         kind,
         amount,
+        bits: 12 - (f32::from(amount) / 25.5).round() as u8,
         mix: 0xFF,
         ..Distort::default()
     })
