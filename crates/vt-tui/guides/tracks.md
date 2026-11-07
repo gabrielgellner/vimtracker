@@ -104,7 +104,16 @@ that voice, on a track playing it. One already chosen stays, reads like `Har ---
 nothing until it's back.
 
 `Delay` and `Reverb` can go in any slot, starting half wet. Their tails carry on after a
-note ends. `Reverb` has `Mix` and `Gain` for now. `Delay` has these:
+note ends. `Reverb` has these:
+
+| Setting | Does |
+|---|---|
+| `Pre` | How long before it comes in, up to a quarter second |
+| `Decay` | How long it rings. `FF` goes on for a long time |
+| `Damp` | How quickly its highs fall away as it rings |
+| `Low cut`, `High cut` | Shape what goes in |
+
+`Delay` has these:
 
 | Setting | Does |
 |---|---|

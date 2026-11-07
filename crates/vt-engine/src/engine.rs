@@ -75,6 +75,8 @@ pub struct Engine {
     fast_smoothing: f32,
     /// The long buffers no slot is using.
     memory: MemoryPool,
+    /// Frames rendered in all, playing or not, for what moves on its own.
+    rendered: u64,
     /// The master's levels since the last report.
     reading: Reading,
     /// Frames until LFOs are next worked out.
@@ -134,6 +136,7 @@ impl Engine {
             smoothing: coefficient(rate),
             fast_smoothing: fast_coefficient(rate),
             memory,
+            rendered: 0,
             reading: Reading::default(),
             lfo_countdown: 0,
         };
@@ -595,6 +598,7 @@ impl Engine {
             rate: self.rate,
             seed: self.current.song.seed,
             frames_per_tick: 1.0 / ticks_per_frame,
+            rendered: self.rendered,
         }
     }
 
@@ -838,6 +842,7 @@ impl Engine {
                 .max(1) as usize;
             self.lfo_countdown -= run as u32;
             self.render(&mut out[written * 2..(written + run) * 2]);
+            self.rendered += run as u64;
             if playing {
                 self.frames_since_origin += run as u64;
                 self.clock += run as u64;

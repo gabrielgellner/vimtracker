@@ -63,6 +63,8 @@ pub struct SongTime {
     pub seed: u64,
     /// How many frames a tick takes at this tempo.
     pub frames_per_tick: f64,
+    /// Frames rendered in all, playing or not.
+    pub rendered: u64,
 }
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
@@ -465,7 +467,7 @@ impl TrackState {
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
-            self.inserts[slot].hold(resolved, memory, now.frames_per_tick);
+            self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
         }
         self.offsets = offsets;
         let semitones = offsets[Target::Pitch.index()] * 255.0;

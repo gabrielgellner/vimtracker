@@ -63,6 +63,9 @@ pub enum Setting {
     LowCut,
     HighCut,
     Drive,
+    Pre,
+    Decay,
+    Damp,
 }
 
 impl Setting {
@@ -148,8 +151,6 @@ const WET_MIX_PARAM: Param = Param {
     default: 0x80,
     ..MIX_PARAM
 };
-/// A reverb's.
-const WET_PARAMS: [Param; 2] = [WET_MIX_PARAM, GAIN_PARAM];
 /// A setting from `00` to `FF`.
 const fn hex_param(name: &'static str, setting: Setting, default: u8) -> Param {
     Param {
@@ -160,6 +161,16 @@ const fn hex_param(name: &'static str, setting: Setting, default: u8) -> Param {
         default,
     }
 }
+/// A reverb's, in the order the page shows them.
+const REVERB_PARAMS: [Param; 7] = [
+    hex_param("Pre", Setting::Pre, Reverb::DEFAULT.pre),
+    hex_param("Decay", Setting::Decay, Reverb::DEFAULT.decay),
+    hex_param("Damp", Setting::Damp, Reverb::DEFAULT.damp),
+    hex_param("Low cut", Setting::LowCut, Reverb::DEFAULT.low_cut),
+    hex_param("High cut", Setting::HighCut, Reverb::DEFAULT.high_cut),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
 /// A delay's, in the order the page shows them.
 const DELAY_PARAMS: [Param; 9] = [
     Param {
@@ -222,10 +233,7 @@ impl Insert {
             gain: GAIN_PARAM.default,
         }),
         Self::Delay(Delay::DEFAULT),
-        Self::Reverb(Reverb {
-            mix: WET_PARAMS[0].default,
-            gain: GAIN_PARAM.default,
-        }),
+        Self::Reverb(Reverb::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -237,7 +245,7 @@ impl Insert {
     /// What return `B` starts with.
     pub const RETURN_REVERB: Self = Self::Reverb(Reverb {
         mix: 0xFF,
-        gain: GAIN_PARAM.default,
+        ..Reverb::DEFAULT
     });
 
     /// The effect's name on screen.
@@ -270,7 +278,7 @@ impl Insert {
             }) => &CRUSH_PARAMS,
             Self::Distort(_) => &DISTORT_PARAMS,
             Self::Delay(_) => &DELAY_PARAMS,
-            Self::Reverb(_) => &WET_PARAMS,
+            Self::Reverb(_) => &REVERB_PARAMS,
         }
     }
 
@@ -290,8 +298,9 @@ impl Insert {
             (Self::Delay(delay), param) => DELAY_PARAMS
                 .get(param)
                 .map_or(0, |found| delay.read(found.setting)),
-            (Self::Reverb(Reverb { mix, .. }), 0) => mix,
-            (Self::Reverb(Reverb { gain, .. }), 1) => gain,
+            (Self::Reverb(reverb), param) => REVERB_PARAMS
+                .get(param)
+                .map_or(0, |found| reverb.read(found.setting)),
             _ => 0,
         }
     }
@@ -307,16 +316,8 @@ impl Insert {
                 });
             }
             Self::Reverb(reverb) => {
-                return Self::Reverb(match param {
-                    0 => Reverb {
-                        mix: value,
-                        ..reverb
-                    },
-                    1 => Reverb {
-                        gain: value,
-                        ..reverb
-                    },
-                    _ => reverb,
+                return REVERB_PARAMS.get(param).map_or(self, |found| {
+                    Self::Reverb(reverb.written(found.setting, value))
                 });
             }
             Self::Empty => return self,
@@ -362,12 +363,11 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| delay.read(setting));
             }
-            Self::Reverb(Reverb { mix, gain }) => {
-                return match setting {
-                    Setting::Mix => Some(mix),
-                    Setting::Gain => Some(gain),
-                    _ => None,
-                };
+            Self::Reverb(reverb) => {
+                return REVERB_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| reverb.read(setting));
             }
             Self::Empty => return None,
         };
@@ -389,19 +389,7 @@ impl Insert {
         let distort = match self {
             Self::Distort(distort) => distort,
             Self::Delay(delay) => return Self::Delay(delay.written(setting, whole)),
-            Self::Reverb(reverb) => {
-                return Self::Reverb(match setting {
-                    Setting::Mix => Reverb {
-                        mix: whole,
-                        ..reverb
-                    },
-                    Setting::Gain => Reverb {
-                        gain: whole,
-                        ..reverb
-                    },
-                    _ => reverb,
-                });
-            }
+            Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
             Self::Empty => return self,
         };
         Self::Distort(match setting {
@@ -512,7 +500,7 @@ impl Delay {
             Setting::Drive => self.drive,
             Setting::Mix => self.mix,
             Setting::Gain => self.gain,
-            Setting::Type | Setting::Amount | Setting::Bits => 0,
+            _ => 0,
         }
     }
 
@@ -530,19 +518,79 @@ impl Delay {
             Setting::Drive => delay.drive = value,
             Setting::Mix => delay.mix = value,
             Setting::Gain => delay.gain = value,
-            Setting::Type | Setting::Amount | Setting::Bits => {}
+            _ => {}
         }
         delay
     }
 }
 
-/// A reverb's settings.
+/// A reverb's settings. One a file doesn't have starts as new.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Reverb {
+    /// How long before anything comes out, up to a quarter of a second.
+    pub pre: u8,
+    /// How long it rings.
+    pub decay: u8,
+    /// How quickly its highs fall away as it rings.
+    pub damp: u8,
+    /// A high-pass on what goes in, which `00` turns off.
+    pub low_cut: u8,
+    /// A low-pass on what goes in, which `FF` turns off.
+    pub high_cut: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
-    #[serde(default = "unity_gain")]
     pub gain: u8,
+}
+
+impl Default for Reverb {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Reverb {
+    /// As it starts.
+    pub const DEFAULT: Self = Self {
+        pre: 0,
+        decay: 0x50,
+        damp: 0x55,
+        low_cut: 0,
+        high_cut: 0xFF,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Pre => self.pre,
+            Setting::Decay => self.decay,
+            Setting::Damp => self.damp,
+            Setting::LowCut => self.low_cut,
+            Setting::HighCut => self.high_cut,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut reverb = self;
+        match setting {
+            Setting::Pre => reverb.pre = value,
+            Setting::Decay => reverb.decay = value,
+            Setting::Damp => reverb.damp = value,
+            Setting::LowCut => reverb.low_cut = value,
+            Setting::HighCut => reverb.high_cut = value,
+            Setting::Mix => reverb.mix = value,
+            Setting::Gain => reverb.gain = value,
+            _ => {}
+        }
+        reverb
+    }
 }
 
 fn unity_gain() -> u8 {
@@ -635,20 +683,33 @@ mod tests {
     }
 
     #[test]
-    fn a_delay_and_reverbs_settings_change_alone_and_read_back() {
-        {
-            let effect = Insert::ALL[3];
-            let mixed = effect.with_value(0, 0x12);
-            assert_eq!((mixed.value(0), mixed.value(1)), (0x12, UNITY_LEVEL));
-            let quiet = effect.with_value(1, 0x34);
-            assert_eq!((quiet.value(0), quiet.value(1)), (0x80, 0x34));
-            assert_eq!(
-                effect.write(Setting::Mix, 300.0).read(Setting::Mix),
-                Some(0xFF)
-            );
-            assert_eq!(effect.read(Setting::Amount), None);
-            assert_eq!(effect.stepped(true).stepped(false), effect);
-        }
+    fn a_reverbs_settings_change_alone_and_read_back() {
+        let effect = Insert::ALL[3];
+        let names: Vec<&str> = effect.params().iter().map(|param| param.name).collect();
+        assert_eq!(
+            names,
+            ["Pre", "Decay", "Damp", "Low cut", "High cut", "Mix", "Gain"]
+        );
+        let mixed = effect.with_value(5, 0x12);
+        assert_eq!((mixed.value(5), mixed.value(6)), (0x12, UNITY_LEVEL));
+        assert_eq!(
+            effect.write(Setting::Mix, 300.0).read(Setting::Mix),
+            Some(0xFF)
+        );
+        assert_eq!(effect.read(Setting::Amount), None);
+        assert_eq!(effect.stepped(true).stepped(false), effect);
+    }
+
+    #[test]
+    fn a_reverb_saved_with_fewer_settings_loads_with_the_rest_as_new() {
+        let reverb: Reverb = ron::from_str("(mix: 255, gain: 224)").unwrap();
+        assert_eq!(
+            reverb,
+            Reverb {
+                mix: 0xFF,
+                ..Reverb::DEFAULT
+            }
+        );
     }
 
     #[test]
