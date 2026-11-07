@@ -1,7 +1,9 @@
 //! What keys do on the track page.
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::{Action, TrackControl};
+use std::sync::Arc;
+
+use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert};
@@ -178,6 +180,16 @@ pub const SYNTH_ROWS: [&[Control]; 11] = [
 /// The Mod page's rows, top to bottom.
 pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
     [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
+
+/// An effect taken out of a slot, waiting to be put in another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TakenInsert {
+    pub insert: Insert,
+    pub track: usize,
+    pub slot: usize,
+    /// How far undo went when it was taken, to tell if `p` comes straight after.
+    pub undo_depth: usize,
+}
 
 /// A part of the track page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -504,6 +516,83 @@ impl App {
         }
     }
 
+    /// The slot the cursor is in, on the FX page.
+    fn fx_slot(&self) -> usize {
+        self.track_row / SLOT_ROWS
+    }
+
+    /// `dd`: take the effect out of this slot, for `p` to put somewhere.
+    fn take_insert(&mut self) {
+        let slot = self.fx_slot();
+        let insert = self.page_track().inserts[slot];
+        if insert == Insert::Empty {
+            self.status = "There's nothing in this slot to take".to_owned();
+            return;
+        }
+        self.set_insert(slot, Insert::Empty);
+        self.taken_insert = Some(TakenInsert {
+            insert,
+            track: self.cursor.track,
+            slot,
+            undo_depth: self.history.undo_depth(),
+        });
+        self.move_control(self.track_row, 0);
+        self.status = format!("Took {}: p puts it in a slot", insert.name());
+    }
+
+    /// `p`: put what was taken into this slot. What's there goes where it came from, if that's still
+    /// empty, so two slots swap. Straight after `dd`, the whole move is one undo step.
+    fn put_insert(&mut self) {
+        let Some(taken) = self.taken_insert.take() else {
+            self.status = "dd takes an effect out of a slot first".to_owned();
+            return;
+        };
+        let (track, slot) = (self.cursor.track, self.fx_slot());
+        let displaced = self.page_track().inserts[slot];
+        let mut actions = vec![Action::SetInsert {
+            track,
+            slot,
+            insert: taken.insert,
+        }];
+        let source_empty = (taken.track, taken.slot) != (track, slot)
+            && self
+                .song()
+                .tracks
+                .get(taken.track)
+                .is_some_and(|source| source.inserts[taken.slot] == Insert::Empty);
+        if displaced != Insert::Empty {
+            if source_empty {
+                actions.push(Action::SetInsert {
+                    track: taken.track,
+                    slot: taken.slot,
+                    insert: displaced,
+                });
+            } else {
+                // There's nowhere for it to go, so it's the next one to put.
+                self.taken_insert = Some(TakenInsert {
+                    insert: displaced,
+                    track,
+                    slot,
+                    undo_depth: 0,
+                });
+            }
+        }
+        let mut next = Arc::clone(self.song());
+        for action in &actions {
+            if let Ok(edited) = edit(&next, action) {
+                next = edited;
+            }
+        }
+        if taken.undo_depth == self.history.undo_depth() {
+            self.history.replace_current(next);
+        } else {
+            self.history.commit(next);
+        }
+        self.dirty = true;
+        self.publish();
+        self.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
+    }
+
     fn set_insert(&mut self, slot: usize, insert: Insert) {
         self.apply(&Action::SetInsert {
             track: self.cursor.track,
@@ -600,6 +689,11 @@ impl App {
                 self.move_control(0, field);
             }
             Cmd::FieldJump => self.open_field_jump(),
+            Cmd::RemoveRow | Cmd::Paste if self.track_page != Page::Fx => {
+                self.status = "dd and p move effects, on the FX page".to_owned();
+            }
+            Cmd::RemoveRow => self.take_insert(),
+            Cmd::Paste => self.put_insert(),
             Cmd::Increase => self.adjust_control(true, times, false),
             Cmd::Decrease => self.adjust_control(false, times, false),
             Cmd::IncreaseLarge => self.adjust_control(true, times, true),

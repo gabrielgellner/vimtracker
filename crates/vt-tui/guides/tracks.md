@@ -68,9 +68,14 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 | `x` on the effect | Empty the slot |
 | `x` on a setting | Back to its default |
 | `{` `}` | Previous or next slot, staying on the same setting |
+| `dd` | Take the effect out of this slot |
+| `p` | Put it in this slot, swapping with what's there |
 
 A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
 next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
+
+`dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
+step commands stay with the slot, so they reach whatever's there now.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Amount` is
