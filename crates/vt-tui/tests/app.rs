@@ -456,6 +456,36 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
 }
 
 #[test]
+fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _rt) = app();
+    press(&mut app, " 6jj");
+    assert_eq!(column_name(&app), "Send A");
+    press(&mut app, "ll");
+    assert_eq!(app.cursor.track, 2);
+    assert_eq!(
+        column_name(&app),
+        "Pan",
+        "a return has no sends, so it's on the row above"
+    );
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Mute", "and going down skips them");
+    press(&mut app, "k");
+    assert_eq!(column_name(&app), "Pan");
+    press(&mut app, "ll");
+    assert_eq!(column_name(&app), "Level", "the master only has its level");
+    press(&mut app, "jG");
+    assert_eq!(column_name(&app), "Level");
+    press(&mut app, "hhhh");
+    assert_eq!(app.cursor.track, 0);
+    assert_eq!(column_name(&app), "Level", "where it went is where it is");
+    press(&mut app, "jjl");
+    assert_eq!(column_name(&app), "Send A");
+    press(&mut app, "lh");
+    assert_eq!(column_name(&app), "Send A", "back on a track that has it");
+}
+
+#[test]
 fn track_count_is_limited_to_the_constant() {
     let (mut app, _rt) = app();
     command(&mut app, "track add 62");

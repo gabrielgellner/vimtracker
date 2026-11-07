@@ -364,11 +364,44 @@ impl App {
     /// What the cursor is on.
     pub fn track_control(&self) -> Control {
         if self.view == View::Mixer {
-            return MIXER[self.mixer_row.min(MIXER.len() - 1)];
+            return MIXER[self.mixer_row_here()];
         }
         let rows = self.page_rows();
         let row = rows[self.track_row.min(rows.len() - 1)];
         row[self.track_field.min(self.fields_in(row) - 1)]
+    }
+
+    /// The mixer's rows this track has: a fixed track has no sends, and the master no pan, mute or
+    /// solo.
+    fn mixer_rows_here(&self) -> Vec<usize> {
+        let track = self.song().tracks.get(self.cursor.track);
+        (0..MIXER.len())
+            .filter(|row| track.is_none_or(|track| MIXER[*row].exists_on(track)))
+            .collect()
+    }
+
+    /// The row the cursor is on. On a track without the row it was on, it's the nearest above it,
+    /// and the row it was on is kept, so going back to a track that has it finds it again.
+    fn mixer_row_here(&self) -> usize {
+        let rows = self.mixer_rows_here();
+        let wanted = self.mixer_row.min(MIXER.len() - 1);
+        rows.iter()
+            .rev()
+            .find(|row| **row <= wanted)
+            .or(rows.first())
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Move up or down the mixer's rows, going only through those this track has.
+    fn move_mixer_row(&mut self, by: isize) {
+        let rows = self.mixer_rows_here();
+        let here = self.mixer_row_here();
+        let at = rows.iter().position(|row| *row == here).unwrap_or(0);
+        let to = (at as isize)
+            .saturating_add(by)
+            .clamp(0, rows.len() as isize - 1);
+        self.mixer_row = rows.get(to as usize).copied().unwrap_or(0);
     }
 
     /// How many settings a row has on this track, which on the FX page depends on the effect.
@@ -670,15 +703,10 @@ impl App {
             Cmd::Move(Motion::RowEnd) => {
                 self.move_track(self.song().tracks.len() as isize - 1 - track)
             }
-            Cmd::Move(Motion::Down) => {
-                let moved = self.mixer_row.saturating_add(times as usize);
-                self.mixer_row = moved.min(MIXER.len() - 1);
-            }
-            Cmd::Move(Motion::Up) => {
-                self.mixer_row = self.mixer_row.saturating_sub(times as usize);
-            }
-            Cmd::Move(Motion::First) => self.mixer_row = 0,
-            Cmd::Move(Motion::Last) => self.mixer_row = MIXER.len() - 1,
+            Cmd::Move(Motion::Down) => self.move_mixer_row(times),
+            Cmd::Move(Motion::Up) => self.move_mixer_row(-times),
+            Cmd::Move(Motion::First) => self.move_mixer_row(isize::MIN),
+            Cmd::Move(Motion::Last) => self.move_mixer_row(isize::MAX),
             _ => return self.run_track_page(cmd),
         }
         self.count = None;
