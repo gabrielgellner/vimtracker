@@ -81,6 +81,7 @@ fn field_range(field: Field) -> (usize, usize) {
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
+        Field::Gate => (7, 11),
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + COMMAND_WIDTH),
         Field::FxValue(slot) => (
             fx_start(slot) + COMMAND_WIDTH,
@@ -95,7 +96,7 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
         return (0, length);
     }
     let slots = step.fx.len();
-    let last = scope.last.min(1 + slots);
+    let last = scope.last.min(2 + slots);
     let (start, _) = field_range(Field::of_group(scope.first.min(last)));
     let end = match Field::of_group(last) {
         Field::FxCommand(slot) => field_range(Field::FxValue(slot)).1 + MARK_WIDTH,
@@ -256,6 +257,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     });
     let playhead = playhead_step(app);
     let lane_playheads = lane_playheads(app, phrase);
+    // When each row of the loop starts, in steps, so a beat row is one that starts on a beat even
+    // when rows before it last several pulses.
+    let starts: Vec<usize> = phrase
+        .loop_steps()
+        .iter()
+        .scan(0, |time, step| {
+            let start = *time;
+            *time += step.pulses();
+            Some(start)
+        })
+        .collect();
     let body_width = phrase
         .steps()
         .iter()
@@ -349,7 +361,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         let marker = if playhead == Some(index) { ">" } else { " " };
         let plays = extent.plays(index);
-        let on_beat = row.rem_euclid(BEAT_STEPS as isize) == 0;
+        let on_beat = match usize::try_from(row).ok().and_then(|row| starts.get(row)) {
+            Some(start) if plays => start.is_multiple_of(BEAT_STEPS),
+            _ => row.rem_euclid(BEAT_STEPS as isize) == 0,
+        };
         let number = match (plays, on_beat) {
             (true, true) => Style::new().fg(theme::YELLOW),
             (true, false) => Style::new().fg(theme::SUBTEXT1),

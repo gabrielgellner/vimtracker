@@ -3038,6 +3038,8 @@ fn the_status_line_names_the_column() {
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Velocity");
     press(&mut app, "l");
+    assert_eq!(column_name(&app), "Gate");
+    press(&mut app, "l");
     assert_eq!(column_name(&app), "FX1 command");
     press(&mut app, "l");
     assert_eq!(column_name(&app), "FX1 value");
@@ -5299,7 +5301,7 @@ fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
     press(&mut app, " 4LL= 3");
     let command = |app: &App, step: usize| app.phrase_here().unwrap().steps()[step].fx[0].command;
     let amount = FxCommand::Slot { slot: 0, param: 1 };
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     press(&mut app, "i1am80");
     assert_eq!(command(&app, 0), Some(amount));
     assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x80);
@@ -5339,7 +5341,7 @@ fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
 
     // A name that isn't there says so.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "ggjj0lli2am");
+    press(&mut app, "ggjj0llli2am");
     assert_eq!(command(&app, 2), None);
     assert!(app.status.contains("isn't"), "{}", app.status);
 }
@@ -5347,7 +5349,7 @@ fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
 #[test]
 fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LL= 3lli1am80");
+    press(&mut app, " 4LL= 3llli1am80");
     special(&mut app, KeyCode::Esc);
     let backend = ratatui::backend::TestBackend::new(120, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -5416,7 +5418,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     // A sample track has no synth settings, in Dest or for a step.
     let dest = labels(&mut app, " 4LjjK/");
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
-    let steps = labels(&mut app, " 3llK");
+    let steps = labels(&mut app, " 3lllK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
 
     // On a synth they're there under their names on this voice.
@@ -5702,7 +5704,7 @@ fn lane_of(app: &App, slot: usize) -> Option<vt_model::song::Lane> {
 fn the_loop_keys_on_an_fx_column_set_its_lane() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     assert_eq!(app.cursor.field, vt_tui::app::Field::FxCommand(0));
     press(&mut app, "jjgs");
     assert_eq!(
@@ -5762,7 +5764,7 @@ fn the_loop_keys_on_the_notes_still_set_the_phrases_loop() {
 #[test]
 fn a_lane_shows_its_length_and_where_it_is_playing() {
     let (mut app, _realtime) = app();
-    press(&mut app, "lljrSNA20gg");
+    press(&mut app, "llljrSNA20gg");
     command(&mut app, "len 3");
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
@@ -5789,7 +5791,7 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
 fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     let (mut app, _realtime) = app();
     // FX 1's lane is steps 4 to 6 of the phrase's 16.
-    press(&mut app, "ll4jgs");
+    press(&mut app, "lll4jgs");
     command(&mut app, "len 3");
     press(&mut app, "G");
     assert_eq!(app.cursor.step, 6, "the lane's last step");
@@ -5799,4 +5801,33 @@ fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     assert_eq!(app.cursor.step, 5, "a count goes by the lane too");
     press(&mut app, "hhG");
     assert_eq!(app.cursor.step, 15, "the notes go by the phrase's loop");
+}
+
+#[test]
+fn k_on_the_gate_column_chooses_a_gate_and_keeps_its_pulses() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "llrMLT3ggK");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "hld");
+    special(&mut app, KeyCode::Enter);
+    let gate = app.song().tracks[0].phrases[&0].steps()[0].gate.unwrap();
+    assert_eq!(
+        (gate.kind, gate.pulses),
+        (vt_model::step::GateKind::Hold, 3)
+    );
+}
+
+#[test]
+fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
+    let (mut app, _realtime) = app();
+    // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
+    press(&mut app, "llrSGL2jrSGL2gg");
+    app.top = 0;
+    let buffer = screen(&app);
+    let number_colour = |row: u16| buffer[(5, row + 2)].fg;
+    let beat = number_colour(0);
+    assert_ne!(number_colour(1), beat, "row 01 starts at step 2");
+    assert_eq!(number_colour(2), beat, "row 02 starts at step 4");
+    assert_ne!(number_colour(4), beat, "row 04 starts at step 6");
+    assert_eq!(number_colour(6), beat, "row 06 starts at step 8");
 }

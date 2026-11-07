@@ -156,7 +156,7 @@ impl App {
                 .find_map(|step| step.fx.get(slot).and_then(|fx| fx.command))
                 .map(|command| ShapeColumn::Fx { slot, command })
                 .ok_or("Type an FX command on a row of the selection first"),
-            Field::Note => Err("Shape works on Velocity and FX columns"),
+            Field::Note | Field::Gate => Err("Shape works on Velocity and FX columns"),
         }
     }
 

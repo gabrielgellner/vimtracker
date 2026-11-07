@@ -28,7 +28,10 @@ use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
 use vt_model::song::{ChainEntry, Lane, Phrase, Section, Song, Track, TrackKind};
-use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
+use vt_model::step::{
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
+    Step,
+};
 
 use crate::grammar::Change;
 use crate::guides::Guide;
@@ -795,7 +798,7 @@ impl App {
     fn lane_slot(&self) -> Option<usize> {
         match self.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) => Some(slot),
-            Field::Note | Field::Velocity => None,
+            Field::Note | Field::Velocity | Field::Gate => None,
         }
     }
 
@@ -1107,6 +1110,7 @@ impl App {
             _ => match self.cursor.field {
                 Field::Note => self.insert_note(key),
                 Field::Velocity | Field::FxValue(_) => self.insert_value(key),
+                Field::Gate => self.insert_gate(key),
                 Field::FxCommand(slot) => self.insert_command(key, slot),
             },
         }
@@ -1157,6 +1161,7 @@ impl App {
         match self.cursor.field {
             Field::Note => self.insert_note(key),
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
+            Field::Gate => self.insert_gate(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
         }
     }
@@ -1467,6 +1472,59 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// A gate's three letters then its pulses, like `HLD3`. A digit on its own keeps the gate type
+    /// that's there, or `SGL` in an empty cell, and changes only the length.
+    fn insert_gate(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.set_field(FieldValue::Gate(None));
+                    self.move_step(-1);
+                }
+            }
+            KeyCode::Char(c @ '0'..='9') if !key.ctrl && self.entry.text.len() != 1 => {
+                let pulses = c as u8 - b'0';
+                if pulses > MAX_PULSES {
+                    self.status = format!("A row lasts 0 to {MAX_PULSES} pulses");
+                    self.entry.text.clear();
+                    return;
+                }
+                let name = std::mem::take(&mut self.entry.text);
+                let kind = match name.as_str() {
+                    "" => self
+                        .current_gate()
+                        .map_or(GateKind::Single, |gate| gate.kind),
+                    name => match GateKind::from_name(name) {
+                        Some(kind) => kind,
+                        None => {
+                            self.status = format!("{name} isn't a gate: SGL, MLT, HLD or RST");
+                            return;
+                        }
+                    },
+                };
+                self.set_field(FieldValue::Gate(Some(Gate { kind, pulses })));
+                self.advance();
+            }
+            KeyCode::Char(c)
+                if !key.ctrl && c.is_ascii_alphabetic() && self.entry.text.len() < 3 =>
+            {
+                self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 3 && GateKind::from_name(&self.entry.text).is_none() {
+                    self.status = format!("{} isn't a gate: SGL, MLT, HLD or RST", self.entry.text);
+                    self.entry.text.clear();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The gate cell under the cursor.
+    pub(crate) fn current_gate(&self) -> Option<Gate> {
+        let phrase = self.phrase_here()?;
+        phrase.steps().get(self.cursor.step)?.gate
     }
 
     fn advance(&mut self) {

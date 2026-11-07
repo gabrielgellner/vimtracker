@@ -280,7 +280,7 @@ impl App {
                 StepRange::between(step, step),
                 Scope {
                     first: self.cursor.field.group(),
-                    last: 1 + self.slots(),
+                    last: 2 + self.slots(),
                 },
             ),
             Cover::Motion(motion, count) => (
@@ -539,7 +539,7 @@ impl App {
             match field {
                 Field::Velocity => matches!(step.note, Note::On(_)),
                 Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
-                Field::Note | Field::FxCommand(_) => true,
+                Field::Note | Field::Gate | Field::FxCommand(_) => true,
             }
         };
         let Some(first) = (selection.range.first..=selection.range.last).find(takes) else {
@@ -613,6 +613,7 @@ impl App {
                 velocity: self.note_velocity,
             },
             Field::Velocity => Fill::Velocity(value.velocity),
+            Field::Gate => Fill::Gate(value.gate),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
         };
@@ -711,6 +712,12 @@ impl App {
                         phrase,
                         step,
                         value: FieldValue::Velocity(value.velocity),
+                    },
+                    Field::Gate => Action::SetField {
+                        track: self.cursor.track,
+                        phrase,
+                        step,
+                        value: FieldValue::Gate(value.gate),
                     },
                     Field::FxCommand(slot) | Field::FxValue(slot) => Action::SetField {
                         track: self.cursor.track,
@@ -919,12 +926,12 @@ impl App {
     /// Move between fields or column groups, within the step's slots.
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
-        let last = 1 + slots * 2;
+        let last = 2 + slots * 2;
         let order = self.cursor.field.order();
         self.cursor.field = match motion {
             Motion::Right => Field::from_order((order + 1).min(last)),
             Motion::Left => Field::from_order(order.saturating_sub(1)),
-            Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(1 + slots)),
+            Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(2 + slots)),
             Motion::RowStart => Field::Note,
             Motion::RowEnd => Field::from_order(last),
             _ => Field::of_group(self.cursor.field.group().saturating_sub(1)),

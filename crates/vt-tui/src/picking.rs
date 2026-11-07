@@ -11,7 +11,7 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
-use vt_model::step::{FxCommand, FxSlot};
+use vt_model::step::{FxCommand, FxSlot, Gate, GateKind};
 use vt_model::target::Target;
 
 use crate::app::{App, Entry, Field};
@@ -310,10 +310,43 @@ impl App {
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot),
+            Field::Gate => self.open_gate_picker(),
             Field::Note | Field::Velocity => {
-                self.status = "K chooses on the FX columns".to_owned();
+                self.status = "K chooses on the gate and FX columns".to_owned();
             }
         }
+    }
+
+    /// List the gate types, with what each does and the cell's current one highlighted.
+    fn open_gate_picker(&mut self) {
+        let current = self.current_gate().map(|gate| gate.kind);
+        let empty = Item {
+            label: "---  Empty, one pulse of SGL".to_owned(),
+            pick: Pick::Gate(None),
+        };
+        let items = std::iter::once(empty)
+            .chain(GateKind::ALL.iter().map(|kind| Item {
+                label: format!("{}  {}", kind.name(), kind.meaning()),
+                pick: Pick::Gate(Some(*kind)),
+            }))
+            .collect();
+        let position = GateKind::ALL
+            .iter()
+            .position(|kind| Some(*kind) == current)
+            .map_or(0, |position| position + 1);
+        let mut picker = Picker::new("Gates", items);
+        picker.move_highlight(position as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Put a chosen gate type in the cell, keeping its pulses, or empty it.
+    fn pick_gate(&mut self, kind: Option<GateKind>) {
+        let gate = kind.map(|kind| Gate {
+            kind,
+            pulses: self.current_gate().map_or(1, |gate| gate.pulses),
+        });
+        self.set_field(FieldValue::Gate(gate));
     }
 
     /// List the FX commands, with what each does and this slot's current one highlighted.
@@ -497,6 +530,7 @@ impl App {
                     }
                     Some(Pick::Track(track)) => self.go_to_track(track),
                     Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
+                    Some(Pick::Gate(kind)) => self.pick_gate(kind),
                     Some(Pick::Lfo { track, slot, lfo }) => {
                         self.apply(&Action::SetLfo { track, slot, lfo });
                     }
