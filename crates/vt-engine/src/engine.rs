@@ -122,7 +122,13 @@ impl Engine {
         let mut engine = Self {
             rate,
             current,
-            tracks: Box::new(std::array::from_fn(|index| TrackState::new(seed, index))),
+            // Built on the heap a track at a time: each holds two voices with room for any synth,
+            // so the whole array is too big to build on the stack first.
+            tracks: (0..MAX_TRACKS)
+                .map(|index| TrackState::new(seed, index))
+                .collect::<Box<[TrackState]>>()
+                .try_into()
+                .unwrap_or_else(|_| unreachable!("one state for each track")),
             preview: Voice::default(),
             preview_track: 0,
             transport: Transport::Stopped,

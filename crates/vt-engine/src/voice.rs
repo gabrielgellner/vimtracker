@@ -3,7 +3,11 @@
 use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
 use crate::dsp::kick::Kick;
+use crate::dsp::modal::Modal;
+use crate::dsp::noise::Noise;
+use crate::dsp::particle::ParticleNoise;
 use crate::dsp::six_op::SixOp;
+use crate::dsp::string_model::StringModel;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
@@ -48,6 +52,10 @@ enum Synth {
     Waveshaping(Waveshaping),
     Wavetable(Wavetable),
     SixOp(SixOp),
+    String(StringModel),
+    Modal(Modal),
+    Dust(ParticleNoise),
+    Noise(Noise),
 }
 
 impl Synth {
@@ -59,6 +67,10 @@ impl Synth {
             SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
             SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
             SynthVoice::SixOp => Self::SixOp(SixOp::new(rate)),
+            SynthVoice::String => Self::String(StringModel::new(rate)),
+            SynthVoice::Modal => Self::Modal(Modal::new()),
+            SynthVoice::Dust => Self::Dust(ParticleNoise::new()),
+            SynthVoice::Noise => Self::Noise(Noise::new()),
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
             SynthVoice::Snare => Self::Snare(Snare::new(rate)),
             SynthVoice::Hat => Self::Hat(Hat::new(rate)),
@@ -76,6 +88,10 @@ impl Synth {
             Self::Waveshaping(synth) => synth.next(frequency, settings),
             Self::Wavetable(synth) => synth.next(frequency, settings),
             Self::SixOp(synth) => synth.next(frequency, settings),
+            Self::String(synth) => synth.next(frequency, settings),
+            Self::Modal(synth) => synth.next(frequency, settings),
+            Self::Dust(synth) => synth.next(frequency, settings),
+            Self::Noise(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -180,13 +196,25 @@ impl Voice {
         match &mut self.synth {
             Some(Synth::Snare(synth)) => synth.seed(seed),
             Some(Synth::Hat(synth)) => synth.seed(seed),
+            Some(Synth::String(synth)) => synth.seed(seed),
+            Some(Synth::Dust(synth)) => synth.seed(seed),
+            Some(Synth::Noise(synth)) => synth.seed(seed),
             _ => {}
         }
     }
 
     /// Whether this note's synth draws noise.
     pub fn uses_noise(&self) -> bool {
-        matches!(self.synth, Some(Synth::Snare(_) | Synth::Hat(_)))
+        matches!(
+            self.synth,
+            Some(
+                Synth::Snare(_)
+                    | Synth::Hat(_)
+                    | Synth::String(_)
+                    | Synth::Dust(_)
+                    | Synth::Noise(_)
+            )
+        )
     }
 
     /// Start the release of a note that would otherwise hold until something ended it.

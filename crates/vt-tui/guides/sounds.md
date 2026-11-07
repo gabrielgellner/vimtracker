@@ -58,6 +58,42 @@ made. A new patch takes over on the next note.
 | `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
 | `Time` | Attack and decay: as patched at `80`, faster below, slower above |
 
+`String` is a plucked string: a burst of noise ringing in a modelled string, which dies
+away by itself. Try a note around `C-3`.
+
+| Setting | Does |
+|---|---|
+| `Material` | A sitar's buzz at `00`, plain at `40`, more metal going up |
+| `Bright` | How bright the pluck is |
+| `Decay` | How long it rings. Near `FF` it rings until the next note |
+
+`Modal` is a struck resonator, for bells, bars, plates and woodblocks. It dies away by
+itself.
+
+| Setting | Does |
+|---|---|
+| `Material` | Partials bunched low, in tune at `40`, spread like a bell high |
+| `Bright` | How bright the strike is, and how long the high partials last |
+| `Decay` | How long it rings |
+
+`Dust` is random clicks through filters tuned around the note, for crackle, rain and
+droplets. It sounds until the note ends, shaped by the first envelope.
+
+| Setting | Does |
+|---|---|
+| `Spread` | How far each click's pitch strays from the note |
+| `Density` | How many clicks: a few at `00`, a hiss at `FF` |
+| `Filter` | Below `80`, more and more echoing; above, more and more ringing |
+
+`Noise` is noise, held for a clock's cycle, through a resonant filter at the note. It
+sounds until the note ends, shaped by the first envelope.
+
+| Setting | Does |
+|---|---|
+| `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
+| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
+| `Res` | How much the filter rings at the note |
+
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
 
 | Setting | Does |
@@ -84,9 +120,9 @@ hat, and raise `Decay` for an open one.
 | `Decay` | How long it rings |
 
 The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
-and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves` or `6-op` note holds
+and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves`, `6-op`, `Dust` or `Noise` note holds
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
-Sustain for plucks. The drums die away by themselves. A track plays one note at a time.
+Sustain for plucks. The drums, `String` and `Modal` die away by themselves. A track plays one note at a time.
 
 ## Choosing a sample
 

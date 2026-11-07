@@ -49,12 +49,12 @@ impl Default for Settings {
 }
 
 #[inline]
-fn this_blep(t: f32) -> f32 {
+pub(super) fn this_blep(t: f32) -> f32 {
     0.5 * t * t
 }
 
 #[inline]
-fn next_blep(t: f32) -> f32 {
+pub(super) fn next_blep(t: f32) -> f32 {
     let t = 1.0 - t;
     -0.5 * t * t
 }
