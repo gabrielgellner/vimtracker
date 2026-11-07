@@ -62,6 +62,20 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     text
 }
 
+/// The step as it will be once the value being typed is in: a command chosen in Insert waits for
+/// its value before it's written, but shows in its cell meanwhile.
+fn pending_step(app: &App, step: &Step, typing: bool) -> Option<Step> {
+    let (Field::FxValue(slot), Some(command)) = (app.cursor.field, app.entry.command) else {
+        return None;
+    };
+    if !typing {
+        return None;
+    }
+    let mut step = step.clone();
+    step.fx.get_mut(slot)?.command = Some(command);
+    Some(step)
+}
+
 /// Split text into runs of the same style, given a style for each character.
 fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
@@ -351,7 +365,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(spans));
             continue;
         };
+        let typing = index == app.cursor.step && matches!(app.mode, Mode::Insert | Mode::Replace);
+        let pending = pending_step(app, step, typing);
+        let step = pending.as_ref().unwrap_or(step);
         let mut text = step_text(step, app.track_here());
+        // The first digit of a value being typed shows in its place.
+        if typing
+            && matches!(app.cursor.field, Field::FxValue(_) | Field::Velocity)
+            && app.entry.text.len() == 1
+        {
+            let (start, end) = field_range(app.cursor.field);
+            if end <= text.len() {
+                text.replace_range(start..end, &format!("{}_", app.entry.text));
+            }
+        }
         // A lane's playhead goes in the gap before its column.
         for (slot, at) in lane_playheads.iter().enumerate() {
             let before = slot_columns(slot).0 - 1;

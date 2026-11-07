@@ -3072,6 +3072,41 @@ fn reset_shows_on_the_status_line_and_undoes() {
 }
 
 #[test]
+fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
+    let (mut app, _realtime) = app();
+    let row = |app: &App| -> String {
+        let buffer = screen(app);
+        (0..80).map(|x| buffer[(x, 2)].symbol()).collect()
+    };
+    // From K on an empty cell, as from typing, the command waits for its value.
+    press(&mut app, "lllK");
+    press(&mut app, "CUT");
+    special(&mut app, KeyCode::Enter);
+    assert!(row(&app).contains("CUT   00"), "{}", row(&app));
+    assert_eq!(
+        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        None,
+        "not written yet"
+    );
+    press(&mut app, "4");
+    assert!(row(&app).contains("CUT   4_"), "{}", row(&app));
+    press(&mut app, "0");
+    assert_eq!(
+        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        Some(vt_model::step::FxCommand::Cut)
+    );
+    // Typing the name works the same way, over a value already there.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "khiRES");
+    assert!(row(&app).contains("RES   40"), "{}", row(&app));
+    assert_eq!(
+        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        Some(vt_model::step::FxCommand::Cut),
+        "still the old one until the value"
+    );
+}
+
+#[test]
 fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let mut song = Song::new(1);
     let step = |text: &str| text.parse::<Step>().unwrap();
