@@ -10,7 +10,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::track_page::{Control, MIXER};
-use crate::views::track::value;
+use crate::views::track::{name_spans, value, value_spans};
 
 /// Room for a track's number and name.
 const NAME_WIDTH: usize = 8;
@@ -30,14 +30,20 @@ fn first_shown(cursor: usize, tracks: usize, rows: usize) -> usize {
 /// Draw the mixer.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let mut heading = " ".repeat(NAME_WIDTH);
+    let mut heading = vec![Span::raw(" ".repeat(NAME_WIDTH))];
     for control in MIXER {
-        heading.push_str(&format!("{:<COLUMN_WIDTH$}", control.label()));
+        let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
+        heading.extend(name_spans(
+            app,
+            control.label(),
+            &label.map_or_else(String::new, String::from),
+            COLUMN_WIDTH,
+        ));
     }
     let mut lines = vec![
         Line::styled("Mixer", bold),
         Line::raw(""),
-        Line::styled(heading, theme::dim()),
+        Line::from(heading),
     ];
     let song = app.song();
     let rows = usize::from(area.height.saturating_sub(ROWS_AROUND_TRACKS));
@@ -65,7 +71,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Style::new()
             };
             let gap = COLUMN_WIDTH.saturating_sub(text.chars().count());
-            spans.push(Span::styled(text, style));
+            // A jump's labels go on the cursor's track, which it stays on.
+            if here {
+                spans.extend(value_spans(app, control, text, style));
+            } else {
+                spans.push(Span::styled(text, style));
+            }
             spans.push(Span::raw(" ".repeat(gap)));
         }
         lines.push(Line::from(spans));

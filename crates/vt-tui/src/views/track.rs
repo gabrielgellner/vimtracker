@@ -138,7 +138,12 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 }
 
 /// A setting's value, with a jump's label over its first letter if it has one.
-fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<Span<'static>> {
+pub(crate) fn value_spans(
+    app: &App,
+    control: Control,
+    text: String,
+    style: Style,
+) -> Vec<Span<'static>> {
     let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
     match label {
         Some(label) => vec![
@@ -151,7 +156,7 @@ fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<S
 
 /// A setting's name in its column, with any labels from a jump over the letters just after what's
 /// been typed, as flash.nvim draws them, since that's where the eye is while searching.
-fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Vec<Span<'static>> {
+pub(crate) fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Vec<Span<'static>> {
     let letters: Vec<char> = name.chars().collect();
     let typed = app.field_jump.as_ref().and_then(|jump| {
         let at = name.to_lowercase().find(&jump.query)?;

@@ -379,6 +379,7 @@ const MIXER: &[(&str, Cmd, &str)] = &[
     ("C-x", Cmd::Decrease, "Decrease the value"),
     ("x", Cmd::ClearField, "Back to its default"),
     ("K", Cmd::PickValue, "Switch mute or solo"),
+    ("/", Cmd::FieldJump, "Jump to a setting by its name"),
 ];
 
 /// Keys that act on a selection.

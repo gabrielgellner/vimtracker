@@ -107,6 +107,9 @@ pub const MIXER: [Control; 6] = [
     Control::Solo,
 ];
 
+/// The mixer's columns, as rows like a page's.
+pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
+
 const fn base(control: TrackControl) -> Control {
     Control::Base(control)
 }

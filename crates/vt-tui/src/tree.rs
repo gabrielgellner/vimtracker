@@ -27,10 +27,11 @@ pub enum ChainColumn {
 pub struct Place {
     view: View,
     cursor: Cursor,
-    /// Where on the track page, as a jump can land on another of its settings.
+    /// Where on the track page or the mixer, as a jump can land on another of their settings.
     track_page: Page,
     track_row: usize,
     track_field: usize,
+    mixer_column: usize,
 }
 
 impl App {
@@ -54,6 +55,7 @@ impl App {
             track_page: self.track_page,
             track_row: self.track_row,
             track_field: self.track_field,
+            mixer_column: self.mixer_column,
         }
     }
 
@@ -75,6 +77,9 @@ impl App {
         if place.view == View::Track {
             self.track_page = place.track_page;
             self.move_control(place.track_row, place.track_field);
+        }
+        if place.view == View::Mixer {
+            self.mixer_column = place.mixer_column;
         }
     }
 
