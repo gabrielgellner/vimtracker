@@ -5,9 +5,10 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
-use vt_model::lfo::{Destination, Lfo, Rate};
+use vt_model::lfo::{Lfo, Rate};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
+use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 const STEP: usize = 6000;
@@ -109,7 +110,7 @@ fn step_commands_lock_its_settings() {
 
 #[test]
 fn an_lfo_moves_its_settings() {
-    for destination in [Destination::Har, Destination::Tim, Destination::Mor] {
+    for destination in [Target::Har, Target::Tim, Target::Mor] {
         let mut moving = song(&[NOTE, REST, REST, REST]);
         moving.tracks[0].lfos[0] = Lfo {
             destination: Some(destination),

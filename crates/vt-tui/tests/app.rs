@@ -8,12 +8,13 @@ use ratatui::style::Color;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
-use vt_model::lfo::{Destination, Lfo, Rate, Shape};
+use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
 use vt_model::song::{
     Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song, SynthVoice,
 };
 use vt_model::step::{Note, Step};
+use vt_model::target::Target;
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
@@ -2254,11 +2255,11 @@ fn the_track_page_types_lfo_settings() {
     // Down to LFO 1, on Dest.
     press(&mut app, "Ljj0");
     press(&mut app, "=");
-    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+    assert_eq!(lfo(&app).destination, Some(Target::Cut));
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
-    assert_eq!(lfo(&app).destination, Some(Destination::Mor));
+    assert_eq!(lfo(&app).destination, Some(Target::Mor));
 
     press(&mut app, "l=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
@@ -2320,10 +2321,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.view, View::Track);
-    assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
-        Some(Destination::Res)
-    );
+    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
     assert_eq!(app.song().tracks[1].lfos[0], Lfo::default());
     assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
 
@@ -2332,22 +2330,16 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "0K");
     assert_eq!(app.picker.as_ref().unwrap().selected, 2);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
-        Some(Destination::Res)
-    );
+    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
     press(&mut app, "K");
     press(&mut app, "pan");
     special(&mut app, KeyCode::Enter);
     let lfo = app.song().tracks[1].lfos[1];
-    assert_eq!(lfo.destination, Some(Destination::Pan));
+    assert_eq!(lfo.destination, Some(Target::Pan));
     assert_eq!(lfo.rate, Rate::Steps(7));
 
     press(&mut app, "u");
-    assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
-        Some(Destination::Res)
-    );
+    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
 }
 
 fn typed_rate_on_second_lfo(app: &mut App) {
@@ -2485,7 +2477,7 @@ fn the_track_page_sets_envelopes() {
     assert_eq!(app.picker.as_ref().unwrap().selected, 1, "opens on Cut");
     press(&mut app, "pitch");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(env(&app, 1).destination, Some(Destination::Pitch));
+    assert_eq!(env(&app, 1).destination, Some(Target::Pitch));
     press(&mut app, "lllll");
     typed(&mut app, "+18");
     assert_eq!(env(&app, 1).depth, 0x18);
@@ -2555,7 +2547,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
     };
     press(&mut app, "Ljj0");
     choose(&mut app, "cut");
-    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+    assert_eq!(lfo(&app).destination, Some(Target::Cut));
 
     press(&mut app, "l");
     choose(&mut app, "square");
@@ -2696,7 +2688,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(lfo(&app).shape, Shape::Saw);
     press(&mut app, "hx");
     assert_eq!(lfo(&app).shape, Shape::Tri);
-    assert_eq!(lfo(&app).destination, Some(Destination::Cut));
+    assert_eq!(lfo(&app).destination, Some(Target::Cut));
     press(&mut app, "hx");
     assert_eq!(lfo(&app), Lfo::default());
 

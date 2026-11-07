@@ -7,9 +7,9 @@ use vt_model::constants::{
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
-use vt_model::lfo::Destination;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
+use vt_model::target::Target;
 
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
@@ -589,7 +589,7 @@ impl Engine {
             .tracks
             .get(index)
             .map(|track| track.envelopes[0])
-            .filter(|envelope| envelope.destination == Some(Destination::Vol))
+            .filter(|envelope| envelope.destination == Some(Target::Vol))
             .unwrap_or_default()
     }
 

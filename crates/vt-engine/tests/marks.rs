@@ -7,10 +7,11 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::constants::UNITY_LEVEL;
-use vt_model::lfo::{Destination, Lfo, Rate, Shape};
+use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Phrase, Song, level_gain};
+use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -179,7 +180,7 @@ fn an_lfo_carries_on_around_a_lock_as_around_a_hold() {
     let with = |text: &str| {
         let mut start = song(&[text]);
         start.tracks[0].lfos[0] = Lfo {
-            destination: Some(Destination::Vol),
+            destination: Some(Target::Vol),
             shape: Shape::Sine,
             rate: Rate::Hertz(400),
             depth: 0x20,

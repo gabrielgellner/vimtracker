@@ -5,10 +5,11 @@ use vt_engine::link::{Command, connect};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
-use vt_model::lfo::{Destination, Lfo, Rate, Shape};
+use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
+use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -67,7 +68,7 @@ fn song(texts: &[&str]) -> Song {
 fn moving(lfo: Lfo) -> Song {
     let mut song = song(&["C-4 -- VOL80 ---00 ---00"]);
     song.tracks[0].lfos[0] = Lfo {
-        destination: Some(Destination::Vol),
+        destination: Some(Target::Vol),
         depth: 0x40,
         ..lfo
     };
@@ -178,7 +179,7 @@ fn retrig_restarts_it_on_each_note() {
     let ramp = |retrig| {
         let mut song = song(&texts);
         song.tracks[0].lfos[0] = Lfo {
-            destination: Some(Destination::Vol),
+            destination: Some(Target::Vol),
             shape: Shape::Ramp,
             rate: Rate::Note(QUARTER * 4),
             depth: 0x40,
@@ -292,7 +293,7 @@ fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
     let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
     moved.tracks[0].cutoff = 0xFF;
     moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(Destination::Cut),
+        destination: Some(Target::Cut),
         rate: Rate::Note(QUARTER),
         depth: 0xC0,
         ..Lfo::default()
@@ -392,22 +393,22 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
         };
         song
     };
-    let cut = moved(Destination::Cut, |song| song.tracks[0].cutoff = 0x80);
+    let cut = moved(Target::Cut, |song| song.tracks[0].cutoff = 0x80);
     assert_eq!(live_after(cut.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(cut.clone(), 3).cutoff, 0x60);
 
-    let har = moved(Destination::Har, |song| song.tracks[0].harmonics = 0x80);
+    let har = moved(Target::Har, |song| song.tracks[0].harmonics = 0x80);
     assert_eq!(live_after(har, 1).harmonics, 0xA0);
 
-    let dly = moved(Destination::Dly, |song| song.tracks[0].delay = 0x40);
+    let dly = moved(Target::Dly, |song| song.tracks[0].delay = 0x40);
     assert_eq!(live_after(dly, 1).delay, 0x60);
 
     // `Vol` shows on the track's level, around its own setting.
-    let vol = moved(Destination::Vol, |song| song.tracks[0].level = 0x90);
+    let vol = moved(Target::Vol, |song| song.tracks[0].level = 0x90);
     assert_eq!(live_after(vol, 1).level, 0xB0);
 
     // It clamps at the ends of the range.
-    let high = moved(Destination::Cut, |song| song.tracks[0].cutoff = 0xF0);
+    let high = moved(Target::Cut, |song| song.tracks[0].cutoff = 0xF0);
     assert_eq!(live_after(high, 1).cutoff, 0xFF);
 
     // A step's command is what's playing as well.
@@ -437,7 +438,7 @@ fn the_first_envelope_on_vol_does_not_move_the_level() {
 fn an_envelope_on_cut_moves_the_live_value() {
     let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
     song.tracks[0].cutoff = 0x40;
-    song.tracks[0].envelopes[1].destination = Some(Destination::Cut);
+    song.tracks[0].envelopes[1].destination = Some(Target::Cut);
     song.tracks[0].envelopes[1].attack_ms = 0;
     song.tracks[0].envelopes[1].decay_ms = 0;
     song.tracks[0].envelopes[1].sustain = 100;
