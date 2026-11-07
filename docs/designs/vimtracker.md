@@ -1481,7 +1481,7 @@ Now, a track's place is worked out from the song's: `(section step - where its c
 
 *   **Each column has a loop.** The note column, with its velocity, and each FX column has its own length and start, kept with the phrase. By default, each column follows the phrase's loop, so nothing changes until a length is set.
 *   **Each column has a counter.** It moves on one step at a time, and reads its own row: `start + count % length`.
-*   **Counters keep going across a phrase's repeats.** Otherwise there's no drift. Going back to the top, a section's reset, `Space c` and realigning all set them back to the start. This is open: it could go back with each repeat of the phrase.
+*   **Counters keep going across a phrase's repeats,** decided with the author, so columns drift unless something resets them, just as tracks of unequal lengths do now. Going back to the top, a section's reset, `Space c` and realigning all set them back to the start.
 *   **A chain moves on** when the note column's loop ends. FX columns carry on counting into the next phrase, and read that phrase's rows.
 *   **Keys.** The loop keys work on the cursor's column when given a column, so `gs` and `ge` set where it starts and ends, and `:len 12` sets its length. Rotate and slide follow. The exact keys are worked out with the author before building.
 *   **On screen.** Each column dims the rows outside its own loop, and has its own playhead.
