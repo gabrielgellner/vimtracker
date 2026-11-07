@@ -69,6 +69,17 @@ loop, and when it ends, the chain moves on to its next phrase.
 
 Any gate with `0` pulses skips its row.
 
+Here's a phrase with gates. Row 00 holds for 3 steps, then ties into row 01. Row 02
+plays twice, row 03 is skipped, and row 04 rests for 2 steps. The yellow numbers are
+beats, and they fall on the rows that start on a beat, however long the rows before
+them are.
+
+![A phrase with a gate column](images/gates.svg)
+
+`K` on the gate column chooses a gate from a list, keeping its pulses:
+
+![The list of gates](images/gate-list.svg)
+
 ## An FX column has two modes
 
 ### Without a lane: it follows the notes
@@ -99,6 +110,12 @@ count:      0  1  2  3  4  5  6  7  8  9 …
 lane row:   00 01 02 00 01 02 00 01 02 00         count % 3
 note row:   00 01 02 03 04 05 06 07 08 09         a 16-row loop
 ```
+
+Here FX 1 is a lane of 3, with the title showing `FX1:3`. After 21 steps the notes
+are on row 04, while the lane, with its own `>`, is on row 02, as `20 % 3 = 2`. The
+rows outside its lane are dim in that column only.
+
+![An FX column playing its own lane](images/lane.svg)
 
 On the phrase's second pass, at count 16, the notes are back at row 00, but the lane
 is at row `16 % 3 = 1`. That's the **drift**, and it carries on across repeats and

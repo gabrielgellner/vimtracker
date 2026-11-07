@@ -22,3 +22,7 @@ cargo run --release -p vt-tui --bin vimtracker
 
 or, with [just](https://github.com/casey/just) installed, `just run my-song` to open or
 start a project in the folder `my-song`.
+
+The pictures of the program in this manual are made from the program itself, with
+`just screenshots`, so they show what it really draws. What the terminal draws as
+images, like the filter curve, isn't in them.

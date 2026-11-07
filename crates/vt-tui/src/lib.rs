@@ -12,6 +12,7 @@ pub mod meter;
 pub mod picking;
 pub mod probe;
 pub mod run;
+pub mod screenshot;
 pub mod shaping;
 pub mod song_view;
 pub mod theme;

@@ -6,6 +6,10 @@ default:
 run *args:
     cargo run --release -p vt-tui --bin vimtracker -- {{args}}
 
+# Make the manual's screenshots of the interface, as SVGs in docs/manual/src/images
+screenshots:
+    cargo run --release -q -p vt-tui --example screenshots
+
 # Build the manual into docs/manual/book
 docs:
     mdbook build docs/manual
