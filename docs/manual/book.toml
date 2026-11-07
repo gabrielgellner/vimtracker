@@ -1,0 +1,12 @@
+[book]
+title = "vimtracker"
+description = "A music tracker for the terminal, edited with a keyboard grammar modelled on Neovim."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
