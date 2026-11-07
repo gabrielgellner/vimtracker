@@ -1305,7 +1305,7 @@ LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan,
                                                       An LFO's Depth and Phase
 ```
 
-**Registering.** An owner declares its targets in a static table: name, short code, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two share a code.
+**Registering.** An owner declares its targets in a static table: name, group, short code, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two share a code.
 
 **Targets at first.**
 
@@ -1318,6 +1318,30 @@ LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan,
 A step command is the slot's number and the setting's two letters, so its text always says where it goes. It does nothing if what's in the slot doesn't have that setting, and it takes locks, holds and glides. Targets belong to the slot and not the effect: after moving an effect, `1AM80` still goes to slot 1.
 
 There's no special case for what moves a target. A stepped setting rounds the result to a whole step, so an LFO on `Bits` just steps, and one on `Type` jumps between types. Choosing to do that is the author's.
+
+**Choosing a target.** The list grows with every effect, so a picker with groups can be browsed as well as searched. It takes after two things. Snacks' explorer, the author's `<leader>fe`, is one picker with two places to be: it opens on the list, where `h` and `l` close and open a folder, `/` goes to the search and back, and `i` goes to it too. Its search keeps a match's parents showing, so the tree doesn't disappear. The Digitakt II's preset browser has a list with a `FILTER` list beside it, and a separate text search.
+
+```text
+Dest
+  Filter    │ > Amount
+  Machine   │   Mix
+  Output    │   Gain
+> FX 1      │   Type
+  FX 2      │
+  LFO 1     │
+```
+
+| In | Keys | Does |
+|---|---|---|
+| The list | `j` `k` | Move, and `Enter` chooses |
+| The list | `h` | Go to the groups |
+| The groups | `j` `k` | Choose a group, showing what's in it |
+| The groups | `l` or `Enter` | Go to the list |
+| Either | `/` | Go to the search, or back |
+| The search | Typing | Narrows across every group, showing each match's group, and `Enter` chooses the first |
+| Any | `Esc` | Close, changing nothing |
+
+It opens on the list, on the current choice. A group comes from what's on the track, so an empty slot isn't there, and a group with one thing in it shows that thing directly. A short list with no groups stays as pickers are now, opening on the search, so `K` then `pl` still works. Two levels are enough for targets. More levels, and tags that cut across groups as the Digitakt II's do, wait for something that needs them, like a sample browser. Step commands and the sample picker can use this later.
 
 **Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
 
@@ -1334,6 +1358,7 @@ There's no special case for what moves a target. A stepped setting rounds the re
 1.  **The table, and the existing targets on it:** `Target`, registering, and the `Dest` list built from it. **Tests:** golden renders unchanged, every existing destination still does what it did, no two codes are the same, and the list holds only what's on the track.
 2.  **A slot's settings as targets:** the layers, `process(input, values)`, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
 3.  **An LFO's `Depth` and `Phase` as targets:** the order and the one-way lists. **Tests:** `LFO 1` moving `LFO 2`, the list offering no way back, and a song rendering the same each time.
+4.  **A picker with groups, for `Dest`:** the two columns and `/`. **Tests:** each key in each place, opening on the current choice, a search reaching every group, one thing in a group shown directly, `Esc` changing nothing, and flat pickers behaving as they did.
 
 **Done when** the author has used it in a jam, and the cost of a track with its slots full and moving is measured in a release build.
 
