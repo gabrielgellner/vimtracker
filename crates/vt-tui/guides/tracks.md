@@ -49,8 +49,8 @@ doesn't show `Drive`'s saturation.
 ## Jumping to a setting
 
 Press `/` and type part of a setting's name, like `cu`, and each match on this page
-gets a label over its value. Press a label to land on that value, ready for `=`
-and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `Ctrl-O`
+gets a label over its value, and again after its name. Press a label to land on
+that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `Ctrl-O`
 comes back after a jump.
 
 A label is never a letter that could carry on your search, so you can keep typing to

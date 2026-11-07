@@ -4295,7 +4295,10 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
         .unwrap();
     let label = &jump_labels(&app)[0][..1];
     let text = track_text(&app).join("\n");
-    assert!(text.contains(&format!("Res       {label}0 ")), "{text}");
+    assert!(
+        text.contains(&format!("Res{label}      {label}0 ")),
+        "{text}"
+    );
     assert!(text.contains("Cut       FF "), "{text}");
     let buffer = terminal.backend().buffer().clone();
     let y = (0..24)
@@ -4312,6 +4315,41 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
         .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_owned())
         .collect();
     assert_eq!(last, "/res");
+}
+
+#[test]
+fn a_jumps_labels_also_follow_the_names_being_searched() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4/cu");
+    let line = |app: &App, name: &str| {
+        track_text(app)
+            .into_iter()
+            .find(|line| line.starts_with(name))
+            .unwrap()
+    };
+    // In the same columns as without a label.
+    assert!(line(&app, "Cut").starts_with("Cuts      sF ▕"));
+    assert!(line(&app, "Low cut").starts_with("Low cutd  d0 ▕"));
+    assert!(line(&app, "High cut").starts_with("High cutf fF ▕"));
+    assert!(line(&app, "Res").starts_with("Res       00 ▕"));
+    special(&mut app, KeyCode::Esc);
+
+    // A name over two rows has both their labels, and the columns stay put.
+    press(&mut app, "L/dep");
+    let labels = jump_labels(&app);
+    let text = track_text(&app);
+    let heading = text.iter().find(|line| line.contains("Attack")).unwrap();
+    assert!(
+        labels.iter().all(|label| label.ends_with("Depth")),
+        "{labels:?}"
+    );
+    assert!(heading.contains("Depth"), "{heading}");
+    assert!(heading.contains("Reset"), "{heading}");
+    let at = |line: &str, word: &str| line.find(word).unwrap();
+    special(&mut app, KeyCode::Esc);
+    let plain = track_text(&app);
+    let before = plain.iter().find(|line| line.contains("Attack")).unwrap();
+    assert_eq!(at(heading, "Reset"), at(before, "Reset"));
 }
 
 #[test]
