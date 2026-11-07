@@ -1313,7 +1313,7 @@ LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan,
 |---|---|---|
 | The existing ten | `Cut`, `Pan` and so on | `CUT`, `PAN` and so on |
 | A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | Named the same |
-| An LFO's settings | `LFO 1 Depth`, `LFO 1 Phase` | None |
+| An LFO's settings | `L2 Depth`, `L2 Phase` | None |
 
 A step can set any of these. A slot's setting has one command, holding the slot and its place in the effect's list, and it reads as the setting's name, as `Dest` does, so nothing has to be generated or learned, and a new effect adds no commands. FX columns are 8 characters wide for this, as small terminals aren't supported. A file holds the slot and place, like `1.1`. It takes locks, holds and glides, and `K` lists what's on the track, or `1am` types it by the slot and the start of a name. A command belongs to the slot and place, and not the effect: after changing what's in a slot, it reads as whatever's now there, and does nothing in an empty slot.
 

@@ -355,6 +355,8 @@ mod tests {
         song.tracks[0].lfos[0].depth = 0x80;
         song.tracks[0].envelopes[1].destination = Some(target);
         song.tracks[0].envelopes[1].depth = 0x40;
+        song.tracks[0].lfos[1].destination = Some(Target::Cut);
+        song.tracks[0].lfos[0].destination = Some(Target::LfoDepth { lfo: 1 });
         let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
         for step in 0..8 {
             *phrase.step_mut(step).unwrap() = "C-4 -- 1.180g 2.340 3.220h".parse().unwrap();

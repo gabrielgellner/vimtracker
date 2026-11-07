@@ -703,3 +703,101 @@ fn a_target_that_is_not_on_the_track_does_nothing() {
         );
     }
 }
+
+/// LFO 1 moving something of LFO 2's, which is on `Cut`.
+fn lfo_on_lfo(target: Target, depth: i16, second: Lfo) -> Song {
+    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+    moved.tracks[0].cutoff = 0x80;
+    moved.tracks[0].lfos[0] = Lfo {
+        destination: Some(target),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER * 2),
+        depth,
+        ..Lfo::default()
+    };
+    moved.tracks[0].lfos[1] = Lfo {
+        destination: Some(Target::Cut),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER),
+        ..second
+    };
+    moved
+}
+
+#[test]
+fn an_lfo_moves_another_lfos_depth() {
+    // LFO 2 has no depth of its own, so it only moves while LFO 1 gives it some. A half note is 8
+    // steps, so LFO 1 is up for the first 4, and down for the next.
+    let moved = lfo_on_lfo(Target::LfoDepth { lfo: 1 }, 0x20, Lfo::default());
+    // LFO 2 is a quarter long, up for 2 steps and down for 2.
+    assert_eq!(live_after(moved.clone(), 1).cutoff, 0xA0);
+    assert_eq!(live_after(moved.clone(), 3).cutoff, 0x60);
+    // With LFO 1 down, the depth is negative, so LFO 2 flips.
+    assert_eq!(live_after(moved.clone(), 5).cutoff, 0x60);
+    assert_eq!(live_after(moved, 7).cutoff, 0xA0);
+}
+
+#[test]
+fn an_lfo_moves_another_lfos_phase() {
+    let second = Lfo {
+        depth: 0x20,
+        ..Lfo::default()
+    };
+    // A depth of 0x80 is half a cycle, either way, so LFO 2 is flipped from where it would be.
+    let moved = lfo_on_lfo(Target::LfoPhase { lfo: 1 }, 0x80, second);
+    let plain = lfo_on_lfo(Target::Pitch, 0, second);
+    assert_eq!(live_after(plain, 1).cutoff, 0xA0);
+    assert_eq!(live_after(moved, 1).cutoff, 0x60);
+}
+
+#[test]
+fn an_lfo_moving_another_goes_one_way_only() {
+    // LFO 2 on LFO 1's depth, set in a file, does nothing, as LFO 1 has already run.
+    let mut back = song(&["C-4 -- ---00 ---00 ---00"]);
+    back.tracks[0].cutoff = 0x80;
+    back.tracks[0].lfos[0] = Lfo {
+        destination: Some(Target::Cut),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER),
+        depth: 0x20,
+        ..Lfo::default()
+    };
+    let plain = back.clone();
+    back.tracks[0].lfos[1] = Lfo {
+        destination: Some(Target::LfoDepth { lfo: 0 }),
+        depth: 0x40,
+        ..Lfo::default()
+    };
+    assert_eq!(
+        render_frames(version(back, flat()), RATE, STEP * 8),
+        render_frames(version(plain, flat()), RATE, STEP * 8)
+    );
+}
+
+#[test]
+fn an_envelope_moves_an_lfos_depth() {
+    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+    moved.tracks[0].cutoff = 0x80;
+    moved.tracks[0].lfos[0] = Lfo {
+        destination: Some(Target::Cut),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER),
+        ..Lfo::default()
+    };
+    let envelope = &mut moved.tracks[0].envelopes[1];
+    envelope.destination = Some(Target::LfoDepth { lfo: 0 });
+    envelope.depth = 0x20;
+    envelope.attack_ms = 0;
+    envelope.decay_ms = 0;
+    envelope.sustain = 100;
+    assert_eq!(live_after(moved, 1).cutoff, 0xA0);
+}
+
+#[test]
+fn an_lfo_moving_another_renders_the_same_each_time() {
+    let render = || {
+        let moved = lfo_on_lfo(Target::LfoDepth { lfo: 1 }, 0x20, Lfo::default());
+        render_frames(version(moved, flat()), RATE, STEP * 8)
+    };
+    assert_eq!(render(), render());
+}

@@ -490,7 +490,7 @@ impl App {
             Control::Lfo(slot, field) => {
                 let mut lfo = track.lfos[slot];
                 for _ in 0..count.min(0x200) {
-                    adjust_lfo(&mut lfo, field, up, large, &track);
+                    adjust_lfo(&mut lfo, slot, field, up, large, &track);
                 }
                 self.set_lfo(slot, lfo);
             }
@@ -844,7 +844,7 @@ impl App {
                         ..lfo
                     },
                 );
-                let on = Target::on_track(&page).into_iter().map(|destination| {
+                let on = Target::for_lfo(&page, slot).into_iter().map(|destination| {
                     (
                         format!(
                             "{}  {}",
@@ -1022,7 +1022,7 @@ impl App {
                         ..envelope
                     },
                 );
-                let on = Target::on_track(&page).into_iter().map(|destination| {
+                let on = Target::for_envelope(&page).into_iter().map(|destination| {
                     (
                         format!(
                             "{}  {}",
@@ -1239,7 +1239,7 @@ fn adjust_envelope(
     match field {
         EnvelopeField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::on_track(track).into_iter().map(Some));
+            choices.extend(Target::for_envelope(track).into_iter().map(Some));
             envelope.destination = next_in(&choices, envelope.destination, up);
         }
         EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
@@ -1260,11 +1260,11 @@ fn adjust_envelope(
 }
 
 /// Move one setting of an LFO one notch.
-fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool, large: bool, track: &Track) {
+fn adjust_lfo(lfo: &mut Lfo, slot: usize, field: LfoField, up: bool, large: bool, track: &Track) {
     match field {
         LfoField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::on_track(track).into_iter().map(Some));
+            choices.extend(Target::for_lfo(track, slot).into_iter().map(Some));
             lfo.destination = next_in(&choices, lfo.destination, up);
         }
         LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
