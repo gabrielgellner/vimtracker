@@ -321,22 +321,19 @@ impl App {
             },
         };
         let track = self.song().tracks.get(self.cursor.track);
-        // Those for a slot's settings are there while the slot holds something.
+        // Only what this track has, from its machine and its slots.
         let commands: Vec<FxCommand> = FxCommand::ALL
             .into_iter()
-            .filter(|command| match (*command, track) {
-                (FxCommand::Slot { slot, param }, Some(track)) => {
-                    usize::from(param) < track.inserts[usize::from(slot)].params().len()
-                }
-                _ => true,
-            })
+            .filter(|command| track.is_none_or(|track| command.exists_on(track)))
             .collect();
         let items = std::iter::once(empty)
             .chain(commands.iter().map(|command| {
-                let (name, meaning) = match (*command, track) {
-                    (FxCommand::Slot { slot, param }, Some(track)) => {
-                        let target = Target::Slot { slot, param };
+                let (name, meaning) = match (command.target(), track) {
+                    (Some(target @ Target::Slot { .. }), Some(track)) => {
                         (target.name_on(track), target.meaning_on(track))
+                    }
+                    (Some(_), Some(track)) => {
+                        (command.name_on(track), command.meaning().to_owned())
                     }
                     _ => (command.name().to_owned(), command.meaning().to_owned()),
                 };

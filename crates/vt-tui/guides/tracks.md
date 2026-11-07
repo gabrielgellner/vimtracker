@@ -80,6 +80,10 @@ brings them in, and `Mix` blends it with the sound going in, from `00` dry to `F
 turns down what comes out, as `Amount` can make it much louder, on the level scale,
 where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
+`Dest` and step commands only list what's loaded: a synth's settings under their names on
+that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
+nothing until it's back.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

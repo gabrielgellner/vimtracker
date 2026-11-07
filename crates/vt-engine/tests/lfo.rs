@@ -9,7 +9,7 @@ use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Song, level_gain};
+use vt_model::song::{Machine, Song, level_gain};
 use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
@@ -399,7 +399,10 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
     assert_eq!(live_after(cut.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(cut.clone(), 3).cutoff, 0x60);
 
-    let har = moved(Target::Har, |song| song.tracks[0].harmonics = 0x80);
+    let har = moved(Target::Har, |song| {
+        song.tracks[0].machine = Machine::Plaits;
+        song.tracks[0].harmonics = 0x80;
+    });
     assert_eq!(live_after(har, 1).harmonics, 0xA0);
 
     let dly = moved(Target::Dly, |song| song.tracks[0].delay = 0x40);
@@ -639,4 +642,64 @@ fn modulating_a_slot_is_heard_and_renders_the_same_each_time() {
     };
     assert_eq!(render(0x80), render(0x80));
     assert_ne!(render(0x80), render(0));
+}
+
+/// How far a track's level swings in decibels over the last of a render.
+fn swing_db(out: &[f32]) -> f32 {
+    let left: Vec<f32> = out.iter().step_by(2).map(|sample| sample.abs()).collect();
+    let tail = &left[left.len() / 2..];
+    let most = tail.iter().copied().fold(0.0, f32::max);
+    let least = tail.iter().copied().fold(1.0, f32::min);
+    20.0 * (most / least).log10()
+}
+
+#[test]
+fn a_fast_lfo_keeps_its_depth() {
+    let swing = |hertz: u32, destination| {
+        let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+        moved.tracks[0].lfos[0] = Lfo {
+            destination: Some(destination),
+            shape: Shape::Sine,
+            rate: Rate::Hertz(hertz * 100),
+            depth: 0x40,
+            ..Lfo::default()
+        };
+        swing_db(&render_frames(
+            version(moved, flat()),
+            RATE,
+            RATE as usize / 2,
+        ))
+    };
+    for destination in [Target::Vol, Target::Pan] {
+        let (slow, fast) = (swing(2, destination), swing(50, destination));
+        assert!(
+            fast > slow - 1.5,
+            "{destination:?}: {slow} dB slow, {fast} dB fast"
+        );
+    }
+}
+
+#[test]
+fn a_target_that_is_not_on_the_track_does_nothing() {
+    // Har on a sample track, and a slot with nothing in it.
+    let plain = render_frames(
+        version(song(&["C-4 -- ---00 ---00 ---00"]), flat()),
+        RATE,
+        STEP,
+    );
+    for destination in [Target::Har, AMOUNT_TARGET] {
+        let mut dead = song(&["C-4 -- ---00 ---00 ---00"]);
+        dead.tracks[0].lfos[0] = Lfo {
+            destination: Some(destination),
+            depth: 0xFF,
+            ..Lfo::default()
+        };
+        dead.tracks[0].envelopes[1].destination = Some(destination);
+        dead.tracks[0].envelopes[1].depth = 0xFF;
+        assert_eq!(
+            render_frames(version(dead, flat()), RATE, STEP),
+            plain,
+            "{destination:?}"
+        );
+    }
 }

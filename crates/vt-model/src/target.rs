@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::insert::{INSERTS, MAX_PARAMS};
-use crate::song::Track;
+use crate::song::{Machine, Track};
 use crate::step::FxCommand;
 
 /// Something an LFO or an envelope can move, in the same units as its FX command.
@@ -109,8 +109,39 @@ impl Target {
         }
     }
 
-    /// The name on screen, on this track, as a slot's settings depend on what's in it.
+    /// Which of a machine's settings this is, if it's one of them.
+    const fn machine_setting(self) -> Option<usize> {
+        match self {
+            Self::Har => Some(0),
+            Self::Tim => Some(1),
+            Self::Mor => Some(2),
+            _ => None,
+        }
+    }
+
+    /// Whether this track has it: a machine's settings are on tracks playing that machine, and a
+    /// slot's while the slot holds something with that setting. Anything else does no work.
+    pub fn exists_on(self, track: &Track) -> bool {
+        match self {
+            Self::Har | Self::Tim | Self::Mor => track.machine == Machine::Plaits,
+            Self::Slot { slot, param } => track
+                .inserts
+                .get(usize::from(slot))
+                .is_some_and(|insert| usize::from(param) < insert.params().len()),
+            _ => true,
+        }
+    }
+
+    /// The name on screen, on this track, as settings depend on what's loaded. One chosen and no
+    /// longer there says so.
     pub fn name_on(self, track: &Track) -> String {
+        if let Some(setting) = self.machine_setting() {
+            return if self.exists_on(track) {
+                track.synth_voice.settings()[setting].to_owned()
+            } else {
+                format!("{} ---", self.info().name)
+            };
+        }
         let Self::Slot { slot, param } = self else {
             return self.info().name.to_owned();
         };
@@ -126,6 +157,9 @@ impl Target {
 
     /// What it does, for a list to choose from, on this track.
     pub fn meaning_on(self, track: &Track) -> String {
+        if self.machine_setting().is_some() {
+            return format!("A setting of {}", track.synth_voice.name());
+        }
         let Self::Slot { slot, .. } = self else {
             return self.info().meaning.to_owned();
         };
@@ -136,10 +170,13 @@ impl Target {
         format!("{effect} in slot {}", slot + 1)
     }
 
-    /// What's on a track to choose from: what every track has, and the settings of what's in its
-    /// slots, in order.
+    /// What's on a track to choose from: what it has from its machine, and the settings of what's
+    /// in its slots, in order.
     pub fn on_track(track: &Track) -> Vec<Self> {
-        let mut targets = Self::ALL.to_vec();
+        let mut targets: Vec<Self> = Self::ALL
+            .into_iter()
+            .filter(|target| target.exists_on(track))
+            .collect();
         for (slot, insert) in track.inserts.iter().enumerate() {
             targets.extend((0..insert.params().len()).map(|param| Self::Slot {
                 slot: slot as u8,
@@ -154,10 +191,39 @@ impl FxCommand {
     /// The name on screen, on this track: a slot's setting reads as it does in `Dest`, from what's
     /// in the slot.
     pub fn name_on(self, track: &Track) -> String {
-        match self {
-            Self::Slot { slot, param } => Target::Slot { slot, param }.name_on(track),
-            command => command.name().to_owned(),
+        match self.target() {
+            Some(target) if target.exists_on(track) => {
+                if matches!(self, Self::Slot { .. } | Self::Har | Self::Tim | Self::Mor) {
+                    target.name_on(track)
+                } else {
+                    self.name().to_owned()
+                }
+            }
+            Some(target @ Target::Slot { .. }) => target.name_on(track),
+            _ => self.name().to_owned(),
         }
+    }
+
+    /// What this sets, if it sets something that can be modulated.
+    pub const fn target(self) -> Option<Target> {
+        match self {
+            Self::Vol => Some(Target::Vol),
+            Self::Pan => Some(Target::Pan),
+            Self::Cut => Some(Target::Cut),
+            Self::Res => Some(Target::Res),
+            Self::Dly => Some(Target::Dly),
+            Self::Rev => Some(Target::Rev),
+            Self::Har => Some(Target::Har),
+            Self::Tim => Some(Target::Tim),
+            Self::Mor => Some(Target::Mor),
+            Self::Slot { slot, param } => Some(Target::Slot { slot, param }),
+            Self::Del | Self::Kil | Self::Off | Self::Ret | Self::Cha => None,
+        }
+    }
+
+    /// Whether this track has what this sets, so it belongs in a list to choose from.
+    pub fn exists_on(self, track: &Track) -> bool {
+        self.target().is_none_or(|target| target.exists_on(track))
     }
 
     /// The command for typed text: its name, or a slot's number and the start of a setting's name.
@@ -184,10 +250,12 @@ impl FxCommand {
 mod tests {
     use super::*;
     use crate::insert::Insert;
+    use crate::song::SynthVoice;
 
     #[test]
     fn every_target_has_its_own_place() {
         let track = Track {
+            machine: Machine::Plaits,
             inserts: [Insert::ALL[1]; INSERTS],
             ..Track::default()
         };
@@ -234,7 +302,10 @@ mod tests {
 
     #[test]
     fn a_track_only_offers_the_settings_of_what_is_in_its_slots() {
-        let mut track = Track::default();
+        let mut track = Track {
+            machine: Machine::Plaits,
+            ..Track::default()
+        };
         assert_eq!(Target::on_track(&track), Target::ALL.to_vec());
         track.inserts[1] = Insert::ALL[1];
         let targets = Target::on_track(&track);
@@ -267,6 +338,36 @@ mod tests {
         assert_eq!(FxCommand::typed("2AM", &track), None);
         assert_eq!(FxCommand::typed("1ZZ", &track), None);
         assert_eq!(FxCommand::typed("9AM", &track), None);
+    }
+
+    #[test]
+    fn a_machines_settings_are_only_on_tracks_playing_it_under_their_real_names() {
+        let mut track = Track::default();
+        assert!(!Target::on_track(&track).contains(&Target::Har));
+        assert!(Target::on_track(&track).contains(&Target::Pitch));
+        // One chosen before switching says it isn't there, and comes back after.
+        assert_eq!(Target::Har.name_on(&track), "Har ---");
+        assert_eq!(FxCommand::Har.name_on(&track), "HAR");
+
+        track.machine = Machine::Plaits;
+        assert!(Target::on_track(&track).contains(&Target::Har));
+        track.synth_voice = SynthVoice::Fm;
+        assert_eq!(Target::Har.name_on(&track), "Ratio");
+        assert_eq!(Target::Mor.name_on(&track), "Feedback");
+        assert_eq!(FxCommand::Tim.name_on(&track), "Index");
+        assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
+        track.synth_voice = SynthVoice::Kick;
+        assert_eq!(Target::Har.name_on(&track), "Punch");
+    }
+
+    #[test]
+    fn every_setting_a_command_sets_is_its_own_target() {
+        for command in FxCommand::ALL {
+            if let Some(target) = command.target() {
+                assert!(target.index() < Target::COUNT, "{command:?}");
+            }
+        }
+        assert_eq!(FxCommand::Del.target(), None);
     }
 
     #[test]

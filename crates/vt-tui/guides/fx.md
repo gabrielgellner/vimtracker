@@ -17,7 +17,7 @@ only takes effect once its value is typed.
 | `RES` | Filter resonance |
 | `DLY` | Delay send |
 | `REV` | Reverb send |
-| `HAR` | A synth's first setting |
+| `HAR` | A synth's first setting, shown by its name on that voice |
 | `TIM` | A synth's second setting |
 | `MOR` | A synth's third setting |
 | `1 Amount` | A setting in a slot on the FX page, below |

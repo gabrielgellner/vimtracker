@@ -2260,7 +2260,11 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
-    assert_eq!(lfo(&app).destination, Some(Target::Mor));
+    assert_eq!(
+        lfo(&app).destination,
+        Some(Target::Pitch),
+        "the last on a sample track"
+    );
 
     press(&mut app, "l=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
@@ -2316,7 +2320,11 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "Ljjj0K");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.shown().count(), 11);
+    assert_eq!(
+        picker.shown().count(),
+        8,
+        "what a sample track has, and none"
+    );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
     special(&mut app, KeyCode::Enter);
@@ -5165,7 +5173,8 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, "jj");
-    for _ in 0..11 {
+    // Past the seven a sample track has, as a synth's settings aren't on it.
+    for _ in 0..8 {
         press(&mut app, "=");
     }
     assert_eq!(
@@ -5271,4 +5280,61 @@ fn the_fx_pages_bars_follow_what_plays() {
     // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
     assert!(line.contains("Amount 40 ▕██│██████▏"), "{line}");
     assert!(line.contains("Mix    FF ▕█████████▏"), "{line}");
+}
+
+#[test]
+fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
+    use vt_model::song::{Machine, SynthVoice};
+    use vt_model::target::Target;
+    let (mut app, _realtime) = app();
+    let labels = |app: &mut App, keys: &str| {
+        press(app, keys);
+        let found: Vec<String> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .shown()
+            .map(|item| item.label.clone())
+            .collect();
+        special(app, KeyCode::Esc);
+        found
+    };
+    let on = |labels: &[String], name: &str| {
+        labels
+            .iter()
+            .any(|label| label.starts_with(&format!("{name}  ")))
+    };
+    // A sample track has no synth settings, in Dest or for a step.
+    let dest = labels(&mut app, " 4LjjK");
+    assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
+    let steps = labels(&mut app, " 3llK");
+    assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
+
+    // On a synth they're there under their names on this voice.
+    press(&mut app, " 4HKpl");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "jK");
+    press(&mut app, "fm");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].machine, Machine::Plaits);
+    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
+    let dest = labels(&mut app, "LggjjK");
+    assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
+    let steps = labels(&mut app, " 3K");
+    assert!(on(&steps, "Index"), "{steps:?}");
+
+    // One chosen stays through a change of machine, and says what happened.
+    press(&mut app, " 4Kratio");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(Target::Har));
+    press(&mut app, "HggK");
+    press(&mut app, "sa");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(Target::Har));
+    press(&mut app, "L");
+    let line = track_page_text(&app)
+        .into_iter()
+        .find(|line| line.starts_with("LFO 1"))
+        .unwrap();
+    assert!(line.contains("Har ---"), "{line}");
 }
