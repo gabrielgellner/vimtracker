@@ -19,8 +19,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::f32::consts::PI;
-
+use super::plaits_parts::Svf;
 use super::virtual_analog::{BLOCK, Settings};
 use crate::rng::Pcg32;
 
@@ -48,47 +47,6 @@ pub(crate) fn soft_clip(x: f32) -> f32 {
 #[inline]
 fn noise(rng: &mut Pcg32) -> f32 {
     rng.next_u32() as f32 / 4_294_967_296.0
-}
-
-/// A state variable filter.
-#[derive(Debug, Clone, Copy, Default)]
-struct Svf {
-    g: f32,
-    r: f32,
-    h: f32,
-    state_1: f32,
-    state_2: f32,
-}
-
-impl Svf {
-    fn set_g_q(&mut self, g: f32, resonance: f32) {
-        self.g = g;
-        self.r = 1.0 / resonance;
-        self.h = 1.0 / (1.0 + self.r * g + g * g);
-    }
-
-    /// Set by a quick approximation, for frequencies a resonator would use.
-    fn set_fast(&mut self, f: f32, resonance: f32) {
-        let a = 3.260e-01 * PI.powi(3);
-        let b = 1.823e-01 * PI.powi(5);
-        let f2 = f * f;
-        self.set_g_q(f * (PI + f2 * (a + b * f2)), resonance);
-    }
-
-    fn set_exact(&mut self, f: f32, resonance: f32) {
-        self.set_g_q((PI * f.min(0.497)).tan(), resonance);
-    }
-
-    /// The next high-pass and band-pass outputs.
-    #[inline]
-    fn process(&mut self, input: f32) -> (f32, f32) {
-        let hp = (input - self.r * self.state_1 - self.g * self.state_1 - self.state_2) * self.h;
-        let bp = self.g * hp + self.state_1;
-        self.state_1 = self.g * hp + bp;
-        let lp = self.g * bp + self.state_2;
-        self.state_2 = self.g * bp + lp;
-        (hp, bp)
-    }
 }
 
 const SNARE_MODES: usize = 5;
