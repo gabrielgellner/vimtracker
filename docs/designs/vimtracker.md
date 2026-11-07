@@ -1080,7 +1080,8 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M8c: Song flow.** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
 *   **M10: Tracks that process.** Returns and a master in a fixed routing, delay and reverb as effects with real settings, and a better reverb. **Tests:** as [its design](#m10-design-tracks-that-process) lists.
-*   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
+*   **M11: Lanes.** Counters for where each track is, so lengths change while playing, FX columns with their own lengths that drift against the notes, and pulses and gate types that give each row its own length. **Tests:** as [its design](#m11-design-lanes) lists.
+*   **M12: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
 ### M4 design: marks
 
@@ -1435,6 +1436,115 @@ Sleeping doesn't save anything overall yet, as checking every slot of every trac
 4.  **The new `Reverb`:** the design and settings. **Tests:** decay time against the setting, stability at the top of `Decay`, pre-delay, and the cost against the old one.
 
 **Done when** the author has used it in a jam, the cost is measured, and how each effect's settings feel by ear is settled. Golden renders change at issues 3 and 4, by design.
+
+### M11 design: lanes
+
+Made with the author's agreement on 2026-11-07, and not built yet. It comes before more effects because it changes how the engine finds its place in a track, and that's best done now.
+
+**The idea.** Metropolix is the author's favourite sequencer, and much of what makes it work already has a home here. Its stages carry their own time, its modulation lanes have their own lengths, and its lengths change while it plays. Brought into the tracker, a row's note gets a length in pulses, and each FX column gets its own loop. The columns then drift against each other, and every pass through a phrase sounds a little different.
+
+**Prior art.** From the Metropolix manual, version 1.6.5:
+
+*   **Stages:** each of its 8 has a pitch, a `PULSE COUNT` of 1 to 8 clock pulses, and a `GATE TYPE`:
+    *   `HOLD`: one gate for all its pulses, tied into the next stage.
+    *   `MULTIPLE`: a gate on each pulse.
+    *   `SINGLE`: one gate on the first pulse.
+    *   `REST`: no gate.
+*   **`SKIP`:** treats a stage as if it doesn't exist, and its pulses don't count towards the length.
+*   **`LEN`:** sets how many stages play and, apart from that, how many pulses before the track resets.
+*   **Mod lanes:** each has 8 values with its own `ORDER`, `LEN` and `DIV`, and each value steps or ramps into the next.
+*   **Counters:** each level passes its pulses down to the one below, and a track or lane keeps its own place. That's why lengths can change while it plays.
+
+Monome's Kria, from memory and not yet checked, gives gate, note, octave and length each their own loop. Elektron gives each track its own length and scale. Here, each track already loops at its own chain length.
+
+**What's here already.**
+
+| Metropolix | Here |
+|---|---|
+| A mod lane value that steps or ramps | An FX column value with a lock, hold or glide mark. A glide is a ramp |
+| `RATCH` | `RET` |
+| `PROB` | `CHA` |
+| Gate length | `KIL` and `OFF` |
+| A track's own length | A track's own chain length |
+
+#### Part 1: counters
+
+Now, a track's place is worked out from the song's: `(section step - where its chain started) % chain length`, in `Engine::track_place`, and the app does the same to draw its playhead. A new length changes the result of that `%`, so the playhead jumps. That's why `:len`, `ge` and `:double` wait until playback is paused.
+
+*   **Each track keeps its place.** It moves on one step with each step that fires, and when it reaches the length as it is now, it goes back to the start. A length made shorter than the place goes back to the start on the next step, so nothing jumps.
+*   **The formula stays for jumps.** Playing from a step, starting a section, launching a chain and realigning all set the counter from the formula, as now. After that, the counter is what moves.
+*   **The screen is told.** The engine reports each track's place, and the playhead is drawn from that, not worked out again on the edit thread.
+*   **Lengths change at once.** `:len`, `ge` and `:double` work while playing, and the status line no longer says they wait.
+*   **Launches.** A launch on `chain` waits for the counter to go back to the start, not for the formula's `%` to come round.
+
+#### Part 2: FX columns with their own lengths
+
+*   **Each column has a loop.** The note column, with its velocity, and each FX column has its own length and start, kept with the phrase. By default, each column follows the phrase's loop, so nothing changes until a length is set.
+*   **Each column has a counter.** It moves on one step at a time, and reads its own row: `start + count % length`.
+*   **Counters keep going across a phrase's repeats.** Otherwise there's no drift. Going back to the top, a section's reset, `Space c` and realigning all set them back to the start. This is open: it could go back with each repeat of the phrase.
+*   **A chain moves on** when the note column's loop ends. FX columns carry on counting into the next phrase, and read that phrase's rows.
+*   **Keys.** The loop keys work on the cursor's column when given a column, so `gs` and `ge` set where it starts and ends, and `:len 12` sets its length. Rotate and slide follow. The exact keys are worked out with the author before building.
+*   **On screen.** Each column dims the rows outside its own loop, and has its own playhead.
+*   **Glides** go to the next value in their own column, in that column's time.
+
+#### Part 3: pulses and gate types
+
+*   **A note has a length.** Beside its velocity, a note has `Pulses`, from `0` to `8`, and a `Gate`. They stay with the note, as a note in a tracker is often just a trigger.
+    *   `0` means the row is skipped. Skipping is just a length of 0, so a phrase can get shorter in the middle, not only at its ends.
+    *   A row with no note is 1 pulse, as rows are now.
+*   **Gate types:**
+
+    | `Gate` | Its pulses |
+    |---|---|
+    | `Hold` | One note across all of them, tied into the next row's note with no new attack |
+    | `Multi` | A new note on each |
+    | `Single` | One note on the first, as now |
+    | `Rest` | No note, and the row still takes its time |
+
+*   **Time is the sum of pulses.** A phrase lasts as long as the pulses of the rows in its loop, and a chain as long as its phrases. The edit thread works out the running totals when it publishes a version, so the callback finds a row by walking them.
+*   **FX columns stay on steps.** Their counters move with each step, not each row of notes, so they drift against a note column with long rows. A row's FX on the note column fire on its first pulse.
+*   **What stays the same:** `RET` repeats within a pulse, `CHA` decides whether a row plays, and `DEL`, `KIL` and `OFF` count from the start of the row.
+
+**Risks.**
+
+*   **Reading the grid.** Once rows have pulses, a row of the note column and the same row of an FX column aren't the same moment, and the beat rows stop meaning beats on the note column. Metropolix gives each lane its own screen. A pulse bar on each note row, and a playhead per column, are a first try, and are tried with the author before going further.
+*   **Things that assume one length per phrase.** These each need a per-column answer: `ip` and `ic`, paste, rotate, `.`, the shape panel and section lengths.
+*   **Renders.** With drifting columns, a loop no longer repeats exactly at its length. `:render` still renders the length asked for.
+
+**Left out.** These come later, if they're wanted in a jam:
+
+*   **Play orders:** pendulum, random and the rest, on each column.
+*   **A per-track clock division,** as Metropolix's `DIV`.
+*   **An accumulating transpose,** as its `ACCUM`.
+*   **Two tracks sharing one phrase,** each with its own order and length. That's Metropolix's other big idea, and a deeper change, as phrases here belong to their track.
+
+**Issues.**
+
+1.  **Counters for each track's place.** **Tests:**
+    *   Golden renders unchanged.
+    *   Shortening a track while it plays goes back to the start on its next step, with no jump.
+    *   Lengthening keeps the place.
+    *   Playing from a step, a section starting and a launch each land where the formula says.
+    *   A launch on `chain` waits for the counter.
+    *   The playhead drawn is the one the engine reports.
+    *   No allocation in the callback.
+2.  **Lengths change while playing.** `:len`, `ge`, `gs` and `:double` work while playing. **Tests:** each of them while playing, with no jump.
+3.  **FX columns with their own lengths.** **Tests:**
+    *   A song saved without them plays as before.
+    *   A column with a shorter length repeats on its own and drifts against the notes, as worked out by hand.
+    *   Counters carry on across a phrase's repeats and into the next phrase, and go back with a reset.
+    *   A glide goes to the next value in its own column.
+    *   Each column draws its own loop and playhead.
+4.  **Pulses and gate types.** **Tests:**
+    *   A song saved without them plays as before.
+    *   A row's length in pulses, and a chain's in all.
+    *   Each gate type's notes.
+    *   A skipped row takes no time.
+    *   A held note ties with no new attack.
+    *   FX columns keep their own time against long rows.
+    *   Changing pulses while playing, with no jump.
+
+**Done when** the author has used it in a jam and the grid stays readable.
 
 ### Known Gaps From Review
 
