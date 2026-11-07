@@ -55,7 +55,12 @@ Per-note tables are a further idea, and they get their own decision after the mi
 *   **Machine:** what makes a track's sound, under Direction. The sampler is the first.
 *   **Chain:** a list of phrases, each with a transpose.
 *   **Phrase:** one track's sequence of steps, reusable by ID.
-*   **Step:** one position in a phrase. One step is a sixteenth note at normal speed.
+*   **Step:** one position in a phrase, and one sixteenth note at normal speed. From M13, a
+    phrase's positions are called **rows**, and a step is only the unit of time: a row with a
+    note lasts as many steps as its pulses.
+*   **Pulse:** one step of time, as a note's length is counted, from M13.
+*   **Lane:** one column of a phrase playing on its own loop, from M12. The note column's loop is
+    the phrase's loop.
 *   **Field:** one editable part of a step: note, velocity, instrument, or a slot's command or
     value.
 *   **Slot:** one FX command and its value. Column group means a slot, or the note, velocity
@@ -116,9 +121,12 @@ Per-note tables are a further idea, and they get their own decision after the mi
 *   Backward compatibility while prototyping. A format change can make older projects
     unloadable. Files carry a version number so the program can say why, and rendering to WAV
     is how to keep a jam.
-*   Grid column types, such as chord or stage-sequencer columns. Chords and stage sequences are
-    generators that write to ordinary tracks. Machines and bus tracks, under Direction, differ in
-    what a track sounds like or takes in. Every track keeps the same steps and the same grammar.
+*   Grid column types, such as chord columns. Chords are generators that write to ordinary
+    tracks, and so are note transformers like Ableton's. Machines and bus tracks, under
+    Direction, differ in what a track sounds like or takes in. Every track keeps the same rows and
+    the same grammar. The exception, decided with the author on 2026-11-07, is how a phrase's
+    columns play in time: lanes (M12) and pulses (M13) change how the grid itself plays, and the
+    phasing that comes from that is the point, which a generator writing rows can't give.
 *   Matching the sound of any other tracker exactly.
 *   Using the names, logos or visual design of Polyend, Dirtywave or Elektron products.
 *   Sample recording, streaming long samples, MIDI, plugin hosting and live performance mode for now.
@@ -758,8 +766,8 @@ Made by the author on 2026-11-06, after a review of this section:
 This list comes after Milestones after M3, in order, as jams ask for it. Each entry gets its own short design.
 
 1.  **Tables.** Per-note tables with their own speed, independent column rates, and aux tables, modelled on the M8. The author wants cycles that drift across notes, such as a 5-step table cycle against a 16-step phrase, which the M8's `TIC00` per-note mode allows. Open questions: how transpose and volume columns get a rate and loop point, end-of-table behaviour, when a cycle's position resets, a command that tests whether a note is held (a community M8 tutorial says tables cannot detect note-off, and the manual documents no such test), FX addressing such as `HOP` beyond row `F` and IDs above `FF`, table `00` as an aux table, and a safe rule for zero-time `HOP` loops. First command candidates: `HOP`, `THO`, `TIC`, `TBL`, `TBX`, `RND`, `REP`, `IFC`.
-2.  **Sample slicing and waveform view.** The slicer moves up to M11, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
-3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M11.
+2.  **Sample slicing and waveform view.** The slicer moves up to M14, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and Braille waveforms. The M8 and Polyend are the references.
+3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M14.
 4.  **Song view and looping.** Moved up to M8, apart from per-track speed and grooves, which stay here. Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
 5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
 6.  **Smaller items.** Chasing held values on play, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
@@ -1080,7 +1088,10 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M8c: Song flow.** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
 *   **M10: Tracks that process.** Returns and a master in a fixed routing, delay and reverb as effects with real settings, and a better reverb. **Tests:** as [its design](#m10-design-tracks-that-process) lists.
-*   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
+*   **M11: Live lengths.** A track's length changes while it plays, and the playhead stays on its row. **Tests:** as [its design](#m11-design-live-lengths) lists.
+*   **M12: Lanes.** FX columns with their own loops, which drift against the notes. **Tests:** as [its design](#m12-design-lanes) lists.
+*   **M13: Pulses.** A note gets a length in pulses and a gate type, so rows take their own time. **Tests:** as [its design](#m13-design-pulses) lists.
+*   **M14: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
 ### M4 design: marks
 
@@ -1139,7 +1150,7 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 **Data.** `Track` gains `sample: Option<String>` and `name: String`. `Step.instrument`, `Song.instruments`, `Instrument` and instrument volume go, as `Level` already does that job. A note's gain is its velocity times the track's values. `FORMAT_VERSION` becomes 2, and older songs are refused with a message, with no conversion. A track that played several samples has to be rebuilt as several tracks.
 
-**No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M11, or sooner if a jam asks.
+**No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M14, or sooner if a jam asks.
 
 **Step text.** `NOTE VEL FX FX FX`, as in `C-4 64 CUT40 ---00 RET14`. Field and column numbers shift down by one.
 
@@ -1161,7 +1172,7 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 ### M6 design: editing across tracks
 
-Column folding stays in M11. This adds one thing: a Visual selection can reach other tracks with `W` and `B`, and the operators that already work on a selection then work on all of them, as one undo step.
+Column folding stays in M14. This adds one thing: a Visual selection can reach other tracks with `W` and `B`, and the operators that already work on a selection then work on all of them, as one undo step.
 
 *   **Rows.** A selection is rows of the focused phrase and a run of tracks. `W` and `B` extend the run and leave the cursor on its track, so reaching a shorter track doesn't change the rows. On another track those rows count from that phrase's own loop start, as the neighbour columns show them, on the phrase it's on level with the cursor. Rows a phrase doesn't have are left out.
 *   **Columns.** The same columns on each track. A neighbour column only shows notes, so it lights up by row even when the selection is FX columns.
@@ -1219,7 +1230,7 @@ Built, from [Song flow and session workflow](song-flow.md), which replaces parts
 
 Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert slots to each track, one effect to put in them, and an FX page, and sets up what later effects reuse.
 
-**Prior art.** The boxes nearest this workflow mostly have a fixed chain per track: the Digitakt II has bit reduction, overdrive and sample rate reduction before its filter, the M8 has `DEGRADE` and a limiter per instrument, and tracker-ce has overdrive and bit depth per instrument. Slots come from Maschine, which has as many as you like on sounds, groups and master, and the Tonverk, which has two. Slots are kept here because order matters once M11 adds a compressor, and a fixed chain would get long.
+**Prior art.** The boxes nearest this workflow mostly have a fixed chain per track: the Digitakt II has bit reduction, overdrive and sample rate reduction before its filter, the M8 has `DEGRADE` and a limiter per instrument, and tracker-ce has overdrive and bit depth per instrument. Slots come from Maschine, which has as many as you like on sounds, groups and master, and the Tonverk, which has two. Slots are kept here because order matters once M14 adds a compressor, and a fixed chain would get long.
 
 **Signal path.** `Machine -> Filter -> Utility filter -> Insert 1, 2, 3 -> Level, Pan -> Sends`, as in Direction above. In the engine, this goes in `TrackState::shape`, after `trimmed` and before the gain. `Drive` stays on the filter.
 
@@ -1271,7 +1282,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 **Steps and modulation.** See the modulation table below. This replaces the first plan, of `DST` and `DMX` commands reaching only the first `Distort`, by the author's decision.
 
-**Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Moving `Drive` onto the list.
+**Left out.** Other effects, which are M14. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Moving `Drive` onto the list.
 
 **To judge by ear, as they may change the rules:**
 
@@ -1425,7 +1436,7 @@ Measured on 2026-11-07 by timing a render in a release build on an M5, 8 tracks 
 
 Sleeping doesn't save anything overall yet, as checking every slot of every track each frame costs about what it saves. It's still needed, for a slot's tail to carry on after its note ends.
 
-**Left out.** Buses, which are M11. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
+**Left out.** Buses, which are M14. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
 
 **Issues.**
 
@@ -1435,6 +1446,161 @@ Sleeping doesn't save anything overall yet, as checking every slot of every trac
 4.  **The new `Reverb`:** the design and settings. **Tests:** decay time against the setting, stability at the top of `Decay`, pre-delay, and the cost against the old one.
 
 **Done when** the author has used it in a jam, the cost is measured, and how each effect's settings feel by ear is settled. Golden renders change at issues 3 and 4, by design.
+
+### M11 design: live lengths
+
+Made with the author's agreement on 2026-11-07, after a review. Not built yet. A track's length changes while it plays, and its playhead stays on the row it's on. This comes before more effects because lanes (M12) and pulses (M13) build on it, and both change the engine's sense of where a track is.
+
+**Prior art.** Metropolix, whose manual the author shared, keeps each track's place as it plays, so its lengths change live. Here, a track's place is worked out from the running count, the step the song has reached: `(running count - where its chain started) % chain length`, in `Engine::track_place`. The app works out the same place to draw the playhead, in `App::chain_playhead`, from `started`, which the engine reports through `JamState`.
+
+**The problem.** A new length changes that `%`, so the playhead lands on another row. `:len`, `ge` and `:double` wait until playback is paused for this reason. Undo, redo and edits to a chain's rows change a chain's length too, aren't held back, and jump today.
+
+**The rule.** When a new version arrives while playing, `Engine::swap` keeps each track on the same row by moving `started`. Everything else still uses the formula.
+
+*   **The same row.** The track's slot in its chain and its row in that phrase's loop come from the old version, with `chain_position`. If that slot and row still exist in the new version, `started` moves so the formula gives that place again. Shortening an earlier phrase, or adding a row to the chain before the playhead, keeps the place.
+*   **No row to stay on.** If the row is gone, the track goes to its chain's first row on its next step, as the existing `after_steps` rule does for a count past a reset.
+*   **The screen follows.** `started` already reaches the app through `JamState`, and `App::chain_playhead` draws from it, so nothing new is reported. For one frame, the app can draw the new song with the old `started`, which is a known gap.
+*   **Lengths change at once.** `can_change_length` goes, with its status message, and `:len`, `ge` and `:double` work while playing. `gs` already does, as moving a loop's start keeps its length.
+*   **Sections.** A section with no fixed length is as long as its longest chain, so a live change can change it. The section's place keeps counting. If its length is now shorter than its place, the next section comes in on the next step, and a `Launch::Every` grid follows the new length.
+*   **Unchanged:** playing from a step, launches, realigning, swing and renders, which all still use the formula.
+
+**Alternatives considered.** Each track could keep a counter that moves on each step and wraps at the length. It needs new state in the callback, a list of the nine places that would reset it, a way to report it every step, and care with swing, and playing from a step would no longer match playing to it. Moving `started` when a version arrives needs none of this.
+
+**Issues.**
+
+1.  **Keeping the place across versions:** the rule in `swap`, and the section rule.
+    **Tests:**
+    *   Golden renders unchanged.
+    *   A chain of 16 at place 12, shortened to 8, goes to place 0 on its next step.
+    *   A chain of 16 at place 5, lengthened to 32, goes to place 6.
+    *   A two-phrase chain playing its second phrase keeps its row when the first phrase is shortened.
+    *   An undo, and an edit to a chain's rows, while playing keep the row.
+    *   An `Every` launch during a `:len` on a section with no fixed length lands on the new grid.
+    *   No allocation in the callback, with the `forbidden` guard tests in `link.rs`.
+2.  **Length edits while playing:** remove `can_change_length` from `:double`, `ge` and `:len`, its status message and comment, the two app tests that check the wait, and the guide's line about it.
+    **Tests:** each of `:len`, `ge` and `:double` while playing leaves the next row played as the old row plus 1, or the chain's first row if that's past the new length.
+
+**Done when** `:len`, `ge`, `:double` and undo work while playing without the playhead moving off its row, and the author has used them in a jam.
+
+### M12 design: lanes
+
+Made with the author's agreement on 2026-11-07, after a review. Not built yet. Each FX column can have its own loop, so it drifts against the notes, and a phrase stops repeating exactly at its length.
+
+**Prior art.** In Metropolix, each of 8 mod lanes has its own length, order and clock division, and each value steps or ramps into the next. Its lanes drift against its tracks, which is the point.
+
+| Metropolix | Here |
+|---|---|
+| A mod lane's value that steps or ramps | An FX column value with a lock, hold or glide mark |
+| `RATCH` and `PROB` in a lane | `RET` and `CHA` in an FX column |
+| A track's own length | A track's own chain length |
+
+**Lanes.**
+
+*   **The note column's loop is the phrase's loop.** Velocity shares it. Nothing new is stored for it.
+*   **An FX column can have its own loop,** a start and a length in the phrase's stored rows, inside them. With no loop of its own, a column follows the phrase's loop as now. Songs saved without these play as before.
+*   **Where a lane reads.** A column with its own loop reads row `start + ((place + offset) % length)`. Here `place` is the track's count since its chain started, `running count - started`, before the chain's `%`. So a lane carries on counting across its phrase's repeats and into the next phrase, and drifts until something resets `started`, just as tracks of unequal lengths do. In the next phrase, it reads that phrase's column loop at the same place.
+*   **Resets** are whatever sets `started` today: a section bringing in a new chain, a launch, realigning, a section that resets, and playing from a step. So playing from a step matches playing to it.
+*   **Live changes.** `offset` is a small number per column, kept by the engine. When a column's loop changes while playing, `swap` moves it so the column stays on its row, as M11 does for tracks. It's reported to the app with `started`.
+*   **What runs.** Each step, each FX column runs the row it reads. `RET` and `CHA` in a drifting column are Metropolix's `RATCH` and `PROB` lanes. They act on the step they land on, and do nothing on a step with no note.
+*   **Glides** go to the next value in their own column, searching that column's loop and wrapping within it. Their time is that many steps.
+*   **Editing commands act on the phrase's rows as now,** and lanes only change what plays. So `ip`, `ic`, paste, rotate, `.` and the shape panel keep working on rows, whichever loop a column plays.
+*   **On screen.** Each column dims the rows outside its own loop, and has its own playhead.
+
+**An example.** A phrase loop of 16, with FX 1's loop rows 0 to 2. FX 1 reads rows 0, 1, 2, 0 and so on. The phrase's second pass starts at place 16, and FX 1 reads row `16 % 3 = 1` there. If the chain's next phrase is 8 rows, with its own FX 1 loop of 3, its first step is place 32, and FX 1 reads that phrase's row `32 % 3 = 2`.
+
+**To decide with the author** before issue 1: the keys that set a column's loop, likely `gs`, `ge` and `:len` on an FX column, and how the playheads and dimmed rows look.
+
+**Alternatives considered.**
+
+*   **Resetting each column on every repeat of its phrase:** columns would line up again each pass and never drift. Rejected with the author.
+*   **A counter for each column:** it has the same costs as in M11's alternatives.
+*   **Separate screens for lanes,** as Metropolix has: lanes kept in the grid keep the grammar, and are seen beside their notes.
+
+**Risks.**
+
+*   **A jam after live edits isn't reproducible.** Rendering or playing from a step works places out again from the formula, not from the offsets live edits left, and may not match what was heard. Rendering what's playing is the way to keep a jam.
+*   **Reading the grid.** The playhead per column is tried with the author before the milestone is done.
+
+**Issues.**
+
+1.  **Columns with their own loops:** the loop in the phrase, saved with a serde default, where a lane reads, offsets kept across versions, glides in a lane, and the keys.
+    **Tests:**
+    *   Golden renders unchanged.
+    *   The example above.
+    *   A lane's place after playing from a step matches playing to it.
+    *   A lane changed while playing keeps its row.
+    *   A glide wraps within its lane.
+    *   No allocation in the callback.
+2.  **Lanes on screen:** dimmed rows and a playhead for each column.
+    **Tests:** each column's playhead matches the row the engine plays.
+
+**Done when** the author has used lanes in a jam, and agrees the grid stays readable with them.
+
+### M13 design: pulses
+
+Made with the author's agreement on 2026-11-07, after a review. Not built yet. A note gets a length in pulses and a gate type, so rows take their own time. Pulses stay with the note, as a note is often just a trigger, and the gate is part of what that note does.
+
+**Prior art.** Each Metropolix stage has a `PULSE COUNT` of 1 to 8 clock pulses, and a `GATE TYPE`: `HOLD`, one gate for all its pulses, tied into the next stage; `MULTIPLE`, a gate on each pulse; `SINGLE`, one gate on the first; and `REST`, none. `SKIP` treats a stage as if it isn't there.
+
+**Pulses.**
+
+*   **A pulse is one step,** 240 ticks. From here, a phrase's positions are rows, and steps are only time.
+*   **A note has `Pulses` and a `Gate`.** `Pulses` is `0` to `8`, and a new note has `1` and `Single`, so a song saved without them plays as before. They're on any row with a note event, `OFF` included. A row with no note is always 1 pulse.
+*   **`0` skips the row.** It takes no time and fires nothing, FX included, as Metropolix's `SKIP` does. A phrase whose loop sums to 0 pulses is passed over in its chain, and a chain summing to 0 is empty, as a missing chain is now. Looking for the next row stops after one pass, so it can't hang.
+*   **Lengths in rows, time in steps.** `:len`, `gs`, `ge` and `:double` count rows. A chain lasts the sum of its rows' pulses, and a section's length, `Launch::Every`, the `:reset` period, render lengths and swing count steps. Swing goes by the step, as now, so it doesn't depend on rows.
+*   **Finding the row.** The edit thread works out each phrase's running totals of pulses when it publishes a version, in `Published::new`. The callback finds a place's row by searching them. `chain_position`, the playhead and audition all use the same search.
+
+**Gate types.**
+
+| `Gate` | Note-ons | The note ends | `RET` and `CHA` |
+|---|---|---|---|
+| `Single` | On the first pulse | When something ends it, as now | `RET` repeats within the first pulse. `CHA` is rolled once |
+| `Multi` | On each pulse, at the same velocity | `KIL`, `OFF` and `DEL` count from each pulse's start | `RET` repeats within each pulse. `CHA` is rolled once, for the row |
+| `Hold` | On the first pulse | It's tied into the next row's note, which changes pitch with no new attack, then carries on as that row's note | `RET` repeats within the first pulse. `CHA` is rolled once |
+| `Rest` | None | It ends a note that's sounding, as `OFF` would | None |
+
+*   **A `Hold` with no note to tie into** carries on as a `Single`. That covers an empty next row, a `Rest`, an `OFF`, a skipped row, a failed `CHA`, a launch or a jump.
+*   **The tie needs each machine to change pitch without restarting.** A sample carries on playing at the new rate, and a synth changes pitch without restarting its envelopes. A machine that can't retriggers.
+*   **FX columns.** A column with no lane of its own follows the note rows, and its row's FX fire on the row's first pulse. A lane runs on steps, as in M12, so it drifts against long rows.
+*   **Returns and the master** have no notes, so pulses don't apply to them.
+
+**On screen and in files.** The note column grows by a pulse digit and a gate letter: `C-4 64 4M`. The step text reads the old form, with no pulses or gate, as `1` and `Single`.
+
+**To decide with the author** before issue 1:
+
+*   The keys for pulses and the gate.
+*   How a row's length shows. A bar beside the note is the first try.
+*   Whether the beat rows still mark beats when rows have pulses.
+
+**Alternatives considered.**
+
+*   **A stage generator writing ordinary rows,** as the Non-Goals once said: rejected with the author, as phasing between lanes and long notes is the point, and that comes from how the grid plays, not from what's written in it.
+*   **Pulses as an FX command:** a command in a drifting lane would land on different rows each pass, so rhythm itself would wander.
+*   **A clock division for each track,** as Metropolix's `DIV`: it stretches a whole track evenly, not each row, and is left for later.
+
+**Risks.**
+
+*   **Reading the grid.** A row of notes and the same row of a lane aren't the same moment once rows have pulses. This is tried with the author, with the pulse bar, before more is built.
+*   **The tie is new to every machine.** Each one is tested.
+
+**Issues.**
+
+1.  **Pulses and gate types:** the fields on a note, the step text, running totals in `Published`, the search, the gate types and the tie.
+    **Tests:**
+    *   Golden renders unchanged.
+    *   A row lasts its pulses, and a chain the sum of its rows'.
+    *   Each gate type plays as its table row says.
+    *   A `Hold` with nothing to tie into carries on as a `Single`.
+    *   A tie on each machine changes pitch with no new attack.
+    *   A skipped row takes no time and fires nothing.
+    *   A loop of all `0` rows is passed over and doesn't hang.
+    *   A lane drifts against long rows, and a default column follows them.
+    *   Pulses changed while playing keep the row, as in M11.
+    *   No allocation in the callback.
+2.  **Pulses on screen and in the grammar:** the keys, the pulse bar and audition.
+    **Tests:** entering and changing each value, and auditioning a row with pulses.
+
+**Done when** the author has used pulses in a jam, the grid stays readable to them, and the cost of the search in the callback is measured in a release build.
 
 ### Known Gaps From Review
 
