@@ -1,0 +1,118 @@
+# Builds release binaries when a vX.Y.Z tag is pushed, and attaches them to the GitHub
+# release for that tag. `just release` pushes the tag and writes the notes.
+#
+# Each target builds on its own native runner rather than cross-compiling, so the Linux
+# builds can link the runner's ALSA, which the audio output needs.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # Builds the whole matrix without a tag, to check it still works. Nothing is uploaded,
+  # because there is no release to upload to.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      # One target failing shouldn't cancel the others; its log is what you want to read.
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-15
+          # 22.04 rather than 24.04: the binary links the runner's glibc, and 22.04's runs on
+          # more distributions.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ALSA headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        # --locked builds against the committed Cargo.lock, so the binary is the one the tag
+        # describes.
+        run: cargo build --release --locked -p vt-tui --bin vimtracker --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          name="vimtracker-${version}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          cp "target/${{ matrix.target }}/release/vimtracker" "dist/${name}/"
+          cp README.md LICENSE "dist/${name}/"
+          # A manual run on a branch may have no changelog yet.
+          [ -f CHANGELOG.md ] && cp CHANGELOG.md "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          # shasum is on both macOS and Linux runners; sha256sum isn't on macOS.
+          ( cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256" )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimtracker-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only a tag has a release to attach to.
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Collect checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          ( cd dist && cat *.sha256 | sort -k2 > SHA256SUMS && rm -f *.sha256 )
+          ls -l dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # This job never checks the repository out, so gh can't find it from a git remote.
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `just release` usually creates the release first, with the changelog as its notes.
+          # If the build gets here first, it makes a placeholder that `just release` then edits.
+          # --clobber lets a re-run replace the files instead of failing.
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" \
+                 --title "Release ${GITHUB_REF_NAME}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber

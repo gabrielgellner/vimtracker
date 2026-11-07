@@ -10,3 +10,5 @@ build-dir = "book"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
+# The address on GitHub Pages, so the not-found page links back to the manual.
+site-url = "/vimtracker/"
