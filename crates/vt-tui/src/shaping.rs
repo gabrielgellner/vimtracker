@@ -1,12 +1,16 @@
-//! The shape panel: fill a selected column with a ramp or random values, heard while it's adjusted.
+//! The shape panel: fill a selected column with a ramp, random values, a wave or two values in turn,
+//! heard while it's adjusted.
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
+use vt_model::lfo::{Rate, Shape as Wave, note_rates};
 use vt_model::selection::{Field, StepRange};
-use vt_model::shape::{FillKind, MAX_BEND, Shape, ShapeColumn, Where, default_ends};
+use vt_model::shape::{
+    DEFAULT_RATE, FillKind, MAX_BEND, Shape, ShapeColumn, WAVES, Where, default_ends,
+};
 use vt_model::song::Song;
 
 use crate::app::{App, Selection};
@@ -23,6 +27,14 @@ const HEX_JUMP: i16 = 0x10;
 /// How far a large step moves an `Every` or a `Chance`.
 const EVERY_JUMP: i16 = 4;
 const CHANCE_JUMP: i16 = 10;
+/// How far a small and a large step move a phase, in degrees, as on an LFO.
+const PHASE_NUDGE: i16 = 15;
+const PHASE_JUMP: i16 = 90;
+/// The longest `Run`, and how far a large step moves it.
+const MAX_RUN: i16 = 256;
+const RUN_JUMP: i16 = 4;
+/// The longest rate that can be typed, like `64 bars`.
+const RATE_TEXT: usize = 8;
 
 /// A row of the panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +44,10 @@ pub enum ShapeRow {
     Curve,
     S,
     Fill,
+    Wave,
+    Rate,
+    Phase,
+    Run,
     Where,
     Amount,
 }
@@ -45,6 +61,10 @@ impl ShapeRow {
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Fill => "Fill",
+            Self::Wave => "Shape",
+            Self::Rate => "Rate",
+            Self::Phase => "Phase",
+            Self::Run => "Run",
             Self::Where => "Where",
             Self::Amount => "Amount",
         }
@@ -67,16 +87,21 @@ pub struct ShapePanel {
 }
 
 impl ShapePanel {
-    /// The rows on show. `Amount` only means something for some choices of rows.
+    /// The rows on show. A wave and `Alternate` have their own settings in place of a curve, and
+    /// `Amount` only means something for some choices of rows.
     pub fn rows(&self) -> Vec<ShapeRow> {
-        let mut rows = vec![
-            ShapeRow::From,
-            ShapeRow::To,
-            ShapeRow::Curve,
-            ShapeRow::S,
-            ShapeRow::Fill,
-            ShapeRow::Where,
-        ];
+        let mut rows = vec![ShapeRow::From, ShapeRow::To];
+        rows.extend_from_slice(match self.shape.kind {
+            FillKind::Ramp | FillKind::Random => &[ShapeRow::Curve, ShapeRow::S, ShapeRow::Fill],
+            FillKind::Wave => &[
+                ShapeRow::Fill,
+                ShapeRow::Wave,
+                ShapeRow::Rate,
+                ShapeRow::Phase,
+            ],
+            FillKind::Alternate => &[ShapeRow::Fill, ShapeRow::Run],
+        });
+        rows.push(ShapeRow::Where);
         if matches!(self.shape.place, Where::Every(_) | Where::Chance(_)) {
             rows.push(ShapeRow::Amount);
         }
@@ -91,6 +116,13 @@ impl ShapePanel {
             .and_then(|track| track.phrases.get(&self.phrase))
             .map_or(&[], |phrase| phrase.steps())
     }
+}
+
+/// The next or previous choice, going round.
+fn turned<T: Copy + PartialEq>(choices: &[T], current: T, sign: i16) -> T {
+    let at = choices.iter().position(|c| *c == current).unwrap_or(0);
+    let step = if sign > 0 { 1 } else { choices.len() - 1 };
+    choices[(at + step) % choices.len()]
 }
 
 /// A value moved and kept in `0..=top`.
@@ -164,6 +196,10 @@ impl App {
                 curve: 0,
                 s: 0,
                 kind: FillKind::Ramp,
+                wave: Wave::Sine,
+                rate: DEFAULT_RATE,
+                phase: 0,
+                run: 1,
                 place: column.default_where(),
                 seed: base.seed.wrapping_add(self.shape_seed),
             },
@@ -230,7 +266,8 @@ impl App {
         }
     }
 
-    /// Apply a shape to a range, with its ends chosen again from what's there.
+    /// Apply a shape to a range. A ramp's or random fill's ends are chosen again from what's there,
+    /// and a wave or `Alternate` keeps the two values it moves between.
     pub(crate) fn shape_again(&mut self, range: StepRange, column: ShapeColumn, shape: Shape) {
         let Some(phrase) = self.phrase_id() else {
             return;
@@ -240,7 +277,10 @@ impl App {
             .phrases
             .get(&phrase)
             .map_or(&[][..], |p| p.steps());
-        let (from, to) = default_ends(steps, range, column);
+        let (from, to) = match shape.kind {
+            FillKind::Ramp | FillKind::Random => default_ends(steps, range, column),
+            FillKind::Wave | FillKind::Alternate => (shape.from, shape.to),
+        };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
         self.apply(&Action::Shape {
@@ -324,11 +364,17 @@ impl App {
                     shape.curve = moved(i16::from(shape.curve), bend, -most, most) as i8;
                 }
                 ShapeRow::S => shape.s = moved(i16::from(shape.s), bend, -most, most) as i8,
-                ShapeRow::Fill => {
-                    shape.kind = match shape.kind {
-                        FillKind::Ramp => FillKind::Random,
-                        FillKind::Random => FillKind::Ramp,
-                    };
+                ShapeRow::Fill => shape.kind = turned(&FillKind::ALL, shape.kind, sign),
+                ShapeRow::Wave => shape.wave = turned(&WAVES, shape.wave, sign),
+                ShapeRow::Rate if large => shape.rate = shape.rate.jumped(sign > 0),
+                ShapeRow::Rate => shape.rate = shape.rate.nudged(sign > 0),
+                ShapeRow::Phase => {
+                    let by = sign * if large { PHASE_JUMP } else { PHASE_NUDGE };
+                    shape.phase = (shape.phase as i16 + by).rem_euclid(360) as u16;
+                }
+                ShapeRow::Run => {
+                    let by = sign * if large { RUN_JUMP } else { 1 };
+                    shape.run = moved(shape.run as i16, by, 1, MAX_RUN) as u16;
                 }
                 ShapeRow::Where => {
                     let choices = panel.column.wheres();
@@ -366,6 +412,10 @@ impl App {
                 ShapeRow::Curve => shape.curve = 0,
                 ShapeRow::S => shape.s = 0,
                 ShapeRow::Fill => shape.kind = FillKind::Ramp,
+                ShapeRow::Wave => shape.wave = Wave::Sine,
+                ShapeRow::Rate => shape.rate = DEFAULT_RATE,
+                ShapeRow::Phase => shape.phase = 0,
+                ShapeRow::Run => shape.run = 1,
                 ShapeRow::Where => shape.place = default_where,
                 ShapeRow::Amount => {
                     shape.place = match shape.place {
@@ -388,17 +438,45 @@ impl App {
         let (title, items, position): (&'static str, Vec<Item>, usize) = match panel.row {
             ShapeRow::Fill => (
                 "Fill",
-                [FillKind::Ramp, FillKind::Random]
+                FillKind::ALL
                     .map(|kind| Item {
-                        label: match kind {
-                            FillKind::Ramp => "Ramp  From one value to the other".to_owned(),
-                            FillKind::Random => "Random  Anywhere between the two".to_owned(),
-                        },
+                        label: format!("{}  {}", kind.name(), kind.description()),
                         pick: Pick::ShapeFill(kind),
                     })
                     .to_vec(),
-                usize::from(panel.shape.kind == FillKind::Random),
+                FillKind::ALL
+                    .iter()
+                    .position(|kind| *kind == panel.shape.kind)
+                    .unwrap_or(0),
             ),
+            ShapeRow::Wave => (
+                "Shape",
+                WAVES
+                    .map(|wave| Item {
+                        label: wave.name().to_owned(),
+                        pick: Pick::ShapeWave(wave),
+                    })
+                    .to_vec(),
+                WAVES
+                    .iter()
+                    .position(|wave| *wave == panel.shape.wave)
+                    .unwrap_or(0),
+            ),
+            ShapeRow::Rate => {
+                let rates = note_rates();
+                let position = rates
+                    .iter()
+                    .position(|rate| *rate == panel.shape.rate)
+                    .unwrap_or(0);
+                let items = rates
+                    .into_iter()
+                    .map(|rate| Item {
+                        label: rate.to_string(),
+                        pick: Pick::ShapeRate(rate),
+                    })
+                    .collect();
+                ("Rate", items, position)
+            }
             ShapeRow::Where => {
                 let choices = panel.column.wheres();
                 let same = |choice: &Where| {
@@ -415,7 +493,7 @@ impl App {
                 ("Where", items, position)
             }
             _ => {
-                self.status = "K chooses from a list on Fill and Where".to_owned();
+                self.status = "K chooses from a list on Fill, Shape, Rate and Where".to_owned();
                 return;
             }
         };
@@ -429,6 +507,14 @@ impl App {
         self.change_shape(|panel| panel.shape.kind = kind);
     }
 
+    pub(crate) fn pick_shape_wave(&mut self, wave: Wave) {
+        self.change_shape(|panel| panel.shape.wave = wave);
+    }
+
+    pub(crate) fn pick_shape_rate(&mut self, rate: Rate) {
+        self.change_shape(|panel| panel.shape.rate = rate);
+    }
+
     pub(crate) fn pick_shape_where(&mut self, place: Where) {
         self.change_shape(|panel| panel.shape.place = place);
     }
@@ -437,7 +523,7 @@ impl App {
         let Some(panel) = &self.shape else {
             return;
         };
-        if matches!(panel.row, ShapeRow::Fill | ShapeRow::Where) {
+        if matches!(panel.row, ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where) {
             self.open_shape_picker();
         } else if let Some(panel) = &mut self.shape {
             panel.typing = Some(String::new());
@@ -450,6 +536,7 @@ impl App {
         };
         let hex = matches!(panel.row, ShapeRow::From | ShapeRow::To);
         let signed = matches!(panel.row, ShapeRow::Curve | ShapeRow::S);
+        let rate = panel.row == ShapeRow::Rate;
         let Some(text) = &mut panel.typing else {
             return;
         };
@@ -466,7 +553,15 @@ impl App {
                 }
             }
             KeyCode::Char(c)
+                if rate
+                    && text.len() < RATE_TEXT
+                    && (c.is_ascii_alphanumeric() || matches!(c, '/' | ' ')) =>
+            {
+                text.push(c);
+            }
+            KeyCode::Char(c)
                 if !hex
+                    && !rate
                     && text.len() < 4
                     && (c.is_ascii_digit()
                         || (signed && text.is_empty() && matches!(c, '-' | '+'))) =>
@@ -517,7 +612,22 @@ impl App {
                     }
                     _ => refused = Some("That amount isn't a whole number above 0"),
                 },
-                ShapeRow::Fill | ShapeRow::Where => {}
+                // A wave here is laid out by rows, so a rate has to be in time with them.
+                ShapeRow::Rate => match text.parse::<Rate>() {
+                    Ok(Rate::Hertz(_)) | Err(_) => {
+                        refused = Some("A rate here is like 1/4, 1/8d, 1/16t, 2 bars or 7st");
+                    }
+                    Ok(rate) => shape.rate = rate,
+                },
+                ShapeRow::Phase => match text.parse::<u16>() {
+                    Ok(phase) if phase < 360 => shape.phase = phase,
+                    _ => refused = Some("Phase runs from 0 to 359"),
+                },
+                ShapeRow::Run => match text.parse::<i16>() {
+                    Ok(run) if run > 0 => shape.run = run.min(MAX_RUN) as u16,
+                    _ => refused = Some("Run is a whole number above 0"),
+                },
+                ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where => {}
             }
         });
         if let Some(reason) = refused {

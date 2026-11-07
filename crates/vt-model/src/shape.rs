@@ -1,10 +1,17 @@
-//! Filling a column across a selection with a shaped ramp or random values.
+//! Filling a column across a selection with a shaped ramp, random values, a wave, or two values in
+//! turn.
 
+use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
+use crate::lfo::{Rate, Shape as Wave, wave};
 use crate::selection::StepRange;
 use crate::step::{FxCommand, FxSlot, MAX_VELOCITY, Mark, Note, Step};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
+/// The waves a column can follow, in the order `+` goes through them.
+pub const WAVES: [Wave; 5] = [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square];
+/// How long a wave's cycle is unless told otherwise: a half note.
+pub const DEFAULT_RATE: Rate = Rate::Note(TICKS_PER_QUARTER as u32 * 2);
 
 /// What goes in the rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +20,35 @@ pub enum FillKind {
     Ramp,
     /// Anywhere between the two values, new on each row.
     Random,
+    /// Swinging between the two values, by where each row falls in the wave's cycle.
+    Wave,
+    /// One value then the other, on the rows it fills, however they're spaced.
+    Alternate,
+}
+
+impl FillKind {
+    /// Every fill, in the order `+` goes through them.
+    pub const ALL: [Self; 4] = [Self::Ramp, Self::Random, Self::Wave, Self::Alternate];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ramp => "Ramp",
+            Self::Random => "Random",
+            Self::Wave => "Wave",
+            Self::Alternate => "Alternate",
+        }
+    }
+
+    /// What it does, for a list to choose from.
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Ramp => "From one value to the other",
+            Self::Random => "Anywhere between the two",
+            Self::Wave => "Swinging between the two",
+            Self::Alternate => "One value, then the other",
+        }
+    }
 }
 
 /// Which rows get a value.
@@ -138,6 +174,13 @@ pub struct Shape {
     /// Eases both ends: above 0 an S, and below 0 the reverse.
     pub s: i8,
     pub kind: FillKind,
+    /// The wave a `Wave` follows, its length, and where in the cycle the first row selected falls,
+    /// in degrees, as an LFO's are.
+    pub wave: Wave,
+    pub rate: Rate,
+    pub phase: u16,
+    /// How many rows in a row `Alternate` gives each value.
+    pub run: u16,
     pub place: Where,
     /// Picks the random values and the chance rows, so a change elsewhere doesn't reroll them.
     pub seed: u64,
@@ -221,7 +264,8 @@ pub fn values(
     let (low, high) = (from.min(to) as u64, from.max(to) as u64);
     let across = (last - first).max(1) as f64;
     rows.iter()
-        .map(|&row| {
+        .enumerate()
+        .map(|(index, &row)| {
             let value = match shape.kind {
                 FillKind::Ramp => {
                     let t = (row - first) as f64 / across;
@@ -232,6 +276,17 @@ pub fn values(
                 FillKind::Random => {
                     let span = high - low + 1;
                     (low + mix(shape.seed, row - range.first) % span) as u8
+                }
+                FillKind::Wave => {
+                    let ticks = (row - range.first) as u64 * TICKS_PER_STEP;
+                    let cycles =
+                        shape.rate.cycles(ticks as f64, 0.0) + f64::from(shape.phase) / 360.0;
+                    let t = (f64::from(wave(shape.wave, cycles, shape.seed)) + 1.0) / 2.0;
+                    (from + (to - from) * t).round().clamp(0.0, top) as u8
+                }
+                FillKind::Alternate => {
+                    let turn = index / usize::from(shape.run.max(1));
+                    (if turn.is_multiple_of(2) { from } else { to }) as u8
                 }
             };
             (row, value)
@@ -302,6 +357,10 @@ mod tests {
             curve,
             s,
             kind: FillKind::Ramp,
+            wave: Wave::Sine,
+            rate: DEFAULT_RATE,
+            phase: 0,
+            run: 1,
             place: Where::Notes,
             seed: 1,
         }
@@ -447,6 +506,125 @@ mod tests {
             assert_eq!(out, written(&steps, shape));
             assert_ne!(out, written(&steps, Shape { seed: 2, ..shape }));
         }
+    }
+
+    fn waving(wave: Wave, from: u8, to: u8) -> Shape {
+        Shape {
+            kind: FillKind::Wave,
+            wave,
+            ..ramp(from, to, 0, 0)
+        }
+    }
+
+    #[test]
+    fn a_wave_swings_between_the_values_at_its_rate() {
+        // A half note is 8 rows.
+        assert_eq!(
+            written(&notes(9), waving(Wave::Tri, 0, 0x40)),
+            [0x20, 0x30, 0x40, 0x30, 0x20, 0x10, 0, 0x10, 0x20]
+        );
+        assert_eq!(
+            written(&notes(5), waving(Wave::Sine, 0, 0x40)),
+            [0x20, 0x37, 0x40, 0x37, 0x20]
+        );
+        assert_eq!(
+            written(&notes(8), waving(Wave::Square, 0x10, 0x70)),
+            [0x70, 0x70, 0x70, 0x70, 0x10, 0x10, 0x10, 0x10]
+        );
+        assert_eq!(
+            written(&notes(5), waving(Wave::Ramp, 0, 0x40)),
+            [0, 0x08, 0x10, 0x18, 0x20]
+        );
+        assert_eq!(
+            written(&notes(5), waving(Wave::Saw, 0, 0x40)),
+            [0x40, 0x38, 0x30, 0x28, 0x20]
+        );
+    }
+
+    #[test]
+    fn a_waves_rate_and_phase_move_it_and_swapped_ends_flip_it() {
+        let quarter = Shape {
+            rate: "1/4".parse().unwrap(),
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            written(&notes(5), quarter),
+            [0x20, 0x40, 0x20, 0, 0x20],
+            "a quarter note is 4 rows"
+        );
+        let steps = Shape {
+            rate: "2st".parse().unwrap(),
+            ..waving(Wave::Square, 0, 0x40)
+        };
+        assert_eq!(written(&notes(4), steps), [0x40, 0, 0x40, 0]);
+        let phased = Shape {
+            phase: 90,
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(written(&notes(3), phased), [0x40, 0x30, 0x20]);
+        assert_eq!(
+            written(&notes(3), waving(Wave::Tri, 0x40, 0)),
+            [0x20, 0x10, 0]
+        );
+    }
+
+    #[test]
+    fn a_wave_goes_by_where_a_row_falls_counting_from_the_first_selected() {
+        let steps = rows(&[
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+        ]);
+        let out = values(&steps, all(&steps), VEL, &waving(Wave::Tri, 0, 0x40));
+        assert_eq!(out, [(1, 0x30), (3, 0x30), (4, 0x20)]);
+        let later = StepRange::between(1, 4);
+        let out = values(&steps, later, VEL, &waving(Wave::Tri, 0, 0x40));
+        assert_eq!(out, [(1, 0x20), (3, 0x40), (4, 0x30)]);
+    }
+
+    fn alternating(run: u16, from: u8, to: u8) -> Shape {
+        Shape {
+            kind: FillKind::Alternate,
+            run,
+            ..ramp(from, to, 0, 0)
+        }
+    }
+
+    #[test]
+    fn alternate_takes_turns_for_its_run() {
+        assert_eq!(
+            written(&notes(5), alternating(1, 0x70, 0x40)),
+            [0x70, 0x40, 0x70, 0x40, 0x70]
+        );
+        assert_eq!(
+            written(&notes(6), alternating(2, 0x70, 0x40)),
+            [0x70, 0x70, 0x40, 0x40, 0x70, 0x70]
+        );
+    }
+
+    #[test]
+    fn alternate_flips_on_every_note_however_they_are_spaced() {
+        let steps = rows(&[
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "C-4 -- ---00 ---00 ---00",
+        ]);
+        let out = values(&steps, all(&steps), VEL, &alternating(1, 0x70, 0x40));
+        assert_eq!(out, [(0, 0x70), (3, 0x40), (4, 0x70), (6, 0x40)]);
+    }
+
+    #[test]
+    fn a_wave_and_alternate_stop_at_the_columns_top() {
+        let steps = notes(4);
+        assert_eq!(written(&steps, alternating(1, 0xFF, 0)), [0x7F, 0, 0x7F, 0]);
+        let out = written(&notes(3), waving(Wave::Tri, 0, 0xFF));
+        assert!(out.iter().all(|value| *value <= 0x7F), "{out:?}");
     }
 
     #[test]

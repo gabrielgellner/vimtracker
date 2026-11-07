@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use vt_model::envelope::Envelope;
-use vt_model::lfo::Lfo;
+use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterType, Machine, SynthVoice};
 use vt_model::step::FxCommand;
@@ -64,6 +64,10 @@ pub enum Pick {
     SectionChain(Option<u32>),
     /// What the shape panel fills with.
     ShapeFill(FillKind),
+    /// The wave the shape panel follows.
+    ShapeWave(Wave),
+    /// The length of the shape panel's wave.
+    ShapeRate(Rate),
     /// Which rows the shape panel fills.
     ShapeWhere(Where),
     Use {

@@ -36,10 +36,11 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
         ShapeRow::Curve | ShapeRow::S if shape.kind == FillKind::Random => "--".to_owned(),
         ShapeRow::Curve => bend(shape.curve),
         ShapeRow::S => bend(shape.s),
-        ShapeRow::Fill => match shape.kind {
-            FillKind::Ramp => "Ramp".to_owned(),
-            FillKind::Random => "Random".to_owned(),
-        },
+        ShapeRow::Fill => shape.kind.name().to_owned(),
+        ShapeRow::Wave => shape.wave.name().to_owned(),
+        ShapeRow::Rate => shape.rate.to_string(),
+        ShapeRow::Phase => format!("{}°", shape.phase),
+        ShapeRow::Run => shape.run.to_string(),
         ShapeRow::Where => shape.place.name().to_owned(),
         ShapeRow::Amount => match shape.place {
             Where::Every(every) => format!("{every} rows"),

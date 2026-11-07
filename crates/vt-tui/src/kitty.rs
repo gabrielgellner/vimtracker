@@ -9,10 +9,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ratatui::style::Color;
 use vt_engine::dsp::filter::track_response_db;
-use vt_engine::dsp::lfo::wave;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
-use vt_model::lfo::{LFOS_PER_TRACK, Shape};
+use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
 use vt_model::song::{FilterType, Track};
 
 use crate::app::App;

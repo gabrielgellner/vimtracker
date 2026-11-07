@@ -9,6 +9,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::samples::SamplePool;
+use vt_model::shape::FillKind;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::{App, Field};
@@ -1476,6 +1477,106 @@ fn random_fill_stays_in_range_and_rerolls() {
     keys(&mut app, "u");
     assert_eq!(steps(&app).len(), 64);
     assert!(vel(&app).iter().all(|v| v == "40"));
+}
+
+#[test]
+fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    assert!(panel(&app).rows().contains(&ShapeRow::Curve));
+    // From, To, Curve, S, then Fill, and `=` goes on past Random.
+    keys(&mut app, "jjjj==");
+    assert_eq!(panel(&app).shape.kind, FillKind::Wave);
+    let rows = panel(&app).rows();
+    assert!(!rows.contains(&ShapeRow::Curve));
+    assert!(rows.contains(&ShapeRow::Rate));
+    assert_eq!(panel(&app).row, ShapeRow::Fill, "the cursor stays on Fill");
+
+    keys(&mut app, "j=");
+    assert_eq!(panel(&app).row, ShapeRow::Wave);
+    assert_eq!(panel(&app).shape.wave.name(), "Tri");
+    keys(&mut app, "j");
+    assert_eq!(panel(&app).shape.rate.to_string(), "1/2");
+    keys(&mut app, "i1/4<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "1/4");
+    keys(&mut app, "i2hz<Enter>");
+    assert_eq!(
+        panel(&app).shape.rate.to_string(),
+        "1/4",
+        "not free of the grid"
+    );
+    keys(&mut app, "i7st<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "7st");
+    keys(&mut app, "x+");
+    assert_eq!(
+        panel(&app).shape.rate.to_string(),
+        "1/4",
+        "faster, as on an LFO"
+    );
+    keys(&mut app, "j=_");
+    assert_eq!(panel(&app).shape.phase, 285, "it goes round");
+    keys(&mut app, "i90<Enter>");
+    assert_eq!(panel(&app).shape.phase, 90);
+    keys(&mut app, "i360<Enter>");
+    assert_eq!(panel(&app).shape.phase, 90, "that's refused");
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.phase, 0);
+
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.history.undo_depth(), 1);
+}
+
+#[test]
+fn the_panel_alternates_and_a_list_chooses_a_wave() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    keys(&mut app, "jjjj");
+    keys(&mut app, "K");
+    keys(&mut app, "alt<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Alternate);
+    assert_eq!(vel(&app), ["10", "40", "--", "10"]);
+    keys(&mut app, "j");
+    assert_eq!(panel(&app).row, ShapeRow::Run);
+    keys(&mut app, "=");
+    assert_eq!(panel(&app).shape.run, 2);
+    assert_eq!(vel(&app), ["10", "10", "--", "40"]);
+    keys(&mut app, "i0<Enter>");
+    assert_eq!(panel(&app).shape.run, 2, "that's refused");
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.run, 1);
+
+    // Fill's list also goes to Wave, and Shape and Rate have lists of their own.
+    keys(&mut app, "k");
+    keys(&mut app, "Kwav<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Wave);
+    keys(&mut app, "jKsquare<Enter>");
+    assert_eq!(panel(&app).shape.wave.name(), "Square");
+    keys(&mut app, "jK");
+    assert!(app.picker.is_some());
+    keys(&mut app, "<Esc><Esc>");
+}
+
+#[test]
+fn dot_keeps_the_two_values_a_wave_or_alternate_moves_between() {
+    let (mut app, _rt) = app_with(&[
+        "C-4 10 ---00 ---00 ---00",
+        "C-4 10 ---00 ---00 ---00",
+        "C-4 70 ---00 ---00 ---00",
+        "C-4 7F ---00 ---00 ---00",
+        "C-4 00 ---00 ---00 ---00",
+        "C-4 30 ---00 ---00 ---00",
+    ]);
+    keys(&mut app, "lvjjS");
+    keys(&mut app, "i20ji60jjj");
+    keys(&mut app, "Kalt<Enter><Enter>");
+    assert_eq!(vel(&app)[..3], ["20", "60", "20"]);
+    keys(&mut app, "3jvjj.");
+    assert_eq!(vel(&app)[3..], ["20", "60", "20"]);
 }
 
 #[test]

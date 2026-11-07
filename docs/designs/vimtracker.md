@@ -466,7 +466,7 @@ state is deferred until plain values are found wanting. Selecting and pressing `
 **Sweep.** A sweep covers one column, Velocity or FX, across at least two rows. A multi-column, note-column or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
 highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
-first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead. `Where` chooses the
+first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape, rate and phase by where each row falls in time, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time. `Where` chooses the
 rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, or a percent chance. A velocity only ever goes on a note.
 
 **Curve.** `f(t)` applies bias then gain, where `t` runs by row position from 0 at the first row filled to 1 at the last, and the
