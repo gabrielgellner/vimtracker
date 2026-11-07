@@ -4414,3 +4414,78 @@ fn slash_only_jumps_on_the_parameter_pages() {
     assert_ne!(app.mode, Mode::Jump);
     assert!(app.field_jump.is_none());
 }
+
+#[test]
+fn option_keys_narrow_and_widen_the_grid_in_normal_and_insert() {
+    let key = |name: &str| parse_sequence(name).unwrap()[0];
+    let (mut app, _realtime) = app();
+    assert_eq!(app.song().skip, 4);
+    app.key(key("M-1"), Instant::now());
+    assert_eq!(app.song().skip, 2);
+    app.key(key("M-1"), Instant::now());
+    app.key(key("M-1"), Instant::now());
+    assert_eq!(app.song().skip, 1, "it stops at 1/16");
+    press(&mut app, "j");
+    assert_eq!(app.cursor.step, 1, "the 1 isn't a count");
+    press(&mut app, "k");
+    for _ in 0..6 {
+        app.key(key("M-2"), Instant::now());
+    }
+    assert_eq!(app.song().skip, 16, "it stops at a bar");
+
+    // A size between them goes to the next one along, either way.
+    command(&mut app, "set skip=6");
+    app.key(key("M-1"), Instant::now());
+    assert_eq!(app.song().skip, 4);
+    command(&mut app, "set skip=6");
+    app.key(key("M-2"), Instant::now());
+    assert_eq!(app.song().skip, 8);
+    command(&mut app, "set skip=32");
+    app.key(key("M-2"), Instant::now());
+    assert_eq!(app.song().skip, 32, "past the sizes, it stays");
+    app.key(key("M-1"), Instant::now());
+    assert_eq!(app.song().skip, 16);
+
+    // In Insert it writes nothing, and the arrows follow it from the note just written.
+    command(&mut app, "set skip=4");
+    press(&mut app, "i");
+    app.key(key("M-1"), Instant::now());
+    assert_eq!(app.song().skip, 2);
+    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.cursor.step, 0);
+    let notes = |app: &App| {
+        app.phrase_here()
+            .unwrap()
+            .steps()
+            .iter()
+            .filter(|step| step.note != Note::Empty)
+            .count()
+    };
+    assert_eq!(notes(&app), 0, "M-1 isn't a note off");
+    press(&mut app, "a");
+    assert_eq!(notes(&app), 1);
+    app.key(key("M-2"), Instant::now());
+    assert_eq!(app.song().skip, 4);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 4);
+}
+
+#[test]
+fn the_status_line_shows_the_grid_in_the_phrase_view() {
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(100, 2);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .unwrap();
+        (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol().to_owned())
+            .collect::<String>()
+    };
+    let (mut app, _realtime) = app();
+    assert!(draw(&app).contains("Grid 1/4"), "{}", draw(&app));
+    app.key(parse_sequence("M-1").unwrap()[0], Instant::now());
+    assert!(draw(&app).contains("Grid 1/8"), "{}", draw(&app));
+    press(&mut app, " 4");
+    assert!(!draw(&app).contains("Grid"), "{}", draw(&app));
+}

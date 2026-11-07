@@ -110,6 +110,9 @@ pub enum Cmd {
     ShowPage(Page),
     /// Search this page for a setting to jump to.
     FieldJump,
+    /// Halve or double how far the left and right arrows move in Insert.
+    NarrowGrid,
+    WidenGrid,
 }
 
 /// One row of the table.
@@ -226,6 +229,12 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("v", Cmd::VisualField, "Select fields"),
     ("V", Cmd::VisualStep, "Select whole steps"),
     ("g v", Cmd::Reselect, "Reselect the last selection"),
+    (
+        "M-1",
+        Cmd::NarrowGrid,
+        "Narrower grid for the arrows in Insert",
+    ),
+    ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
     ("Space p d", Cmd::Double, "Double this phrase"),
     ("K", Cmd::PickValue, "Choose this field from a list"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),

@@ -6,6 +6,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
+use vt_model::constants::TICKS_PER_STEP;
+use vt_model::lfo::{Rate, note_rates};
 use vt_model::song::SynthVoice;
 
 use crate::app::{App, Field};
@@ -75,6 +77,16 @@ pub fn column_name(app: &App) -> String {
     }
 }
 
+/// A grid size as a note division where it is one, or otherwise in steps.
+fn grid_name(skip: u32) -> String {
+    let rate = Rate::Note(skip.saturating_mul(TICKS_PER_STEP as u32));
+    if note_rates().contains(&rate) {
+        rate.to_string()
+    } else {
+        Rate::Steps(skip).to_string()
+    }
+}
+
 /// Draw the status line and the message or command line below it.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let transport = match app.transport {
@@ -138,11 +150,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         String::new()
     };
     let reset = format!("{section}{reset}");
+    // The grid only means something where notes are entered.
+    let grid = if app.view == View::Phrase {
+        format!("  Grid {}", grid_name(app.song().skip))
+    } else {
+        String::new()
+    };
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}  TVol {level:02X}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}{grid}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,
@@ -160,7 +178,26 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 
 #[cfg(test)]
 mod tests {
-    use super::format_bpm;
+    use super::{format_bpm, grid_name};
+
+    #[test]
+    fn a_grid_reads_as_a_note_division_where_it_is_one() {
+        for (skip, name) in [
+            (1, "1/16"),
+            (2, "1/8"),
+            (3, "1/8d"),
+            (4, "1/4"),
+            (6, "1/4d"),
+            (8, "1/2"),
+            (12, "1/2d"),
+            (16, "1 bar"),
+            (32, "2 bars"),
+            (7, "7st"),
+            (0, "0st"),
+        ] {
+            assert_eq!(grid_name(skip), name);
+        }
+    }
 
     #[test]
     fn tempos_drop_trailing_zeros() {
