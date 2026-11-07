@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
-    FORMAT_VERSION, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
+    FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::insert::{INSERTS, Insert};
@@ -569,17 +569,38 @@ pub struct Chain {
     pub label: String,
 }
 
+/// Where an FX column loops on its own, among a phrase's stored steps. It drifts against the
+/// notes, which follow the phrase's loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lane {
+    pub start: usize,
+    pub length: usize,
+}
+
+impl Lane {
+    /// Whether a stored step is in it.
+    pub fn contains(self, step: usize) -> bool {
+        (self.start..self.start + self.length).contains(&step)
+    }
+
+    /// The stored step it reads at this count, which can be below 0 after playing from a step.
+    pub fn step_at(self, count: i64) -> usize {
+        self.start + count.rem_euclid(self.length.max(1) as i64) as usize
+    }
+}
+
 /// One track's sequence of steps, reusable by ID.
 ///
 /// It stores more than it plays, like a clip: a loop of `length` steps starting at `start`, with
 /// anything either side of it kept but silent. Rows on screen count from the loop's start, so the
-/// loop's first step is always beat 1.
+/// loop's first step is always beat 1. Each FX column can have a lane of its own.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "PhraseFile", into = "PhraseFile")]
 pub struct Phrase {
     steps: Vec<Step>,
     start: usize,
     length: usize,
+    lanes: [Option<Lane>; FX_SLOTS],
 }
 
 #[derive(Serialize, Deserialize)]
@@ -589,6 +610,17 @@ struct PhraseFile {
     start: usize,
     #[serde(default)]
     length: Option<usize>,
+    #[serde(default)]
+    lanes: [Option<Lane>; FX_SLOTS],
+}
+
+/// A lane that fits in this many stored steps, or none if it can't.
+fn fitted(lane: Option<Lane>, stored: usize) -> Option<Lane> {
+    let lane = lane?;
+    (lane.start < stored).then(|| Lane {
+        start: lane.start,
+        length: lane.length.clamp(1, stored - lane.start),
+    })
 }
 
 impl From<PhraseFile> for Phrase {
@@ -600,6 +632,7 @@ impl From<PhraseFile> for Phrase {
             .unwrap_or(stored)
             .min(stored - start.min(stored));
         Self {
+            lanes: file.lanes.map(|lane| fitted(lane, stored)),
             steps: file.steps,
             start,
             length,
@@ -613,6 +646,7 @@ impl From<Phrase> for PhraseFile {
             steps: phrase.steps,
             start: phrase.start,
             length: Some(phrase.length),
+            lanes: phrase.lanes,
         }
     }
 }
@@ -625,6 +659,7 @@ impl Phrase {
             steps: vec![Step::default(); length],
             start: 0,
             length,
+            lanes: [None; FX_SLOTS],
         }
     }
 
@@ -635,6 +670,7 @@ impl Phrase {
             steps,
             start: 0,
             length,
+            lanes: [None; FX_SLOTS],
         }
     }
 
@@ -659,6 +695,40 @@ impl Phrase {
         let steps = self.loop_steps();
         (1..steps.len()).find_map(|distance| {
             let fx = steps[(step + distance) % steps.len()].fx.get(slot)?;
+            (fx.command == Some(command)).then_some((distance, *fx))
+        })
+    }
+
+    /// An FX column's own lane, if it has one. One without follows the phrase's loop.
+    pub fn lane(&self, slot: usize) -> Option<Lane> {
+        self.lanes.get(slot).copied().flatten()
+    }
+
+    /// Give an FX column a lane of its own, or none to follow the phrase's loop again. Steps are
+    /// stored for all of it, up to the most a phrase keeps.
+    pub fn set_lane(&mut self, slot: usize, lane: Option<Lane>) {
+        if slot >= FX_SLOTS {
+            return;
+        }
+        if let Some(lane) = lane {
+            self.store_up_to((lane.start + lane.length.max(1)).min(MAX_PHRASE_STEPS));
+        }
+        self.lanes[slot] = fitted(lane, self.steps.len());
+    }
+
+    /// The next value with this command in a lane, looking forward from one of its steps and
+    /// wrapping within it, with how many steps away it is.
+    pub fn next_in_lane(
+        &self,
+        slot: usize,
+        step: usize,
+        command: FxCommand,
+    ) -> Option<(usize, FxSlot)> {
+        let lane = self.lane(slot)?;
+        let at = step.checked_sub(lane.start)?;
+        (1..lane.length).find_map(|distance| {
+            let index = lane.start + (at + distance) % lane.length;
+            let fx = self.steps.get(index)?.fx.get(slot)?;
             (fx.command == Some(command)).then_some((distance, *fx))
         })
     }
@@ -718,6 +788,10 @@ impl Phrase {
             self.steps
                 .splice(0..0, std::iter::repeat_n(Step::default(), added));
             self.start = 0;
+            // Lanes stay on the steps they had.
+            for lane in self.lanes.iter_mut().flatten() {
+                lane.start += added;
+            }
         } else {
             let highest = MAX_PHRASE_STEPS
                 .max(self.steps.len())
@@ -741,8 +815,15 @@ impl Phrase {
     pub fn double(&mut self) {
         let copy = self.loop_steps().to_vec();
         let end = self.start + self.length;
+        let added = copy.len();
         self.steps.splice(end..end, copy);
         self.length *= 2;
+        // Lanes after the loop move down with their steps.
+        for lane in self.lanes.iter_mut().flatten() {
+            if lane.start >= end {
+                lane.start += added;
+            }
+        }
     }
 }
 
@@ -911,6 +992,118 @@ mod tests {
     use crate::insert::{Distort, DistortType};
 
     #[test]
+    fn a_lane_saves_fits_its_steps_and_follows_them() {
+        let mut phrase = Phrase::new(16);
+        phrase.set_lane(
+            1,
+            Some(Lane {
+                start: 4,
+                length: 3,
+            }),
+        );
+        assert_eq!(
+            phrase.lane(1),
+            Some(Lane {
+                start: 4,
+                length: 3
+            })
+        );
+        assert_eq!(phrase.lane(0), None, "others follow the phrase");
+        let text = ron::to_string(&phrase).unwrap();
+        assert_eq!(ron::from_str::<Phrase>(&text).unwrap(), phrase);
+
+        // A lane past the end stores the steps it needs.
+        phrase.set_lane(
+            2,
+            Some(Lane {
+                start: 14,
+                length: 6,
+            }),
+        );
+        assert_eq!(phrase.steps().len(), 20);
+        // Sliding steps in front, or doubling the loop over it, moves it with its steps.
+        phrase.slide(-2);
+        assert_eq!(phrase.lane(1).unwrap().start, 6);
+        let mut doubled = Phrase::new(4);
+        doubled.grow_to(8);
+        doubled.set_lane(
+            0,
+            Some(Lane {
+                start: 5,
+                length: 2,
+            }),
+        );
+        doubled.double();
+        assert_eq!(doubled.lane(0).unwrap().start, 9);
+    }
+
+    #[test]
+    fn a_saved_phrase_without_lanes_has_none_and_a_bad_one_is_fitted() {
+        let mut old = ron::to_string(&Phrase::new(2)).unwrap();
+        old = old.replace(",lanes:(None,None,None)", "");
+        assert!(!old.contains("lanes"), "{old}");
+        let phrase: Phrase = ron::from_str(&old).unwrap();
+        assert_eq!(phrase.lane(0), None);
+        let file = PhraseFile {
+            steps: vec![Step::default(); 2],
+            start: 0,
+            length: Some(2),
+            lanes: [
+                Some(Lane {
+                    start: 1,
+                    length: 9,
+                }),
+                Some(Lane {
+                    start: 5,
+                    length: 1,
+                }),
+                None,
+            ],
+        };
+        let phrase = Phrase::from(file);
+        assert_eq!(
+            phrase.lane(0),
+            Some(Lane {
+                start: 1,
+                length: 1
+            })
+        );
+        assert_eq!(phrase.lane(1), None, "it starts past the steps");
+    }
+
+    #[test]
+    fn a_lane_reads_by_count_and_a_glide_looks_within_it() {
+        let lane = Lane {
+            start: 2,
+            length: 3,
+        };
+        let read: Vec<usize> = (0..7).map(|count| lane.step_at(count)).collect();
+        assert_eq!(read, [2, 3, 4, 2, 3, 4, 2]);
+        assert_eq!(lane.step_at(-1), 4);
+        let steps = [
+            "--- -- CUT10 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "--- -- CUT20 ---00 ---00",
+            "--- -- ---00 ---00 ---00",
+            "--- -- CUT30 ---00 ---00",
+        ];
+        let mut phrase = Phrase::from_steps(steps.iter().map(|t| t.parse().unwrap()).collect());
+        phrase.set_lane(0, Some(lane));
+        let next = |step| {
+            phrase
+                .next_in_lane(0, step, FxCommand::Cut)
+                .map(|(distance, fx)| (distance, fx.value))
+        };
+        assert_eq!(
+            next(4),
+            Some((1, 0x20)),
+            "wraps to the lane's start, not row 0"
+        );
+        assert_eq!(next(2), Some((2, 0x30)));
+        assert_eq!(next(0), None, "not in the lane");
+    }
+
+    #[test]
     fn next_value_looks_forward_in_the_slot_and_wraps() {
         let steps = [
             "--- -- CUT10 ---00",
@@ -1076,6 +1269,7 @@ mod tests {
         let file = PhraseFile {
             steps: vec![Step::default(); 3],
             start: 0,
+            lanes: [None; FX_SLOTS],
             length: None,
         };
         let phrase = Phrase::from(file);
@@ -1087,6 +1281,7 @@ mod tests {
         let file = PhraseFile {
             steps: vec![Step::default(); 3],
             start: 9,
+            lanes: [None; FX_SLOTS],
             length: Some(9),
         };
         let phrase = Phrase::from(file);

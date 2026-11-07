@@ -3,12 +3,12 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    FIXED_TRACKS, GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING, MAX_TRACKS,
-    MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
+    FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING,
+    MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
-use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 use vt_model::target::Target;
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
@@ -194,7 +194,7 @@ impl Engine {
     pub fn realign(&mut self) {
         self.place = 0;
         for track in self.tracks.iter_mut() {
-            track.started = 0;
+            track.restart(0);
         }
     }
 
@@ -204,7 +204,7 @@ impl Engine {
         for (track, chain) in self.tracks.iter_mut().zip(&section.chains) {
             if track.playing != *chain {
                 track.playing = *chain;
-                track.started = place;
+                track.restart(place);
             }
         }
     }
@@ -255,7 +255,7 @@ impl Engine {
     /// Put a track's chain at this step, leaving the others where they are.
     pub fn place_track(&mut self, track: usize, step: usize) {
         if let Some(state) = self.tracks.get_mut(track) {
-            state.started = self.place as i64 - step as i64;
+            state.restart(self.place as i64 - step as i64);
         }
     }
 
@@ -283,6 +283,7 @@ impl Engine {
                 cued: track.cued,
                 chain: track.playing,
                 started: track.started,
+                lane_offsets: track.lane_offsets,
             })
     }
 
@@ -353,7 +354,7 @@ impl Engine {
             self.tracks[index].stop();
         }
         self.tracks[index].launched = Some(chain);
-        self.tracks[index].started = section_step as i64;
+        self.tracks[index].restart(section_step as i64);
     }
 
     /// Whether any section has a length, so there's a next step to fire. One with a length and no
@@ -427,7 +428,7 @@ impl Engine {
         } else if next != from && wrapped {
             let place = self.place as i64;
             for track in self.tracks.iter_mut() {
-                track.started = place;
+                track.restart(place);
             }
         } else if next != from {
             self.start_row(section);
@@ -527,7 +528,8 @@ impl Engine {
             if old_chain != Some(chain) {
                 continue;
             }
-            let track = &self.current.song.tracks[index];
+            let current = Arc::clone(&self.current);
+            let track = &current.song.tracks[index];
             let (old_length, length) = (
                 before.chain_steps(chain) as i64,
                 track.chain_steps(chain) as i64,
@@ -535,15 +537,51 @@ impl Engine {
             if old_length == 0 || length == 0 {
                 continue;
             }
-            let count = place - self.tracks[index].started;
+            let state = &mut self.tracks[index];
+            let count = place - state.started;
             let next = count.rem_euclid(old_length);
-            let kept = before
-                .chain_position(chain, next as usize)
-                .and_then(|at| track.chain_place(chain, at.slot, at.step))
+            let Some(was_at) = before.chain_position(chain, next as usize) else {
+                continue;
+            };
+            let kept = track
+                .chain_place(chain, was_at.slot, was_at.step)
                 .unwrap_or(0) as i64;
-            if length != old_length || kept != next {
+            let moved = length != old_length || kept != next;
+            if moved {
                 let laps = count.div_euclid(old_length);
-                self.tracks[index].started = place - (laps * length + kept);
+                state.started = place - (laps * length + kept);
+            }
+            let (Some(old_phrase), Some(at)) = (
+                before.phrases.get(&was_at.phrase),
+                track.chain_position(chain, kept as usize),
+            ) else {
+                continue;
+            };
+            let Some(phrase) = track.phrases.get(&at.phrase) else {
+                continue;
+            };
+            let new_count = place - state.started;
+            for slot in 0..FX_SLOTS {
+                let (old_lane, lane) = (old_phrase.lane(slot), phrase.lane(slot));
+                if !moved && old_lane == lane && was_at.phrase == at.phrase {
+                    continue;
+                }
+                let Some(lane) = lane else {
+                    state.lane_offsets[slot] = 0;
+                    continue;
+                };
+                // The step this column was going to read, which it keeps if its lane still has it.
+                let was_reading = match old_lane {
+                    Some(old_lane) => old_lane.step_at(count + state.lane_offsets[slot]),
+                    None => old_phrase.start() + was_at.step,
+                };
+                let target = if was_at.phrase == at.phrase && lane.contains(was_reading) {
+                    was_reading
+                } else {
+                    lane.start
+                };
+                let offset = (target - lane.start) as i64 - new_count;
+                state.lane_offsets[slot] = offset.rem_euclid(lane.length.max(1) as i64);
             }
         }
     }
@@ -1069,19 +1107,36 @@ impl Engine {
         let Some(step) = owner.step_at(position) else {
             return;
         };
+        // Each FX column reads its own lane's step if it has one, and the note's step if not.
+        let phrase = owner.phrases.get(&position.phrase);
+        let count = section_step as i64 - self.tracks[index].started;
+        let mut lane_steps = [None; FX_SLOTS];
+        let mut fx = [FxSlot::default(); FX_SLOTS];
+        for (number, read) in fx.iter_mut().enumerate() {
+            let lane = phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?)));
+            let found = match lane {
+                Some((phrase, lane)) => {
+                    let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
+                    lane_steps[number] = Some(at);
+                    phrase.steps().get(at).and_then(|step| step.fx.get(number))
+                }
+                None => step.fx.get(number),
+            };
+            *read = found.copied().unwrap_or_default();
+        }
         let mut delay_units = None;
         let mut kill_units = None;
         let mut off_units = None;
         let mut retrigger = None;
         // `CHA` goes first, as whether the note plays decides whether locks end.
         let mut plays = true;
-        for slot in step.fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
+        for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
             plays &= self.tracks[index].rng.chance(slot.value);
         }
         if plays && matches!(step.note, Note::On(_)) {
             self.tracks[index].end_locks();
         }
-        for (number, slot) in step.fx.iter().enumerate() {
+        for (number, slot) in fx.iter().enumerate() {
             let Some(command) = slot.command else {
                 continue;
             };
@@ -1092,10 +1147,12 @@ impl Engine {
                 FxCommand::Ret => retrigger = Some(slot.value),
                 FxCommand::Cha => {}
                 value if slot.mark == Mark::Glide => {
-                    let to = owner.phrases.get(&position.phrase).and_then(|phrase| {
-                        phrase
-                            .next_value(position.step, number, value)
-                            .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
+                    let to = phrase.and_then(|phrase| {
+                        match lane_steps[number] {
+                            Some(at) => phrase.next_in_lane(number, at, value),
+                            None => phrase.next_value(position.step, number, value),
+                        }
+                        .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
                     });
                     let now = self.song_time();
                     self.tracks[index].start_glide(value, slot.value, to, now);

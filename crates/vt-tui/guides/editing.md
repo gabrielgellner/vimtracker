@@ -172,6 +172,28 @@ phrase, along with what is outside it.
 A phrase used in two places shares one loop. Copy it with `gc` to give one
 place its own.
 
+## Lanes
+
+An FX column can loop on its own, apart from the notes: a lane. It keeps
+counting across the phrase's repeats, so a lane of 3 against a loop of 16 lands
+somewhere new each pass, as tracks of different lengths do.
+
+| Keys | Does, on an FX column |
+|---|---|
+| `gs` | Start the column's lane on the cursor's step |
+| `ge` | End the lane on the cursor's step |
+| `:len 3` | Make the lane 3 steps long |
+| `:len` | Follow the phrase's loop again |
+
+On the note or velocity column these set the phrase's loop, as above. On a
+column with a lane, `gg` and `G` go to its first and last steps, and `5G` to
+its fifth. A
+column with a lane shows its length in the title, like `FX1:3`, dims the steps
+outside its lane, and has its own `>` while playing. Editing works on rows as
+usual, whatever loop a column plays. Anything that starts a track's chain over
+starts its lanes over too, so playing from a step hears what playing to it
+would. A glide in a lane goes to the next value in that lane.
+
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and
 `;` there plays just that row's note.

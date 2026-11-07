@@ -17,8 +17,8 @@ use crate::selection::{
 };
 use crate::shape::{Shape, ShapeColumn, values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Launch, Machine, Phrase, Repeat, Section, SectionStart, Song,
-    SynthVoice, Track, lowest_unused,
+    Chain, ChainEntry, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section, SectionStart,
+    Song, SynthVoice, Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
 
@@ -227,6 +227,13 @@ pub enum Action {
         track: usize,
         phrase: u32,
         length: usize,
+    },
+    /// Give an FX column of a phrase a lane of its own, or none to follow the phrase's loop.
+    SetLane {
+        track: usize,
+        phrase: u32,
+        slot: usize,
+        lane: Option<Lane>,
     },
     /// Move a phrase's loop by some steps, keeping its length.
     SlideLoop {
@@ -709,6 +716,14 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
         Action::SlideLoop { track, phrase, by } => {
             phrase_mut(&mut next, *track, *phrase)?.slide(*by);
+        }
+        Action::SetLane {
+            track,
+            phrase,
+            slot,
+            lane,
+        } => {
+            phrase_mut(&mut next, *track, *phrase)?.set_lane(*slot, *lane);
         }
         Action::RotateLoop { track, phrase, by } => {
             phrase_mut(&mut next, *track, *phrase)?.rotate(*by);

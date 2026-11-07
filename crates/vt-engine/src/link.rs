@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
 };
 
 use crate::dsp::memory::{Memory, MemoryCount};
@@ -66,6 +66,8 @@ pub struct JamState {
     pub chain: Option<u32>,
     /// The running count that chain began at.
     pub started: i64,
+    /// What's added to that count for each FX column's lane.
+    pub lane_offsets: [i64; FX_SLOTS],
 }
 
 /// What the callback reports back each block.
@@ -370,6 +372,32 @@ mod tests {
             total += violations;
         }
         total
+    }
+
+    #[test]
+    fn lanes_changing_while_playing_never_allocate_in_the_callback() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = song(8, 16);
+            for track in next.tracks.iter_mut().take(8) {
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for slot in 0..FX_SLOTS {
+                    let lane = vt_model::song::Lane {
+                        start: (round + slot) % 4,
+                        length: 1 + (round * 3 + slot) % 7,
+                    };
+                    phrase.set_lane(slot, Some(lane));
+                }
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
     }
 
     #[test]

@@ -27,7 +27,8 @@ pub enum Line {
     /// Keep playing the section being edited, or go back to playing the song.
     Loop,
     Bpm(u32),
-    Len(usize),
+    /// A loop's length, or none for an FX column to follow the phrase's loop again.
+    Len(Option<usize>),
     TrackAdd(usize),
     TrackDel,
     Mute,
@@ -207,7 +208,10 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         "name" if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
         "name" => Err(LineError::Name),
         "bpm" => millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
-        "len" => steps(argument).map(Line::Len).ok_or(LineError::Len),
+        "len" if argument.is_empty() => Ok(Line::Len(None)),
+        "len" => steps(argument)
+            .map(|length| Line::Len(Some(length)))
+            .ok_or(LineError::Len),
         "track" => match argument.split_whitespace().collect::<Vec<_>>()[..] {
             ["add"] => Ok(Line::TrackAdd(1)),
             ["add", count] => count
@@ -329,7 +333,7 @@ mod tests {
         assert_eq!(parse("w"), Ok(Line::Write(None)));
         assert_eq!(parse("w a/b"), Ok(Line::Write(Some("a/b".into()))));
         assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
-        assert_eq!(parse("len 32"), Ok(Line::Len(32)));
+        assert_eq!(parse("len 32"), Ok(Line::Len(Some(32))));
         assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
         assert_eq!(
             parse("render a b.wav --rows 8 --tail"),
@@ -362,12 +366,12 @@ mod tests {
         assert!(parse("reset 0").is_err());
         assert!(parse("reset").is_err());
         assert_eq!(parse("reset 0x40"), Ok(Line::Reset(Some(64))));
-        assert_eq!(parse("len 16"), Ok(Line::Len(16)));
-        assert_eq!(parse("len 0x10"), Ok(Line::Len(16)));
-        assert_eq!(parse("len 0xfF"), Ok(Line::Len(255)));
+        assert_eq!(parse("len 16"), Ok(Line::Len(Some(16))));
+        assert_eq!(parse("len 0x10"), Ok(Line::Len(Some(16))));
+        assert_eq!(parse("len 0xfF"), Ok(Line::Len(Some(255))));
         assert_eq!(
             parse("len 10"),
-            Ok(Line::Len(10)),
+            Ok(Line::Len(Some(10))),
             "plain numbers stay decimal"
         );
         for wrong in [
@@ -428,6 +432,7 @@ mod tests {
     #[test]
     fn bad_commands_are_refused() {
         assert_eq!(parse("len 0"), Err(LineError::Len));
+        assert_eq!(parse("len"), Ok(Line::Len(None)));
         assert_eq!(parse("e"), Err(LineError::NeedsPath(":e")));
         assert_eq!(parse("nope"), Err(LineError::Unknown("nope".into())));
     }

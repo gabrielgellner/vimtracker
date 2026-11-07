@@ -26,8 +26,8 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Extent, Scope, StepRange};
-use vt_model::song::{ChainEntry, Phrase, Section, Song, Track, TrackKind};
+use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
+use vt_model::song::{ChainEntry, Lane, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 use crate::grammar::Change;
@@ -382,6 +382,23 @@ impl App {
     /// The keys typed so far in a sequence.
     pub fn pending(&self) -> &[Key] {
         &self.pending
+    }
+
+    /// What `gg` and `G` go by: the cursor's FX column's lane if it has one, and the phrase's loop
+    /// otherwise. Beats always go by the phrase's loop.
+    pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
+        let extent = self.extent();
+        let lane = match (motion, self.cursor.field) {
+            (Motion::First | Motion::Last, Field::FxCommand(slot) | Field::FxValue(slot)) => {
+                self.phrase_here().and_then(|phrase| phrase.lane(slot))
+            }
+            _ => None,
+        };
+        lane.map_or(extent, |lane| Extent {
+            start: lane.start,
+            length: lane.length,
+            ..extent
+        })
     }
 
     /// Where the cursor's phrase's loop sits.
@@ -772,8 +789,54 @@ impl App {
         }
     }
 
+    /// The FX column the cursor is on, whose lane the loop keys set.
+    fn lane_slot(&self) -> Option<usize> {
+        match self.cursor.field {
+            Field::FxCommand(slot) | Field::FxValue(slot) => Some(slot),
+            Field::Note | Field::Velocity => None,
+        }
+    }
+
+    /// The cursor's FX column's lane as it is, or the phrase's loop if it has none.
+    fn lane_here(&self, slot: usize) -> Lane {
+        let extent = self.extent();
+        self.phrase_here()
+            .and_then(|phrase| phrase.lane(slot))
+            .unwrap_or(Lane {
+                start: extent.start,
+                length: extent.length,
+            })
+    }
+
+    /// Give the cursor's FX column a lane, or none to follow the phrase's loop again.
+    fn set_lane(&mut self, slot: usize, lane: Option<Lane>) {
+        let Some(phrase) = self.phrase_id() else {
+            return;
+        };
+        if self.phrase_here().and_then(|p| p.lane(slot)) == lane {
+            return;
+        }
+        self.apply(&Action::SetLane {
+            track: self.cursor.track,
+            phrase,
+            slot,
+            lane,
+        });
+        self.status = match lane {
+            Some(lane) => format!("FX {} loops on its own, {} steps", slot + 1, lane.length),
+            None => format!("FX {} follows the phrase's loop", slot + 1),
+        };
+    }
+
     /// Start the loop on the cursor's step. The notes stay where they are and the numbers change.
+    /// On an FX column, its lane starts there instead, keeping its length.
     fn start_loop_here(&mut self) {
+        if let Some(slot) = self.lane_slot() {
+            let length = self.lane_here(slot).length;
+            let start = self.cursor.step;
+            self.set_lane(slot, Some(Lane { start, length }));
+            return;
+        }
         let by = self.extent().row(self.cursor.step);
         if by != 0
             && let Some(phrase) = self.phrase_id()
@@ -789,6 +852,15 @@ impl App {
     /// End the loop on the cursor's step, so its row is the last that plays. Steps after it stay
     /// stored, and a dim step below the loop brings the steps before it in.
     fn end_loop_here(&mut self) {
+        if let Some(slot) = self.lane_slot() {
+            let start = self.lane_here(slot).start;
+            let Some(length) = (self.cursor.step + 1).checked_sub(start).filter(|l| *l > 0) else {
+                self.status = "A lane can't end above its start".to_owned();
+                return;
+            };
+            self.set_lane(slot, Some(Lane { start, length }));
+            return;
+        }
         let extent = self.extent();
         let Ok(row) = usize::try_from(extent.row(self.cursor.step)) else {
             self.status = "The loop can't end above its start".to_owned();
@@ -1552,7 +1624,17 @@ impl App {
             }),
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
-            Line::Len(length) => {
+            Line::Len(length) if self.lane_slot().is_some() => {
+                let slot = self.lane_slot().unwrap_or(0);
+                let start = self.lane_here(slot).start;
+                self.set_lane(slot, length.map(|length| Lane { start, length }));
+            }
+            Line::Len(None) => {
+                self.status =
+                    ":len needs a length here. On an FX column, alone it follows the phrase"
+                        .to_owned();
+            }
+            Line::Len(Some(length)) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength {
                         track: self.cursor.track,

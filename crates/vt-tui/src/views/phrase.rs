@@ -5,9 +5,9 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_model::constants::BEAT_STEPS;
+use vt_model::constants::{BEAT_STEPS, FX_SLOTS};
 use vt_model::selection::Scope;
-use vt_model::song::Track;
+use vt_model::song::{Phrase, Track};
 use vt_model::step::{Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
@@ -106,6 +106,27 @@ fn playhead_step(app: &App) -> Option<usize> {
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some(start + position.step)
+}
+
+/// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
+fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
+    let mut playheads = [None; FX_SLOTS];
+    let Some(jam) = playhead_step(app).and(app.jam.get(app.cursor.track)) else {
+        return playheads;
+    };
+    let count = app.playhead as i64 - jam.started;
+    for (slot, playhead) in playheads.iter_mut().enumerate() {
+        *playhead = phrase
+            .lane(slot)
+            .map(|lane| lane.step_at(count + jam.lane_offsets[slot]));
+    }
+    playheads
+}
+
+/// The characters an FX slot takes in a step's text, with its mark.
+fn slot_columns(slot: usize) -> (usize, usize) {
+    let (start, _) = field_range(Field::FxCommand(slot));
+    (start, field_range(Field::FxValue(slot)).1 + MARK_WIDTH)
 }
 
 /// Which other tracks fit beside the focused one, keeping those near it in view.
@@ -227,6 +248,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         )
     });
     let playhead = playhead_step(app);
+    let lane_playheads = lane_playheads(app, phrase);
     let body_width = phrase
         .steps()
         .iter()
@@ -256,6 +278,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         app.cursor.slot + 1,
         app.chain_entries().len(),
     );
+    for slot in 0..FX_SLOTS {
+        if let Some(lane) = phrase.lane(slot) {
+            heading.push_str(&format!(" FX{}:{}", slot + 1, lane.length));
+        }
+    }
     heading.truncate(GUTTER + body_width);
     let mut title = format!("{heading:<width$}  ", width = GUTTER + body_width);
     for track in &others {
@@ -305,7 +332,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(spans));
             continue;
         };
-        let text = step_text(step, app.track_here());
+        let mut text = step_text(step, app.track_here());
+        // A lane's playhead goes in the gap before its column.
+        for (slot, at) in lane_playheads.iter().enumerate() {
+            let before = slot_columns(slot).0 - 1;
+            if *at == Some(index) && text.get(before..=before) == Some(" ") {
+                text.replace_range(before..=before, ">");
+            }
+        }
         let marker = if playhead == Some(index) { ">" } else { " " };
         let plays = extent.plays(index);
         let on_beat = row.rem_euclid(BEAT_STEPS as isize) == 0;
@@ -336,6 +370,24 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         {
             let (start, end) = field_range(Field::Note);
             styles[start..end].fill(body.patch(theme::out_of_scale()));
+        }
+        // A column with a lane plays its own rows: they're lit, and the rest of it is dim.
+        for (slot, lane_playhead) in lane_playheads.iter().enumerate() {
+            let Some(lane) = phrase.lane(slot) else {
+                continue;
+            };
+            let (start, end) = slot_columns(slot);
+            let end = end.min(text.len());
+            let style = if *lane_playhead == Some(index) {
+                theme::active()
+            } else if lane.contains(index) {
+                Style::new()
+            } else {
+                theme::faint()
+            };
+            if start < end {
+                styles[start - 1..end].fill(style);
+            }
         }
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.is_value() && fx.mark == Mark::Lock {

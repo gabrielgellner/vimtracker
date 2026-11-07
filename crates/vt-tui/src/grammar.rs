@@ -210,7 +210,7 @@ impl App {
                 self.move_horizontal(motion);
             }
         } else {
-            self.cursor.step = motion.step(self.cursor.step, count, self.extent());
+            self.cursor.step = motion.step(self.cursor.step, count, self.motion_extent(motion));
         }
     }
 
@@ -284,7 +284,7 @@ impl App {
                 },
             ),
             Cover::Motion(motion, count) => (
-                StepRange::between(step, motion.step(step, count, extent)),
+                StepRange::between(step, motion.step(step, count, self.motion_extent(motion))),
                 column,
             ),
             Cover::Target(target, count) => self.target_range(target, count),
