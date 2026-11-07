@@ -181,7 +181,13 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         assert!(peak(&out, 0) > 0.05, "{voice:?}: {}", peak(&out, 0));
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
         for command in ["HAR", "TIM", "MOR"] {
-            let locked = format!("C-2 7F {command}F0 ---00 ---00");
+            // 6-op's Harm is a patch number, so past its last patch it plays the same one.
+            let value = if voice == SynthVoice::SixOp && command == "HAR" {
+                "20"
+            } else {
+                "F0"
+            };
+            let locked = format!("C-2 7F {command}{value} ---00 ---00");
             let changed = play(with_some(&[&locked, REST]), 2);
             assert!(changed != out, "{voice:?} {command}");
         }

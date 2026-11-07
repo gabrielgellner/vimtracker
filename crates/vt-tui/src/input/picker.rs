@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
+use vt_model::action::TrackControl;
 use vt_model::envelope::Envelope;
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
@@ -61,6 +62,12 @@ pub enum Pick {
     SynthVoice {
         track: usize,
         voice: SynthVoice,
+    },
+    /// A value for one of a track's settings, such as 6-op's patch.
+    Base {
+        track: usize,
+        control: TrackControl,
+        value: u8,
     },
     /// Play this phrase on a row of the chain.
     RowPhrase(u32),

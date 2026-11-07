@@ -3,8 +3,10 @@
 use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
 use crate::dsp::kick::Kick;
+use crate::dsp::six_op::SixOp;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use crate::dsp::waveshaping::Waveshaping;
+use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
@@ -44,6 +46,8 @@ enum Synth {
     Snare(Snare),
     Hat(Hat),
     Waveshaping(Waveshaping),
+    Wavetable(Wavetable),
+    SixOp(SixOp),
 }
 
 impl Synth {
@@ -53,6 +57,8 @@ impl Synth {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
             SynthVoice::Fm => Self::Fm(Fm::new(rate)),
             SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
+            SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
+            SynthVoice::SixOp => Self::SixOp(SixOp::new(rate)),
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
             SynthVoice::Snare => Self::Snare(Snare::new(rate)),
             SynthVoice::Hat => Self::Hat(Hat::new(rate)),
@@ -68,6 +74,15 @@ impl Synth {
             Self::Snare(synth) => synth.next(frequency, settings),
             Self::Hat(synth) => synth.next(frequency, settings),
             Self::Waveshaping(synth) => synth.next(frequency, settings),
+            Self::Wavetable(synth) => synth.next(frequency, settings),
+            Self::SixOp(synth) => synth.next(frequency, settings),
+        }
+    }
+
+    /// Let go of the note, for a synth with envelopes of its own.
+    fn release(&mut self) {
+        if let Self::SixOp(synth) = self {
+            synth.release();
         }
     }
 }
@@ -211,6 +226,9 @@ impl Voice {
         if matches!(self.stage, Stage::Held { .. }) {
             self.stage = Stage::Released { from: self.level };
             self.elapsed = 0;
+            if let Some(synth) = &mut self.synth {
+                synth.release();
+            }
         }
     }
 

@@ -5,12 +5,13 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use vt_engine::dsp::six_op;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
-use vt_model::song::Track;
+use vt_model::song::{SynthVoice, Track};
 use vt_model::target::Target;
 
 use crate::app::App;
@@ -147,6 +148,12 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
     }
 }
 
+/// The name of the patch a 6-op track's `Patch` chooses, shown on its row.
+fn patch_name(control: Control, track: &Track) -> Option<String> {
+    (control == Control::Base(TrackControl::Harmonics) && track.synth_voice == SynthVoice::SixOp)
+        .then(|| six_op::patch_name(usize::from(track.harmonics)))
+}
+
 /// The value a control shows a bar for, and how. True is a mark either side of a centre.
 fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     let level = |value| Some((value, false));
@@ -253,7 +260,12 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         };
         used += text.chars().count();
         spans.extend(value_spans(app, *control, text, style));
-        if let Some((value, centred)) = bar_value(*control, track) {
+        if let Some(name) = patch_name(*control, track) {
+            // A patch number says nothing as a bar, so its name takes the bar's place.
+            used += 1 + name.chars().count();
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(name, Style::new().fg(theme::MAUVE)));
+        } else if let Some((value, centred)) = bar_value(*control, track) {
             let live = app
                 .live
                 .and_then(|live| live_value(*control, &live))
@@ -274,7 +286,9 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
     match control {
         Control::Machine => track.machine.name().to_owned(),
         Control::SynthVoice => track.synth_voice.name().to_owned(),
-        Control::Base(TrackControl::Harmonics) => hex(track.harmonics),
+        Control::Base(TrackControl::Harmonics) => {
+            hex(track.harmonics.min(track.synth_voice.harmonics_top()))
+        }
         Control::Base(TrackControl::Timbre) => hex(track.timbre),
         Control::Base(TrackControl::Morph) => hex(track.morph),
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),

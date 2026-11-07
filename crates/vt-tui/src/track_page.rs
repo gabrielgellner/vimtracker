@@ -3,13 +3,14 @@
 use ratatui::crossterm::event::KeyCode;
 use std::sync::Arc;
 
+use vt_engine::dsp::six_op;
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::{FilterType, Machine, SynthVoice, Track, TrackKind};
+use vt_model::song::{FilterType, Machine, SIX_OP_PATCHES, SynthVoice, Track, TrackKind};
 use vt_model::target::Target;
 
 use crate::app::{App, Entry};
@@ -467,6 +468,13 @@ impl App {
         if tracks.get(track).is_some_and(|t| !control.exists_on(t)) {
             return;
         }
+        let top = match control {
+            Control::Base(TrackControl::Harmonics) => tracks
+                .get(track)
+                .map_or(0xFF, |t| t.synth_voice.harmonics_top()),
+            _ => 0xFF,
+        };
+        let value = value.min(top);
         match control {
             Control::Base(control) => self.apply(&Action::SetTrackBase {
                 track,
@@ -484,10 +492,15 @@ impl App {
     fn adjust_control(&mut self, up: bool, count: usize, large: bool) {
         let control = self.track_control();
         let track = self.page_track();
+        // 6-op's `Patch` is a patch number, so it moves from the patch shown and stops at the last.
+        let top = match control {
+            Control::Base(TrackControl::Harmonics) => track.synth_voice.harmonics_top(),
+            _ => 0xFF,
+        };
         let change = |value: u8| {
             let size = if large { HEX_JUMP } else { 1 };
-            let moved = i64::from(value) + if up { size } else { -size } * count as i64;
-            moved.clamp(0, 0xFF) as u8
+            let moved = i64::from(value.min(top)) + if up { size } else { -size } * count as i64;
+            moved.clamp(0, i64::from(top)) as u8
         };
         match control {
             Control::Mute | Control::Solo => {
@@ -985,13 +998,19 @@ impl App {
             self.open_voice_picker();
             return;
         }
+        if self.track_control() == Control::Base(TrackControl::Harmonics)
+            && self.page_track().synth_voice == SynthVoice::SixOp
+        {
+            self.open_patch_picker();
+            return;
+        }
         if let Control::Envelope(slot, field) = self.track_control() {
             self.open_envelope_picker(slot, field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Machine, Voice, File, Type, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, Voice, Patch, File, Type, Dest, Shape, Rate, Retrig and Reset"
                     .to_owned();
             return;
         };
@@ -1175,6 +1194,26 @@ impl App {
         let position = SynthVoice::ALL.iter().position(|voice| *voice == current);
         let mut picker = Picker::new("Voice", items);
         picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List 6-op's patches by name, with the current one highlighted.
+    fn open_patch_picker(&mut self) {
+        let track = self.cursor.track;
+        let current = self.page_track().harmonics.min(SIX_OP_PATCHES - 1);
+        let items = (0..SIX_OP_PATCHES)
+            .map(|patch| Item {
+                label: format!("{patch:02X}  {}", six_op::patch_name(usize::from(patch))),
+                pick: Pick::Base {
+                    track,
+                    control: TrackControl::Harmonics,
+                    value: patch,
+                },
+            })
+            .collect();
+        let mut picker = Picker::new("Patch", items);
+        picker.move_highlight(isize::from(current));
         self.picker = Some(picker);
         self.mode = Mode::Picker;
     }

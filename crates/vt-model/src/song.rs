@@ -376,6 +376,9 @@ impl Machine {
     }
 }
 
+/// How many patches 6-op has, which its `Patch` counts from `00`.
+pub const SIX_OP_PATCHES: u8 = 96;
+
 /// Which synth the Plaits machine plays.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SynthVoice {
@@ -386,6 +389,10 @@ pub enum SynthVoice {
     Fm,
     /// A slope through a waveshaper and a wavefolder.
     Waveshaping,
+    /// A grid of waves in four banks.
+    Wavetable,
+    /// Six-operator FM, playing DX7 patches.
+    SixOp,
     /// An 808-style bass drum.
     Kick,
     /// An 808-style snare drum.
@@ -396,10 +403,12 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::VirtualAnalog,
         Self::Fm,
         Self::Waveshaping,
+        Self::Wavetable,
+        Self::SixOp,
         Self::Kick,
         Self::Snare,
         Self::Hat,
@@ -411,6 +420,8 @@ impl SynthVoice {
             Self::VirtualAnalog => "VA",
             Self::Fm => "FM",
             Self::Waveshaping => "Fold",
+            Self::Wavetable => "Waves",
+            Self::SixOp => "6-op",
             Self::Kick => "Kick",
             Self::Snare => "Snare",
             Self::Hat => "Hat",
@@ -423,6 +434,8 @@ impl SynthVoice {
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
             Self::Fm => "Two-operator FM, for bass, bells and keys",
             Self::Waveshaping => "A wave folded into harmonics, for bass and leads",
+            Self::Wavetable => "Waves in four banks to sweep, for pads and leads",
+            Self::SixOp => "Six-op FM with 96 DX7 patches, for keys and bells",
             Self::Kick => "An 808-style bass drum, tuned by its note",
             Self::Snare => "An 808-style snare drum, tuned by its note",
             Self::Hat => "An 808-style hi-hat, tuned by its note",
@@ -435,6 +448,8 @@ impl SynthVoice {
             Self::VirtualAnalog => ["Harm", "Timbre", "Morph"],
             Self::Fm => ["Ratio", "Index", "Feedback"],
             Self::Waveshaping => ["Shape", "Fold", "Slope"],
+            Self::Wavetable => ["Bank", "Wave", "Row"],
+            Self::SixOp => ["Patch", "Bright", "Time"],
             Self::Kick => ["Punch", "Tone", "Decay"],
             Self::Snare => ["Snappy", "Tone", "Decay"],
             Self::Hat => ["Noise", "Tone", "Decay"],
@@ -447,13 +462,26 @@ impl SynthVoice {
             Self::VirtualAnalog => [true, false, false],
             Self::Fm => [false, false, true],
             Self::Waveshaping => [true, false, false],
+            Self::Wavetable => [false, false, false],
+            Self::SixOp => [false, true, true],
             Self::Kick | Self::Snare | Self::Hat => [false, false, false],
+        }
+    }
+
+    /// The highest value `Harm` takes. 6-op's is a patch number, so it stops at the last patch.
+    pub fn harmonics_top(self) -> u8 {
+        match self {
+            Self::SixOp => SIX_OP_PATCHES - 1,
+            _ => 0xFF,
         }
     }
 
     /// Whether a note keeps sounding until something ends it.
     pub fn holds(self) -> bool {
-        matches!(self, Self::VirtualAnalog | Self::Fm | Self::Waveshaping)
+        matches!(
+            self,
+            Self::VirtualAnalog | Self::Fm | Self::Waveshaping | Self::Wavetable | Self::SixOp
+        )
     }
 }
 
