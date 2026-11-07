@@ -1,6 +1,6 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
-use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
+use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
@@ -168,6 +168,9 @@ pub struct TrackState {
     pub playing: Option<u32>,
     /// The running count its chain began at. A cursor partway through a chain can put it below 0.
     pub started: i64,
+    /// What's added to the count for each FX column's lane, so a lane changed while playing stays
+    /// on its step. Anything that sets `started` again sets these back to 0.
+    pub lane_offsets: [i64; FX_SLOTS],
     pub voice: Voice,
     pub tail: Voice,
     /// What this track has played since the meters last asked, after its level and pan.
@@ -289,6 +292,7 @@ impl TrackState {
             cued: None,
             playing: None,
             started: 0,
+            lane_offsets: [0; FX_SLOTS],
             voice: Voice::default(),
             tail: Voice::default(),
             reading: Reading::default(),
@@ -344,6 +348,12 @@ impl TrackState {
             pitch: 1.0,
             filter_moving: false,
         }
+    }
+
+    /// Start counting the track's chain from this running count, with its lanes in line again.
+    pub fn restart(&mut self, started: i64) {
+        self.started = started;
+        self.lane_offsets = [0; FX_SLOTS];
     }
 
     /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values

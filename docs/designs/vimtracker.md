@@ -1506,7 +1506,9 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. E
 *   **Editing commands act on the phrase's rows as now,** and lanes only change what plays. So `ip`, `ic`, paste, rotate, `.` and the shape panel keep working on rows, whichever loop a column plays.
 *   **On screen.** Each column dims the rows outside its own loop, and has its own playhead.
 
-**An example.** A phrase loop of 16, with FX 1's loop rows 0 to 2. FX 1 reads rows 0, 1, 2, 0 and so on. The phrase's second pass starts at place 16, and FX 1 reads row `16 % 3 = 1` there. If the chain's next phrase is 8 rows, with its own FX 1 loop of 3, its first step is place 32, and FX 1 reads that phrase's row `32 % 3 = 2`.
+**An example.** A phrase loop of 16, with FX 1's loop rows 0 to 2. FX 1 reads rows 0, 1, 2, 0 and so on. The phrase's second pass starts at place 16, and FX 1 reads row `16 % 3 = 1` there. If instead the chain goes on to a phrase of 8 rows with its own FX 1 loop of 3, that phrase starts at place 16, and FX 1 reads its row `16 % 3 = 1`.
+
+**Built** as designed, with the keys and display agreed: on an FX column, `gs` and `ge` set its lane, `:len 3` its length and `:len` alone follows the phrase again. A lane shows its length in the title, like `FX1:3`, dims the rows outside it, and has its own `>`.
 
 **To decide with the author** before issue 1: the keys that set a column's loop, likely `gs`, `ge` and `:len` on an FX column, and how the playheads and dimmed rows look.
 
