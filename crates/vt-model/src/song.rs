@@ -476,19 +476,8 @@ impl SynthVoice {
 
     /// What its three settings are called, which `HAR`, `TIM` and `MOR` set in this order.
     pub fn settings(self) -> [&'static str; 3] {
-        match self {
-            Self::VirtualAnalog => ["Harm", "Timbre", "Morph"],
-            Self::Fm => ["Ratio", "Index", "Feedback"],
-            Self::Waveshaping => ["Shape", "Fold", "Slope"],
-            Self::Wavetable => ["Bank", "Wave", "Row"],
-            Self::SixOp => ["Patch", "Bright", "Time"],
-            Self::String | Self::Modal => ["Material", "Bright", "Decay"],
-            Self::Dust => ["Spread", "Density", "Filter"],
-            Self::Noise => ["Type", "Clock", "Res"],
-            Self::Kick => ["Punch", "Tone", "Decay"],
-            Self::Snare => ["Snappy", "Tone", "Decay"],
-            Self::Hat => ["Noise", "Tone", "Decay"],
-        }
+        let entries = crate::settings::voice_entries(self);
+        [entries[0].name, entries[1].name, entries[2].name]
     }
 
     /// Which of its settings has a middle of its own, so shows where it is around that.

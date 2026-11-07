@@ -1679,7 +1679,7 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
 
 *   **No two labels on a track can match.** A track can show at once the events, its own settings, its machine's settings and its slots'. A test checks every machine's labels against the track's and the events', and every effect's against each other. A slot's digit sets its effect's labels apart from the rest.
 *   **Distort's Amount is one setting.** On Crush it's shown as Bits, from 2 to 12, as it is now, with the same id and label.
-*   **The grid gets narrower.** A command's name takes 9 columns now, for names like `1 Amount`. A label takes 5 and a gap, so a cell reads `CUT  40 .` or `2FDBK60 .`, which saves 9 columns a track across a step's three FX cells.
+*   **The grid gets narrower.** A command's name takes 9 columns now, for names like `1 Amount`. A label takes 5 and a gap, so a cell reads `CUT   40 .` or `2FDBK 40 .`, which saves 9 columns a track across a step's three FX cells.
 
 **Machines and Plaits' voices.** Each Plaits voice is a machine with its own settings. `Machine` becomes `Sample` or `Plaits(SynthVoice)`, so `K` on Machine lists Sample, then the voices grouped under Plaits, and the Voice row goes. Sample registers no settings. Each voice's code takes the same values as now, given as an array in the order the voice registers them.
 
@@ -1745,7 +1745,7 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
     **Tests:**
     *   No two labels match on a track: each machine's against the track's and the events', and each effect's against each other.
     *   Every label is 3 or 4 letters after an optional digit, every entry has a long name and a group, and every id is unique.
-    *   The grid shows `CUT  40` and `2FDBK60`, and a command takes 6 columns with its gap.
+    *   The grid shows `CUT   40` and `2FDBK 40`, and a command takes 6 columns with its gap.
     *   The existing tests of `Target` and of effects' setting names pass against the table.
 2.  **Machines register their settings:** `Machine::Plaits(SynthVoice)`, each voice's settings and defaults, a track keeping every voice's values, the generated patch names, the Sound page's rows from the registry, and a voice's array of values in place of `Settings`. `HAR`, `TIM`, `MOR` and `ACC` set settings 1 to 4 of the loaded voice until issue 3. Tracks' files change.
     **Code:** `song.rs`'s `Track`, `Machine` and `SynthVoice`, which lose `harmonics`, `timbre`, `morph`, `accent`, `harmonics_top`, `centred`, `uses_accent` and `settings`; `action.rs`'s `TrackControl` and the two machine actions, which merge; `track_state.rs`'s `synth`, `LiveValues` and `synth_settings`; `voice.rs` and every voice in `dsp`, which take the array; `six_op.rs`'s `patch_index`; the track page's rows, the Voice and patch pickers, and `views/track.rs`.

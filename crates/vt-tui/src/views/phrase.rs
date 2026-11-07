@@ -23,8 +23,8 @@ const GUTTER: usize = 9;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
-/// Room for a slot's command on screen, which can be a setting's name like `1 Amount`, and a gap.
-const COMMAND_WIDTH: usize = 9;
+/// Room for a slot's command on screen, a label of up to 5 characters like `2FDBK`, and a gap.
+const COMMAND_WIDTH: usize = 6;
 
 /// A slot on screen: its command and value, its mark, and the gap before the next.
 const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
@@ -47,7 +47,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     let mut text = format!("{} {velocity} {gate}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
-            (Some(command), Some(track)) => command.name_on(track),
+            (Some(command), Some(track)) => command.label_on(track),
             (Some(command), None) => command.name().to_owned(),
             (None, _) => "---".to_owned(),
         };
@@ -60,6 +60,20 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
         text.push_str(&format!(" {name:<COMMAND_WIDTH$}{:02X} {mark}", slot.value));
     }
     text
+}
+
+/// The step as it will be once the value being typed is in: a command chosen in Insert waits for
+/// its value before it's written, but shows in its cell meanwhile.
+fn pending_step(app: &App, step: &Step, typing: bool) -> Option<Step> {
+    let (Field::FxValue(slot), Some(command)) = (app.cursor.field, app.entry.command) else {
+        return None;
+    };
+    if !typing {
+        return None;
+    }
+    let mut step = step.clone();
+    step.fx.get_mut(slot)?.command = Some(command);
+    Some(step)
 }
 
 /// Split text into runs of the same style, given a style for each character.
@@ -351,7 +365,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(spans));
             continue;
         };
+        let typing = index == app.cursor.step && matches!(app.mode, Mode::Insert | Mode::Replace);
+        let pending = pending_step(app, step, typing);
+        let step = pending.as_ref().unwrap_or(step);
         let mut text = step_text(step, app.track_here());
+        // The first digit of a value being typed shows in its place.
+        if typing
+            && matches!(app.cursor.field, Field::FxValue(_) | Field::Velocity)
+            && app.entry.text.len() == 1
+        {
+            let (start, end) = field_range(app.cursor.field);
+            if end <= text.len() {
+                text.replace_range(start..end, &format!("{}_", app.entry.text));
+            }
+        }
         // A lane's playhead goes in the gap before its column.
         for (slot, at) in lane_playheads.iter().enumerate() {
             let before = slot_columns(slot).0 - 1;
