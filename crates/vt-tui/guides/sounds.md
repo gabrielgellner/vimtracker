@@ -36,6 +36,28 @@ west-coast edge. Try a note around `C-2`.
 | `Fold` | How far it's folded: smooth at `00`, and rich going up |
 | `Slope` | The wave's tilt, from a triangle at `00` to a ramp |
 
+`Waves` sweeps through a grid of 8 by 8 waves, in four banks: soft and organ-like, then
+vocal, then the harsher waves of older digital synths, then all of them shuffled. Below
+`80`, `Bank` blends between banks and waves; above it, it steps from one to the next.
+
+| Setting | Does |
+|---|---|
+| `Bank` | Up through the banks, then down. Above `80`, it steps |
+| `Wave` | Which wave along a row of the grid |
+| `Row` | Which row of the grid |
+
+`6-op` is six-operator FM playing 96 DX7 patches, from basses and electric pianos to
+bells, organs, pads and brass. Each patch has envelopes of its own, which the track's
+first envelope shapes again, so give it a long Release to hear a patch's tail. A new
+track's `Bright` starts at `00`, which is dark, so set it to `80` to hear a patch as it was
+made.
+
+| Setting | Does |
+|---|---|
+| `Patch` | Which patch, named beside it. It changes on the next note |
+| `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
+| `Time` | Attack and decay: as patched at `80`, faster below, slower above |
+
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
 
 | Setting | Does |
@@ -62,7 +84,7 @@ hat, and raise `Decay` for an open one.
 | `Decay` | How long it rings |
 
 The three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any synth,
-and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM` or `Fold` note holds
+and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves` or `6-op` note holds
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
 Sustain for plucks. The drums die away by themselves. A track plays one note at a time.
 
