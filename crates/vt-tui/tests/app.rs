@@ -2112,44 +2112,25 @@ fn the_playhead_marks_where_the_loop_is_playing() {
 }
 
 #[test]
-fn ge_waits_until_paused_like_other_length_changes() {
-    let (mut app, _realtime) = app();
-    press(&mut app, "jj");
-    app.transport = Transport::Playing;
-    let length = app.song().tracks[0].phrases[&0].len();
-    press(&mut app, "ge");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), length);
-    assert!(app.status.contains("until paused"), "{}", app.status);
-    app.transport = Transport::Paused;
-    press(&mut app, "ge");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 3);
-}
-
-#[test]
-fn length_changes_wait_until_paused_and_slides_dont() {
+fn length_changes_work_while_playing() {
     let (mut app, _realtime) = app();
     app.transport = Transport::Playing;
-    command(&mut app, "len 4");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    assert!(app.status.contains("paused"), "{}", app.status);
-    command(&mut app, "double");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    press(&mut app, " pd");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    app.transport = Transport::Paused;
-    command(&mut app, "len 8");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 8);
-    command(&mut app, "double");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    app.transport = Transport::Playing;
-    press(&mut app, "]L");
-    assert_eq!(app.song().tracks[0].phrases[&0].start(), 4);
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    press(&mut app, "gs");
-    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
-    app.transport = Transport::Stopped;
     command(&mut app, "len 4");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
+    command(&mut app, "double");
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 8);
+    press(&mut app, " pd");
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 16);
+    press(&mut app, "ggjjge");
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 3);
+    assert!(!app.status.contains("paused"), "{}", app.status);
+    press(&mut app, "]L");
+    assert_eq!(app.song().tracks[0].phrases[&0].start(), 4);
+    assert_eq!(
+        app.song().tracks[0].phrases[&0].len(),
+        3,
+        "slides keep the length"
+    );
 }
 
 #[test]
