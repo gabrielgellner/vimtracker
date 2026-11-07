@@ -1079,7 +1079,7 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M8d: Session workflow.** Launch timing on a beat or bar grid, one-phrase chains opening straight to their phrase, chain labels, and cloning a chain with its phrases from the song view. **Tests:** as [its design](song-flow.md) lists.
 *   **M8c: Song flow.** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
 *   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
-*   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
+*   **M10: Tracks that process.** Returns and a master in a fixed routing, delay and reverb as effects with real settings, and a better reverb. **Tests:** as [its design](#m10-design-tracks-that-process) lists.
 *   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
 ### M4 design: marks
@@ -1365,6 +1365,54 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 4.  **A picker with groups, for `Dest`:** the two columns and `/`. **Tests:** each key in each place, opening on the current choice, a search reaching every group, one thing in a group shown directly, `Esc` changing nothing, and flat pickers behaving as they did.
 
 **Done when** the author has used it in a jam, and the cost of a track with its slots full and moving is measured in a release build.
+
+### M10 design: tracks that process
+
+Made with the author's agreement on 2026-11-07. Not built yet. A send is a track, as a return track is in Ableton, and the output goes through a master track.
+
+**Prior art.** Ableton's return tracks are empty tracks at the end, with whatever devices are put on them, and each track has a send knob per return. The Digitakt II and M8 have one fixed global delay and reverb, and the M8 has commands any step can use to change them. The Digitakt II's reverb has `PRE`, `DEC`, `FREQ`, `GAIN`, `HPF`, `LPF` and `VOL`, and its delay has `TIME` in 128ths, ping-pong and width among others. Vital's delay filters and saturates its feedback, and its reverb is a 16-line network. The Griesinger reverb in `clouds/dsp/fx/reverb.h`, MIT, is about 180 lines, and Rings, Elements and Beads use the same design.
+
+**Tracks.** Three fixed tracks sit after the others and can't be removed: `A` and `B`, which are returns, and `M`, the master.
+
+```text
+Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limiter -> out
+                          |-- Send A --> A -> slots -> Level, Pan --^
+                          |-- Send B --> B -> slots -> Level, Pan --^
+```
+
+*   **A return or the master is a `Track` with no machine.** It makes no sound of its own, so it has no Machine or filter rows on its Sound page, and notes on its steps do nothing. It has everything else a track has: 3 slots, LFOs, envelopes, phrases, a mixer strip and a meter, with no new code.
+*   **Its own steps reach it.** A `1 Decay 40` on `B`'s phrase sequences its reverb, and no other track's steps can, as on the Syntakt, which keeps a phrase self-contained.
+*   **Sends.** The `Delay` and `Reverb` settings on a track become `Send A` and `Send B`, and the `DLY` and `REV` commands follow. A return has no sends, so there's no feedback between them.
+*   **Solo and mute.** Soloing a track keeps the returns and master sounding, as in Ableton, and muting a return silences it.
+*   **Where they show.** In track lists, the song view and the mixer, labelled `A`, `B` and `M`. `W`, `B` and `]b` go through them. They're left out of `:track add` and of how many tracks a kit fills.
+
+**`Delay` and `Reverb` are effects.** They're chosen for a slot like `Distort`, so any slot on any track can hold them. A new song has `Delay` in `A`'s first slot and `Reverb` in `B`'s, each with `Mix` at `FF`. The fixed global delay and reverb go.
+
+| Effect | Settings |
+|---|---|
+| `Delay` | `Time`, `Feedback`, `Ping-pong`, `Width`, `Low cut`, `High cut`, `Drive`, `Mix`, `Gain` |
+| `Reverb` | `Pre`, `Decay`, `Damp`, `Low cut`, `High cut`, `Mix`, `Gain` |
+
+`MAX_PARAMS` grows to 9, and the FX page keeps its columns of two, top then bottom. The places in `Target` and the commands for slots grow with it.
+
+**`Delay`.** After #88. `Time` takes note divisions, and reads between samples, easing to a new time so it glides. `Feedback` runs through `Low cut`, `High cut` and `Drive`, so repeats darken and degrade. Ping-pong and width are settings of how the two sides feed each other. Beads' wow and flutter would suit it, and is left for later.
+
+**`Reverb`.** After #89, from Clouds' Griesinger design, with its lengths scaled from 32 kHz to the device's rate. `Decay` and `Damp` set the loop's feedback and low-pass, `Pre` delays what goes in, and the cuts shape what goes in. Vital's reverb is the alternative if this one is found wanting, at more cost.
+
+**Memory.** Both need long buffers, which can't be in a slot's state, as that's as large as the largest effect's for every slot of every track. The edit thread allocates them when an effect is chosen or a song loads, hands them over with the song's next version, and takes the old ones back to free, as versions already do. So an effect costs nothing until it's used.
+
+**Idle cost.** A return with silence going in and nothing ringing skips its effects. This, and the cost of a whole song, get measured in a release build.
+
+**Left out.** Buses, which are M11. Sends between returns. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
+
+**Issues.**
+
+1.  **The fixed tracks and routing:** kinds of track, `A`, `B` and `M`, sends, and the master's slots, with `Delay` and `Reverb` as effects holding today's sound. **Tests:** golden renders unchanged, the routing above, solo and mute, the fixed tracks can't be removed and aren't counted by `:track add`, steps on a return reach only its own slots, and an old song loads with the default returns.
+2.  **Long buffers through the edit thread.** **Tests:** choosing an effect allocates only on the edit thread, old buffers come back to free, no allocation in the callback, and rates from 44.1 to 96 kHz.
+3.  **The new `Delay`:** the settings and feedback path. **Tests:** time in note divisions, a change of time gliding without a click, feedback staying stable at its top, each cut, ping-pong and width.
+4.  **The new `Reverb`:** the design and settings. **Tests:** decay time against the setting, stability at the top of `Decay`, pre-delay, and the cost against the old one.
+
+**Done when** the author has used it in a jam, the cost is measured, and how each effect's settings feel by ear is settled. Golden renders change at issues 3 and 4, by design.
 
 ### Known Gaps From Review
 
