@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
-use vt_model::selection::{Block, Field, Motion, Scope, Shift, StepRange, Target, first_value};
+use vt_model::selection::{
+    Block, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
+};
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{Note, Step};
 
@@ -923,18 +925,24 @@ impl App {
         self.clamp_cursor();
     }
 
-    /// Move between fields or column groups, within the step's slots.
+    /// Move between fields, or between the step's parts: the note with its velocity and gate,
+    /// then each FX slot, as the headings over the grid name them.
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
         let last = 2 + slots * 2;
         let order = self.cursor.field.order();
+        let group = self.cursor.field.group();
         self.cursor.field = match motion {
             Motion::Right => Field::from_order((order + 1).min(last)),
             Motion::Left => Field::from_order(order.saturating_sub(1)),
-            Motion::NextGroup => Field::of_group((self.cursor.field.group() + 1).min(2 + slots)),
+            Motion::NextGroup if slots == 0 => self.cursor.field,
+            Motion::NextGroup => {
+                Field::of_group(group.max(FX_GROUP - 1).saturating_add(1).min(2 + slots))
+            }
             Motion::RowStart => Field::Note,
             Motion::RowEnd => Field::from_order(last),
-            _ => Field::of_group(self.cursor.field.group().saturating_sub(1)),
+            _ if group > FX_GROUP => Field::of_group(group - 1),
+            _ => Field::Note,
         };
     }
 }

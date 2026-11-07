@@ -10,7 +10,7 @@ on beside it.
 |---|---|
 | `j` `k` | Next or previous step |
 | `h` `l` | Previous or next field |
-| `w` `b` | Next or previous group of columns |
+| `w` `b` | Next or previous part: the note, then each FX slot |
 | `0` `$` | Start or end of the row: the Note column, or the last FX value |
 | `}` `{` | Next or previous beat, which is 4 steps |
 | `gg` `G` | First or last step of the loop |
