@@ -324,6 +324,16 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX"),
     ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
+    (
+        "}",
+        Cmd::Move(Motion::NextBeat),
+        "Next slot, on the FX page",
+    ),
+    (
+        "{",
+        Cmd::Move(Motion::PreviousBeat),
+        "Previous slot, on the FX page",
+    ),
     ("h", Cmd::Move(Motion::Left), "Previous setting"),
     ("l", Cmd::Move(Motion::Right), "Next setting"),
     ("0", Cmd::Move(Motion::RowStart), "First setting"),

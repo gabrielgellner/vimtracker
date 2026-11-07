@@ -67,6 +67,10 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 | `K` or `i` on the effect | Choose what's in the slot. `=` and `-` step through |
 | `x` on the effect | Empty the slot |
 | `x` on a setting | Back to its default |
+| `{` `}` | Previous or next slot, staying on the same setting |
+
+A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
+next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Amount` is

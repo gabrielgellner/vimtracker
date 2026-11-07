@@ -4777,22 +4777,14 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     assert_eq!(peach(&app), 0);
 }
 
-/// The FX page's text for a slot, found by its number, on a screen wide enough for it.
+/// The FX page's text for a slot: the line with its number, and the line below.
 fn fx_line(app: &App, slot: usize) -> String {
-    let backend = ratatui::backend::TestBackend::new(120, 12);
-    let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+    let lines = track_page_text(app);
+    let at = lines
+        .iter()
+        .position(|line| line.starts_with(&format!("{}  ", slot + 1)))
         .unwrap();
-    let buffer = terminal.backend().buffer().clone();
-    (0..12)
-        .map(|y| {
-            (0..120)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .find(|line| line.starts_with(&format!("{}  ", slot + 1)))
-        .unwrap()
+    format!("{}\n{}", lines[at], lines[at + 1])
 }
 
 fn on_fx_page() -> (App, vt_engine::link::Realtime) {
@@ -4811,8 +4803,8 @@ fn l_reaches_the_fx_page_and_stops_there() {
     press(&mut app, "H");
     assert_eq!(app.track_page, Page::Mod);
     press(&mut app, "L");
-    assert_eq!(fx_line(&app, 0).trim_end(), "1  ---");
-    assert_eq!(fx_line(&app, 2).trim_end(), "3  ---");
+    assert!(fx_line(&app, 0).starts_with("1  ---  "));
+    assert!(fx_line(&app, 2).starts_with("3  ---  "));
 }
 
 #[test]
@@ -4831,28 +4823,28 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
     let line = fx_line(&app, 0);
     assert!(line.starts_with("1  Distort"), "{line}");
-    assert!(line.contains("Type Soft"), "{line}");
+    assert!(line.contains("Type   Soft"), "{line}");
     assert!(line.contains("Amount 40 ▕"), "{line}");
-    assert!(line.contains("Mix FF ▕█████████▏"), "{line}");
-    assert!(line.contains("Gain E0 ▕"), "{line}");
+    assert!(line.contains("Mix    FF ▕█████████▏"), "{line}");
+    assert!(line.contains("Gain   E0 ▕"), "{line}");
 
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Type");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Type Hard"));
+    assert!(fx_line(&app, 0).contains("Type   Hard"));
     press(&mut app, "-");
     press(&mut app, "-");
-    assert!(fx_line(&app, 0).contains("Type Down"), "it goes round");
+    assert!(fx_line(&app, 0).contains("Type   Down"), "it goes round");
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
-    assert!(fx_line(&app, 0).contains("Type Fold"));
+    assert!(fx_line(&app, 0).contains("Type   Fold"));
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
     special(&mut app, KeyCode::Esc);
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     assert_eq!(column_name(&app), "Amount");
     press(&mut app, "+");
     assert!(fx_line(&app, 0).contains("Amount 50"));
@@ -4868,14 +4860,14 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
         "already there, so no undo step"
     );
 
-    press(&mut app, "l");
+    press(&mut app, "kl");
     assert_eq!(column_name(&app), "Mix");
-    press(&mut app, "l");
+    press(&mut app, "j");
     assert_eq!(column_name(&app), "Gain");
     press(&mut app, "_");
-    assert!(fx_line(&app, 0).contains("Gain D0"));
+    assert!(fx_line(&app, 0).contains("Gain   D0"));
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Gain E0"));
+    assert!(fx_line(&app, 0).contains("Gain   E0"));
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Gain", "it stops at the last it uses");
 
@@ -4890,12 +4882,12 @@ fn emptying_a_slot_keeps_the_cursor_valid() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=$");
-    assert_eq!(column_name(&app), "Gain");
+    assert_eq!(column_name(&app), "Mix");
     press(&mut app, "0x");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     // Undo puts the settings back, and taking them away again leaves the cursor on the effect.
     press(&mut app, "u$");
-    assert_eq!(column_name(&app), "Gain");
+    assert_eq!(column_name(&app), "Mix");
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     assert_eq!(column_name(&app), "Effect");
@@ -4903,7 +4895,7 @@ fn emptying_a_slot_keeps_the_cursor_valid() {
     press(&mut app, "=$W");
     assert_eq!(column_name(&app), "Effect");
     press(&mut app, "B");
-    assert_eq!(column_name(&app), "Gain");
+    assert_eq!(column_name(&app), "Mix");
 }
 
 #[test]
@@ -4915,8 +4907,7 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
-    press(&mut app, "l");
-    press(&mut app, "l");
+    press(&mut app, "lj");
     press(&mut app, "i10");
     press(&mut app, "0K");
     press(&mut app, "dist");
@@ -4954,7 +4945,7 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     );
     press(&mut app, &second.to_string());
     assert_eq!(column_name(&app), "Amount");
-    assert_eq!(app.track_row, 1);
+    assert_eq!(app.track_row, 3);
 }
 
 #[test]
@@ -4968,13 +4959,98 @@ fn an_insert_set_on_the_page_is_heard() {
     press(&mut app, " 3k;");
     let plain = loudest(&mut realtime, 2000);
     assert!(plain > 0.0);
-    press(&mut app, " 4LL=$");
-    press(&mut app, "x");
-    press(&mut app, "h");
+    press(&mut app, " 4LL=lj");
     press(&mut app, "iff");
     block(&mut realtime, &mut app);
     press(&mut app, " 3;");
     let driven = loudest(&mut realtime, 2000);
     assert!(driven > 0.0);
     assert_ne!(plain, driven, "{plain} and {driven}");
+}
+
+#[test]
+fn settings_are_in_columns_of_two_and_keys_move_as_they_are_seen() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=j=gg");
+    let name = |app: &App| column_name(app);
+    assert_eq!(name(&app), "Effect");
+    // On the effect, j goes straight to the next slot's effect.
+    press(&mut app, "j");
+    assert_eq!((name(&app).as_str(), app.track_row), ("Effect", 2));
+    press(&mut app, "j");
+    assert_eq!(
+        (name(&app).as_str(), app.track_row),
+        ("Effect", 4),
+        "an empty slot too"
+    );
+    press(&mut app, "j");
+    assert_eq!(name(&app), "Effect", "it stops at the last");
+    press(&mut app, "gg");
+
+    // Across then down the columns: 1 over 2, 3 over 4.
+    press(&mut app, "l");
+    assert_eq!(name(&app), "Type");
+    press(&mut app, "j");
+    assert_eq!(name(&app), "Amount");
+    press(&mut app, "l");
+    assert_eq!(name(&app), "Gain");
+    press(&mut app, "k");
+    assert_eq!(name(&app), "Mix");
+    press(&mut app, "h");
+    assert_eq!(name(&app), "Type");
+
+    // On through the next slot, and a count goes as far as it says.
+    press(&mut app, "jj");
+    assert_eq!((name(&app).as_str(), app.track_row), ("Type", 2));
+    press(&mut app, "k");
+    assert_eq!((name(&app).as_str(), app.track_row), ("Amount", 1));
+    press(&mut app, "2j");
+    assert_eq!((name(&app).as_str(), app.track_row), ("Amount", 3));
+}
+
+#[test]
+fn braces_go_to_the_same_setting_in_the_next_slot() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=}={"); // Slots 1 and 2 hold an effect.
+    press(&mut app, "lj");
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 1));
+    press(&mut app, "}");
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 3));
+    // An empty slot has only its effect, and the setting comes back after it.
+    press(&mut app, "}");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "{");
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 3));
+    press(&mut app, "{{{");
+    assert_eq!(app.track_row, 1, "it stops at the first");
+    // A count, and nothing on the other pages but saying so.
+    press(&mut app, "2}");
+    assert_eq!(app.track_row, 5);
+    press(&mut app, "H");
+    let (row, field) = (app.track_row, app.track_field);
+    press(&mut app, "}");
+    assert_eq!((app.track_row, app.track_field), (row, field));
+    assert!(app.status.contains("FX page"), "{}", app.status);
+}
+
+#[test]
+fn a_jump_labels_a_slots_effect_once() {
+    use vt_tui::track_page::Control;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "/effect");
+    let jump = app.field_jump.as_ref().unwrap();
+    let labels: Vec<char> = (0..3)
+        .map(|slot| jump.label(Control::Insert(slot)).unwrap())
+        .collect();
+    assert_eq!(
+        labels
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        3
+    );
+    press(&mut app, &labels[2].to_string());
+    assert_eq!(app.track_row, 4);
 }

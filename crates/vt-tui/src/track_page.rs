@@ -4,7 +4,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, TrackControl};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
-use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{INSERTS, Insert};
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
 use vt_model::song::{FilterType, Machine, SynthVoice, Track};
@@ -115,21 +115,35 @@ pub const MIXER: [Control; 6] = [
 /// The mixer's columns, as rows like a page's.
 pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
-const fn insert_row(slot: usize) -> [Control; 1 + MAX_PARAMS] {
+/// The rows of a slot on the FX page, as columns of two settings, one over the other. The effect
+/// is in both, as one tall column, so `j` and `k` on it go between slots.
+const fn insert_rows(slot: usize) -> [[Control; 3]; 2] {
     [
-        Control::Insert(slot),
-        Control::InsertParam(slot, 0),
-        Control::InsertParam(slot, 1),
-        Control::InsertParam(slot, 2),
-        Control::InsertParam(slot, 3),
+        [
+            Control::Insert(slot),
+            Control::InsertParam(slot, 0),
+            Control::InsertParam(slot, 2),
+        ],
+        [
+            Control::Insert(slot),
+            Control::InsertParam(slot, 1),
+            Control::InsertParam(slot, 3),
+        ],
     ]
 }
 
-const INSERT_ROWS: [[Control; 1 + MAX_PARAMS]; INSERTS] =
-    [insert_row(0), insert_row(1), insert_row(2)];
-/// The FX page's rows, top to bottom. A row has room for the most settings any effect has, and the
-/// cursor stops at the last one its effect uses.
-pub const FX_ROWS: [&[Control]; INSERTS] = [&INSERT_ROWS[0], &INSERT_ROWS[1], &INSERT_ROWS[2]];
+const INSERT_ROWS: [[[Control; 3]; 2]; INSERTS] = [insert_rows(0), insert_rows(1), insert_rows(2)];
+/// How many rows a slot takes.
+pub const SLOT_ROWS: usize = 2;
+/// The FX page's rows, top to bottom. The cursor stops at the last setting an effect uses.
+pub const FX_ROWS: [&[Control]; INSERTS * SLOT_ROWS] = [
+    &INSERT_ROWS[0][0],
+    &INSERT_ROWS[0][1],
+    &INSERT_ROWS[1][0],
+    &INSERT_ROWS[1][1],
+    &INSERT_ROWS[2][0],
+    &INSERT_ROWS[2][1],
+];
 
 const fn base(control: TrackControl) -> Control {
     Control::Base(control)
@@ -507,6 +521,21 @@ impl App {
         self.track_field = field.min(self.fields_in(rows[self.track_row]) - 1);
     }
 
+    /// Move a row up or down, past any that would leave the cursor on the same setting, as an empty
+    /// slot's effect is in both its rows.
+    fn step_row(&mut self, by: isize) {
+        let before = self.track_control();
+        let last = self.page_rows().len() - 1;
+        let mut row = self.track_row;
+        while let Some(next) = row.checked_add_signed(by).filter(|next| *next <= last) {
+            row = next;
+            self.move_control(row, self.track_field);
+            if self.track_control() != before {
+                return;
+            }
+        }
+    }
+
     /// Run a command on the mixer. `h` and `l` go between its strips, and `j` and `k` up and down
     /// them. Everything else means what it does on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
@@ -540,8 +569,21 @@ impl App {
         let times = count.unwrap_or(1).max(1);
         let (row, field) = (self.track_row, self.track_field);
         match cmd {
-            Cmd::Move(Motion::Down) => self.move_control(row.saturating_add(times), field),
-            Cmd::Move(Motion::Up) => self.move_control(row.saturating_sub(times), field),
+            Cmd::Move(Motion::Down) => (0..times).for_each(|_| self.step_row(1)),
+            Cmd::Move(Motion::Up) => (0..times).for_each(|_| self.step_row(-1)),
+            Cmd::Move(Motion::NextBeat | Motion::PreviousBeat) if self.track_page != Page::Fx => {
+                self.status = "{ and } go between slots on the FX page".to_owned();
+            }
+            // Only the slot changes, so a setting goes to the same setting in the next. The field
+            // is left as it is, so it comes back after an empty slot.
+            Cmd::Move(Motion::NextBeat) => {
+                let slot = (row / SLOT_ROWS).saturating_add(times).min(INSERTS - 1);
+                self.track_row = slot * SLOT_ROWS + row % SLOT_ROWS;
+            }
+            Cmd::Move(Motion::PreviousBeat) => {
+                let slot = (row / SLOT_ROWS).saturating_sub(times);
+                self.track_row = slot * SLOT_ROWS + row % SLOT_ROWS;
+            }
             Cmd::Move(Motion::First) => self.move_control(0, field),
             Cmd::Move(Motion::Last) => self.move_control(usize::MAX, field),
             Cmd::Move(Motion::Right) => self.move_control(row, field.saturating_add(times)),

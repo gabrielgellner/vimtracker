@@ -119,6 +119,13 @@ impl App {
             .filter(|(_, _, _, name)| name.contains(query))
             .collect();
         hits.sort_by_key(|(row, field, _, _)| (row.abs_diff(from_row), field.abs_diff(from_field)));
+        // A setting can be in two rows, as a slot's effect is.
+        let mut seen = Vec::new();
+        hits.retain(|(_, _, control, _)| {
+            let new = !seen.contains(control);
+            seen.push(*control);
+            new
+        });
         hits.into_iter()
             .map(|(_, _, control, name)| (control, name))
             .collect()

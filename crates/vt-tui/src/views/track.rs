@@ -8,6 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
+use vt_model::insert::Insert;
 use vt_model::lfo::{Destination, depth_text};
 use vt_model::song::Track;
 
@@ -15,7 +16,9 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
-use crate::track_page::{Control, ENVELOPES, EnvelopeField, FX_ROWS, LFOS, LfoField, Page};
+use crate::track_page::{
+    Control, ENVELOPES, EnvelopeField, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
+};
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
@@ -29,10 +32,12 @@ const LFO_SHAPE_NAME: usize = 7;
 pub(crate) const FILTER_CURVE_WIDTH: usize = 22;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
-/// Room for a slot's number on the FX page, its effect's name, and a setting that's a choice.
+/// Room for a slot's number on the FX page, and for its effect's name.
 const FX_INDENT: usize = 3;
 const FX_EFFECT_WIDTH: usize = 10;
-const FX_CHOICE_WIDTH: usize = 7;
+/// Room for a setting's name on the FX page, and for its value and bar, so its columns line up.
+const FX_NAME_WIDTH: usize = 7;
+const FX_VALUE_WIDTH: usize = 17;
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
@@ -462,11 +467,12 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines
 }
 
-/// A slot on the FX page: its number and effect, then the effect's settings, read from its list.
-fn fx_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
+/// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
+/// effect is only drawn in its first row.
+fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
-    for control in controls.iter().filter(|control| control.exists_on(track)) {
+    for control in controls {
         let selected = *control == current;
         let text = if selected && app.mode == Mode::Insert {
             format!("{}_", app.entry.text)
@@ -484,7 +490,7 @@ fn fx_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             .and_then(|jump| jump.label(*control));
         let labels = label.map_or_else(String::new, String::from);
         match *control {
-            Control::Insert(slot) => {
+            Control::Insert(slot) if first => {
                 spans.push(Span::styled(
                     format!("{:<FX_INDENT$}", slot + 1),
                     theme::dim(),
@@ -493,24 +499,28 @@ fn fx_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
                 spans.extend(value_spans(app, *control, text, style));
                 spans.push(Span::raw(" ".repeat(room)));
             }
-            Control::InsertParam(slot, param) => {
+            Control::Insert(_) => {
+                spans.push(Span::raw(" ".repeat(FX_INDENT + FX_EFFECT_WIDTH)));
+            }
+            Control::InsertParam(slot, param) if control.exists_on(track) => {
                 let name = control.name_on(track);
-                spans.extend(name_spans(app, name, &labels, name.chars().count() + 1));
-                let length = text.chars().count();
-                spans.extend(value_spans(app, *control, text, style));
+                spans.extend(name_spans(app, name, &labels, FX_NAME_WIDTH));
                 let insert = track.inserts[slot];
-                if insert.params()[param].choices.is_empty() {
+                let used = if insert.params()[param].choices.is_empty() {
                     let set = insert.value(param);
+                    let used = text.chars().count() + 1 + BAR_CELLS + 2;
+                    spans.extend(value_spans(app, *control, text, style));
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(BAR_START, theme::faint()));
                     spans.extend(bar_spans(set, set, false));
                     spans.push(Span::styled(BAR_END, theme::faint()));
-                    spans.push(Span::raw("  "));
+                    used
                 } else {
-                    spans.push(Span::raw(
-                        " ".repeat(FX_CHOICE_WIDTH.saturating_sub(length)),
-                    ));
-                }
+                    let used = text.chars().count();
+                    spans.extend(value_spans(app, *control, text, style));
+                    used
+                };
+                spans.push(Span::raw(" ".repeat(FX_VALUE_WIDTH.saturating_sub(used))));
             }
             _ => {}
         }
@@ -567,8 +577,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
         }
         Page::Fx => {
-            for controls in FX_ROWS {
-                lines.push(fx_row(app, track, controls));
+            for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
+                lines.push(fx_row(app, track, rows[0], true));
+                // An empty slot has nothing for its second row, and the slots stay apart.
+                if track.inserts[slot] != Insert::Empty {
+                    lines.push(fx_row(app, track, rows[1], false));
+                }
+                lines.push(Line::raw(""));
             }
         }
         Page::Mod => {

@@ -1254,13 +1254,17 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 **The FX page.** A third page on the track page, with one row per slot:
 
 ```text
-1  Distort   Type Soft   Amount 40 ▕██▎      ▏  Mix FF ▕█████████▏  Gain E0 ▕███████▉ ▏
+1  Distort   Type   Soft             Mix    FF ▕█████████▏
+             Amount 40 ▕██▎      ▏   Gain   E0 ▕███████▉ ▏
+
 2  ---
+
 3  ---
 ```
 
 *   **`H` and `L`** become the previous and next page, stopping at each end, in place of naming a page each. Sound to FX is `LL`.
-*   **Rows stay fixed**, as `page_rows` returns static lists: a row is the effect and room for the most settings any effect has, and the cursor stops at the last one this effect uses. An empty slot only has its effect.
+*   **Settings are in columns of two**, by the author's decision, filling top then bottom, so a setting's neighbours are as close as they can be: 1 over 2, then 3 over 4. Rows stay fixed, as `page_rows` returns static lists, and the cursor stops at the last setting an effect uses. An empty slot only has its effect.
+*   **`j` and `k`** move as seen, and on the effect they go between slots. **`{` and `}`** go to the same setting in the previous or next slot.
 *   **`K` or `i` on the effect** chooses it from a list, and `=` and `-` step through. `x` on the effect empties the slot, and `x` on a setting returns it to its default.
 *   **`dd`** takes the effect out of its slot, and **`p`** puts the last one taken into the slot under the cursor, swapping with what's there, to change the order. This only works on this page. Moving an effect starts its state afresh, which may click if it's playing.
 *   **`/`** finds these as it does the other pages, from their names, and the bars move with what's playing, as on the Sound page.
