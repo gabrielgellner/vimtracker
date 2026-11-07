@@ -70,7 +70,9 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Amount` is
-how much, and `Mix` blends it with the sound going in, from `00` dry to `FF` wet.
+how much, and `Mix` blends it with the sound going in, from `00` dry to `FF` wet. `Gain`
+turns down what comes out, as `Amount` can make it much louder, on the level scale,
+where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
 ## Output
 

@@ -121,6 +121,7 @@ const fn insert_row(slot: usize) -> [Control; 1 + MAX_PARAMS] {
         Control::InsertParam(slot, 0),
         Control::InsertParam(slot, 1),
         Control::InsertParam(slot, 2),
+        Control::InsertParam(slot, 3),
     ]
 }
 

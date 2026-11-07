@@ -4,6 +4,7 @@
 //! program's own.
 
 use vt_model::insert::{Distort, DistortType, Insert};
+use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
 use crate::dsp::oversampler::Oversampler;
@@ -22,6 +23,7 @@ pub struct InsertState {
     insert: Insert,
     amount: Smoothed,
     mix: Smoothed,
+    gain: Smoothed,
     oversampler: [Oversampler; 2],
     held: [f32; 2],
     /// How many frames since `Down` last took a sample.
@@ -34,6 +36,7 @@ impl Default for InsertState {
             insert: Insert::Empty,
             amount: Smoothed::at(0.0),
             mix: Smoothed::at(0.0),
+            gain: Smoothed::at(1.0),
             oversampler: [Oversampler::default(); 2],
             held: [0.0; 2],
             since: 0.0,
@@ -96,15 +99,23 @@ impl InsertState {
         );
         if !same_kind {
             *self = Self::default();
-            if let Insert::Distort(Distort { amount, mix, .. }) = insert {
+            if let Insert::Distort(Distort {
+                amount, mix, gain, ..
+            }) = insert
+            {
                 self.amount = Smoothed::at(f32::from(amount) / 255.0);
                 self.mix = Smoothed::at(f32::from(mix) / 255.0);
+                self.gain = Smoothed::at(level_gain(f32::from(gain)));
             }
         }
         self.insert = insert;
-        if let Insert::Distort(Distort { amount, mix, .. }) = insert {
+        if let Insert::Distort(Distort {
+            amount, mix, gain, ..
+        }) = insert
+        {
             self.amount.target = f32::from(amount) / 255.0;
             self.mix.target = f32::from(mix) / 255.0;
+            self.gain.target = level_gain(f32::from(gain));
         }
     }
 
@@ -112,6 +123,7 @@ impl InsertState {
     pub fn settle(&mut self) {
         self.amount.settle();
         self.mix.settle();
+        self.gain.settle();
     }
 
     /// One frame through the slot. An empty one does nothing else.
@@ -122,6 +134,7 @@ impl InsertState {
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
+        let gain = self.gain.next(smoothing);
         let wet = match kind {
             DistortType::Crush => {
                 let step = crush_step(amount);
@@ -156,8 +169,8 @@ impl InsertState {
         };
         // Written so all wet and all dry are exact.
         [
-            wet[0] * mix + input[0] * (1.0 - mix),
-            wet[1] * mix + input[1] * (1.0 - mix),
+            (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+            (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
         ]
     }
 }
@@ -172,7 +185,12 @@ mod tests {
 
     fn state(kind: DistortType, amount: u8, mix: u8) -> InsertState {
         let mut state = InsertState::default();
-        state.set(Insert::Distort(Distort { kind, amount, mix }));
+        state.set(Insert::Distort(Distort {
+            kind,
+            amount,
+            mix,
+            ..Distort::default()
+        }));
         state
     }
 
@@ -379,6 +397,30 @@ mod tests {
     }
 
     #[test]
+    fn gain_turns_it_all_down_on_the_level_scale() {
+        let run = |gain: u8, mix: u8| {
+            let mut state = InsertState::default();
+            state.set(Insert::Distort(Distort {
+                kind: DistortType::Hard,
+                amount: 0xFF,
+                mix,
+                gain,
+            }));
+            sine(220.0, 0.5, RATE as usize / 10)
+                .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE)[0])
+                .collect::<Vec<f32>>()
+        };
+        let db = |a: f32, b: f32| 20.0 * (a / b).log10();
+        // Every `10` is 4 dB.
+        let down = db(rms(&run(0xD0, 0xFF)), rms(&run(0xE0, 0xFF)));
+        assert!((down + 4.0).abs() < 0.01, "{down}");
+        // It also takes the dry sound with it.
+        let dry = db(rms(&run(0xD0, 0x00)), rms(&run(0xE0, 0x00)));
+        assert!((dry + 4.0).abs() < 0.01, "{dry}");
+        assert_eq!(peak(&run(0x00, 0xFF)), 0.0);
+    }
+
+    #[test]
     fn a_changed_amount_moves_smoothly_and_keeps_its_state() {
         let mut state = state(DistortType::Soft, 0x00, 0xFF);
         state.process([0.5; 2], NO_SMOOTHING, RATE);
@@ -387,6 +429,7 @@ mod tests {
                 kind: DistortType::Soft,
                 amount,
                 mix: 0xFF,
+                ..Distort::default()
             })
         };
         state.set(settings(0xFF));

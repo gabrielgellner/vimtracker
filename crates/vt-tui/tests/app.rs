@@ -4777,12 +4777,15 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     assert_eq!(peach(&app), 0);
 }
 
-/// The FX page's text, with a slot's row found by its number.
+/// The FX page's text for a slot, found by its number, with its values' line if it has one.
 fn fx_line(app: &App, slot: usize) -> String {
-    track_page_text(app)
-        .into_iter()
-        .find(|line| line.starts_with(&format!("{}  ", slot + 1)))
-        .unwrap()
+    let lines = track_page_text(app);
+    let at = lines
+        .iter()
+        .position(|line| line.starts_with(&format!("{}  ", slot + 1)))
+        .unwrap();
+    let below = lines.get(at + 1).filter(|line| line.starts_with("   "));
+    format!("{}\n{}", lines[at], below.map_or("", |line| line.as_str()))
 }
 
 fn on_fx_page() -> (App, vt_engine::link::Realtime) {
@@ -4824,6 +4827,7 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert!(line.contains("Type Soft"), "{line}");
     assert!(line.contains("Amount 40 ▕"), "{line}");
     assert!(line.contains("Mix FF ▕█████████▏"), "{line}");
+    assert!(line.contains("Gain E0 ▕"), "{line}");
 
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Type");
@@ -4860,7 +4864,13 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Mix");
     press(&mut app, "l");
-    assert_eq!(column_name(&app), "Mix", "it stops at the last it uses");
+    assert_eq!(column_name(&app), "Gain");
+    press(&mut app, "_");
+    assert!(fx_line(&app, 0).contains("Gain D0"));
+    press(&mut app, "x");
+    assert!(fx_line(&app, 0).contains("Gain E0"));
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Gain", "it stops at the last it uses");
 
     // Only this slot, and only this track.
     assert_eq!(app.song().tracks[0].inserts[1], Insert::Empty);
@@ -4873,12 +4883,12 @@ fn emptying_a_slot_keeps_the_cursor_valid() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=$");
-    assert_eq!(column_name(&app), "Mix");
+    assert_eq!(column_name(&app), "Gain");
     press(&mut app, "0x");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     // Undo puts the settings back, and taking them away again leaves the cursor on the effect.
     press(&mut app, "u$");
-    assert_eq!(column_name(&app), "Mix");
+    assert_eq!(column_name(&app), "Gain");
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     assert_eq!(column_name(&app), "Effect");
@@ -4886,7 +4896,7 @@ fn emptying_a_slot_keeps_the_cursor_valid() {
     press(&mut app, "=$W");
     assert_eq!(column_name(&app), "Effect");
     press(&mut app, "B");
-    assert_eq!(column_name(&app), "Mix");
+    assert_eq!(column_name(&app), "Gain");
 }
 
 #[test]

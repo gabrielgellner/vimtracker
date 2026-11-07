@@ -620,6 +620,7 @@ fn distort(kind: DistortType, amount: u8) -> Insert {
         kind,
         amount,
         mix: 0xFF,
+        ..Distort::default()
     })
 }
 

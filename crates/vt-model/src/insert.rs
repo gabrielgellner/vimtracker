@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::constants::UNITY_LEVEL;
+
 /// How many a track has.
 pub const INSERTS: usize = 3;
 
@@ -53,10 +55,10 @@ pub struct Param {
 }
 
 /// The most settings any effect has.
-pub const MAX_PARAMS: usize = 3;
+pub const MAX_PARAMS: usize = 4;
 
 const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
-const DISTORT_PARAMS: [Param; 3] = [
+const DISTORT_PARAMS: [Param; 4] = [
     Param {
         name: "Type",
         choices: &DISTORT_TYPE_NAMES,
@@ -72,6 +74,11 @@ const DISTORT_PARAMS: [Param; 3] = [
         choices: &[],
         default: 0xFF,
     },
+    Param {
+        name: "Gain",
+        choices: &[],
+        default: UNITY_LEVEL,
+    },
 ];
 
 impl Insert {
@@ -82,6 +89,7 @@ impl Insert {
             kind: DistortType::Soft,
             amount: DISTORT_PARAMS[1].default,
             mix: DISTORT_PARAMS[2].default,
+            gain: DISTORT_PARAMS[3].default,
         }),
     ];
 
@@ -118,6 +126,7 @@ impl Insert {
                 .unwrap_or(0) as u8,
             (Self::Distort(distort), 1) => distort.amount,
             (Self::Distort(distort), 2) => distort.mix,
+            (Self::Distort(distort), 3) => distort.gain,
             _ => 0,
         }
     }
@@ -142,6 +151,10 @@ impl Insert {
             },
             2 => Distort {
                 mix: value,
+                ..distort
+            },
+            3 => Distort {
+                gain: value,
                 ..distort
             },
             _ => distort,
@@ -169,6 +182,14 @@ pub struct Distort {
     pub amount: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
+    /// What comes out, on the level scale, so `E0` leaves it as it is. It's right there to turn
+    /// down as `Amount` makes it louder.
+    #[serde(default = "unity_gain")]
+    pub gain: u8,
+}
+
+fn unity_gain() -> u8 {
+    UNITY_LEVEL
 }
 
 impl Default for Distort {
@@ -177,6 +198,7 @@ impl Default for Distort {
             kind: DistortType::default(),
             amount: 0x40,
             mix: 0xFF,
+            gain: UNITY_LEVEL,
         }
     }
 }
@@ -194,6 +216,24 @@ mod tests {
             }
         }
         assert_eq!(Insert::ALL[1], Insert::Distort(Distort::default()));
+    }
+
+    #[test]
+    fn every_effect_ends_with_a_gain() {
+        for effect in Insert::ALL.into_iter().filter(|e| *e != Insert::Empty) {
+            let last = effect.params().last().unwrap();
+            assert_eq!(
+                (last.name, last.default),
+                ("Gain", UNITY_LEVEL),
+                "{effect:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_distort_saved_without_a_gain_loads_at_unity() {
+        let distort: Distort = ron::from_str("(kind: Fold, amount: 16, mix: 32)").unwrap();
+        assert_eq!(distort.gain, UNITY_LEVEL);
     }
 
     #[test]

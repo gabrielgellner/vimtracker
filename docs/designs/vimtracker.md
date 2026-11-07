@@ -1234,6 +1234,7 @@ Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert 
 | `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down` | `Soft` |
 | `Amount` | `00` to `FF`, more of what `Type` does | `40` |
 | `Mix` | `00` dry to `FF` wet | `FF` |
+| `Gain` | On the level scale, after `Mix` | `E0`, which is 0 dB |
 
 The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are, so its copyright notice goes in `dsp/distort.rs`. With `d` from `Amount`:
 
@@ -1246,12 +1247,15 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 `Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: for the types other than `Soft`, `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
 
+**Every effect ends with a `Gain`**, by the author's decision after hearing `Distort`, so a change in level can be fixed while the knob is being turned, with no change of page. Matching levels automatically is left out: a level measured over 300 to 500 ms would make a drum loop pump, and a fixed curve depends on how loud the sound going in is.
+
 **The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
 
-**The FX page.** A third page on the track page, with one row per slot:
+**The FX page.** A third page on the track page, with one row per slot, which takes two lines to fit beside the main meter at 80 columns:
 
 ```text
-1  Distort   Type Soft    Amount 40 ▕███▌     ▏   Mix FF ▕█████████▏
+1  Distort   Type Soft
+   Amount 40 ▕██▎      ▏  Mix FF ▕█████████▏  Gain E0 ▕███████▉ ▏
 2  ---
 3  ---
 ```
