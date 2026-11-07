@@ -5512,3 +5512,80 @@ fn a_plain_list_still_opens_on_its_search() {
     press(&mut app, "K/");
     assert_eq!(app.picker.as_ref().unwrap().query, "/");
 }
+
+#[test]
+fn dd_and_p_move_an_effect_and_swap_two_as_one_undo_step() {
+    use vt_model::insert::{DistortType, Insert};
+    let (mut app, _realtime) = on_fx_page();
+    let inserts = |app: &App| app.song().tracks[0].inserts;
+    let soft = Insert::ALL[1];
+    let fold = soft.with_value(0, DistortType::Fold as u8);
+    // Soft in slot 1, and Fold in slot 2.
+    press(&mut app, "=}=lK");
+    press(&mut app, "fold");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "gg0");
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+    let depth = app.history.undo_depth();
+
+    // Slot 1 into slot 3, which is empty.
+    press(&mut app, "dd");
+    assert_eq!(inserts(&app), [Insert::Empty, fold, Insert::Empty]);
+    assert!(app.status.contains("Distort"), "{}", app.status);
+    press(&mut app, "}}p");
+    assert_eq!(inserts(&app), [Insert::Empty, fold, soft]);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    press(&mut app, "u");
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+
+    // Slot 1 onto slot 2: they swap.
+    press(&mut app, "gg");
+    press(&mut app, "dd}p");
+    assert_eq!(inserts(&app), [fold, soft, Insert::Empty]);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+
+    // Back where it came from changes nothing.
+    press(&mut app, "ggddp");
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+}
+
+#[test]
+fn dd_and_p_say_why_when_there_is_nothing_to_move() {
+    use vt_model::insert::Insert;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "dd");
+    assert!(app.status.contains("nothing"), "{}", app.status);
+    press(&mut app, "p");
+    assert!(app.status.contains("dd"), "{}", app.status);
+    // On the other pages they aren't for steps or anything else.
+    press(&mut app, "=dd");
+    press(&mut app, "H");
+    press(&mut app, "p");
+    assert!(app.status.contains("FX page"), "{}", app.status);
+    assert_eq!(app.view, View::Track);
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+    // It's still there to put, across tracks too.
+    press(&mut app, "LW");
+    press(&mut app, "p");
+    assert_eq!(app.song().tracks[1].inserts[0], Insert::ALL[1]);
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+}
+
+#[test]
+fn the_sound_follows_the_new_order() {
+    use vt_engine::track_state::LiveValues;
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " 4LL=dd}p");
+    block(&mut realtime, &mut app);
+    press(&mut app, " 3k;");
+    let _ = loudest(&mut realtime, 4000);
+    app.tick();
+    let live: LiveValues = app.live.unwrap();
+    assert_eq!(live.inserts[1][1], 0x40, "the second slot has it");
+    assert_eq!(live.inserts[0], [0; 4], "the first doesn't");
+}

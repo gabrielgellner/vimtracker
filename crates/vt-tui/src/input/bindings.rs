@@ -323,6 +323,8 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("G", Cmd::Move(Motion::Last), "Last row"),
     ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX"),
     ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
+    ("d d", Cmd::RemoveRow, "Take an effect out of its slot"),
+    ("p", Cmd::Paste, "Put the effect taken in this slot"),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     (
         "}",

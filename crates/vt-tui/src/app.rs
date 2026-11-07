@@ -40,7 +40,7 @@ use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::picking::kit_path;
 use crate::shaping::ShapePanel;
-use crate::track_page::Page;
+use crate::track_page::{Page, TakenInsert};
 use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
@@ -197,6 +197,8 @@ pub struct App {
     pub shape: Option<ShapePanel>,
     /// The search for a setting under way.
     pub field_jump: Option<FieldJump>,
+    /// An effect taken out of a slot with `dd`, for `p` to put somewhere.
+    pub(crate) taken_insert: Option<TakenInsert>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
@@ -293,6 +295,7 @@ impl App {
             anchor_track: None,
             shape: None,
             field_jump: None,
+            taken_insert: None,
             shape_seed: 0,
             kit: Vec::new(),
             replacing_selection: None,
