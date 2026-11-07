@@ -12,6 +12,7 @@ use crate::constants::{
     MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
+use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::scale::Scale;
 use crate::selection::Extent;
@@ -121,6 +122,9 @@ pub struct Track {
     /// And a low-pass, which `FF` turns off.
     #[serde(default = "open_cutoff")]
     pub high_cut: u8,
+    /// The effects after the filters, in order.
+    #[serde(default)]
+    pub inserts: [Insert; INSERTS],
     /// Where held `PAN` starts.
     #[serde(default = "centre")]
     pub pan: u8,
@@ -226,6 +230,7 @@ impl Default for Track {
             drive: 0,
             low_cut: 0,
             high_cut: open_cutoff(),
+            inserts: Default::default(),
             pan: centre(),
             delay: 0,
             reverb: 0,
@@ -798,6 +803,7 @@ pub fn lowest_unused<T>(items: &BTreeMap<u32, T>) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::insert::{Distort, DistortType};
 
     #[test]
     fn next_value_looks_forward_in_the_slot_and_wraps() {
@@ -971,6 +977,20 @@ mod tests {
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
         assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);
+    }
+
+    #[test]
+    fn a_tracks_inserts_save_and_load_and_start_empty() {
+        let mut track = Track::default();
+        assert_eq!(track.inserts, [Insert::Empty; INSERTS]);
+        track.inserts[1] = Insert::Distort(Distort {
+            kind: DistortType::Fold,
+            amount: 0x80,
+            mix: 0x40,
+        });
+        let text = ron::to_string(&track).unwrap();
+        let loaded: Track = ron::from_str(&text).unwrap();
+        assert_eq!(loaded, track);
     }
 
     #[test]

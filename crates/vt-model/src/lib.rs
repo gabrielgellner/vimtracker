@@ -4,6 +4,7 @@ pub mod action;
 pub mod constants;
 pub mod envelope;
 pub mod history;
+pub mod insert;
 pub mod kit;
 pub mod label;
 pub mod lfo;

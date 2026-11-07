@@ -2,10 +2,12 @@
 
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
+use vt_model::insert::INSERTS;
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 
+use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
@@ -177,6 +179,8 @@ pub struct TrackState {
     drive: Smoothed,
     trim: [Trim; 2],
     low_cut: Smoothed,
+    /// What each of its effects keeps.
+    inserts: [InsertState; INSERTS],
     high_cut: Smoothed,
     /// The coefficients in use, and the value each was worked out for.
     low_cut_coefficients: Option<(f32, Coefficients)>,
@@ -278,6 +282,7 @@ impl TrackState {
             drive: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
+            inserts: [InsertState::default(); INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
             high_cut_coefficients: None,
@@ -352,6 +357,9 @@ impl TrackState {
             self.filter_type = track.filter;
             self.filter = [Channel::default(); 2];
             self.coefficients = None;
+        }
+        for (state, insert) in self.inserts.iter_mut().zip(track.inserts) {
+            state.set(insert);
         }
         self.drive.target = f32::from(track.drive) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
@@ -628,6 +636,7 @@ impl TrackState {
         self.cut_envelope.settle();
         self.res_envelope.settle();
         self.pan_envelope.settle();
+        self.inserts.iter_mut().for_each(InsertState::settle);
         self.drive.settle();
         self.low_cut.settle();
         self.high_cut.settle();
@@ -727,7 +736,10 @@ impl TrackState {
                 None => input,
             }
         };
-        let filtered = self.trimmed(filtered, smoothing, rate);
+        let mut filtered = self.trimmed(filtered, smoothing, rate);
+        for insert in &mut self.inserts {
+            filtered = insert.process(filtered, smoothing, rate);
+        }
         let gain = self.gain.next(smoothing) * self.level.next(smoothing);
         let (left, right) = pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
