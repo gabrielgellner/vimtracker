@@ -8,9 +8,11 @@ not affiliated with any of them.
 It is early, and the design and implementation plan are in
 [docs/designs/vimtracker.md](docs/designs/vimtracker.md).
 
-The manual is in [docs/manual](docs/manual/src/SUMMARY.md). With
-[mdBook](https://rust-lang.github.io/mdBook/) installed, `just docs-serve` opens it in a
-browser.
+The manual is at <https://gabrielgellner.github.io/vimtracker/>, and its source is in
+[docs/manual](docs/manual/src/SUMMARY.md). With [mdBook](https://rust-lang.github.io/mdBook/)
+installed, `just docs-serve` opens a local copy in a browser.
+
+How to work on vimtracker, and how releases are made, is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Build and run
 
