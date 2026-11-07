@@ -100,7 +100,7 @@ impl App {
             .map(|track| track.synth_voice)
             .unwrap_or_default();
         let (from_row, from_field) = if self.view == View::Mixer {
-            (0, self.mixer_column)
+            (0, self.mixer_row)
         } else {
             (self.track_row, self.track_field)
         };
@@ -164,7 +164,7 @@ impl App {
         if let Some((row, field)) = place {
             self.record_jump();
             if self.view == View::Mixer {
-                self.mixer_column = field;
+                self.mixer_row = field;
             } else {
                 self.move_control(row, field);
             }

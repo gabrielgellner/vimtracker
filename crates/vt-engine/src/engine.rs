@@ -720,6 +720,17 @@ impl Engine {
         std::mem::take(&mut self.reading)
     }
 
+    /// Each track's levels over the last so many frames. A silent track skips adding to its reading,
+    /// so the frames are given here, and an average counts the silence.
+    pub fn take_track_readings(&mut self, frames: u32) -> [Reading; MAX_TRACKS] {
+        let mut readings = [Reading::default(); MAX_TRACKS];
+        for (reading, track) in readings.iter_mut().zip(self.tracks.iter_mut()) {
+            *reading = std::mem::take(&mut track.reading);
+            reading.frames = frames;
+        }
+        readings
+    }
+
     pub fn process(&mut self, out: &mut [f32]) {
         let mut written = 0;
         let total = out.len() / 2;
@@ -1099,6 +1110,7 @@ impl Engine {
                     self.fast_smoothing,
                     self.rate,
                 );
+                track.reading.add(shaped.dry, shaped.dry);
                 mix[0] += shaped.dry[0];
                 mix[1] += shaped.dry[1];
                 delay_in[0] += shaped.delay[0];

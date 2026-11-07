@@ -9,6 +9,7 @@ use vt_model::step::{FxCommand, FxSlot, Mark};
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
+use crate::mixer::Reading;
 use crate::rng::Pcg32;
 use crate::voice::{NoteOn, Voice};
 
@@ -143,6 +144,8 @@ pub struct TrackState {
     pub started: i64,
     pub voice: Voice,
     pub tail: Voice,
+    /// What this track has played since the meters last asked, after its level and pan.
+    pub reading: Reading,
     /// Live controls, kept here rather than in the song so undo can't change them.
     pub mute: bool,
     pub solo: bool,
@@ -239,6 +242,7 @@ impl TrackState {
             started: 0,
             voice: Voice::default(),
             tail: Voice::default(),
+            reading: Reading::default(),
             mute: false,
             solo: false,
             rng: Pcg32::new(seed, index as u64),

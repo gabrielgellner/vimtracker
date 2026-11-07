@@ -31,7 +31,7 @@ pub struct Place {
     track_page: Page,
     track_row: usize,
     track_field: usize,
-    mixer_column: usize,
+    mixer_row: usize,
 }
 
 impl App {
@@ -55,7 +55,7 @@ impl App {
             track_page: self.track_page,
             track_row: self.track_row,
             track_field: self.track_field,
-            mixer_column: self.mixer_column,
+            mixer_row: self.mixer_row,
         }
     }
 
@@ -79,7 +79,7 @@ impl App {
             self.move_control(place.track_row, place.track_field);
         }
         if place.view == View::Mixer {
-            self.mixer_column = place.mixer_column;
+            self.mixer_row = place.mixer_row;
         }
     }
 

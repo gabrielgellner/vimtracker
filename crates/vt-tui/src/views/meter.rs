@@ -22,7 +22,7 @@ const MARKS: [i32; 9] = [0, 6, -12, -24, -6, -48, -18, -36, -60];
 /// The most gain reduction the G bar can show, in dB.
 const MOST_REDUCTION: f32 = 12.0;
 /// Partial blocks, from one eighth of a cell up to a whole one.
-const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+pub(crate) const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 /// Split the space for a view into what the view gets and what the meter gets, if there is room.
 pub fn split(body: Rect) -> (Rect, Option<Rect>) {
@@ -34,8 +34,15 @@ pub fn split(body: Rect) -> (Rect, Option<Rect>) {
     (view, Some(meter))
 }
 
-/// A bar of one channel for one row, counting rows up from the bottom.
-fn level_cell(row: usize, rows: usize, average: f32, peak: f32, top: f32) -> Span<'static> {
+/// A bar of one channel for one row, counting rows up from the bottom, some cells wide.
+pub(crate) fn level_cell(
+    row: usize,
+    rows: usize,
+    average: f32,
+    peak: f32,
+    top: f32,
+    width: usize,
+) -> Span<'static> {
     let eighths = |db: f32| (height_of(db) * (rows * 8) as f32).round() as usize;
     let start = row * 8;
     let solid = eighths(average).saturating_sub(start).min(8);
@@ -56,7 +63,7 @@ fn level_cell(row: usize, rows: usize, average: f32, peak: f32, top: f32) -> Spa
     } else {
         (EIGHTHS[light], dimmed, theme::MANTLE)
     };
-    Span::styled(symbol.to_string().repeat(2), Style::new().fg(fg).bg(bg))
+    Span::styled(symbol.to_string().repeat(width), Style::new().fg(fg).bg(bg))
 }
 
 /// The G bar for one row, hanging down from the top, counting rows down from the top.
@@ -130,7 +137,7 @@ pub fn draw(frame: &mut Frame, area: Rect, meter: &Meter, limiter: bool) {
         let label = labels[row].map_or(String::new(), |mark| mark.to_string());
         let [left, right] = meter
             .channels
-            .map(|c| level_cell(row, rows, c.average(), c.peak.now, c.peak.top));
+            .map(|c| level_cell(row, rows, c.average(), c.peak.now, c.peak.top, 2));
         lines.push(Line::from(vec![
             Span::styled(format!(" {label:>3} "), theme::dim()),
             left,
