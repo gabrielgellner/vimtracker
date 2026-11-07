@@ -1834,9 +1834,8 @@ Kind::Stepped {
 | LFO phase | Continuous, linear, wraps | `45°` |
 | Pitch | Continuous, linear, middle, one semitone a coarse step | `+7 st +12 ct` |
 | Patch, Distort's Type, Delay's Time, Ping | Stepped, choices | `E.PIANO 1`, `Crush`, `1/8 D` |
-| Distort's Amount on Crush | Continuous, cut into 11 notches | `12 bits` |
 
-*   **Distort's Amount** keeps one continuous value, so changing Type keeps it. On Crush it's cut into 11 equal notches for 2 to 12 bits, and nudges move a whole notch. It's the only setting whose kind depends on another setting.
+*   **Distort's Amount** is continuous whatever the Type, and no kind depends on another setting. Crush turns it into whole bits, as now, and changing Type keeps the number but not what it sounds like. Keeping a value consistent across an effect's modes isn't worth a special case, since each mode sounds different anyway.
 *   **Pitch's fine part** is 1/256 of a semitone, about 0.4 cents.
 
 **In the grid.** A continuous value shows four digits: `CUT   4080 .`. Its coarse digits are bold in `MAUVE`, the colour the track page uses for values. Its fine digits are in `MAUVE` set back 30% toward the FX band. A stepped value and an event show only two digits. An event's value is bold `PEACH`, as it isn't a setting, like Renoise's own colour for timing commands. A lock the track doesn't have now is grey with no colour (`OVERLAY2`). An empty cell is faint (`OVERLAY0`), as a code editor dims whitespace, so what's written stands out. Each slot is 2 columns wider than now.
@@ -1898,7 +1897,7 @@ Kind::Stepped {
 
 **Left out.**
 
-*   **Controllers,** such as 14-bit knobs and endless encoders. The kinds give a controller what it needs: a continuous value takes 14 bits into its `u16`, a stepped one splits a knob's travel into its steps, and an encoder moves one coarse step or notch a detent.
+*   **Controllers,** such as 14-bit knobs and endless encoders. The kinds give a controller what it needs: a continuous value takes 14 bits into its `u16`, a stepped one splits a knob's travel into its steps, and an encoder moves one coarse step or one step a detent.
 *   **Typing a value in units in the grid,** such as `1.2k`, `375ms` or `-6db`, which could come later as a prompt.
 *   **Envelope times as settings,** which aren't lockable. The Mod page shows them in ms as now.
 *   **A colour for each group of settings.**
@@ -1911,7 +1910,7 @@ Kind::Stepped {
     **Tests:**
     *   Golden renders unchanged, as coarse-only values give the same fractions as before.
     *   `cut:4080h` and `1.distort.type:03` save and load, and `cut:FF80` and a list's place past its top fail to load.
-    *   Each kind's units for named values, such as Cut at `FF00`, Vol at `E000` as `0.0 dB`, and Crush's notches as 2 and 12 bits.
+    *   Each kind's units for named values, such as Cut at `FF00`, and Vol at `E000` as `0.0 dB`.
     *   The grid's colours for each kind of cell, as the table above has them.
     *   No allocation in the callback.
 2.  **Editing the fine part:** the fine field, the coarse and fine editing rules above, carrying, the top, a new value starting at `00`, ramps and glides through the fine part, stepped values moving by steps and not gliding, and a key for the fine part on the pages.
