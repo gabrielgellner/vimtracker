@@ -135,11 +135,15 @@ const MOTIONS: &[(&str, Cmd, &str)] = &[
     ("l", Cmd::Move(Motion::Right), "Next field"),
     ("j", Cmd::Move(Motion::Down), "Next step"),
     ("k", Cmd::Move(Motion::Up), "Previous step"),
-    ("w", Cmd::Move(Motion::NextGroup), "Next column group"),
+    (
+        "w",
+        Cmd::Move(Motion::NextGroup),
+        "Next part: the note, then each FX",
+    ),
     (
         "b",
         Cmd::Move(Motion::PreviousGroup),
-        "Previous column group",
+        "Previous part: an FX, or the note",
     ),
     ("0", Cmd::Move(Motion::RowStart), "Start of the row"),
     ("$", Cmd::Move(Motion::RowEnd), "End of the row"),

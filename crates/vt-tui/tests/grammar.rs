@@ -478,18 +478,35 @@ fn motions_move_the_cursor_and_stop_at_edges() {
     assert_eq!(app.cursor.step, 15);
     keys(&mut app, "h");
     assert_eq!(app.cursor.field, Field::Note);
-    keys(&mut app, "w");
-    assert_eq!(app.cursor.field, Field::Velocity);
-    keys(&mut app, "w");
-    assert_eq!(app.cursor.field, Field::Gate);
+    // `w` and `b` go between the note part and each FX slot, as the headings name them.
     keys(&mut app, "w");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     keys(&mut app, "l");
     assert_eq!(app.cursor.field, Field::FxValue(0));
     keys(&mut app, "w");
     assert_eq!(app.cursor.field, Field::FxCommand(1));
+    keys(&mut app, "ww");
+    assert_eq!(
+        app.cursor.field,
+        Field::FxCommand(2),
+        "it stops at the last slot"
+    );
     keys(&mut app, "b");
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.cursor.field, Field::FxCommand(1));
+    keys(&mut app, "bb");
+    assert_eq!(app.cursor.field, Field::Note);
+    keys(&mut app, "llb");
+    assert_eq!(
+        app.cursor.field,
+        Field::Note,
+        "from the gate, back to the note"
+    );
+    keys(&mut app, "l2w");
+    assert_eq!(
+        app.cursor.field,
+        Field::FxCommand(1),
+        "a count goes further"
+    );
     keys(&mut app, "20l");
     assert_eq!(app.cursor.field, Field::FxValue(2));
 }
