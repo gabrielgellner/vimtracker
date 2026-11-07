@@ -1237,14 +1237,14 @@ Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert 
 
 The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are, so its copyright notice goes in `dsp/distort.rs`. With `d` from `Amount`:
 
-*   `Soft`: `tanh(x * d)`.
+*   `Soft`: the overdrive from Plaits' `dsp/fx/overdrive.h`, MIT, which is curved so a little does little, and holds a loud sound within about 3 dB as it's turned up. A quieter sound still comes up, by about 9 dB from half level and 22 dB from a tenth at `FF`, as a clip can't hold back what doesn't reach it. `Amount` covers its top half, as below that it gets quieter.
 *   `Hard`: `x * d`, clamped to -1 and 1.
 *   `Fold`: a triangle wave of `x * d`, from Vital's linear fold.
 *   `Sine`: a sine of `x * d`, from Vital's sine fold.
 *   `Crush`: `x` rounded to steps of a size set by `Amount`.
 *   `Down`: holds a sample for a time set by `Amount`, in time rather than samples, so it sounds the same at any device rate.
 
-`Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
+`Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: for the types other than `Soft`, `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
 
 **The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
 
@@ -1268,8 +1268,8 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 **To judge by ear, as they may change the rules:**
 
-*   How `Amount` feels across its range, and whether `+30 dB` is too much. Whether `00` should be cleaner than `Soft` is at unity.
-*   Whether `Soft` and `Hard` need level compensation, as a quiet sound comes out much louder with `Amount` up. `Level` is there if not.
+*   How `Amount` feels across its range, and whether `+30 dB` is too much for `Hard` and the folds.
+*   Whether a quiet sound coming up with `Amount` is a problem on `Soft` and `Hard`. `Level` is there if not.
 *   What `Crush` and `Down` should span, which is set by ear.
 *   Whether the click from moving an effect while playing matters.
 

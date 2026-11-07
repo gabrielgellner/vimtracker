@@ -34,7 +34,7 @@ fn semitones(interval: f32) -> f32 {
 }
 
 #[inline]
-fn soft_clip(x: f32) -> f32 {
+pub(crate) fn soft_clip(x: f32) -> f32 {
     if x < -3.0 {
         -1.0
     } else if x > 3.0 {

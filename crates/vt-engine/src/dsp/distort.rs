@@ -1,9 +1,11 @@
-//! The `Distort` effect. Its shapes come from Vital's `distortion.cpp`, by Matt Tytel, GPL 3 or later:
-//! Copyright 2013-2019 Matt Tytel. Its scaling, mix and state are this program's own.
+//! The `Distort` effect. Most of its shapes come from Vital's `distortion.cpp`, by Matt Tytel, GPL 3
+//! or later: Copyright 2013-2019 Matt Tytel. `Soft` comes from Plaits' `dsp/fx/overdrive.h`, by Emilie
+//! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
+//! program's own.
 
 use vt_model::insert::{Distort, DistortType, Insert};
 
-use crate::dsp::filter::soft_clip;
+use crate::dsp::drums::soft_clip;
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::smoother::Smoothed;
 
@@ -43,6 +45,21 @@ impl Default for InsertState {
 #[inline]
 fn drive_of(amount: f32) -> f32 {
     10.0_f32.powf(amount * MOST_DRIVE_DB / 20.0)
+}
+
+/// What `Soft` does before and after it clips. The overdrive this comes from is about unity with a
+/// quiet sound at half way, and quiet below that, so `Amount` covers its top half: from clean at
+/// `00`, to pushing hard at `FF`. Its gain after the clip holds back a loud sound's level, but it
+/// can't do that for a quiet one, which comes up as the clip takes hold.
+#[inline]
+fn overdrive_gains(amount: f32) -> (f32, f32) {
+    let drive = 0.5 + amount * 0.5;
+    let drive_2 = drive * drive;
+    let low = drive * 0.5;
+    let high = drive_2 * drive_2 * drive * 24.0;
+    let pre = low + (high - low) * drive_2;
+    let squashed = drive * (2.0 - drive);
+    (pre, 1.0 / soft_clip(0.33 + squashed * (pre - 0.33)))
 }
 
 /// The distance between the steps `Crush` rounds to. Losing bits can't be heard until about 10 are
@@ -120,6 +137,14 @@ impl InsertState {
                 }
                 self.held
             }
+            DistortType::Soft => {
+                let (pre, post) = overdrive_gains(amount);
+                let [left, right] = &mut self.oversampler;
+                [
+                    left.process(input[0], |x| soft_clip(x * pre)) * post,
+                    right.process(input[1], |x| soft_clip(x * pre)) * post,
+                ]
+            }
             _ => {
                 let drive = drive_of(amount);
                 let [left, right] = &mut self.oversampler;
@@ -194,6 +219,57 @@ mod tests {
                 [sample, -sample]
             );
         }
+    }
+
+    /// The average level, past the oversampler's short delay.
+    fn rms(samples: &[f32]) -> f32 {
+        let tail = &samples[64..];
+        (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn soft_is_about_clean_at_none_and_a_loud_sound_stays_about_as_loud() {
+        let plain: Vec<f32> = sine(220.0, 0.25, RATE as usize / 10).collect();
+        let clean = played(DistortType::Soft, 0x00, 0xFF, 0.25);
+        let db = |a: f32, b: f32| 20.0 * (a / b).log10();
+        let at_none = db(rms(&clean), rms(&plain));
+        assert!(at_none.abs() < 1.0, "{at_none} dB at 00");
+        // A loud sound stays within a few dB of itself. A clip can only hold back what reaches it,
+        // so a quieter sound does get louder as it's turned up.
+        let change = |level: f32, amount: u8| {
+            let dry = level / std::f32::consts::SQRT_2;
+            db(rms(&played(DistortType::Soft, amount, 0xFF, level)), dry)
+        };
+        for amount in [0x00, 0x40, 0x80, 0xC0, 0xFF] {
+            assert!(
+                change(1.0, amount).abs() < 4.0,
+                "{} dB at {amount:02X}",
+                change(1.0, amount)
+            );
+            assert!(
+                change(0.5, amount).abs() < 10.0,
+                "{} dB at {amount:02X}",
+                change(0.5, amount)
+            );
+        }
+        // And it does more as it goes, turning towards a square at the top.
+        let bent = |amount| {
+            let out = played(DistortType::Soft, amount, 0xFF, 0.5);
+            peak(&out) / rms(&out)
+        };
+        assert!(bent(0xFF) < bent(0x80), "{} and {}", bent(0xFF), bent(0x80));
+        assert!(bent(0x80) < bent(0x00), "{} and {}", bent(0x80), bent(0x00));
+    }
+
+    #[test]
+    fn the_overdrive_matches_where_it_comes_from() {
+        // At full drive, 24 times in, and whatever makes a full clip come out at one.
+        let (pre, post) = overdrive_gains(1.0);
+        assert!((pre - 24.0).abs() < 1e-3, "{pre}");
+        assert!((post - 1.0).abs() < 1e-3, "{post}");
+        // At half drive, about unity for a quiet sound.
+        let (pre, post) = overdrive_gains(0.0);
+        assert!((pre * post - 1.0).abs() < 0.1, "{}", pre * post);
     }
 
     #[test]
