@@ -256,6 +256,7 @@ mod tests {
     use std::sync::Arc;
 
     use vt_model::constants::MAX_TRACKS;
+    use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
     use vt_model::sample::SampleData;
     use vt_model::samples::SamplePool;
     use vt_model::song::Song;
@@ -324,6 +325,23 @@ mod tests {
             handle.pump();
         }
         assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn every_distort_type_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut song = song(8, 16);
+        for (track, kind) in song.tracks.iter_mut().zip(DistortType::ALL) {
+            let insert = Insert::Distort(Distort {
+                kind,
+                ..Distort::default()
+            });
+            track.inserts = [insert; INSERTS];
+        }
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
     }
 
     #[test]

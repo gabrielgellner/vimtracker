@@ -3,6 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::{Engine, Transport, swing_ticks};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
@@ -602,4 +603,63 @@ fn a_preview_goes_through_its_tracks_sound() {
     );
     let no_sample = hear(|song| song.tracks[0].sample = None);
     assert_eq!(no_sample, 0.0);
+}
+
+fn distorted(inserts: [Insert; 3]) -> Vec<[f32; 2]> {
+    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    song.tracks[0].inserts = inserts;
+    let sine = (0..9600).map(|frame| {
+        let t = frame as f32 / RATE as f32;
+        [(t * 220.0 * std::f32::consts::TAU).sin() * 0.5; 2]
+    });
+    render(song, pool(sine.collect()), 4800)
+}
+
+fn distort(kind: DistortType, amount: u8) -> Insert {
+    Insert::Distort(Distort {
+        kind,
+        amount,
+        mix: 0xFF,
+    })
+}
+
+#[test]
+fn empty_inserts_change_nothing_and_an_effect_changes_the_sound() {
+    let plain = distorted([Insert::Empty; 3]);
+    assert!(plain.iter().any(|frame| frame[0] != 0.0));
+    let crushed = distorted([
+        distort(DistortType::Crush, 0xFF),
+        Insert::Empty,
+        Insert::Empty,
+    ]);
+    assert_ne!(plain, crushed);
+    // Whichever slot it's in, alone it does the same.
+    let later = distorted([
+        Insert::Empty,
+        Insert::Empty,
+        distort(DistortType::Crush, 0xFF),
+    ]);
+    assert_eq!(crushed, later);
+}
+
+#[test]
+fn inserts_run_in_order() {
+    let hard = distort(DistortType::Hard, 0xFF);
+    let crush = distort(DistortType::Crush, 0xFF);
+    let distinct = |out: &[[f32; 2]]| {
+        let mut seen: Vec<u32> = out.iter().map(|frame| frame[0].to_bits()).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        seen.len()
+    };
+    let crushed_last = distorted([hard, crush, Insert::Empty]);
+    let crushed_first = distorted([crush, hard, Insert::Empty]);
+    assert_ne!(crushed_last, crushed_first);
+    // Crushing last leaves only its steps, scaled by the level after it.
+    assert!(
+        distinct(&crushed_last) < distinct(&crushed_first),
+        "{} and {}",
+        distinct(&crushed_last),
+        distinct(&crushed_first)
+    );
 }
