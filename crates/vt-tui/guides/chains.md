@@ -44,6 +44,8 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
 | `=` `-` | Next or previous phrase, or transpose by a semitone |
 | `+` `_` | Phrase number by `10` in hex, or transpose by an octave |
+| `M-l` `M-h` | Option and `l` `h`: as `=` `-`, without moving |
+| `M-k` `M-j` | Option and `k` `j`: as `+` `_`, without moving |
 | `K` | Choose this row's phrase from a list |
 | `x` | Transpose back to 0 |
 | `dd` `yy` `p` | Remove a row, copy it, or add the copy below |
@@ -111,6 +113,8 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `j` `k` | Next or previous section |
 | `h` `l` | Previous or next column |
 | `=` `-` `+` `_` | Change the value |
+| `M-l` `M-h` | Option and `l` `h`: as `=` `-`, without moving |
+| `M-k` `M-j` | Option and `k` `j`: as `+` `_`, without moving |
 | `i` | Type a length or repeat then `Enter`, or a chain's two hex digits |
 | `x` | Length follows the chains, Rpt is 1, Start is new, or no chain |
 | `K` | On Start, switch new and reset. On a track, choose its chain |

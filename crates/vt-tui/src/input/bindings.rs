@@ -202,6 +202,48 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
 /// One beat, as a slide.
 const BEAT: isize = BEAT_STEPS as isize;
 
+/// Option with the movement keys changes the value instead, like holding Edit on the M8, so the
+/// hand that moves can nudge without leaving the home row. Left and right are a small step, up
+/// and down a large one.
+const ADJUST: &[(&str, Cmd, &str)] = &[
+    ("M-l", Cmd::Increase, "Increase the value, as ="),
+    ("M-h", Cmd::Decrease, "Decrease the value, as -"),
+    (
+        "M-k",
+        Cmd::IncreaseLarge,
+        "Increase the value, a large step, as +",
+    ),
+    (
+        "M-j",
+        Cmd::DecreaseLarge,
+        "Decrease the value, a large step, as _",
+    ),
+];
+
+/// [`ADJUST`] for a selection.
+const ADJUST_SELECTION: &[(&str, Cmd, &str)] = &[
+    (
+        "M-l",
+        Cmd::Increase,
+        "Increase the selection's values, as =",
+    ),
+    (
+        "M-h",
+        Cmd::Decrease,
+        "Decrease the selection's values, as -",
+    ),
+    (
+        "M-k",
+        Cmd::IncreaseLarge,
+        "Increase the selection's values, a large step, as +",
+    ),
+    (
+        "M-j",
+        Cmd::DecreaseLarge,
+        "Decrease the selection's values, a large step, as _",
+    ),
+];
+
 /// Keys for Normal mode only.
 const NORMAL: &[(&str, Cmd, &str)] = &[
     ("d", Cmd::Operator(Op::Clear), "Clear"),
@@ -492,14 +534,19 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, MOTIONS);
     add(Mode::Normal, VIEWPORT);
     add(Mode::Normal, NORMAL);
+    add(Mode::Normal, ADJUST);
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Chain, CHAIN);
+    add(Mode::Chain, ADJUST);
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
+    add(Mode::Track, ADJUST);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Song, SONG);
+    add(Mode::Song, ADJUST);
     add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MIXER);
+    add(Mode::Mixer, ADJUST);
     add(Mode::Mixer, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
@@ -509,6 +556,7 @@ pub fn bindings() -> Vec<Binding> {
         add(mode, VIEWPORT);
         add(mode, TARGETS);
         add(mode, VISUAL);
+        add(mode, ADJUST_SELECTION);
     }
     rows
 }
