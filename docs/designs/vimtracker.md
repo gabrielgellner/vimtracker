@@ -1305,17 +1305,17 @@ LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan,
                                                       An LFO's Depth and Phase
 ```
 
-**Registering.** An owner declares its targets in a static table: name, group, short code, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two share a code.
+**Registering.** An owner declares its targets in a static table: name, group, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two settings of an effect share a name.
 
 **Targets at first.**
 
 | Target | `Dest` | Step command |
 |---|---|---|
 | The existing ten | `Cut`, `Pan` and so on | `CUT`, `PAN` and so on |
-| A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | `1AM`, `2MX`, `3GN`, `1BI`, `1TY` |
+| A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | Named the same |
 | An LFO's settings | `LFO 1 Depth`, `LFO 1 Phase` | None |
 
-A step command is the slot's number and the setting's two letters, so its text always says where it goes. It does nothing if what's in the slot doesn't have that setting, and it takes locks, holds and glides. Targets belong to the slot and not the effect: after moving an effect, `1AM80` still goes to slot 1.
+A step can set any of these. A slot's setting has one command, holding the slot and its place in the effect's list, and it reads as the setting's name, as `Dest` does, so nothing has to be generated or learned, and a new effect adds no commands. FX columns are 8 characters wide for this, as small terminals aren't supported. A file holds the slot and place, like `1.1`. It takes locks, holds and glides, and `K` lists what's on the track, or `1am` types it by the slot and the start of a name. A command belongs to the slot and place, and not the effect: after changing what's in a slot, it reads as whatever's now there, and does nothing in an empty slot.
 
 There's no special case for what moves a target. A stepped setting rounds the result to a whole step, so an LFO on `Bits` just steps, and one on `Type` jumps between types. Choosing to do that is the author's.
 
@@ -1345,7 +1345,7 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 
 **Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
 
-**Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. An effect only receives finished values, in `process(input, values)`, so it needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
+**Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. The engine works out a finished copy of the effect each update and hands that over, so an effect needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
 
 **On a trig.** A later kind of target reads its value once when a step fires, and isn't smoothed, as an LFO added to a Bernoulli gate's chance is in a modular. Nothing in the table prevents it, and none is built until the first one is wanted. `CHA` comes first, with hats getting busier and sparser over some bars. The Digitakt II and Polyend set these per step, and as far as was read don't modulate them, so this goes past them.
 
@@ -1356,7 +1356,7 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 **Issues.**
 
 1.  **The table, and the existing targets on it:** `Target`, registering, and the `Dest` list built from it. **Tests:** golden renders unchanged, every existing destination still does what it did, no two codes are the same, and the list holds only what's on the track.
-2.  **A slot's settings as targets:** the layers, `process(input, values)`, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
+2.  **A slot's settings as targets:** the layers, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
 3.  **An LFO's `Depth` and `Phase` as targets:** the order and the one-way lists. **Tests:** `LFO 1` moving `LFO 2`, the list offering no way back, and a song rendering the same each time.
 4.  **A picker with groups, for `Dest`:** the two columns and `/`. **Tests:** each key in each place, opening on the current choice, a search reaching every group, one thing in a group shown directly, `Esc` changing nothing, and flat pickers behaving as they did.
 

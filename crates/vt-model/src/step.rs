@@ -1,5 +1,6 @@
 //! One position in a phrase, and the fields it holds.
 
+use crate::insert::{INSERTS, MAX_PARAMS};
 use std::fmt;
 use std::str::FromStr;
 
@@ -41,11 +42,24 @@ pub enum FxCommand {
     Off,
     Ret,
     Cha,
+    /// Sets a setting of what's in a slot, by its place in the effect's list. It reads as the
+    /// setting's name on screen, and a file holds the slot and place, like `1.2`.
+    Slot {
+        slot: u8,
+        param: u8,
+    },
 }
+
+/// How a file names the commands for slots' settings.
+const SLOT_NAMES: [[&str; MAX_PARAMS]; INSERTS] = [
+    ["1.0", "1.1", "1.2", "1.3"],
+    ["2.0", "2.1", "2.2", "2.3"],
+    ["3.0", "3.1", "3.2", "3.3"],
+];
 
 impl FxCommand {
     /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 14 + INSERTS * MAX_PARAMS] = [
         Self::Vol,
         Self::Pan,
         Self::Cut,
@@ -60,7 +74,23 @@ impl FxCommand {
         Self::Off,
         Self::Ret,
         Self::Cha,
+        Self::slot(0, 0),
+        Self::slot(0, 1),
+        Self::slot(0, 2),
+        Self::slot(0, 3),
+        Self::slot(1, 0),
+        Self::slot(1, 1),
+        Self::slot(1, 2),
+        Self::slot(1, 3),
+        Self::slot(2, 0),
+        Self::slot(2, 1),
+        Self::slot(2, 2),
+        Self::slot(2, 3),
     ];
+
+    const fn slot(slot: u8, param: u8) -> Self {
+        Self::Slot { slot, param }
+    }
 
     /// What it does, for a list to show.
     pub fn meaning(self) -> &'static str {
@@ -79,6 +109,7 @@ impl FxCommand {
             Self::Off => "Start the release after xx units",
             Self::Ret => "Retrigger. x is the fade, y the units between",
             Self::Cha => "Play the note with a chance of xx out of FF",
+            Self::Slot { .. } => "A setting of what's in a slot on the FX page",
         }
     }
 
@@ -107,6 +138,7 @@ impl FxCommand {
             Self::Off => "OFF",
             Self::Ret => "RET",
             Self::Cha => "CHA",
+            Self::Slot { slot, param } => SLOT_NAMES[slot as usize][param as usize],
         }
     }
 
@@ -127,7 +159,7 @@ impl FxCommand {
             "OFF" => Self::Off,
             "RET" => Self::Ret,
             "CHA" => Self::Cha,
-            _ => return None,
+            _ => return Self::ALL.into_iter().find(|command| command.name() == name),
         })
     }
 
@@ -144,6 +176,7 @@ impl FxCommand {
                 | Self::Har
                 | Self::Tim
                 | Self::Mor
+                | Self::Slot { .. }
         )
     }
 }

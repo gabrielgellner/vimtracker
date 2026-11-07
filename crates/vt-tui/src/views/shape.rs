@@ -63,7 +63,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     };
     let name = match panel.column {
         ShapeColumn::Velocity => "Velocity".to_owned(),
-        ShapeColumn::Fx { command, .. } => command.name().to_owned(),
+        ShapeColumn::Fx { command, .. } => app
+            .song()
+            .tracks
+            .get(panel.track)
+            .map_or_else(|| command.name().to_owned(), |track| command.name_on(track)),
     };
     let range = panel.selection.range;
     let filled = values(panel.base_steps(), range, panel.column, &panel.shape).len();

@@ -5,6 +5,7 @@ use vt_engine::link::{Command, connect};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
+use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -374,6 +375,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         harmonics: 0x33,
         timbre: 0x44,
         morph: 0x55,
+        inserts: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
 }
@@ -464,4 +466,177 @@ fn the_callback_reports_the_watched_tracks_live_values() {
     assert!(handle.send(Command::Watch { track: 99 }));
     realtime.process(&mut out);
     assert_eq!(handle.latest().unwrap().live, LiveValues::default());
+}
+
+fn with_distort(mut song: Song, kind: DistortType) -> Song {
+    song.tracks[0].inserts[0] = Insert::Distort(Distort {
+        kind,
+        amount: 0x40,
+        mix: 0xC0,
+        gain: 0xD0,
+    });
+    song
+}
+
+const AMOUNT: usize = 1;
+const MIX: usize = 2;
+const GAIN: usize = 3;
+const AMOUNT_TARGET: Target = Target::Slot { slot: 0, param: 1 };
+
+fn slot_live(song: Song, steps: usize) -> [u8; 4] {
+    live_after(song, steps).inserts[0]
+}
+
+#[test]
+fn a_slots_settings_read_as_set_with_nothing_moving_them() {
+    let live = slot_live(
+        with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft),
+        1,
+    );
+    assert_eq!((live[AMOUNT], live[MIX], live[GAIN]), (0x40, 0xC0, 0xD0));
+}
+
+#[test]
+fn a_step_locks_a_slots_setting_until_the_next_note() {
+    let locked = song(&[
+        "C-4 -- 1.180 ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "C-4 -- ---00 ---00 ---00",
+    ]);
+    let locked = with_distort(locked, DistortType::Soft);
+    assert_eq!(slot_live(locked.clone(), 1)[AMOUNT], 0x80);
+    assert_eq!(slot_live(locked.clone(), 2)[AMOUNT], 0x80, "it lasts");
+    assert_eq!(slot_live(locked, 3)[AMOUNT], 0x40, "until the next note");
+}
+
+#[test]
+fn a_step_holds_a_slots_setting_past_the_next_note() {
+    let held = song(&[
+        "C-4 -- 1.220h ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "C-4 -- ---00 ---00 ---00",
+    ]);
+    assert_eq!(
+        slot_live(with_distort(held, DistortType::Soft), 3)[MIX],
+        0x20
+    );
+}
+
+#[test]
+fn a_step_glides_a_slots_setting() {
+    let glide = song(&[
+        "C-4 -- 1.300g ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "--- -- ---00 ---00 ---00",
+        "--- -- 1.380 ---00 ---00",
+    ]);
+    let glide = with_distort(glide, DistortType::Soft);
+    let halfway = slot_live(glide.clone(), 2)[GAIN];
+    assert!((0x38..=0x48).contains(&halfway), "{halfway:02X}");
+    assert_eq!(slot_live(glide, 5)[GAIN], 0x80);
+}
+
+#[test]
+fn only_the_slot_a_command_names_changes() {
+    let mut other = with_distort(song(&["C-4 -- 2.180 ---00 ---00"]), DistortType::Soft);
+    other.tracks[0].inserts[1] = other.tracks[0].inserts[0];
+    let live = live_after(other, 1);
+    assert_eq!(live.inserts[0][AMOUNT], 0x40);
+    assert_eq!(live.inserts[1][AMOUNT], 0x80);
+}
+
+#[test]
+fn a_command_does_nothing_in_an_empty_slot() {
+    let empty = song(&["C-4 -- 1.180 ---00 ---00"]);
+    assert_eq!(slot_live(empty, 1), [0; 4]);
+}
+
+#[test]
+fn a_command_goes_by_its_place_so_it_means_bits_on_crush() {
+    // Bits show as a place in the list, from 2 up, so 6 bits is the fifth.
+    let crushed = with_distort(song(&["C-4 -- 1.106 ---00 ---00"]), DistortType::Crush);
+    assert_eq!(slot_live(crushed, 1)[AMOUNT], 4);
+}
+
+fn moved_by_lfo(song_with: Song, target: Target, depth: i16, steps: usize) -> [u8; 4] {
+    let mut moved = song_with;
+    moved.tracks[0].lfos[0] = Lfo {
+        destination: Some(target),
+        shape: Shape::Square,
+        rate: Rate::Steps(4),
+        depth,
+        phase: 0,
+        retrig: false,
+    };
+    slot_live(moved, steps)
+}
+
+#[test]
+fn an_lfo_moves_a_slots_setting_both_ways() {
+    let base = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    // A square: up for the first half of its 4 steps, and down for the second.
+    let up = moved_by_lfo(base.clone(), AMOUNT_TARGET, 0x20, 2)[AMOUNT];
+    let down = moved_by_lfo(base.clone(), AMOUNT_TARGET, 0x20, 4)[AMOUNT];
+    assert_eq!((up, down), (0x60, 0x20));
+    assert_eq!(
+        moved_by_lfo(base, AMOUNT_TARGET, 0x20, 2)[MIX],
+        0xC0,
+        "not the others"
+    );
+}
+
+#[test]
+fn an_lfo_on_a_slots_setting_stops_at_its_range() {
+    let base = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    assert_eq!(
+        moved_by_lfo(base.clone(), AMOUNT_TARGET, 0xFF, 2)[AMOUNT],
+        0xFF
+    );
+    assert_eq!(moved_by_lfo(base, AMOUNT_TARGET, 0xFF, 4)[AMOUNT], 0x00);
+}
+
+#[test]
+fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
+    let crushed = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Crush);
+    // A setting of 9 bits is place 7, and half of full depth is 5 of the 10 places.
+    let moved = moved_by_lfo(crushed.clone(), AMOUNT_TARGET, 0x80, 2)[AMOUNT];
+    assert_eq!(moved, 10, "stops at the most bits");
+    let moved = moved_by_lfo(crushed, AMOUNT_TARGET, 0x80, 4)[AMOUNT];
+    assert_eq!(moved, 2);
+    let soft = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    let kind = moved_by_lfo(soft, Target::Slot { slot: 0, param: 0 }, 0x80, 2)[0];
+    assert_eq!(kind, 3, "half way up the 5 steps from the first");
+}
+
+#[test]
+fn an_lfo_on_an_empty_slot_does_nothing() {
+    let plain = song(&["C-4 -- ---00 ---00 ---00"]);
+    assert_eq!(moved_by_lfo(plain, AMOUNT_TARGET, 0x80, 2), [0; 4]);
+}
+
+#[test]
+fn an_envelope_moves_a_slots_setting() {
+    let mut moved = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    moved.tracks[0].envelopes[1].destination = Some(AMOUNT_TARGET);
+    moved.tracks[0].envelopes[1].depth = 0x40;
+    moved.tracks[0].envelopes[1].attack_ms = 0;
+    moved.tracks[0].envelopes[1].decay_ms = 0;
+    moved.tracks[0].envelopes[1].sustain = 100;
+    assert_eq!(slot_live(moved, 1)[AMOUNT], 0x80);
+}
+
+#[test]
+fn modulating_a_slot_is_heard_and_renders_the_same_each_time() {
+    let render = |depth: i16| {
+        let mut moved = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+        moved.tracks[0].lfos[0] = Lfo {
+            destination: Some(AMOUNT_TARGET),
+            depth,
+            ..Lfo::default()
+        };
+        render_frames(version(moved, flat()), RATE, STEP * 8)
+    };
+    assert_eq!(render(0x80), render(0x80));
+    assert_ne!(render(0x80), render(0));
 }

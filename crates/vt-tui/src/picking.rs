@@ -12,6 +12,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot};
+use vt_model::target::Target;
 
 use crate::app::{App, Entry, Field};
 use crate::guides::GUIDES;
@@ -319,16 +320,36 @@ impl App {
                 command: None,
             },
         };
+        let track = self.song().tracks.get(self.cursor.track);
+        // Those for a slot's settings are there while the slot holds something.
+        let commands: Vec<FxCommand> = FxCommand::ALL
+            .into_iter()
+            .filter(|command| match (*command, track) {
+                (FxCommand::Slot { slot, param }, Some(track)) => {
+                    usize::from(param) < track.inserts[usize::from(slot)].params().len()
+                }
+                _ => true,
+            })
+            .collect();
         let items = std::iter::once(empty)
-            .chain(FxCommand::ALL.map(|command| Item {
-                label: format!("{}  {}", command.name(), command.meaning()),
-                pick: Pick::FxCommand {
-                    slot,
-                    command: Some(command),
-                },
+            .chain(commands.iter().map(|command| {
+                let (name, meaning) = match (*command, track) {
+                    (FxCommand::Slot { slot, param }, Some(track)) => {
+                        let target = Target::Slot { slot, param };
+                        (target.name_on(track), target.meaning_on(track))
+                    }
+                    _ => (command.name().to_owned(), command.meaning().to_owned()),
+                };
+                Item {
+                    label: format!("{name}  {meaning}"),
+                    pick: Pick::FxCommand {
+                        slot,
+                        command: Some(*command),
+                    },
+                }
             }))
             .collect();
-        let position = FxCommand::ALL
+        let position = commands
             .iter()
             .position(|command| Some(*command) == current)
             .map_or(0, |position| position + 1);

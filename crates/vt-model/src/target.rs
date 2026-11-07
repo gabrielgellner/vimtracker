@@ -3,6 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::insert::{INSERTS, MAX_PARAMS};
+use crate::song::Track;
+use crate::step::FxCommand;
+
 /// Something an LFO or an envelope can move, in the same units as its FX command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Target {
@@ -17,6 +21,11 @@ pub enum Target {
     Har,
     Tim,
     Mor,
+    /// One of the settings of what's in a track's slot, by its place in the effect's list.
+    Slot {
+        slot: u8,
+        param: u8,
+    },
 }
 
 /// What a target declares about itself.
@@ -33,7 +42,7 @@ pub struct TargetInfo {
 }
 
 impl Target {
-    /// Every target, in the order `+` goes through them.
+    /// The targets every track has, in the order `+` goes through them.
     pub const ALL: [Self; 10] = [
         Self::Cut,
         Self::Res,
@@ -48,12 +57,26 @@ impl Target {
     ];
 
     /// How many places sources add to.
-    pub const COUNT: usize = Self::ALL.len();
+    pub const COUNT: usize = Self::ALL.len() + INSERTS * MAX_PARAMS;
 
     /// Its place among those.
     #[inline]
     pub const fn index(self) -> usize {
-        self as usize
+        match self {
+            Self::Cut => 0,
+            Self::Res => 1,
+            Self::Pan => 2,
+            Self::Vol => 3,
+            Self::Dly => 4,
+            Self::Rev => 5,
+            Self::Pitch => 6,
+            Self::Har => 7,
+            Self::Tim => 8,
+            Self::Mor => 9,
+            Self::Slot { slot, param } => {
+                Self::ALL.len() + slot as usize * MAX_PARAMS + param as usize
+            }
+        }
     }
 
     /// What it declares.
@@ -82,31 +105,97 @@ impl Target {
             Self::Har => info("Har", "Machine", "A synth's first setting", Some("HAR")),
             Self::Tim => info("Tim", "Machine", "A synth's second setting", Some("TIM")),
             Self::Mor => info("Mor", "Machine", "A synth's third setting", Some("MOR")),
+            Self::Slot { .. } => info("Setting", "FX", "A setting of what's in a slot", None),
         }
     }
 
-    /// The name on screen.
-    pub const fn name(self) -> &'static str {
-        self.info().name
+    /// The name on screen, on this track, as a slot's settings depend on what's in it.
+    pub fn name_on(self, track: &Track) -> String {
+        let Self::Slot { slot, param } = self else {
+            return self.info().name.to_owned();
+        };
+        let found = track
+            .inserts
+            .get(usize::from(slot))
+            .and_then(|insert| insert.params().get(usize::from(param)));
+        found.map_or_else(
+            || format!("{} ---", slot + 1),
+            |found| format!("{} {}", slot + 1, found.name),
+        )
     }
 
-    /// What's on a track to choose from.
-    pub fn on_track() -> impl Iterator<Item = Self> {
-        Self::ALL.into_iter()
+    /// What it does, for a list to choose from, on this track.
+    pub fn meaning_on(self, track: &Track) -> String {
+        let Self::Slot { slot, .. } = self else {
+            return self.info().meaning.to_owned();
+        };
+        let effect = track
+            .inserts
+            .get(usize::from(slot))
+            .map_or("---", |insert| insert.name());
+        format!("{effect} in slot {}", slot + 1)
+    }
+
+    /// What's on a track to choose from: what every track has, and the settings of what's in its
+    /// slots, in order.
+    pub fn on_track(track: &Track) -> Vec<Self> {
+        let mut targets = Self::ALL.to_vec();
+        for (slot, insert) in track.inserts.iter().enumerate() {
+            targets.extend((0..insert.params().len()).map(|param| Self::Slot {
+                slot: slot as u8,
+                param: param as u8,
+            }));
+        }
+        targets
+    }
+}
+
+impl FxCommand {
+    /// The name on screen, on this track: a slot's setting reads as it does in `Dest`, from what's
+    /// in the slot.
+    pub fn name_on(self, track: &Track) -> String {
+        match self {
+            Self::Slot { slot, param } => Target::Slot { slot, param }.name_on(track),
+            command => command.name().to_owned(),
+        }
+    }
+
+    /// The command for typed text: its name, or a slot's number and the start of a setting's name.
+    pub fn typed(text: &str, track: &Track) -> Option<Self> {
+        if let Some(command) = Self::from_name(text).filter(|command| command.name() == text) {
+            return Some(command);
+        }
+        let slot = usize::from(text.bytes().next()?.checked_sub(b'1')?);
+        let start = text.get(1..)?.to_lowercase();
+        let param = track
+            .inserts
+            .get(slot)?
+            .params()
+            .iter()
+            .position(|param| param.name.to_lowercase().starts_with(&start))?;
+        Some(Self::Slot {
+            slot: slot as u8,
+            param: param as u8,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::step::FxCommand;
+    use crate::insert::Insert;
 
     #[test]
     fn every_target_has_its_own_place() {
-        for (at, target) in Target::ALL.into_iter().enumerate() {
+        let track = Track {
+            inserts: [Insert::ALL[1]; INSERTS],
+            ..Track::default()
+        };
+        let targets = Target::on_track(&track);
+        for (at, target) in targets.iter().enumerate() {
             assert_eq!(target.index(), at, "{target:?}");
         }
-        assert_eq!(Target::COUNT, Target::ALL.len());
+        assert_eq!(targets.len(), Target::COUNT, "full slots use every place");
     }
 
     #[test]
@@ -141,6 +230,50 @@ mod tests {
             assert!(!info.group.is_empty(), "{target:?}");
             assert!(!info.meaning.is_empty(), "{target:?}");
         }
+    }
+
+    #[test]
+    fn a_track_only_offers_the_settings_of_what_is_in_its_slots() {
+        let mut track = Track::default();
+        assert_eq!(Target::on_track(&track), Target::ALL.to_vec());
+        track.inserts[1] = Insert::ALL[1];
+        let targets = Target::on_track(&track);
+        assert_eq!(targets.len(), Target::ALL.len() + 4);
+        assert_eq!(
+            targets[Target::ALL.len()],
+            Target::Slot { slot: 1, param: 0 }
+        );
+        let names: Vec<String> = targets[Target::ALL.len()..]
+            .iter()
+            .map(|target| target.name_on(&track))
+            .collect();
+        assert_eq!(names, ["2 Type", "2 Amount", "2 Mix", "2 Gain"]);
+        assert_eq!(Target::Cut.name_on(&track), "Cut");
+        // What's chosen still reads if the slot empties.
+        track.inserts[1] = Insert::Empty;
+        assert_eq!(Target::Slot { slot: 1, param: 2 }.name_on(&track), "2 ---");
+    }
+
+    #[test]
+    fn a_command_reads_as_its_setting_and_can_be_typed() {
+        let mut track = Track::default();
+        track.inserts[0] = Insert::ALL[1];
+        let amount = FxCommand::Slot { slot: 0, param: 1 };
+        assert_eq!(amount.name_on(&track), "1 Amount");
+        assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
+        assert_eq!(FxCommand::typed("1AM", &track), Some(amount));
+        assert_eq!(FxCommand::typed("CUT", &track), Some(FxCommand::Cut));
+        // An empty slot has no settings to type, and nor does a name that isn't there.
+        assert_eq!(FxCommand::typed("2AM", &track), None);
+        assert_eq!(FxCommand::typed("1ZZ", &track), None);
+        assert_eq!(FxCommand::typed("9AM", &track), None);
+    }
+
+    #[test]
+    fn a_saved_slot_target_comes_back() {
+        let target = Target::Slot { slot: 2, param: 3 };
+        let text = ron::to_string(&target).unwrap();
+        assert_eq!(ron::from_str::<Target>(&text).unwrap(), target);
     }
 
     #[test]

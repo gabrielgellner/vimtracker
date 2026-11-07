@@ -1072,7 +1072,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(41, row + 2)].fg
+        buffer[(59, row + 2)].fg
     };
     on_the_row_being_edited(&mut app);
     app.playhead = 2;
@@ -1656,6 +1656,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,
+        inserts: Default::default(),
     });
     assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -1963,7 +1964,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (42..45).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (60..63).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2069,7 +2070,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 
 /// Another track's column on one row of steps: its marker and note, and its colour.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 41 + column * 4;
+    let x = 59 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -2152,7 +2153,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..40)
+        (0..63)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -2861,8 +2862,16 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let app = App::new(song, None, samples, handle, 48_000);
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
-    assert!(row(2).contains("CUT40 . DLY20 h RES10 g"), "{}", row(2));
-    assert!(row(3).contains("DEL10   ---00   ---00"), "{}", row(3));
+    assert!(
+        row(2).contains("CUT      40 . DLY      20 h RES      10 g"),
+        "{}",
+        row(2)
+    );
+    assert!(
+        row(3).contains("DEL      10   ---      00   ---      00"),
+        "{}",
+        row(3)
+    );
 }
 
 #[test]
@@ -4048,11 +4057,11 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
         .unwrap();
     let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
     // Name column, then the icon, with the same text after it either way.
-    assert_eq!(text(&drawn, 24), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(drawn[(24, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
-    assert_eq!(text(&drawn, 27), "\u{10EEEE}\u{305}\u{310}");
-    assert_eq!(text(&drawn, 28), " ");
-    for x in 30..80 {
+    assert_eq!(text(&drawn, 26), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(26, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(text(&drawn, 29), "\u{10EEEE}\u{305}\u{310}");
+    assert_eq!(text(&drawn, 30), " ");
+    for x in 32..80 {
         assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
     }
 }
@@ -4118,6 +4127,7 @@ fn the_filter_curve_moves_with_what_plays() {
         harmonics: track.harmonics,
         timbre: track.timbre,
         morph: track.morph,
+        inserts: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -5097,4 +5107,168 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
         "{}",
         fx_line(&app, 0)
     );
+}
+
+#[test]
+fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
+    use vt_model::target::Target;
+    let (mut app, _realtime) = app();
+    // LFO 1's Dest is on the Mod page, its third row.
+    press(&mut app, " 4Ljj");
+    let list = |app: &mut App| {
+        press(app, "K");
+        let labels: Vec<String> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .shown()
+            .map(|item| item.label.clone())
+            .collect();
+        special(app, KeyCode::Esc);
+        labels
+    };
+    assert!(!list(&mut app).iter().any(|label| label.starts_with("1 ")));
+
+    press(&mut app, "L="); // Distort in slot 1.
+    press(&mut app, "Hjj");
+    let labels = list(&mut app);
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("1 Amount  Distort in slot 1")),
+        "{labels:?}"
+    );
+
+    // Choosing one saves it, and it reads back on the page.
+    press(&mut app, "K1 amount");
+    special(&mut app, KeyCode::Enter);
+    let target = Target::Slot { slot: 0, param: 1 };
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
+    let lfo = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.starts_with("LFO 1"))
+            .unwrap()
+    };
+    assert!(lfo(&app).contains("1 Amount"), "{}", lfo(&app));
+
+    // Emptying the slot leaves it chosen, doing nothing, and saying so.
+    press(&mut app, "Lx");
+    press(&mut app, "H");
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
+    assert!(lfo(&app).contains("1 ---"), "{}", lfo(&app));
+}
+
+#[test]
+fn stepping_dest_goes_through_a_slots_settings() {
+    use vt_model::target::Target;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=H");
+    press(&mut app, "jj");
+    for _ in 0..11 {
+        press(&mut app, "=");
+    }
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::Slot { slot: 0, param: 0 }),
+    );
+}
+
+#[test]
+fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
+    use vt_model::step::FxCommand;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LL= 3");
+    let command = |app: &App, step: usize| app.phrase_here().unwrap().steps()[step].fx[0].command;
+    let amount = FxCommand::Slot { slot: 0, param: 1 };
+    press(&mut app, "ll");
+    press(&mut app, "i1am80");
+    assert_eq!(command(&app, 0), Some(amount));
+    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x80);
+    let text = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(
+        text.contains("1.180"),
+        "a file holds the slot and place: {text}"
+    );
+    special(&mut app, KeyCode::Esc);
+
+    // The list has what's on the track, under the names on the page.
+    press(&mut app, "ggjK");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("1 Mix  Distort in slot 1")),
+        "{labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|label| label.starts_with("2 ")),
+        "{labels:?}"
+    );
+    press(&mut app, "1 mix");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "40");
+    assert_eq!(
+        command(&app, 1),
+        Some(FxCommand::Slot { slot: 0, param: 2 })
+    );
+
+    // A name that isn't there says so.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "ggjj0lli2am");
+    assert_eq!(command(&app, 2), None);
+    assert!(app.status.contains("isn't"), "{}", app.status);
+}
+
+#[test]
+fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LL= 3lli1am80");
+    special(&mut app, KeyCode::Esc);
+    let backend = ratatui::backend::TestBackend::new(120, 12);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: String = (0..12)
+        .map(|y| {
+            (0..120)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(text.contains("1 Amount 80"), "{text}");
+    assert!(text.contains("---      00"), "{text}");
+}
+
+#[test]
+fn the_fx_pages_bars_follow_what_plays() {
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=");
+    let mut live = vt_engine::track_state::LiveValues {
+        level: 0xE0,
+        pan: 0x80,
+        cutoff: 0xFF,
+        resonance: 0,
+        delay: 0,
+        reverb: 0,
+        harmonics: 0x80,
+        timbre: 0,
+        morph: 0x80,
+        inserts: Default::default(),
+    };
+    live.inserts[0] = [0, 0xFF, 0xFF, 0xE0];
+    app.live = Some(live);
+    let line = fx_line(&app, 0);
+    // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
+    assert!(line.contains("Amount 40 ▕██│██████▏"), "{line}");
+    assert!(line.contains("Mix    FF ▕█████████▏"), "{line}");
 }

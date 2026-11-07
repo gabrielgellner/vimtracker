@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::UNITY_LEVEL;
+use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 
 /// How many a track has.
 pub const INSERTS: usize = 3;
@@ -44,11 +44,47 @@ impl DistortType {
     }
 }
 
+/// What a slot's setting is, for what moves it to read and write it on its own scale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    Type,
+    Amount,
+    Bits,
+    Mix,
+    Gain,
+}
+
+impl Setting {
+    /// Every setting.
+    pub const ALL: [Self; 5] = [Self::Type, Self::Amount, Self::Bits, Self::Mix, Self::Gain];
+
+    /// The highest value a step can give it.
+    pub const fn highest(self) -> u8 {
+        match self {
+            Self::Type => DistortType::ALL.len() as u8 - 1,
+            Self::Bits => MOST_BITS,
+            Self::Gain => MAX_LEVEL,
+            Self::Amount | Self::Mix => 0xFF,
+        }
+    }
+
+    /// What full modulation moves it by, in its own units.
+    pub const fn span(self) -> f32 {
+        match self {
+            Self::Type => (DistortType::ALL.len() - 1) as f32,
+            Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
+            Self::Amount | Self::Mix | Self::Gain => 255.0,
+        }
+    }
+}
+
 /// One setting an effect declares. The pages, stepping, `x`, `K` and typing read these, so a new
 /// effect needs no new page code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
     pub name: &'static str,
+    /// What it is, on its own scale.
+    pub setting: Setting,
     /// What it chooses between, in order, or nothing for a value in hex.
     pub choices: &'static [&'static str],
     /// Whether stepping past the last choice goes round to the first, or stops. A choice that's a
@@ -63,18 +99,21 @@ pub const MAX_PARAMS: usize = 4;
 const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
 const TYPE_PARAM: Param = Param {
     name: "Type",
+    setting: Setting::Type,
     choices: &DISTORT_TYPE_NAMES,
     wraps: true,
     default: 0,
 };
 const MIX_PARAM: Param = Param {
     name: "Mix",
+    setting: Setting::Mix,
     choices: &[],
     wraps: false,
     default: 0xFF,
 };
 const GAIN_PARAM: Param = Param {
     name: "Gain",
+    setting: Setting::Gain,
     choices: &[],
     wraps: false,
     default: UNITY_LEVEL,
@@ -83,6 +122,7 @@ const DISTORT_PARAMS: [Param; 4] = [
     TYPE_PARAM,
     Param {
         name: "Amount",
+        setting: Setting::Amount,
         choices: &[],
         wraps: false,
         default: 0x40,
@@ -103,6 +143,7 @@ const CRUSH_PARAMS: [Param; 4] = [
     TYPE_PARAM,
     Param {
         name: "Bits",
+        setting: Setting::Bits,
         choices: &BIT_NAMES,
         wraps: false,
         default: 7,
@@ -209,6 +250,54 @@ impl Insert {
         })
     }
 
+    /// A setting as a step gives it: whole bits for `Bits`, and a place for `Type`. Nothing if
+    /// there's no effect here.
+    pub fn read(self, setting: Setting) -> Option<u8> {
+        let Self::Distort(distort) = self else {
+            return None;
+        };
+        Some(match setting {
+            Setting::Type => distort.kind as u8,
+            Setting::Amount => distort.amount,
+            Setting::Bits => crush_bits(distort.amount),
+            Setting::Mix => distort.mix,
+            Setting::Gain => distort.gain,
+        })
+    }
+
+    /// The same with a setting moved, on the scale `read` gives, landing on a whole value within its
+    /// range. It's how a stepped setting ends up stepping, whatever moved it.
+    #[must_use]
+    pub fn write(self, setting: Setting, value: f32) -> Self {
+        let Self::Distort(distort) = self else {
+            return self;
+        };
+        let whole = value.round().clamp(0.0, f32::from(setting.highest())) as u8;
+        Self::Distort(match setting {
+            Setting::Type => Distort {
+                kind: DistortType::ALL[usize::from(whole)],
+                ..distort
+            },
+            Setting::Amount => Distort {
+                amount: whole,
+                ..distort
+            },
+            Setting::Bits => Distort {
+                amount: (f32::from(MOST_BITS - whole.max(LEAST_BITS)) * AMOUNT_PER_BIT).round()
+                    as u8,
+                ..distort
+            },
+            Setting::Mix => Distort {
+                mix: whole,
+                ..distort
+            },
+            Setting::Gain => Distort {
+                gain: whole,
+                ..distort
+            },
+        })
+    }
+
     /// The next or previous effect, as it starts, going round. It's the same kind of slot if the
     /// settings differ, so stepping always changes the effect.
     #[must_use]
@@ -304,6 +393,62 @@ mod tests {
             amount,
             ..Distort::default()
         })
+    }
+
+    #[test]
+    fn no_two_settings_of_an_effect_share_a_name() {
+        for params in [&DISTORT_PARAMS, &CRUSH_PARAMS] {
+            for (at, param) in params.iter().enumerate() {
+                for other in &params[at + 1..] {
+                    assert_ne!(param.name, other.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_setting_reads_as_it_writes() {
+        let hard = Insert::ALL[1];
+        for setting in Setting::ALL {
+            let high = f32::from(setting.highest());
+            let written = hard.write(setting, high);
+            assert_eq!(
+                written.read(setting),
+                Some(setting.highest()),
+                "{setting:?}"
+            );
+        }
+        assert_eq!(Insert::Empty.read(Setting::Mix), None);
+        assert_eq!(Insert::Empty.write(Setting::Mix, 3.0), Insert::Empty);
+    }
+
+    #[test]
+    fn writing_lands_on_whole_values_inside_the_range() {
+        let effect = crush(0x40);
+        assert_eq!(
+            effect.write(Setting::Bits, 6.4).read(Setting::Bits),
+            Some(6)
+        );
+        assert_eq!(
+            effect.write(Setting::Bits, 6.6).read(Setting::Bits),
+            Some(7)
+        );
+        assert_eq!(
+            effect.write(Setting::Bits, -3.0).read(Setting::Bits),
+            Some(LEAST_BITS)
+        );
+        assert_eq!(
+            effect.write(Setting::Bits, 99.0).read(Setting::Bits),
+            Some(MOST_BITS)
+        );
+        assert_eq!(
+            effect.write(Setting::Type, 2.2).read(Setting::Type),
+            Some(2)
+        );
+        assert_eq!(
+            effect.write(Setting::Gain, 300.0).read(Setting::Gain),
+            Some(MAX_LEVEL)
+        );
     }
 
     #[test]
