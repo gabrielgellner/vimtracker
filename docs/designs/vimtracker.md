@@ -544,7 +544,7 @@ Machine -> Filter -> Utility filter -> FX inserts -> Level, Pan -> Sends or a bu
 
 ### A shared parameter list
 
-Each machine and effect declares its settings: name, range, units and default. The track page, stepping, `x`, `K`, typing, modulation `Dest` lists and FX on steps all read that list, so a new machine or effect needs no new UI. It's built with the first effect, in M9, when something new first needs it. Until then, the existing controls stay as they are.
+Each machine and effect declares its settings: name, range, units and default. The track page, stepping, `x`, `K`, typing, modulation `Dest` lists and FX on steps all read that list, so a new machine or effect needs no new UI. It's built with the first effect, in M9, when something new first needs it, and at first covers effects only, as the M9 design says. Until then, the existing controls stay as they are.
 
 ### Everything is a track
 
@@ -1078,7 +1078,7 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M8b: Jamming.** Launch a chain on one track while playing, and capture what's playing as a new section. **Tests:** a launch waits for the track's chain to end, stopping a track, a launch ending with its section, capturing without a break, and no allocation in the callback.
 *   **M8d: Session workflow.** Launch timing on a beat or bar grid, one-phrase chains opening straight to their phrase, chain labels, and cloning a chain with its phrases from the song view. **Tests:** as [its design](song-flow.md) lists.
 *   **M8c: Song flow.** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
-*   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list, and slots naming any parameter on that list. **Tests:** every parameter on the list works with each key from the list alone, an effect's response, reordering, and off costing nothing.
+*   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
 *   **M10: Tracks that process.** Send and mix tracks in a fixed routing, moving delay and reverb to send tracks with real settings, and a better reverb. **Tests:** a track's steps sequence its effects, and the cost of an idle track is measured.
 *   **M11: More effects and machines.** Compressor with sidechain, saturation and bitcrush, 3-band EQ and chorus, then buses, column folding, the slicer, a kick synth and Plaits-style voices, with polyphony decided when one needs it. Only what's wanted in a jam gets built.
 
@@ -1214,6 +1214,73 @@ From the author on 2026-11-06, after Ableton's Capture and Insert Scene, which n
 ### M8d and M8c designs
 
 Built, from [Song flow and session workflow](song-flow.md), which replaces parts of the M8 and M8b designs above.
+
+### M9 design: FX inserts
+
+Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert slots to each track, one effect to put in them, and an FX page, and sets up what later effects reuse.
+
+**Prior art.** The boxes nearest this workflow mostly have a fixed chain per track: the Digitakt II has bit reduction, overdrive and sample rate reduction before its filter, the M8 has `DEGRADE` and a limiter per instrument, and tracker-ce has overdrive and bit depth per instrument. Slots come from Maschine, which has as many as you like on sounds, groups and master, and the Tonverk, which has two. Slots are kept here because order matters once M11 adds a compressor, and a fixed chain would get long.
+
+**Signal path.** `Machine -> Filter -> Utility filter -> Insert 1, 2, 3 -> Level, Pan -> Sends`, as in Direction above. In the engine, this goes in `TrackState::shape`, after `trimmed` and before the gain. `Drive` stays on the filter.
+
+**Data.** `Track` gains `inserts: [Insert; 3]`, with a serde default of all empty, and `FORMAT_VERSION` stays as it is, so existing songs load and sound the same. `Insert` is an enum of `Empty` and `Distort`, whose settings are plain copyable values. Changes go through `Action`, so each is one undo step.
+
+**Engine.** `TrackState` gains a preallocated, copyable state for each slot, as machines are, so the callback doesn't allocate. An empty slot is a match and nothing else, and a track with no inserts renders exactly as before.
+
+**The first effect: `Distort`.** One effect with a `Type`, after #87.
+
+| Setting | Values | Default |
+|---|---|---|
+| `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down` | `Soft` |
+| `Amount` | `00` to `FF`, more of what `Type` does | `40` |
+| `Mix` | `00` dry to `FF` wet | `FF` |
+
+The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are, so its copyright notice goes in `dsp/distort.rs`. With `d` from `Amount`:
+
+*   `Soft`: `tanh(x * d)`.
+*   `Hard`: `x * d`, clamped to -1 and 1.
+*   `Fold`: a triangle wave of `x * d`, from Vital's linear fold.
+*   `Sine`: a sine of `x * d`, from Vital's sine fold.
+*   `Crush`: `x` rounded to steps of a size set by `Amount`.
+*   `Down`: holds a sample for a time set by `Amount`, in time rather than samples, so it sounds the same at any device rate.
+
+`Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
+
+**The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
+
+**The FX page.** A third page on the track page, with one row per slot:
+
+```text
+1  Distort   Type Soft    Amount 40 ▕███▌     ▏   Mix FF ▕█████████▏
+2  ---
+3  ---
+```
+
+*   **`H` and `L`** become the previous and next page, stopping at each end, in place of naming a page each. Sound to FX is `LL`.
+*   **Rows stay fixed**, as `page_rows` returns static lists: a row is the effect and room for the most settings any effect has, and the cursor stops at the last one this effect uses. An empty slot only has its effect.
+*   **`K` or `i` on the effect** chooses it from a list, and `=` and `-` step through. `x` on the effect empties the slot, and `x` on a setting returns it to its default.
+*   **`dd`** takes the effect out of its slot, and **`p`** puts the last one taken into the slot under the cursor, swapping with what's there, to change the order. This only works on this page. Moving an effect starts its state afresh, which may click if it's playing.
+*   **`/`** finds these as it does the other pages, from their names, and the bars move with what's playing, as on the Sound page.
+
+**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
+
+**Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Reaching a second copy of an effect from steps or modulation. Moving `Drive` onto the list.
+
+**To judge by ear, as they may change the rules:**
+
+*   How `Amount` feels across its range, and whether `+30 dB` is too much. Whether `00` should be cleaner than `Soft` is at unity.
+*   Whether `Soft` and `Hard` need level compensation, as a quiet sound comes out much louder with `Amount` up. `Level` is there if not.
+*   What `Crush` and `Down` should span, which is set by ear.
+*   Whether the click from moving an effect while playing matters.
+
+**Issues.**
+
+1.  **Inserts and `Distort` in the engine:** the data, the state in `TrackState`, `dsp/distort.rs` and the shared `Oversampler`. **Tests:** golden renders unchanged with empty slots, each type's response, `Mix` at each end, oversampling keeps aliasing down for the types that use it, slots run in order, a saved insert loads, and no allocation under the real-time guard.
+2.  **The parameter list and FX page:** the list, the page, `H` and `L`, `x`, `K`, typing and bars. **Tests:** each key works on a setting from the list alone, the cursor stays valid across effects and machines, `/` finds the settings, and a change is one undo step.
+3.  **Order:** `dd` and `p`. **Tests:** moving swaps slots and is one undo step, and the sound follows the new order.
+4.  **Steps and modulation:** `DST`, `DMX`, `Dst` and `Dmx`. **Tests:** a lock, hold and glide on each, an LFO on each, reaching only the first `Distort`, and doing nothing without one.
+
+**Done when** the author has used it in a jam, and the questions above are answered. The CPU cost of a track with `Soft` is measured in a release build.
 
 ### Known Gaps From Review
 
