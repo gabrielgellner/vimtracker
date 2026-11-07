@@ -656,7 +656,7 @@ Made by the author on 2026-11-06, after a review of this section:
 27. **String, Modal, Dust and Noise follow from issue #134**, Plaits' struck and noisy voices, their main outputs, through Plaits' limiter as it has them. String and Modal ring out from a strike and die away by themselves, as the drums do. Dust and Noise sound until the note ends, shaped by the track's envelope rather than Plaits' low-pass gate. Plaits keeps three strings so one rings under the next note, and here a track plays one, as it does every voice. Each new note starts with its settings where they are, rather than sweeping from the last note's, as each note is a new voice. A pluck puts little into Plaits' string, so it's about 20 dB quieter than the other voices; a gain of 8 before the limiter brings it level, and the limiter catches the brightest plucks. Their shared parts of stmlib, with the drums' filter, are in one file. Each costs at most 0.5% of a core on an M5, and Dust's diffuser takes a voice to 16.8 KB, allocated ahead of time like the rest. Added on 2026-11-07.
 28. **Accent is a synth's own setting, apart from velocity**, after Elektron, where velocity and tone lock apart. It's Plaits' accent, how hard a sound is struck, which Plaits takes from its level input along with its loudness. Here velocity stays loudness alone, so a quiet note can be struck hard. Accent is a track setting below the three, from `00` to `FF`, starting at `CC`, Plaits' 0.8 with nothing patched, so songs made before it sound the same. `ACC` sets it from a step and holds, and LFOs and envelopes can move it. It changes the voices Plaits gives an accent to: the drums' strike, `String` and `Modal`'s brightness and ring, and `6-op`'s velocity. The others ignore it, so it's dimmed on them and isn't offered as a destination. Added on 2026-11-07. Changed by decision 29: Accent becomes a setting of the voices that use it, and `ACC` its label.
 29. **Settings are registered once, and steps lock them by id**, after Elektron's locks and DAW automation, rather than through a list of named commands. Each has a long name for finding it and a label of 3 or 4 letters for the grid, typed and confirmed with `Enter`. Each Plaits voice is a machine with its own settings under their real names, which a track keeps for each voice, and a lock belongs to its voice or effect, drawn faint where it doesn't apply. Events (`DEL`, `KIL`, `OFF`, `RET`, `CHA`) stay a short list of their own. This changes decisions 16 and 28, reverses 17, and carries out 7. The [M14 design](#m14-design-one-list-of-settings) has the rest. Added on 2026-11-07.
-30. **A setting's kind decides what its value means**, after tracker-ce's parameters and CLAP's stepped flag. A value is stored as its kind's own number: a `u16` of coarse and fine bytes for a continuous setting, and an integer for a stepped one, so a list can grow without moving saved values. The grid stays in hex, with coarse digits bold and fine ones set back, and the status line shows real units. Controllers and micro-timing are separate. The [M14b design](#m14b-design-kinds-of-setting) has the rest. Added on 2026-11-07.
+30. **A setting's kind decides what its value means**, after tracker-ce's parameters and CLAP's stepped flag. A value is stored as its kind's own number: a `u16` of coarse and fine bytes for a continuous setting, and an integer for a stepped one, so a list can grow without moving saved values. A mode, like Distort's Type, owns its own settings as a voice does, rather than changing another setting's kind, and isn't lockable. The grid stays in hex, with coarse digits bold and fine ones set back, and the status line shows real units. Controllers and micro-timing are separate. The [M14b design](#m14b-design-kinds-of-setting) has the rest. Added on 2026-11-07.
 
 ## Alternatives Considered
 
@@ -1786,7 +1786,7 @@ Made with the author's agreement on 2026-11-07, from issue #139. Not built yet. 
 | Pan and centred voice settings | Either side of a middle | `80` is the middle |
 | Volume, sends, gain | The level scale, `E0` at 0 dB | Capped at `MAX_LEVEL` |
 | Patch, Distort's Type, Delay's Time, Ping | A list of choices | A place in the list, which wraps or stops |
-| Crush's bits | 2 to 12 | Distort's Amount, turned into whole bits |
+| Crush's bits | 2 to 12 | Distort's Amount, turned into whole bits, sharing its place |
 
 There's also too little resolution in places. 256 steps across a filter's range is 47 cents a step, which is too coarse for tuning or for dialling in a resonant filter.
 
@@ -1834,10 +1834,22 @@ Kind::Stepped {
 | LFO phase | Continuous, linear, wraps | `45°` |
 | Pitch | Continuous, linear, middle, one semitone a coarse step | `+7 st +12 ct` |
 | Patch, Distort's Type, Delay's Time, Ping | Stepped, choices | `E.PIANO 1`, `Crush`, `1/8 D` |
+| Crush's Bits | Stepped, 2 to 12 | `12 bits` |
 
-*   **Distort's Amount** is continuous whatever the Type, and no kind depends on another setting. Crush turns it into whole bits, as now, and changing Type keeps the number but not what it sounds like. Keeping a value consistent across an effect's modes isn't worth a special case, since each mode sounds different anyway.
 *   **Pitch's fine part** is 1/256 of a semitone, about 0.4 cents.
 
+**Distort's modes have their own settings.** A setting's kind never depends on another setting's value. Instead, a mode owns the settings that mean something in it, as a voice does:
+
+| Types | Its own setting | Kind |
+|---|---|---|
+| Soft, Hard, Fold, Sine | Amount `1AMNT`, the drive | Continuous |
+| Crush | Bits `1BITS` | Stepped, 2 to 12 |
+| Down | Rate `1RATE`, how long each sample is held | Continuous |
+
+*   **Mix and Gain** are shared by every mode, as they mean the same in each.
+*   **Changing Type keeps each mode's value,** as a track keeps every voice's, so going from Crush to Soft and back finds Bits where it was.
+*   **A lock for another mode,** such as `1BITS` with Soft in the slot, is grey and does nothing, like a String lock on a Kick track, and plays again when Crush is back.
+*   **Type isn't lockable,** like the slot's effect and the track's machine. Choosing a mode chooses a sound, not something to modulate, and a Type lock would make settings appear for one step. `1TYPE` goes, and Type is set on the Sound page.
 **In the grid.** A continuous value shows four digits: `CUT   4080 .`. Its coarse digits are bold in `MAUVE`, the colour the track page uses for values. Its fine digits are in `MAUVE` set back 30% toward the FX band. A stepped value and an event show only two digits. An event's value is bold `PEACH`, as it isn't a setting, like Renoise's own colour for timing commands. A lock the track doesn't have now is grey with no colour (`OVERLAY2`). An empty cell is faint (`OVERLAY0`), as a code editor dims whitespace, so what's written stands out. Each slot is 2 columns wider than now.
 
 | Cell | Coarse | Fine | Label and mark |
@@ -1857,7 +1869,7 @@ Kind::Stepped {
 *   **At the top,** a value that would go past it, such as `FF` typed over `3F80`, stops at the top, `FF00`.
 *   **Stepped values** move one step at a time, and a list's `wraps` says whether they go round. They can't glide, so `g` isn't offered on them.
 
-**The status line** names the setting, then its value in units: `Filter: Cut, 1.21 kHz`, `FX 1 Distort: Type, Crush`, `String: Decay, 62 %, not on this track`.
+**The status line** names the setting, then its value in units: `Filter: Cut, 1.21 kHz`, `FX 1 Distort: Bits, 12 bits`, `String: Decay, 62 %, not on this track`.
 
 **The pages.** The Sound and Mod pages show values in their kinds' units. Their typing in units with `Enter` stays as it is, as for LFO phase in degrees. LFO depth and phase are stored in their kinds' form, as every setting is. How a page reaches the fine part is decided in issue 2. `h` and `l` already move between the page's columns, so it needs a different key.
 
@@ -1906,11 +1918,12 @@ Kind::Stepped {
 **Issues.** Each leaves everything building and every test passing.
 
 1.  **Kinds and 16-bit values:** the two shapes and every setting's kind, `u16` values in steps, tracks and the engine, the file form, the status line's units, and the grid's four digits and colours. The fine part shows and loads but is typed only as `00`.
-    **Code:** `settings.rs`'s `Kind` and entries; `insert.rs`'s `Param`s; `step.rs`'s `FxSlot`; `steptext.rs`'s parser; `song.rs`'s `Track.settings`; `track_state.rs`'s values and how they reach the voices; `six_op.rs`'s `patch_index`; `views/phrase.rs`'s `step_text` and colours; `views/status.rs`; `theme.rs`.
+    **Code:** `settings.rs`'s `Kind` and entries, and whether a mode's setting exists; `insert.rs`'s `Param`s and a value for each Distort mode's setting; `step.rs`'s `FxSlot`; `steptext.rs`'s parser; `song.rs`'s `Track.settings`; `track_state.rs`'s values and how they reach the voices; `six_op.rs`'s `patch_index`; `views/phrase.rs`'s `step_text` and colours; `views/status.rs`; `theme.rs`.
     **Tests:**
     *   Golden renders unchanged, as coarse-only values give the same fractions as before.
     *   `cut:4080h` and `1.distort.type:03` save and load, and `cut:FF80` and a list's place past its top fail to load.
     *   Each kind's units for named values, such as Cut at `FF00`, and Vol at `E000` as `0.0 dB`.
+    *   A `1BITS` lock is grey with Soft in the slot and plays with Crush, Bits keeps its value from Crush to Soft and back, and `1type` isn't a label.
     *   The grid's colours for each kind of cell, as the table above has them.
     *   No allocation in the callback.
 2.  **Editing the fine part:** the fine field, the coarse and fine editing rules above, carrying, the top, a new value starting at `00`, ramps and glides through the fine part, stepped values moving by steps and not gliding, and a key for the fine part on the pages.
