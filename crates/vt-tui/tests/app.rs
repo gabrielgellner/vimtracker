@@ -1072,7 +1072,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The neighbour column after the focused track's text, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(56, row + 2)].fg
+        buffer[(59, row + 2)].fg
     };
     on_the_row_being_edited(&mut app);
     app.playhead = 2;
@@ -1964,7 +1964,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (57..60).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (60..63).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2070,7 +2070,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 
 /// Another track's column on one row of steps: its marker and note, and its colour.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 56 + column * 4;
+    let x = 59 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -2153,7 +2153,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..60)
+        (0..63)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -2863,12 +2863,12 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).contains("CUT     40 . DLY     20 h RES     10 g"),
+        row(2).contains("CUT      40 . DLY      20 h RES      10 g"),
         "{}",
         row(2)
     );
     assert!(
-        row(3).contains("DEL     10   ---     00   ---     00"),
+        row(3).contains("DEL      10   ---      00   ---      00"),
         "{}",
         row(3)
     );
@@ -5245,8 +5245,8 @@ fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
                 + "\n"
         })
         .collect();
-    assert!(text.contains("1 Amount80"), "{text}");
-    assert!(text.contains("---     00"), "{text}");
+    assert!(text.contains("1 Amount 80"), "{text}");
+    assert!(text.contains("---      00"), "{text}");
 }
 
 #[test]

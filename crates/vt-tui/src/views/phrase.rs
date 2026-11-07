@@ -23,8 +23,8 @@ const GUTTER: usize = 9;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
-/// Room for a slot's command on screen, which can be a setting's name like `1 Amount`.
-const COMMAND_WIDTH: usize = 8;
+/// Room for a slot's command on screen, which can be a setting's name like `1 Amount`, and a gap.
+const COMMAND_WIDTH: usize = 9;
 
 /// A slot on screen: its command and value, its mark, and the gap before the next.
 const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
@@ -44,7 +44,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
             (Some(command), None) => command.name().to_owned(),
             (None, _) => "---".to_owned(),
         };
-        let name: String = name.chars().take(COMMAND_WIDTH).collect();
+        let name: String = name.chars().take(COMMAND_WIDTH - 1).collect();
         let mark = if slot.is_value() {
             slot.mark.glyph()
         } else {
