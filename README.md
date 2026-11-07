@@ -8,6 +8,10 @@ not affiliated with any of them.
 It is early, and the design and implementation plan are in
 [docs/designs/vimtracker.md](docs/designs/vimtracker.md).
 
+The manual is in [docs/manual](docs/manual/src/SUMMARY.md). With
+[mdBook](https://rust-lang.github.io/mdBook/) installed, `just docs-serve` opens it in a
+browser.
+
 ## Build and run
 
 ```sh

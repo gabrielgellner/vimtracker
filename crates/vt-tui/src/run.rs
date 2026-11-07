@@ -178,42 +178,7 @@ fn main_loop(
         if let Some(graphics) = graphics.as_deref_mut() {
             graphics.sync(app, &mut std::io::stdout())?;
         }
-        terminal.draw(|frame| {
-            frame.render_widget(Block::new().style(theme::screen()), frame.area());
-            let [body, status] =
-                Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
-            app.follow_cursor(usize::from(
-                body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
-            ));
-            let (view, meter) = views::meter::split(body);
-            match app.view {
-                View::Chain => views::chain::draw(frame, view, app),
-                View::Phrase => views::phrase::draw(frame, view, app),
-                View::Track => views::track::draw(frame, view, app),
-                View::Mixer => views::mixer::draw(frame, view, app),
-                View::Song => views::song::draw(frame, view, app),
-            }
-            views::system::draw(frame, view, app, Some(stats));
-            if let Some(meter) = meter {
-                views::meter::draw(frame, meter, &app.meter, app.song().limiter);
-            }
-            views::status::draw(frame, status, app);
-            views::help::draw_popup(frame, body, app, Instant::now());
-            if app.mode == Mode::Help {
-                views::help::draw_help(frame, body, app);
-            }
-            app.guide_page = views::guide::page(body.height);
-            app.guide_width = views::guide::text_width(body.width);
-            if let Some(guide) = app.guide {
-                views::guide::draw(frame, body, guide, app.guide_scroll);
-            }
-            if let Some(panel) = &app.shape {
-                views::shape::draw(frame, view, app, panel);
-            }
-            if let Some(picker) = &app.picker {
-                views::picker::draw(frame, body, picker);
-            }
-        })?;
+        terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
                 if let Event::Key(key) = event::read()?
@@ -225,4 +190,48 @@ fn main_loop(
         }
     }
     Ok(())
+}
+
+/// Draw the whole screen: the view, the meter, the status line, and whatever is open over them.
+/// Without audio stats, as for a screenshot, the system line shows no trouble.
+pub fn draw_screen(
+    frame: &mut ratatui::Frame,
+    app: &mut App,
+    stats: Option<&AudioStats>,
+    now: Instant,
+) {
+    frame.render_widget(Block::new().style(theme::screen()), frame.area());
+    let [body, status] =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
+    app.follow_cursor(usize::from(
+        body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
+    ));
+    let (view, meter) = views::meter::split(body);
+    match app.view {
+        View::Chain => views::chain::draw(frame, view, app),
+        View::Phrase => views::phrase::draw(frame, view, app),
+        View::Track => views::track::draw(frame, view, app),
+        View::Mixer => views::mixer::draw(frame, view, app),
+        View::Song => views::song::draw(frame, view, app),
+    }
+    views::system::draw(frame, view, app, stats);
+    if let Some(meter) = meter {
+        views::meter::draw(frame, meter, &app.meter, app.song().limiter);
+    }
+    views::status::draw(frame, status, app);
+    views::help::draw_popup(frame, body, app, now);
+    if app.mode == Mode::Help {
+        views::help::draw_help(frame, body, app);
+    }
+    app.guide_page = views::guide::page(body.height);
+    app.guide_width = views::guide::text_width(body.width);
+    if let Some(guide) = app.guide {
+        views::guide::draw(frame, body, guide, app.guide_scroll);
+    }
+    if let Some(panel) = &app.shape {
+        views::shape::draw(frame, view, app, panel);
+    }
+    if let Some(picker) = &app.picker {
+        views::picker::draw(frame, body, picker);
+    }
 }
