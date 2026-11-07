@@ -365,6 +365,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
     (track.level, track.pan, track.cutoff, track.resonance) = (0x90, 0x30, 0x70, 0x20);
     (track.send_a, track.send_b) = (0x11, 0x22);
     (track.harmonics, track.timbre, track.morph) = (0x33, 0x44, 0x55);
+    track.accent = 0x66;
     let expected = LiveValues {
         level: 0x90,
         pan: 0x30,
@@ -375,6 +376,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         harmonics: 0x33,
         timbre: 0x44,
         morph: 0x55,
+        accent: 0x66,
         inserts: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);

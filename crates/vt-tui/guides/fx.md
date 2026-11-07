@@ -20,6 +20,7 @@ only takes effect once its value is typed.
 | `HAR` | A synth's first setting, shown by its name on that voice |
 | `TIM` | A synth's second setting |
 | `MOR` | A synth's third setting |
+| `ACC` | How hard a synth is struck, on the voices it changes |
 | `1 Amount` | A setting in a slot on the FX page, below |
 
 A slot's settings can be set from a step, the same way as the rest. `K` on a command lists them

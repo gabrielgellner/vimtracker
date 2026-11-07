@@ -138,6 +138,9 @@ pub struct Track {
     /// Where held `MOR` starts: a synth's third setting.
     #[serde(default = "centre")]
     pub morph: u8,
+    /// Where held `ACC` starts: how hard a synth is struck, for the voices it changes.
+    #[serde(default = "default_accent")]
+    pub accent: u8,
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
@@ -301,6 +304,7 @@ impl Default for Track {
             harmonics: centre(),
             timbre: 0,
             morph: centre(),
+            accent: DEFAULT_ACCENT,
             mute: false,
             solo: false,
             swing: None,
@@ -333,6 +337,14 @@ fn open_cutoff() -> u8 {
 
 fn centre() -> u8 {
     0x80
+}
+
+/// A synth's accent before any is set: Plaits' 0.8, as it strikes with nothing patched to its
+/// level.
+pub const DEFAULT_ACCENT: u8 = 0xCC;
+
+fn default_accent() -> u8 {
+    DEFAULT_ACCENT
 }
 
 /// What a section does to the tracks when it starts.
@@ -492,6 +504,15 @@ impl SynthVoice {
             Self::Noise => [true, false, false],
             Self::Kick | Self::Snare | Self::Hat => [false, false, false],
         }
+    }
+
+    /// Whether how hard it's struck changes its sound, as well as its level: the drums, the
+    /// struck voices, and 6-op's patches. The rest ignore `Accent`.
+    pub fn uses_accent(self) -> bool {
+        matches!(
+            self,
+            Self::Kick | Self::Snare | Self::Hat | Self::String | Self::Modal | Self::SixOp
+        )
     }
 
     /// The highest value `Harm` takes. 6-op's is a patch number, so it stops at the last patch.

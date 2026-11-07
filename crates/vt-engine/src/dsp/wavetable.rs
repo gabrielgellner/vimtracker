@@ -244,6 +244,7 @@ mod tests {
             harmonics,
             timbre,
             morph,
+            ..Settings::default()
         }
     }
 

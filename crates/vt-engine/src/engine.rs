@@ -636,6 +636,7 @@ impl Engine {
                 (FxCommand::Har, before.harmonics, track.harmonics),
                 (FxCommand::Tim, before.timbre, track.timbre),
                 (FxCommand::Mor, before.morph, track.morph),
+                (FxCommand::Acc, before.accent, track.accent),
             ];
             for (command, was, now) in controls {
                 if was != now {

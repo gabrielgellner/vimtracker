@@ -23,10 +23,6 @@ use super::plaits_parts::Svf;
 use super::virtual_analog::{BLOCK, Settings};
 use crate::rng::Pcg32;
 
-/// How hard every note hits, as Plaits does with nothing patched to its level. A step's velocity
-/// sets its loudness.
-const ACCENT: f32 = 0.8;
-
 #[inline]
 fn semitones(interval: f32) -> f32 {
     2_f32.powf(interval / 12.0)
@@ -60,6 +56,8 @@ pub struct Snare {
     pulse_remaining: i32,
     pulse: f32,
     pulse_height: f32,
+    /// Whether the strike's height is set, from its accent, which comes with the first block.
+    struck: bool,
     pulse_lp: f32,
     noise_envelope: f32,
     resonators: [Svf; SNARE_MODES],
@@ -75,7 +73,8 @@ impl Snare {
             rng: Pcg32::new(0, 0),
             pulse_remaining: (1.0e-3 * rate as f32) as i32,
             pulse: 0.0,
-            pulse_height: 3.0 + 7.0 * ACCENT,
+            pulse_height: 0.0,
+            struck: false,
             pulse_lp: 0.0,
             noise_envelope: 2.0,
             resonators: [Svf::default(); SNARE_MODES],
@@ -107,7 +106,12 @@ impl Snare {
             harmonics: snappy,
             timbre: tone,
             morph: decay,
+            accent,
         } = settings;
+        if !self.struck {
+            self.pulse_height = 3.0 + 7.0 * accent;
+            self.struck = true;
+        }
         let decay_xt = decay * (1.0 + decay * (decay - 1.0));
         let pulse_decay = 1.0 - 1.0 / (0.1e-3 * self.rate);
         let q = 2000.0 * semitones(decay_xt * 84.0);
@@ -234,10 +238,11 @@ impl Hat {
             harmonics: noisiness,
             timbre: tone,
             morph: decay,
+            accent,
         } = settings;
         let envelope_decay = 1.0 - 0.003 * semitones(-decay * 84.0);
         if self.fresh {
-            self.envelope = (1.5 + 0.5 * (1.0 - decay)) * (0.3 + 0.7 * ACCENT);
+            self.envelope = (1.5 + 0.5 * (1.0 - decay)) * (0.3 + 0.7 * accent);
             self.fresh = false;
         }
 
@@ -290,6 +295,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.4,
             morph: 0.4,
+            ..Settings::default()
         }
     }
 
@@ -377,6 +383,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for run in [snare, hat] {
                             for sample in run(hertz, settings, 4_800) {

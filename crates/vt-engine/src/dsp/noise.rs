@@ -199,6 +199,7 @@ mod tests {
             harmonics: 0.0,
             timbre: 0.9,
             morph: 0.2,
+            ..Settings::default()
         }
     }
 
@@ -262,6 +263,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 4_800) {
                             assert!(

@@ -176,12 +176,13 @@ pub const SAMPLE_ROWS: [&[Control]; 8] = [
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth.
-pub const SYNTH_ROWS: [&[Control]; 11] = [
+pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::SynthVoice, base(TrackControl::Pan)],
     &[base(TrackControl::Harmonics), base(TrackControl::SendA)],
     &[base(TrackControl::Timbre), base(TrackControl::SendB)],
     &[base(TrackControl::Morph), Control::Swing],
+    &[base(TrackControl::Accent)],
     &[Control::FilterType],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
@@ -263,6 +264,7 @@ impl Control {
             Self::Base(TrackControl::Harmonics) => "Harm",
             Self::Base(TrackControl::Timbre) => "Timbre",
             Self::Base(TrackControl::Morph) => "Morph",
+            Self::Base(TrackControl::Accent) => "Accent",
             Self::Sample => "File",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
@@ -548,6 +550,7 @@ impl App {
                     TrackControl::Harmonics => track.harmonics,
                     TrackControl::Timbre => track.timbre,
                     TrackControl::Morph => track.morph,
+                    TrackControl::Accent => track.accent,
                 };
                 self.set_hex(control, change(value));
             }
@@ -817,6 +820,7 @@ impl App {
                     TrackControl::Harmonics => track.harmonics,
                     TrackControl::Timbre => track.timbre,
                     TrackControl::Morph => track.morph,
+                    TrackControl::Accent => track.accent,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));

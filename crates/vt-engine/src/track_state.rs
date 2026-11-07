@@ -4,7 +4,7 @@ use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
-use vt_model::song::{FilterType, Track, level_gain};
+use vt_model::song::{DEFAULT_ACCENT, FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 use vt_model::target::Target;
 
@@ -80,14 +80,15 @@ pub struct LiveValues {
     pub harmonics: u8,
     pub timbre: u8,
     pub morph: u8,
+    pub accent: u8,
     /// What each slot's settings are playing with, in the effect's order.
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
 }
 
 /// The commands whose values last, in the order `TrackState::values` keeps them.
-const VALUE_COMMANDS: [FxCommand; 9 + INSERTS * MAX_PARAMS] = {
+const VALUE_COMMANDS: [FxCommand; 10 + INSERTS * MAX_PARAMS] = {
     let slots = FxCommand::ALL;
-    let mut commands = [FxCommand::Vol; 9 + INSERTS * MAX_PARAMS];
+    let mut commands = [FxCommand::Vol; 10 + INSERTS * MAX_PARAMS];
     let first = [
         FxCommand::Vol,
         FxCommand::Pan,
@@ -98,6 +99,7 @@ const VALUE_COMMANDS: [FxCommand; 9 + INSERTS * MAX_PARAMS] = {
         FxCommand::Har,
         FxCommand::Tim,
         FxCommand::Mor,
+        FxCommand::Acc,
     ];
     let mut at = 0;
     while at < first.len() {
@@ -242,7 +244,7 @@ pub struct TrackState {
     /// What modulation multiplies a note's speed by.
     pitch: f64,
     /// Held `HAR`, `TIM` and `MOR`, on `0..=1`.
-    synth: [f32; 3],
+    synth: [f32; 4],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
 }
@@ -343,7 +345,7 @@ impl TrackState {
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
             offsets: [0.0; Target::COUNT],
-            synth: [0.5, 0.0, 0.5],
+            synth: [0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0],
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
             pan_offset: Smoothed::at(0.0),
@@ -384,6 +386,7 @@ impl TrackState {
             track.harmonics,
             track.timbre,
             track.morph,
+            track.accent,
         ];
         for (command, base) in VALUE_COMMANDS.into_iter().zip(bases) {
             self.values[value_index(command)] = ValueLayers::at(base);
@@ -526,6 +529,7 @@ impl TrackState {
             harmonics: shown(synth.harmonics),
             timbre: shown(synth.timbre),
             morph: shown(synth.morph),
+            accent: shown(synth.accent),
             inserts: self.resolved.map(|insert| {
                 let mut values = [0; MAX_PARAMS];
                 for (param, value) in values.iter_mut().enumerate() {
@@ -545,6 +549,7 @@ impl TrackState {
             harmonics: at(self.synth[0], Target::Har),
             timbre: at(self.synth[1], Target::Tim),
             morph: at(self.synth[2], Target::Mor),
+            accent: at(self.synth[3], Target::Acc),
         }
     }
 
@@ -720,6 +725,7 @@ impl TrackState {
             FxCommand::Har => self.synth[0] = value / 255.0,
             FxCommand::Tim => self.synth[1] = value / 255.0,
             FxCommand::Mor => self.synth[2] = value / 255.0,
+            FxCommand::Acc => self.synth[3] = value / 255.0,
             FxCommand::Slot { slot, param } => {
                 self.slot_values[usize::from(slot)][usize::from(param)] = value;
                 return;

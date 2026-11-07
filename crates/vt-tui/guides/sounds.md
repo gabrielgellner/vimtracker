@@ -124,6 +124,18 @@ and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `F
 until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
 Sustain for plucks. The drums, `String` and `Modal` die away by themselves. A track plays one note at a time.
 
+## Accent
+
+`Accent`, below the three settings, is how hard a synth is struck, as Plaits has it. On
+`Kick`, `Snare` and `Hat` a harder strike is punchier and louder. On `String` and `Modal`
+it's brighter and rings longer, and on `6-op` it's the patch's own response to how hard a
+key is played. The other voices ignore it, and it's dimmed on them.
+
+It starts at `CC`, Plaits' own strength, and it's apart from velocity: velocity is only
+how loud a note is, so a quiet note can still be struck hard. `ACC` sets it from a step,
+and LFOs and envelopes can move it as `Accent`. Set it high on the track page and every
+note on the track rings out, or lock it on a step for one hard hit.
+
 ## Choosing a sample
 
 Press `Space 5` to list WAV files in the project's `samples` folder and under

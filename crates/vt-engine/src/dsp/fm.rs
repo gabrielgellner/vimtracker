@@ -116,6 +116,7 @@ impl Fm {
             harmonics,
             timbre,
             morph,
+            ..
         } = settings;
         let semitones = ratio(harmonics);
         let carrier = frequency / OVERSAMPLING as f32;
@@ -194,6 +195,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.0,
             morph: 0.5,
+            ..Settings::default()
         }
     }
 
@@ -259,6 +261,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 2_000) {
                             assert!(

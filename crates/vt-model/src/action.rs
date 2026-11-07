@@ -343,6 +343,7 @@ pub enum TrackControl {
     Harmonics,
     Timbre,
     Morph,
+    Accent,
 }
 
 /// An FX slot with its value within what its command takes.
@@ -631,6 +632,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Harmonics => track.harmonics = *value,
                 TrackControl::Timbre => track.timbre = *value,
                 TrackControl::Morph => track.morph = *value,
+                TrackControl::Accent => track.accent = *value,
             }
         }
         Action::SetInsert {

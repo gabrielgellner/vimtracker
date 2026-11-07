@@ -1686,6 +1686,33 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
 }
 
 #[test]
+fn the_sound_page_sets_a_synths_accent() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    let accent = |app: &App| app.song().tracks[0].accent;
+    press(&mut app, " 4K");
+    press(&mut app, "Plaits");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "jK");
+    press(&mut app, "Kick");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "jjjj");
+    assert_eq!(column_name(&app), "Accent");
+    assert_eq!(accent(&app), 0xCC, "Plaits' own strength to start");
+    assert!(
+        track_text(&app)[7].starts_with("Accent    CC"),
+        "{:?}",
+        track_text(&app)
+    );
+    press(&mut app, "=");
+    assert_eq!(accent(&app), 0xCD);
+    press(&mut app, "i40");
+    assert_eq!(accent(&app), 0x40);
+    press(&mut app, "x");
+    assert_eq!(accent(&app), 0xCC, "back to its default");
+}
+
+#[test]
 fn choosing_a_sample_goes_back_to_playing_samples() {
     let (mut app, _realtime) = app();
     let kit = kit_file();
@@ -1821,6 +1848,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,
+        accent: 0xCC,
         inserts: Default::default(),
     });
     assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
@@ -2559,8 +2587,9 @@ fn the_gap_above_the_filter_is_only_on_screen() {
     special(&mut app, KeyCode::Enter);
     let lines = track_page_text(&app);
     assert!(lines[6].starts_with("Morph"), "{}", lines[6]);
-    assert!(lines[7].trim().is_empty(), "{}", lines[7]);
-    assert!(lines[8].starts_with("Filter"), "{}", lines[8]);
+    assert!(lines[7].starts_with("Accent"), "{}", lines[7]);
+    assert!(lines[8].trim().is_empty(), "{}", lines[8]);
+    assert!(lines[9].starts_with("Filter"), "{}", lines[9]);
 }
 
 #[test]
@@ -4325,6 +4354,7 @@ fn the_filter_curve_moves_with_what_plays() {
         harmonics: track.harmonics,
         timbre: track.timbre,
         morph: track.morph,
+        accent: track.accent,
         inserts: Default::default(),
     };
 
@@ -5462,6 +5492,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,
+        accent: 0xCC,
         inserts: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);

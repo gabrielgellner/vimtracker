@@ -22,6 +22,8 @@ pub enum Target {
     Har,
     Tim,
     Mor,
+    /// How hard a synth is struck.
+    Acc,
     /// One of the settings of what's in a track's slot, by its place in the effect's list.
     Slot {
         slot: u8,
@@ -52,7 +54,7 @@ pub struct TargetInfo {
 
 impl Target {
     /// The targets every track has, in the order `+` goes through them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Cut,
         Self::Res,
         Self::Pan,
@@ -63,6 +65,7 @@ impl Target {
         Self::Har,
         Self::Tim,
         Self::Mor,
+        Self::Acc,
     ];
 
     /// How many places sources add to.
@@ -82,6 +85,7 @@ impl Target {
             Self::Har => 7,
             Self::Tim => 8,
             Self::Mor => 9,
+            Self::Acc => 10,
             Self::Slot { slot, param } => {
                 Self::ALL.len() + slot as usize * MAX_PARAMS + param as usize
             }
@@ -116,6 +120,12 @@ impl Target {
             Self::Har => info("Har", "Machine", "A synth's first setting", Some("HAR")),
             Self::Tim => info("Tim", "Machine", "A synth's second setting", Some("TIM")),
             Self::Mor => info("Mor", "Machine", "A synth's third setting", Some("MOR")),
+            Self::Acc => info(
+                "Accent",
+                "Machine",
+                "How hard a synth is struck",
+                Some("ACC"),
+            ),
             Self::Slot { .. } => info("Setting", "FX", "A setting of what's in a slot", None),
             Self::LfoDepth { lfo: 0 } => info("L1 Depth", "LFO 1", "How far LFO 1 swings", None),
             Self::LfoPhase { lfo: 0 } => info("L1 Phase", "LFO 1", "Where LFO 1 is", None),
@@ -142,6 +152,11 @@ impl Target {
         match self {
             Self::Har | Self::Tim | Self::Mor => {
                 track.is_sound() && track.machine == Machine::Plaits
+            }
+            Self::Acc => {
+                track.is_sound()
+                    && track.machine == Machine::Plaits
+                    && track.synth_voice.uses_accent()
             }
             Self::Cut | Self::Res | Self::SendA | Self::SendB | Self::Pitch => track.is_sound(),
             Self::Pan => track.kind != TrackKind::Master,
@@ -266,6 +281,7 @@ impl FxCommand {
             Self::Har => Some(Target::Har),
             Self::Tim => Some(Target::Tim),
             Self::Mor => Some(Target::Mor),
+            Self::Acc => Some(Target::Acc),
             Self::Slot { slot, param } => Some(Target::Slot { slot, param }),
             Self::Del | Self::Kil | Self::Off | Self::Ret | Self::Cha => None,
         }
@@ -308,6 +324,7 @@ mod tests {
     fn every_target_has_its_own_place() {
         let track = Track {
             machine: Machine::Plaits,
+            synth_voice: SynthVoice::String,
             inserts: [Insert::ALL[2]; INSERTS],
             ..Track::default()
         };
@@ -316,6 +333,25 @@ mod tests {
             assert_eq!(target.index(), at, "{target:?}");
         }
         assert_eq!(targets.len(), Target::COUNT, "full slots use every place");
+    }
+
+    #[test]
+    fn only_a_voice_that_is_struck_offers_accent() {
+        for voice in SynthVoice::ALL {
+            let track = Track {
+                machine: Machine::Plaits,
+                synth_voice: voice,
+                ..Track::default()
+            };
+            assert_eq!(
+                Target::Acc.exists_on(&track),
+                voice.uses_accent(),
+                "{voice:?}"
+            );
+        }
+        let samples = Track::default();
+        assert!(!Target::Acc.exists_on(&samples));
+        assert!(!FxCommand::Acc.exists_on(&samples));
     }
 
     #[test]
@@ -356,6 +392,7 @@ mod tests {
     fn a_track_only_offers_the_settings_of_what_is_in_its_slots() {
         let mut track = Track {
             machine: Machine::Plaits,
+            synth_voice: SynthVoice::String,
             ..Track::default()
         };
         assert_eq!(Target::on_track(&track), Target::ALL.to_vec());

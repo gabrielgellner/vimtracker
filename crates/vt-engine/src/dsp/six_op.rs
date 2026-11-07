@@ -39,8 +39,6 @@ const PATCH_SIZE: usize = 128;
 pub const PATCHES: usize = vt_model::song::SIX_OP_PATCHES as usize;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
-/// How hard a note is played, as Plaits plays one with nothing patched to its level.
-const VELOCITY: f32 = 0.8;
 
 static BANKS: &[u8; PATCHES * PATCH_SIZE] = include_bytes!("tables/plaits_fm_patches.bin");
 
@@ -837,7 +835,7 @@ impl SixOp {
         let note_on = self.gate && !self.was_gated;
         self.was_gated = self.gate;
         if note_on {
-            self.velocity = normalize_velocity(VELOCITY);
+            self.velocity = normalize_velocity(settings.accent);
             self.note = 69.0 + 12.0 * (frequency * self.rate / 440.0).max(1e-6).log2();
             if patch.reset_phase {
                 for op in &mut self.operators {
@@ -970,6 +968,7 @@ mod tests {
             harmonics,
             timbre: 0.5,
             morph: 0.5,
+            ..Settings::default()
         }
     }
 
@@ -1048,6 +1047,7 @@ mod tests {
                         harmonics: index as f32 / 255.0,
                         timbre,
                         morph,
+                        ..Settings::default()
                     };
                     let mut voice = SixOp::new(RATE);
                     for sample in run(&mut voice, hertz, s, 2_400) {

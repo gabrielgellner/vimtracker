@@ -195,6 +195,52 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
 }
 
 #[test]
+fn accent_changes_how_a_struck_voice_sounds_and_nothing_else() {
+    for voice in SynthVoice::ALL {
+        let soft = play(on(voice, &["C-3 7F ACC20 ---00 ---00", REST]), 2);
+        let hard = play(on(voice, &["C-3 7F ACCFF ---00 ---00", REST]), 2);
+        assert_eq!(
+            soft != hard,
+            voice.uses_accent(),
+            "{voice:?}: does accent change it?"
+        );
+    }
+    // The track's own accent does the same as a step's.
+    let mut set = on(SynthVoice::Modal, &[NOTE, REST]);
+    set.tracks[0].accent = 0xFF;
+    let locked = on(SynthVoice::Modal, &["C-2 7F ACCFF ---00 ---00", REST]);
+    assert_eq!(play(set, 2), play(locked, 2));
+}
+
+#[test]
+fn a_harder_strike_is_brighter_on_a_string() {
+    let roughness = |out: &[f32]| {
+        let total: f32 = out
+            .chunks(2)
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|pair| (pair[1][0] - pair[0][0]).powi(2))
+            .sum();
+        let energy: f32 = out.iter().step_by(2).map(|s| s * s).sum();
+        total / energy
+    };
+    let soft = play(
+        on(SynthVoice::String, &["C-3 7F ACC00 ---00 ---00", REST]),
+        2,
+    );
+    let hard = play(
+        on(SynthVoice::String, &["C-3 7F ACCFF ---00 ---00", REST]),
+        2,
+    );
+    assert!(
+        roughness(&hard) > roughness(&soft),
+        "{} {}",
+        roughness(&hard),
+        roughness(&soft)
+    );
+}
+
+#[test]
 fn a_kick_dies_away_while_fm_holds() {
     let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
     let mut kick = on(SynthVoice::Kick, &steps);

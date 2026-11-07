@@ -37,6 +37,7 @@ pub enum FxCommand {
     Har,
     Tim,
     Mor,
+    Acc,
     Del,
     Kil,
     Off,
@@ -65,8 +66,8 @@ const SLOT_NAMES: [[&str; MAX_PARAMS]; INSERTS] = [
 
 impl FxCommand {
     /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 14 + INSERTS * MAX_PARAMS] = {
-        const FIRST: [FxCommand; 14] = [
+    pub const ALL: [Self; 15 + INSERTS * MAX_PARAMS] = {
+        const FIRST: [FxCommand; 15] = [
             FxCommand::Vol,
             FxCommand::Pan,
             FxCommand::Cut,
@@ -76,13 +77,14 @@ impl FxCommand {
             FxCommand::Har,
             FxCommand::Tim,
             FxCommand::Mor,
+            FxCommand::Acc,
             FxCommand::Del,
             FxCommand::Kil,
             FxCommand::Off,
             FxCommand::Ret,
             FxCommand::Cha,
         ];
-        let mut all = [Self::Vol; 14 + INSERTS * MAX_PARAMS];
+        let mut all = [Self::Vol; 15 + INSERTS * MAX_PARAMS];
         let mut at = 0;
         while at < FIRST.len() {
             all[at] = FIRST[at];
@@ -117,6 +119,7 @@ impl FxCommand {
             Self::Har => "A synth's first setting, holds",
             Self::Tim => "A synth's second setting, holds",
             Self::Mor => "A synth's third setting, holds",
+            Self::Acc => "How hard a synth is struck, holds",
             Self::Del => "Delay this step by xx units",
             Self::Kil => "Cut the note after xx units",
             Self::Off => "Start the release after xx units",
@@ -146,6 +149,7 @@ impl FxCommand {
             Self::Har => "HAR",
             Self::Tim => "TIM",
             Self::Mor => "MOR",
+            Self::Acc => "ACC",
             Self::Del => "DEL",
             Self::Kil => "KIL",
             Self::Off => "OFF",
@@ -167,6 +171,7 @@ impl FxCommand {
             "HAR" => Self::Har,
             "TIM" => Self::Tim,
             "MOR" => Self::Mor,
+            "ACC" => Self::Acc,
             "DEL" => Self::Del,
             "KIL" => Self::Kil,
             "OFF" => Self::Off,
@@ -189,6 +194,7 @@ impl FxCommand {
                 | Self::Har
                 | Self::Tim
                 | Self::Mor
+                | Self::Acc
                 | Self::Slot { .. }
         )
     }
