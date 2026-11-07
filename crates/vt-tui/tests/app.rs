@@ -3144,6 +3144,8 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     // Typing the name works the same way, over a value already there.
     special(&mut app, KeyCode::Esc);
     press(&mut app, "khiRES");
+    assert!(row(&app).contains("RES_"), "{}", row(&app));
+    special(&mut app, KeyCode::Enter);
     assert!(row(&app).contains("RES   40"), "{}", row(&app));
     assert_eq!(
         app.phrase_here().unwrap().steps()[0].fx[0].command,
@@ -3234,6 +3236,78 @@ fn the_status_line_names_the_column() {
     assert_eq!(column_name(&app), "FX1 value");
     press(&mut app, " 2");
     assert_eq!(column_name(&app), "Phrase");
+}
+
+/// A sample track with a cutoff lock, a lock for String's Decay, which it doesn't play, and an
+/// event.
+fn app_with_a_lock_for_another_voice() -> (App, Realtime) {
+    let mut song = Song::new(1);
+    let decay = SettingId::voice(SynthVoice::String, 2).unwrap();
+    assert_eq!(decay.name(), "Decay");
+    let text = format!("C-4 40 cut:40 {}:20 del:10", decay.key());
+    let phrase = Phrase::from_steps(vec![text.parse::<Step>().unwrap()]);
+    song.tracks[0].phrases.insert(0, Arc::new(phrase));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+#[test]
+fn the_status_line_names_the_setting_a_cell_locks() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app_with_a_lock_for_another_voice();
+    press(&mut app, "lll");
+    assert_eq!(column_name(&app), "Filter: Cut");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Filter: Cut", "on its value too");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "String: Decay, not on this track");
+    press(&mut app, "ll");
+    assert_eq!(column_name(&app), vt_model::step::FxCommand::Del.meaning());
+}
+
+#[test]
+fn a_lock_the_track_doesnt_have_is_drawn_faint() {
+    let (app, _realtime) = app_with_a_lock_for_another_voice();
+    let buffer = screen(&app);
+    let row: String = (0..80).map(|x| buffer[(x, 2)].symbol()).collect();
+    let style_of = |label: &str| {
+        let at = row
+            .find(label)
+            .unwrap_or_else(|| panic!("no {label}: {row}"));
+        buffer[(at as u16, 2)].style()
+    };
+    assert_eq!(style_of("DCAY").fg, vt_tui::theme::faint().fg, "{row}");
+    assert_ne!(style_of("CUT").fg, vt_tui::theme::faint().fg);
+    assert_ne!(style_of("DEL").fg, vt_tui::theme::faint().fg);
+}
+
+#[test]
+fn k_lists_commands_by_group_and_opens_searching() {
+    use vt_tui::input::picker::Focus;
+    let (mut app, _realtime) = app();
+    press(&mut app, "lllK");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.focus, Focus::Search);
+    assert!(picker.query.is_empty());
+    let mut names = picker.group_names();
+    names.dedup();
+    assert_eq!(
+        names[..3],
+        ["---".to_owned(), "Filter".into(), "Output".into()]
+    );
+    assert_eq!(names.last().map(String::as_str), Some("Events"));
+    // Typing searches long names as well as labels.
+    press(&mut app, "send b");
+    assert_eq!(
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|item| item.label.as_str()),
+        Some("SNB   Send B")
+    );
 }
 
 #[test]
@@ -5496,9 +5570,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
         .map(|item| item.label.clone())
         .collect();
     assert!(
-        labels
-            .iter()
-            .any(|label| label.starts_with("1MIX  FX 1 Distort: 1 Mix")),
+        labels.iter().any(|label| label.starts_with("1MIX  1 Mix")),
         "{labels:?}"
     );
     assert!(
@@ -5516,11 +5588,28 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
         "a file holds the setting's key: {text}"
     );
 
-    // A label that isn't there says so.
+    // Typed, a slot's label needs its digit, and `Enter` takes it to the value.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "ggjj0llliXYZ");
+    press(&mut app, "ggj0llli1mix");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "40");
+    assert_eq!(command(&app, 1), Some(setting(2)));
+
+    // A label that isn't there says so, and opens the list searching for it.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "ggjj0llliamnt");
+    special(&mut app, KeyCode::Enter);
     assert_eq!(command(&app, 2), None);
-    assert!(app.status.contains("isn't"), "{}", app.status);
+    assert!(app.status.contains("isn't a label"), "{}", app.status);
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.query, "amnt");
+    assert_eq!(
+        picker.current().map(|item| item.label.as_str()),
+        Some("1AMNT 1 Amount")
+    );
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "20");
+    assert_eq!(command(&app, 2), Some(setting(1)));
 }
 
 #[test]
@@ -5956,7 +6045,9 @@ fn the_loop_keys_on_an_fx_column_without_a_lane_set_the_phrases_loop() {
 #[test]
 fn a_lane_shows_its_length_and_where_it_is_playing() {
     let (mut app, _realtime) = app();
-    press(&mut app, "llljrSNA20gg");
+    press(&mut app, "llljrSNA");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "20gg");
     command(&mut app, "lane 3");
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;

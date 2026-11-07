@@ -9,6 +9,8 @@ use vt_engine::engine::Transport;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 
+use vt_model::step::FxCommand;
+
 use crate::app::{App, Field};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -38,6 +40,25 @@ pub fn format_swing(swing: u16) -> String {
     }
 }
 
+/// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
+/// which part of an empty cell the cursor is on.
+fn fx_name(app: &App, slot: usize) -> String {
+    let command = app.current_slot(slot).and_then(|cell| cell.command);
+    match (command, app.track_here()) {
+        (Some(FxCommand::Set(id)), Some(track)) if id.exists_on(track) => {
+            format!("{}: {}", id.group(), id.name())
+        }
+        (Some(FxCommand::Set(id)), _) => {
+            format!("{}: {}, not on this track", id.group(), id.name())
+        }
+        (Some(event), _) => event.meaning(),
+        (None, _) if matches!(app.cursor.field, Field::FxValue(_)) => {
+            format!("FX{} value", slot + 1)
+        }
+        (None, _) => format!("FX{} command", slot + 1),
+    }
+}
+
 /// The name of what the cursor is on, for the status line.
 pub fn column_name(app: &App) -> String {
     match app.view {
@@ -45,8 +66,7 @@ pub fn column_name(app: &App) -> String {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
             Field::Gate => "Gate".to_owned(),
-            Field::FxCommand(slot) => format!("FX{} command", slot + 1),
-            Field::FxValue(slot) => format!("FX{} value", slot + 1),
+            Field::FxCommand(slot) | Field::FxValue(slot) => fx_name(app, slot),
         },
         View::Chain => match app.chain_column {
             ChainColumn::Phrase => "Phrase".to_owned(),

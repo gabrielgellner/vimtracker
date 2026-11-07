@@ -214,6 +214,8 @@ pub struct App {
     guard: Option<(Key, Instant)>,
 }
 
+/// The longest a typed label is: a slot's digit and 4 letters.
+const LONGEST_LABEL: usize = 5;
 impl App {
     /// Start with a song, its project folder if it has one, and a connection to the engine.
     pub fn new(
@@ -1453,8 +1455,7 @@ impl App {
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
     }
 
-    /// The third letter of a valid name moves to the value. An invalid name is refused, and the
-    /// field is unchanged.
+    /// A label, then `Enter`, moves to the value. One that isn't on the track opens the list.
     fn insert_command(&mut self, key: Key, slot: usize) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
@@ -1464,17 +1465,25 @@ impl App {
                     self.move_step(-1);
                 }
             }
+            // A label is 3 or 4 letters, after a slot's digit for an effect's setting.
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_alphanumeric() => {
-                self.entry.text.push(c.to_ascii_uppercase());
-                if self.entry.text.len() == 3 {
-                    let name = std::mem::take(&mut self.entry.text);
-                    let track = self.song().tracks.get(self.cursor.track);
-                    match track.and_then(|track| FxCommand::typed(&name, track)) {
-                        Some(command) => {
-                            self.entry.command = Some(command);
-                            self.cursor.field = Field::FxValue(slot);
-                        }
-                        None => self.status = format!("{name} isn't an FX command"),
+                if self.entry.text.len() < LONGEST_LABEL {
+                    self.entry.text.push(c.to_ascii_uppercase());
+                }
+            }
+            // A label on this track goes to its value. Anything else opens the list, searching
+            // for what was typed, so a name half remembered still gets there.
+            KeyCode::Enter if !self.entry.text.is_empty() => {
+                let name = std::mem::take(&mut self.entry.text);
+                let track = self.song().tracks.get(self.cursor.track);
+                match track.and_then(|track| FxCommand::typed(&name, track)) {
+                    Some(command) => {
+                        self.entry.command = Some(command);
+                        self.cursor.field = Field::FxValue(slot);
+                    }
+                    None => {
+                        self.status = format!("{name} isn't a label on this track");
+                        self.open_fx_picker(slot, &name.to_lowercase());
                     }
                 }
             }
