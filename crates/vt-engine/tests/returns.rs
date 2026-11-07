@@ -99,6 +99,15 @@ fn a_send_goes_through_its_return() {
 }
 
 #[test]
+fn an_echo_comes_back_exactly_on_time() {
+    let out = render(song("---00"));
+    let first = (HIT + 1000..out.len())
+        .find(|at| out[*at][0] != 0.0)
+        .unwrap();
+    assert!((18_000..18_010).contains(&first), "{first}");
+}
+
+#[test]
 fn a_returns_level_changes_only_what_comes_back() {
     let plain = render(song("---00"));
     let mut quiet = song("---00");
@@ -122,7 +131,7 @@ fn a_returns_pan_moves_only_what_comes_back() {
 fn a_returns_slot_shapes_only_what_comes_back() {
     let plain = render(song("---00"));
     let mut shaped = song("---00");
-    shaped.tracks[RETURN_A].inserts[0] = hard();
+    shaped.tracks[RETURN_A].inserts[1] = hard();
     let out = render(shaped);
     assert_eq!(out[HIT], plain[HIT]);
     assert_ne!(out[ECHO], plain[ECHO]);
@@ -220,6 +229,31 @@ fn a_fixed_tracks_live_controls_stay_with_it_as_tracks_come_and_go() {
     engine.process(&mut out);
     let out = out.as_chunks::<2>().0.to_vec();
     assert!(loudest(&out, ECHO) > 0.05);
+}
+
+#[test]
+fn a_delay_in_a_slot_keeps_ringing_after_its_note_ends() {
+    let mut song = song("---00");
+    song.tracks[0].send_a = 0;
+    song.tracks[0].inserts[2] = Insert::RETURN_DELAY;
+    let out = render(song);
+    assert_eq!(loudest(&out, HIT), 0.0, "all wet, so not the hit");
+    assert!(loudest(&out, ECHO) > 0.05, "but its echo, after the note");
+    let first = (0..out.len()).find(|at| out[*at][0] != 0.0).unwrap();
+    assert!((18_000..18_010).contains(&first), "{first}");
+}
+
+#[test]
+fn a_return_with_nothing_in_its_slots_passes_on_what_it_is_sent() {
+    let mut song = song("---00");
+    song.tracks[RETURN_A].inserts[0] = Insert::Empty;
+    let out = render(song);
+    assert_eq!(loudest(&out, ECHO), 0.0, "no echo");
+    let plain = render(self::song("---00"));
+    assert!(
+        loudest(&out, HIT) > loudest(&plain, HIT) * 1.9,
+        "the hit twice over"
+    );
 }
 
 #[test]

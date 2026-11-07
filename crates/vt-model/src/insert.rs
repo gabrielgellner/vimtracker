@@ -13,6 +13,8 @@ pub enum Insert {
     #[default]
     Empty,
     Distort(Distort),
+    Delay(Delay),
+    Reverb(Reverb),
 }
 
 /// What a distortion does to the sound.
@@ -131,6 +133,15 @@ const DISTORT_PARAMS: [Param; 4] = [
     GAIN_PARAM,
 ];
 
+/// A delay or reverb's. It starts half wet in a slot, so the sound stays under it.
+const WET_PARAMS: [Param; 2] = [
+    Param {
+        default: 0x80,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -159,7 +170,7 @@ pub fn crush_bits(amount: u8) -> u8 {
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 2] = [
+    pub const ALL: [Self; 4] = [
         Self::Empty,
         Self::Distort(Distort {
             kind: DistortType::Soft,
@@ -167,13 +178,35 @@ impl Insert {
             mix: MIX_PARAM.default,
             gain: GAIN_PARAM.default,
         }),
+        Self::Delay(Delay {
+            mix: WET_PARAMS[0].default,
+            gain: GAIN_PARAM.default,
+        }),
+        Self::Reverb(Reverb {
+            mix: WET_PARAMS[0].default,
+            gain: GAIN_PARAM.default,
+        }),
     ];
+
+    /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
+    pub const RETURN_DELAY: Self = Self::Delay(Delay {
+        mix: 0xFF,
+        gain: GAIN_PARAM.default,
+    });
+
+    /// What return `B` starts with.
+    pub const RETURN_REVERB: Self = Self::Reverb(Reverb {
+        mix: 0xFF,
+        gain: GAIN_PARAM.default,
+    });
 
     /// The effect's name on screen.
     pub fn name(self) -> &'static str {
         match self {
             Self::Empty => "---",
             Self::Distort(_) => "Distort",
+            Self::Delay(_) => "Delay",
+            Self::Reverb(_) => "Reverb",
         }
     }
 
@@ -182,6 +215,8 @@ impl Insert {
         match self {
             Self::Empty => "Nothing here",
             Self::Distort(_) => "Clips, folds or crushes the sound",
+            Self::Delay(_) => "Repeats the sound, bouncing side to side",
+            Self::Reverb(_) => "Puts the sound in a room",
         }
     }
 
@@ -194,6 +229,7 @@ impl Insert {
                 ..
             }) => &CRUSH_PARAMS,
             Self::Distort(_) => &DISTORT_PARAMS,
+            Self::Delay(_) | Self::Reverb(_) => &WET_PARAMS,
         }
     }
 
@@ -210,6 +246,8 @@ impl Insert {
             (Self::Distort(distort), 1) => distort.amount,
             (Self::Distort(distort), 2) => distort.mix,
             (Self::Distort(distort), 3) => distort.gain,
+            (Self::Delay(Delay { mix, .. }) | Self::Reverb(Reverb { mix, .. }), 0) => mix,
+            (Self::Delay(Delay { gain, .. }) | Self::Reverb(Reverb { gain, .. }), 1) => gain,
             _ => 0,
         }
     }
@@ -217,8 +255,16 @@ impl Insert {
     /// The same with a setting changed.
     #[must_use]
     pub fn with_value(self, param: usize, value: u8) -> Self {
-        let Self::Distort(distort) = self else {
-            return self;
+        let distort = match self {
+            Self::Distort(distort) => distort,
+            Self::Delay(_) | Self::Reverb(_) => {
+                return match param {
+                    0 => self.with_wet(Some(value), None),
+                    1 => self.with_wet(None, Some(value)),
+                    _ => self,
+                };
+            }
+            Self::Empty => return self,
         };
         Self::Distort(match param {
             0 => Distort {
@@ -253,8 +299,16 @@ impl Insert {
     /// A setting as a step gives it: whole bits for `Bits`, and a place for `Type`. Nothing if
     /// there's no effect here.
     pub fn read(self, setting: Setting) -> Option<u8> {
-        let Self::Distort(distort) = self else {
-            return None;
+        let distort = match self {
+            Self::Distort(distort) => distort,
+            Self::Delay(Delay { mix, gain }) | Self::Reverb(Reverb { mix, gain }) => {
+                return match setting {
+                    Setting::Mix => Some(mix),
+                    Setting::Gain => Some(gain),
+                    _ => None,
+                };
+            }
+            Self::Empty => return None,
         };
         Some(match setting {
             Setting::Type => distort.kind as u8,
@@ -269,10 +323,18 @@ impl Insert {
     /// range. It's how a stepped setting ends up stepping, whatever moved it.
     #[must_use]
     pub fn write(self, setting: Setting, value: f32) -> Self {
-        let Self::Distort(distort) = self else {
-            return self;
-        };
         let whole = value.round().clamp(0.0, f32::from(setting.highest())) as u8;
+        let distort = match self {
+            Self::Distort(distort) => distort,
+            Self::Delay(_) | Self::Reverb(_) => {
+                return match setting {
+                    Setting::Mix => self.with_wet(Some(whole), None),
+                    Setting::Gain => self.with_wet(None, Some(whole)),
+                    _ => self,
+                };
+            }
+            Self::Empty => return self,
+        };
         Self::Distort(match setting {
             Setting::Type => Distort {
                 kind: DistortType::ALL[usize::from(whole)],
@@ -298,6 +360,21 @@ impl Insert {
         })
     }
 
+    /// A delay or reverb with a new mix or gain.
+    fn with_wet(self, mix: Option<u8>, gain: Option<u8>) -> Self {
+        match self {
+            Self::Delay(held) => Self::Delay(Delay {
+                mix: mix.unwrap_or(held.mix),
+                gain: gain.unwrap_or(held.gain),
+            }),
+            Self::Reverb(held) => Self::Reverb(Reverb {
+                mix: mix.unwrap_or(held.mix),
+                gain: gain.unwrap_or(held.gain),
+            }),
+            Self::Empty | Self::Distort(_) => self,
+        }
+    }
+
     /// The next or previous effect, as it starts, going round. It's the same kind of slot if the
     /// settings differ, so stepping always changes the effect.
     #[must_use]
@@ -321,6 +398,24 @@ pub struct Distort {
     pub mix: u8,
     /// What comes out, on the level scale, so `E0` leaves it as it is. It's right there to turn
     /// down as `Amount` makes it louder.
+    #[serde(default = "unity_gain")]
+    pub gain: u8,
+}
+
+/// A delay's settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delay {
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    #[serde(default = "unity_gain")]
+    pub gain: u8,
+}
+
+/// A reverb's settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reverb {
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
     #[serde(default = "unity_gain")]
     pub gain: u8,
 }
@@ -364,6 +459,22 @@ mod tests {
                 ("Gain", UNITY_LEVEL),
                 "{effect:?}"
             );
+        }
+    }
+
+    #[test]
+    fn a_delay_and_reverbs_settings_change_alone_and_read_back() {
+        for effect in [Insert::ALL[2], Insert::ALL[3]] {
+            let mixed = effect.with_value(0, 0x12);
+            assert_eq!((mixed.value(0), mixed.value(1)), (0x12, UNITY_LEVEL));
+            let quiet = effect.with_value(1, 0x34);
+            assert_eq!((quiet.value(0), quiet.value(1)), (0x80, 0x34));
+            assert_eq!(
+                effect.write(Setting::Mix, 300.0).read(Setting::Mix),
+                Some(0xFF)
+            );
+            assert_eq!(effect.read(Setting::Amount), None);
+            assert_eq!(effect.stepped(true).stepped(false), effect);
         }
     }
 
@@ -496,8 +607,9 @@ mod tests {
     #[test]
     fn stepping_goes_round_the_effects_and_keeps_nothing() {
         let changed = Insert::ALL[1].with_value(1, 0x12);
-        assert_eq!(changed.stepped(true), Insert::Empty);
+        assert_eq!(changed.stepped(true), Insert::ALL[2]);
+        assert_eq!(Insert::ALL[3].stepped(true), Insert::Empty);
         assert_eq!(Insert::Empty.stepped(true), Insert::ALL[1]);
-        assert_eq!(Insert::Empty.stepped(false), Insert::ALL[1]);
+        assert_eq!(Insert::Empty.stepped(false), Insert::ALL[3]);
     }
 }

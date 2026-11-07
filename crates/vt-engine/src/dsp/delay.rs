@@ -19,6 +19,11 @@ impl Delay {
         }
     }
 
+    /// Forget what's in it.
+    pub fn clear(&mut self) {
+        self.buffer.fill([0.0; 2]);
+    }
+
     /// Feed one frame in and get one out, delayed by `frames`.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], frames: usize) -> [f32; 2] {

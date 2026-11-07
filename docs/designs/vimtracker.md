@@ -1409,16 +1409,28 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 
 **`Reverb`.** After #89, from Clouds' Griesinger design, with its lengths scaled from 32 kHz to the device's rate. `Decay` and `Damp` set the loop's feedback and low-pass, `Pre` delays what goes in, and the cuts shape what goes in. Vital's reverb is the alternative if this one is found wanting, at more cost.
 
-**Memory.** Both need long buffers, which can't be in a slot's state, as that's as large as the largest effect's for every slot of every track. The edit thread allocates them when an effect is chosen or a song loads, hands them over with the song's next version, and takes the old ones back to free, as versions already do. So an effect costs nothing until it's used.
+**Memory.** Both need long buffers, which can't be in a slot's state, as that's as large as the largest effect's for every slot of every track. When a version needs more than the callback has, the edit thread allocates them and sends them ahead of it, into a pool slots take from. When it needs fewer, the edit thread asks for that many back, and the callback returns them as they come free, to be freed there. Nothing is tied to a slot, so moving an effect needs nothing new, and an effect costs nothing until it's used.
 
-**Idle cost.** A return with silence going in and nothing ringing skips its effects. This, and the cost of a whole song, get measured in a release build.
+**Idle cost.** A slot with silence going in, and quiet coming out for a whole delay or 0.1 seconds of reverb, does no work, and a track or return with nothing else to do skips it all. This cuts what's below -100 dB, which is the only change it makes to a render.
+
+Measured on 2026-11-07 by timing a render in a release build on an M5, 8 tracks of Plaits `VA`, as a share of one core, before and after `Delay` and `Reverb` moved into slots:
+
+| Song | Before | After |
+|---|---|---|
+| Stopped, nothing sent | 0.39% | 0.49% |
+| Playing, nothing sent | 1.21% | 1.30% |
+| Playing, sending to `A` and `B` | 1.21% | 1.49% |
+| Playing, `Delay` and `Reverb` in slots on all 8 | | 1.77% |
+| Stopped, `Delay` and `Reverb` in slots on all 8 | | 0.51% |
+
+Sleeping doesn't save anything overall yet, as checking every slot of every track each frame costs about what it saves. It's still needed, for a slot's tail to carry on after its note ends.
 
 **Left out.** Buses, which are M11. Sends between returns, so a delay can't feed the reverb as the M8's can, though a slot on `A` can hold a `Reverb` after its `Delay`. Pre-fader sends. Stems for the returns: a track's stem still carries what it sends, as now. Letting other tracks' steps reach a return's settings.
 
 **Issues.**
 
 1.  **The fixed tracks and routing:** kinds of track, `A`, `B` and `M`, sends, and the master's slots, with `A` and `B` running today's delay and reverb from the engine until issue 2. **Tests:** golden renders unchanged, the routing above, solo and mute, the fixed tracks can't be removed and aren't counted by `:track add`, steps on a return reach only that return, and a song without them loads with them.
-2.  **Long buffers through the edit thread, and `Delay` and `Reverb` as effects in slots,** holding today's sound. A slot can't hold them until then. **Tests:** golden renders unchanged, choosing an effect allocates only on the edit thread, old buffers come back to free, no allocation in the callback, and rates from 44.1 to 96 kHz.
+2.  **Long buffers through the edit thread, and `Delay` and `Reverb` as effects in slots,** holding today's sound. A slot can't hold them until then. **Tests:** golden renders unchanged apart from what's below -100 dB, choosing an effect allocates only on the edit thread, old buffers come back to free, no allocation in the callback, and rates from 44.1 to 96 kHz.
 3.  **The new `Delay`:** the settings and feedback path. **Tests:** time in note divisions, a change of time gliding without a click, feedback staying stable at its top, each cut, ping-pong and width.
 4.  **The new `Reverb`:** the design and settings. **Tests:** decay time against the setting, stability at the top of `Decay`, pre-delay, and the cost against the old one.
 

@@ -194,6 +194,11 @@ impl Track {
         Self {
             kind,
             name: kind.letter().to_owned(),
+            inserts: match kind {
+                TrackKind::ReturnA => [Insert::RETURN_DELAY, Insert::Empty, Insert::Empty],
+                TrackKind::ReturnB => [Insert::RETURN_REVERB, Insert::Empty, Insert::Empty],
+                TrackKind::Sound | TrackKind::Master => [Insert::Empty; INSERTS],
+            },
             ..Self::default()
         }
     }

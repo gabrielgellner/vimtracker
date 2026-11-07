@@ -101,6 +101,19 @@ impl Reverb {
         }
     }
 
+    /// Forget what's in it.
+    pub fn clear(&mut self) {
+        for channel in &mut self.channels {
+            for comb in &mut channel.combs {
+                comb.buffer.fill(0.0);
+                comb.store = 0.0;
+            }
+            for allpass in &mut channel.allpasses {
+                allpass.buffer.fill(0.0);
+            }
+        }
+    }
+
     /// Feed one frame in and get the wet signal out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {

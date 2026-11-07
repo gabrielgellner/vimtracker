@@ -10,6 +10,7 @@ use vt_model::target::Target;
 
 use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
+use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::mixer::Reading;
@@ -60,6 +61,8 @@ pub struct SongTime {
     pub clock: u64,
     pub rate: u32,
     pub seed: u64,
+    /// How long a delay is at this tempo.
+    pub delay_frames: usize,
 }
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
@@ -152,7 +155,7 @@ pub struct Retrigger {
 }
 
 /// One track's voices, held FX values and pending events.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct TrackState {
     /// A chain launched in place of its section's, while jamming, or none inside if stopped.
     pub launched: Option<Option<u32>>,
@@ -335,7 +338,7 @@ impl TrackState {
             drive: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
-            inserts: [InsertState::default(); INSERTS],
+            inserts: std::array::from_fn(|_| InsertState::default()),
             slot_values: [[0.0; MAX_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             slot_moving: [false; INSERTS],
@@ -390,7 +393,14 @@ impl TrackState {
 
     /// Work out what the LFOs add now. A stopped track sits at its held values, so an audition
     /// hears those rather than wherever the LFO stopped.
-    pub fn modulate(&mut self, track: &Track, index: usize, now: SongTime, stopped: bool) {
+    pub fn modulate(
+        &mut self,
+        track: &Track,
+        index: usize,
+        now: SongTime,
+        stopped: bool,
+        memory: &mut MemoryPool,
+    ) {
         if !stopped {
             self.advance_glides(now);
         }
@@ -474,7 +484,7 @@ impl TrackState {
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
-            self.inserts[slot].set(resolved);
+            self.inserts[slot].hold(resolved, memory, now.delay_frames);
         }
         self.offsets = offsets;
         let semitones = offsets[Target::Pitch.index()] * 255.0;
@@ -713,6 +723,19 @@ impl TrackState {
         self.update_gains();
     }
 
+    /// Give the long buffers its slots hold back to the pool, as the track's gone.
+    pub fn give_back_memory(&mut self, memory: &mut MemoryPool) {
+        for insert in &mut self.inserts {
+            insert.give_back(memory);
+        }
+    }
+
+    /// Whether a slot still has something to play, with nothing going in.
+    #[inline]
+    pub fn ringing(&self, rate: u32) -> bool {
+        self.inserts.iter().any(|insert| insert.ringing(rate))
+    }
+
     /// Whether anything is sounding.
     #[inline]
     pub fn sounding(&self) -> bool {
@@ -896,8 +919,9 @@ impl TrackState {
         [frame[0] * gain, frame[1] * gain]
     }
 
-    /// What a return adds to the mix for what its effect gave: its slots, level and pan, then
-    /// whether it's heard, faded so muting doesn't click.
+    /// What a return adds to the mix for what's sent to it: its slots, level and pan, then whether
+    /// it's heard, faded so muting doesn't click. With nothing going in and nothing left in its
+    /// slots, it does no work.
     #[inline]
     pub fn process_return(
         &mut self,
@@ -906,6 +930,9 @@ impl TrackState {
         fast: f32,
         rate: u32,
     ) -> [f32; 2] {
+        if input == [0.0, 0.0] && !self.ringing(rate) {
+            return [0.0, 0.0];
+        }
         let frame = self.slots_and_level(input, smoothing, fast, rate);
         let position =
             (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))

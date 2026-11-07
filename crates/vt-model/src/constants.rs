@@ -46,6 +46,8 @@ pub const HISTORY_LIMIT: usize = 1000;
 pub const DEFAULT_RENDER_RATE: u32 = 44_100;
 /// Song versions waiting for the callback.
 pub const PUBLISH_QUEUE: usize = 1;
+/// Long buffers on their way to or from the callback at once. More wait their turn.
+pub const MEMORY_QUEUE: usize = 256;
 /// Versions waiting to be freed.
 pub const RETURN_QUEUE: usize = 16;
 /// Transport, preview and mute messages.
