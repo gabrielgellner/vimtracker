@@ -17,3 +17,4 @@ pub mod shape;
 pub mod song;
 pub mod step;
 pub mod steptext;
+pub mod target;

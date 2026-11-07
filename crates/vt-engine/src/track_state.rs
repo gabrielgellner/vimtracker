@@ -3,9 +3,10 @@
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::INSERTS;
-use vt_model::lfo::{Destination, LFOS_PER_TRACK, wave};
+use vt_model::lfo::{LFOS_PER_TRACK, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
+use vt_model::target::Target;
 
 use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
@@ -189,9 +190,9 @@ pub struct TrackState {
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
     pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
-    /// What the LFOs add to each held value, in `Destination::ALL`'s order. Separate from the held
+    /// What the LFOs add to each held value, in `Target::ALL`'s order. Separate from the held
     /// values, so a step's FX moves the centre and the LFO carries on around it.
-    offsets: [f32; Destination::ALL.len()],
+    offsets: [f32; Target::COUNT],
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
@@ -290,7 +291,7 @@ impl TrackState {
             coefficients: None,
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
-            offsets: [0.0; Destination::ALL.len()],
+            offsets: [0.0; Target::COUNT],
             synth: [0.5, 0.0, 0.5],
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
@@ -333,7 +334,7 @@ impl TrackState {
         if !stopped {
             self.advance_glides(now);
         }
-        let mut offsets = [0.0_f32; Destination::ALL.len()];
+        let mut offsets = [0.0_f32; Target::COUNT];
         self.filter_moving = false;
         for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
             let Some(destination) = lfo.destination else {
@@ -342,7 +343,7 @@ impl TrackState {
             if lfo.depth == 0 {
                 continue;
             }
-            self.filter_moving |= matches!(destination, Destination::Cut | Destination::Res);
+            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
             if stopped {
                 continue;
             }
@@ -350,7 +351,7 @@ impl TrackState {
             let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
             let key = now.seed ^ ((index as u64) << 8 | slot as u64);
             let value = wave(lfo.shape, cycles + f64::from(lfo.phase) / 360.0, key);
-            offsets[destination as usize] += value * f32::from(lfo.depth) / 255.0;
+            offsets[destination.index()] += value * f32::from(lfo.depth) / 255.0;
         }
         // A different filter starts from silence rather than from another's state.
         if self.filter_type != track.filter {
@@ -364,33 +365,33 @@ impl TrackState {
         self.drive.target = f32::from(track.drive) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
-        self.cut_offset.target = offsets[Destination::Cut as usize];
-        self.res_offset.target = offsets[Destination::Res as usize];
-        self.pan_offset.target = offsets[Destination::Pan as usize];
-        let mut moved = [0.0_f32; Destination::ALL.len()];
+        self.cut_offset.target = offsets[Target::Cut.index()];
+        self.res_offset.target = offsets[Target::Res.index()];
+        self.pan_offset.target = offsets[Target::Pan.index()];
+        let mut moved = [0.0_f32; Target::COUNT];
         for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
             let Some(destination) = envelope.destination else {
                 continue;
             };
             // The first one on `Vol` is each note's own shape, which the voice follows itself.
-            if envelope.depth == 0 || (slot == 0 && destination == Destination::Vol) {
+            if envelope.depth == 0 || (slot == 0 && destination == Target::Vol) {
                 continue;
             }
-            self.filter_moving |= matches!(destination, Destination::Cut | Destination::Res);
+            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
             if stopped {
                 continue;
             }
             let level = run.level(envelope, now.clock, now.rate);
-            moved[destination as usize] += level * f32::from(envelope.depth) / 255.0;
+            moved[destination.index()] += level * f32::from(envelope.depth) / 255.0;
         }
-        self.cut_envelope.target = moved[Destination::Cut as usize];
-        self.res_envelope.target = moved[Destination::Res as usize];
-        self.pan_envelope.target = moved[Destination::Pan as usize];
+        self.cut_envelope.target = moved[Target::Cut.index()];
+        self.res_envelope.target = moved[Target::Res.index()];
+        self.pan_envelope.target = moved[Target::Pan.index()];
         for (offset, envelope) in offsets.iter_mut().zip(moved) {
             *offset += envelope;
         }
         self.offsets = offsets;
-        let semitones = offsets[Destination::Pitch as usize] * 255.0;
+        let semitones = offsets[Target::Pitch.index()] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
@@ -401,7 +402,7 @@ impl TrackState {
     /// `level`, as they both set how loud it is. The first envelope on `Vol` shapes notes, and isn't
     /// a movement of the level.
     pub fn live(&self, level: u8) -> LiveValues {
-        let offset = |destination: Destination| self.offsets[destination as usize];
+        let offset = |destination: Target| self.offsets[destination.index()];
         let moved = |held: f32, destination| {
             ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8
         };
@@ -412,14 +413,14 @@ impl TrackState {
         };
         let synth = self.synth_settings();
         let shown = |value: f32| (value * 255.0).round() as u8;
-        let vol = self.vol + offset(Destination::Vol) * 255.0 - f32::from(UNITY_LEVEL);
+        let vol = self.vol + offset(Target::Vol) * 255.0 - f32::from(UNITY_LEVEL);
         LiveValues {
             level: (f32::from(level) + vol).clamp(0.0, 255.0).round() as u8,
-            pan: moved(self.pan.target, Destination::Pan),
-            cutoff: moved(self.cutoff.target, Destination::Cut),
-            resonance: moved(self.resonance.target, Destination::Res),
-            delay: on_level(self.delay, Destination::Dly),
-            reverb: on_level(self.reverb, Destination::Rev),
+            pan: moved(self.pan.target, Target::Pan),
+            cutoff: moved(self.cutoff.target, Target::Cut),
+            resonance: moved(self.resonance.target, Target::Res),
+            delay: on_level(self.delay, Target::Dly),
+            reverb: on_level(self.reverb, Target::Rev),
             harmonics: shown(synth.harmonics),
             timbre: shown(synth.timbre),
             morph: shown(synth.morph),
@@ -428,13 +429,13 @@ impl TrackState {
 
     /// What a synth on this track plays with: the held values and what modulation adds.
     pub fn synth_settings(&self) -> Settings {
-        let at = |held: f32, destination: Destination| {
-            (held + self.offsets[destination as usize]).clamp(0.0, 1.0)
+        let at = |held: f32, destination: Target| {
+            (held + self.offsets[destination.index()]).clamp(0.0, 1.0)
         };
         Settings {
-            harmonics: at(self.synth[0], Destination::Har),
-            timbre: at(self.synth[1], Destination::Tim),
-            morph: at(self.synth[2], Destination::Mor),
+            harmonics: at(self.synth[0], Target::Har),
+            timbre: at(self.synth[1], Target::Tim),
+            morph: at(self.synth[2], Target::Mor),
         }
     }
 
@@ -468,13 +469,13 @@ impl TrackState {
 
     /// Work out the gains of the held values that are heard on a level scale.
     fn update_gains(&mut self) {
-        let gain = |held: f32, destination: Destination| {
-            level_gain((held + self.offsets[destination as usize] * 255.0).clamp(0.0, 255.0))
+        let gain = |held: f32, destination: Target| {
+            level_gain((held + self.offsets[destination.index()] * 255.0).clamp(0.0, 255.0))
         };
         let (vol, delay, reverb) = (
-            gain(self.vol, Destination::Vol),
-            gain(self.delay, Destination::Dly),
-            gain(self.reverb, Destination::Rev),
+            gain(self.vol, Target::Vol),
+            gain(self.delay, Target::Dly),
+            gain(self.reverb, Target::Rev),
         );
         self.gain.target = vol;
         self.delay_send.target = delay;

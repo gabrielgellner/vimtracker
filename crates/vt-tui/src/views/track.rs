@@ -9,8 +9,9 @@ use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
-use vt_model::lfo::{Destination, depth_text};
+use vt_model::lfo::depth_text;
 use vt_model::song::Track;
+use vt_model::target::Target;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -281,9 +282,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
                 EnvelopeField::Sustain => format!("{}%", envelope.sustain),
                 EnvelopeField::Release => ms(envelope.release_ms),
                 // The first envelope on `Vol` shapes each note, rather than moving a value.
-                EnvelopeField::Depth
-                    if slot == 0 && envelope.destination == Some(Destination::Vol) =>
-                {
+                EnvelopeField::Depth if slot == 0 && envelope.destination == Some(Target::Vol) => {
                     "--".to_owned()
                 }
                 EnvelopeField::Depth => depth_text(envelope.depth),

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
+use crate::target::Target;
 
 /// How many a track has.
 pub const LFOS_PER_TRACK: usize = 2;
@@ -215,54 +216,6 @@ impl FromStr for Rate {
     }
 }
 
-/// What an LFO moves: the values a track holds, in the same units as their FX commands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Destination {
-    Cut,
-    Res,
-    Pan,
-    Vol,
-    Dly,
-    Rev,
-    /// In semitones, where the others are in their hex units.
-    Pitch,
-    Har,
-    Tim,
-    Mor,
-}
-
-impl Destination {
-    /// Every destination, in the order `+` goes through them.
-    pub const ALL: [Self; 10] = [
-        Self::Cut,
-        Self::Res,
-        Self::Pan,
-        Self::Vol,
-        Self::Dly,
-        Self::Rev,
-        Self::Pitch,
-        Self::Har,
-        Self::Tim,
-        Self::Mor,
-    ];
-
-    /// The name on screen.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Cut => "Cut",
-            Self::Res => "Res",
-            Self::Pan => "Pan",
-            Self::Vol => "Vol",
-            Self::Dly => "Dly",
-            Self::Rev => "Rev",
-            Self::Pitch => "Pitch",
-            Self::Har => "Har",
-            Self::Tim => "Tim",
-            Self::Mor => "Mor",
-        }
-    }
-}
-
 /// The wave an LFO follows. `Saw` falls and `Ramp` rises.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Shape {
@@ -355,7 +308,7 @@ fn random(key: u64, cycle: i64) -> f32 {
 /// One LFO's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lfo {
-    pub destination: Option<Destination>,
+    pub destination: Option<Target>,
     pub shape: Shape,
     pub rate: Rate,
     /// How far it swings either way, in the destination's units. Negative flips the shape.

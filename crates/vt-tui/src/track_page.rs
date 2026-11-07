@@ -5,9 +5,10 @@ use vt_model::action::{Action, TrackControl};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert};
-use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
+use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
 use vt_model::song::{FilterType, Machine, SynthVoice, Track};
+use vt_model::target::Target;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -842,9 +843,9 @@ impl App {
                         ..lfo
                     },
                 );
-                let on = Destination::ALL.map(|destination| {
+                let on = Target::on_track().map(|destination| {
                     (
-                        format!("{}  {}", destination.name(), meaning(destination)),
+                        format!("{}  {}", destination.name(), destination.info().meaning),
                         Lfo {
                             destination: Some(destination),
                             ..lfo
@@ -1015,9 +1016,9 @@ impl App {
                         ..envelope
                     },
                 );
-                let on = Destination::ALL.map(|destination| {
+                let on = Target::on_track().map(|destination| {
                     (
-                        format!("{}  {}", destination.name(), meaning(destination)),
+                        format!("{}  {}", destination.name(), destination.info().meaning),
                         Envelope {
                             destination: Some(destination),
                             ..envelope
@@ -1200,22 +1201,6 @@ impl App {
     }
 }
 
-/// What a destination moves, for the picker.
-fn meaning(destination: Destination) -> &'static str {
-    match destination {
-        Destination::Cut => "Filter cutoff",
-        Destination::Res => "Filter resonance",
-        Destination::Pan => "Pan",
-        Destination::Vol => "Volume",
-        Destination::Dly => "Delay send",
-        Destination::Rev => "Reverb send",
-        Destination::Pitch => "Pitch, with depth in semitones",
-        Destination::Har => "A synth's first setting",
-        Destination::Tim => "A synth's second setting",
-        Destination::Mor => "A synth's third setting",
-    }
-}
-
 /// How far a small step moves an envelope time. Short times need finer steps than long ones.
 fn time_step(value: u16) -> u16 {
     match value {
@@ -1238,7 +1223,7 @@ fn adjust_envelope(envelope: &mut Envelope, field: EnvelopeField, up: bool, larg
     match field {
         EnvelopeField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Destination::ALL.map(Some));
+            choices.extend(Target::ALL.map(Some));
             envelope.destination = next_in(&choices, envelope.destination, up);
         }
         EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
@@ -1263,7 +1248,7 @@ fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool, large: bool) {
     match field {
         LfoField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Destination::ALL.map(Some));
+            choices.extend(Target::ALL.map(Some));
             lfo.destination = next_in(&choices, lfo.destination, up);
         }
         LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
