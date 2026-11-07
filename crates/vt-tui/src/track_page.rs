@@ -6,7 +6,7 @@ use std::sync::Arc;
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
-use vt_model::insert::{INSERTS, Insert};
+use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
 use vt_model::song::{FilterType, Machine, SynthVoice, Track, TrackKind};
@@ -120,32 +120,43 @@ pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
 /// The rows of a slot on the FX page, as columns of two settings, one over the other. The effect
 /// is in both, as one tall column, so `j` and `k` on it go between slots.
-const fn insert_rows(slot: usize) -> [[Control; 3]; 2] {
+const fn insert_top(slot: usize) -> [Control; FX_COLUMNS + 1] {
     [
-        [
-            Control::Insert(slot),
-            Control::InsertParam(slot, 0),
-            Control::InsertParam(slot, 2),
-        ],
-        [
-            Control::Insert(slot),
-            Control::InsertParam(slot, 1),
-            Control::InsertParam(slot, 3),
-        ],
+        Control::Insert(slot),
+        Control::InsertParam(slot, 0),
+        Control::InsertParam(slot, 2),
+        Control::InsertParam(slot, 4),
+        Control::InsertParam(slot, 6),
+        Control::InsertParam(slot, 8),
     ]
 }
 
-const INSERT_ROWS: [[[Control; 3]; 2]; INSERTS] = [insert_rows(0), insert_rows(1), insert_rows(2)];
+const fn insert_bottom(slot: usize) -> [Control; FX_COLUMNS] {
+    [
+        Control::Insert(slot),
+        Control::InsertParam(slot, 1),
+        Control::InsertParam(slot, 3),
+        Control::InsertParam(slot, 5),
+        Control::InsertParam(slot, 7),
+    ]
+}
+
+const INSERT_TOPS: [[Control; FX_COLUMNS + 1]; INSERTS] =
+    [insert_top(0), insert_top(1), insert_top(2)];
+const INSERT_BOTTOMS: [[Control; FX_COLUMNS]; INSERTS] =
+    [insert_bottom(0), insert_bottom(1), insert_bottom(2)];
+/// How many columns of settings a slot has.
+pub const FX_COLUMNS: usize = MAX_PARAMS.div_ceil(2);
 /// How many rows a slot takes.
 pub const SLOT_ROWS: usize = 2;
 /// The FX page's rows, top to bottom. The cursor stops at the last setting an effect uses.
 pub const FX_ROWS: [&[Control]; INSERTS * SLOT_ROWS] = [
-    &INSERT_ROWS[0][0],
-    &INSERT_ROWS[0][1],
-    &INSERT_ROWS[1][0],
-    &INSERT_ROWS[1][1],
-    &INSERT_ROWS[2][0],
-    &INSERT_ROWS[2][1],
+    &INSERT_TOPS[0],
+    &INSERT_BOTTOMS[0],
+    &INSERT_TOPS[1],
+    &INSERT_BOTTOMS[1],
+    &INSERT_TOPS[2],
+    &INSERT_BOTTOMS[2],
 ];
 
 const fn base(control: TrackControl) -> Control {

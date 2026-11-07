@@ -61,8 +61,8 @@ pub struct SongTime {
     pub clock: u64,
     pub rate: u32,
     pub seed: u64,
-    /// How long a delay is at this tempo.
-    pub delay_frames: usize,
+    /// How many frames a tick takes at this tempo.
+    pub frames_per_tick: f64,
 }
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
@@ -299,29 +299,10 @@ impl TrackState {
             kill_at: None,
             off_at: None,
             retrigger: None,
-            values: [
-                ValueLayers::at(UNITY_LEVEL),
-                ValueLayers::at(0x80),
-                ValueLayers::at(0xFF),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0x80),
-                ValueLayers::at(0),
-                ValueLayers::at(0x80),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-                ValueLayers::at(0),
-            ],
+            values: {
+                let first = [UNITY_LEVEL, 0x80, 0xFF, 0, 0, 0, 0x80, 0, 0x80];
+                std::array::from_fn(|at| ValueLayers::at(first.get(at).copied().unwrap_or(0)))
+            },
             swung: None,
             vol: f32::from(UNITY_LEVEL),
             send_a: 0.0,
@@ -484,7 +465,7 @@ impl TrackState {
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
-            self.inserts[slot].hold(resolved, memory, now.delay_frames);
+            self.inserts[slot].hold(resolved, memory, now.frames_per_tick);
         }
         self.offsets = offsets;
         let semitones = offsets[Target::Pitch.index()] * 255.0;

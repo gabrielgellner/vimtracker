@@ -103,8 +103,17 @@ song's position.
 that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
 nothing until it's back.
 
-`Delay` and `Reverb` can go in any slot, starting half wet, with `Mix` and `Gain` for
-now. Their tails carry on after a note ends.
+`Delay` and `Reverb` can go in any slot, starting half wet. Their tails carry on after a
+note ends. `Reverb` has `Mix` and `Gain` for now. `Delay` has these:
+
+| Setting | Does |
+|---|---|
+| `Time` | A note division, up to `1 bar`. A change glides |
+| `Feedback` | How much comes round again. `FF` keeps going |
+| `Ping-pong` | `On` goes side to side, and `Off` stays put |
+| `Width` | From `00`, sides together, to `FF`, fully apart |
+| `Low cut`, `High cut` | Take more from each repeat |
+| `Drive` | Saturates louder repeats each time round |
 
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars

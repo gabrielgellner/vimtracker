@@ -308,7 +308,7 @@ mod tests {
     fn every_target_has_its_own_place() {
         let track = Track {
             machine: Machine::Plaits,
-            inserts: [Insert::ALL[1]; INSERTS],
+            inserts: [Insert::ALL[2]; INSERTS],
             ..Track::default()
         };
         let targets = Target::for_envelope(&track);
@@ -417,14 +417,8 @@ mod tests {
         let song = Song::new(1);
         let offered = |track: &Track| Target::on_track(track);
         let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
-        let delay = [
-            Target::Slot { slot: 0, param: 0 },
-            Target::Slot { slot: 0, param: 1 },
-        ];
-        assert_eq!(
-            offered(return_a),
-            [Target::Pan, Target::Vol, delay[0], delay[1]]
-        );
+        assert_eq!(offered(return_a)[..2], [Target::Pan, Target::Vol]);
+        assert_eq!(offered(return_a).len(), 2 + 9, "and its delay's settings");
         assert_eq!(offered(master), [Target::Vol]);
         assert!(FxCommand::Vol.exists_on(return_a));
         assert!(

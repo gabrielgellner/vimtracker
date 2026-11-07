@@ -486,7 +486,7 @@ const MIX: usize = 2;
 const GAIN: usize = 3;
 const AMOUNT_TARGET: Target = Target::Slot { slot: 0, param: 1 };
 
-fn slot_live(song: Song, steps: usize) -> [u8; 4] {
+fn slot_live(song: Song, steps: usize) -> [u8; vt_model::insert::MAX_PARAMS] {
     live_after(song, steps).inserts[0]
 }
 
@@ -552,7 +552,7 @@ fn only_the_slot_a_command_names_changes() {
 #[test]
 fn a_command_does_nothing_in_an_empty_slot() {
     let empty = song(&["C-4 -- 1.180 ---00 ---00"]);
-    assert_eq!(slot_live(empty, 1), [0; 4]);
+    assert_eq!(slot_live(empty, 1), [0; vt_model::insert::MAX_PARAMS]);
 }
 
 #[test]
@@ -562,7 +562,12 @@ fn a_command_goes_by_its_place_so_it_means_bits_on_crush() {
     assert_eq!(slot_live(crushed, 1)[AMOUNT], 4);
 }
 
-fn moved_by_lfo(song_with: Song, target: Target, depth: i16, steps: usize) -> [u8; 4] {
+fn moved_by_lfo(
+    song_with: Song,
+    target: Target,
+    depth: i16,
+    steps: usize,
+) -> [u8; vt_model::insert::MAX_PARAMS] {
     let mut moved = song_with;
     moved.tracks[0].lfos[0] = Lfo {
         destination: Some(target),
@@ -615,7 +620,10 @@ fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
 #[test]
 fn an_lfo_on_an_empty_slot_does_nothing() {
     let plain = song(&["C-4 -- ---00 ---00 ---00"]);
-    assert_eq!(moved_by_lfo(plain, AMOUNT_TARGET, 0x80, 2), [0; 4]);
+    assert_eq!(
+        moved_by_lfo(plain, AMOUNT_TARGET, 0x80, 2),
+        [0; vt_model::insert::MAX_PARAMS]
+    );
 }
 
 #[test]

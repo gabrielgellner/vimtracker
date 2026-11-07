@@ -52,41 +52,54 @@ pub enum FxCommand {
 
 /// How a file names the commands for slots' settings.
 const SLOT_NAMES: [[&str; MAX_PARAMS]; INSERTS] = [
-    ["1.0", "1.1", "1.2", "1.3"],
-    ["2.0", "2.1", "2.2", "2.3"],
-    ["3.0", "3.1", "3.2", "3.3"],
+    [
+        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8",
+    ],
+    [
+        "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8",
+    ],
+    [
+        "3.0", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3.8",
+    ],
 ];
 
 impl FxCommand {
     /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 14 + INSERTS * MAX_PARAMS] = [
-        Self::Vol,
-        Self::Pan,
-        Self::Cut,
-        Self::Res,
-        Self::SendA,
-        Self::SendB,
-        Self::Har,
-        Self::Tim,
-        Self::Mor,
-        Self::Del,
-        Self::Kil,
-        Self::Off,
-        Self::Ret,
-        Self::Cha,
-        Self::slot(0, 0),
-        Self::slot(0, 1),
-        Self::slot(0, 2),
-        Self::slot(0, 3),
-        Self::slot(1, 0),
-        Self::slot(1, 1),
-        Self::slot(1, 2),
-        Self::slot(1, 3),
-        Self::slot(2, 0),
-        Self::slot(2, 1),
-        Self::slot(2, 2),
-        Self::slot(2, 3),
-    ];
+    pub const ALL: [Self; 14 + INSERTS * MAX_PARAMS] = {
+        const FIRST: [FxCommand; 14] = [
+            FxCommand::Vol,
+            FxCommand::Pan,
+            FxCommand::Cut,
+            FxCommand::Res,
+            FxCommand::SendA,
+            FxCommand::SendB,
+            FxCommand::Har,
+            FxCommand::Tim,
+            FxCommand::Mor,
+            FxCommand::Del,
+            FxCommand::Kil,
+            FxCommand::Off,
+            FxCommand::Ret,
+            FxCommand::Cha,
+        ];
+        let mut all = [Self::Vol; 14 + INSERTS * MAX_PARAMS];
+        let mut at = 0;
+        while at < FIRST.len() {
+            all[at] = FIRST[at];
+            at += 1;
+        }
+        let mut slot = 0;
+        while slot < INSERTS {
+            let mut param = 0;
+            while param < MAX_PARAMS {
+                all[at] = Self::slot(slot as u8, param as u8);
+                at += 1;
+                param += 1;
+            }
+            slot += 1;
+        }
+        all
+    };
 
     const fn slot(slot: u8, param: u8) -> Self {
         Self::Slot { slot, param }
