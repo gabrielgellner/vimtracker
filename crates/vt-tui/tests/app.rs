@@ -483,6 +483,29 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "lh");
     assert_eq!(column_name(&app), "Send A", "back on a track that has it");
+
+    // `$` and `0` go to the last and first tracks that have the row.
+    press(&mut app, "$");
+    assert_eq!(
+        (app.cursor.track, column_name(&app)),
+        (1, "Send A".to_owned())
+    );
+    press(&mut app, "0");
+    assert_eq!(
+        (app.cursor.track, column_name(&app)),
+        (0, "Send A".to_owned())
+    );
+    press(&mut app, "k$");
+    assert_eq!(
+        (app.cursor.track, column_name(&app)),
+        (3, "Pan".to_owned()),
+        "B, as M has none"
+    );
+    press(&mut app, "k$");
+    assert_eq!(
+        (app.cursor.track, column_name(&app)),
+        (4, "Level".to_owned())
+    );
 }
 
 #[test]
@@ -3323,7 +3346,7 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     assert_eq!(app.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 4);
+    assert_eq!(app.cursor.track, 3, "B, the last with a mute");
     press(&mut app, "gg");
     assert_eq!(column_name(&app), "Level");
 }

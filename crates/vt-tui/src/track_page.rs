@@ -393,6 +393,22 @@ impl App {
             .unwrap_or(0)
     }
 
+    /// Go to the first or last track that has the row the cursor is on, staying on that row.
+    fn mixer_row_end(&mut self, last: bool) {
+        let row = self.mixer_row_here();
+        let has = |track: &Track| MIXER[row].exists_on(track);
+        let tracks = &self.song().tracks;
+        let found = if last {
+            tracks.iter().rposition(has)
+        } else {
+            tracks.iter().position(has)
+        };
+        if let Some(to) = found {
+            self.move_track(to as isize - self.cursor.track as isize);
+            self.mixer_row = row;
+        }
+    }
+
     /// Move up or down the mixer's rows, going only through those this track has.
     fn move_mixer_row(&mut self, by: isize) {
         let rows = self.mixer_rows_here();
@@ -695,14 +711,11 @@ impl App {
     /// them. Everything else means what it does on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
         let times = self.count.unwrap_or(1).max(1) as isize;
-        let track = self.cursor.track as isize;
         match cmd {
             Cmd::Move(Motion::Right) => self.move_track(times),
             Cmd::Move(Motion::Left) => self.move_track(-times),
-            Cmd::Move(Motion::RowStart) => self.move_track(-track),
-            Cmd::Move(Motion::RowEnd) => {
-                self.move_track(self.song().tracks.len() as isize - 1 - track)
-            }
+            Cmd::Move(Motion::RowStart) => self.mixer_row_end(false),
+            Cmd::Move(Motion::RowEnd) => self.mixer_row_end(true),
             Cmd::Move(Motion::Down) => self.move_mixer_row(times),
             Cmd::Move(Motion::Up) => self.move_mixer_row(-times),
             Cmd::Move(Motion::First) => self.move_mixer_row(isize::MIN),
