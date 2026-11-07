@@ -1180,6 +1180,33 @@ fn each_row_shows_how_far_it_is_from_the_cursor() {
 }
 
 #[test]
+fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "W");
+    let buffer = screen(&app);
+    let title: String = (55..80).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert_eq!(
+        title.trim_end(),
+        " 01  02",
+        "the returns and master are left out"
+    );
+    assert_eq!(
+        buffer[(60, 0)].bg,
+        vt_tui::theme::GREEN,
+        "track 02 is marked"
+    );
+    assert_ne!(buffer[(56, 0)].bg, vt_tui::theme::GREEN);
+    let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
+    assert_eq!(headings.trim_end(), "         Note        FX");
+    assert_eq!(
+        buffer[(21, 2)].bg,
+        vt_tui::theme::SURFACE0,
+        "the FX sit on a band"
+    );
+    assert_ne!(buffer[(9, 2)].bg, vt_tui::theme::SURFACE0);
+}
+
+#[test]
 fn other_tracks_light_the_step_they_are_playing() {
     let song = Song::new(3);
     let samples = Arc::new(SamplePool::default());
@@ -1192,9 +1219,9 @@ fn other_tracks_light_the_step_they_are_playing() {
         terminal
             .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
             .unwrap();
-        // The neighbour column after the focused track's text, on a step two rows below the title.
+        // The next track's column in the overview, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(55, row + 2)].fg
+        buffer[(59, row + 2)].fg
     };
     on_the_row_being_edited(&mut app);
     app.playhead = 2;
@@ -2157,7 +2184,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (56..59).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (60..63).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2243,8 +2270,9 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 }
 
 /// Another track's column on one row of steps: its marker and note, and its colour.
+/// A column of the overview past the track being edited, which is the overview's first here.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 55 + column * 4;
+    let x = 59 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }

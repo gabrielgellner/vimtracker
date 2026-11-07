@@ -151,19 +151,32 @@ fn slot_columns(slot: usize) -> (usize, usize) {
     (start, field_range(Field::FxValue(slot)).1 + MARK_WIDTH)
 }
 
-/// Which other tracks fit beside the focused one, keeping those near it in view.
+/// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
+/// those near it in view. Returns and the master have their notes elsewhere, so they're left out
+/// unless one is the track being edited.
 fn neighbours(app: &App, width: usize) -> Vec<usize> {
-    let tracks = app.song().tracks.len();
-    let columns = width / NEIGHBOUR_WIDTH;
-    let others = tracks.saturating_sub(1);
-    let shown = columns.min(others);
+    let tracks: Vec<usize> = app
+        .song()
+        .tracks
+        .iter()
+        .enumerate()
+        .filter(|(index, track)| track.is_sound() || *index == app.cursor.track)
+        .map(|(index, _)| index)
+        .collect();
+    let shown = (width / NEIGHBOUR_WIDTH).min(tracks.len());
     if shown == 0 {
         return Vec::new();
     }
-    let others: Vec<usize> = (0..tracks).filter(|t| *t != app.cursor.track).collect();
-    let centre = others.partition_point(|t| *t < app.cursor.track);
-    let start = centre.saturating_sub(shown / 2).min(others.len() - shown);
-    others[start..start + shown].to_vec()
+    let centre = tracks.partition_point(|track| *track < app.cursor.track);
+    let start = centre.saturating_sub(shown / 2).min(tracks.len() - shown);
+    tracks[start..start + shown].to_vec()
+}
+
+/// The headings over the grid's two parts, the note and its FX, at the columns they start at.
+fn section_headings(width: usize) -> String {
+    let mut text = format!("{:<FX_START$}FX", "Note");
+    text.truncate(width);
+    text
 }
 
 /// What another track's column shows: the phrase it's on and, if it's moving, where in that phrase.
@@ -317,11 +330,24 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
     }
     heading.truncate(GUTTER + body_width);
-    let mut title = format!("{heading:<width$}  ", width = GUTTER + body_width);
+    let bold = Style::new().add_modifier(Modifier::BOLD);
+    let mut title = vec![Span::styled(
+        format!("{heading:<width$}  ", width = GUTTER + body_width),
+        bold,
+    )];
     for track in &others {
-        // Over the note, past the column's marker.
-        title.push(' ');
-        title.push_str(&track_label(app, *track)[..3]);
+        // Over the note, past the column's marker. The track being edited is marked out, so the
+        // overview shows every track in its place.
+        let label = &track_label(app, *track)[..3];
+        if *track == app.cursor.track {
+            title.push(Span::raw(" "));
+            title.push(Span::styled(
+                label.to_owned(),
+                bold.fg(theme::BASE).bg(theme::GREEN),
+            ));
+        } else {
+            title.push(Span::styled(format!(" {label}"), bold));
+        }
     }
     let cursor_style = theme::cursor(app.mode);
     let boxed = app.mode == Mode::Insert;
@@ -335,11 +361,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Line::raw("")
         }
     };
+    // The top edge names the grid's two parts, set into the box in Insert.
+    let headings = section_headings(body_width);
+    let top_rule = if boxed {
+        let inside: String = headings
+            .chars()
+            .chain(std::iter::repeat('─'))
+            .take(body_width)
+            .map(|c| if c == ' ' { '─' } else { c })
+            .collect();
+        Line::styled(format!("{}┌{inside}┐", " ".repeat(GUTTER - 1)), edge)
+    } else {
+        Line::styled(format!("{}{headings}", " ".repeat(GUTTER)), theme::dim())
+    };
     let side = if boxed { "│" } else { " " };
-    let mut lines = vec![
-        Line::styled(title, Style::new().add_modifier(Modifier::BOLD)),
-        rule("┌", "┐"),
-    ];
+    let mut lines = vec![Line::from(title), top_rule];
     for index in (top..rows).take(height) {
         let row = extent.row(index);
         let Some(step) = phrase.steps().get(index) else {
@@ -436,6 +472,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             if start < end {
                 styles[start - 1..end].fill(style);
+            }
+        }
+        // The FX sit on a band a shade lighter than the screen, so the two parts read apart.
+        // A selection's or the cursor's colour goes over it.
+        for style in styles.iter_mut().skip(FX_START) {
+            if style.bg.is_none() {
+                *style = style.bg(theme::SURFACE0);
             }
         }
         for (slot, fx) in step.fx.iter().enumerate() {
