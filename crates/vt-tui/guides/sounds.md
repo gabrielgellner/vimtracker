@@ -15,9 +15,9 @@ settings, named on the page.
 
 | Setting | Does |
 |---|---|
-| `Harm` | Detunes the saw, up to two octaves either way. `80` is in tune |
-| `Timbre` | The square: none at `00`, then a pulse, a square and hard sync |
-| `Morph` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
+| `Detune` | Detunes the saw, up to two octaves either way. `80` is in tune |
+| `Square` | The square: none at `00`, then a pulse, a square and hard sync |
+| `Saw` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
 
 `FM` is two sine waves, one bending the other, for bass, bells and keys.
 
@@ -92,7 +92,7 @@ sounds until the note ends, shaped by the first envelope.
 |---|---|
 | `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
 | `Clock` | How fast the noise changes: grainy steps low, a hiss high |
-| `Res` | How much the filter rings at the note |
+| `Ring` | How much the filter rings at the note |
 
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
 

@@ -23,8 +23,8 @@ const GUTTER: usize = 9;
 /// room, so nothing moves when Insert starts.
 pub const ROWS_AROUND_STEPS: u16 = 3;
 
-/// Room for a slot's command on screen, which can be a setting's name like `1 Amount`, and a gap.
-const COMMAND_WIDTH: usize = 9;
+/// Room for a slot's command on screen, a label of up to 5 characters like `2FDBK`, and a gap.
+const COMMAND_WIDTH: usize = 6;
 
 /// A slot on screen: its command and value, its mark, and the gap before the next.
 const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
@@ -47,7 +47,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     let mut text = format!("{} {velocity} {gate}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
-            (Some(command), Some(track)) => command.name_on(track),
+            (Some(command), Some(track)) => command.label_on(track),
             (Some(command), None) => command.name().to_owned(),
             (None, _) => "---".to_owned(),
         };

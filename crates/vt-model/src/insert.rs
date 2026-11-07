@@ -98,6 +98,10 @@ impl Setting {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
     pub name: &'static str,
+    /// The name songs store it by, which never changes.
+    pub key: &'static str,
+    /// The grid's short label, 3 or 4 letters, after the slot's digit.
+    pub label: &'static str,
     /// What it is, on its own scale.
     pub setting: Setting,
     /// What it chooses between, in order, or nothing for a value in hex.
@@ -114,6 +118,8 @@ pub const MAX_PARAMS: usize = 9;
 const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
 const TYPE_PARAM: Param = Param {
     name: "Type",
+    key: "type",
+    label: "TYPE",
     setting: Setting::Type,
     choices: &DISTORT_TYPE_NAMES,
     wraps: true,
@@ -121,6 +127,8 @@ const TYPE_PARAM: Param = Param {
 };
 const MIX_PARAM: Param = Param {
     name: "Mix",
+    key: "mix",
+    label: "MIX",
     setting: Setting::Mix,
     choices: &[],
     wraps: false,
@@ -128,15 +136,19 @@ const MIX_PARAM: Param = Param {
 };
 const GAIN_PARAM: Param = Param {
     name: "Gain",
+    key: "gain",
+    label: "GAIN",
     setting: Setting::Gain,
     choices: &[],
     wraps: false,
     default: UNITY_LEVEL,
 };
-const DISTORT_PARAMS: [Param; 4] = [
+pub(crate) const DISTORT_PARAMS: [Param; 4] = [
     TYPE_PARAM,
     Param {
         name: "Amount",
+        key: "amount",
+        label: "AMNT",
         setting: Setting::Amount,
         choices: &[],
         wraps: false,
@@ -152,9 +164,17 @@ const WET_MIX_PARAM: Param = Param {
     ..MIX_PARAM
 };
 /// A setting from `00` to `FF`.
-const fn hex_param(name: &'static str, setting: Setting, default: u8) -> Param {
+const fn hex_param(
+    name: &'static str,
+    key: &'static str,
+    label: &'static str,
+    setting: Setting,
+    default: u8,
+) -> Param {
     Param {
         name,
+        key,
+        label,
         setting,
         choices: &[],
         wraps: false,
@@ -162,36 +182,88 @@ const fn hex_param(name: &'static str, setting: Setting, default: u8) -> Param {
     }
 }
 /// A reverb's, in the order the page shows them.
-const REVERB_PARAMS: [Param; 7] = [
-    hex_param("Pre", Setting::Pre, Reverb::DEFAULT.pre),
-    hex_param("Decay", Setting::Decay, Reverb::DEFAULT.decay),
-    hex_param("Damp", Setting::Damp, Reverb::DEFAULT.damp),
-    hex_param("Low cut", Setting::LowCut, Reverb::DEFAULT.low_cut),
-    hex_param("High cut", Setting::HighCut, Reverb::DEFAULT.high_cut),
+pub(crate) const REVERB_PARAMS: [Param; 7] = [
+    hex_param("Pre", "pre", "PRE", Setting::Pre, Reverb::DEFAULT.pre),
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::Decay,
+        Reverb::DEFAULT.decay,
+    ),
+    hex_param("Damp", "damp", "DAMP", Setting::Damp, Reverb::DEFAULT.damp),
+    hex_param(
+        "Low cut",
+        "lowcut",
+        "LCUT",
+        Setting::LowCut,
+        Reverb::DEFAULT.low_cut,
+    ),
+    hex_param(
+        "High cut",
+        "highcut",
+        "HCUT",
+        Setting::HighCut,
+        Reverb::DEFAULT.high_cut,
+    ),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
 /// A delay's, in the order the page shows them.
-const DELAY_PARAMS: [Param; 9] = [
+pub(crate) const DELAY_PARAMS: [Param; 9] = [
     Param {
         name: "Time",
+        key: "time",
+        label: "TIME",
         setting: Setting::Time,
         choices: &DIVISION_NAMES,
         wraps: false,
         default: Delay::DEFAULT.time,
     },
-    hex_param("Feedback", Setting::Feedback, Delay::DEFAULT.feedback),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        Delay::DEFAULT.feedback,
+    ),
     Param {
         name: "Ping-pong",
+        key: "pingpong",
+        label: "PING",
         setting: Setting::PingPong,
         choices: &["Off", "On"],
         wraps: true,
         default: Delay::DEFAULT.ping_pong,
     },
-    hex_param("Width", Setting::Width, Delay::DEFAULT.width),
-    hex_param("Low cut", Setting::LowCut, Delay::DEFAULT.low_cut),
-    hex_param("High cut", Setting::HighCut, Delay::DEFAULT.high_cut),
-    hex_param("Drive", Setting::Drive, Delay::DEFAULT.drive),
+    hex_param(
+        "Width",
+        "width",
+        "WDTH",
+        Setting::Width,
+        Delay::DEFAULT.width,
+    ),
+    hex_param(
+        "Low cut",
+        "lowcut",
+        "LCUT",
+        Setting::LowCut,
+        Delay::DEFAULT.low_cut,
+    ),
+    hex_param(
+        "High cut",
+        "highcut",
+        "HCUT",
+        Setting::HighCut,
+        Delay::DEFAULT.high_cut,
+    ),
+    hex_param(
+        "Drive",
+        "drive",
+        "DRIV",
+        Setting::Drive,
+        Delay::DEFAULT.drive,
+    ),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -208,6 +280,8 @@ const CRUSH_PARAMS: [Param; 4] = [
     TYPE_PARAM,
     Param {
         name: "Bits",
+        key: "amount",
+        label: "AMNT",
         setting: Setting::Bits,
         choices: &BIT_NAMES,
         wraps: false,
