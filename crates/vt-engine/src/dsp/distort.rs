@@ -24,8 +24,6 @@ pub struct InsertState {
     memory: Option<Memory>,
     /// How many frames in a row it's been quiet. It starts with nothing to play.
     quiet: u32,
-    /// How long a delay is now.
-    delay_frames: usize,
     insert: Insert,
     amount: Smoothed,
     mix: Smoothed,
@@ -41,7 +39,6 @@ impl Default for InsertState {
         Self {
             memory: None,
             quiet: u32::MAX,
-            delay_frames: 1,
             insert: Insert::Empty,
             amount: Smoothed::at(0.0),
             mix: Smoothed::at(0.0),
@@ -110,14 +107,20 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
 impl InsertState {
     /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
     /// there's none free yet, it's silent and asks again next time.
-    pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, delay_frames: usize) {
+    pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, frames_per_tick: f64) {
         if !same_effect(self.insert, insert) {
             self.give_back(pool);
         }
         self.set(insert);
-        self.delay_frames = delay_frames;
-        if self.memory.is_none() {
+        let started = self.memory.is_none();
+        if started {
             self.memory = pool.take(insert);
+        }
+        if let Some(memory) = &mut self.memory {
+            memory.follow(insert, frames_per_tick);
+            if started {
+                memory.settle();
+            }
         }
     }
 
@@ -137,7 +140,7 @@ impl InsertState {
             Insert::Distort(Distort {
                 amount, mix, gain, ..
             }) => (amount, mix, gain),
-            Insert::Delay(Delay { mix, gain }) | Insert::Reverb(Reverb { mix, gain }) => {
+            Insert::Delay(Delay { mix, gain, .. }) | Insert::Reverb(Reverb { mix, gain }) => {
                 (0, mix, gain)
             }
         };
@@ -163,7 +166,7 @@ impl InsertState {
     pub fn ringing(&self, rate: u32) -> bool {
         self.memory
             .as_ref()
-            .is_some_and(|memory| self.quiet < memory.quiet_frames(self.delay_frames, rate))
+            .is_some_and(|memory| self.quiet < memory.quiet_frames(rate))
     }
 
     /// One frame through what the slot keeps. Once it's quiet with nothing going in, it does no work.
@@ -176,7 +179,7 @@ impl InsertState {
         let Some(memory) = &mut self.memory else {
             return [0.0, 0.0];
         };
-        let wet = memory.process(input, self.delay_frames);
+        let wet = memory.process(input);
         let quiet = nothing_in && wet[0].abs() < SILENT && wet[1].abs() < SILENT;
         self.quiet = if quiet {
             self.quiet.saturating_add(1)

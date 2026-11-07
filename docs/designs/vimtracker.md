@@ -1405,7 +1405,7 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 
 `MAX_PARAMS` grows to 9, and the FX page keeps its columns of two, top then bottom. The places in `Target` and the commands for slots grow with it.
 
-**`Delay`.** After #88. `Time` takes note divisions, and reads between samples, easing to a new time so it glides. `Feedback` runs through `Low cut`, `High cut` and `Drive`, so repeats darken and degrade. Ping-pong and width are settings of how the two sides feed each other. Beads' wow and flutter would suit it, and is left for later.
+**`Delay`.** After #88, and built. `Time` is a place in the list of note divisions, from `1/64` to `1 bar`, so a step or an LFO moves it in whole divisions. It reads between samples through four of them, easing to a new time with a half life of 50 ms, so it glides. What comes round goes through `Low cut`, `High cut` and a soft clip, so repeats darken and degrade, and the clip keeps `Feedback` at `FF` bounded. `Drive` pushes into the clip and brings it back down by as much, which leaves quiet repeats alone. `Ping-pong` on sums what goes in to one side, and each side feeds the other. `Width` narrows what comes out. Its buffer holds a bar at 20 BPM, about 4.6 MB at 48 kHz. Beads' wow and flutter would suit it, and is left for later.
 
 **`Reverb`.** After #89, from Clouds' Griesinger design, with its lengths scaled from 32 kHz to the device's rate. `Decay` and `Damp` set the loop's feedback and low-pass, `Pre` delays what goes in, and the cuts shape what goes in. Vital's reverb is the alternative if this one is found wanting, at more cost.
 

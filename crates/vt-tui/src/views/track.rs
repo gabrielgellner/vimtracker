@@ -18,7 +18,7 @@ use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
 use crate::track_page::{
-    Control, ENVELOPES, EnvelopeField, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
+    Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
@@ -37,8 +37,10 @@ pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 const FX_INDENT: usize = 3;
 const FX_EFFECT_WIDTH: usize = 10;
 /// Room for a setting's name on the FX page, and for its value and bar, so its columns line up.
-const FX_NAME_WIDTH: usize = 7;
-const FX_VALUE_WIDTH: usize = 17;
+const FX_NAME_WIDTHS: [usize; FX_COLUMNS] = [9, 10, 9, 6, 5];
+const FX_VALUE_WIDTH: usize = 12;
+/// Cells in a bar on the FX page, where there are more columns to fit.
+const FX_BAR_CELLS: usize = 5;
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
@@ -56,12 +58,16 @@ const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
 /// A bar for a value, full at `FF`, filling all of its cells. Only `00` leaves them empty.
 pub fn level_bar(value: u8) -> String {
-    let eighths = (usize::from(value) * BAR_CELLS * 8 / 255).max(usize::from(value > 0));
+    level_bar_of(value, BAR_CELLS)
+}
+
+fn level_bar_of(value: u8, cells: usize) -> String {
+    let eighths = (usize::from(value) * cells * 8 / 255).max(usize::from(value > 0));
     let mut bar = "█".repeat(eighths / 8);
     if eighths % 8 > 0 {
         bar.push(EIGHTHS[eighths % 8 - 1]);
     }
-    format!("{bar:<BAR_CELLS$}")
+    format!("{bar:<cells$}")
 }
 
 /// A mark for a value either side of a centre, like pan, filling all of the bar's cells.
@@ -103,6 +109,23 @@ pub fn bar_spans(set: u8, live: u8, centred: bool) -> Vec<Span<'static>> {
                 Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
             }
             ' ' if cell == mark => Span::styled("│", theme::faint()),
+            _ => Span::styled(shown.to_string(), bright),
+        })
+        .collect()
+}
+
+/// A setting's bar on the FX page: what's playing, with a dim mark for what's set if that differs.
+fn fx_bar_spans(set: u8, live: u8) -> Vec<Span<'static>> {
+    let bright = Style::new().fg(theme::MAUVE);
+    let mark = usize::from(set) * FX_BAR_CELLS / 256;
+    level_bar_of(live, FX_BAR_CELLS)
+        .chars()
+        .enumerate()
+        .map(|(cell, shown)| match shown {
+            '█' if set != live && cell == mark => {
+                Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
+            }
+            ' ' if set != live && cell == mark => Span::styled("│", theme::faint()),
             _ => Span::styled(shown.to_string(), bright),
         })
         .collect()
@@ -506,16 +529,17 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
             }
             Control::InsertParam(slot, param) if control.exists_on(track) => {
                 let name = control.name_on(track);
-                spans.extend(name_spans(app, name, &labels, FX_NAME_WIDTH));
+                let room = FX_NAME_WIDTHS[param / 2];
+                spans.extend(name_spans(app, name, &labels, room));
                 let insert = track.inserts[slot];
                 let used = if insert.params()[param].choices.is_empty() {
                     let set = insert.value(param);
                     let live = app.live.map_or(set, |live| live.inserts[slot][param]);
-                    let used = text.chars().count() + 1 + BAR_CELLS + 2;
+                    let used = text.chars().count() + 1 + FX_BAR_CELLS + 2;
                     spans.extend(value_spans(app, *control, text, style));
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(BAR_START, theme::faint()));
-                    spans.extend(bar_spans(set, live, false));
+                    spans.extend(fx_bar_spans(set, live));
                     spans.push(Span::styled(BAR_END, theme::faint()));
                     used
                 } else {

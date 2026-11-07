@@ -42,6 +42,28 @@ const DIVISIONS: [(&str, u32); 18] = [
     ("1 bar", BAR_TICKS),
 ];
 
+/// The divisions' names, shortest first, for a setting to choose between.
+pub const DIVISION_NAMES: [&str; DIVISIONS.len()] = {
+    let mut names = [""; DIVISIONS.len()];
+    let mut at = 0;
+    while at < DIVISIONS.len() {
+        names[at] = DIVISIONS[at].0;
+        at += 1;
+    }
+    names
+};
+
+/// How many ticks each is.
+pub const DIVISION_TICKS: [u32; DIVISIONS.len()] = {
+    let mut ticks = [0; DIVISIONS.len()];
+    let mut at = 0;
+    while at < DIVISIONS.len() {
+        ticks[at] = DIVISIONS[at].1;
+        at += 1;
+    }
+    ticks
+};
+
 /// How long one cycle takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Rate {

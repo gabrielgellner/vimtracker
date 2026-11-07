@@ -19,8 +19,6 @@ use crate::published::Published;
 use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState, slot_base};
 use crate::voice::{NoteOn, Voice};
 
-/// Delay time: 3/16 of a note, in ticks.
-pub const DELAY_TICKS: u64 = TICKS_PER_QUARTER * 3 / 4;
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
 
@@ -596,7 +594,7 @@ impl Engine {
             clock: self.clock,
             rate: self.rate,
             seed: self.current.song.seed,
-            delay_frames: sample_of_tick(DELAY_TICKS, self.rate, self.millibpm) as usize,
+            frames_per_tick: 1.0 / ticks_per_frame,
         }
     }
 
