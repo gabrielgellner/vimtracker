@@ -4777,15 +4777,22 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     assert_eq!(peach(&app), 0);
 }
 
-/// The FX page's text for a slot, found by its number, with its values' line if it has one.
+/// The FX page's text for a slot, found by its number, on a screen wide enough for it.
 fn fx_line(app: &App, slot: usize) -> String {
-    let lines = track_page_text(app);
-    let at = lines
-        .iter()
-        .position(|line| line.starts_with(&format!("{}  ", slot + 1)))
+    let backend = ratatui::backend::TestBackend::new(120, 12);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
         .unwrap();
-    let below = lines.get(at + 1).filter(|line| line.starts_with("   "));
-    format!("{}\n{}", lines[at], below.map_or("", |line| line.as_str()))
+    let buffer = terminal.backend().buffer().clone();
+    (0..12)
+        .map(|y| {
+            (0..120)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .find(|line| line.starts_with(&format!("{}  ", slot + 1)))
+        .unwrap()
 }
 
 fn on_fx_page() -> (App, vt_engine::link::Realtime) {

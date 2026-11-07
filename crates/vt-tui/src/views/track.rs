@@ -29,9 +29,10 @@ const LFO_SHAPE_NAME: usize = 7;
 pub(crate) const FILTER_CURVE_WIDTH: usize = 22;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
-/// Room for a slot's number on the FX page, and for its effect's name.
+/// Room for a slot's number on the FX page, its effect's name, and a setting that's a choice.
 const FX_INDENT: usize = 3;
 const FX_EFFECT_WIDTH: usize = 10;
+const FX_CHOICE_WIDTH: usize = 7;
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
@@ -461,11 +462,10 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines
 }
 
-/// A slot on the FX page: its number and effect, and any choices, with its values on a line below,
-/// all read from its list.
-fn fx_lines(app: &App, track: &Track, controls: &[Control]) -> Vec<Line<'static>> {
+/// A slot on the FX page: its number and effect, then the effect's settings, read from its list.
+fn fx_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
     let current = app.track_control();
-    let (mut first, mut values) = (Vec::new(), vec![Span::raw(" ".repeat(FX_INDENT))]);
+    let mut spans = Vec::new();
     for control in controls.iter().filter(|control| control.exists_on(track)) {
         let selected = *control == current;
         let text = if selected && app.mode == Mode::Insert {
@@ -485,40 +485,37 @@ fn fx_lines(app: &App, track: &Track, controls: &[Control]) -> Vec<Line<'static>
         let labels = label.map_or_else(String::new, String::from);
         match *control {
             Control::Insert(slot) => {
-                first.push(Span::styled(
+                spans.push(Span::styled(
                     format!("{:<FX_INDENT$}", slot + 1),
                     theme::dim(),
                 ));
                 let room = FX_EFFECT_WIDTH.saturating_sub(text.chars().count());
-                first.extend(value_spans(app, *control, text, style));
-                first.push(Span::raw(" ".repeat(room)));
+                spans.extend(value_spans(app, *control, text, style));
+                spans.push(Span::raw(" ".repeat(room)));
             }
             Control::InsertParam(slot, param) => {
                 let name = control.name_on(track);
-                let name = name_spans(app, name, &labels, name.chars().count() + 1);
+                spans.extend(name_spans(app, name, &labels, name.chars().count() + 1));
+                let length = text.chars().count();
+                spans.extend(value_spans(app, *control, text, style));
                 let insert = track.inserts[slot];
                 if insert.params()[param].choices.is_empty() {
                     let set = insert.value(param);
-                    values.extend(name);
-                    values.extend(value_spans(app, *control, text, style));
-                    values.push(Span::raw(" "));
-                    values.push(Span::styled(BAR_START, theme::faint()));
-                    values.extend(bar_spans(set, set, false));
-                    values.push(Span::styled(BAR_END, theme::faint()));
-                    values.push(Span::raw("  "));
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(BAR_START, theme::faint()));
+                    spans.extend(bar_spans(set, set, false));
+                    spans.push(Span::styled(BAR_END, theme::faint()));
+                    spans.push(Span::raw("  "));
                 } else {
-                    first.extend(name);
-                    first.extend(value_spans(app, *control, text, style));
+                    spans.push(Span::raw(
+                        " ".repeat(FX_CHOICE_WIDTH.saturating_sub(length)),
+                    ));
                 }
             }
             _ => {}
         }
     }
-    let mut lines = vec![Line::from(first)];
-    if values.len() > 1 {
-        lines.push(Line::from(values));
-    }
-    lines
+    Line::from(spans)
 }
 
 /// The filter's curve in a box, under its rows.
@@ -571,7 +568,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         Page::Fx => {
             for controls in FX_ROWS {
-                lines.extend(fx_lines(app, track, controls));
+                lines.push(fx_row(app, track, controls));
             }
         }
         Page::Mod => {

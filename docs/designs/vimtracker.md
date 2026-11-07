@@ -1251,11 +1251,10 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 **The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
 
-**The FX page.** A third page on the track page, with one row per slot, which takes two lines to fit beside the main meter at 80 columns:
+**The FX page.** A third page on the track page, with one row per slot:
 
 ```text
-1  Distort   Type Soft
-   Amount 40 ▕██▎      ▏  Mix FF ▕█████████▏  Gain E0 ▕███████▉ ▏
+1  Distort   Type Soft   Amount 40 ▕██▎      ▏  Mix FF ▕█████████▏  Gain E0 ▕███████▉ ▏
 2  ---
 3  ---
 ```
