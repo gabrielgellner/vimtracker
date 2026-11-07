@@ -79,19 +79,23 @@ pub struct Stem {
     pub samples: Vec<f32>,
 }
 
-/// Render each track that would be heard on its own, with the limiter off so the stems add up to
-/// the whole. Each keeps its own delay and reverb, and they all end together.
+/// Render each track that plays sounds and would be heard, on its own, with the limiter off so the
+/// stems add up to the whole. Each keeps what it sends to the returns, and they all end together.
 pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> Vec<Stem> {
     let song = &version.song;
-    let any_solo = song.tracks.iter().any(|track| track.solo);
+    let sounds = song.sound_tracks();
+    let any_solo = song.tracks[..sounds].iter().any(|track| track.solo);
     let heard = |track: &Track| if any_solo { track.solo } else { !track.mute };
-    let mut stems: Vec<Stem> = (0..song.tracks.len())
+    let mut stems: Vec<Stem> = (0..sounds)
         .filter(|index| heard(&song.tracks[*index]))
         .map(|index| {
             let mut alone = Song::clone(song);
             alone.limiter = false;
             for (other, track) in alone.tracks.iter_mut().enumerate() {
-                track.mute = false;
+                // The fixed tracks stay as they are, as what this one sends goes through them.
+                if other < sounds {
+                    track.mute = false;
+                }
                 track.solo = other == index;
             }
             let alone = Published::new(Arc::new(alone), Arc::clone(&version.samples));

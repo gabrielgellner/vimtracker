@@ -64,12 +64,16 @@ pub fn column_name(app: &App) -> String {
             REPEAT_COLUMN => "Rpt".to_owned(),
             START_COLUMN => "Start".to_owned(),
             column => {
-                let track = column - COLUMNS_BEFORE_TRACKS + 1;
+                let index = column - COLUMNS_BEFORE_TRACKS;
+                let name = match app.song().tracks.get(index) {
+                    Some(track) if !track.is_sound() => track.kind.title().to_owned(),
+                    _ => format!("Track {:02}", index + 1),
+                };
                 let label = app.song_label();
                 if label.is_empty() {
-                    format!("Track {track:02} chain")
+                    format!("{name} chain")
                 } else {
-                    format!("Track {track:02} chain: {label}")
+                    format!("{name} chain: {label}")
                 }
             }
         },

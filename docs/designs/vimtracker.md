@@ -1393,7 +1393,7 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 *   **A return or the master is a `Track` with no machine.** It makes no sound of its own, so it has no Machine or filter rows on its Sound page, and notes on its steps do nothing. It has everything else a track has: 3 slots, LFOs, envelopes, phrases, a mixer strip and a meter, with no new code.
 *   **Its own steps reach it.** A `1 Decay 40` on `B`'s phrase sequences its reverb, and no other track's steps can, as on the Syntakt, which keeps a phrase self-contained.
 *   **Sends.** The `Delay` and `Reverb` settings on a track become `Send A` and `Send B`, and the `DLY` and `REV` commands follow. A return has no sends, so there's no feedback between them.
-*   **Solo and mute.** Soloing a track keeps the returns and master sounding, as in Ableton, and muting a return silences it.
+*   **Solo and mute.** Soloing a track keeps the returns and master sounding, as in Ableton. Soloing a return plays what comes back from it, with what sends to it still playing but not heard. Muting a return silences it, and the master can't be muted or soloed. **Names.** The commands are `SNA` and `SNB`.
 *   **Where they show.** In track lists, the song view and the mixer, labelled `A`, `B` and `M`. `W`, `B` and `]b` go through them. They're left out of `:track add` and of how many tracks a kit fills.
 
 **`Delay` and `Reverb` are effects.** They're chosen for a slot like `Distort`, so any slot on any track can hold them. A new song has `Delay` in `A`'s first slot and `Reverb` in `B`'s, each with `Mix` at `FF`. The fixed global delay and reverb go.
@@ -1417,8 +1417,8 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 
 **Issues.**
 
-1.  **The fixed tracks and routing:** kinds of track, `A`, `B` and `M`, sends, and the master's slots, with `Delay` and `Reverb` as effects holding today's sound. **Tests:** golden renders unchanged, the routing above, solo and mute, the fixed tracks can't be removed and aren't counted by `:track add`, steps on a return reach only its own slots, and an old song loads with the default returns.
-2.  **Long buffers through the edit thread.** **Tests:** choosing an effect allocates only on the edit thread, old buffers come back to free, no allocation in the callback, and rates from 44.1 to 96 kHz.
+1.  **The fixed tracks and routing:** kinds of track, `A`, `B` and `M`, sends, and the master's slots, with `A` and `B` running today's delay and reverb from the engine until issue 2. **Tests:** golden renders unchanged, the routing above, solo and mute, the fixed tracks can't be removed and aren't counted by `:track add`, steps on a return reach only that return, and a song without them loads with them.
+2.  **Long buffers through the edit thread, and `Delay` and `Reverb` as effects in slots,** holding today's sound. A slot can't hold them until then. **Tests:** golden renders unchanged, choosing an effect allocates only on the edit thread, old buffers come back to free, no allocation in the callback, and rates from 44.1 to 96 kHz.
 3.  **The new `Delay`:** the settings and feedback path. **Tests:** time in note divisions, a change of time gliding without a click, feedback staying stable at its top, each cut, ping-pong and width.
 4.  **The new `Reverb`:** the design and settings. **Tests:** decay time against the setting, stability at the top of `Decay`, pre-delay, and the cost against the old one.
 

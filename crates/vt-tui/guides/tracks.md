@@ -109,11 +109,32 @@ follow what's playing. A setting that's whole values, like `Bits`, just steps.
 
 ## Output
 
-`Pan`, `Delay` and `Reverb` are where those values start when
+`Pan`, `Send A` and `Send B` are where those values start when
 playback starts from the top. A step's `h` value changes them until the next start,
 and changing one here is heard straight away unless a lock or glide is on top. `Level` scales the whole track.
 Dimmed `Swing` is the project's, which this track follows. Changing it gives the
 track its own, and `x` follows the project again.
+
+## Returns and the master
+
+Every song ends with three fixed tracks, labelled `A`, `B` and `M`. `W`, `B` and the
+track list go through them, and `:track add` and `:track del` work before them, so they
+always stay last.
+
+`A` and `B` are returns, as in Ableton: what a track's `Send A` and `Send B` send plays
+through them, and comes out alongside the track. For now `A` is the delay and `B` the
+reverb. `M` is the master: everything goes through it, and then the limiter.
+
+They make no sound of their own, so they have no machine or filter, and their Sound
+page has just `Level` and `Pan`, and the master only `Level`. The rest works as on any
+track: 3 slots on the FX page, the Mod page, a strip on the mixer, and phrases. To give
+one a phrase, type a chain number in its column on the Song view. A note on one plays
+nothing, but it does start the track's envelopes. Steps on a return only reach that
+return, so `VOL` on `B`'s phrase rides the reverb.
+
+Soloing a track keeps the returns, so you hear what it sends. Soloing a return plays
+only what comes back from it. Muting a return silences what comes back, and the master
+can't be muted or soloed.
 
 ## Envelopes
 
@@ -123,7 +144,7 @@ width depends only on its own time.
 
 | Setting | Value |
 |---|---|
-| Dest | `Vol` `Cut` `Res` `Pan` `Dly` `Rev` `Pitch`, or `---` for off |
+| Dest | `Vol` `Cut` `Res` `Pan` `SendA` `SendB` `Pitch`, or `---` for off |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
 | Release | Milliseconds, after the note ends |
@@ -149,7 +170,7 @@ step moves the centre and the LFO carries on around it.
 
 | Setting | Value |
 |---|---|
-| Dest | `Cut` `Res` `Pan` `Vol` `Dly` `Rev` `Pitch`, or `---` for off |
+| Dest | `Cut` `Res` `Pan` `Vol` `SendA` `SendB` `Pitch`, or `---` for off |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
@@ -179,7 +200,7 @@ Playing from the top restarts every LFO. A `:reset` doesn't, since that is
 about patterns. To follow the steps, turn on `Retrig`. While stopped, a track
 sits at its held values, so `;` hears those. Pausing freezes the LFO.
 
-`Vol`, `Dly` and `Rev` swing in dB, on the level scale in **Phrases and
+`Vol`, `SendA` and `SendB` swing in dB, on the level scale in **Phrases and
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
 is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
 on a step.
@@ -188,7 +209,7 @@ on a step.
 
 Press `Space 6` for a strip for each track: its name, a meter of what it's playing
 with `L` and `R` bars, a fader beside them showing its `Level`, then its `Pan`,
-`Delay`, `Reverb`, mute and solo. The meters are on the same scale as the main one,
+`Send A`, `Send B`, mute and solo. The meters are on the same scale as the main one,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
 tracks, `j` and `k` up and down the strip, and values edit as they do on the track page. On mute and solo, `=` switches on,
 `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as

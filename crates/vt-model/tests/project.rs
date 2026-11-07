@@ -221,3 +221,17 @@ fn save_as_copies_samples_and_rewrites_paths() {
         Err(ProjectError::Exists(_))
     ));
 }
+
+#[test]
+fn a_song_from_before_the_fixed_tracks_loads_with_them() {
+    let dir = folder();
+    let mut song = Song::new(2);
+    song.tracks.truncate(2);
+    song.sections[0].chains.truncate(2);
+    save_song(&dir, &song).unwrap();
+    let loaded = load_song(&dir).unwrap();
+    assert_eq!(loaded.sound_tracks(), 2);
+    assert_eq!(loaded.tracks.len(), 5);
+    assert_eq!(loaded.sections[0].chains.len(), 5);
+    assert_eq!(loaded.tracks[2].name, "A");
+}

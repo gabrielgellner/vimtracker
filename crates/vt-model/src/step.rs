@@ -32,8 +32,8 @@ pub enum FxCommand {
     Pan,
     Cut,
     Res,
-    Dly,
-    Rev,
+    SendA,
+    SendB,
     Har,
     Tim,
     Mor,
@@ -64,8 +64,8 @@ impl FxCommand {
         Self::Pan,
         Self::Cut,
         Self::Res,
-        Self::Dly,
-        Self::Rev,
+        Self::SendA,
+        Self::SendB,
         Self::Har,
         Self::Tim,
         Self::Mor,
@@ -99,8 +99,8 @@ impl FxCommand {
             Self::Pan => "Pan, holds. 00 left, 80 centre, FF right",
             Self::Cut => "Filter cutoff, holds",
             Self::Res => "Filter resonance, holds",
-            Self::Dly => "Delay send, holds",
-            Self::Rev => "Reverb send, holds",
+            Self::SendA => "Send to return A, holds",
+            Self::SendB => "Send to return B, holds",
             Self::Har => "A synth's first setting, holds",
             Self::Tim => "A synth's second setting, holds",
             Self::Mor => "A synth's third setting, holds",
@@ -116,7 +116,7 @@ impl FxCommand {
     /// The highest value this takes. Those on the level scale stop at its top.
     pub fn highest(self) -> u8 {
         match self {
-            Self::Vol | Self::Dly | Self::Rev => MAX_LEVEL,
+            Self::Vol | Self::SendA | Self::SendB => MAX_LEVEL,
             _ => 0xFF,
         }
     }
@@ -128,8 +128,8 @@ impl FxCommand {
             Self::Pan => "PAN",
             Self::Cut => "CUT",
             Self::Res => "RES",
-            Self::Dly => "DLY",
-            Self::Rev => "REV",
+            Self::SendA => "SNA",
+            Self::SendB => "SNB",
             Self::Har => "HAR",
             Self::Tim => "TIM",
             Self::Mor => "MOR",
@@ -149,8 +149,8 @@ impl FxCommand {
             "PAN" => Self::Pan,
             "CUT" => Self::Cut,
             "RES" => Self::Res,
-            "DLY" => Self::Dly,
-            "REV" => Self::Rev,
+            "SNA" => Self::SendA,
+            "SNB" => Self::SendB,
             "HAR" => Self::Har,
             "TIM" => Self::Tim,
             "MOR" => Self::Mor,
@@ -171,8 +171,8 @@ impl FxCommand {
                 | Self::Pan
                 | Self::Cut
                 | Self::Res
-                | Self::Dly
-                | Self::Rev
+                | Self::SendA
+                | Self::SendB
                 | Self::Har
                 | Self::Tim
                 | Self::Mor

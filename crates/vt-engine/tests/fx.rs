@@ -288,7 +288,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     let late = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert_eq!(late(&dry), 0.0);
     let delayed = render(
-        song(&["C-4 -- DLYFF ---00 ---00"]),
+        song(&["C-4 -- SNAFF ---00 ---00"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -297,7 +297,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     assert_eq!(delayed[17_000][0], 0.0);
     assert_ne!(delayed[18_100][0], 0.0);
     let reverbed = render(
-        song(&["C-4 -- REVFF ---00 ---00"]),
+        song(&["C-4 -- SNBFF ---00 ---00"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -451,7 +451,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
 
 #[test]
 fn track_level_also_turns_down_the_sends() {
-    let text = ["C-4 -- DLYFF REVFF ---00"];
+    let text = ["C-4 -- SNAFF SNBFF ---00"];
     let mut silent = song(&text);
     silent.tracks[0].level = 0;
     let out = render(silent, flat(0.5), STEP * 8);

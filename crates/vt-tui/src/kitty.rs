@@ -369,7 +369,8 @@ impl Graphics {
             && let Some(track) = app.song().tracks.get(app.cursor.track).cloned()
         {
             match app.track_page {
-                Page::Sound => self.sync_sound(app, &track, out)?,
+                Page::Sound if track.is_sound() => self.sync_sound(app, &track, out)?,
+                Page::Sound => {}
                 Page::Mod => self.sync_mod(app, &track, out)?,
                 Page::Fx => {}
             }

@@ -79,7 +79,7 @@ an edit changes all of them.
 ## The level scale
 
 Levels work like Ableton's faders: even steps in dB, with room above 0. Track
-level, `VOL`, `DLY` and `REV` all use this scale.
+level, `VOL`, `SNA` and `SNB` all use this scale.
 
 | Value | Level |
 |---|---|

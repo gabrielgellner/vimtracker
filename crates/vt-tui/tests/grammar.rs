@@ -1152,8 +1152,8 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
 
     // Filling a selection snaps too, and other commands keep their whole range.
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llvjrDLYFF");
-    assert_eq!(steps(&app)[1], "--- -- DLYF8 ---00 ---00");
+    keys(&mut app, "llvjrSNAFF");
+    assert_eq!(steps(&app)[1], "--- -- SNAF8 ---00 ---00");
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "llrCUTFF");
     assert_eq!(steps(&app)[0], "--- -- CUTFF ---00 ---00");

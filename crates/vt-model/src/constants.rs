@@ -8,8 +8,12 @@ pub const UNITY_LEVEL: u8 = 0xE0;
 pub const MAX_LEVEL: u8 = 0xF8;
 /// How many dB one step of a level value is.
 pub const DB_PER_LEVEL: f32 = 0.25;
+/// Tracks that play sounds a song can have.
+pub const MAX_SOUND_TRACKS: usize = 64;
+/// The tracks every song has after those: two returns and the master.
+pub const FIXED_TRACKS: usize = 3;
 /// Tracks the engine prepares state for. Raising this does not affect saved songs.
-pub const MAX_TRACKS: usize = 64;
+pub const MAX_TRACKS: usize = MAX_SOUND_TRACKS + FIXED_TRACKS;
 /// Tracks in a new project.
 pub const DEFAULT_TRACKS: usize = 8;
 /// Clock ticks per step, at 960 per quarter note.
