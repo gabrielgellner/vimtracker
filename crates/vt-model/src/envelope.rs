@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
 use crate::lfo::MAX_LFO_DEPTH;
-use crate::target::Target;
+use crate::settings::SettingId;
 
 /// How far `fall` curves: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
@@ -27,7 +27,7 @@ pub fn fall(t: f32) -> f32 {
 /// One envelope's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Envelope {
-    pub destination: Option<Target>,
+    pub destination: Option<SettingId>,
     pub attack_ms: u16,
     pub decay_ms: u16,
     /// Percent of full, while a note holds.
@@ -50,7 +50,7 @@ impl Envelope {
     /// The shape a note has with nothing else set: a click-free start, and a short release.
     pub fn note_shape() -> Self {
         Self {
-            destination: Some(Target::Vol),
+            destination: Some(SettingId::VOL),
             attack_ms: 1,
             decay_ms: 0,
             sustain: 100,
@@ -63,7 +63,7 @@ impl Envelope {
     /// The second envelope's starting point: a decay on the filter, doing nothing until it has depth.
     pub fn filter_shape() -> Self {
         Self {
-            destination: Some(Target::Cut),
+            destination: Some(SettingId::CUT),
             decay_ms: 200,
             sustain: 0,
             ..Self::note_shape()

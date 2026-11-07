@@ -322,9 +322,9 @@ mod tests {
     use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
     use vt_model::sample::SampleData;
     use vt_model::samples::SamplePool;
+    use vt_model::settings::SettingId;
     use vt_model::song::Song;
     use vt_model::step::{Note, Step};
-    use vt_model::target::Target;
 
     use super::*;
     use crate::rt_guard::forbidden;
@@ -512,17 +512,21 @@ mod tests {
     fn modulating_a_slot_never_allocates_in_the_callback() {
         let pool = samples();
         let mut song = song(1, 16);
-        let target = Target::Slot { slot: 0, param: 1 };
+        let target =
+            vt_model::settings::SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
         song.tracks[0].inserts = [Insert::ALL[1]; INSERTS];
         song.tracks[0].lfos[0].destination = Some(target);
         song.tracks[0].lfos[0].depth = 0x80;
         song.tracks[0].envelopes[1].destination = Some(target);
         song.tracks[0].envelopes[1].depth = 0x40;
-        song.tracks[0].lfos[1].destination = Some(Target::Cut);
-        song.tracks[0].lfos[0].destination = Some(Target::LfoDepth { lfo: 1 });
+        song.tracks[0].lfos[1].destination = Some(SettingId::CUT);
+        song.tracks[0].lfos[0].destination = Some(SettingId::lfo(1, 0).unwrap());
         let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
         for step in 0..8 {
-            *phrase.step_mut(step).unwrap() = "C-4 -- 1.180g 2.340 3.220h".parse().unwrap();
+            *phrase.step_mut(step).unwrap() =
+                "C-4 -- 1.distort.amount:80g 2.distort.gain:40 3.distort.mix:20h"
+                    .parse()
+                    .unwrap();
         }
         let engine = Engine::new(48_000, published(song, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -538,10 +542,10 @@ mod tests {
             let phrase = Arc::make_mut(marked.tracks[id as usize].phrases.get_mut(&0).unwrap());
             for step in 0..16 {
                 let text = match step % 4 {
-                    0 => "C-4 -- CUT40g VOL80 PANC0h",
-                    1 => "--- -- RES20g ---00 ---00",
-                    2 => "C-4 -- CUTF0h VOLA0g ---00",
-                    _ => "--- -- ---00 RES40 ---00",
+                    0 => "C-4 -- cut:40g vol:80 pan:C0h",
+                    1 => "--- -- res:20g --- ---",
+                    2 => "C-4 -- cut:F0h vol:A0g ---",
+                    _ => "--- -- --- res:40 ---",
                 };
                 *phrase.step_mut(step).unwrap() = text.parse().unwrap();
             }
@@ -610,11 +614,11 @@ mod tests {
             track.sample = Some("flat".to_owned());
         }
         let texts = [
-            "C-4 01 VOL80 PAN20 CUT40",
-            "C-4 -- RESC0 SNA80 SNB80",
-            "C-4 -- DEL02 KIL03 OFF01",
-            "C-4 -- RET52 CHA80 ---00",
-            "OFF -- ---00 ---00 ---00",
+            "C-4 01 vol:80 pan:20 cut:40",
+            "C-4 -- res:C0 sna:80 snb:80",
+            "C-4 -- del:02 kil:03 off:01",
+            "C-4 -- ret:52 cha:80 ---",
+            "OFF -- --- --- ---",
         ];
         for id in 0..2 {
             let phrase = Arc::make_mut(fx.tracks[id as usize].phrases.get_mut(&0).unwrap());
@@ -688,8 +692,15 @@ mod tests {
         for (track, voice) in played.tracks.iter_mut().zip(voices) {
             track.machine = vt_model::song::Machine::Plaits(voice);
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-            *phrase.step_mut(0).unwrap() = "C-2 7F TIM40 ---00 ---00".parse().unwrap();
-            *phrase.step_mut(4).unwrap() = "G-2 7F MOR20 HAR90 ---00".parse().unwrap();
+            let key = |setting| {
+                vt_model::settings::SettingId::voice(voice, setting)
+                    .unwrap()
+                    .key()
+            };
+            *phrase.step_mut(0).unwrap() = format!("C-2 7F {}:40 --- ---", key(1)).parse().unwrap();
+            *phrase.step_mut(4).unwrap() = format!("G-2 7F {}:20 {}:90 ---", key(2), key(0))
+                .parse()
+                .unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -706,7 +717,7 @@ mod tests {
         }
         for id in 0..2 {
             let phrase = Arc::make_mut(played.tracks[id as usize].phrases.get_mut(&0).unwrap());
-            *phrase.step_mut(0).unwrap() = "C-4 01 VOL80 ---00 ---00".parse().unwrap();
+            *phrase.step_mut(0).unwrap() = "C-4 01 vol:80 --- ---".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -798,7 +809,7 @@ mod tests {
         let mut one = song(1, 0);
         *Arc::make_mut(one.tracks[0].phrases.get_mut(&0).unwrap())
             .step_mut(0)
-            .unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
+            .unwrap() = "C-4 -- --- --- ---".parse().unwrap();
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert_eq!(blocks(&mut rt, 1), 0);

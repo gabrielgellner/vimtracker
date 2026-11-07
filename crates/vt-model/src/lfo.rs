@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
-use crate::target::Target;
+use crate::settings::SettingId;
 
 /// How many a track has.
 pub const LFOS_PER_TRACK: usize = 2;
@@ -330,7 +330,7 @@ fn random(key: u64, cycle: i64) -> f32 {
 /// One LFO's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lfo {
-    pub destination: Option<Target>,
+    pub destination: Option<SettingId>,
     pub shape: Shape,
     pub rate: Rate,
     /// How far it swings either way, in the destination's units. Negative flips the shape.

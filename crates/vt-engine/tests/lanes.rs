@@ -23,7 +23,7 @@ fn version(song: &Song) -> Arc<Published> {
 fn phrase(fx: &[&str]) -> Phrase {
     let mut phrase = Phrase::new(16);
     for (at, text) in fx.iter().enumerate() {
-        let step: Step = format!("--- -- {text} ---00 ---00").parse().unwrap();
+        let step: Step = format!("--- -- {text} --- ---").parse().unwrap();
         *phrase.step_mut(at).unwrap() = step;
     }
     phrase
@@ -57,7 +57,7 @@ fn lane(start: usize, length: usize) -> Option<Lane> {
 
 /// Three held sends in a lane of three.
 fn three() -> Phrase {
-    let mut phrase = phrase(&["SNA10h", "SNA20h", "SNA30h"]);
+    let mut phrase = phrase(&["sna:10h", "sna:20h", "sna:30h"]);
     phrase.set_lane(0, lane(0, 3));
     phrase
 }
@@ -92,7 +92,7 @@ fn a_lane_repeats_on_its_own_and_carries_on_across_its_phrases_repeats() {
 
 #[test]
 fn a_lane_carries_on_into_the_next_phrase() {
-    let mut next = phrase(&["SNA40h", "SNA50h", "SNA60h"]);
+    let mut next = phrase(&["sna:40h", "sna:50h", "sna:60h"]);
     next.set_len(8);
     next.set_lane(0, lane(0, 3));
     let song = song(vec![three(), next]);
@@ -104,7 +104,7 @@ fn a_lane_carries_on_into_the_next_phrase() {
 
 #[test]
 fn a_column_without_a_lane_follows_the_notes() {
-    let song = song(vec![phrase(&["SNA10h", "SNA20h", "SNA30h"])]);
+    let song = song(vec![phrase(&["sna:10h", "sna:20h", "sna:30h"])]);
     let mut engine = engine(&song);
     assert_eq!(send_at(&mut engine, 4), 0x30, "held from row 2");
     assert_eq!(send_at(&mut engine, 16), 0x10);
@@ -131,7 +131,7 @@ fn a_lane_changed_while_playing_stays_on_its_step() {
     assert_eq!(send_at(&mut engine, 4), 0x20);
     let mut longer = song.clone();
     let phrase = Arc::make_mut(longer.tracks[0].phrases.get_mut(&10).unwrap());
-    *phrase.step_mut(3).unwrap() = "--- -- SNA40h ---00 ---00".parse().unwrap();
+    *phrase.step_mut(3).unwrap() = "--- -- sna:40h --- ---".parse().unwrap();
     phrase.set_lane(0, lane(0, 4));
     engine.swap(version(&longer));
     assert_eq!(send_at(&mut engine, 5), 0x30, "row 2, not 5 % 4 = 1");
@@ -141,7 +141,7 @@ fn a_lane_changed_while_playing_stays_on_its_step() {
 
 #[test]
 fn a_glide_in_a_lane_goes_to_the_next_value_in_that_lane() {
-    let mut phrase = phrase(&["---00", "SNA20h", "SNA40h", "SNA60g"]);
+    let mut phrase = phrase(&["---", "sna:20h", "sna:40h", "sna:60g"]);
     phrase.set_lane(0, lane(1, 3));
     let song = song(vec![phrase]);
     let mut engine = engine(&song);

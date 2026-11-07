@@ -11,7 +11,6 @@ use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates}
 use vt_model::selection::Motion;
 use vt_model::settings::{Kind, SettingId, voice_entries};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
-use vt_model::target::Target;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -1041,19 +1040,17 @@ impl App {
                         ..lfo
                     },
                 );
-                let on = Target::for_lfo(&page, slot).into_iter().map(|destination| {
-                    (
-                        format!(
-                            "{}  {}",
-                            destination.name_on(&page),
-                            destination.meaning_on(&page)
-                        ),
-                        Lfo {
-                            destination: Some(destination),
-                            ..lfo
-                        },
-                    )
-                });
+                let on = SettingId::for_lfo(&page, slot)
+                    .into_iter()
+                    .map(|destination| {
+                        (
+                            format!("{}  {}", destination.name_on(&page), destination.meaning()),
+                            Lfo {
+                                destination: Some(destination),
+                                ..lfo
+                            },
+                        )
+                    });
                 ("LFO destination", std::iter::once(off).chain(on).collect())
             }
             LfoField::Shape => {
@@ -1091,7 +1088,11 @@ impl App {
             .collect();
         let picker = if field == LfoField::Destination {
             let groups = std::iter::once("---".to_owned())
-                .chain(Target::for_lfo(&page, slot).into_iter().map(Target::group))
+                .chain(
+                    SettingId::for_lfo(&page, slot)
+                        .into_iter()
+                        .map(SettingId::group),
+                )
                 .collect();
             Picker::grouped(title, items, groups, position.unwrap_or(0))
         } else {
@@ -1231,19 +1232,17 @@ impl App {
                         ..envelope
                     },
                 );
-                let on = Target::for_envelope(&page).into_iter().map(|destination| {
-                    (
-                        format!(
-                            "{}  {}",
-                            destination.name_on(&page),
-                            destination.meaning_on(&page)
-                        ),
-                        Envelope {
-                            destination: Some(destination),
-                            ..envelope
-                        },
-                    )
-                });
+                let on = SettingId::for_envelope(&page)
+                    .into_iter()
+                    .map(|destination| {
+                        (
+                            format!("{}  {}", destination.name_on(&page), destination.meaning()),
+                            Envelope {
+                                destination: Some(destination),
+                                ..envelope
+                            },
+                        )
+                    });
                 (
                     "Envelope destination",
                     std::iter::once(off).chain(on).collect(),
@@ -1279,7 +1278,11 @@ impl App {
             .collect();
         let picker = if field == EnvelopeField::Destination {
             let groups = std::iter::once("---".to_owned())
-                .chain(Target::for_envelope(&page).into_iter().map(Target::group))
+                .chain(
+                    SettingId::for_envelope(&page)
+                        .into_iter()
+                        .map(SettingId::group),
+                )
                 .collect();
             Picker::grouped(title, items, groups, position.unwrap_or(0))
         } else {
@@ -1456,7 +1459,7 @@ fn adjust_envelope(
     match field {
         EnvelopeField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::for_envelope(track).into_iter().map(Some));
+            choices.extend(SettingId::for_envelope(track).into_iter().map(Some));
             envelope.destination = next_in(&choices, envelope.destination, up);
         }
         EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
@@ -1481,7 +1484,7 @@ fn adjust_lfo(lfo: &mut Lfo, slot: usize, field: LfoField, up: bool, large: bool
     match field {
         LfoField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::for_lfo(track, slot).into_iter().map(Some));
+            choices.extend(SettingId::for_lfo(track, slot).into_iter().map(Some));
             lfo.destination = next_in(&choices, lfo.destination, up);
         }
         LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),

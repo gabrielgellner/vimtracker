@@ -9,8 +9,8 @@ use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
+use vt_model::settings::{Effect, SettingId};
 use vt_model::song::{Machine, Song, SynthVoice, level_gain};
-use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -67,9 +67,9 @@ fn song(texts: &[&str]) -> Song {
 
 /// A song holding `VOL 80` on one long note, with this LFO moving the volume.
 fn moving(lfo: Lfo) -> Song {
-    let mut song = song(&["C-4 -- VOL80 ---00 ---00"]);
+    let mut song = song(&["C-4 -- vol:80 --- ---"]);
     song.tracks[0].lfos[0] = Lfo {
-        destination: Some(Target::Vol),
+        destination: Some(SettingId::VOL),
         depth: 0x40,
         ..lfo
     };
@@ -109,11 +109,11 @@ fn a_synced_lfo_moves_around_the_held_value_in_time() {
 
 #[test]
 fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
-    let out = render(song(&["C-4 -- ---00 ---00 ---00"]), flat(), STEP);
+    let out = render(song(&["C-4 -- --- --- ---"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let out = render(song(&["C-4 -- VOLE0 ---00 ---00"]), flat(), STEP);
+    let out = render(song(&["C-4 -- vol:E0 --- ---"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let mut limitless = song(&["C-4 -- VOLFF ---00 ---00"]);
+    let mut limitless = song(&["C-4 -- vol:FF --- ---"]);
     limitless.limiter = false;
     let out = render(limitless, flat(), STEP);
     let top = left(&out, STEP - 1);
@@ -171,16 +171,16 @@ fn a_reset_leaves_lfos_running() {
 #[test]
 fn retrig_restarts_it_on_each_note() {
     let texts = [
-        "C-4 -- VOL80h ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "C-4 -- ---00 ---00 ---00",
+        "C-4 -- vol:80h --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
     ];
     let ramp = |retrig| {
         let mut song = song(&texts);
         song.tracks[0].lfos[0] = Lfo {
-            destination: Some(Target::Vol),
+            destination: Some(SettingId::VOL),
             shape: Shape::Ramp,
             rate: Rate::Note(QUARTER * 4),
             depth: 0x40,
@@ -291,10 +291,10 @@ fn block_size_does_not_change_the_result() {
 fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
     // Half of each cycle sits at the top of the range. If the filter stopped there, it would come
     // back with old state and jump.
-    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut moved = song(&["C-4 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0xFF;
     moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(Target::Cut),
+        destination: Some(SettingId::CUT),
         rate: Rate::Note(QUARTER),
         depth: 0xC0,
         ..Lfo::default()
@@ -314,8 +314,8 @@ fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
 
 #[test]
 fn a_tracks_base_is_where_its_held_values_start() {
-    let from_step = render(song(&["C-4 -- CUT40 PAN20 ---00"]), buzz(), STEP);
-    let mut from_page = song(&["C-4 -- ---00 ---00 ---00"]);
+    let from_step = render(song(&["C-4 -- cut:40 pan:20 ---"]), buzz(), STEP);
+    let mut from_page = song(&["C-4 -- --- --- ---"]);
     from_page.tracks[0].cutoff = 0x40;
     from_page.tracks[0].pan = 0x20;
     assert_eq!(from_step, render(from_page, buzz(), STEP));
@@ -323,7 +323,7 @@ fn a_tracks_base_is_where_its_held_values_start() {
 
 #[test]
 fn a_page_change_is_heard_now_and_leaves_what_a_step_set() {
-    let start = song(&["C-4 -- PAN00h ---00 ---00"]);
+    let start = song(&["C-4 -- pan:00h --- ---"]);
     let samples = flat();
     let mut engine = Engine::new(RATE, version(start.clone(), Arc::clone(&samples)));
     engine.play_from(0);
@@ -360,7 +360,7 @@ fn live_after(song: Song, steps: usize) -> LiveValues {
 
 #[test]
 fn live_values_are_the_settings_when_nothing_moves_them() {
-    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut song = song(&["C-4 -- --- --- ---"]);
     let track = &mut song.tracks[0];
     (track.level, track.pan, track.cutoff, track.resonance) = (0x90, 0x30, 0x70, 0x20);
     (track.send_a, track.send_b) = (0x11, 0x22);
@@ -385,7 +385,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
 fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
     // A square LFO a quarter long is at its top for the first two steps, and bottom for the next.
     let moved = |destination, base: fn(&mut Song)| {
-        let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+        let mut song = song(&["C-4 -- --- --- ---"]);
         base(&mut song);
         song.tracks[0].lfos[0] = Lfo {
             destination: Some(destination),
@@ -396,29 +396,32 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
         };
         song
     };
-    let cut = moved(Target::Cut, |song| song.tracks[0].cutoff = 0x80);
+    let cut = moved(SettingId::CUT, |song| song.tracks[0].cutoff = 0x80);
     assert_eq!(live_after(cut.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(cut.clone(), 3).cutoff, 0x60);
 
-    let har = moved(Target::Har, |song| {
-        song.tracks[0].machine = Machine::Plaits(SynthVoice::default());
-        song.tracks[0].set_machine_value(0, 0x80);
-    });
+    let har = moved(
+        SettingId::voice(SynthVoice::default(), 0).unwrap(),
+        |song| {
+            song.tracks[0].machine = Machine::Plaits(SynthVoice::default());
+            song.tracks[0].set_machine_value(0, 0x80);
+        },
+    );
     assert_eq!(live_after(har, 1).machine[0], 0xA0);
 
-    let dly = moved(Target::SendA, |song| song.tracks[0].send_a = 0x40);
+    let dly = moved(SettingId::SEND_A, |song| song.tracks[0].send_a = 0x40);
     assert_eq!(live_after(dly, 1).send_a, 0x60);
 
     // `Vol` shows on the track's level, around its own setting.
-    let vol = moved(Target::Vol, |song| song.tracks[0].level = 0x90);
+    let vol = moved(SettingId::VOL, |song| song.tracks[0].level = 0x90);
     assert_eq!(live_after(vol, 1).level, 0xB0);
 
     // It clamps at the ends of the range.
-    let high = moved(Target::Cut, |song| song.tracks[0].cutoff = 0xF0);
+    let high = moved(SettingId::CUT, |song| song.tracks[0].cutoff = 0xF0);
     assert_eq!(live_after(high, 1).cutoff, 0xFF);
 
     // A step's command is what's playing as well.
-    let stepped = song(&["C-4 -- CUT40 ---00 ---00"]);
+    let stepped = song(&["C-4 -- cut:40 --- ---"]);
     assert_eq!(live_after(stepped, 1).cutoff, 0x40);
 
     // Once stopped, an LFO adds nothing.
@@ -434,7 +437,7 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
 
 #[test]
 fn the_first_envelope_on_vol_does_not_move_the_level() {
-    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut song = song(&["C-4 -- --- --- ---"]);
     song.tracks[0].level = 0x90;
     song.tracks[0].envelopes[0].attack_ms = 500;
     assert_eq!(live_after(song, 1).level, 0x90);
@@ -442,9 +445,9 @@ fn the_first_envelope_on_vol_does_not_move_the_level() {
 
 #[test]
 fn an_envelope_on_cut_moves_the_live_value() {
-    let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut song = song(&["C-4 -- --- --- ---"]);
     song.tracks[0].cutoff = 0x40;
-    song.tracks[0].envelopes[1].destination = Some(Target::Cut);
+    song.tracks[0].envelopes[1].destination = Some(SettingId::CUT);
     song.tracks[0].envelopes[1].attack_ms = 0;
     song.tracks[0].envelopes[1].decay_ms = 0;
     song.tracks[0].envelopes[1].sustain = 100;
@@ -485,7 +488,7 @@ fn with_distort(mut song: Song, kind: DistortType) -> Song {
 const AMOUNT: usize = 1;
 const MIX: usize = 2;
 const GAIN: usize = 3;
-const AMOUNT_TARGET: Target = Target::Slot { slot: 0, param: 1 };
+const AMOUNT_TARGET: SettingId = SettingId::slot(0, Effect::Distort, 1).unwrap();
 
 fn slot_live(song: Song, steps: usize) -> [u8; vt_model::insert::MAX_PARAMS] {
     live_after(song, steps).inserts[0]
@@ -494,7 +497,7 @@ fn slot_live(song: Song, steps: usize) -> [u8; vt_model::insert::MAX_PARAMS] {
 #[test]
 fn a_slots_settings_read_as_set_with_nothing_moving_them() {
     let live = slot_live(
-        with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft),
+        with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft),
         1,
     );
     assert_eq!((live[AMOUNT], live[MIX], live[GAIN]), (0x40, 0xC0, 0xD0));
@@ -503,9 +506,9 @@ fn a_slots_settings_read_as_set_with_nothing_moving_them() {
 #[test]
 fn a_step_locks_a_slots_setting_until_the_next_note() {
     let locked = song(&[
-        "C-4 -- 1.180 ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "C-4 -- ---00 ---00 ---00",
+        "C-4 -- 1.distort.amount:80 --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
     ]);
     let locked = with_distort(locked, DistortType::Soft);
     assert_eq!(slot_live(locked.clone(), 1)[AMOUNT], 0x80);
@@ -516,9 +519,9 @@ fn a_step_locks_a_slots_setting_until_the_next_note() {
 #[test]
 fn a_step_holds_a_slots_setting_past_the_next_note() {
     let held = song(&[
-        "C-4 -- 1.220h ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "C-4 -- ---00 ---00 ---00",
+        "C-4 -- 1.distort.mix:20h --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
     ]);
     assert_eq!(
         slot_live(with_distort(held, DistortType::Soft), 3)[MIX],
@@ -529,11 +532,11 @@ fn a_step_holds_a_slots_setting_past_the_next_note() {
 #[test]
 fn a_step_glides_a_slots_setting() {
     let glide = song(&[
-        "C-4 -- 1.300g ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "--- -- ---00 ---00 ---00",
-        "--- -- 1.380 ---00 ---00",
+        "C-4 -- 1.distort.gain:00g --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- 1.distort.gain:80 --- ---",
     ]);
     let glide = with_distort(glide, DistortType::Soft);
     let halfway = slot_live(glide.clone(), 2)[GAIN];
@@ -543,7 +546,10 @@ fn a_step_glides_a_slots_setting() {
 
 #[test]
 fn only_the_slot_a_command_names_changes() {
-    let mut other = with_distort(song(&["C-4 -- 2.180 ---00 ---00"]), DistortType::Soft);
+    let mut other = with_distort(
+        song(&["C-4 -- 2.distort.amount:80 --- ---"]),
+        DistortType::Soft,
+    );
     other.tracks[0].inserts[1] = other.tracks[0].inserts[0];
     let live = live_after(other, 1);
     assert_eq!(live.inserts[0][AMOUNT], 0x40);
@@ -552,20 +558,23 @@ fn only_the_slot_a_command_names_changes() {
 
 #[test]
 fn a_command_does_nothing_in_an_empty_slot() {
-    let empty = song(&["C-4 -- 1.180 ---00 ---00"]);
+    let empty = song(&["C-4 -- 1.distort.amount:80 --- ---"]);
     assert_eq!(slot_live(empty, 1), [0; vt_model::insert::MAX_PARAMS]);
 }
 
 #[test]
 fn a_command_goes_by_its_place_so_it_means_bits_on_crush() {
     // Bits show as a place in the list, from 2 up, so 6 bits is the fifth.
-    let crushed = with_distort(song(&["C-4 -- 1.106 ---00 ---00"]), DistortType::Crush);
+    let crushed = with_distort(
+        song(&["C-4 -- 1.distort.amount:06 --- ---"]),
+        DistortType::Crush,
+    );
     assert_eq!(slot_live(crushed, 1)[AMOUNT], 4);
 }
 
 fn moved_by_lfo(
     song_with: Song,
-    target: Target,
+    target: SettingId,
     depth: i16,
     steps: usize,
 ) -> [u8; vt_model::insert::MAX_PARAMS] {
@@ -583,7 +592,7 @@ fn moved_by_lfo(
 
 #[test]
 fn an_lfo_moves_a_slots_setting_both_ways() {
-    let base = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    let base = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
     // A square: up for the first half of its 4 steps, and down for the second.
     let up = moved_by_lfo(base.clone(), AMOUNT_TARGET, 0x20, 2)[AMOUNT];
     let down = moved_by_lfo(base.clone(), AMOUNT_TARGET, 0x20, 4)[AMOUNT];
@@ -597,7 +606,7 @@ fn an_lfo_moves_a_slots_setting_both_ways() {
 
 #[test]
 fn an_lfo_on_a_slots_setting_stops_at_its_range() {
-    let base = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    let base = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
     assert_eq!(
         moved_by_lfo(base.clone(), AMOUNT_TARGET, 0xFF, 2)[AMOUNT],
         0xFF
@@ -607,20 +616,25 @@ fn an_lfo_on_a_slots_setting_stops_at_its_range() {
 
 #[test]
 fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
-    let crushed = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Crush);
+    let crushed = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Crush);
     // A setting of 9 bits is place 7, and half of full depth is 5 of the 10 places.
     let moved = moved_by_lfo(crushed.clone(), AMOUNT_TARGET, 0x80, 2)[AMOUNT];
     assert_eq!(moved, 10, "stops at the most bits");
     let moved = moved_by_lfo(crushed, AMOUNT_TARGET, 0x80, 4)[AMOUNT];
     assert_eq!(moved, 2);
-    let soft = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
-    let kind = moved_by_lfo(soft, Target::Slot { slot: 0, param: 0 }, 0x80, 2)[0];
+    let soft = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
+    let kind = moved_by_lfo(
+        soft,
+        SettingId::slot(0, Effect::Distort, 0).unwrap(),
+        0x80,
+        2,
+    )[0];
     assert_eq!(kind, 3, "half way up the 5 steps from the first");
 }
 
 #[test]
 fn an_lfo_on_an_empty_slot_does_nothing() {
-    let plain = song(&["C-4 -- ---00 ---00 ---00"]);
+    let plain = song(&["C-4 -- --- --- ---"]);
     assert_eq!(
         moved_by_lfo(plain, AMOUNT_TARGET, 0x80, 2),
         [0; vt_model::insert::MAX_PARAMS]
@@ -629,7 +643,7 @@ fn an_lfo_on_an_empty_slot_does_nothing() {
 
 #[test]
 fn an_envelope_moves_a_slots_setting() {
-    let mut moved = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+    let mut moved = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
     moved.tracks[0].envelopes[1].destination = Some(AMOUNT_TARGET);
     moved.tracks[0].envelopes[1].depth = 0x40;
     moved.tracks[0].envelopes[1].attack_ms = 0;
@@ -641,7 +655,7 @@ fn an_envelope_moves_a_slots_setting() {
 #[test]
 fn modulating_a_slot_is_heard_and_renders_the_same_each_time() {
     let render = |depth: i16| {
-        let mut moved = with_distort(song(&["C-4 -- ---00 ---00 ---00"]), DistortType::Soft);
+        let mut moved = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
         moved.tracks[0].lfos[0] = Lfo {
             destination: Some(AMOUNT_TARGET),
             depth,
@@ -665,7 +679,7 @@ fn swing_db(out: &[f32]) -> f32 {
 #[test]
 fn a_fast_lfo_keeps_its_depth() {
     let swing = |hertz: u32, destination| {
-        let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+        let mut moved = song(&["C-4 -- --- --- ---"]);
         moved.tracks[0].lfos[0] = Lfo {
             destination: Some(destination),
             shape: Shape::Sine,
@@ -679,7 +693,7 @@ fn a_fast_lfo_keeps_its_depth() {
             RATE as usize / 2,
         ))
     };
-    for destination in [Target::Vol, Target::Pan] {
+    for destination in [SettingId::VOL, SettingId::PAN] {
         let (slow, fast) = (swing(2, destination), swing(50, destination));
         assert!(
             fast > slow - 1.5,
@@ -691,13 +705,12 @@ fn a_fast_lfo_keeps_its_depth() {
 #[test]
 fn a_target_that_is_not_on_the_track_does_nothing() {
     // Har on a sample track, and a slot with nothing in it.
-    let plain = render_frames(
-        version(song(&["C-4 -- ---00 ---00 ---00"]), flat()),
-        RATE,
-        STEP,
-    );
-    for destination in [Target::Har, AMOUNT_TARGET] {
-        let mut dead = song(&["C-4 -- ---00 ---00 ---00"]);
+    let plain = render_frames(version(song(&["C-4 -- --- --- ---"]), flat()), RATE, STEP);
+    for destination in [
+        SettingId::voice(SynthVoice::default(), 0).unwrap(),
+        AMOUNT_TARGET,
+    ] {
+        let mut dead = song(&["C-4 -- --- --- ---"]);
         dead.tracks[0].lfos[0] = Lfo {
             destination: Some(destination),
             depth: 0xFF,
@@ -714,8 +727,8 @@ fn a_target_that_is_not_on_the_track_does_nothing() {
 }
 
 /// LFO 1 moving something of LFO 2's, which is on `Cut`.
-fn lfo_on_lfo(target: Target, depth: i16, second: Lfo) -> Song {
-    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+fn lfo_on_lfo(target: SettingId, depth: i16, second: Lfo) -> Song {
+    let mut moved = song(&["C-4 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0x80;
     moved.tracks[0].lfos[0] = Lfo {
         destination: Some(target),
@@ -725,7 +738,7 @@ fn lfo_on_lfo(target: Target, depth: i16, second: Lfo) -> Song {
         ..Lfo::default()
     };
     moved.tracks[0].lfos[1] = Lfo {
-        destination: Some(Target::Cut),
+        destination: Some(SettingId::CUT),
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
         ..second
@@ -737,7 +750,7 @@ fn lfo_on_lfo(target: Target, depth: i16, second: Lfo) -> Song {
 fn an_lfo_moves_another_lfos_depth() {
     // LFO 2 has no depth of its own, so it only moves while LFO 1 gives it some. A half note is 8
     // steps, so LFO 1 is up for the first 4, and down for the next.
-    let moved = lfo_on_lfo(Target::LfoDepth { lfo: 1 }, 0x20, Lfo::default());
+    let moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
     // LFO 2 is a quarter long, up for 2 steps and down for 2.
     assert_eq!(live_after(moved.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(moved.clone(), 3).cutoff, 0x60);
@@ -753,8 +766,8 @@ fn an_lfo_moves_another_lfos_phase() {
         ..Lfo::default()
     };
     // A depth of 0x80 is half a cycle, either way, so LFO 2 is flipped from where it would be.
-    let moved = lfo_on_lfo(Target::LfoPhase { lfo: 1 }, 0x80, second);
-    let plain = lfo_on_lfo(Target::Pitch, 0, second);
+    let moved = lfo_on_lfo(SettingId::lfo(1, 1).unwrap(), 0x80, second);
+    let plain = lfo_on_lfo(SettingId::PITCH, 0, second);
     assert_eq!(live_after(plain, 1).cutoff, 0xA0);
     assert_eq!(live_after(moved, 1).cutoff, 0x60);
 }
@@ -762,10 +775,10 @@ fn an_lfo_moves_another_lfos_phase() {
 #[test]
 fn an_lfo_moving_another_goes_one_way_only() {
     // LFO 2 on LFO 1's depth, set in a file, does nothing, as LFO 1 has already run.
-    let mut back = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut back = song(&["C-4 -- --- --- ---"]);
     back.tracks[0].cutoff = 0x80;
     back.tracks[0].lfos[0] = Lfo {
-        destination: Some(Target::Cut),
+        destination: Some(SettingId::CUT),
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
         depth: 0x20,
@@ -773,7 +786,7 @@ fn an_lfo_moving_another_goes_one_way_only() {
     };
     let plain = back.clone();
     back.tracks[0].lfos[1] = Lfo {
-        destination: Some(Target::LfoDepth { lfo: 0 }),
+        destination: Some(SettingId::lfo(0, 0).unwrap()),
         depth: 0x40,
         ..Lfo::default()
     };
@@ -785,16 +798,16 @@ fn an_lfo_moving_another_goes_one_way_only() {
 
 #[test]
 fn an_envelope_moves_an_lfos_depth() {
-    let mut moved = song(&["C-4 -- ---00 ---00 ---00"]);
+    let mut moved = song(&["C-4 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0x80;
     moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(Target::Cut),
+        destination: Some(SettingId::CUT),
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
         ..Lfo::default()
     };
     let envelope = &mut moved.tracks[0].envelopes[1];
-    envelope.destination = Some(Target::LfoDepth { lfo: 0 });
+    envelope.destination = Some(SettingId::lfo(0, 0).unwrap());
     envelope.depth = 0x20;
     envelope.attack_ms = 0;
     envelope.decay_ms = 0;
@@ -805,7 +818,7 @@ fn an_envelope_moves_an_lfos_depth() {
 #[test]
 fn an_lfo_moving_another_renders_the_same_each_time() {
     let render = || {
-        let moved = lfo_on_lfo(Target::LfoDepth { lfo: 1 }, 0x20, Lfo::default());
+        let moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
         render_frames(version(moved, flat()), RATE, STEP * 8)
     };
     assert_eq!(render(), render());

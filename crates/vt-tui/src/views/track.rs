@@ -10,9 +10,8 @@ use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
-use vt_model::settings::Kind;
+use vt_model::settings::{Kind, SettingId};
 use vt_model::song::Track;
-use vt_model::target::Target;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -324,7 +323,9 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
                 EnvelopeField::Sustain => format!("{}%", envelope.sustain),
                 EnvelopeField::Release => ms(envelope.release_ms),
                 // The first envelope on `Vol` shapes each note, rather than moving a value.
-                EnvelopeField::Depth if slot == 0 && envelope.destination == Some(Target::Vol) => {
+                EnvelopeField::Depth
+                    if slot == 0 && envelope.destination == Some(SettingId::VOL) =>
+                {
                     "--".to_owned()
                 }
                 EnvelopeField::Depth => depth_text(envelope.depth),
@@ -375,8 +376,9 @@ fn width(control: Control) -> usize {
             | EnvelopeField::Sustain
             | EnvelopeField::Release,
         ) => 9,
+        // Room for a slot's setting, like `2 Ping-pong`, or one that's gone, like `Material ---`.
         Control::Lfo(_, LfoField::Destination)
-        | Control::Envelope(_, EnvelopeField::Destination) => 9,
+        | Control::Envelope(_, EnvelopeField::Destination) => 13,
         _ => 7,
     }
 }

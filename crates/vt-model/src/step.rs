@@ -1,12 +1,12 @@
 //! One position in a phrase, and the fields it holds.
 
-use crate::insert::{INSERTS, MAX_PARAMS};
 use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::constants::{FX_SLOTS, MAX_LEVEL};
+use crate::constants::FX_SLOTS;
+use crate::settings::SettingId;
 
 /// Lowest note the format can write, `C-0`.
 pub const MIN_NOTE: u8 = 12;
@@ -25,178 +25,90 @@ pub enum Note {
     On(u8),
 }
 
-/// An FX command name. Mixer and filter values hold until changed, and the rest apply once.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What an FX slot does: an event, which acts on the note once, or a lock of one of the
+/// settings in the registry, which holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FxCommand {
-    Vol,
-    Pan,
-    Cut,
-    Res,
-    SendA,
-    SendB,
-    Har,
-    Tim,
-    Mor,
-    Acc,
     Del,
     Kil,
     Off,
     Ret,
     Cha,
-    /// Sets a setting of what's in a slot, by its place in the effect's list. It reads as the
-    /// setting's name on screen, and a file holds the slot and place, like `1.2`.
-    Slot {
-        slot: u8,
-        param: u8,
-    },
+    /// Sets a setting, by its id, so it belongs to its owner: the track, a voice, or an effect in
+    /// a slot.
+    Set(SettingId),
 }
 
-/// How a file names the commands for slots' settings.
-const SLOT_NAMES: [[&str; MAX_PARAMS]; INSERTS] = [
-    [
-        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8",
-    ],
-    [
-        "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8",
-    ],
-    [
-        "3.0", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3.8",
-    ],
-];
-
 impl FxCommand {
-    /// Every command, in the order a list shows them.
-    pub const ALL: [Self; 15 + INSERTS * MAX_PARAMS] = {
-        const FIRST: [FxCommand; 15] = [
-            FxCommand::Vol,
-            FxCommand::Pan,
-            FxCommand::Cut,
-            FxCommand::Res,
-            FxCommand::SendA,
-            FxCommand::SendB,
-            FxCommand::Har,
-            FxCommand::Tim,
-            FxCommand::Mor,
-            FxCommand::Acc,
-            FxCommand::Del,
-            FxCommand::Kil,
-            FxCommand::Off,
-            FxCommand::Ret,
-            FxCommand::Cha,
-        ];
-        let mut all = [Self::Vol; 15 + INSERTS * MAX_PARAMS];
-        let mut at = 0;
-        while at < FIRST.len() {
-            all[at] = FIRST[at];
-            at += 1;
-        }
-        let mut slot = 0;
-        while slot < INSERTS {
-            let mut param = 0;
-            while param < MAX_PARAMS {
-                all[at] = Self::slot(slot as u8, param as u8);
-                at += 1;
-                param += 1;
-            }
-            slot += 1;
-        }
-        all
-    };
+    pub const VOL: Self = Self::Set(SettingId::VOL);
+    pub const PAN: Self = Self::Set(SettingId::PAN);
+    pub const CUT: Self = Self::Set(SettingId::CUT);
+    pub const RES: Self = Self::Set(SettingId::RES);
+    pub const SEND_A: Self = Self::Set(SettingId::SEND_A);
+    pub const SEND_B: Self = Self::Set(SettingId::SEND_B);
 
-    const fn slot(slot: u8, param: u8) -> Self {
-        Self::Slot { slot, param }
-    }
+    /// Every event, in the order a list shows them.
+    pub const EVENTS: [Self; 5] = [Self::Del, Self::Kil, Self::Off, Self::Ret, Self::Cha];
 
     /// What it does, for a list to show.
-    pub fn meaning(self) -> &'static str {
+    pub fn meaning(self) -> String {
         match self {
-            Self::Vol => "Track gain, holds",
-            Self::Pan => "Pan, holds. 00 left, 80 centre, FF right",
-            Self::Cut => "Filter cutoff, holds",
-            Self::Res => "Filter resonance, holds",
-            Self::SendA => "Send to return A, holds",
-            Self::SendB => "Send to return B, holds",
-            Self::Har => "A synth's first setting, holds",
-            Self::Tim => "A synth's second setting, holds",
-            Self::Mor => "A synth's third setting, holds",
-            Self::Acc => "How hard a synth is struck, holds",
-            Self::Del => "Delay this step by xx units",
-            Self::Kil => "Cut the note after xx units",
-            Self::Off => "Start the release after xx units",
-            Self::Ret => "Retrigger. x is the fade, y the units between",
-            Self::Cha => "Play the note with a chance of xx out of FF",
-            Self::Slot { .. } => "A setting of what's in a slot on the FX page",
+            Self::Del => "Delay this step by xx units".to_owned(),
+            Self::Kil => "Cut the note after xx units".to_owned(),
+            Self::Off => "Start the release after xx units".to_owned(),
+            Self::Ret => "Retrigger. x is the fade, y the units between".to_owned(),
+            Self::Cha => "Play the note with a chance of xx out of FF".to_owned(),
+            Self::Set(id) => format!("{}: {}", id.group(), id.name()),
         }
     }
 
-    /// The highest value this takes. Those on the level scale stop at its top.
+    /// The highest value this takes: a setting's own top, as a list stops at its last choice.
     pub fn highest(self) -> u8 {
         match self {
-            Self::Vol | Self::SendA | Self::SendB => MAX_LEVEL,
+            Self::Set(id) => id.entry().kind.top(),
             _ => 0xFF,
         }
     }
 
-    /// The three-letter name used on screen and in files.
-    pub fn name(self) -> &'static str {
+    /// Its label, as the grid shows it with nothing loaded to name it otherwise.
+    pub fn name(self) -> String {
         match self {
-            Self::Vol => "VOL",
-            Self::Pan => "PAN",
-            Self::Cut => "CUT",
-            Self::Res => "RES",
-            Self::SendA => "SNA",
-            Self::SendB => "SNB",
-            Self::Har => "HAR",
-            Self::Tim => "TIM",
-            Self::Mor => "MOR",
-            Self::Acc => "ACC",
-            Self::Del => "DEL",
-            Self::Kil => "KIL",
-            Self::Off => "OFF",
-            Self::Ret => "RET",
-            Self::Cha => "CHA",
-            Self::Slot { slot, param } => SLOT_NAMES[slot as usize][param as usize],
+            Self::Del => "DEL".to_owned(),
+            Self::Kil => "KIL".to_owned(),
+            Self::Off => "OFF".to_owned(),
+            Self::Ret => "RET".to_owned(),
+            Self::Cha => "CHA".to_owned(),
+            Self::Set(id) => id.label().unwrap_or_else(|| id.key()),
         }
     }
 
-    /// Look a command up by its three-letter name.
-    pub fn from_name(name: &str) -> Option<Self> {
-        Some(match name {
-            "VOL" => Self::Vol,
-            "PAN" => Self::Pan,
-            "CUT" => Self::Cut,
-            "RES" => Self::Res,
-            "SNA" => Self::SendA,
-            "SNB" => Self::SendB,
-            "HAR" => Self::Har,
-            "TIM" => Self::Tim,
-            "MOR" => Self::Mor,
-            "ACC" => Self::Acc,
-            "DEL" => Self::Del,
-            "KIL" => Self::Kil,
-            "OFF" => Self::Off,
-            "RET" => Self::Ret,
-            "CHA" => Self::Cha,
-            _ => return Self::ALL.into_iter().find(|command| command.name() == name),
-        })
+    /// The name songs store it by: an event's own, or a setting's key.
+    pub fn key(self) -> String {
+        match self {
+            Self::Set(id) => id.key(),
+            event => event.name().to_lowercase(),
+        }
     }
 
-    /// Whether the value stays in force after this step.
+    /// The command a stored key names.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::EVENTS
+            .into_iter()
+            .find(|event| event.key() == key)
+            .or_else(|| SettingId::from_key(key).map(Self::Set))
+    }
+
+    /// The setting this locks, if it locks one.
+    pub fn setting(self) -> Option<SettingId> {
+        match self {
+            Self::Set(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Whether the value stays in force after this step: a setting's does, an event's doesn't.
     pub fn holds(self) -> bool {
-        matches!(
-            self,
-            Self::Vol
-                | Self::Pan
-                | Self::Cut
-                | Self::Res
-                | Self::SendA
-                | Self::SendB
-                | Self::Har
-                | Self::Tim
-                | Self::Mor
-                | Self::Acc
-                | Self::Slot { .. }
-        )
+        matches!(self, Self::Set(_))
     }
 }
 

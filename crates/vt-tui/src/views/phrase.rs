@@ -47,7 +47,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     let mut text = format!("{} {velocity} {gate}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
-            (Some(command), Some(track)) => command.label_on(track),
+            (Some(command), Some(_)) => command.name(),
             (Some(command), None) => command.name().to_owned(),
             (None, _) => "---".to_owned(),
         };

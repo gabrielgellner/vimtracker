@@ -146,9 +146,9 @@ fn an_empty_row_with_a_gate_still_takes_its_time() {
 #[test]
 fn a_lane_runs_on_steps_and_a_column_without_one_follows_the_rows() {
     let rows = [
-        "C-4 -- MLT4 SNA10h ---00 ---00",
-        "--- -- SNA20h ---00 ---00",
-        "--- -- SNA30h ---00 ---00",
+        "C-4 -- MLT4 sna:10h --- ---",
+        "--- -- sna:20h --- ---",
+        "--- -- sna:30h --- ---",
     ];
     let send = |song: &Song, place: usize| {
         let mut engine = Engine::new(RATE, version(song));

@@ -7,18 +7,18 @@ use vt_model::constants::{
     MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
+use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
 };
-use vt_model::target::Target;
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
 use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState, slot_base};
+use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState, base_of};
 use crate::voice::{NoteOn, Voice};
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
@@ -627,44 +627,10 @@ impl Engine {
             } else {
                 &fresh
             };
-            let controls = [
-                (FxCommand::Cut, before.cutoff, track.cutoff),
-                (FxCommand::Res, before.resonance, track.resonance),
-                (FxCommand::Pan, before.pan, track.pan),
-                (FxCommand::SendA, before.send_a, track.send_a),
-                (FxCommand::SendB, before.send_b, track.send_b),
-                (
-                    FxCommand::Har,
-                    before.machine_value(0),
-                    track.machine_value(0),
-                ),
-                (
-                    FxCommand::Tim,
-                    before.machine_value(1),
-                    track.machine_value(1),
-                ),
-                (
-                    FxCommand::Mor,
-                    before.machine_value(2),
-                    track.machine_value(2),
-                ),
-                (
-                    FxCommand::Acc,
-                    before.machine_value(3),
-                    track.machine_value(3),
-                ),
-            ];
-            for (command, was, now) in controls {
+            for id in SettingId::all() {
+                let (was, now) = (base_of(id, before), base_of(id, track));
                 if was != now {
-                    state.set_base(command, now);
-                }
-            }
-            for command in FxCommand::ALL {
-                if matches!(command, FxCommand::Slot { .. }) {
-                    let (was, now) = (slot_base(command, before), slot_base(command, track));
-                    if was != now {
-                        state.set_base(command, now);
-                    }
+                    state.set_base(id, now);
                 }
             }
         }
@@ -777,7 +743,7 @@ impl Engine {
             .tracks
             .get(index)
             .map(|track| track.envelopes[0])
-            .filter(|envelope| envelope.destination == Some(Target::Vol))
+            .filter(|envelope| envelope.destination == Some(SettingId::VOL))
             .unwrap_or_default()
     }
 
@@ -1205,7 +1171,8 @@ impl Engine {
                 FxCommand::Off => off_units = Some(slot.value),
                 FxCommand::Ret => retrigger = Some(slot.value),
                 FxCommand::Cha => {}
-                value if slot.mark == Mark::Glide => {
+                FxCommand::Set(id) if slot.mark == Mark::Glide => {
+                    let value = command;
                     let to = phrase.and_then(|phrase| {
                         match lane_steps[number] {
                             Some(at) => phrase.next_in_lane(number, at, value),
@@ -1216,9 +1183,9 @@ impl Engine {
                         .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
                     });
                     let now = self.song_time();
-                    self.tracks[index].start_glide(value, slot.value, to, now);
+                    self.tracks[index].start_glide(id, slot.value, to, now);
                 }
-                value => self.tracks[index].set_value(value, slot.value, slot.mark),
+                FxCommand::Set(id) => self.tracks[index].set_value(id, slot.value, slot.mark),
             }
         }
         let tie = tying && plays && delay_units.is_none() && matches!(event, Note::On(_));

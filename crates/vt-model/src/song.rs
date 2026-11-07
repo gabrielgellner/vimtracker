@@ -1214,17 +1214,17 @@ mod tests {
         assert_eq!(read, [2, 3, 4, 2, 3, 4, 2]);
         assert_eq!(lane.step_at(-1), 4);
         let steps = [
-            "--- -- CUT10 ---00 ---00",
-            "--- -- ---00 ---00 ---00",
-            "--- -- CUT20 ---00 ---00",
-            "--- -- ---00 ---00 ---00",
-            "--- -- CUT30 ---00 ---00",
+            "--- -- cut:10 --- ---",
+            "--- -- --- --- ---",
+            "--- -- cut:20 --- ---",
+            "--- -- --- --- ---",
+            "--- -- cut:30 --- ---",
         ];
         let mut phrase = Phrase::from_steps(steps.iter().map(|t| t.parse().unwrap()).collect());
         phrase.set_lane(0, Some(lane));
         let next = |step| {
             phrase
-                .next_in_lane(0, step, FxCommand::Cut)
+                .next_in_lane(0, step, FxCommand::CUT)
                 .map(|(distance, fx)| (distance, fx.value))
         };
         assert_eq!(
@@ -1239,10 +1239,10 @@ mod tests {
     #[test]
     fn next_value_looks_forward_in_the_slot_and_wraps() {
         let steps = [
-            "--- -- CUT10 ---00",
-            "--- -- RES20 ---00",
-            "--- -- CUT30 CUT90",
-            "--- -- ---00 ---00",
+            "--- -- cut:10 ---",
+            "--- -- res:20 ---",
+            "--- -- cut:30 cut:90",
+            "--- -- --- ---",
         ];
         let steps = steps.iter().map(|text| text.parse().unwrap()).collect();
         let phrase = Phrase::from_steps(steps);
@@ -1251,11 +1251,11 @@ mod tests {
                 .next_value(step, slot, command)
                 .map(|(distance, fx)| (distance, fx.value))
         };
-        assert_eq!(found(0, 0, FxCommand::Cut), Some((2, 0x30)));
-        assert_eq!(found(2, 0, FxCommand::Cut), Some((2, 0x10)));
-        assert_eq!(found(1, 0, FxCommand::Res), None, "not itself");
-        assert_eq!(found(0, 1, FxCommand::Cut), Some((2, 0x90)));
-        assert_eq!(found(0, 0, FxCommand::Vol), None);
+        assert_eq!(found(0, 0, FxCommand::CUT), Some((2, 0x30)));
+        assert_eq!(found(2, 0, FxCommand::CUT), Some((2, 0x10)));
+        assert_eq!(found(1, 0, FxCommand::RES), None, "not itself");
+        assert_eq!(found(0, 1, FxCommand::CUT), Some((2, 0x90)));
+        assert_eq!(found(0, 0, FxCommand::VOL), None);
     }
     use crate::constants::DEFAULT_TRACKS;
 
@@ -1318,7 +1318,7 @@ mod tests {
         Phrase::from_steps(
             gates
                 .iter()
-                .map(|gate| format!("C-4 -- {gate} ---00 ---00 ---00").parse().unwrap())
+                .map(|gate| format!("C-4 -- {gate} --- --- ---").parse().unwrap())
                 .collect(),
         )
     }

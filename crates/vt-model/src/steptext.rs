@@ -1,7 +1,7 @@
 //! The readable text form of a step, used on disk and in tests.
 //!
-//! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 CUT40 ---00 RET14`. A row without a gate cell
-//! leaves it out, as every row did before gates: `C-4 64 CUT40 ---00 RET14`.
+//! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
+//! leaves it out, as every row did before gates: `C-4 64 cut:40 --- ret:14`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -106,29 +106,25 @@ impl FromStr for Note {
 impl FromStr for FxSlot {
     type Err = StepTextError;
 
+    /// A command's key, a colon, its value in two hex digits and a value's mark, like `cut:40`,
+    /// `string.decay:80g` or `del:03`, or `---` for an empty slot. The colon is there because a key
+    /// can end in letters that read as hex.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bad = || StepTextError::Slot(text.to_owned());
-        if !matches!(text.len(), 5 | 6) || !text.is_ascii() {
-            return Err(bad());
+        if text == "---" {
+            return Ok(Self::default());
         }
-        let (body, mark) = text.split_at(5);
+        let (key, rest) = text.split_once(':').ok_or_else(bad)?;
+        let (value, mark) = rest.split_at_checked(2).ok_or_else(bad)?;
+        let value = hex_byte(value).ok_or_else(bad)?;
         let mark = match mark {
             "" => Mark::Lock,
             "h" => Mark::Hold,
             "g" => Mark::Glide,
             _ => return Err(bad()),
         };
-        let (name, value) = body.split_at(3);
-        let value = hex_byte(value).ok_or_else(bad)?;
-        if name == "---" {
-            return if value == 0 && mark == Mark::Lock {
-                Ok(Self::default())
-            } else {
-                Err(bad())
-            };
-        }
         let command =
-            FxCommand::from_name(name).ok_or_else(|| StepTextError::Command(name.to_owned()))?;
+            FxCommand::from_key(key).ok_or_else(|| StepTextError::Command(key.to_owned()))?;
         if mark != Mark::Lock && !command.holds() {
             return Err(bad());
         }
@@ -143,8 +139,8 @@ impl FromStr for FxSlot {
 impl fmt::Display for FxSlot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.command {
-            Some(command) => write!(f, "{}{:02X}", command.name(), self.value)?,
-            None => f.write_str("---00")?,
+            Some(command) => write!(f, "{}:{:02X}", command.key(), self.value)?,
+            None => f.write_str("---")?,
         }
         match self.mark {
             Mark::Lock => Ok(()),
@@ -212,15 +208,15 @@ mod tests {
     #[test]
     fn every_field_form_round_trips() {
         for text in [
-            "C-4 64 ---00 RET14",
-            "--- -- ---00 ---00 ---00",
-            "OFF 7F PAN80 CHAFF",
-            "C-0 00 KIL02 OFF03",
-            "G-9 -- SNA20 SNB30",
+            "C-4 64 --- ret:14",
+            "--- -- --- --- ---",
+            "OFF 7F pan:80 cha:FF",
+            "C-0 00 kil:02 off:03",
+            "G-9 -- sna:20 snb:30",
             "C#3 --",
-            "C-4 64 CUT40h SNA20g PAN80",
-            "C-4 64 HLD3 CUT40 ---00 ---00",
-            "--- -- RST4 ---00 ---00 ---00",
+            "C-4 64 cut:40h sna:20g pan:80",
+            "C-4 64 HLD3 cut:40 --- ---",
+            "--- -- RST4 --- --- ---",
             "E-4 -- MLT0",
         ] {
             let step: Step = text.parse().unwrap();
@@ -231,14 +227,14 @@ mod tests {
     #[test]
     fn a_slot_reads_its_mark_with_lock_the_plain_form() {
         let slot = |text: &str| text.parse::<FxSlot>().map(|slot| slot.mark);
-        assert_eq!(slot("CUT40"), Ok(Mark::Lock));
-        assert_eq!(slot("CUT40h"), Ok(Mark::Hold));
-        assert_eq!(slot("CUT40g"), Ok(Mark::Glide));
+        assert_eq!(slot("cut:40"), Ok(Mark::Lock));
+        assert_eq!(slot("cut:40h"), Ok(Mark::Hold));
+        assert_eq!(slot("cut:40g"), Ok(Mark::Glide));
     }
 
     #[test]
     fn only_values_can_have_a_mark() {
-        for text in ["DEL10h", "RET14g", "---00h", "CUT40x", "CUT40."] {
+        for text in ["del:10h", "ret:14g", "---h", "CUT40x", "cut:40."] {
             assert!(text.parse::<FxSlot>().is_err(), "{text} should be refused");
         }
     }
@@ -256,7 +252,7 @@ mod tests {
         for text in ["HLD9", "XYZ1", "HLD", "HLD10", "hld3"] {
             assert!(gate(text).is_err(), "{text} should be refused");
         }
-        let step: Step = "C-4 64 ---00 ---00 ---00".parse().unwrap();
+        let step: Step = "C-4 64 --- --- ---".parse().unwrap();
         assert_eq!(step.gate, None, "a row from before gates has none");
         assert_eq!(step.pulses(), 1);
     }
@@ -278,9 +274,11 @@ mod tests {
             ("C-4 6 --", StepTextError::Velocity("6".into())),
             ("C-4 ab --", StepTextError::Velocity("ab".into())),
             ("C-4 80", StepTextError::Velocity("80".into())),
-            ("C-4 -- CUT4", StepTextError::Slot("CUT4".into())),
+            ("C-4 -- cut:4", StepTextError::Slot("cut:4".into())),
+            ("C-4 -- CUT40", StepTextError::Slot("CUT40".into())),
             ("C-4 -- ---01", StepTextError::Slot("---01".into())),
-            ("C-4 -- XXX00", StepTextError::Command("XXX".into())),
+            ("C-4 -- xyz:00", StepTextError::Command("xyz".into())),
+            ("C-4 -- del:00h", StepTextError::Slot("del:00h".into())),
             ("C-4", StepTextError::TooFewFields("C-4".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");
