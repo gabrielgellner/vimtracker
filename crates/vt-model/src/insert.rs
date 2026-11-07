@@ -457,8 +457,9 @@ pub struct Distort {
     pub gain: u8,
 }
 
-/// A delay's settings.
+/// A delay's settings. One a file doesn't have starts as new.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Delay {
     /// A place in the list of note divisions.
     pub time: u8,
@@ -477,6 +478,12 @@ pub struct Delay {
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
+}
+
+impl Default for Delay {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 impl Delay {
@@ -606,6 +613,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_delay_saved_with_fewer_settings_loads_with_the_rest_as_new() {
+        let delay: Delay = ron::from_str("(mix: 255, gain: 224)").unwrap();
+        assert_eq!(
+            delay,
+            Delay {
+                mix: 0xFF,
+                ..Delay::DEFAULT
+            }
+        );
     }
 
     #[test]
