@@ -19,6 +19,15 @@ These were sent with `tmux send-keys` to a private tmux server using the author'
 | `Ctrl-J` | `j` with `CONTROL` | Distinct from `Enter` |
 | `Esc` | `Esc` | tmux `escape-time` is 10 ms in the config |
 
+`Ctrl` with a number mostly can't be used. Sent the same way on 2026-11-06, `Ctrl-1` arrives as
+`1`, `Ctrl-2` as `Ctrl-Space`, `Ctrl-3` as `Esc`, `Ctrl-8` as `Backspace`, and `Ctrl-9` and
+`Ctrl-0` as plain digits. Only `Ctrl-4` to `Ctrl-7` arrive as themselves.
+
+## Checked on a real keyboard
+
+*   `Option-1`, `Option-2` and `Option-s` work in kitty, on 2026-11-06. That needs
+    `macos_option_as_alt`.
+
 ## Still to check by hand
 
 `send-keys` writes directly to the pane, so these need a real keyboard, in kitty, with and

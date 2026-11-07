@@ -386,14 +386,14 @@ const SONG: &[(&str, Cmd, &str)] = &[
 ];
 
 const MIXER: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next track"),
-    ("k", Cmd::Move(Motion::Up), "Previous track"),
-    ("g g", Cmd::Move(Motion::First), "First track"),
-    ("G", Cmd::Move(Motion::Last), "Last track"),
-    ("h", Cmd::Move(Motion::Left), "Previous setting"),
-    ("l", Cmd::Move(Motion::Right), "Next setting"),
-    ("0", Cmd::Move(Motion::RowStart), "First setting"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+    ("h", Cmd::Move(Motion::Left), "Previous track"),
+    ("l", Cmd::Move(Motion::Right), "Next track"),
+    ("0", Cmd::Move(Motion::RowStart), "First track"),
+    ("$", Cmd::Move(Motion::RowEnd), "Last track"),
+    ("j", Cmd::Move(Motion::Down), "Next setting"),
+    ("k", Cmd::Move(Motion::Up), "Previous setting"),
+    ("g g", Cmd::Move(Motion::First), "First setting"),
+    ("G", Cmd::Move(Motion::Last), "Last setting"),
     ("=", Cmd::Increase, "Increase the value, or switch on"),
     ("-", Cmd::Decrease, "Decrease the value, or switch off"),
     ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),

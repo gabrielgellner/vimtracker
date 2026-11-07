@@ -255,7 +255,7 @@ impl App {
     /// What the cursor is on.
     pub fn track_control(&self) -> Control {
         if self.view == View::Mixer {
-            return MIXER[self.mixer_column.min(MIXER.len() - 1)];
+            return MIXER[self.mixer_row.min(MIXER.len() - 1)];
         }
         let rows = self.page_rows();
         let row = rows[self.track_row.min(rows.len() - 1)];
@@ -411,27 +411,27 @@ impl App {
         self.track_field = field.min(rows[self.track_row].len() - 1);
     }
 
-    /// Run a command on the mixer. Moving goes between tracks, and everything else means what it
-    /// does on the track page.
+    /// Run a command on the mixer. `h` and `l` go between its strips, and `j` and `k` up and down
+    /// them. Everything else means what it does on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
         let times = self.count.unwrap_or(1).max(1) as isize;
         let track = self.cursor.track as isize;
         match cmd {
-            Cmd::Move(Motion::Down) => self.move_track(times),
-            Cmd::Move(Motion::Up) => self.move_track(-times),
-            Cmd::Move(Motion::First) => self.move_track(-track),
-            Cmd::Move(Motion::Last) => {
+            Cmd::Move(Motion::Right) => self.move_track(times),
+            Cmd::Move(Motion::Left) => self.move_track(-times),
+            Cmd::Move(Motion::RowStart) => self.move_track(-track),
+            Cmd::Move(Motion::RowEnd) => {
                 self.move_track(self.song().tracks.len() as isize - 1 - track)
             }
-            Cmd::Move(Motion::Right) => {
-                let moved = self.mixer_column.saturating_add(times as usize);
-                self.mixer_column = moved.min(MIXER.len() - 1);
+            Cmd::Move(Motion::Down) => {
+                let moved = self.mixer_row.saturating_add(times as usize);
+                self.mixer_row = moved.min(MIXER.len() - 1);
             }
-            Cmd::Move(Motion::Left) => {
-                self.mixer_column = self.mixer_column.saturating_sub(times as usize);
+            Cmd::Move(Motion::Up) => {
+                self.mixer_row = self.mixer_row.saturating_sub(times as usize);
             }
-            Cmd::Move(Motion::RowStart) => self.mixer_column = 0,
-            Cmd::Move(Motion::RowEnd) => self.mixer_column = MIXER.len() - 1,
+            Cmd::Move(Motion::First) => self.mixer_row = 0,
+            Cmd::Move(Motion::Last) => self.mixer_row = MIXER.len() - 1,
             _ => return self.run_track_page(cmd),
         }
         self.count = None;

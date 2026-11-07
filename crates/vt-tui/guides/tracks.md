@@ -136,8 +136,10 @@ on a step.
 
 ## The mixer
 
-Press `Space 6` for every track's `Level`, `Pan`, `Delay`, `Reverb`, mute and
-solo on one page. `j` and `k` move between tracks, `h` and `l` between settings,
-and values edit as they do on the track page. On mute and solo, `=` switches on,
+Press `Space 6` for a strip for each track: its name, a meter of what it's playing
+with `L` and `R` bars, a fader beside them showing its `Level`, then its `Pan`,
+`Delay`, `Reverb`, mute and solo. The meters are on the same scale as the main one,
+with `0` marked, and show the track after its level and pan. `h` and `l` move between
+tracks, `j` and `k` up and down the strip, and values edit as they do on the track page. On mute and solo, `=` switches on,
 `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track.

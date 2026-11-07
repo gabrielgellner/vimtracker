@@ -118,7 +118,7 @@ pub struct App {
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
-    pub mixer_column: usize,
+    pub mixer_row: usize,
     pub song_column: usize,
     /// The section the engine is on.
     pub playing_section: usize,
@@ -161,6 +161,8 @@ pub struct App {
     pub playhead: usize,
     /// The main output's level.
     pub meter: Meter,
+    /// Each track's level, for the mixer.
+    pub track_meters: Vec<Meter>,
     /// The CPU figure on the status line.
     pub cpu: LoadReadout,
     last_tick: Instant,
@@ -227,7 +229,7 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
-            mixer_column: 0,
+            mixer_row: 0,
             song_column: 0,
             playing_section: 0,
             looping: None,
@@ -264,6 +266,7 @@ impl App {
             transport: Transport::Stopped,
             playhead: 0,
             meter: Meter::default(),
+            track_meters: vec![Meter::default(); MAX_TRACKS],
             cpu: LoadReadout::default(),
             last_tick: Instant::now(),
             should_quit: false,
@@ -447,6 +450,10 @@ impl App {
         let report = self.handle.latest();
         self.meter
             .update(report.map(|report| report.reading), seconds);
+        let tracks = self.song().tracks.len();
+        for (index, meter) in self.track_meters.iter_mut().take(tracks).enumerate() {
+            meter.update(report.map(|report| report.tracks[index]), seconds);
+        }
         if let Some(report) = report {
             self.playhead = report.position;
             self.playing_section = report.section;

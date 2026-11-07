@@ -3161,15 +3161,23 @@ fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
 }
 
 fn mixer_text(app: &App) -> Vec<String> {
-    let backend = ratatui::backend::TestBackend::new(80, 12);
+    let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
-    (0..12)
+    (0..16)
         .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
         .collect()
+}
+
+/// The line of the mixer starting with a setting's name.
+fn mixer_line(app: &App, name: &str) -> String {
+    mixer_text(app)
+        .into_iter()
+        .find(|line| line.starts_with(name))
+        .unwrap()
 }
 
 #[test]
@@ -3185,23 +3193,23 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].level, 0xE0);
 
-    press(&mut app, "jl");
+    press(&mut app, "lj");
     assert_eq!(app.cursor.track, 1);
     press(&mut app, "i40");
     assert_eq!(app.song().tracks[1].pan, 0x40);
     assert_eq!(app.song().tracks[0].pan, 0x80, "only this track");
     press(&mut app, "x");
     assert_eq!(app.song().tracks[1].pan, 0x80);
-    press(&mut app, "l+");
+    press(&mut app, "j+");
     assert_eq!(app.song().tracks[1].delay, 0x10);
-    press(&mut app, "l");
+    press(&mut app, "j");
     assert_eq!(column_name(&app), "Reverb");
-    press(&mut app, "gg$h");
+    press(&mut app, "Gk0");
     assert_eq!(app.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
-    press(&mut app, "G");
+    press(&mut app, "$");
     assert_eq!(app.cursor.track, 1);
-    press(&mut app, "0");
+    press(&mut app, "gg");
     assert_eq!(column_name(&app), "Level");
 }
 
@@ -3213,9 +3221,13 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     special(&mut app, KeyCode::Esc);
     block(&mut realtime, &mut app);
     let _ = loudest(&mut realtime, 96_000);
-    press(&mut app, " 6$h=");
+    press(&mut app, " 6Gk=");
     assert!(app.levels[0].mute);
-    assert!(mixer_text(&app)[3].contains('M'), "{}", mixer_text(&app)[3]);
+    assert!(
+        mixer_line(&app, "Mute").contains('M'),
+        "{}",
+        mixer_line(&app, "Mute")
+    );
     press(&mut app, "=");
     assert!(app.levels[0].mute, "= only switches on");
     press(&mut app, " 3k;");
@@ -3226,9 +3238,9 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     assert!(app.levels[0].mute);
     press(&mut app, "x");
     assert!(!app.levels[0].mute);
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     assert!(app.levels[0].solo);
-    assert!(mixer_text(&app)[3].contains('S'));
+    assert!(mixer_line(&app, "Solo")[4..].contains('S'));
     press(&mut app, "i");
     assert!(!app.levels[0].solo);
     assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
@@ -3241,15 +3253,79 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
     command(&mut app, "name bd");
     press(&mut app, " 6");
     assert!(
-        mixer_text(&app)[3].starts_with("01 BD"),
+        mixer_text(&app)[2].contains("01 BD"),
         "{}",
-        mixer_text(&app)[3]
+        mixer_text(&app)[2]
     );
-    press(&mut app, "G");
+    press(&mut app, "$");
     assert_eq!(app.cursor.track, 31);
+    let names = &mixer_text(&app)[2];
+    assert!(names.contains("32"), "{names}");
+    assert!(!names.contains("01"), "{names}");
+}
+
+#[test]
+fn the_mixers_meters_show_only_the_track_that_is_playing() {
+    use vt_tui::meter::FLOOR_DB;
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    block(&mut realtime, &mut app);
+    let _ = loudest(&mut realtime, 96_000);
+    press(&mut app, " 3k;");
+    let _ = loudest(&mut realtime, 2000);
+    app.tick();
+    assert!(
+        app.track_meters[0].top() > FLOOR_DB,
+        "{}",
+        app.track_meters[0].top()
+    );
+    assert_eq!(app.track_meters[1].top(), FLOOR_DB);
+}
+
+#[test]
+fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
+    use vt_engine::mixer::Reading;
+    let (mut app, _realtime) = app();
+    let reading = Reading {
+        before: [1.0, 0.0],
+        after: [1.0, 0.0],
+        power: [100.0, 0.0],
+        frames: 100,
+    };
+    for _ in 0..50 {
+        app.track_meters[0].update(Some(reading), 0.033);
+    }
+    command(&mut app, "track add 6");
+    press(&mut app, " 6");
     let text = mixer_text(&app);
-    assert!(text.iter().any(|line| line.starts_with("32 ")), "{text:?}");
-    assert!(!text.iter().any(|line| line.starts_with("01 ")), "{text:?}");
+    assert!(text[2].starts_with("       01"), "{}", text[2]);
+    assert!(text[2].contains("08"), "eight strips fit: {}", text[2]);
+    // The meter's left channel is full, and the right empty.
+    let bars = &text[3..10];
+    let left = |line: &String| line.chars().nth(7).unwrap();
+    let right = |line: &String| line.chars().nth(8).unwrap();
+    assert_eq!(left(&bars[bars.len() - 1]), '█', "{bars:?}");
+    assert_eq!(right(&bars[bars.len() - 1]), ' ', "{bars:?}");
+    // Every track has a fader, for a level of E0 here. The next track has only that.
+    let fader = |line: &String, strip: usize| line.chars().nth(7 + strip * 7 + 3).unwrap();
+    assert_ne!(fader(&bars[bars.len() - 1], 0), ' ');
+    assert_ne!(fader(&bars[bars.len() - 1], 1), ' ');
+    // Turning a fader down lowers only that strip's.
+    let filled = |text: &[String], strip: usize| {
+        text[3..10]
+            .iter()
+            .filter(|line| fader(line, strip) != ' ')
+            .count()
+    };
+    let before = filled(&text, 0);
+    press(&mut app, "x");
+    press(&mut app, "i10");
+    let text = mixer_text(&app);
+    assert!(filled(&text, 0) < before, "{text:?}");
+    assert_eq!(filled(&text, 1), before);
+    assert!(mixer_line(&app, "Level").contains("10"));
 }
 
 fn song_text(app: &App) -> Vec<String> {
@@ -4364,7 +4440,7 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
     use vt_tui::track_page::Control;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 6j");
+    press(&mut app, " 6l");
     assert_eq!(app.view, View::Mixer);
     assert_eq!(app.cursor.track, 1);
     press(&mut app, "/s");
@@ -4384,16 +4460,14 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
             .map(|x| buffer[(x, y)].symbol().to_owned())
             .collect::<String>()
     };
-    // The columns stay put, with the label in the name and on this track's value alone.
-    assert!(line(2).contains(&format!("S{solo}lo")), "{}", line(2));
-    let column = line(2).find('S').unwrap();
-    assert_eq!(buffer[(column as u16 + 1, 2)].bg, vt_tui::theme::PEACH);
-    assert_eq!(buffer[(column as u16, 3)].symbol(), "-", "track 1");
-    assert_eq!(
-        buffer[(column as u16, 4)].symbol(),
-        solo.to_string(),
-        "track 2"
-    );
+    // The name keeps its place with the label in it, and only this track's value has one.
+    let y = (0..24)
+        .find(|y| line(*y).starts_with(&format!("S{solo}lo")))
+        .unwrap();
+    assert_eq!(buffer[(1, y)].bg, vt_tui::theme::PEACH);
+    assert_eq!(buffer[(7, y)].symbol(), "-", "track 1");
+    assert_eq!(buffer[(14, y)].symbol(), solo.to_string(), "track 2");
+    assert_eq!(buffer[(14, y)].bg, vt_tui::theme::PEACH);
 
     press(&mut app, &solo.to_string());
     assert_eq!(app.mode, Mode::Normal);

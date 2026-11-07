@@ -72,6 +72,8 @@ pub struct Telemetry {
     pub position: usize,
     pub transport: Transport,
     pub reading: Reading,
+    /// Each track's levels.
+    pub tracks: [Reading; MAX_TRACKS],
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
@@ -159,6 +161,9 @@ impl Handle {
         while let Ok(mut report) = self.telemetry.pop() {
             if let Some(earlier) = latest {
                 report.reading.merge(earlier.reading);
+                for (reading, earlier) in report.tracks.iter_mut().zip(earlier.tracks) {
+                    reading.merge(earlier);
+                }
             }
             latest = Some(report);
         }
@@ -221,11 +226,13 @@ impl Realtime {
             }
         }
         self.engine.process(out);
+        let reading = self.engine.take_reading();
         let _ = self.telemetry.push(Telemetry {
             section: self.engine.section(),
             position: self.engine.position(),
             transport: self.engine.transport(),
-            reading: self.engine.take_reading(),
+            reading,
+            tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,
             live: self.engine.live(self.watched),
         });
