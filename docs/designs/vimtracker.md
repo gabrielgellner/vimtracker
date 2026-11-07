@@ -1345,7 +1345,7 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 
 **Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
 
-**Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. An effect only receives finished values, in `process(input, values)`, so it needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
+**Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. The engine works out a finished copy of the effect each update and hands that over, so an effect needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
 
 **On a trig.** A later kind of target reads its value once when a step fires, and isn't smoothed, as an LFO added to a Bernoulli gate's chance is in a modular. Nothing in the table prevents it, and none is built until the first one is wanted. `CHA` comes first, with hats getting busier and sparser over some bars. The Digitakt II and Polyend set these per step, and as far as was read don't modulate them, so this goes past them.
 
@@ -1356,7 +1356,7 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 **Issues.**
 
 1.  **The table, and the existing targets on it:** `Target`, registering, and the `Dest` list built from it. **Tests:** golden renders unchanged, every existing destination still does what it did, no two codes are the same, and the list holds only what's on the track.
-2.  **A slot's settings as targets:** the layers, `process(input, values)`, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
+2.  **A slot's settings as targets:** the layers, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
 3.  **An LFO's `Depth` and `Phase` as targets:** the order and the one-way lists. **Tests:** `LFO 1` moving `LFO 2`, the list offering no way back, and a song rendering the same each time.
 4.  **A picker with groups, for `Dest`:** the two columns and `/`. **Tests:** each key in each place, opening on the current choice, a search reaching every group, one thing in a group shown directly, `Esc` changing nothing, and flat pickers behaving as they did.
 

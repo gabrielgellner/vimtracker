@@ -261,6 +261,7 @@ mod tests {
     use vt_model::samples::SamplePool;
     use vt_model::song::Song;
     use vt_model::step::{Note, Step};
+    use vt_model::target::Target;
 
     use super::*;
     use crate::rt_guard::forbidden;
@@ -342,6 +343,26 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         assert!(handle.send(Command::PlayFrom { step: 0 }));
         assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
+    #[test]
+    fn modulating_a_slot_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut song = song(1, 16);
+        let target = Target::Slot { slot: 0, param: 1 };
+        song.tracks[0].inserts = [Insert::ALL[1]; INSERTS];
+        song.tracks[0].lfos[0].destination = Some(target);
+        song.tracks[0].lfos[0].depth = 0x80;
+        song.tracks[0].envelopes[1].destination = Some(target);
+        song.tracks[0].envelopes[1].depth = 0x40;
+        let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+        for step in 0..8 {
+            *phrase.step_mut(step).unwrap() = "C-4 -- 1AM80g 2GN40 3MX20h".parse().unwrap();
+        }
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 400), 0);
     }
 
     #[test]

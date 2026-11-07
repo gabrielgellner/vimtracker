@@ -276,7 +276,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
             match field {
                 EnvelopeField::Destination => envelope
                     .destination
-                    .map_or_else(|| "---".to_owned(), |d| d.name().to_owned()),
+                    .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
                 EnvelopeField::Attack => ms(envelope.attack_ms),
                 EnvelopeField::Decay => ms(envelope.decay_ms),
                 EnvelopeField::Sustain => format!("{}%", envelope.sustain),
@@ -308,7 +308,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
             match field {
                 LfoField::Destination => lfo
                     .destination
-                    .map_or_else(|| "---".to_owned(), |d| d.name().to_owned()),
+                    .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
                 LfoField::Shape => lfo.shape.name().to_owned(),
                 LfoField::Rate => lfo.rate.to_string(),
                 LfoField::Depth => depth_text(lfo.depth),
@@ -333,6 +333,8 @@ fn width(control: Control) -> usize {
             | EnvelopeField::Sustain
             | EnvelopeField::Release,
         ) => 9,
+        Control::Lfo(_, LfoField::Destination)
+        | Control::Envelope(_, EnvelopeField::Destination) => 9,
         _ => 7,
     }
 }
@@ -438,9 +440,10 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     let mut lines = vec![Line::from(
         (0..TRACK_ENVELOPES)
             .map(|slot| {
-                let name = track.envelopes[slot]
-                    .destination
-                    .map_or("---", |destination| destination.name());
+                let name = track.envelopes[slot].destination.map_or_else(
+                    || "---".to_owned(),
+                    |destination| destination.name_on(track),
+                );
                 let label = format!("Env {}  {name}", slot + 1);
                 Span::styled(
                     format!("{label:<width$}", width = DIAGRAM_WIDTH + 2),
@@ -507,11 +510,12 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
                 let insert = track.inserts[slot];
                 let used = if insert.params()[param].choices.is_empty() {
                     let set = insert.value(param);
+                    let live = app.live.map_or(set, |live| live.inserts[slot][param]);
                     let used = text.chars().count() + 1 + BAR_CELLS + 2;
                     spans.extend(value_spans(app, *control, text, style));
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(BAR_START, theme::faint()));
-                    spans.extend(bar_spans(set, set, false));
+                    spans.extend(bar_spans(set, live, false));
                     spans.push(Span::styled(BAR_END, theme::faint()));
                     used
                 } else {

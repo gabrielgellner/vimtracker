@@ -1656,6 +1656,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,
+        inserts: Default::default(),
     });
     assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -4048,11 +4049,11 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
         .unwrap();
     let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
     // Name column, then the icon, with the same text after it either way.
-    assert_eq!(text(&drawn, 24), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(drawn[(24, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
-    assert_eq!(text(&drawn, 27), "\u{10EEEE}\u{305}\u{310}");
-    assert_eq!(text(&drawn, 28), " ");
-    for x in 30..80 {
+    assert_eq!(text(&drawn, 26), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(26, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(text(&drawn, 29), "\u{10EEEE}\u{305}\u{310}");
+    assert_eq!(text(&drawn, 30), " ");
+    for x in 32..80 {
         assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
     }
 }
@@ -4118,6 +4119,7 @@ fn the_filter_curve_moves_with_what_plays() {
         harmonics: track.harmonics,
         timbre: track.timbre,
         morph: track.morph,
+        inserts: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -5097,4 +5099,102 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
         "{}",
         fx_line(&app, 0)
     );
+}
+
+#[test]
+fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
+    use vt_model::target::Target;
+    let (mut app, _realtime) = app();
+    // LFO 1's Dest is on the Mod page, its third row.
+    press(&mut app, " 4Ljj");
+    let list = |app: &mut App| {
+        press(app, "K");
+        let labels: Vec<String> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .shown()
+            .map(|item| item.label.clone())
+            .collect();
+        special(app, KeyCode::Esc);
+        labels
+    };
+    assert!(!list(&mut app).iter().any(|label| label.starts_with("1 ")));
+
+    press(&mut app, "L="); // Distort in slot 1.
+    press(&mut app, "Hjj");
+    let labels = list(&mut app);
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("1 Amount  Distort in slot 1")),
+        "{labels:?}"
+    );
+
+    // Choosing one saves it, and it reads back on the page.
+    press(&mut app, "K1 amount");
+    special(&mut app, KeyCode::Enter);
+    let target = Target::Slot { slot: 0, param: 1 };
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
+    let lfo = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.starts_with("LFO 1"))
+            .unwrap()
+    };
+    assert!(lfo(&app).contains("1 Amount"), "{}", lfo(&app));
+
+    // Emptying the slot leaves it chosen, doing nothing, and saying so.
+    press(&mut app, "Lx");
+    press(&mut app, "H");
+    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
+    assert!(lfo(&app).contains("1 ---"), "{}", lfo(&app));
+}
+
+#[test]
+fn stepping_dest_goes_through_a_slots_settings() {
+    use vt_model::target::Target;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=H");
+    press(&mut app, "jj");
+    for _ in 0..11 {
+        press(&mut app, "=");
+    }
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::Slot { slot: 0, param: 0 }),
+    );
+}
+
+#[test]
+fn a_slots_step_command_can_be_typed_and_chosen() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "lli1am80");
+    let text = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(text.contains("1AM80"), "{text}");
+    press(&mut app, "j");
+}
+
+#[test]
+fn the_fx_pages_bars_follow_what_plays() {
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=");
+    let mut live = vt_engine::track_state::LiveValues {
+        level: 0xE0,
+        pan: 0x80,
+        cutoff: 0xFF,
+        resonance: 0,
+        delay: 0,
+        reverb: 0,
+        harmonics: 0x80,
+        timbre: 0,
+        morph: 0x80,
+        inserts: Default::default(),
+    };
+    live.inserts[0] = [0, 0xFF, 0xFF, 0xE0];
+    app.live = Some(live);
+    let line = fx_line(&app, 0);
+    // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
+    assert!(line.contains("Amount 40 ▕██│██████▏"), "{line}");
+    assert!(line.contains("Mix    FF ▕█████████▏"), "{line}");
 }

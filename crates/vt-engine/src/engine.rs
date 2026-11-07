@@ -17,7 +17,7 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState};
+use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState, slot_base};
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
@@ -479,6 +479,14 @@ impl Engine {
             for (command, was, now) in controls {
                 if was != now {
                     state.set_base(command, now);
+                }
+            }
+            for command in FxCommand::ALL {
+                if matches!(command, FxCommand::Slot { .. }) {
+                    let (was, now) = (slot_base(command, before), slot_base(command, track));
+                    if was != now {
+                        state.set_base(command, now);
+                    }
                 }
             }
         }

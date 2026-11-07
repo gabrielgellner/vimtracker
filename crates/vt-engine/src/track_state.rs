@@ -2,7 +2,7 @@
 
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
-use vt_model::insert::INSERTS;
+use vt_model::insert::{INSERTS, Insert, MAX_PARAMS, Setting};
 use vt_model::lfo::{LFOS_PER_TRACK, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
@@ -75,20 +75,38 @@ pub struct LiveValues {
     pub harmonics: u8,
     pub timbre: u8,
     pub morph: u8,
+    /// What each slot's settings are playing with, in the effect's order.
+    pub inserts: [[u8; MAX_PARAMS]; INSERTS],
 }
 
 /// The commands whose values last, in the order `TrackState::values` keeps them.
-const VALUE_COMMANDS: [FxCommand; 9] = [
-    FxCommand::Vol,
-    FxCommand::Pan,
-    FxCommand::Cut,
-    FxCommand::Res,
-    FxCommand::Dly,
-    FxCommand::Rev,
-    FxCommand::Har,
-    FxCommand::Tim,
-    FxCommand::Mor,
-];
+const VALUE_COMMANDS: [FxCommand; 24] = {
+    let slots = FxCommand::ALL;
+    let mut commands = [FxCommand::Vol; 24];
+    let first = [
+        FxCommand::Vol,
+        FxCommand::Pan,
+        FxCommand::Cut,
+        FxCommand::Res,
+        FxCommand::Dly,
+        FxCommand::Rev,
+        FxCommand::Har,
+        FxCommand::Tim,
+        FxCommand::Mor,
+    ];
+    let mut at = 0;
+    while at < first.len() {
+        commands[at] = first[at];
+        at += 1;
+    }
+    // The commands for slots' settings come last in the full list, and they all hold.
+    let mut slot = 0;
+    while slot < INSERTS * Setting::ALL.len() {
+        commands[first.len() + slot] = slots[slots.len() - INSERTS * Setting::ALL.len() + slot];
+        slot += 1;
+    }
+    commands
+};
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
 #[derive(Debug, Clone, Copy)]
@@ -182,6 +200,10 @@ pub struct TrackState {
     low_cut: Smoothed,
     /// What each of its effects keeps.
     inserts: [InsertState; INSERTS],
+    /// What's heard for each setting of each slot, before modulation, as a step command gives it.
+    slot_values: [[f32; Setting::ALL.len()]; INSERTS],
+    /// What each slot's effect is playing with now.
+    resolved: [Insert; INSERTS],
     high_cut: Smoothed,
     /// The coefficients in use, and the value each was worked out for.
     low_cut_coefficients: Option<(f32, Coefficients)>,
@@ -230,6 +252,14 @@ fn pan_position(value: f32) -> f32 {
 
 /// Where `TrackState::values` keeps a command's value. Other commands have none, and share the
 /// first place, as nothing that calls this passes them.
+/// Where a slot's setting starts, from what's on the track. Nothing if the slot's empty.
+pub fn slot_base(command: FxCommand, track: &Track) -> u8 {
+    let FxCommand::Slot { slot, setting } = command else {
+        return 0;
+    };
+    track.inserts[usize::from(slot)].read(setting).unwrap_or(0)
+}
+
 fn value_index(command: FxCommand) -> usize {
     VALUE_COMMANDS
         .iter()
@@ -266,6 +296,21 @@ impl TrackState {
                 ValueLayers::at(0x80),
                 ValueLayers::at(0),
                 ValueLayers::at(0x80),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
+                ValueLayers::at(0),
             ],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
@@ -284,6 +329,8 @@ impl TrackState {
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: [InsertState::default(); INSERTS],
+            slot_values: [[0.0; Setting::ALL.len()]; INSERTS],
+            resolved: [Insert::Empty; INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
             high_cut_coefficients: None,
@@ -325,6 +372,11 @@ impl TrackState {
             self.values[value_index(command)] = ValueLayers::at(base);
             self.write_value(command, f32::from(base));
         }
+        for command in VALUE_COMMANDS.into_iter().skip(bases.len()) {
+            let base = slot_base(command, track);
+            self.values[value_index(command)] = ValueLayers::at(base);
+            self.write_value(command, f32::from(base));
+        }
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
     }
 
@@ -359,9 +411,6 @@ impl TrackState {
             self.filter = [Channel::default(); 2];
             self.coefficients = None;
         }
-        for (state, insert) in self.inserts.iter_mut().zip(track.inserts) {
-            state.set(insert);
-        }
         self.drive.target = f32::from(track.drive) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
@@ -389,6 +438,22 @@ impl TrackState {
         self.pan_envelope.target = moved[Target::Pan.index()];
         for (offset, envelope) in offsets.iter_mut().zip(moved) {
             *offset += envelope;
+        }
+        // Each slot's effect gets finished values, and doesn't know where they came from.
+        for (slot, insert) in track.inserts.into_iter().enumerate() {
+            let mut resolved = insert;
+            for (param, found) in insert.params().iter().enumerate() {
+                let target = Target::Slot {
+                    slot: slot as u8,
+                    param: param as u8,
+                };
+                let setting = found.setting;
+                let added = offsets[target.index()] * setting.span();
+                let value = self.slot_values[slot][setting as usize] + added;
+                resolved = resolved.write(setting, value);
+            }
+            self.resolved[slot] = resolved;
+            self.inserts[slot].set(resolved);
         }
         self.offsets = offsets;
         let semitones = offsets[Target::Pitch.index()] * 255.0;
@@ -424,6 +489,13 @@ impl TrackState {
             harmonics: shown(synth.harmonics),
             timbre: shown(synth.timbre),
             morph: shown(synth.morph),
+            inserts: self.resolved.map(|insert| {
+                let mut values = [0; MAX_PARAMS];
+                for (param, value) in values.iter_mut().enumerate() {
+                    *value = insert.value(param);
+                }
+                values
+            }),
         }
     }
 
@@ -610,6 +682,10 @@ impl TrackState {
             FxCommand::Har => self.synth[0] = value / 255.0,
             FxCommand::Tim => self.synth[1] = value / 255.0,
             FxCommand::Mor => self.synth[2] = value / 255.0,
+            FxCommand::Slot { slot, setting } => {
+                self.slot_values[usize::from(slot)][setting as usize] = value;
+                return;
+            }
             _ => {}
         }
         self.voice.set_synth(self.synth_settings());

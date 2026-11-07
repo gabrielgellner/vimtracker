@@ -490,14 +490,14 @@ impl App {
             Control::Lfo(slot, field) => {
                 let mut lfo = track.lfos[slot];
                 for _ in 0..count.min(0x200) {
-                    adjust_lfo(&mut lfo, field, up, large);
+                    adjust_lfo(&mut lfo, field, up, large, &track);
                 }
                 self.set_lfo(slot, lfo);
             }
             Control::Envelope(slot, field) => {
                 let mut envelope = track.envelopes[slot];
                 for _ in 0..count.min(0x200) {
-                    adjust_envelope(&mut envelope, field, up, large);
+                    adjust_envelope(&mut envelope, field, up, large, &track);
                 }
                 self.set_envelope(slot, envelope);
             }
@@ -833,7 +833,8 @@ impl App {
             return;
         };
         let track = self.cursor.track;
-        let lfo = self.page_track().lfos[slot];
+        let page = self.page_track();
+        let lfo = page.lfos[slot];
         let (title, choices): (&'static str, Vec<(String, Lfo)>) = match field {
             LfoField::Destination => {
                 let off = (
@@ -843,9 +844,13 @@ impl App {
                         ..lfo
                     },
                 );
-                let on = Target::on_track().map(|destination| {
+                let on = Target::on_track(&page).into_iter().map(|destination| {
                     (
-                        format!("{}  {}", destination.name(), destination.info().meaning),
+                        format!(
+                            "{}  {}",
+                            destination.name_on(&page),
+                            destination.meaning_on(&page)
+                        ),
                         Lfo {
                             destination: Some(destination),
                             ..lfo
@@ -1006,6 +1011,7 @@ impl App {
     /// List what an envelope's setting can be, with the current one highlighted.
     fn open_envelope_picker(&mut self, slot: usize, field: EnvelopeField) {
         let track = self.cursor.track;
+        let page = self.page_track();
         let envelope = self.page_track().envelopes[slot];
         let (title, choices): (&'static str, Vec<(String, Envelope)>) = match field {
             EnvelopeField::Destination => {
@@ -1016,9 +1022,13 @@ impl App {
                         ..envelope
                     },
                 );
-                let on = Target::on_track().map(|destination| {
+                let on = Target::on_track(&page).into_iter().map(|destination| {
                     (
-                        format!("{}  {}", destination.name(), destination.info().meaning),
+                        format!(
+                            "{}  {}",
+                            destination.name_on(&page),
+                            destination.meaning_on(&page)
+                        ),
                         Envelope {
                             destination: Some(destination),
                             ..envelope
@@ -1211,7 +1221,13 @@ fn time_step(value: u16) -> u16 {
 }
 
 /// Move one setting of an envelope one notch.
-fn adjust_envelope(envelope: &mut Envelope, field: EnvelopeField, up: bool, large: bool) {
+fn adjust_envelope(
+    envelope: &mut Envelope,
+    field: EnvelopeField,
+    up: bool,
+    large: bool,
+    track: &Track,
+) {
     let time = |value: u16| {
         let size = if large { TIME_JUMP } else { 1 };
         if up {
@@ -1223,7 +1239,7 @@ fn adjust_envelope(envelope: &mut Envelope, field: EnvelopeField, up: bool, larg
     match field {
         EnvelopeField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::ALL.map(Some));
+            choices.extend(Target::on_track(track).into_iter().map(Some));
             envelope.destination = next_in(&choices, envelope.destination, up);
         }
         EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
@@ -1244,11 +1260,11 @@ fn adjust_envelope(envelope: &mut Envelope, field: EnvelopeField, up: bool, larg
 }
 
 /// Move one setting of an LFO one notch.
-fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool, large: bool) {
+fn adjust_lfo(lfo: &mut Lfo, field: LfoField, up: bool, large: bool, track: &Track) {
     match field {
         LfoField::Destination => {
             let mut choices = vec![None];
-            choices.extend(Target::ALL.map(Some));
+            choices.extend(Target::on_track(track).into_iter().map(Some));
             lfo.destination = next_in(&choices, lfo.destination, up);
         }
         LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),

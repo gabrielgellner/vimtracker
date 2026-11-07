@@ -20,6 +20,12 @@ only takes effect once its value is typed.
 | `HAR` | A synth's first setting |
 | `TIM` | A synth's second setting |
 | `MOR` | A synth's third setting |
+| `1AM` `2MX` `3GN` | A setting in a slot on the FX page, below |
+
+A slot's settings are `TY` for `Type`, by its place in the list from `00`, `AM` for
+`Amount`, `BI` for `Bits` in whole bits, `MX` for `Mix` and `GN` for `Gain`. So `1AM80` sets
+`Amount` in slot 1, and `1BI06` sets 6 bits. A command belongs to the slot rather than the
+effect, and does nothing if what's in the slot doesn't have that setting.
 
 `VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback
