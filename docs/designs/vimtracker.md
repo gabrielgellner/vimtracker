@@ -1269,9 +1269,9 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 *   **`dd`** takes the effect out of its slot, and **`p`** puts the last one taken into the slot under the cursor, swapping with what's there, to change the order. This only works on this page. Moving an effect starts its state afresh, which may click if it's playing.
 *   **`/`** finds these as it does the other pages, from their names, and the bars move with what's playing, as on the Sound page.
 
-**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. On `Crush`, whatever moves it lands on whole bits, with no special cases for locks, glides, LFOs or envelopes. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
+**Steps and modulation.** See the modulation table below. This replaces the first plan, of `DST` and `DMX` commands reaching only the first `Distort`, by the author's decision.
 
-**Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Reaching a second copy of an effect from steps or modulation. Moving `Drive` onto the list.
+**Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Moving `Drive` onto the list.
 
 **To judge by ear, as they may change the rules:**
 
@@ -1285,9 +1285,82 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 1.  **Inserts and `Distort` in the engine:** the data, the state in `TrackState`, `dsp/distort.rs` and the shared `Oversampler`. **Tests:** golden renders unchanged with empty slots, each type's response, `Mix` at each end, oversampling keeps aliasing down for the types that use it, slots run in order, a saved insert loads, and no allocation under the real-time guard.
 2.  **The parameter list and FX page:** the list, the page, `H` and `L`, `x`, `K`, typing and bars. **Tests:** each key works on a setting from the list alone, the cursor stays valid across effects and machines, `/` finds the settings, and a change is one undo step.
 3.  **Order:** `dd` and `p`. **Tests:** moving swaps slots and is one undo step, and the sound follows the new order.
-4.  **Steps and modulation:** `DST`, `DMX`, `Dst` and `Dmx`. **Tests:** a lock, hold and glide on each, an LFO on each, reaching only the first `Distort`, and doing nothing without one.
+4.  **The modulation table:** as below, with its own issues.
 
 **Done when** the author has used it in a jam, and the questions above are answered. The CPU cost of a track with `Soft` is measured in a release build.
+
+### M9 design: the modulation table
+
+Made with the author's agreement on 2026-11-06. Not built yet. Things that want to be modulated register for it, and an object can be a source and a target at once, as an LFO's `Depth` can be moved by another LFO.
+
+**Prior art.** Vital's modules register named controls, like `createMonoModControl("distortion_drive")`, and modulation connects a source to one by name. Its LFOs' frequency and phase can be modulated. The Digitakt II's LFO destinations include `LFO1: Speed`, `Depth`, `Fade` and more, one way: LFO 2 can reach LFO 1, and LFO 3 can reach both, but never backwards. tracker-ce has a fixed `parameterList`, with a table per track of who controls each one. Here, `Destination` is a fixed list, and `TrackState` wires each one by hand, though its `offsets` array is already a simple form of the table.
+
+**The table.** Sources and targets don't know about each other. `Destination` becomes `Target`, a fixed enum giving each target a place in an array. Sources add to the array, and targets read from it:
+
+```text
+Sources                         The table                    Targets read it
+Envelopes  ┐
+LFOs       ├─ add to ──>  [ a value per target ] ──>  Cut, Res, Pan, Har...
+                                                      A slot's settings
+                                                      An LFO's Depth and Phase
+```
+
+**Registering.** An owner declares its targets in a static table: name, group, short code, highest value and default, as effects already do in the parameter list. The `Dest` list and step commands are built from these, on the edit thread, for what's on the track, so an empty slot offers nothing. The callback only sees places in the array, with no names or lookups. A test checks that no two share a code.
+
+**Targets at first.**
+
+| Target | `Dest` | Step command |
+|---|---|---|
+| The existing ten | `Cut`, `Pan` and so on | `CUT`, `PAN` and so on |
+| A slot's settings | `1 Amount`, `2 Mix`, `3 Gain` | `1AM`, `2MX`, `3GN`, `1BI`, `1TY` |
+| An LFO's settings | `LFO 1 Depth`, `LFO 1 Phase` | None |
+
+A step command is the slot's number and the setting's two letters, so its text always says where it goes. It does nothing if what's in the slot doesn't have that setting, and it takes locks, holds and glides. Targets belong to the slot and not the effect: after moving an effect, `1AM80` still goes to slot 1.
+
+There's no special case for what moves a target. A stepped setting rounds the result to a whole step, so an LFO on `Bits` just steps, and one on `Type` jumps between types. Choosing to do that is the author's.
+
+**Choosing a target.** The list grows with every effect, so a picker with groups can be browsed as well as searched. It takes after two things. Snacks' explorer, the author's `<leader>fe`, is one picker with two places to be: it opens on the list, where `h` and `l` close and open a folder, `/` goes to the search and back, and `i` goes to it too. Its search keeps a match's parents showing, so the tree doesn't disappear. The Digitakt II's preset browser has a list with a `FILTER` list beside it, and a separate text search.
+
+```text
+Dest
+  Filter    │ > Amount
+  Machine   │   Mix
+  Output    │   Gain
+> FX 1      │   Type
+  FX 2      │
+  LFO 1     │
+```
+
+| In | Keys | Does |
+|---|---|---|
+| The list | `j` `k` | Move, and `Enter` chooses |
+| The list | `h` | Go to the groups |
+| The groups | `j` `k` | Choose a group, showing what's in it |
+| The groups | `l` or `Enter` | Go to the list |
+| Either | `/` | Go to the search, or back |
+| The search | Typing | Narrows across every group, showing each match's group, and `Enter` chooses the first |
+| Any | `Esc` | Close, changing nothing |
+
+It opens on the list, on the current choice. A group comes from what's on the track, so an empty slot isn't there, and a group with one thing in it shows that thing directly. A short list with no groups stays as pickers are now, opening on the search, so `K` then `pl` still works. Two levels are enough for targets. More levels, and tags that cut across groups as the Digitakt II's do, wait for something that needs them, like a sample browser. Step commands and the sample picker can use this later.
+
+**Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
+
+**Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. An effect only receives finished values, in `process(input, values)`, so it needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
+
+**On a trig.** A later kind of target reads its value once when a step fires, and isn't smoothed, as an LFO added to a Bernoulli gate's chance is in a modular. Nothing in the table prevents it, and none is built until the first one is wanted. `CHA` comes first, with hats getting busier and sparser over some bars. The Digitakt II and Polyend set these per step, and as far as was read don't modulate them, so this goes past them.
+
+**Memory.** The rule is that the callback doesn't allocate, not that everything is loaded at the start. Measured on 2026-11-06, the release binary is 3.9 MB, a `TrackState` is 2.2 KB, or 139 KB for all 64 tracks, and an `InsertState` is 136 bytes. A slot's state is as large as the largest effect's, so anything with a big buffer, like a reverb or delay, doesn't go in it: the edit thread allocates that when the effect is chosen, hands it over with the song's next version, and takes the old one back to free, as versions already do. Effects cost nothing until they're used.
+
+**Left out.** `Rate` as a target: LFOs work out where they are from the song's position, so they can't drift, and a changed rate would make the wave jump. It needs them to add up their position instead, which changes how they restart and stay in sync, and gets its own decision. Moving the Sound page's controls onto the list: only their modulation moves over. Trig targets, as above.
+
+**Issues.**
+
+1.  **The table, and the existing targets on it:** `Target`, registering, and the `Dest` list built from it. **Tests:** golden renders unchanged, every existing destination still does what it did, no two codes are the same, and the list holds only what's on the track.
+2.  **A slot's settings as targets:** the layers, `process(input, values)`, step commands and moving bars. **Tests:** a lock, hold and glide on a setting, an LFO and envelope on one, each slot alone, nothing from a slot without that setting, an LFO on `Bits` landing on whole bits, renders repeatable, and no allocation in the callback.
+3.  **An LFO's `Depth` and `Phase` as targets:** the order and the one-way lists. **Tests:** `LFO 1` moving `LFO 2`, the list offering no way back, and a song rendering the same each time.
+4.  **A picker with groups, for `Dest`:** the two columns and `/`. **Tests:** each key in each place, opening on the current choice, a search reaching every group, one thing in a group shown directly, `Esc` changing nothing, and flat pickers behaving as they did.
+
+**Done when** the author has used it in a jam, and the cost of a track with its slots full and moving is measured in a release build.
 
 ### Known Gaps From Review
 
