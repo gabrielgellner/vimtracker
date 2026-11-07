@@ -1265,8 +1265,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().shown().count(),
-        15,
-        "with nothing in the slots"
+        12,
+        "on a sample track with nothing in its slots"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.mode, Mode::Replace);

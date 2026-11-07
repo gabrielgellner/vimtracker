@@ -1343,6 +1343,10 @@ Dest
 
 It opens on the list, on the current choice. A group comes from what's on the track, so an empty slot isn't there, and a group with one thing in it shows that thing directly. A short list with no groups stays as pickers are now, opening on the search, so `K` then `pl` still works. Two levels are enough for targets. More levels, and tags that cut across groups as the Digitakt II's do, wait for something that needs them, like a sample browser. Step commands and the sample picker can use this later.
 
+**What's on a track.** The lists only hold what's loaded: a machine's settings on tracks playing it, under their names on that voice, and a slot's while it holds something. A target that isn't on the track does no work, and a choice already made stays, reading like `Har ---`, so trying a machine doesn't lose its modulation.
+
+**Keeping up.** Modulation moves values through the 1 ms smoother envelopes use, as a 10 ms one takes 16 dB off an LFO at 100 Hz. A change with nothing moving that value still takes 10 ms, so it doesn't jump. LFOs stop at 100 Hz, and true audio rate is left out: it needs working out waves on every sample and updating filters far more often, and the `FM` voice already does what it's most wanted for.
+
 **Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
 
 **Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. The engine works out a finished copy of the effect each update and hands that over, so an effect needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.

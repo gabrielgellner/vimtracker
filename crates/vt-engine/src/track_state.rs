@@ -204,6 +204,8 @@ pub struct TrackState {
     slot_values: [[f32; MAX_PARAMS]; INSERTS],
     /// What each slot's effect is playing with now.
     resolved: [Insert; INSERTS],
+    /// Whether modulation is moving each slot.
+    slot_moving: [bool; INSERTS],
     high_cut: Smoothed,
     /// The coefficients in use, and the value each was worked out for.
     low_cut_coefficients: Option<(f32, Coefficients)>,
@@ -333,6 +335,7 @@ impl TrackState {
             inserts: [InsertState::default(); INSERTS],
             slot_values: [[0.0; MAX_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
+            slot_moving: [false; INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
             high_cut_coefficients: None,
@@ -394,7 +397,8 @@ impl TrackState {
             let Some(destination) = lfo.destination else {
                 continue;
             };
-            if lfo.depth == 0 {
+            // A target that isn't on this track does no work.
+            if lfo.depth == 0 || !destination.exists_on(track) {
                 continue;
             }
             self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
@@ -425,7 +429,10 @@ impl TrackState {
                 continue;
             };
             // The first one on `Vol` is each note's own shape, which the voice follows itself.
-            if envelope.depth == 0 || (slot == 0 && destination == Target::Vol) {
+            if envelope.depth == 0
+                || (slot == 0 && destination == Target::Vol)
+                || !destination.exists_on(track)
+            {
                 continue;
             }
             self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
@@ -444,6 +451,7 @@ impl TrackState {
         // Each slot's effect gets finished values, and doesn't know where they came from.
         for (slot, insert) in track.inserts.into_iter().enumerate() {
             let mut resolved = insert;
+            self.slot_moving[slot] = false;
             for (param, found) in insert.params().iter().enumerate() {
                 let target = Target::Slot {
                     slot: slot as u8,
@@ -451,6 +459,7 @@ impl TrackState {
                 };
                 let setting = found.setting;
                 let added = offsets[target.index()] * setting.span();
+                self.slot_moving[slot] |= added != 0.0;
                 let value = self.slot_values[slot][param] + added;
                 resolved = resolved.write(setting, value);
             }
@@ -779,17 +788,16 @@ impl TrackState {
     #[inline]
     pub fn shape(&mut self, input: [f32; 2], smoothing: f32, fast: f32, rate: u32) -> ShapedFrame {
         let cutoff = (self.cutoff.next(smoothing)
-            + self.cut_offset.next(smoothing)
+            + self.cut_offset.next(fast)
             + self.cut_envelope.next(fast))
         .clamp(0.0, 1.0);
         let resonance = (self.resonance.next(smoothing)
-            + self.res_offset.next(smoothing)
+            + self.res_offset.next(fast)
             + self.res_envelope.next(fast))
         .clamp(0.0, 1.0);
-        let position = (self.pan.next(smoothing)
-            + self.pan_offset.next(smoothing)
-            + self.pan_envelope.next(fast))
-        .clamp(0.0, 1.0);
+        let position =
+            (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
+                .clamp(0.0, 1.0);
         let drive = self.drive.next(smoothing);
         let open = self.filter_type == FilterType::LowPass
             && cutoff > 0.999
@@ -816,14 +824,33 @@ impl TrackState {
             }
         };
         let mut filtered = self.trimmed(filtered, smoothing, rate);
-        for insert in &mut self.inserts {
-            filtered = insert.process(filtered, smoothing, rate);
+        for (slot, insert) in self.inserts.iter_mut().enumerate() {
+            // A setting being modulated keeps up, and a change on its own doesn't jump.
+            let keeping_up = if self.slot_moving[slot] {
+                fast
+            } else {
+                smoothing
+            };
+            filtered = insert.process(filtered, keeping_up, rate);
         }
-        let gain = self.gain.next(smoothing) * self.level.next(smoothing);
+        // What's moved by modulation keeps up, and a change on its own doesn't jump.
+        let keeping_up = |target: Target| {
+            if self.offsets[target.index()] == 0.0 {
+                smoothing
+            } else {
+                fast
+            }
+        };
+        let (vol, dly, rev) = (
+            keeping_up(Target::Vol),
+            keeping_up(Target::Dly),
+            keeping_up(Target::Rev),
+        );
+        let gain = self.gain.next(vol) * self.level.next(smoothing);
         let (left, right) = pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
-        let delay = self.delay_send.next(smoothing);
-        let reverb = self.reverb_send.next(smoothing);
+        let delay = self.delay_send.next(dly);
+        let reverb = self.reverb_send.next(rev);
         ShapedFrame {
             dry,
             delay: [dry[0] * delay, dry[1] * delay],
