@@ -2549,6 +2549,42 @@ fn the_track_page_sets_the_utility_filter() {
 }
 
 #[test]
+fn option_with_the_movement_keys_changes_the_value_without_moving() {
+    let (mut app, _realtime) = on_track_page();
+    let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
+    press(&mut app, "L0l");
+    typed(&mut app, "20");
+    let label = app.track_control().label();
+    alt(&mut app, "M-l");
+    assert_eq!(attack(&app), 25, "as =");
+    alt(&mut app, "M-k");
+    assert_eq!(attack(&app), 75, "as +");
+    alt(&mut app, "M-h");
+    assert_eq!(attack(&app), 70, "as -");
+    alt(&mut app, "M-j");
+    assert_eq!(attack(&app), 20, "as _");
+    assert_eq!(app.track_control().label(), label, "the cursor stays");
+}
+
+#[test]
+fn option_with_the_movement_keys_changes_notes_and_selections() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let Note::On(start) = written_notes(&app)[0] else {
+        panic!("no note");
+    };
+    press(&mut app, "gg");
+    alt(&mut app, "M-l");
+    alt(&mut app, "M-k");
+    assert_eq!(written_notes(&app), [Note::On(start + 13)]);
+    press(&mut app, "V");
+    alt(&mut app, "M-h");
+    alt(&mut app, "M-j");
+    assert_eq!(written_notes(&app), [Note::On(start)], "on a selection too");
+}
+
+#[test]
 fn the_track_page_sets_envelopes() {
     let (mut app, _realtime) = on_track_page();
     let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];
