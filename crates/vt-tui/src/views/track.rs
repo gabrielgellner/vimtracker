@@ -15,7 +15,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
-use crate::track_page::{Control, ENVELOPES, EnvelopeField, LFOS, LfoField, Page};
+use crate::track_page::{Control, ENVELOPES, EnvelopeField, FX_ROWS, LFOS, LfoField, Page};
 use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
@@ -29,6 +29,9 @@ const LFO_SHAPE_NAME: usize = 7;
 pub(crate) const FILTER_CURVE_WIDTH: usize = 22;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
+/// Room for an effect's name on the FX page, and for a setting that's a choice.
+const FX_EFFECT_WIDTH: usize = 10;
+const FX_CHOICE_WIDTH: usize = 7;
 /// Room for a section's name.
 const NAME_WIDTH: usize = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
@@ -281,6 +284,20 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
                 EnvelopeField::Reset => if envelope.reset { "on" } else { "off" }.to_owned(),
             }
         }
+        Control::Insert(slot) => track.inserts[slot].name().to_owned(),
+        Control::InsertParam(slot, param) => {
+            let insert = track.inserts[slot];
+            match insert.params().get(param) {
+                Some(found) if !found.choices.is_empty() => found
+                    .choices
+                    .get(usize::from(insert.value(param)))
+                    .copied()
+                    .unwrap_or("")
+                    .to_owned(),
+                Some(_) => hex(insert.value(param)),
+                None => String::new(),
+            }
+        }
         Control::Lfo(slot, field) => {
             let lfo = &track.lfos[slot];
             match field {
@@ -444,6 +461,65 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines
 }
 
+/// A slot on the FX page: its number and effect, then the effect's settings, read from its list.
+fn fx_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
+    let current = app.track_control();
+    let mut spans = Vec::new();
+    for control in controls.iter().filter(|control| control.exists_on(track)) {
+        let selected = *control == current;
+        let typing = selected && app.mode == Mode::Insert;
+        let text = if typing {
+            format!("{}_", app.entry.text)
+        } else {
+            value(*control, track, app.song().swing)
+        };
+        let style = if selected {
+            theme::cursor(app.mode)
+        } else {
+            Style::new()
+        };
+        let label = app
+            .field_jump
+            .as_ref()
+            .and_then(|jump| jump.label(*control));
+        let labels = label.map_or_else(String::new, String::from);
+        match *control {
+            Control::Insert(slot) => {
+                spans.push(Span::styled(format!("{}  ", slot + 1), theme::dim()));
+                spans.extend(name_spans(app, "", &labels, labels.len()));
+                let room = FX_EFFECT_WIDTH.saturating_sub(text.chars().count() + labels.len());
+                spans.push(Span::styled(text, style));
+                spans.push(Span::raw(" ".repeat(room)));
+            }
+            Control::InsertParam(slot, param) => {
+                let name = control.name_on(track);
+                spans.extend(name_spans(
+                    app,
+                    name,
+                    &labels,
+                    name.chars().count().max(labels.len()) + 1,
+                ));
+                let length = text.chars().count();
+                spans.extend(value_spans(app, *control, text, style));
+                let insert = track.inserts[slot];
+                if insert.params()[param].choices.is_empty() {
+                    let set = insert.value(param);
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(BAR_START, theme::faint()));
+                    spans.extend(bar_spans(set, set, false));
+                    spans.push(Span::styled(BAR_END, theme::faint()));
+                    spans.push(Span::raw("  "));
+                } else {
+                    let room = FX_CHOICE_WIDTH.saturating_sub(length);
+                    spans.push(Span::raw(" ".repeat(room)));
+                }
+            }
+            _ => {}
+        }
+    }
+    Line::from(spans)
+}
+
 /// The filter's curve in a box, under its rows.
 fn filter_curve(id: u32) -> Vec<Line<'static>> {
     let rule = "─".repeat(FILTER_CURVE_WIDTH);
@@ -467,7 +543,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let tabs = [Page::Sound, Page::Mod].map(|page| {
+    let tabs = Page::ALL.map(|page| {
         let text = format!(" {} ", page.name());
         if page == app.track_page {
             Span::styled(text, bold)
@@ -491,6 +567,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 lines.push(sound_row(app, track, controls));
             }
             lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
+        }
+        Page::Fx => {
+            for controls in FX_ROWS {
+                lines.push(fx_row(app, track, controls));
+            }
         }
         Page::Mod => {
             lines.push(heading(app, &ENVELOPES));

@@ -4,6 +4,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, TrackControl};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
+use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{Destination, LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
 use vt_model::song::{FilterType, Machine, SynthVoice, Track};
@@ -67,6 +68,10 @@ pub enum Control {
     FilterType,
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
+    /// What's in one of the track's slots.
+    Insert(usize),
+    /// One of the settings declared by what's in a slot.
+    InsertParam(usize, usize),
 }
 
 const fn lfo_row(slot: usize) -> [Control; 6] {
@@ -110,6 +115,21 @@ pub const MIXER: [Control; 6] = [
 /// The mixer's columns, as rows like a page's.
 pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
+const fn insert_row(slot: usize) -> [Control; 1 + MAX_PARAMS] {
+    [
+        Control::Insert(slot),
+        Control::InsertParam(slot, 0),
+        Control::InsertParam(slot, 1),
+        Control::InsertParam(slot, 2),
+    ]
+}
+
+const INSERT_ROWS: [[Control; 1 + MAX_PARAMS]; INSERTS] =
+    [insert_row(0), insert_row(1), insert_row(2)];
+/// The FX page's rows, top to bottom. A row has room for the most settings any effect has, and the
+/// cursor stops at the last one its effect uses.
+pub const FX_ROWS: [&[Control]; INSERTS] = [&INSERT_ROWS[0], &INSERT_ROWS[1], &INSERT_ROWS[2]];
+
 const fn base(control: TrackControl) -> Control {
     Control::Base(control)
 }
@@ -148,15 +168,27 @@ pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
 pub enum Page {
     Sound,
     Mod,
+    Fx,
 }
 
 impl Page {
+    /// Every page, in order.
+    pub const ALL: [Self; 3] = [Self::Sound, Self::Mod, Self::Fx];
+
     /// The page's name on screen.
     pub fn name(self) -> &'static str {
         match self {
             Self::Sound => "Sound",
             Self::Mod => "Mod",
+            Self::Fx => "FX",
         }
+    }
+
+    /// The page next to this one, or this one at either end.
+    fn beside(self, next: bool) -> Self {
+        let at = Self::ALL.iter().position(|page| *page == self).unwrap_or(0);
+        let to = if next { at + 1 } else { at.saturating_sub(1) };
+        Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
     /// The page's rows, top to bottom, for a track with this machine.
@@ -165,6 +197,7 @@ impl Page {
             (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
             (Self::Sound, Machine::Plaits) => &SYNTH_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
+            (Self::Fx, _) => &FX_ROWS,
         }
     }
 }
@@ -205,6 +238,27 @@ impl Control {
             Self::Envelope(_, EnvelopeField::Release) => "Release",
             Self::Envelope(_, EnvelopeField::Depth) => "Depth",
             Self::Envelope(_, EnvelopeField::Reset) => "Reset",
+            Self::Insert(_) => "Effect",
+            Self::InsertParam(..) => "Setting",
+        }
+    }
+
+    /// The setting's name on screen, on this track, as a slot's settings depend on what's in it.
+    pub fn name_on(self, track: &Track) -> &'static str {
+        match self {
+            Self::InsertParam(slot, param) => track.inserts[slot]
+                .params()
+                .get(param)
+                .map_or_else(|| self.label(), |found| found.name),
+            _ => self.label_on(track.synth_voice),
+        }
+    }
+
+    /// Whether this track has the setting: a slot only has the settings of what's in it.
+    pub fn exists_on(self, track: &Track) -> bool {
+        match self {
+            Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
+            _ => true,
         }
     }
 
@@ -222,14 +276,21 @@ impl Control {
 
     /// Whether this is two hex digits, entered as soon as the second is typed.
     fn is_hex(self) -> bool {
-        matches!(self, Self::Base(_) | Self::Level)
+        matches!(self, Self::Base(_) | Self::Level | Self::InsertParam(..))
     }
 
-    /// Whether this is picked from a list rather than typed.
-    fn is_choice(self) -> bool {
+    /// Whether this is picked from a list rather than typed, on this track.
+    fn is_choice(self, track: &Track) -> bool {
+        if let Self::InsertParam(slot, param) = self {
+            return track.inserts[slot]
+                .params()
+                .get(param)
+                .is_some_and(|found| !found.choices.is_empty());
+        }
         matches!(
             self,
-            Self::Machine
+            Self::Insert(_)
+                | Self::Machine
                 | Self::SynthVoice
                 | Self::Sample
                 | Self::Mute
@@ -259,7 +320,18 @@ impl App {
         }
         let rows = self.page_rows();
         let row = rows[self.track_row.min(rows.len() - 1)];
-        row[self.track_field.min(row.len() - 1)]
+        row[self.track_field.min(self.fields_in(row) - 1)]
+    }
+
+    /// How many settings a row has on this track, which on the FX page depends on the effect.
+    fn fields_in(&self, row: &[Control]) -> usize {
+        let track = self.song().tracks.get(self.cursor.track);
+        track.map_or(row.len(), |track| {
+            row.iter()
+                .take_while(|control| control.exists_on(track))
+                .count()
+                .max(1)
+        })
     }
 
     /// The rows of the page showing, which depend on the track's machine.
@@ -362,6 +434,21 @@ impl App {
                 self.set_hex(control, change(value));
             }
             Control::Level => self.set_hex(control, change(track.level)),
+            Control::Insert(slot) => self.set_insert(slot, track.inserts[slot].stepped(up)),
+            Control::InsertParam(slot, param) => {
+                let insert = track.inserts[slot];
+                let Some(found) = insert.params().get(param) else {
+                    return;
+                };
+                let value = insert.value(param);
+                let moved = if found.choices.is_empty() {
+                    change(value)
+                } else {
+                    let count = found.choices.len() as u8;
+                    (value + if up { 1 } else { count - 1 }) % count
+                };
+                self.set_insert(slot, insert.with_value(param, moved));
+            }
             Control::FilterType => {
                 // One way at a time, as a large step would skip through a short list.
                 let filter = next_in(&FilterType::ALL, track.filter, up);
@@ -397,6 +484,14 @@ impl App {
         }
     }
 
+    fn set_insert(&mut self, slot: usize, insert: Insert) {
+        self.apply(&Action::SetInsert {
+            track: self.cursor.track,
+            slot,
+            insert,
+        });
+    }
+
     fn set_envelope(&mut self, slot: usize, envelope: Envelope) {
         self.apply(&Action::SetEnvelope {
             track: self.cursor.track,
@@ -408,7 +503,7 @@ impl App {
     pub(crate) fn move_control(&mut self, row: usize, field: usize) {
         let rows = self.page_rows();
         self.track_row = row.min(rows.len() - 1);
-        self.track_field = field.min(rows[self.track_row].len() - 1);
+        self.track_field = field.min(self.fields_in(rows[self.track_row]) - 1);
     }
 
     /// Run a command on the mixer. `h` and `l` go between its strips, and `j` and `k` up and down
@@ -452,8 +547,8 @@ impl App {
             Cmd::Move(Motion::Left) => self.move_control(row, field.saturating_sub(times)),
             Cmd::Move(Motion::RowStart) => self.move_control(row, 0),
             Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
-            Cmd::ShowPage(page) => {
-                self.track_page = page;
+            Cmd::PreviousPage | Cmd::NextPage => {
+                self.track_page = self.track_page.beside(cmd == Cmd::NextPage);
                 self.move_control(0, field);
             }
             Cmd::FieldJump => self.open_field_jump(),
@@ -463,7 +558,9 @@ impl App {
             Cmd::DecreaseLarge => self.adjust_control(false, times, true),
             Cmd::ClearField => self.reset_control(),
             Cmd::PickValue => self.open_control_picker(),
-            Cmd::EnterInsert if self.track_control().is_choice() => self.open_control_picker(),
+            Cmd::EnterInsert if self.track_control().is_choice(&self.page_track()) => {
+                self.open_control_picker();
+            }
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.mode = Mode::Insert;
@@ -536,6 +633,19 @@ impl App {
                 });
             }
             Control::Sample => {}
+            Control::Insert(slot) => {
+                if track.inserts[slot] != Insert::Empty {
+                    self.set_insert(slot, Insert::Empty);
+                }
+            }
+            Control::InsertParam(slot, param) => {
+                let insert = track.inserts[slot];
+                if let Some(found) = insert.params().get(param)
+                    && insert.value(param) != found.default
+                {
+                    self.set_insert(slot, insert.with_value(param, found.default));
+                }
+            }
             Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
             Control::Level => {}
             Control::Swing if track.swing.is_some() => {
@@ -644,6 +754,14 @@ impl App {
             self.open_default_sample_picker();
             return;
         }
+        if let Control::Insert(slot) = control {
+            self.open_insert_picker(slot);
+            return;
+        }
+        if let Control::InsertParam(slot, param) = control {
+            self.open_insert_param_picker(slot, param);
+            return;
+        }
         if self.track_control() == Control::FilterType {
             self.open_filter_picker();
             return;
@@ -728,6 +846,65 @@ impl App {
     }
 
     /// List the filter types, with what each does and the current one highlighted.
+    /// List the effects a slot can hold, with the current one highlighted.
+    fn open_insert_picker(&mut self, slot: usize) {
+        let track = self.cursor.track;
+        let current = self.page_track().inserts[slot];
+        let items = Insert::ALL
+            .map(|insert| Item {
+                label: format!("{}  {}", insert.name(), insert.meaning()),
+                pick: Pick::Insert {
+                    track,
+                    slot,
+                    // Choosing what's already there keeps its settings.
+                    insert: if insert.name() == current.name() {
+                        current
+                    } else {
+                        insert
+                    },
+                },
+            })
+            .to_vec();
+        let position = Insert::ALL
+            .iter()
+            .position(|insert| insert.name() == current.name());
+        let mut picker = Picker::new("Effect", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List the choices of a slot's setting, with the current one highlighted.
+    fn open_insert_param_picker(&mut self, slot: usize, param: usize) {
+        let track = self.cursor.track;
+        let current = self.page_track().inserts[slot];
+        let Some(found) = current
+            .params()
+            .get(param)
+            .filter(|p| !p.choices.is_empty())
+        else {
+            self.status = "This is a value: = and - change it, and i types it".to_owned();
+            return;
+        };
+        let items = found
+            .choices
+            .iter()
+            .enumerate()
+            .map(|(index, choice)| Item {
+                label: (*choice).to_owned(),
+                pick: Pick::Insert {
+                    track,
+                    slot,
+                    insert: current.with_value(param, index as u8),
+                },
+            })
+            .collect();
+        let mut picker = Picker::new(found.name, items);
+        picker.move_highlight(isize::from(current.value(param) as i8));
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
     fn open_filter_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().filter;
@@ -877,6 +1054,13 @@ impl App {
         match control {
             Control::Mute | Control::Solo => {}
             Control::Sample => {}
+            Control::Insert(_) => {}
+            Control::InsertParam(slot, param) => {
+                if let Ok(value) = u8::from_str_radix(text, 16) {
+                    let insert = track.inserts[slot];
+                    self.set_insert(slot, insert.with_value(param, value));
+                }
+            }
             Control::Base(_) | Control::Level => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {
                     self.set_hex(control, value);

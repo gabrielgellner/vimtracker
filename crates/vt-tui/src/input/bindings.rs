@@ -9,7 +9,6 @@ use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
 use crate::input::mode::{Mode, View};
-use crate::track_page::Page;
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +106,8 @@ pub enum Cmd {
     /// Add a section holding what each track is playing, and carry on in it.
     Capture,
     /// Go to a part of the track page.
-    ShowPage(Page),
+    PreviousPage,
+    NextPage,
     /// Search this page for a setting to jump to.
     FieldJump,
     /// Halve or double how far the left and right arrows move in Insert.
@@ -321,8 +321,8 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("k", Cmd::Move(Motion::Up), "Previous row"),
     ("g g", Cmd::Move(Motion::First), "First row"),
     ("G", Cmd::Move(Motion::Last), "Last row"),
-    ("H", Cmd::ShowPage(Page::Sound), "Sound page"),
-    ("L", Cmd::ShowPage(Page::Mod), "Mod page"),
+    ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX"),
+    ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     ("h", Cmd::Move(Motion::Left), "Previous setting"),
     ("l", Cmd::Move(Motion::Right), "Next setting"),

@@ -93,12 +93,9 @@ impl App {
         if query.is_empty() {
             return Vec::new();
         }
-        let voice = self
-            .song()
-            .tracks
-            .get(self.cursor.track)
-            .map(|track| track.synth_voice)
-            .unwrap_or_default();
+        let Some(track) = self.song().tracks.get(self.cursor.track) else {
+            return Vec::new();
+        };
         let (from_row, from_field) = if self.view == View::Mixer {
             (0, self.mixer_row)
         } else {
@@ -114,8 +111,9 @@ impl App {
                     .enumerate()
                     .map(move |(field, control)| (row, field, *control))
             })
+            .filter(|(_, _, control)| control.exists_on(track))
             .map(|(row, field, control)| {
-                let name = control.label_on(voice).to_lowercase();
+                let name = control.name_on(track).to_lowercase();
                 (row, field, control, name)
             })
             .filter(|(_, _, _, name)| name.contains(query))

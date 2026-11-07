@@ -2529,7 +2529,7 @@ fn the_track_page_draws_each_envelopes_shape() {
     assert!(dots(&lines[heading + 1]) > 0);
 
     // Changing a value redraws it.
-    press(&mut app, "L0lll");
+    press(&mut app, "gg0lll");
     typed(&mut app, "0");
     assert_ne!(page(&app)[heading + 1], lines[heading + 1]);
     assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
@@ -3064,6 +3064,8 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     use vt_tui::track_page::{MOD_ROWS, Page, SAMPLE_ROWS};
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.track_page, Page::Sound);
+    press(&mut app, "H");
+    assert_eq!(app.track_page, Page::Sound, "it stops at the first");
     press(&mut app, "j$");
     press(&mut app, "L");
     assert_eq!(app.track_page, Page::Mod);
@@ -4773,4 +4775,189 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     assert_eq!(peach(&app), 3, "C# on its three letters, and C isn't");
     alt(&mut app, "M-s");
     assert_eq!(peach(&app), 0);
+}
+
+/// The FX page's text, with a slot's row found by its number.
+fn fx_line(app: &App, slot: usize) -> String {
+    track_page_text(app)
+        .into_iter()
+        .find(|line| line.starts_with(&format!("{}  ", slot + 1)))
+        .unwrap()
+}
+
+fn on_fx_page() -> (App, vt_engine::link::Realtime) {
+    let (mut app, realtime) = app();
+    press(&mut app, " 4LL");
+    (app, realtime)
+}
+
+#[test]
+fn l_reaches_the_fx_page_and_stops_there() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = on_fx_page();
+    assert_eq!(app.track_page, Page::Fx);
+    press(&mut app, "L");
+    assert_eq!(app.track_page, Page::Fx, "it stops at the last");
+    press(&mut app, "H");
+    assert_eq!(app.track_page, Page::Mod);
+    press(&mut app, "L");
+    assert_eq!(fx_line(&app, 0).trim_end(), "1  ---");
+    assert_eq!(fx_line(&app, 2).trim_end(), "3  ---");
+}
+
+#[test]
+fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
+    use vt_model::insert::Insert;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    let depth = app.history.undo_depth();
+    assert_eq!(column_name(&app), "Effect");
+
+    // Nothing but the effect, until there's something in the slot.
+    press(&mut app, "$");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    let line = fx_line(&app, 0);
+    assert!(line.starts_with("1  Distort"), "{line}");
+    assert!(line.contains("Type Soft"), "{line}");
+    assert!(line.contains("Amount 40 ▕"), "{line}");
+    assert!(line.contains("Mix FF ▕█████████▏"), "{line}");
+
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Type");
+    press(&mut app, "=");
+    assert!(fx_line(&app, 0).contains("Type Hard"));
+    press(&mut app, "-");
+    press(&mut app, "-");
+    assert!(fx_line(&app, 0).contains("Type Down"), "it goes round");
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "fold");
+    special(&mut app, KeyCode::Enter);
+    assert!(fx_line(&app, 0).contains("Type Fold"));
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
+    special(&mut app, KeyCode::Esc);
+
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Amount");
+    press(&mut app, "+");
+    assert!(fx_line(&app, 0).contains("Amount 50"));
+    press(&mut app, "ia7");
+    assert!(fx_line(&app, 0).contains("Amount A7"));
+    press(&mut app, "x");
+    assert!(fx_line(&app, 0).contains("Amount 40"));
+    let depth = app.history.undo_depth();
+    press(&mut app, "x");
+    assert_eq!(
+        app.history.undo_depth(),
+        depth,
+        "already there, so no undo step"
+    );
+
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Mix");
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Mix", "it stops at the last it uses");
+
+    // Only this slot, and only this track.
+    assert_eq!(app.song().tracks[0].inserts[1], Insert::Empty);
+    assert_eq!(app.song().tracks[1].inserts[0], Insert::Empty);
+}
+
+#[test]
+fn emptying_a_slot_keeps_the_cursor_valid() {
+    use vt_model::insert::Insert;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=$");
+    assert_eq!(column_name(&app), "Mix");
+    press(&mut app, "0x");
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+    // Undo puts the settings back, and taking them away again leaves the cursor on the effect.
+    press(&mut app, "u$");
+    assert_eq!(column_name(&app), "Mix");
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+    assert_eq!(column_name(&app), "Effect");
+    // Another track's slot being empty does the same.
+    press(&mut app, "=$W");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "B");
+    assert_eq!(column_name(&app), "Mix");
+}
+
+#[test]
+fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
+    use vt_model::insert::Insert;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "dist");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
+    press(&mut app, "l");
+    press(&mut app, "l");
+    press(&mut app, "i10");
+    press(&mut app, "0K");
+    press(&mut app, "dist");
+    special(&mut app, KeyCode::Enter);
+    assert!(
+        fx_line(&app, 0).contains("Amount 10"),
+        "{}",
+        fx_line(&app, 0)
+    );
+}
+
+#[test]
+fn a_jump_finds_a_slots_settings_only_where_they_exist() {
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "/amo");
+    assert_eq!(
+        app.field_jump.as_ref().unwrap().query,
+        "",
+        "nothing to find yet"
+    );
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "=j=");
+    press(&mut app, "/amo");
+    let jump = app.field_jump.as_ref().unwrap();
+    assert!(jump.label(Control::InsertParam(0, 1)).is_some());
+    let second = jump.label(Control::InsertParam(1, 1)).unwrap();
+    assert!(jump.label(Control::InsertParam(2, 1)).is_none());
+    // The name and the value both carry it, in the columns they had.
+    let line = fx_line(&app, 1);
+    assert!(
+        line.contains(&format!("Amo{second}nt {second}0 ▕")),
+        "{line}"
+    );
+    press(&mut app, &second.to_string());
+    assert_eq!(column_name(&app), "Amount");
+    assert_eq!(app.track_row, 1);
+}
+
+#[test]
+fn an_insert_set_on_the_page_is_heard() {
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    block(&mut realtime, &mut app);
+    let _ = loudest(&mut realtime, 96_000);
+    press(&mut app, " 3k;");
+    let plain = loudest(&mut realtime, 2000);
+    assert!(plain > 0.0);
+    press(&mut app, " 4LL=$");
+    press(&mut app, "x");
+    press(&mut app, "h");
+    press(&mut app, "iff");
+    block(&mut realtime, &mut app);
+    press(&mut app, " 3;");
+    let driven = loudest(&mut realtime, 2000);
+    assert!(driven > 0.0);
+    assert_ne!(plain, driven, "{plain} and {driven}");
 }

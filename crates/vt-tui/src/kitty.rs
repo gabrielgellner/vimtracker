@@ -371,6 +371,7 @@ impl Graphics {
             match app.track_page {
                 Page::Sound => self.sync_sound(app, &track, out)?,
                 Page::Mod => self.sync_mod(app, &track, out)?,
+                Page::Fx => {}
             }
         }
         out.flush()

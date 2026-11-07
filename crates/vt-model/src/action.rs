@@ -9,6 +9,7 @@ use crate::constants::{
     MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
+use crate::insert::Insert;
 use crate::lfo::Lfo;
 use crate::scale::Scale;
 use crate::selection::{
@@ -171,6 +172,12 @@ pub enum Action {
         track: usize,
         slot: usize,
         lfo: Lfo,
+    },
+    /// Put an effect, or nothing, in one of a track's slots.
+    SetInsert {
+        track: usize,
+        slot: usize,
+        insert: Insert,
     },
     /// Send every track back to its start after this many steps, or `None` to let them run.
     SetReset {
@@ -612,6 +619,21 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Harmonics => track.harmonics = *value,
                 TrackControl::Timbre => track.timbre = *value,
                 TrackControl::Morph => track.morph = *value,
+            }
+        }
+        Action::SetInsert {
+            track,
+            slot,
+            insert,
+        } => {
+            if let Some(held) = next
+                .tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .inserts
+                .get_mut(*slot)
+            {
+                *held = *insert;
             }
         }
         Action::SetLfo { track, slot, lfo } => {
