@@ -5701,21 +5701,12 @@ fn lane_of(app: &App, slot: usize) -> Option<vt_model::song::Lane> {
 }
 
 #[test]
-fn the_loop_keys_on_an_fx_column_set_its_lane() {
+fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
-    press(&mut app, "lll");
+    press(&mut app, "llljj");
     assert_eq!(app.cursor.field, vt_tui::app::Field::FxCommand(0));
-    press(&mut app, "jjgs");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 2,
-            length: 16
-        })
-    );
-    assert!(app.status.contains("FX 1"), "{}", app.status);
-    press(&mut app, "jjge");
+    command(&mut app, "lane 3");
     assert_eq!(
         lane_of(&app, 0),
         Some(Lane {
@@ -5723,12 +5714,30 @@ fn the_loop_keys_on_an_fx_column_set_its_lane() {
             length: 3
         })
     );
-    command(&mut app, "len 5");
+    assert!(app.status.contains("FX 1"), "{}", app.status);
+    // Now it has a lane, the loop keys set it rather than the phrase.
+    press(&mut app, "jjjjge");
     assert_eq!(
         lane_of(&app, 0),
         Some(Lane {
             start: 2,
             length: 5
+        })
+    );
+    command(&mut app, "len 4");
+    assert_eq!(
+        lane_of(&app, 0),
+        Some(Lane {
+            start: 2,
+            length: 4
+        })
+    );
+    press(&mut app, "kgs");
+    assert_eq!(
+        lane_of(&app, 0),
+        Some(Lane {
+            start: 5,
+            length: 4
         })
     );
     assert_eq!(
@@ -5738,34 +5747,38 @@ fn the_loop_keys_on_an_fx_column_set_its_lane() {
     );
     press(&mut app, "kkkkge");
     assert!(app.status.contains("above its start"), "{}", app.status);
-    command(&mut app, "len");
-    assert_eq!(lane_of(&app, 0), None, "following the phrase again");
+    command(&mut app, "lane");
+    assert_eq!(lane_of(&app, 0), None, "following the notes again");
     press(&mut app, "u");
     assert_eq!(
         lane_of(&app, 0),
         Some(Lane {
-            start: 2,
-            length: 5
+            start: 5,
+            length: 4
         }),
         "one undo each"
     );
 }
 
 #[test]
-fn the_loop_keys_on_the_notes_still_set_the_phrases_loop() {
+fn the_loop_keys_on_an_fx_column_without_a_lane_set_the_phrases_loop() {
     let (mut app, _realtime) = app();
-    command(&mut app, "len 8");
+    press(&mut app, "lll7jge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 8);
+    command(&mut app, "len 6");
+    assert_eq!(app.song().tracks[0].phrases[&0].len(), 6);
+    assert_eq!(lane_of(&app, 0), None, "the column still follows the notes");
+    press(&mut app, "hhh");
+    command(&mut app, "lane 3");
+    assert!(app.status.contains("FX column"), "{}", app.status);
     assert_eq!(lane_of(&app, 0), None);
-    command(&mut app, "len");
-    assert!(app.status.contains("needs a length"), "{}", app.status);
 }
 
 #[test]
 fn a_lane_shows_its_length_and_where_it_is_playing() {
     let (mut app, _realtime) = app();
     press(&mut app, "llljrSNA20gg");
-    command(&mut app, "len 3");
+    command(&mut app, "lane 3");
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     // Place 4 is the notes' row 4, and the lane's row 4 % 3 = 1.
@@ -5791,8 +5804,8 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
 fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     let (mut app, _realtime) = app();
     // FX 1's lane is steps 4 to 6 of the phrase's 16.
-    press(&mut app, "lll4jgs");
-    command(&mut app, "len 3");
+    press(&mut app, "lll4j");
+    command(&mut app, "lane 3");
     press(&mut app, "G");
     assert_eq!(app.cursor.step, 6, "the lane's last step");
     press(&mut app, "gg");

@@ -794,12 +794,20 @@ impl App {
         }
     }
 
-    /// The FX column the cursor is on, whose lane the loop keys set.
-    fn lane_slot(&self) -> Option<usize> {
+    /// The FX column the cursor is on.
+    fn fx_column(&self) -> Option<usize> {
         match self.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) => Some(slot),
             Field::Note | Field::Velocity | Field::Gate => None,
         }
+    }
+
+    /// The FX column the cursor is on, if it already has a lane, which the loop keys then set. A
+    /// column without one follows the notes, and the loop keys set the phrase's loop as they do
+    /// on the notes, so a column only comes apart from them with `:lane`.
+    fn lane_slot(&self) -> Option<usize> {
+        let slot = self.fx_column()?;
+        self.phrase_here()?.lane(slot).map(|_| slot)
     }
 
     /// The cursor's FX column's lane as it is, or the phrase's loop if it has none.
@@ -1687,14 +1695,16 @@ impl App {
             Line::Len(length) if self.lane_slot().is_some() => {
                 let slot = self.lane_slot().unwrap_or(0);
                 let start = self.lane_here(slot).start;
-                self.set_lane(slot, length.map(|length| Lane { start, length }));
+                self.set_lane(slot, Some(Lane { start, length }));
             }
-            Line::Len(None) => {
-                self.status =
-                    ":len needs a length here. On an FX column, alone it follows the phrase"
-                        .to_owned();
-            }
-            Line::Len(Some(length)) => {
+            Line::Lane(length) => match self.fx_column() {
+                Some(slot) => {
+                    let start = self.cursor.step;
+                    self.set_lane(slot, length.map(|length| Lane { start, length }));
+                }
+                None => self.status = ":lane works on an FX column".to_owned(),
+            },
+            Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength {
                         track: self.cursor.track,
