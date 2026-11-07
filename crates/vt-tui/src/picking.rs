@@ -473,6 +473,15 @@ impl App {
                     }
                     Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
                     Some(Pick::SectionChain(chain)) => self.pick_section_chain(chain),
+                    Some(Pick::Insert {
+                        track,
+                        slot,
+                        insert,
+                    }) => self.apply(&Action::SetInsert {
+                        track,
+                        slot,
+                        insert,
+                    }),
                     Some(Pick::Scale(kind)) => self.set_scale(Scale {
                         on: true,
                         kind,

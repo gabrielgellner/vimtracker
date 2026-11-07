@@ -1,16 +1,17 @@
-//! The `Distort` effect. Its shapes come from Vital's `distortion.cpp`, by Matt Tytel, GPL 3 or later:
-//! Copyright 2013-2019 Matt Tytel. Its scaling, mix and state are this program's own.
+//! The `Distort` effect. Most of its shapes come from Vital's `distortion.cpp`, by Matt Tytel, GPL 3
+//! or later: Copyright 2013-2019 Matt Tytel. `Soft` comes from Plaits' `dsp/fx/overdrive.h`, by Emilie
+//! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
+//! program's own.
 
-use vt_model::insert::{Distort, DistortType, Insert};
+use vt_model::insert::{Distort, DistortType, Insert, crush_bits};
+use vt_model::song::level_gain;
 
-use crate::dsp::filter::soft_clip;
+use crate::dsp::drums::soft_clip;
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::smoother::Smoothed;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
 const MOST_DRIVE_DB: f32 = 30.0;
-/// The bit depths `Crush` runs through, from `Amount` at `00` to `FF`.
-const CRUSH_BITS: (f32, f32) = (16.0, 2.0);
 /// The longest `Down` holds a sample, in seconds, so it's the same at any device rate.
 const LONGEST_HOLD: f32 = 0.01;
 
@@ -20,6 +21,7 @@ pub struct InsertState {
     insert: Insert,
     amount: Smoothed,
     mix: Smoothed,
+    gain: Smoothed,
     oversampler: [Oversampler; 2],
     held: [f32; 2],
     /// How many frames since `Down` last took a sample.
@@ -32,6 +34,7 @@ impl Default for InsertState {
             insert: Insert::Empty,
             amount: Smoothed::at(0.0),
             mix: Smoothed::at(0.0),
+            gain: Smoothed::at(1.0),
             oversampler: [Oversampler::default(); 2],
             held: [0.0; 2],
             since: 0.0,
@@ -45,10 +48,25 @@ fn drive_of(amount: f32) -> f32 {
     10.0_f32.powf(amount * MOST_DRIVE_DB / 20.0)
 }
 
-/// The distance between the steps `Crush` rounds to.
+/// What `Soft` does before and after it clips. The overdrive this comes from is about unity with a
+/// quiet sound at half way, and quiet below that, so `Amount` covers its top half: from clean at
+/// `00`, to pushing hard at `FF`. Its gain after the clip holds back a loud sound's level, but it
+/// can't do that for a quiet one, which comes up as the clip takes hold.
 #[inline]
-fn crush_step(amount: f32) -> f32 {
-    2.0_f32.powf(1.0 - (CRUSH_BITS.0 + (CRUSH_BITS.1 - CRUSH_BITS.0) * amount))
+fn overdrive_gains(amount: f32) -> (f32, f32) {
+    let drive = 0.5 + amount * 0.5;
+    let drive_2 = drive * drive;
+    let low = drive * 0.5;
+    let high = drive_2 * drive_2 * drive * 24.0;
+    let pre = low + (high - low) * drive_2;
+    let squashed = drive * (2.0 - drive);
+    (pre, 1.0 / soft_clip(0.33 + squashed * (pre - 0.33)))
+}
+
+/// The distance between the steps `Crush` rounds to, for some whole bits.
+#[inline]
+fn crush_step(bits: u8) -> f32 {
+    2.0_f32.powi(1 - i32::from(bits))
 }
 
 /// A shape that needs a higher rate, given what's already been driven.
@@ -78,15 +96,23 @@ impl InsertState {
         );
         if !same_kind {
             *self = Self::default();
-            if let Insert::Distort(Distort { amount, mix, .. }) = insert {
+            if let Insert::Distort(Distort {
+                amount, mix, gain, ..
+            }) = insert
+            {
                 self.amount = Smoothed::at(f32::from(amount) / 255.0);
                 self.mix = Smoothed::at(f32::from(mix) / 255.0);
+                self.gain = Smoothed::at(level_gain(f32::from(gain)));
             }
         }
         self.insert = insert;
-        if let Insert::Distort(Distort { amount, mix, .. }) = insert {
+        if let Insert::Distort(Distort {
+            amount, mix, gain, ..
+        }) = insert
+        {
             self.amount.target = f32::from(amount) / 255.0;
             self.mix.target = f32::from(mix) / 255.0;
+            self.gain.target = level_gain(f32::from(gain));
         }
     }
 
@@ -94,19 +120,25 @@ impl InsertState {
     pub fn settle(&mut self) {
         self.amount.settle();
         self.mix.settle();
+        self.gain.settle();
     }
 
     /// One frame through the slot. An empty one does nothing else.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
-        let Insert::Distort(Distort { kind, .. }) = self.insert else {
+        let Insert::Distort(Distort {
+            kind, amount: set, ..
+        }) = self.insert
+        else {
             return input;
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
+        let gain = self.gain.next(smoothing);
         let wet = match kind {
             DistortType::Crush => {
-                let step = crush_step(amount);
+                // Whole bits change at once, so this isn't smoothed.
+                let step = crush_step(crush_bits(set));
                 input.map(|sample| (sample / step).round() * step)
             }
             DistortType::Down => {
@@ -119,6 +151,14 @@ impl InsertState {
                 }
                 self.held
             }
+            DistortType::Soft => {
+                let (pre, post) = overdrive_gains(amount);
+                let [left, right] = &mut self.oversampler;
+                [
+                    left.process(input[0], |x| soft_clip(x * pre)) * post,
+                    right.process(input[1], |x| soft_clip(x * pre)) * post,
+                ]
+            }
             _ => {
                 let drive = drive_of(amount);
                 let [left, right] = &mut self.oversampler;
@@ -130,8 +170,8 @@ impl InsertState {
         };
         // Written so all wet and all dry are exact.
         [
-            wet[0] * mix + input[0] * (1.0 - mix),
-            wet[1] * mix + input[1] * (1.0 - mix),
+            (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+            (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
         ]
     }
 }
@@ -146,7 +186,12 @@ mod tests {
 
     fn state(kind: DistortType, amount: u8, mix: u8) -> InsertState {
         let mut state = InsertState::default();
-        state.set(Insert::Distort(Distort { kind, amount, mix }));
+        state.set(Insert::Distort(Distort {
+            kind,
+            amount,
+            mix,
+            ..Distort::default()
+        }));
         state
     }
 
@@ -193,6 +238,57 @@ mod tests {
                 [sample, -sample]
             );
         }
+    }
+
+    /// The average level, past the oversampler's short delay.
+    fn rms(samples: &[f32]) -> f32 {
+        let tail = &samples[64..];
+        (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn soft_is_about_clean_at_none_and_a_loud_sound_stays_about_as_loud() {
+        let plain: Vec<f32> = sine(220.0, 0.25, RATE as usize / 10).collect();
+        let clean = played(DistortType::Soft, 0x00, 0xFF, 0.25);
+        let db = |a: f32, b: f32| 20.0 * (a / b).log10();
+        let at_none = db(rms(&clean), rms(&plain));
+        assert!(at_none.abs() < 1.0, "{at_none} dB at 00");
+        // A loud sound stays within a few dB of itself. A clip can only hold back what reaches it,
+        // so a quieter sound does get louder as it's turned up.
+        let change = |level: f32, amount: u8| {
+            let dry = level / std::f32::consts::SQRT_2;
+            db(rms(&played(DistortType::Soft, amount, 0xFF, level)), dry)
+        };
+        for amount in [0x00, 0x40, 0x80, 0xC0, 0xFF] {
+            assert!(
+                change(1.0, amount).abs() < 4.0,
+                "{} dB at {amount:02X}",
+                change(1.0, amount)
+            );
+            assert!(
+                change(0.5, amount).abs() < 10.0,
+                "{} dB at {amount:02X}",
+                change(0.5, amount)
+            );
+        }
+        // And it does more as it goes, turning towards a square at the top.
+        let bent = |amount| {
+            let out = played(DistortType::Soft, amount, 0xFF, 0.5);
+            peak(&out) / rms(&out)
+        };
+        assert!(bent(0xFF) < bent(0x80), "{} and {}", bent(0xFF), bent(0x80));
+        assert!(bent(0x80) < bent(0x00), "{} and {}", bent(0x80), bent(0x00));
+    }
+
+    #[test]
+    fn the_overdrive_matches_where_it_comes_from() {
+        // At full drive, 24 times in, and whatever makes a full clip come out at one.
+        let (pre, post) = overdrive_gains(1.0);
+        assert!((pre - 24.0).abs() < 1e-3, "{pre}");
+        assert!((post - 1.0).abs() < 1e-3, "{post}");
+        // At half drive, about unity for a quiet sound.
+        let (pre, post) = overdrive_gains(0.0);
+        assert!((pre * post - 1.0).abs() < 0.1, "{}", pre * post);
     }
 
     #[test]
@@ -242,6 +338,21 @@ mod tests {
     }
 
     #[test]
+    fn crush_changes_bits_at_once() {
+        let mut state = state(DistortType::Crush, 0x00, 0xFF);
+        let settings = Insert::Distort(Distort {
+            kind: DistortType::Crush,
+            amount: 0xFF,
+            mix: 0xFF,
+            ..Distort::default()
+        });
+        state.set(settings);
+        // The smoother is still at the old amount, but the steps are already a half.
+        let out = state.process([0.3; 2], 0.0001, RATE)[0];
+        assert_eq!(out, 0.5);
+    }
+
+    #[test]
     fn down_holds_for_a_time_whatever_the_rate() {
         // The same hold in time is twice the frames at twice the rate.
         let run = |rate: u32| {
@@ -283,6 +394,30 @@ mod tests {
     }
 
     #[test]
+    fn gain_turns_it_all_down_on_the_level_scale() {
+        let run = |gain: u8, mix: u8| {
+            let mut state = InsertState::default();
+            state.set(Insert::Distort(Distort {
+                kind: DistortType::Hard,
+                amount: 0xFF,
+                mix,
+                gain,
+            }));
+            sine(220.0, 0.5, RATE as usize / 10)
+                .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE)[0])
+                .collect::<Vec<f32>>()
+        };
+        let db = |a: f32, b: f32| 20.0 * (a / b).log10();
+        // Every `10` is 4 dB.
+        let down = db(rms(&run(0xD0, 0xFF)), rms(&run(0xE0, 0xFF)));
+        assert!((down + 4.0).abs() < 0.01, "{down}");
+        // It also takes the dry sound with it.
+        let dry = db(rms(&run(0xD0, 0x00)), rms(&run(0xE0, 0x00)));
+        assert!((dry + 4.0).abs() < 0.01, "{dry}");
+        assert_eq!(peak(&run(0x00, 0xFF)), 0.0);
+    }
+
+    #[test]
     fn a_changed_amount_moves_smoothly_and_keeps_its_state() {
         let mut state = state(DistortType::Soft, 0x00, 0xFF);
         state.process([0.5; 2], NO_SMOOTHING, RATE);
@@ -291,6 +426,7 @@ mod tests {
                 kind: DistortType::Soft,
                 amount,
                 mix: 0xFF,
+                ..Distort::default()
             })
         };
         state.set(settings(0xFF));

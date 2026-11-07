@@ -53,12 +53,11 @@ pub fn column_name(app: &App) -> String {
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
         View::Track | View::Mixer => {
-            let voice = app
-                .song()
-                .tracks
-                .get(app.cursor.track)
-                .map_or(SynthVoice::default(), |track| track.synth_voice);
-            app.track_control().label_on(voice).to_owned()
+            let control = app.track_control();
+            app.song().tracks.get(app.cursor.track).map_or_else(
+                || control.label_on(SynthVoice::default()).to_owned(),
+                |track| control.name_on(track).to_owned(),
+            )
         }
         View::Song => match app.song_column {
             LENGTH_COLUMN => "Length".to_owned(),

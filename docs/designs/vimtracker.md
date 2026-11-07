@@ -1232,45 +1232,52 @@ Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert 
 | Setting | Values | Default |
 |---|---|---|
 | `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down` | `Soft` |
-| `Amount` | `00` to `FF`, more of what `Type` does | `40` |
+| `Amount` | `00` to `FF`, more of what `Type` does. `Crush` has `Bits` here | `40` |
 | `Mix` | `00` dry to `FF` wet | `FF` |
+| `Gain` | On the level scale, after `Mix` | `E0`, which is 0 dB |
 
 The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are, so its copyright notice goes in `dsp/distort.rs`. With `d` from `Amount`:
 
-*   `Soft`: `tanh(x * d)`.
+*   `Soft`: the overdrive from Plaits' `dsp/fx/overdrive.h`, MIT, which is curved so a little does little, and holds a loud sound within about 3 dB as it's turned up. A quieter sound still comes up, by about 9 dB from half level and 22 dB from a tenth at `FF`, as a clip can't hold back what doesn't reach it. `Amount` covers its top half, as below that it gets quieter.
 *   `Hard`: `x * d`, clamped to -1 and 1.
 *   `Fold`: a triangle wave of `x * d`, from Vital's linear fold.
 *   `Sine`: a sine of `x * d`, from Vital's sine fold.
-*   `Crush`: `x` rounded to steps of a size set by `Amount`.
+*   `Crush`: `x` rounded to steps for whole `Bits`, from `12` to `2`, in place of `Amount`, by the author's decision. Bit depth is a set of whole values, so it changes at once, with nothing in between to smooth. Nothing is lost, as a step's lock gives the same instant change, and there's no special rule: an LFO can still be assigned to it, and just steps.
 *   `Down`: holds a sample for a time set by `Amount`, in time rather than samples, so it sounds the same at any device rate.
 
-`Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
+`Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: for the types other than `Soft`, `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
+
+**Every effect ends with a `Gain`**, by the author's decision after hearing `Distort`, so a change in level can be fixed while the knob is being turned, with no change of page. Matching levels automatically is left out: a level measured over 300 to 500 ms would make a drum loop pump, and a fixed curve depends on how loud the sound going in is.
 
 **The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
 
 **The FX page.** A third page on the track page, with one row per slot:
 
 ```text
-1  Distort   Type Soft    Amount 40 ▕███▌     ▏   Mix FF ▕█████████▏
+1  Distort   Type   Soft             Mix    FF ▕█████████▏
+             Amount 40 ▕██▎      ▏   Gain   E0 ▕███████▉ ▏
+
 2  ---
+
 3  ---
 ```
 
 *   **`H` and `L`** become the previous and next page, stopping at each end, in place of naming a page each. Sound to FX is `LL`.
-*   **Rows stay fixed**, as `page_rows` returns static lists: a row is the effect and room for the most settings any effect has, and the cursor stops at the last one this effect uses. An empty slot only has its effect.
+*   **Settings are in columns of two**, by the author's decision, filling top then bottom, so a setting's neighbours are as close as they can be: 1 over 2, then 3 over 4. Rows stay fixed, as `page_rows` returns static lists, and the cursor stops at the last setting an effect uses. An empty slot only has its effect.
+*   **`j` and `k`** move as seen, and on the effect they go between slots. **`{` and `}`** go to the same setting in the previous or next slot.
 *   **`K` or `i` on the effect** chooses it from a list, and `=` and `-` step through. `x` on the effect empties the slot, and `x` on a setting returns it to its default.
 *   **`dd`** takes the effect out of its slot, and **`p`** puts the last one taken into the slot under the cursor, swapping with what's there, to change the order. This only works on this page. Moving an effect starts its state afresh, which may click if it's playing.
 *   **`/`** finds these as it does the other pages, from their names, and the bars move with what's playing, as on the Sound page.
 
-**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
+**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. On `Crush`, whatever moves it lands on whole bits, with no special cases for locks, glides, LFOs or envelopes. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
 
 **Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Reaching a second copy of an effect from steps or modulation. Moving `Drive` onto the list.
 
 **To judge by ear, as they may change the rules:**
 
-*   How `Amount` feels across its range, and whether `+30 dB` is too much. Whether `00` should be cleaner than `Soft` is at unity.
-*   Whether `Soft` and `Hard` need level compensation, as a quiet sound comes out much louder with `Amount` up. `Level` is there if not.
-*   What `Crush` and `Down` should span, which is set by ear.
+*   How `Amount` feels across its range, and whether `+30 dB` is too much for `Hard` and the folds.
+*   Whether a quiet sound coming up with `Amount` is a problem on `Soft` and `Hard`. `Level` is there if not.
+*   What `Down` should span, which is set by ear, and whether `Crush` should stop short of `2` bits, as quiet sounds drop out.
 *   Whether the click from moving an effect while playing matters.
 
 **Issues.**

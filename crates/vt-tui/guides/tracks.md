@@ -1,10 +1,10 @@
 # The track page, envelopes and LFOs
 
-Press `Space 4` for what a track holds apart from its steps, on two pages: Sound
+Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
 has its machine, filter and output, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
-plays it, with a dim mark left where it's set, and Mod its envelopes and
-LFOs. FX columns belong
+plays it, with a dim mark left where it's set, Mod its envelopes and
+LFOs, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -56,6 +56,29 @@ comes back after a jump.
 A label is never a letter that could carry on your search, so you can keep typing to
 narrow it, and a match keeps its label as you do. `/` searches the page you're on,
 and `H` and `L` change page.
+
+## Effects
+
+The FX page has 3 slots, which the sound goes through in order after the filters and
+before `Level` and `Pan`. An empty slot does nothing and costs nothing.
+
+| Keys | Does |
+|---|---|
+| `K` or `i` on the effect | Choose what's in the slot. `=` and `-` step through |
+| `x` on the effect | Empty the slot |
+| `x` on a setting | Back to its default |
+| `{` `}` | Previous or next slot, staying on the same setting |
+
+A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
+next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
+
+`Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
+on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Amount` is
+how much, and on `Crush` it's `Bits`, whole numbers from `12` to `2`, where anything
+quieter than half a step drops out. Low settings gate quiet sounds, so one press back
+brings them in, and `Mix` blends it with the sound going in, from `00` dry to `FF` wet. `Gain`
+turns down what comes out, as `Amount` can make it much louder, on the level scale,
+where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
 ## Output
 
