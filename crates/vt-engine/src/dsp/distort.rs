@@ -107,7 +107,13 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
 impl InsertState {
     /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
     /// there's none free yet, it's silent and asks again next time.
-    pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, frames_per_tick: f64) {
+    pub fn hold(
+        &mut self,
+        insert: Insert,
+        pool: &mut MemoryPool,
+        frames_per_tick: f64,
+        frames: u64,
+    ) {
         if !same_effect(self.insert, insert) {
             self.give_back(pool);
         }
@@ -117,7 +123,7 @@ impl InsertState {
             self.memory = pool.take(insert);
         }
         if let Some(memory) = &mut self.memory {
-            memory.follow(insert, frames_per_tick);
+            memory.follow(insert, frames_per_tick, frames);
             if started {
                 memory.settle();
             }
@@ -140,7 +146,7 @@ impl InsertState {
             Insert::Distort(Distort {
                 amount, mix, gain, ..
             }) => (amount, mix, gain),
-            Insert::Delay(Delay { mix, gain, .. }) | Insert::Reverb(Reverb { mix, gain }) => {
+            Insert::Delay(Delay { mix, gain, .. }) | Insert::Reverb(Reverb { mix, gain, .. }) => {
                 (0, mix, gain)
             }
         };

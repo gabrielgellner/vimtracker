@@ -11,9 +11,9 @@ use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
 use crate::engine::sample_of_tick;
 
-/// How long a reverb has to stay below `SILENT` to be done, in seconds. It's longer than any of its
-/// lines, so nothing louder is still going round.
-const REVERB_QUIET_SECONDS: f32 = 0.1;
+/// How long a reverb has to stay below `SILENT` to be done, in seconds. It's longer than the way
+/// round its loops and its longest pre-delay, so nothing louder is still on its way.
+const REVERB_QUIET_SECONDS: f32 = 1.0;
 /// How quiet an effect has to be to be done, about -100 dB.
 pub const SILENT: f32 = 0.00001;
 
@@ -56,16 +56,21 @@ impl Memory {
 
     /// Take what's set now, at a tempo.
     #[inline]
-    pub fn follow(&mut self, insert: Insert, frames_per_tick: f64) {
-        if let (Self::Delay(delay), Insert::Delay(settings)) = (self, insert) {
-            delay.follow(settings, frames_per_tick);
+    pub fn follow(&mut self, insert: Insert, frames_per_tick: f64, frames: u64) {
+        match (self, insert) {
+            (Self::Delay(delay), Insert::Delay(settings)) => {
+                delay.follow(settings, frames_per_tick);
+            }
+            (Self::Reverb(reverb), Insert::Reverb(settings)) => reverb.follow(settings, frames),
+            _ => {}
         }
     }
 
     /// Jump to what's set, as it's only just started.
     pub fn settle(&mut self) {
-        if let Self::Delay(delay) = self {
-            delay.settle();
+        match self {
+            Self::Delay(delay) => delay.settle(),
+            Self::Reverb(reverb) => reverb.settle(),
         }
     }
 
@@ -202,7 +207,7 @@ mod tests {
                 time: 17,
                 ..DelaySettings::DEFAULT
             };
-            memory.follow(Insert::Delay(settings), frames as f64 / 3840.0);
+            memory.follow(Insert::Delay(settings), frames as f64 / 3840.0, 0);
             memory.settle();
             assert_eq!(memory.process([1.0, 1.0]), [0.0, 0.0]);
             for _ in 1..frames {
