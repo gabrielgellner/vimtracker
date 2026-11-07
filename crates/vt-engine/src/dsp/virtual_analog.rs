@@ -36,6 +36,8 @@ pub struct Settings {
     pub timbre: f32,
     /// The saw, from a triangle to a saw, to a saw with a widening notch.
     pub morph: f32,
+    /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
+    pub accent: f32,
 }
 
 impl Default for Settings {
@@ -44,6 +46,7 @@ impl Default for Settings {
             harmonics: 0.5,
             timbre: 0.0,
             morph: 0.5,
+            accent: 0.8,
         }
     }
 }
@@ -368,6 +371,7 @@ impl VirtualAnalog {
             harmonics,
             timbre,
             morph,
+            ..
         } = settings;
         let saw_frequency = frequency * semitones(detuning(harmonics));
 
@@ -462,6 +466,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.45,
             morph: 1.0,
+            ..Settings::default()
         };
         let pitch = measured_pitch(&run(220.0, settings, 48_000));
         assert!((pitch - 220.0).abs() < 2.0, "{pitch}");
@@ -477,6 +482,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 2_000) {
                             assert!(
@@ -499,6 +505,7 @@ mod tests {
                 harmonics: sweep,
                 timbre: sweep,
                 morph: 1.0 - sweep,
+                ..Settings::default()
             };
             let sample = voice.next((55.0 + sweep * 2_000.0) / RATE, settings);
             assert!(sample.is_finite() && sample.abs() < 2.0, "{sample}");

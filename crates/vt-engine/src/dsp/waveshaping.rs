@@ -174,6 +174,7 @@ impl Waveshaping {
             harmonics,
             timbre,
             morph,
+            ..
         } = settings;
         self.render_slope(f0, morph * 0.45 + 0.5);
 
@@ -223,6 +224,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.0,
             morph: 0.0,
+            ..Settings::default()
         }
     }
 
@@ -284,6 +286,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 2_000) {
                             assert!(

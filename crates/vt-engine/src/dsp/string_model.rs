@@ -32,8 +32,6 @@ use crate::rng::Pcg32;
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
 const LINE: usize = 1024;
-/// How hard every note hits, as Plaits does with nothing patched to its level.
-const ACCENT: f32 = 0.8;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
 /// A pluck puts little into the string, so Plaits' string is about 20 dB quieter than its other
@@ -116,8 +114,9 @@ impl StringModel {
         let timbre = settings.timbre.clamp(0.0, 1.0);
         let mut brightness = timbre * timbre;
         let mut damping = settings.morph.clamp(0.0, 1.0);
-        brightness += 0.25 * ACCENT * (1.0 - brightness);
-        damping += 0.25 * ACCENT * (1.0 - damping);
+        let accent = settings.accent.clamp(0.0, 1.0);
+        brightness += 0.25 * accent * (1.0 - brightness);
+        damping += 0.25 * accent * (1.0 - damping);
 
         // The pluck: a burst of noise as long as one cycle, filtered by how bright it is.
         if trigger {
@@ -264,6 +263,7 @@ mod tests {
             harmonics: 0.25,
             timbre: 0.5,
             morph: 0.5,
+            ..Settings::default()
         }
     }
 
@@ -330,6 +330,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 4_800) {
                             assert!(

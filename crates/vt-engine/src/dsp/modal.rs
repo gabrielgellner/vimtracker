@@ -26,8 +26,6 @@ use super::virtual_analog::Settings;
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
 const MODES: usize = 24;
-/// How hard every note hits, as Plaits does with nothing patched to its level.
-const ACCENT: f32 = 0.8;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
 
@@ -140,8 +138,9 @@ impl Modal {
         let structure = self.harmonics_lp;
         let mut brightness = settings.timbre.clamp(0.0, 1.0);
         let mut damping = settings.morph.clamp(0.0, 1.0);
-        brightness += 0.25 * ACCENT * (1.0 - brightness);
-        damping += 0.25 * ACCENT * (1.0 - damping);
+        let accent = settings.accent.clamp(0.0, 1.0);
+        brightness += 0.25 * accent * (1.0 - brightness);
+        damping += 0.25 * accent * (1.0 - damping);
 
         // The strike: one impulse, through a low-pass set by how bright it is.
         let cutoff =
@@ -149,7 +148,7 @@ impl Modal {
         let mut strike = [0.0; BLOCK];
         if trigger {
             let attenuation = 1.0 - damping * 0.5;
-            let amplitude = (0.12 + 0.08 * ACCENT) * attenuation;
+            let amplitude = (0.12 + 0.08 * accent) * attenuation;
             strike[0] = amplitude * semitones(cutoff * cutoff * 24.0) / cutoff;
         }
         let mut excitation = [0.0; BLOCK];
@@ -208,6 +207,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.5,
             morph: 0.5,
+            ..Settings::default()
         }
     }
 
@@ -271,6 +271,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 4_800) {
                             assert!(

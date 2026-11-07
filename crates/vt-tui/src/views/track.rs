@@ -140,6 +140,7 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
         Control::Base(TrackControl::Harmonics) => Some(live.harmonics),
         Control::Base(TrackControl::Timbre) => Some(live.timbre),
         Control::Base(TrackControl::Morph) => Some(live.morph),
+        Control::Base(TrackControl::Accent) => Some(live.accent),
         Control::Base(TrackControl::Cutoff) => Some(live.cutoff),
         Control::Base(TrackControl::Resonance) => Some(live.resonance),
         Control::Base(TrackControl::SendA) => Some(live.send_a),
@@ -166,6 +167,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         }
         Control::Base(TrackControl::Timbre) => level(track.timbre),
         Control::Base(TrackControl::Morph) => Some((track.morph, track.synth_voice.centred()[2])),
+        Control::Base(TrackControl::Accent) => level(track.accent),
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),
         Control::Base(TrackControl::Resonance) => level(track.resonance),
         Control::Base(TrackControl::SendA) => level(track.send_a),
@@ -255,6 +257,11 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             theme::cursor(app.mode)
         } else if *control == Control::Swing && track.swing.is_none() {
             theme::dim()
+        } else if *control == Control::Base(TrackControl::Accent)
+            && !track.synth_voice.uses_accent()
+        {
+            // This voice ignores how hard it's struck.
+            theme::dim()
         } else {
             Style::new()
         };
@@ -291,6 +298,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         }
         Control::Base(TrackControl::Timbre) => hex(track.timbre),
         Control::Base(TrackControl::Morph) => hex(track.morph),
+        Control::Base(TrackControl::Accent) => hex(track.accent),
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
         Control::Base(TrackControl::Resonance) => hex(track.resonance),
         Control::Base(TrackControl::Pan) => hex(track.pan),

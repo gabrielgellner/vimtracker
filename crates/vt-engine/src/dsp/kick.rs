@@ -23,10 +23,6 @@ use std::f32::consts::PI;
 
 use super::virtual_analog::{BLOCK, Moving, Settings};
 
-/// How hard every note hits, as Plaits does with nothing patched to its level. A step's velocity
-/// sets its loudness.
-const ACCENT: f32 = 0.8;
-
 #[inline]
 fn diode(x: f32) -> f32 {
     if x >= 0.0 {
@@ -111,6 +107,7 @@ impl Kick {
             harmonics,
             timbre: tone,
             morph: decay,
+            accent,
         } = settings;
         let attack_fm_amount = (harmonics * 4.0).min(1.0);
         let self_fm_amount = (harmonics * 4.0 - 1.0).clamp(0.0, 1.0);
@@ -128,7 +125,7 @@ impl Kick {
         if self.trigger {
             self.pulse_remaining = (1.0e-3 * self.rate) as i32;
             self.fm_pulse_remaining = (6.0e-3 * self.rate) as i32;
-            self.pulse_height = 3.0 + 7.0 * ACCENT;
+            self.pulse_height = 3.0 + 7.0 * accent;
             self.lp_out = 0.0;
             self.trigger = false;
         }
@@ -225,6 +222,7 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.3,
             morph: 0.5,
+            ..Settings::default()
         }
     }
 
@@ -289,6 +287,7 @@ mod tests {
                             harmonics,
                             timbre,
                             morph,
+                            ..Settings::default()
                         };
                         for sample in run(hertz, settings, 4_800) {
                             assert!(
