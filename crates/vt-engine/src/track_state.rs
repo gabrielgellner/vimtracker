@@ -4,10 +4,9 @@ use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
-use vt_model::settings::MAX_MACHINE_SETTINGS;
-use vt_model::song::{DEFAULT_ACCENT, FilterType, Track, level_gain};
-use vt_model::step::{FxCommand, FxSlot, Mark};
-use vt_model::target::Target;
+use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId};
+use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track, level_gain};
+use vt_model::step::{FxSlot, Mark};
 
 use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
@@ -83,36 +82,6 @@ pub struct LiveValues {
     /// What each slot's settings are playing with, in the effect's order.
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
 }
-
-/// The commands whose values last, in the order `TrackState::values` keeps them.
-const VALUE_COMMANDS: [FxCommand; 10 + INSERTS * MAX_PARAMS] = {
-    let slots = FxCommand::ALL;
-    let mut commands = [FxCommand::Vol; 10 + INSERTS * MAX_PARAMS];
-    let first = [
-        FxCommand::Vol,
-        FxCommand::Pan,
-        FxCommand::Cut,
-        FxCommand::Res,
-        FxCommand::SendA,
-        FxCommand::SendB,
-        FxCommand::Har,
-        FxCommand::Tim,
-        FxCommand::Mor,
-        FxCommand::Acc,
-    ];
-    let mut at = 0;
-    while at < first.len() {
-        commands[at] = first[at];
-        at += 1;
-    }
-    // The commands for slots' settings come last in the full list, and they all hold.
-    let mut slot = 0;
-    while slot < INSERTS * MAX_PARAMS {
-        commands[first.len() + slot] = slots[slots.len() - INSERTS * MAX_PARAMS + slot];
-        slot += 1;
-    }
-    commands
-};
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
 #[derive(Debug, Clone, Copy)]
@@ -193,8 +162,12 @@ pub struct TrackState {
     pub retrigger: Option<Retrigger>,
     /// A step waiting for its swing delay.
     pub swung: Option<(u64, usize)>,
-    /// What each value is set to, in `VALUE_COMMANDS`' order. The fields below it are what's heard.
-    values: [ValueLayers; VALUE_COMMANDS.len()],
+    /// What each setting is set to, by its place in the registry. The fields below it are what's
+    /// heard: a voice's or an effect's settings only reach them while it's the one loaded.
+    values: [ValueLayers; SettingId::COUNT],
+    /// The voice and effects whose settings are heard now.
+    loaded_voice: Option<SynthVoice>,
+    loaded_effects: [Option<Effect>; INSERTS],
     /// Held `VOL`, `SNA` and `SNB`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
     /// curve is only worked out when they or an LFO change.
     vol: f32,
@@ -229,9 +202,9 @@ pub struct TrackState {
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
     pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
-    /// What the LFOs add to each held value, in `Target::ALL`'s order. Separate from the held
-    /// values, so a step's FX moves the centre and the LFO carries on around it.
-    offsets: [f32; Target::COUNT],
+    /// What the LFOs add to each held value, by setting. Separate from the held values, so a
+    /// step's FX moves the centre and the LFO carries on around it.
+    offsets: [f32; SettingId::COUNT],
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
@@ -242,8 +215,8 @@ pub struct TrackState {
     envelopes: [EnvelopeRun; TRACK_ENVELOPES],
     /// What modulation multiplies a note's speed by.
     pitch: f64,
-    /// Held `HAR`, `TIM` and `MOR`, on `0..=1`.
-    synth: [f32; 4],
+    /// The loaded voice's held settings, in its order, on `0..=1`.
+    synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
 }
@@ -267,26 +240,39 @@ fn pan_position(value: f32) -> f32 {
     }
 }
 
-/// Where `TrackState::values` keeps a command's value. Other commands have none, and share the
-/// first place, as nothing that calls this passes them.
-/// Where a slot's setting starts, from what's on the track. Nothing if the slot's empty.
-pub fn slot_base(command: FxCommand, track: &Track) -> u8 {
-    let FxCommand::Slot { slot, param } = command else {
-        return 0;
-    };
-    let insert = track.inserts[usize::from(slot)];
-    insert
-        .params()
-        .get(usize::from(param))
-        .and_then(|found| insert.read(found.setting))
-        .unwrap_or(0)
+/// Where a setting starts on this track, before any step sets it. A voice keeps its own, and
+/// an effect's setting is what's in its slot, or its default while another effect is there.
+pub fn base_of(id: SettingId, track: &Track) -> u8 {
+    match id.owner() {
+        (Owner::Track, _) => match id {
+            SettingId::VOL => UNITY_LEVEL,
+            SettingId::PAN => track.pan,
+            SettingId::CUT => track.cutoff,
+            SettingId::RES => track.resonance,
+            SettingId::SEND_A => track.send_a,
+            SettingId::SEND_B => track.send_b,
+            _ => id.entry().default,
+        },
+        (Owner::Voice(_), _) => track.setting(id),
+        (Owner::Slot { slot, effect }, at) => {
+            let insert = track.inserts[slot];
+            if Effect::of(insert) == Some(effect) {
+                insert
+                    .params()
+                    .get(at)
+                    .and_then(|param| insert.read(param.setting))
+                    .unwrap_or(0)
+            } else {
+                id.entry().default
+            }
+        }
+        (Owner::Lfo(_), _) => 0,
+    }
 }
 
-fn value_index(command: FxCommand) -> usize {
-    VALUE_COMMANDS
-        .iter()
-        .position(|value| *value == command)
-        .unwrap_or(0)
+/// What's heard of a value: its lock over its base. A glide is moved along by the song.
+fn heard(layers: &ValueLayers) -> u8 {
+    layers.lock.unwrap_or(layers.base)
 }
 
 impl TrackState {
@@ -313,9 +299,14 @@ impl TrackState {
             off_at: None,
             retrigger: None,
             values: {
-                let first = [UNITY_LEVEL, 0x80, 0xFF, 0, 0, 0, 0x80, 0, 0x80];
-                std::array::from_fn(|at| ValueLayers::at(first.get(at).copied().unwrap_or(0)))
+                let mut values = [ValueLayers::at(0); SettingId::COUNT];
+                for id in SettingId::all() {
+                    values[id.index()] = ValueLayers::at(id.entry().default);
+                }
+                values
             },
+            loaded_voice: None,
+            loaded_effects: [None; INSERTS],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
             send_a: 0.0,
@@ -343,7 +334,7 @@ impl TrackState {
             coefficients: None,
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
-            offsets: [0.0; Target::COUNT],
+            offsets: [0.0; SettingId::COUNT],
             synth: [0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0],
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
@@ -375,28 +366,44 @@ impl TrackState {
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
         self.last_note = None;
-        let bases = [
-            UNITY_LEVEL,
-            track.pan,
-            track.cutoff,
-            track.resonance,
-            track.send_a,
-            track.send_b,
-            track.machine_value(0),
-            track.machine_value(1),
-            track.machine_value(2),
-            track.machine_value(3),
-        ];
-        for (command, base) in VALUE_COMMANDS.into_iter().zip(bases) {
-            self.values[value_index(command)] = ValueLayers::at(base);
-            self.write_value(command, f32::from(base));
-        }
-        for command in VALUE_COMMANDS.into_iter().skip(bases.len()) {
-            let base = slot_base(command, track);
-            self.values[value_index(command)] = ValueLayers::at(base);
-            self.write_value(command, f32::from(base));
+        self.load(track);
+        for id in SettingId::all() {
+            let base = base_of(id, track);
+            self.values[id.index()] = ValueLayers::at(base);
+            self.write_value(id, f32::from(base));
         }
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
+    }
+
+    /// Hear the voice and effects the track has now. One that's changed is heard from its own
+    /// values, as steps and the track page left them.
+    fn load(&mut self, track: &Track) {
+        let voice = track.voice();
+        if voice != self.loaded_voice {
+            self.loaded_voice = voice;
+            if let Some(voice) = voice {
+                for at in 0..MAX_MACHINE_SETTINGS {
+                    if let Some(id) = SettingId::voice(voice, at) {
+                        self.synth[at] = f32::from(heard(&self.values[id.index()])) / 255.0;
+                    }
+                }
+            }
+        }
+        for slot in 0..INSERTS {
+            let effect = Effect::of(track.inserts[slot]);
+            if effect == self.loaded_effects[slot] {
+                continue;
+            }
+            self.loaded_effects[slot] = effect;
+            let Some(effect) = effect else {
+                continue;
+            };
+            for at in 0..effect.params().len() {
+                if let Some(id) = SettingId::slot(slot, effect, at) {
+                    self.slot_values[slot][at] = f32::from(heard(&self.values[id.index()]));
+                }
+            }
+        }
     }
 
     /// Work out what the LFOs add now. A stopped track sits at its held values, so an audition
@@ -409,51 +416,53 @@ impl TrackState {
         stopped: bool,
         memory: &mut MemoryPool,
     ) {
+        self.load(track);
         if !stopped {
             self.advance_glides(now);
         }
         self.filter_moving = false;
         // Envelopes, then each LFO, so each reads what's before it, and there's no way back round.
-        let mut moved = [0.0_f32; Target::COUNT];
+        let mut moved = [0.0_f32; SettingId::COUNT];
         for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
             let Some(destination) = envelope.destination else {
                 continue;
             };
             // The first one on `Vol` is each note's own shape, which the voice follows itself.
             if envelope.depth == 0
-                || (slot == 0 && destination == Target::Vol)
+                || (slot == 0 && destination == SettingId::VOL)
                 || !destination.exists_on(track)
             {
                 continue;
             }
-            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
+            self.filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
             if stopped {
                 continue;
             }
             let level = run.level(envelope, now.clock, now.rate);
             moved[destination.index()] += level * f32::from(envelope.depth) / 255.0;
         }
-        let mut offsets = [0.0_f32; Target::COUNT];
+        let mut offsets = [0.0_f32; SettingId::COUNT];
         for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
             let Some(destination) = lfo.destination else {
                 continue;
             };
-            let moved_by = |target: Target| offsets[target.index()] + moved[target.index()];
-            let at = slot as u8;
-            let depth = f32::from(lfo.depth) + moved_by(Target::LfoDepth { lfo: at }) * 255.0;
+            let moved_by = |setting: usize| {
+                SettingId::lfo(slot, setting)
+                    .map_or(0.0, |id| offsets[id.index()] + moved[id.index()])
+            };
+            let depth = f32::from(lfo.depth) + moved_by(0) * 255.0;
             // A target that isn't on this track does no work.
             if depth == 0.0 || !destination.exists_on(track) {
                 continue;
             }
-            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
+            self.filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
             if stopped {
                 continue;
             }
             let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
             let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
             let key = now.seed ^ ((index as u64) << 8 | slot as u64);
-            let phase =
-                f64::from(lfo.phase) / 360.0 + f64::from(moved_by(Target::LfoPhase { lfo: at }));
+            let phase = f64::from(lfo.phase) / 360.0 + f64::from(moved_by(1));
             let value = wave(lfo.shape, cycles + phase, key);
             let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
             offsets[destination.index()] += value * depth / 255.0;
@@ -467,12 +476,12 @@ impl TrackState {
         self.drive.target = f32::from(track.drive) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
-        self.cut_offset.target = offsets[Target::Cut.index()];
-        self.res_offset.target = offsets[Target::Res.index()];
-        self.pan_offset.target = offsets[Target::Pan.index()];
-        self.cut_envelope.target = moved[Target::Cut.index()];
-        self.res_envelope.target = moved[Target::Res.index()];
-        self.pan_envelope.target = moved[Target::Pan.index()];
+        self.cut_offset.target = offsets[SettingId::CUT.index()];
+        self.res_offset.target = offsets[SettingId::RES.index()];
+        self.pan_offset.target = offsets[SettingId::PAN.index()];
+        self.cut_envelope.target = moved[SettingId::CUT.index()];
+        self.res_envelope.target = moved[SettingId::RES.index()];
+        self.pan_envelope.target = moved[SettingId::PAN.index()];
         for (offset, envelope) in offsets.iter_mut().zip(moved) {
             *offset += envelope;
         }
@@ -480,13 +489,11 @@ impl TrackState {
         for (slot, insert) in track.inserts.into_iter().enumerate() {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
+            let effect = Effect::of(insert);
             for (param, found) in insert.params().iter().enumerate() {
-                let target = Target::Slot {
-                    slot: slot as u8,
-                    param: param as u8,
-                };
+                let id = effect.and_then(|effect| SettingId::slot(slot, effect, param));
                 let setting = found.setting;
-                let added = offsets[target.index()] * setting.span();
+                let added = id.map_or(0.0, |id| offsets[id.index()]) * setting.span();
                 self.slot_moving[slot] |= added != 0.0;
                 let value = self.slot_values[slot][param] + added;
                 resolved = resolved.write(setting, value);
@@ -495,7 +502,7 @@ impl TrackState {
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
         }
         self.offsets = offsets;
-        let semitones = offsets[Target::Pitch.index()] * 255.0;
+        let semitones = offsets[SettingId::PITCH.index()] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
@@ -506,7 +513,7 @@ impl TrackState {
     /// `level`, as they both set how loud it is. The first envelope on `Vol` shapes notes, and isn't
     /// a movement of the level.
     pub fn live(&self, level: u8) -> LiveValues {
-        let offset = |destination: Target| self.offsets[destination.index()];
+        let offset = |destination: SettingId| self.offsets[destination.index()];
         let moved = |held: f32, destination| {
             ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8
         };
@@ -517,14 +524,14 @@ impl TrackState {
         };
         let synth = self.synth_settings();
         let shown = |value: f32| (value * 255.0).round() as u8;
-        let vol = self.vol + offset(Target::Vol) * 255.0 - f32::from(UNITY_LEVEL);
+        let vol = self.vol + offset(SettingId::VOL) * 255.0 - f32::from(UNITY_LEVEL);
         LiveValues {
             level: (f32::from(level) + vol).clamp(0.0, 255.0).round() as u8,
-            pan: moved(self.pan.target, Target::Pan),
-            cutoff: moved(self.cutoff.target, Target::Cut),
-            resonance: moved(self.resonance.target, Target::Res),
-            send_a: on_level(self.send_a, Target::SendA),
-            send_b: on_level(self.send_b, Target::SendB),
+            pan: moved(self.pan.target, SettingId::PAN),
+            cutoff: moved(self.cutoff.target, SettingId::CUT),
+            resonance: moved(self.resonance.target, SettingId::RES),
+            send_a: on_level(self.send_a, SettingId::SEND_A),
+            send_b: on_level(self.send_b, SettingId::SEND_B),
             machine: [synth.harmonics, synth.timbre, synth.morph, synth.accent].map(shown),
             inserts: self.resolved.map(|insert| {
                 let mut values = [0; MAX_PARAMS];
@@ -538,14 +545,18 @@ impl TrackState {
 
     /// What a synth on this track plays with: the held values and what modulation adds.
     pub fn synth_settings(&self) -> Settings {
-        let at = |held: f32, destination: Target| {
-            (held + self.offsets[destination.index()]).clamp(0.0, 1.0)
+        let at = |setting: usize| {
+            let offset = self
+                .loaded_voice
+                .and_then(|voice| SettingId::voice(voice, setting))
+                .map_or(0.0, |id| self.offsets[id.index()]);
+            (self.synth[setting] + offset).clamp(0.0, 1.0)
         };
         Settings {
-            harmonics: at(self.synth[0], Target::Har),
-            timbre: at(self.synth[1], Target::Tim),
-            morph: at(self.synth[2], Target::Mor),
-            accent: at(self.synth[3], Target::Acc),
+            harmonics: at(0),
+            timbre: at(1),
+            morph: at(2),
+            accent: at(3),
         }
     }
 
@@ -579,13 +590,13 @@ impl TrackState {
 
     /// Work out the gains of the held values that are heard on a level scale.
     fn update_gains(&mut self) {
-        let gain = |held: f32, destination: Target| {
+        let gain = |held: f32, destination: SettingId| {
             level_gain((held + self.offsets[destination.index()] * 255.0).clamp(0.0, 255.0))
         };
         let (vol, send_a, send_b) = (
-            gain(self.vol, Target::Vol),
-            gain(self.send_a, Target::SendA),
-            gain(self.send_b, Target::SendB),
+            gain(self.vol, SettingId::VOL),
+            gain(self.send_a, SettingId::SEND_A),
+            gain(self.send_b, SettingId::SEND_B),
         );
         self.gain.target = vol;
         self.send_a_gain.target = send_a;
@@ -633,8 +644,8 @@ impl TrackState {
     }
 
     /// Run a lock or hold value from a step. Anything else on that value gives way to it.
-    pub fn set_value(&mut self, command: FxCommand, value: u8, mark: Mark) {
-        let layers = &mut self.values[value_index(command)];
+    pub fn set_value(&mut self, id: SettingId, value: u8, mark: Mark) {
+        let layers = &mut self.values[id.index()];
         layers.glide = None;
         if mark == Mark::Hold {
             layers.base = value;
@@ -642,21 +653,21 @@ impl TrackState {
         } else {
             layers.lock = Some(value);
         }
-        self.write_value(command, f32::from(value));
+        self.write_value(id, f32::from(value));
     }
 
     /// Run a glide value from a step, toward the next value of its parameter if there is one.
     /// `to` is that value, with how many ticks away it is.
     pub fn start_glide(
         &mut self,
-        command: FxCommand,
+        id: SettingId,
         value: u8,
         to: Option<(FxSlot, f64)>,
         now: SongTime,
     ) {
-        self.set_value(command, value, Mark::Lock);
+        self.set_value(id, value, Mark::Lock);
         if let Some((to, ticks)) = to {
-            let layers = &mut self.values[value_index(command)];
+            let layers = &mut self.values[id.index()];
             layers.lock = None;
             layers.glide = Some(Glide {
                 from: value,
@@ -669,64 +680,69 @@ impl TrackState {
 
     /// A note has started, so the locks it would have outlived are over. Glides carry on.
     pub fn end_locks(&mut self) {
-        for command in VALUE_COMMANDS {
-            let layers = &mut self.values[value_index(command)];
+        for id in SettingId::all() {
+            let layers = &mut self.values[id.index()];
             if layers.lock.take().is_some() && layers.glide.is_none() {
                 let base = layers.base;
-                self.write_value(command, f32::from(base));
+                self.write_value(id, f32::from(base));
             }
         }
     }
 
     /// The track page changed a value. A lock or glide on top stays until it ends.
-    pub fn set_base(&mut self, command: FxCommand, value: u8) {
-        let layers = &mut self.values[value_index(command)];
+    pub fn set_base(&mut self, id: SettingId, value: u8) {
+        let layers = &mut self.values[id.index()];
         layers.base = value;
         if layers.lock.is_none() && layers.glide.is_none() {
-            self.write_value(command, f32::from(value));
+            self.write_value(id, f32::from(value));
         }
     }
 
     /// Move glides along to where the song is.
     fn advance_glides(&mut self, now: SongTime) {
-        for command in VALUE_COMMANDS {
-            let index = value_index(command);
-            let Some(glide) = self.values[index].glide else {
+        for id in SettingId::all() {
+            let Some(glide) = self.values[id.index()].glide else {
                 continue;
             };
             let progress = (now.tick - glide.start_tick) / glide.ticks;
             if progress < 1.0 {
                 let (from, to) = (f32::from(glide.from), f32::from(glide.to.value));
-                self.write_value(command, from + (to - from) * progress.max(0.0) as f32);
+                self.write_value(id, from + (to - from) * progress.max(0.0) as f32);
             } else {
                 // Its row hasn't run, as a chain moved on, so this takes that row's place.
                 let mark = match glide.to.mark {
                     Mark::Hold => Mark::Hold,
                     Mark::Lock | Mark::Glide => Mark::Lock,
                 };
-                self.set_value(command, glide.to.value, mark);
+                self.set_value(id, glide.to.value, mark);
             }
         }
     }
 
     /// Set what's heard for a value, on the `00` to `FF` scale.
-    fn write_value(&mut self, command: FxCommand, value: f32) {
-        match command {
-            FxCommand::Vol => self.vol = value,
-            FxCommand::Pan => self.pan.target = pan_position(value),
-            FxCommand::Cut => self.cutoff.target = value / 255.0,
-            FxCommand::Res => self.resonance.target = value / 255.0,
-            FxCommand::SendA => self.send_a = value,
-            FxCommand::SendB => self.send_b = value,
-            FxCommand::Har => self.synth[0] = value / 255.0,
-            FxCommand::Tim => self.synth[1] = value / 255.0,
-            FxCommand::Mor => self.synth[2] = value / 255.0,
-            FxCommand::Acc => self.synth[3] = value / 255.0,
-            FxCommand::Slot { slot, param } => {
-                self.slot_values[usize::from(slot)][usize::from(param)] = value;
+    /// A setting of a voice or an effect that isn't loaded keeps its value for when it is, and
+    /// isn't heard.
+    fn write_value(&mut self, id: SettingId, value: f32) {
+        match id.owner() {
+            (Owner::Track, _) => match id {
+                SettingId::VOL => self.vol = value,
+                SettingId::PAN => self.pan.target = pan_position(value),
+                SettingId::CUT => self.cutoff.target = value / 255.0,
+                SettingId::RES => self.resonance.target = value / 255.0,
+                SettingId::SEND_A => self.send_a = value,
+                SettingId::SEND_B => self.send_b = value,
+                _ => return,
+            },
+            (Owner::Voice(voice), at) if self.loaded_voice == Some(voice) => {
+                self.synth[at] = value / 255.0;
+            }
+            (Owner::Slot { slot, effect }, at) => {
+                if self.loaded_effects[slot] == Some(effect) {
+                    self.slot_values[slot][at] = value;
+                }
                 return;
             }
-            _ => {}
+            _ => return,
         }
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
@@ -877,7 +893,7 @@ impl TrackState {
             filtered = insert.process(filtered, keeping_up, rate);
         }
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
-        let keeping_up = |target: Target| {
+        let keeping_up = |target: SettingId| {
             if self.offsets[target.index()] == 0.0 {
                 smoothing
             } else {
@@ -885,9 +901,9 @@ impl TrackState {
             }
         };
         let (vol, to_a, to_b) = (
-            keeping_up(Target::Vol),
-            keeping_up(Target::SendA),
-            keeping_up(Target::SendB),
+            keeping_up(SettingId::VOL),
+            keeping_up(SettingId::SEND_A),
+            keeping_up(SettingId::SEND_B),
         );
         let gain = self.gain.next(vol) * self.level.next(smoothing);
         let (left, right) = pan_gains(position);
@@ -919,7 +935,7 @@ impl TrackState {
             };
             frame = insert.process(frame, keeping_up, rate);
         }
-        let vol = if self.offsets[Target::Vol.index()] == 0.0 {
+        let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
             smoothing
         } else {
             fast
@@ -982,6 +998,45 @@ pub struct ShapedFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::song::Machine;
+
+    #[test]
+    fn a_value_for_a_voice_not_playing_waits_for_it() {
+        let mut state = TrackState::new(0, 0);
+        let on = |voice| Track {
+            machine: Machine::Plaits(voice),
+            ..Track::default()
+        };
+        state.load(&on(SynthVoice::Kick));
+        let kick_decay = state.synth_settings().morph;
+        let string_decay = SettingId::voice(SynthVoice::String, 2).unwrap();
+        state.set_value(string_decay, 0x10, Mark::Hold);
+        assert_eq!(
+            state.synth_settings().morph,
+            kick_decay,
+            "the Kick doesn't hear it"
+        );
+        state.load(&on(SynthVoice::String));
+        assert_eq!(state.synth_settings().morph, 0x10 as f32 / 255.0);
+    }
+
+    #[test]
+    fn a_value_for_an_effect_not_in_its_slot_waits_for_it() {
+        use vt_model::insert::Insert;
+        let mut state = TrackState::new(0, 0);
+        let mut track = Track::default();
+        track.inserts[1] = Insert::ALL[3];
+        state.load(&track);
+        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        state.set_value(feedback, 0x30, Mark::Hold);
+        assert_ne!(
+            state.slot_values[1][1], 0x30 as f32,
+            "the Reverb doesn't hear it"
+        );
+        track.inserts[1] = Insert::ALL[2];
+        state.load(&track);
+        assert_eq!(state.slot_values[1][1], 0x30 as f32);
+    }
 
     #[test]
     fn pan_is_exactly_centred_at_80_and_keeps_power() {

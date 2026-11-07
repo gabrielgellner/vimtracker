@@ -10,11 +10,11 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
+use vt_model::settings::SettingId;
 use vt_model::song::{
     Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song, SynthVoice,
 };
 use vt_model::step::{Note, Step};
-use vt_model::target::Target;
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
@@ -2467,13 +2467,13 @@ fn the_track_page_types_lfo_settings() {
     // Down to LFO 1, on Dest.
     press(&mut app, "Ljj0");
     press(&mut app, "=");
-    assert_eq!(lfo(&app).destination, Some(Target::Cut));
+    assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
     press(&mut app, "-");
     assert_eq!(lfo(&app).destination, None);
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(Target::LfoPhase { lfo: 1 }),
+        Some(SettingId::lfo(1, 1).unwrap()),
         "the last for LFO 1 on a sample track"
     );
 
@@ -2541,7 +2541,10 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.view, View::Track);
-    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(SettingId::RES)
+    );
     assert_eq!(app.song().tracks[1].lfos[0], Lfo::default());
     assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
 
@@ -2553,15 +2556,21 @@ fn k_chooses_an_lfos_destination_from_a_list() {
         "Res  Filter resonance"
     );
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(SettingId::RES)
+    );
     press(&mut app, "K/pan");
     special(&mut app, KeyCode::Enter);
     let lfo = app.song().tracks[1].lfos[1];
-    assert_eq!(lfo.destination, Some(Target::Pan));
+    assert_eq!(lfo.destination, Some(SettingId::PAN));
     assert_eq!(lfo.rate, Rate::Steps(7));
 
     press(&mut app, "u");
-    assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
+    assert_eq!(
+        app.song().tracks[1].lfos[1].destination,
+        Some(SettingId::RES)
+    );
 }
 
 fn typed_rate_on_second_lfo(app: &mut App) {
@@ -2740,7 +2749,7 @@ fn the_track_page_sets_envelopes() {
     );
     press(&mut app, "/pitch");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(env(&app, 1).destination, Some(Target::Pitch));
+    assert_eq!(env(&app, 1).destination, Some(SettingId::PITCH));
     press(&mut app, "lllll");
     typed(&mut app, "+18");
     assert_eq!(env(&app, 1).depth, 0x18);
@@ -2809,7 +2818,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
     };
     press(&mut app, "Ljj0");
     choose(&mut app, "/cut");
-    assert_eq!(lfo(&app).destination, Some(Target::Cut));
+    assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
 
     press(&mut app, "l");
     choose(&mut app, "square");
@@ -2950,7 +2959,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(lfo(&app).shape, Shape::Saw);
     press(&mut app, "hx");
     assert_eq!(lfo(&app).shape, Shape::Tri);
-    assert_eq!(lfo(&app).destination, Some(Target::Cut));
+    assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
     press(&mut app, "hx");
     assert_eq!(lfo(&app), Lfo::default());
 
@@ -3130,7 +3139,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     press(&mut app, "0");
     assert_eq!(
         app.phrase_here().unwrap().steps()[0].fx[0].command,
-        Some(vt_model::step::FxCommand::Cut)
+        Some(vt_model::step::FxCommand::CUT)
     );
     // Typing the name works the same way, over a value already there.
     special(&mut app, KeyCode::Esc);
@@ -3138,7 +3147,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     assert!(row(&app).contains("RES   40"), "{}", row(&app));
     assert_eq!(
         app.phrase_here().unwrap().steps()[0].fx[0].command,
-        Some(vt_model::step::FxCommand::Cut),
+        Some(vt_model::step::FxCommand::CUT),
         "still the old one until the value"
     );
 }
@@ -3148,8 +3157,8 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let mut song = Song::new(1);
     let step = |text: &str| text.parse::<Step>().unwrap();
     let phrase = Phrase::from_steps(vec![
-        step("C-4 40 CUT40 SNA20h RES10g"),
-        step("C-4 40 DEL10 ---00 ---00"),
+        step("C-4 40 cut:40 sna:20h res:10g"),
+        step("C-4 40 del:10 --- ---"),
     ]);
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     let samples = Arc::new(SamplePool::default());
@@ -4356,11 +4365,11 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
         .unwrap();
     let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
     // Name column, then the icon, with the same text after it either way.
-    assert_eq!(text(&drawn, 26), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(drawn[(26, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
-    assert_eq!(text(&drawn, 29), "\u{10EEEE}\u{305}\u{310}");
-    assert_eq!(text(&drawn, 30), " ");
-    for x in 32..80 {
+    assert_eq!(text(&drawn, 30), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(drawn[(30, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
+    assert_eq!(text(&drawn, 33), "\u{10EEEE}\u{305}\u{310}");
+    assert_eq!(text(&drawn, 34), " ");
+    for x in 36..80 {
         assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
     }
 }
@@ -5406,7 +5415,6 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
 
 #[test]
 fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
-    use vt_model::target::Target;
     let (mut app, _realtime) = app();
     // LFO 1's Dest is on the Mod page, its third row.
     press(&mut app, " 4Ljj");
@@ -5437,7 +5445,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     // Choosing one saves it, and it reads back on the page.
     press(&mut app, "K/1 amount");
     special(&mut app, KeyCode::Enter);
-    let target = Target::Slot { slot: 0, param: 1 };
+    let target = SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
     assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
     let lfo = |app: &App| {
         track_page_text(app)
@@ -5456,7 +5464,6 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
 
 #[test]
 fn stepping_dest_goes_through_a_slots_settings() {
-    use vt_model::target::Target;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, "jj");
@@ -5466,30 +5473,21 @@ fn stepping_dest_goes_through_a_slots_settings() {
     }
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(Target::Slot { slot: 0, param: 0 }),
+        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 0).unwrap()),
     );
 }
 
 #[test]
-fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
+fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
+    use vt_model::settings::{Effect, SettingId};
     use vt_model::step::FxCommand;
     let (mut app, _realtime) = app();
     press(&mut app, " 4LL= 3");
     let command = |app: &App, step: usize| app.phrase_here().unwrap().steps()[step].fx[0].command;
-    let amount = FxCommand::Slot { slot: 0, param: 1 };
-    press(&mut app, "lll");
-    press(&mut app, "i1am80");
-    assert_eq!(command(&app, 0), Some(amount));
-    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x80);
-    let text = app.phrase_here().unwrap().steps()[0].to_string();
-    assert!(
-        text.contains("1.180"),
-        "a file holds the slot and place: {text}"
-    );
-    special(&mut app, KeyCode::Esc);
+    let setting = |at| FxCommand::Set(SettingId::slot(0, Effect::Distort, at).unwrap());
 
-    // The list has what's on the track, under the names on the page.
-    press(&mut app, "ggjK");
+    // The list has what's on the track, by label and then by group and name.
+    press(&mut app, "lllK");
     let labels: Vec<String> = app
         .picker
         .as_ref()
@@ -5500,24 +5498,27 @@ fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
     assert!(
         labels
             .iter()
-            .any(|label| label.starts_with("1 Mix  Distort in slot 1")),
+            .any(|label| label.starts_with("1MIX  FX 1 Distort: 1 Mix")),
         "{labels:?}"
     );
     assert!(
-        !labels.iter().any(|label| label.starts_with("2 ")),
+        !labels.iter().any(|label| label.starts_with("2")),
         "{labels:?}"
     );
-    press(&mut app, "1 mix");
+    press(&mut app, "1amnt");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "40");
-    assert_eq!(
-        command(&app, 1),
-        Some(FxCommand::Slot { slot: 0, param: 2 })
+    press(&mut app, "80");
+    assert_eq!(command(&app, 0), Some(setting(1)));
+    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x80);
+    let text = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(
+        text.contains("1.distort.amount:80"),
+        "a file holds the setting's key: {text}"
     );
 
-    // A name that isn't there says so.
+    // A label that isn't there says so.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "ggjj0llli2am");
+    press(&mut app, "ggjj0llliXYZ");
     assert_eq!(command(&app, 2), None);
     assert!(app.status.contains("isn't"), "{}", app.status);
 }
@@ -5525,7 +5526,9 @@ fn a_slots_setting_can_be_typed_and_chosen_for_a_step_and_reads_by_name() {
 #[test]
 fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LL= 3llli1am80");
+    press(&mut app, " 4LL= 3lllK1amnt");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "80");
     special(&mut app, KeyCode::Esc);
     let backend = ratatui::backend::TestBackend::new(120, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -5570,7 +5573,6 @@ fn the_fx_pages_bars_follow_what_plays() {
 #[test]
 fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     use vt_model::song::{Machine, SynthVoice};
-    use vt_model::target::Target;
     let (mut app, _realtime) = app();
     let labels = |app: &mut App, keys: &str| {
         press(app, keys);
@@ -5605,27 +5607,32 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     let dest = labels(&mut app, "LggjjK/");
     assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
     let steps = labels(&mut app, " 3K");
-    assert!(on(&steps, "Index"), "{steps:?}");
+    assert!(on(&steps, "INDX"), "{steps:?}");
 
     // One chosen stays through a change of machine, and says what happened.
     press(&mut app, " 4K/ratio");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(Target::Har));
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(SettingId::voice(SynthVoice::Fm, 0).unwrap())
+    );
     press(&mut app, "HggK");
     press(&mut app, "sa");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(Target::Har));
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(SettingId::voice(SynthVoice::Fm, 0).unwrap())
+    );
     press(&mut app, "L");
     let line = track_page_text(&app)
         .into_iter()
         .find(|line| line.starts_with("LFO 1"))
         .unwrap();
-    assert!(line.contains("Har ---"), "{line}");
+    assert!(line.contains("Ratio ---"), "{line}");
 }
 
 #[test]
 fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
-    use vt_model::target::Target;
     let (mut app, _realtime) = app();
     let labels = |app: &mut App, keys: &str| {
         press(app, keys);
@@ -5665,7 +5672,7 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(Target::LfoDepth { lfo: 1 })
+        Some(SettingId::lfo(1, 0).unwrap())
     );
     let line = track_page_text(&app)
         .into_iter()
@@ -5676,7 +5683,6 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
 
 #[test]
 fn dest_can_be_browsed_by_group_as_well_as_searched() {
-    use vt_model::target::Target;
     use vt_tui::input::picker::Focus;
     let (mut app, _realtime) = app();
     // Distort in slot 1, then LFO 1's Dest.
@@ -5722,7 +5728,7 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(Target::Slot { slot: 0, param: 2 })
+        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 2).unwrap())
     );
 
     // It opens on what's chosen, and Esc leaves it.
@@ -5733,7 +5739,7 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(Target::Slot { slot: 0, param: 2 }),
+        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 2).unwrap()),
         "changing nothing"
     );
 
@@ -5752,7 +5758,7 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
-        Some(Target::Pitch)
+        Some(SettingId::PITCH)
     );
 }
 

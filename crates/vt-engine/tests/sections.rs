@@ -73,9 +73,9 @@ fn levels(song: Song, steps: usize) -> Vec<f32> {
         .collect()
 }
 
-const A: &str = "C-4 40 ---00 ---00 ---00";
-const B: &str = "C-4 20 ---00 ---00 ---00";
-const C: &str = "C-4 10 ---00 ---00 ---00";
+const A: &str = "C-4 40 --- --- ---";
+const B: &str = "C-4 20 --- --- ---";
+const C: &str = "C-4 10 --- --- ---";
 const AV: f32 = 0x40 as f32 / 0x7F as f32;
 const BV: f32 = 0x20 as f32 / 0x7F as f32;
 const CV: f32 = 0x10 as f32 / 0x7F as f32;
@@ -109,9 +109,9 @@ fn a_set_length_cuts_a_section_short_or_lets_its_chains_loop_on() {
 
 /// Three different notes tell which step of a chain is playing.
 const STEPS: [&str; 3] = [
-    "C-4 40 ---00 ---00 ---00",
-    "C-4 20 ---00 ---00 ---00",
-    "C-4 10 ---00 ---00 ---00",
+    "C-4 40 --- --- ---",
+    "C-4 20 --- --- ---",
+    "C-4 10 --- --- ---",
 ];
 
 #[test]
@@ -124,7 +124,7 @@ fn a_different_chain_starts_from_its_top() {
 
 /// A chain of six steps, on two sections of three.
 fn spanning() -> Song {
-    let mut span = song(&[&["C-4 40 ---00 ---00 ---00"], &STEPS]);
+    let mut span = song(&[&["C-4 40 --- --- ---"], &STEPS]);
     let steps: Vec<_> = STEPS
         .iter()
         .chain(&[A, B, C])
@@ -292,7 +292,7 @@ fn one_section_that_wraps_keeps_its_tracks_free_running() {
     two.tracks[0].phrases.insert(
         0,
         Arc::new(Phrase::from_steps(vec![
-            "--- -- ---00 ---00 ---00"
+            "--- -- --- --- ---"
                 .parse()
                 .unwrap();
             2
@@ -381,7 +381,7 @@ fn a_render_covers_the_whole_song_once() {
 
 #[test]
 fn songs_with_sections_render_the_same_each_time() {
-    let whole = song(&[&[A, "--- -- CHA80 ---00 ---00"], &[B, C]]);
+    let whole = song(&[&[A, "--- -- cha:80 --- ---"], &[B, C]]);
     let render = || render_loop(version(whole.clone()), RATE, RenderOptions::default());
     assert_eq!(render(), render());
 }

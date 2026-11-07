@@ -6,8 +6,8 @@ use vt_engine::render::render_frames;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
+use vt_model::settings::SettingId;
 use vt_model::song::{FilterType, Song};
-use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -84,9 +84,9 @@ fn close(actual: f32, expected: f32) {
     assert!((actual - expected).abs() < 0.01, "{actual} and {expected}");
 }
 
-const NOTE: &str = "C-4 -- ---00 ---00 ---00";
-const OFF: &str = "OFF -- ---00 ---00 ---00";
-const EMPTY: &str = "--- -- ---00 ---00 ---00";
+const NOTE: &str = "C-4 -- --- --- ---";
+const OFF: &str = "OFF -- --- --- ---";
+const EMPTY: &str = "--- -- --- --- ---";
 
 #[test]
 fn a_note_follows_attack_decay_and_sustain() {
@@ -161,7 +161,7 @@ fn an_envelope_moves_the_filter_with_its_depth() {
         let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
         with.tracks[0].cutoff = 0x40;
         with.tracks[0].envelopes[1] = Envelope {
-            destination: Some(Target::Cut),
+            destination: Some(SettingId::CUT),
             depth,
             ..adsr(0, 40, 0, 0)
         };
@@ -191,7 +191,7 @@ fn what_an_envelope_moves_stays_fast() {
     // still sounding.
     let mut with = song(&[NOTE, NOTE], adsr(0, 0, 100, 0));
     with.tracks[0].envelopes[1] = Envelope {
-        destination: Some(Target::Pan),
+        destination: Some(SettingId::PAN),
         depth: 0x7F,
         ..adsr(0, 40, 0, 0)
     };
@@ -212,7 +212,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
     let up = |depth: i16| {
         let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
         with.tracks[0].envelopes[1] = Envelope {
-            destination: Some(Target::Pitch),
+            destination: Some(SettingId::PITCH),
             depth,
             ..adsr(0, 0, 100, 0)
         };
@@ -229,7 +229,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
     // A decay brings it back to where it started.
     let mut falling = song(&[NOTE], adsr(0, 0, 100, 0));
     falling.tracks[0].envelopes[1] = Envelope {
-        destination: Some(Target::Pitch),
+        destination: Some(SettingId::PITCH),
         depth: 24,
         ..adsr(0, 20, 0, 0)
     };
@@ -242,9 +242,9 @@ fn a_pitch_envelope_changes_speed_and_settles() {
 
 #[test]
 fn a_second_envelope_on_vol_moves_the_level_by_its_depth() {
-    let mut with = song(&["C-4 -- VOL80 ---00 ---00"], adsr(0, 0, 100, 0));
+    let mut with = song(&["C-4 -- vol:80 --- ---"], adsr(0, 0, 100, 0));
     with.tracks[0].envelopes[1] = Envelope {
-        destination: Some(Target::Vol),
+        destination: Some(SettingId::VOL),
         depth: 0x40,
         ..adsr(0, 0, 100, 0)
     };

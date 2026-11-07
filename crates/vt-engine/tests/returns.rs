@@ -40,7 +40,7 @@ fn song(send: &str) -> Song {
     song.tracks[0].envelopes[0].release_ms = 0;
     song.tracks[0].send_a = 0xE0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = format!("C-4 -- {send} ---00 ---00").parse().unwrap();
+    *phrase.step_mut(0).unwrap() = format!("C-4 -- {send} --- ---").parse().unwrap();
     song
 }
 
@@ -83,13 +83,13 @@ fn hard() -> Insert {
 
 #[test]
 fn a_send_goes_through_its_return() {
-    let out = render(song("---00"));
+    let out = render(song("---"));
     assert!(loudest(&out, HIT) > 0.1);
     assert!(loudest(&out, ECHO) > 0.05, "A is a delay");
-    let mut dry = song("---00");
+    let mut dry = song("---");
     dry.tracks[0].send_a = 0;
     assert_eq!(loudest(&render(dry), ECHO), 0.0, "nothing sent");
-    let mut reverbed = song("---00");
+    let mut reverbed = song("---");
     reverbed.tracks[0].send_a = 0;
     reverbed.tracks[0].send_b = 0xE0;
     assert!(
@@ -100,7 +100,7 @@ fn a_send_goes_through_its_return() {
 
 #[test]
 fn an_echo_comes_back_exactly_on_time() {
-    let out = render(song("---00"));
+    let out = render(song("---"));
     let first = (HIT + 1000..out.len())
         .find(|at| out[*at][0] != 0.0)
         .unwrap();
@@ -109,8 +109,8 @@ fn an_echo_comes_back_exactly_on_time() {
 
 #[test]
 fn a_returns_level_changes_only_what_comes_back() {
-    let plain = render(song("---00"));
-    let mut quiet = song("---00");
+    let plain = render(song("---"));
+    let mut quiet = song("---");
     quiet.tracks[RETURN_A].level = 0;
     let out = render(quiet);
     assert_eq!(loudest(&out, ECHO), 0.0);
@@ -119,7 +119,7 @@ fn a_returns_level_changes_only_what_comes_back() {
 
 #[test]
 fn a_returns_pan_moves_only_what_comes_back() {
-    let mut panned = song("---00");
+    let mut panned = song("---");
     panned.tracks[RETURN_A].pan = 0;
     let out = render(panned);
     assert_eq!(out[ECHO][1], 0.0, "all to the left");
@@ -129,8 +129,8 @@ fn a_returns_pan_moves_only_what_comes_back() {
 
 #[test]
 fn a_returns_slot_shapes_only_what_comes_back() {
-    let plain = render(song("---00"));
-    let mut shaped = song("---00");
+    let plain = render(song("---"));
+    let mut shaped = song("---");
     shaped.tracks[RETURN_A].inserts[1] = hard();
     let out = render(shaped);
     assert_eq!(out[HIT], plain[HIT]);
@@ -139,11 +139,11 @@ fn a_returns_slot_shapes_only_what_comes_back() {
 
 #[test]
 fn the_masters_level_and_slots_change_everything() {
-    let plain = render(song("---00"));
-    let mut silent = song("---00");
+    let plain = render(song("---"));
+    let mut silent = song("---");
     silent.tracks[MASTER].level = 0;
     assert!(render(silent).iter().all(|frame| *frame == [0.0, 0.0]));
-    let mut shaped = song("---00");
+    let mut shaped = song("---");
     shaped.tracks[MASTER].inserts[0] = hard();
     let out = render(shaped);
     assert_ne!(out[HIT], plain[HIT]);
@@ -152,12 +152,12 @@ fn the_masters_level_and_slots_change_everything() {
 
 #[test]
 fn a_returns_own_steps_reach_it_and_a_tracks_dont() {
-    let plain = render(song("---00"));
-    let mut sequenced = song("---00");
+    let plain = render(song("---"));
+    let mut sequenced = song("---");
     sequenced.tracks[RETURN_A].add_chain(0);
     sequenced.sections[0].chains[RETURN_A] = Some(0);
     let phrase = Arc::make_mut(sequenced.tracks[RETURN_A].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "--- -- VOL00h ---00 ---00".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "--- -- vol:00h --- ---".parse().unwrap();
     let out = render(sequenced);
     assert_eq!(loudest(&out, ECHO), 0.0, "its own step turned it down");
     assert_eq!(loudest(&out, HIT), loudest(&plain, HIT), "and only it");
@@ -165,23 +165,23 @@ fn a_returns_own_steps_reach_it_and_a_tracks_dont() {
 
 #[test]
 fn a_note_on_a_fixed_track_plays_nothing() {
-    let mut song = song("---00");
+    let mut song = song("---");
     song.tracks[0].send_a = 0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "--- -- ---00 ---00 ---00".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "--- -- --- --- ---".parse().unwrap();
     for track in [RETURN_A, RETURN_B, MASTER] {
         song.tracks[track].sample = Some("s".to_owned());
         song.tracks[track].add_chain(0);
         song.sections[0].chains[track] = Some(0);
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
-        *phrase.step_mut(0).unwrap() = "C-4 -- ---00 ---00 ---00".parse().unwrap();
+        *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
     }
     assert!(render(song).iter().all(|frame| *frame == [0.0, 0.0]));
 }
 
 #[test]
 fn soloing_a_track_keeps_the_returns() {
-    let mut two = song("---00");
+    let mut two = song("---");
     two.add_track();
     let out = render_with(two.clone(), |engine| engine.set_solo(0, true));
     assert!(loudest(&out, ECHO) > 0.05);
@@ -192,24 +192,24 @@ fn soloing_a_track_keeps_the_returns() {
 
 #[test]
 fn muting_a_return_silences_it_and_leaves_the_rest() {
-    let plain = render(song("---00"));
-    let out = render_with(song("---00"), |engine| engine.set_mute(RETURN_A, true));
+    let plain = render(song("---"));
+    let out = render_with(song("---"), |engine| engine.set_mute(RETURN_A, true));
     assert_eq!(loudest(&out, HIT), loudest(&plain, HIT));
     assert!(loudest(&out, ECHO) < 1e-6, "{}", loudest(&out, ECHO));
 }
 
 #[test]
 fn soloing_a_return_hears_what_sends_to_it_without_the_rest() {
-    let out = render_with(song("---00"), |engine| engine.set_solo(RETURN_A, true));
+    let out = render_with(song("---"), |engine| engine.set_solo(RETURN_A, true));
     assert_eq!(loudest(&out, HIT), 0.0, "not the hit itself");
     assert!(loudest(&out, ECHO) > 0.05, "but what it sent");
-    let out = render_with(song("---00"), |engine| engine.set_solo(RETURN_B, true));
+    let out = render_with(song("---"), |engine| engine.set_solo(RETURN_B, true));
     assert!(loudest(&out, ECHO) < 1e-6, "not the other return");
 }
 
 #[test]
 fn a_fixed_tracks_live_controls_stay_with_it_as_tracks_come_and_go() {
-    let start = song("---00");
+    let start = song("---");
     let mut more = start.clone();
     more.add_track();
     let mut engine = Engine::new(RATE, published(start.clone()));
@@ -233,7 +233,7 @@ fn a_fixed_tracks_live_controls_stay_with_it_as_tracks_come_and_go() {
 
 #[test]
 fn a_delay_in_a_slot_keeps_ringing_after_its_note_ends() {
-    let mut song = song("---00");
+    let mut song = song("---");
     song.tracks[0].send_a = 0;
     song.tracks[0].inserts[2] = Insert::RETURN_DELAY;
     let out = render(song);
@@ -245,11 +245,11 @@ fn a_delay_in_a_slot_keeps_ringing_after_its_note_ends() {
 
 #[test]
 fn a_return_with_nothing_in_its_slots_passes_on_what_it_is_sent() {
-    let mut song = song("---00");
+    let mut song = song("---");
     song.tracks[RETURN_A].inserts[0] = Insert::Empty;
     let out = render(song);
     assert_eq!(loudest(&out, ECHO), 0.0, "no echo");
-    let plain = render(self::song("---00"));
+    let plain = render(self::song("---"));
     assert!(
         loudest(&out, HIT) > loudest(&plain, HIT) * 1.9,
         "the hit twice over"
@@ -258,7 +258,7 @@ fn a_return_with_nothing_in_its_slots_passes_on_what_it_is_sent() {
 
 #[test]
 fn stems_are_of_the_tracks_that_play_and_carry_what_they_send() {
-    let mut two = song("---00");
+    let mut two = song("---");
     two.add_track();
     let version = Published::new(Arc::new(two), pool());
     let stems = render_stems(&version, RATE, RenderOptions::default());

@@ -7,8 +7,8 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::samples::SamplePool;
+use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
-use vt_model::target::Target;
 
 const RATE: u32 = 48_000;
 const STEP: usize = 6000;
@@ -48,8 +48,8 @@ fn peak(out: &[f32], step: usize) -> f32 {
         .fold(0.0, |peak: f32, sample| peak.max(sample.abs()))
 }
 
-const NOTE: &str = "C-2 7F ---00 ---00 ---00";
-const REST: &str = "--- -- ---00 ---00 ---00";
+const NOTE: &str = "C-2 7F --- --- ---";
+const REST: &str = "--- -- --- --- ---";
 
 #[test]
 fn it_sounds_with_no_sample_and_holds_until_the_next_note() {
@@ -68,10 +68,10 @@ fn a_sample_track_with_no_sample_is_still_silent() {
 
 #[test]
 fn off_releases_it_and_kil_cuts_it() {
-    let off = play(song(&[NOTE, "--- -- OFF00 ---00 ---00", REST, REST]), 4);
+    let off = play(song(&[NOTE, "--- -- off:00 --- ---", REST, REST]), 4);
     assert!(peak(&off, 0) > 0.1);
     assert!(peak(&off, 3) < 0.001, "{}", peak(&off, 3));
-    let kil = play(song(&[NOTE, "--- -- KIL00 ---00 ---00", REST, REST]), 4);
+    let kil = play(song(&[NOTE, "--- -- kil:00 --- ---", REST, REST]), 4);
     assert!(peak(&kil, 3) < 0.001, "{}", peak(&kil, 3));
 }
 
@@ -99,18 +99,31 @@ fn the_page_values_change_the_sound() {
     }
 }
 
+/// A step locking one of a voice's settings, by its place among them.
+fn lock(voice: SynthVoice, setting: usize, value: &str) -> String {
+    let key = SettingId::voice(voice, setting).unwrap().key();
+    format!("C-2 7F {key}:{value} --- ---")
+}
+
 #[test]
 fn step_commands_lock_its_settings() {
-    for command in ["HAR", "TIM", "MOR"] {
-        let locked = format!("C-2 7F {command}40 ---00 ---00");
+    for setting in 0..3 {
+        let locked = lock(SynthVoice::VirtualAnalog, setting, "40");
         let out = play(song(&[&locked, REST]), 2);
-        assert_ne!(out, play(song(&[NOTE, REST]), 2), "{command}");
+        assert_ne!(out, play(song(&[NOTE, REST]), 2), "{locked}");
     }
 }
 
 #[test]
+fn a_lock_of_another_voices_setting_does_nothing() {
+    let plain = play(song(&[NOTE, REST]), 2);
+    let kick = lock(SynthVoice::Kick, 0, "F0");
+    assert_eq!(play(song(&[&kick, REST]), 2), plain, "the track plays VA");
+}
+
+#[test]
 fn an_lfo_moves_its_settings() {
-    for destination in [Target::Har, Target::Tim, Target::Mor] {
+    for destination in (0..3).filter_map(|at| SettingId::voice(SynthVoice::VirtualAnalog, at)) {
         let mut moving = song(&[NOTE, REST, REST, REST]);
         moving.tracks[0].lfos[0] = Lfo {
             destination: Some(destination),
@@ -129,7 +142,7 @@ fn an_lfo_moves_its_settings() {
 #[test]
 fn notes_change_its_pitch() {
     let low = play(song(&[NOTE]), 2);
-    let high = play(song(&["C-4 7F ---00 ---00 ---00"]), 2);
+    let high = play(song(&["C-4 7F --- --- ---"]), 2);
     let crossings = |out: &[f32]| {
         out.chunks(2)
             .collect::<Vec<_>>()
@@ -180,17 +193,16 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         let out = play(with_some(&[NOTE, REST]), 2);
         assert!(peak(&out, 0) > 0.05, "{voice:?}: {}", peak(&out, 0));
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
-        for command in ["HAR", "TIM", "MOR"] {
-            // 6-op's Harm is a patch number, so past its last patch it plays the same one.
-            // Not 6-op's default patch, `20`, which wouldn't change it.
-            let value = if voice == SynthVoice::SixOp && command == "HAR" {
+        for setting in 0..3 {
+            // 6-op's Patch is a patch number, and not its default patch, `20`.
+            let value = if voice == SynthVoice::SixOp && setting == 0 {
                 "10"
             } else {
                 "F0"
             };
-            let locked = format!("C-2 7F {command}{value} ---00 ---00");
+            let locked = lock(voice, setting, value);
             let changed = play(with_some(&[&locked, REST]), 2);
-            assert!(changed != out, "{voice:?} {command}");
+            assert!(changed != out, "{voice:?} {setting}");
         }
     }
 }
@@ -198,18 +210,20 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
 #[test]
 fn accent_changes_how_a_struck_voice_sounds_and_nothing_else() {
     for voice in SynthVoice::ALL {
-        let soft = play(on(voice, &["C-3 7F ACC20 ---00 ---00", REST]), 2);
-        let hard = play(on(voice, &["C-3 7F ACCFF ---00 ---00", REST]), 2);
-        assert_eq!(
-            soft != hard,
-            vt_model::settings::SettingId::voice(voice, 3).is_some(),
-            "{voice:?}: does accent change it?"
-        );
+        if SettingId::voice(voice, 3).is_none() {
+            continue;
+        }
+        let soft = play(on(voice, &[&lock(voice, 3, "20"), REST]), 2);
+        let hard = play(on(voice, &[&lock(voice, 3, "FF"), REST]), 2);
+        assert_ne!(soft, hard, "{voice:?}");
     }
     // The track's own accent does the same as a step's.
     let mut set = on(SynthVoice::Modal, &[NOTE, REST]);
     set.tracks[0].set_machine_value(3, 0xFF);
-    let locked = on(SynthVoice::Modal, &["C-2 7F ACCFF ---00 ---00", REST]);
+    let locked = on(
+        SynthVoice::Modal,
+        &[&lock(SynthVoice::Modal, 3, "FF"), REST],
+    );
     assert_eq!(play(set, 2), play(locked, 2));
 }
 
@@ -226,11 +240,17 @@ fn a_harder_strike_is_brighter_on_a_string() {
         total / energy
     };
     let soft = play(
-        on(SynthVoice::String, &["C-3 7F ACC00 ---00 ---00", REST]),
+        on(
+            SynthVoice::String,
+            &[&lock(SynthVoice::String, 3, "00"), REST],
+        ),
         2,
     );
     let hard = play(
-        on(SynthVoice::String, &["C-3 7F ACCFF ---00 ---00", REST]),
+        on(
+            SynthVoice::String,
+            &[&lock(SynthVoice::String, 3, "FF"), REST],
+        ),
         2,
     );
     assert!(

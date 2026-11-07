@@ -12,7 +12,6 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind};
-use vt_model::target::Target;
 
 use crate::app::{App, Entry, Field};
 use crate::guides::GUIDES;
@@ -361,23 +360,18 @@ impl App {
         };
         let track = self.song().tracks.get(self.cursor.track);
         // Only what this track has, from its machine and its slots.
-        let commands: Vec<FxCommand> = FxCommand::ALL
-            .into_iter()
-            .filter(|command| track.is_none_or(|track| command.exists_on(track)))
-            .collect();
+        let commands: Vec<FxCommand> =
+            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
         let items = std::iter::once(empty)
             .chain(commands.iter().map(|command| {
-                let (name, meaning) = match (command.target(), track) {
-                    (Some(target @ Target::Slot { .. }), Some(track)) => {
-                        (target.name_on(track), target.meaning_on(track))
+                let meaning = match (command, track) {
+                    (FxCommand::Set(id), Some(track)) => {
+                        format!("{}: {}", id.group(), id.name_on(track))
                     }
-                    (Some(_), Some(track)) => {
-                        (command.name_on(track), command.meaning().to_owned())
-                    }
-                    _ => (command.name().to_owned(), command.meaning().to_owned()),
+                    _ => command.meaning(),
                 };
                 Item {
-                    label: format!("{name}  {meaning}"),
+                    label: format!("{:<6}{meaning}", command.name()),
                     pick: Pick::FxCommand {
                         slot,
                         command: Some(*command),

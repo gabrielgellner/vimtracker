@@ -25,8 +25,8 @@ loop:                  [03 ............. 08]     only these play
 ## One row has four parts
 
 ```text
- Note  Vel  Gate   FX1      FX2      FX3
- C-4   40   HLD3   CUT40 .  ---00    ---00
+ Note  Vel  Gate   FX1         FX2         FX3
+ C-4   40   HLD3   CUT   40 .  ---   00    ---   00
  └─ what sounds    └─ what changes while it plays
            └─ how long it lasts
 ```

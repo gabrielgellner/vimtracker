@@ -1,514 +1,293 @@
-//! What can be modulated. Things that want moving register here, and sources add to a value per
-//! target without knowing what any of them are.
+//! What a track offers: which settings it has now, for LFOs and envelopes to move and steps to
+//! lock, and what they're called on it. A setting another voice or effect owns stays where it was
+//! chosen, and does nothing until its owner is back.
 
-use serde::{Deserialize, Serialize};
-
-use crate::insert::{INSERTS, MAX_PARAMS};
+use crate::insert::INSERTS;
 use crate::lfo::LFOS_PER_TRACK;
+use crate::settings::{Effect, Owner, SettingId, voice_entries};
 use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
-/// Something an LFO or an envelope can move, in the same units as its FX command.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Target {
-    Cut,
-    Res,
-    Pan,
-    Vol,
-    SendA,
-    SendB,
-    /// In semitones, where the others are in their hex units.
-    Pitch,
-    Har,
-    Tim,
-    Mor,
-    /// How hard a synth is struck.
-    Acc,
-    /// One of the settings of what's in a track's slot, by its place in the effect's list.
-    Slot {
-        slot: u8,
-        param: u8,
-    },
-    /// How far an LFO swings, from another moving it.
-    LfoDepth {
-        lfo: u8,
-    },
-    /// Where an LFO is in its cycle, from another moving it.
-    LfoPhase {
-        lfo: u8,
-    },
-}
+/// What each of the track's own settings does, in the table's order.
+const TRACK_MEANINGS: [&str; 7] = [
+    "Volume",
+    "Pan",
+    "Filter cutoff",
+    "Filter resonance",
+    "Send to return A",
+    "Send to return B",
+    "Pitch, with depth in semitones",
+];
 
-/// What a target declares about itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TargetInfo {
-    /// The name on screen.
-    pub name: &'static str,
-    /// What it's listed with.
-    pub group: &'static str,
-    /// What it does, for a list to choose from.
-    pub meaning: &'static str,
-    /// The step command that sets it, if one does.
-    pub command: Option<&'static str>,
-}
+/// The track's own settings in the order lists show them: the filter, then output, then pitch.
+const TRACK_ORDER: [SettingId; 7] = [
+    SettingId::CUT,
+    SettingId::RES,
+    SettingId::PAN,
+    SettingId::VOL,
+    SettingId::SEND_A,
+    SettingId::SEND_B,
+    SettingId::PITCH,
+];
 
-impl Target {
-    /// The targets every track has, in the order `+` goes through them.
-    pub const ALL: [Self; 11] = [
-        Self::Cut,
-        Self::Res,
-        Self::Pan,
-        Self::Vol,
-        Self::SendA,
-        Self::SendB,
-        Self::Pitch,
-        Self::Har,
-        Self::Tim,
-        Self::Mor,
-        Self::Acc,
-    ];
-
-    /// How many places sources add to.
-    pub const COUNT: usize = Self::ALL.len() + INSERTS * MAX_PARAMS + LFOS_PER_TRACK * 2;
-
-    /// Its place among those.
-    #[inline]
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Cut => 0,
-            Self::Res => 1,
-            Self::Pan => 2,
-            Self::Vol => 3,
-            Self::SendA => 4,
-            Self::SendB => 5,
-            Self::Pitch => 6,
-            Self::Har => 7,
-            Self::Tim => 8,
-            Self::Mor => 9,
-            Self::Acc => 10,
-            Self::Slot { slot, param } => {
-                Self::ALL.len() + slot as usize * MAX_PARAMS + param as usize
-            }
-            Self::LfoDepth { lfo } => Self::ALL.len() + INSERTS * MAX_PARAMS + lfo as usize * 2,
-            Self::LfoPhase { lfo } => Self::ALL.len() + INSERTS * MAX_PARAMS + lfo as usize * 2 + 1,
-        }
-    }
-
-    /// What it declares.
-    pub const fn info(self) -> TargetInfo {
-        const fn info(
-            name: &'static str,
-            group: &'static str,
-            meaning: &'static str,
-            command: Option<&'static str>,
-        ) -> TargetInfo {
-            TargetInfo {
-                name,
-                group,
-                meaning,
-                command,
-            }
-        }
-        match self {
-            Self::Cut => info("Cut", "Filter", "Filter cutoff", Some("CUT")),
-            Self::Res => info("Res", "Filter", "Filter resonance", Some("RES")),
-            Self::Pan => info("Pan", "Output", "Pan", Some("PAN")),
-            Self::Vol => info("Vol", "Output", "Volume", Some("VOL")),
-            Self::SendA => info("Send A", "Output", "Send to return A", Some("SNA")),
-            Self::SendB => info("Send B", "Output", "Send to return B", Some("SNB")),
-            Self::Pitch => info("Pitch", "Machine", "Pitch, with depth in semitones", None),
-            Self::Har => info("Har", "Machine", "A synth's first setting", Some("HAR")),
-            Self::Tim => info("Tim", "Machine", "A synth's second setting", Some("TIM")),
-            Self::Mor => info("Mor", "Machine", "A synth's third setting", Some("MOR")),
-            Self::Acc => info(
-                "Accent",
-                "Machine",
-                "How hard a synth is struck",
-                Some("ACC"),
-            ),
-            Self::Slot { .. } => info("Setting", "FX", "A setting of what's in a slot", None),
-            Self::LfoDepth { lfo: 0 } => info("L1 Depth", "LFO 1", "How far LFO 1 swings", None),
-            Self::LfoPhase { lfo: 0 } => info("L1 Phase", "LFO 1", "Where LFO 1 is", None),
-            Self::LfoDepth { .. } => info("L2 Depth", "LFO 2", "How far LFO 2 swings", None),
-            Self::LfoPhase { .. } => info("L2 Phase", "LFO 2", "Where LFO 2 is", None),
-        }
-    }
-
-    /// Which of a machine's settings this is, if it's one of them.
-    const fn machine_setting(self) -> Option<usize> {
-        match self {
-            Self::Har => Some(0),
-            Self::Tim => Some(1),
-            Self::Mor => Some(2),
-            Self::Acc => Some(3),
-            _ => None,
-        }
-    }
-
-    /// Whether this track has it: a machine's settings are on tracks playing that machine, and a
-    /// slot's while the slot holds something with that setting. A fixed track has no sound of its
-    /// own to filter or tune, and sends nowhere, and the master has no pan. Anything else does no
-    /// work.
+impl SettingId {
+    /// Whether this track has it now: a voice's settings while it plays that voice, and an
+    /// effect's while that effect is in its slot. A fixed track has no sound of its own to filter
+    /// or tune, and sends nowhere, and the master has no pan.
     pub fn exists_on(self, track: &Track) -> bool {
-        match self {
-            Self::Har | Self::Tim | Self::Mor | Self::Acc => self
-                .machine_setting()
-                .and_then(|setting| track.machine_setting(setting))
-                .is_some(),
-            Self::Cut | Self::Res | Self::SendA | Self::SendB | Self::Pitch => track.is_sound(),
-            Self::Pan => track.kind != TrackKind::Master,
-            Self::Slot { slot, param } => track
+        match self.owner() {
+            (Owner::Track, _) if self == Self::VOL => true,
+            (Owner::Track, _) if self == Self::PAN => track.kind != TrackKind::Master,
+            (Owner::Track, _) => track.is_sound(),
+            (Owner::Voice(voice), _) => track.voice() == Some(voice),
+            (Owner::Slot { slot, effect }, _) => track
                 .inserts
-                .get(usize::from(slot))
-                .is_some_and(|insert| usize::from(param) < insert.params().len()),
-            _ => true,
+                .get(slot)
+                .is_some_and(|insert| Effect::of(*insert) == Some(effect)),
+            (Owner::Lfo(_), _) => true,
         }
     }
 
-    /// The name on screen, on this track, as settings depend on what's loaded. One chosen and no
-    /// longer there says so.
+    /// Whether a step can lock it: it has a label.
+    pub fn lockable(self) -> bool {
+        self.entry().label.is_some()
+    }
+
+    /// Its name on this track, where an effect's setting reads as what's in the slot shows it, as
+    /// Distort's Amount reads as Bits on Crush. One the track doesn't have now says so.
     pub fn name_on(self, track: &Track) -> String {
-        if let Some(setting) = self.machine_setting() {
-            return if let Some(id) = track.machine_setting(setting) {
-                id.name().to_owned()
-            } else {
-                format!("{} ---", self.info().name)
-            };
-        }
-        let Self::Slot { slot, param } = self else {
-            return self.info().name.to_owned();
-        };
-        let found = track
-            .inserts
-            .get(usize::from(slot))
-            .and_then(|insert| insert.params().get(usize::from(param)));
-        found.map_or_else(
-            || format!("{} ---", slot + 1),
-            |found| format!("{} {}", slot + 1, found.name),
-        )
-    }
-
-    /// What it's listed with, so each slot has its own group.
-    pub fn group(self) -> String {
-        match self {
-            Self::Slot { slot, .. } => format!("FX {}", slot + 1),
-            _ => self.info().group.to_owned(),
+        let here = self.exists_on(track);
+        match self.owner() {
+            // A slot's setting with the effect gone says only which slot, so it fits a column.
+            (Owner::Slot { slot, .. }, _) if !here => format!("{} ---", slot + 1),
+            (Owner::Slot { slot, .. }, at) => {
+                let shown = track.inserts[slot]
+                    .params()
+                    .get(at)
+                    .map_or(self.name(), |param| param.name);
+                format!("{} {shown}", slot + 1)
+            }
+            (Owner::Lfo(lfo), _) => format!("L{} {}", lfo + 1, self.name()),
+            _ if here => self.name().to_owned(),
+            _ => format!("{} ---", self.name()),
         }
     }
 
-    /// What it does, for a list to choose from, on this track.
-    pub fn meaning_on(self, track: &Track) -> String {
-        if self.machine_setting().is_some() {
-            return format!("A setting of {}", track.machine.name());
+    /// What it does, for a list to choose from.
+    pub fn meaning(self) -> String {
+        match self.owner() {
+            (Owner::Track, at) => TRACK_MEANINGS[at].to_owned(),
+            (Owner::Voice(voice), _) => format!("A setting of {}", voice.name()),
+            (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
+            (Owner::Lfo(lfo), 0) => format!("How far LFO {} swings", lfo + 1),
+            (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
         }
-        let Self::Slot { slot, .. } = self else {
-            return self.info().meaning.to_owned();
-        };
-        let effect = track
-            .inserts
-            .get(usize::from(slot))
-            .map_or("---", |insert| insert.name());
-        format!("{effect} in slot {}", slot + 1)
+    }
+
+    /// What's on a track to choose from, in order: its own, its machine's, and its slots' effects'.
+    pub fn on_track(track: &Track) -> Vec<Self> {
+        let mut settings: Vec<Self> = TRACK_ORDER
+            .into_iter()
+            .filter(|id| id.exists_on(track))
+            .collect();
+        if let Some(voice) = track.voice() {
+            settings
+                .extend((0..voice_entries(voice).len()).filter_map(|at| Self::voice(voice, at)));
+        }
+        for slot in 0..INSERTS {
+            if let Some(effect) = Effect::of(track.inserts[slot]) {
+                settings.extend(
+                    (0..effect.params().len()).filter_map(|at| Self::slot(slot, effect, at)),
+                );
+            }
+        }
+        settings
     }
 
     /// What an envelope can move: what's on the track, and either LFO's settings, as envelopes run
     /// first.
     pub fn for_envelope(track: &Track) -> Vec<Self> {
-        let mut targets = Self::on_track(track);
-        targets.extend(Self::lfo_settings());
-        targets
+        let mut settings = Self::on_track(track);
+        settings.extend(lfo_settings());
+        settings
     }
 
     /// What an LFO can move: what's on the track, and the settings of the LFOs after it, as each
     /// runs in order, so there's never a way back round.
     pub fn for_lfo(track: &Track, lfo: usize) -> Vec<Self> {
-        let mut targets = Self::on_track(track);
-        targets.extend(Self::lfo_settings().skip((lfo + 1) * 2));
-        targets
-    }
-
-    /// Every LFO's settings, in order.
-    fn lfo_settings() -> impl Iterator<Item = Self> {
-        (0..LFOS_PER_TRACK as u8).flat_map(|lfo| [Self::LfoDepth { lfo }, Self::LfoPhase { lfo }])
-    }
-
-    /// What's on a track to choose from: what it has from its machine, and the settings of what's
-    /// in its slots, in order.
-    pub fn on_track(track: &Track) -> Vec<Self> {
-        let mut targets: Vec<Self> = Self::ALL
-            .into_iter()
-            .filter(|target| target.exists_on(track))
-            .collect();
-        for (slot, insert) in track.inserts.iter().enumerate() {
-            targets.extend((0..insert.params().len()).map(|param| Self::Slot {
-                slot: slot as u8,
-                param: param as u8,
-            }));
-        }
-        targets
+        let mut settings = Self::on_track(track);
+        settings.extend(lfo_settings().skip((lfo + 1) * 2));
+        settings
     }
 }
 
+/// Every LFO's settings, in order.
+fn lfo_settings() -> impl Iterator<Item = SettingId> {
+    (0..LFOS_PER_TRACK).flat_map(|lfo| (0..2).filter_map(move |at| SettingId::lfo(lfo, at)))
+}
+
 impl FxCommand {
-    /// The name on screen, on this track: a slot's setting reads as it does in `Dest`, from what's
-    /// in the slot.
-    pub fn name_on(self, track: &Track) -> String {
-        match self.target() {
-            Some(target) if target.exists_on(track) => {
-                if matches!(self, Self::Slot { .. } | Self::Har | Self::Tim | Self::Mor) {
-                    target.name_on(track)
-                } else {
-                    self.name().to_owned()
-                }
-            }
-            Some(target @ Target::Slot { .. }) => target.name_on(track),
-            _ => self.name().to_owned(),
-        }
+    /// The commands a step on this track can hold: what it can lock, then the events. A track
+    /// with no sound has no note for an event to act on.
+    pub fn on_track(track: &Track) -> Vec<Self> {
+        let events = Self::EVENTS.into_iter().filter(|_| track.is_sound());
+        SettingId::on_track(track)
+            .into_iter()
+            .filter(|id| id.lockable())
+            .map(Self::Set)
+            .chain(events)
+            .collect()
     }
 
-    /// What this sets, if it sets something that can be modulated.
-    pub const fn target(self) -> Option<Target> {
-        match self {
-            Self::Vol => Some(Target::Vol),
-            Self::Pan => Some(Target::Pan),
-            Self::Cut => Some(Target::Cut),
-            Self::Res => Some(Target::Res),
-            Self::SendA => Some(Target::SendA),
-            Self::SendB => Some(Target::SendB),
-            Self::Har => Some(Target::Har),
-            Self::Tim => Some(Target::Tim),
-            Self::Mor => Some(Target::Mor),
-            Self::Acc => Some(Target::Acc),
-            Self::Slot { slot, param } => Some(Target::Slot { slot, param }),
-            Self::Del | Self::Kil | Self::Off | Self::Ret | Self::Cha => None,
-        }
-    }
-
-    /// Whether this track has what this sets, so it belongs in a list to choose from.
+    /// Whether this track has what this sets, so it does something here.
     pub fn exists_on(self, track: &Track) -> bool {
-        // Those with no value act on a note, and a track with no sound has none.
-        self.target()
-            .map_or(track.is_sound(), |target| target.exists_on(track))
+        match self {
+            Self::Set(id) => id.exists_on(track),
+            _ => track.is_sound(),
+        }
     }
 
-    /// The command for typed text: its name, or a slot's number and the start of a setting's name.
-    pub fn typed(text: &str, track: &Track) -> Option<Self> {
-        if let Some(command) = Self::from_name(text).filter(|command| command.name() == text) {
-            return Some(command);
+    /// Its name on this track, for lists and the status line: a setting's long name, or an
+    /// event's label.
+    pub fn name_on(self, track: &Track) -> String {
+        match self {
+            Self::Set(id) => id.name_on(track),
+            event => event.name(),
         }
-        let slot = usize::from(text.bytes().next()?.checked_sub(b'1')?);
-        let start = text.get(1..)?.to_lowercase();
-        let param = track
-            .inserts
-            .get(slot)?
-            .params()
-            .iter()
-            .position(|param| param.name.to_lowercase().starts_with(&start))?;
-        Some(Self::Slot {
-            slot: slot as u8,
-            param: param as u8,
-        })
+    }
+
+    /// The command a typed label names on this track, whatever its case.
+    pub fn typed(text: &str, track: &Track) -> Option<Self> {
+        let text = text.to_uppercase();
+        Self::on_track(track)
+            .into_iter()
+            .chain(Self::EVENTS)
+            .find(|command| command.name() == text)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::insert::Insert;
+    use crate::insert::{DistortType, Insert};
     use crate::song::{Machine, Song, SynthVoice};
 
     #[test]
-    fn every_target_has_its_own_place() {
-        let track = Track {
-            machine: Machine::Plaits(SynthVoice::String),
-            inserts: [Insert::ALL[2]; INSERTS],
-            ..Track::default()
-        };
-        let targets = Target::for_envelope(&track);
-        for (at, target) in targets.iter().enumerate() {
-            assert_eq!(target.index(), at, "{target:?}");
-        }
-        assert_eq!(targets.len(), Target::COUNT, "full slots use every place");
-    }
-
-    #[test]
-    fn only_a_voice_that_is_struck_offers_accent() {
-        for voice in SynthVoice::ALL {
-            let track = Track {
-                machine: Machine::Plaits(voice),
-                ..Track::default()
-            };
-            assert_eq!(
-                Target::Acc.exists_on(&track),
-                crate::settings::SettingId::voice(voice, 3).is_some(),
-                "{voice:?}"
-            );
-        }
-        let samples = Track::default();
-        assert!(!Target::Acc.exists_on(&samples));
-        assert!(!FxCommand::Acc.exists_on(&samples));
-    }
-
-    #[test]
-    fn no_two_targets_share_a_name_or_a_command() {
-        for (at, target) in Target::ALL.into_iter().enumerate() {
-            for other in &Target::ALL[at + 1..] {
-                let (one, two) = (target.info(), other.info());
-                assert_ne!(one.name, two.name);
-                if one.command.is_some() {
-                    assert_ne!(one.command, two.command, "{target:?} and {other:?}");
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn a_targets_command_is_a_real_one() {
-        for target in Target::ALL {
-            if let Some(command) = target.info().command {
-                assert!(
-                    FxCommand::ALL.iter().any(|real| real.name() == command),
-                    "{command}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn every_target_is_in_a_group_and_says_what_it_does() {
-        for target in Target::ALL {
-            let info = target.info();
-            assert!(!info.group.is_empty(), "{target:?}");
-            assert!(!info.meaning.is_empty(), "{target:?}");
-        }
-    }
-
-    #[test]
-    fn a_track_only_offers_the_settings_of_what_is_in_its_slots() {
+    fn a_track_offers_its_own_then_its_machines_then_its_slots_settings() {
         let mut track = Track {
             machine: Machine::Plaits(SynthVoice::String),
             ..Track::default()
         };
-        assert_eq!(Target::on_track(&track), Target::ALL.to_vec());
-        track.inserts[1] = Insert::ALL[1];
-        let targets = Target::on_track(&track);
-        assert_eq!(targets.len(), Target::ALL.len() + 4);
-        assert_eq!(
-            targets[Target::ALL.len()],
-            Target::Slot { slot: 1, param: 0 }
-        );
-        let names: Vec<String> = targets[Target::ALL.len()..]
-            .iter()
-            .map(|target| target.name_on(&track))
-            .collect();
-        assert_eq!(names, ["2 Type", "2 Amount", "2 Mix", "2 Gain"]);
-        assert_eq!(Target::Cut.name_on(&track), "Cut");
-        // What's chosen still reads if the slot empties.
-        track.inserts[1] = Insert::Empty;
-        assert_eq!(Target::Slot { slot: 1, param: 2 }.name_on(&track), "2 ---");
+        let offered = SettingId::on_track(&track);
+        assert_eq!(offered[..7], TRACK_ORDER);
+        assert_eq!(offered.len(), 7 + 4);
+        assert_eq!(offered[7], SettingId::voice(SynthVoice::String, 0).unwrap());
+        track.inserts[1] = Insert::ALL[2];
+        let offered = SettingId::on_track(&track);
+        assert_eq!(offered.len(), 7 + 4 + 9);
+        assert_eq!(offered[11], SettingId::slot(1, Effect::Delay, 0).unwrap());
     }
 
     #[test]
-    fn a_command_reads_as_its_setting_and_can_be_typed() {
+    fn a_setting_another_voice_or_effect_owns_says_it_isnt_here() {
+        let mut track = Track {
+            machine: Machine::Plaits(SynthVoice::Fm),
+            ..Track::default()
+        };
+        let ratio = SettingId::voice(SynthVoice::Fm, 0).unwrap();
+        assert_eq!(ratio.name_on(&track), "Ratio");
+        track.machine = Machine::Plaits(SynthVoice::Kick);
+        assert!(!ratio.exists_on(&track));
+        assert_eq!(ratio.name_on(&track), "Ratio ---");
+
+        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        assert_eq!(feedback.name_on(&track), "2 ---");
+        track.inserts[1] = Insert::ALL[2];
+        assert_eq!(feedback.name_on(&track), "2 Feedback");
+        track.inserts[1] = Insert::ALL[3];
+        assert!(!feedback.exists_on(&track), "a Reverb isn't the Delay");
+    }
+
+    #[test]
+    fn distorts_amount_reads_as_bits_on_crush() {
         let mut track = Track::default();
         track.inserts[0] = Insert::ALL[1];
-        let amount = FxCommand::Slot { slot: 0, param: 1 };
+        let amount = SettingId::slot(0, Effect::Distort, 1).unwrap();
         assert_eq!(amount.name_on(&track), "1 Amount");
-        assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
-        assert_eq!(FxCommand::typed("1AM", &track), Some(amount));
-        assert_eq!(FxCommand::typed("CUT", &track), Some(FxCommand::Cut));
-        // An empty slot has no settings to type, and nor does a name that isn't there.
-        assert_eq!(FxCommand::typed("2AM", &track), None);
-        assert_eq!(FxCommand::typed("1ZZ", &track), None);
-        assert_eq!(FxCommand::typed("9AM", &track), None);
-    }
-
-    #[test]
-    fn a_machines_settings_are_only_on_tracks_playing_it_under_their_real_names() {
-        let mut track = Track::default();
-        assert!(!Target::on_track(&track).contains(&Target::Har));
-        assert!(Target::on_track(&track).contains(&Target::Pitch));
-        // One chosen before switching says it isn't there, and comes back after.
-        assert_eq!(Target::Har.name_on(&track), "Har ---");
-        assert_eq!(FxCommand::Har.name_on(&track), "HAR");
-
-        track.machine = Machine::Plaits(SynthVoice::default());
-        assert!(Target::on_track(&track).contains(&Target::Har));
-        track.machine = Machine::Plaits(SynthVoice::Fm);
-        assert_eq!(Target::Har.name_on(&track), "Ratio");
-        assert_eq!(Target::Mor.name_on(&track), "Feedback");
-        assert_eq!(FxCommand::Tim.name_on(&track), "Index");
-        assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
-        track.machine = Machine::Plaits(SynthVoice::Kick);
-        assert_eq!(Target::Har.name_on(&track), "Punch");
+        if let Insert::Distort(distort) = &mut track.inserts[0] {
+            distort.kind = DistortType::Crush;
+        }
+        assert_eq!(amount.name_on(&track), "1 Bits");
     }
 
     #[test]
     fn a_fixed_track_only_offers_what_it_has() {
         let song = Song::new(1);
-        let offered = |track: &Track| Target::on_track(track);
         let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
-        assert_eq!(offered(return_a)[..2], [Target::Pan, Target::Vol]);
-        assert_eq!(offered(return_a).len(), 2 + 9, "and its delay's settings");
-        assert_eq!(offered(master), [Target::Vol]);
-        assert!(FxCommand::Vol.exists_on(return_a));
+        let offered = SettingId::on_track(return_a);
+        assert_eq!(offered[..2], [SettingId::PAN, SettingId::VOL]);
+        assert_eq!(offered.len(), 2 + 9, "and its delay's settings");
+        assert_eq!(SettingId::on_track(master)[0], SettingId::VOL);
+        assert!(!SettingId::on_track(master).contains(&SettingId::PAN));
         assert!(
-            !FxCommand::Ret.exists_on(return_a),
-            "it has no note to repeat"
+            FxCommand::on_track(return_a)
+                .iter()
+                .all(|command| command.holds()),
+            "no events without a note"
         );
-        assert!(!FxCommand::SendA.exists_on(return_a), "no way round");
-        assert!(!FxCommand::Pan.exists_on(master));
     }
 
     #[test]
-    fn every_setting_a_command_sets_is_its_own_target() {
-        for command in FxCommand::ALL {
-            if let Some(target) = command.target() {
-                assert!(target.index() < Target::COUNT, "{command:?}");
-            }
-        }
-        assert_eq!(FxCommand::Del.target(), None);
+    fn steps_lock_only_what_has_a_label() {
+        let track = Track::default();
+        let commands = FxCommand::on_track(&track);
+        assert!(commands.contains(&FxCommand::CUT));
+        assert!(!commands.contains(&FxCommand::Set(SettingId::PITCH)));
+        assert!(commands.contains(&FxCommand::Del));
     }
 
     #[test]
     fn lfos_can_only_reach_those_after_them_and_envelopes_reach_both() {
         let track = Track::default();
-        let lfos = |list: &[Target]| {
-            list.iter()
-                .filter(|target| {
-                    matches!(target, Target::LfoDepth { .. } | Target::LfoPhase { .. })
-                })
-                .copied()
-                .collect::<Vec<_>>()
+        let lfos = |list: Vec<SettingId>| -> Vec<String> {
+            list.into_iter()
+                .filter(|id| matches!(id.owner().0, Owner::Lfo(_)))
+                .map(SettingId::key)
+                .collect()
         };
         assert_eq!(
-            lfos(&Target::for_lfo(&track, 0)),
-            [Target::LfoDepth { lfo: 1 }, Target::LfoPhase { lfo: 1 }]
+            lfos(SettingId::for_lfo(&track, 0)),
+            ["lfo2.depth", "lfo2.phase"]
         );
-        assert!(lfos(&Target::for_lfo(&track, 1)).is_empty(), "no way back");
-        assert_eq!(lfos(&Target::for_envelope(&track)).len(), 4);
-        assert!(lfos(&Target::on_track(&track)).is_empty(), "nor on a step");
-        assert_eq!(Target::LfoDepth { lfo: 1 }.name_on(&track), "L2 Depth");
-        assert_eq!(Target::LfoPhase { lfo: 0 }.name_on(&track), "L1 Phase");
+        assert!(lfos(SettingId::for_lfo(&track, 1)).is_empty());
+        assert_eq!(lfos(SettingId::for_envelope(&track)).len(), 4);
     }
 
     #[test]
-    fn each_slot_and_lfo_is_its_own_group_in_a_row() {
-        assert_eq!(Target::Cut.group(), "Filter");
-        assert_eq!(Target::Slot { slot: 1, param: 0 }.group(), "FX 2");
-        assert_eq!(Target::LfoPhase { lfo: 1 }.group(), "LFO 2");
+    fn a_typed_label_finds_its_command_on_the_track() {
+        let track = Track {
+            machine: Machine::Plaits(SynthVoice::Kick),
+            ..Track::default()
+        };
+        assert_eq!(FxCommand::typed("cut", &track), Some(FxCommand::CUT));
+        assert_eq!(FxCommand::typed("del", &track), Some(FxCommand::Del));
+        assert_eq!(
+            FxCommand::typed("acc", &track),
+            Some(FxCommand::Set(
+                SettingId::voice(SynthVoice::Kick, 3).unwrap()
+            ))
+        );
+        assert_eq!(FxCommand::typed("xyz", &track), None);
     }
 
     #[test]
-    fn a_saved_slot_target_comes_back() {
-        let target = Target::Slot { slot: 2, param: 3 };
-        let text = ron::to_string(&target).unwrap();
-        assert_eq!(ron::from_str::<Target>(&text).unwrap(), target);
-    }
-
-    #[test]
-    fn a_saved_target_keeps_its_name_in_a_song() {
-        assert_eq!(ron::to_string(&Target::Cut).unwrap(), "Cut");
-        assert_eq!(ron::from_str::<Target>("Pitch").unwrap(), Target::Pitch);
+    fn a_saved_destination_keeps_its_key_in_a_song() {
+        let mut song = Song::new(1);
+        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        song.tracks[0].lfos[0].destination = Some(feedback);
+        let text = ron::to_string(&song).unwrap();
+        assert!(text.contains("2.delay.feedback"), "{text}");
+        let back: Song = ron::from_str(&text).unwrap();
+        assert_eq!(back.tracks[0].lfos[0].destination, Some(feedback));
     }
 }

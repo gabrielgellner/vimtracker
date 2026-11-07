@@ -1764,6 +1764,8 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
     *   A String lock on a Kick track, and a slot 2 Delay lock with a Reverb in slot 2, do nothing, are drawn faint, and play again when String or the Delay comes back. The same for an LFO's and an envelope's `Dest`.
     *   No allocation in the callback.
 
+**Issue 3 is built in two parts.** The first, on 2026-11-07, is the model and the engine: an FX cell holds an event or `Set(SettingId)`, songs save `cut:40` and `---`, `Dest` stores ids, `Target` and the named value commands go, and `TrackState` keeps a value for every setting, heard only while its voice or effect is loaded. Until the second part, a command is still typed as three letters, so a slot's setting is chosen with `K`. The second part is the interface: typing a label with `Enter`, `K` grouped, the status line, and faint locks. The track's own settings keep the page's short names, `Cut`, `Res` and `Vol`, and the Mod page's `Dest` is 13 wide to fit a slot's setting or one that's gone.
+
 **Issue 2 built** on 2026-11-07. The voices keep `Settings`, with its four fields, as their view of the array they're given, so their code and tests are unchanged. A voice with three settings has a last row of only Swing on the Sound page, and output settings stay in the right column.
 
 **Done when** each issue's tests pass, and the author has used locks of track, effect and voice settings in a jam, typing and `K` feel quick to them, and the grid stays readable to them.

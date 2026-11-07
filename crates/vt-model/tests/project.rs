@@ -63,7 +63,7 @@ fn a_song_round_trips() {
         .unwrap()
         .label = "bass".to_owned();
     let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
-    *phrase.step_mut(2).unwrap() = "C-4 64 CUT40 ---00 RET14".parse().unwrap();
+    *phrase.step_mut(2).unwrap() = "C-4 64 cut:40 --- ret:14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
 }

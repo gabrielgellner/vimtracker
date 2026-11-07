@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS};
 use crate::lfo::LFOS_PER_TRACK;
 use crate::patch_names::PATCH_NAMES;
-use crate::song::{DEFAULT_ACCENT, SynthVoice, Track};
+use crate::song::{DEFAULT_ACCENT, SynthVoice};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
@@ -85,10 +85,10 @@ const fn on_level_scale(
 
 /// The track's own, in the order the table keeps them.
 const TRACK: [Entry; 7] = [
-    on_level_scale("vol", "Volume", "VOL", UNITY_LEVEL),
+    on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     centred("pan", "Pan", "PAN"),
-    level("cut", "Cutoff", "CUT", 0xFF),
-    level("res", "Resonance", "RES", 0x00),
+    level("cut", "Cut", "CUT", 0xFF),
+    level("res", "Res", "RES", 0x00),
     on_level_scale("sna", "Send A", "SNA", 0x00),
     on_level_scale("snb", "Send B", "SNB", 0x00),
     Entry {
@@ -350,6 +350,15 @@ pub enum Owner {
 pub struct SettingId(u16);
 
 impl SettingId {
+    pub const VOL: Self = Self(0);
+    pub const PAN: Self = Self(1);
+    pub const CUT: Self = Self(2);
+    pub const RES: Self = Self(3);
+    pub const SEND_A: Self = Self(4);
+    pub const SEND_B: Self = Self(5);
+    /// Moved by modulation only, in semitones.
+    pub const PITCH: Self = Self(6);
+
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
 
@@ -507,48 +516,11 @@ pub const EVENTS: [FxCommand; 5] = [
     FxCommand::Cha,
 ];
 
-impl FxCommand {
-    /// The setting this command locks on a track, if it's one in the table.
-    pub fn setting_on(self, track: &Track) -> Option<SettingId> {
-        let voice = |setting| track.machine_setting(setting);
-        match self {
-            Self::Vol => SettingId::track(0),
-            Self::Pan => SettingId::track(1),
-            Self::Cut => SettingId::track(2),
-            Self::Res => SettingId::track(3),
-            Self::SendA => SettingId::track(4),
-            Self::SendB => SettingId::track(5),
-            Self::Har => voice(0),
-            Self::Tim => voice(1),
-            Self::Mor => voice(2),
-            Self::Acc => voice(3),
-            Self::Slot { slot, param } => {
-                let slot = usize::from(slot);
-                let effect = Effect::of(*track.inserts.get(slot)?)?;
-                SettingId::slot(slot, effect, usize::from(param))
-            }
-            Self::Del | Self::Kil | Self::Off | Self::Ret | Self::Cha => None,
-        }
-    }
-
-    /// Its label in the grid, on this track: what it locks there, or its name if it locks
-    /// nothing there. A slot's setting with nothing in its place shows its slot's digit.
-    pub fn label_on(self, track: &Track) -> String {
-        match (self.setting_on(track).and_then(SettingId::label), self) {
-            (Some(label), _) => label,
-            (None, Self::Slot { slot, .. }) => format!("{} ---", slot + 1),
-            (None, _) => self.name().to_owned(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::insert::{DistortType, Insert};
-    use crate::song::Machine;
 
     fn labels(ids: impl Iterator<Item = SettingId>) -> Vec<String> {
         ids.filter_map(SettingId::label).collect()
@@ -658,38 +630,19 @@ mod tests {
     }
 
     #[test]
-    fn commands_show_the_label_of_what_they_lock_on_the_track() {
-        let mut track = Track {
-            machine: Machine::Plaits(SynthVoice::Kick),
-            ..Track::default()
-        };
-        assert_eq!(FxCommand::Cut.label_on(&track), "CUT");
-        assert_eq!(FxCommand::Har.label_on(&track), "PNCH");
-        assert_eq!(FxCommand::Acc.label_on(&track), "ACC");
-        assert_eq!(FxCommand::Del.label_on(&track), "DEL");
-        track.machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    fn a_lock_shows_its_settings_label_with_its_slots_digit() {
+        assert_eq!(FxCommand::CUT.name(), "CUT");
+        assert_eq!(FxCommand::Del.name(), "DEL");
+        let punch = SettingId::voice(SynthVoice::Kick, 0).unwrap();
+        assert_eq!(FxCommand::Set(punch).name(), "PNCH");
+        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        assert_eq!(FxCommand::Set(feedback).name(), "2FDBK");
+        assert_eq!(FxCommand::Set(feedback).key(), "2.delay.feedback");
         assert_eq!(
-            FxCommand::Acc.label_on(&track),
-            "ACC",
-            "nothing to lock on VA"
+            FxCommand::from_key("2.delay.feedback"),
+            Some(FxCommand::Set(feedback))
         );
-        track.inserts[1] = Insert::ALL[2];
-        assert_eq!(
-            FxCommand::Slot { slot: 1, param: 1 }.label_on(&track),
-            "2FDBK"
-        );
-        assert_eq!(
-            FxCommand::Slot { slot: 0, param: 1 }.label_on(&track),
-            "1 ---"
-        );
-        track.inserts[0] = Insert::ALL[1];
-        let amount = FxCommand::Slot { slot: 0, param: 1 };
-        assert_eq!(amount.label_on(&track), "1AMNT");
-        if let Insert::Distort(distort) = &mut track.inserts[0] {
-            distort.kind = DistortType::Crush;
-        }
-        assert_eq!(amount.label_on(&track), "1AMNT", "Bits is the same setting");
-        let samples = Track::default();
-        assert_eq!(FxCommand::Har.label_on(&samples), "HAR");
+        assert_eq!(FxCommand::from_key("del"), Some(FxCommand::Del));
+        assert_eq!(FxCommand::from_key("CUT"), None, "keys are lower case");
     }
 }
