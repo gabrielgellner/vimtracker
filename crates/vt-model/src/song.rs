@@ -16,6 +16,7 @@ use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::scale::Scale;
 use crate::selection::Extent;
+use crate::settings::SettingId;
 use crate::step::{FxCommand, FxSlot, Step};
 
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
@@ -123,24 +124,13 @@ pub struct Track {
     /// What makes its sound.
     #[serde(default)]
     pub machine: Machine,
-    /// Which synth it plays, on the Plaits machine.
-    #[serde(default)]
-    pub synth_voice: SynthVoice,
     /// What it plays, relative to the project folder.
     #[serde(default)]
     pub sample: Option<String>,
-    /// Where held `HAR` starts: a synth's first setting.
-    #[serde(default = "centre")]
-    pub harmonics: u8,
-    /// Where held `TIM` starts: a synth's second setting.
-    #[serde(default)]
-    pub timbre: u8,
-    /// Where held `MOR` starts: a synth's third setting.
-    #[serde(default = "centre")]
-    pub morph: u8,
-    /// Where held `ACC` starts: how hard a synth is struck, for the voices it changes.
-    #[serde(default = "default_accent")]
-    pub accent: u8,
+    /// The machines' settings it has changed from their defaults, by setting. A track keeps every
+    /// voice's, so switching voice and back finds the first as it was.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub settings: BTreeMap<SettingId, u8>,
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
@@ -209,6 +199,52 @@ impl Track {
     /// Whether this track plays sounds.
     pub fn is_sound(&self) -> bool {
         self.kind == TrackKind::Sound
+    }
+
+    /// The synth voice it plays, if it plays one.
+    pub fn voice(&self) -> Option<SynthVoice> {
+        match self.machine {
+            Machine::Plaits(voice) if self.is_sound() => Some(voice),
+            _ => None,
+        }
+    }
+
+    /// One of its machine's settings, by its place among them.
+    pub fn machine_setting(&self, setting: usize) -> Option<SettingId> {
+        SettingId::voice(self.voice()?, setting)
+    }
+
+    /// The value of one of its machine's settings, by its place among them, for `HAR`, `TIM`,
+    /// `MOR` and `ACC` to start from. A machine without that setting gives 0, which nothing reads.
+    pub fn machine_value(&self, setting: usize) -> u8 {
+        self.machine_setting(setting)
+            .map_or(0, |id| self.setting(id))
+    }
+
+    /// Set one of its machine's settings, by its place among them, if the machine has it.
+    pub fn set_machine_value(&mut self, setting: usize, value: u8) {
+        if let Some(id) = self.machine_setting(setting) {
+            self.set_setting(id, value);
+        }
+    }
+
+    /// A setting's value on this track: what it's set to, or its default.
+    pub fn setting(&self, id: SettingId) -> u8 {
+        self.settings
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| id.entry().default)
+    }
+
+    /// Set a setting, within what it takes. A setting back at its default isn't kept.
+    pub fn set_setting(&mut self, id: SettingId, value: u8) {
+        let entry = id.entry();
+        let value = value.min(entry.kind.top());
+        if value == entry.default {
+            self.settings.remove(&id);
+        } else {
+            self.settings.insert(id, value);
+        }
     }
 
     /// The total steps a chain lasts: the pulses of every row in its phrases' loops. A missing or
@@ -299,12 +335,8 @@ impl Default for Track {
             kind: TrackKind::default(),
             name: String::new(),
             machine: Machine::default(),
-            synth_voice: SynthVoice::default(),
             sample: None,
-            harmonics: centre(),
-            timbre: 0,
-            morph: centre(),
-            accent: DEFAULT_ACCENT,
+            settings: BTreeMap::new(),
             mute: false,
             solo: false,
             swing: None,
@@ -343,10 +375,6 @@ fn centre() -> u8 {
 /// level.
 pub const DEFAULT_ACCENT: u8 = 0xCC;
 
-fn default_accent() -> u8 {
-    DEFAULT_ACCENT
-}
-
 /// What a section does to the tracks when it starts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SectionStart {
@@ -363,19 +391,27 @@ pub enum Machine {
     /// Plays its sample, once, at the note's speed.
     #[default]
     Sample,
-    /// One of the synth voices, after Mutable Instruments' Plaits.
-    Plaits,
+    /// One of the synth voices, after Mutable Instruments' Plaits, each with its own settings.
+    Plaits(SynthVoice),
 }
 
 impl Machine {
-    /// Every machine, in the order a list shows them.
-    pub const ALL: [Self; 2] = [Self::Sample, Self::Plaits];
+    /// Every machine, in the order a list shows them: Sample, then each Plaits voice.
+    pub const ALL: [Self; 1 + SynthVoice::ALL.len()] = {
+        let mut all = [Self::Sample; 1 + SynthVoice::ALL.len()];
+        let mut at = 0;
+        while at < SynthVoice::ALL.len() {
+            all[at + 1] = Self::Plaits(SynthVoice::ALL[at]);
+            at += 1;
+        }
+        all
+    };
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
         match self {
             Self::Sample => "Sample",
-            Self::Plaits => "Plaits",
+            Self::Plaits(voice) => voice.name(),
         }
     }
 
@@ -383,7 +419,7 @@ impl Machine {
     pub fn meaning(self) -> &'static str {
         match self {
             Self::Sample => "One file, at the speed of its note",
-            Self::Plaits => "A synth, with a choice of voices",
+            Self::Plaits(voice) => voice.meaning(),
         }
     }
 }
@@ -471,44 +507,6 @@ impl SynthVoice {
             Self::Kick => "An 808-style bass drum, tuned by its note",
             Self::Snare => "An 808-style snare drum, tuned by its note",
             Self::Hat => "An 808-style hi-hat, tuned by its note",
-        }
-    }
-
-    /// What its three settings are called, which `HAR`, `TIM` and `MOR` set in this order.
-    pub fn settings(self) -> [&'static str; 3] {
-        let entries = crate::settings::voice_entries(self);
-        [entries[0].name, entries[1].name, entries[2].name]
-    }
-
-    /// Which of its settings has a middle of its own, so shows where it is around that.
-    pub fn centred(self) -> [bool; 3] {
-        match self {
-            Self::VirtualAnalog => [true, false, false],
-            Self::Fm => [false, false, true],
-            Self::Waveshaping => [true, false, false],
-            Self::Wavetable => [false, false, false],
-            Self::SixOp => [false, true, true],
-            Self::String | Self::Modal => [false, false, false],
-            Self::Dust => [false, false, true],
-            Self::Noise => [true, false, false],
-            Self::Kick | Self::Snare | Self::Hat => [false, false, false],
-        }
-    }
-
-    /// Whether how hard it's struck changes its sound, as well as its level: the drums, the
-    /// struck voices, and 6-op's patches. The rest ignore `Accent`.
-    pub fn uses_accent(self) -> bool {
-        matches!(
-            self,
-            Self::Kick | Self::Snare | Self::Hat | Self::String | Self::Modal | Self::SixOp
-        )
-    }
-
-    /// The highest value `Harm` takes. 6-op's is a patch number, so it stops at the last patch.
-    pub fn harmonics_top(self) -> u8 {
-        match self {
-            Self::SixOp => SIX_OP_PATCHES - 1,
-            _ => 0xFF,
         }
     }
 

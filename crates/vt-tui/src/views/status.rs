@@ -8,7 +8,6 @@ use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
-use vt_model::song::SynthVoice;
 
 use crate::app::{App, Field};
 use crate::input::keys::Key;
@@ -56,7 +55,7 @@ pub fn column_name(app: &App) -> String {
         View::Track | View::Mixer => {
             let control = app.track_control();
             app.song().tracks.get(app.cursor.track).map_or_else(
-                || control.label_on(SynthVoice::default()).to_owned(),
+                || control.label().to_owned(),
                 |track| control.name_on(track).to_owned(),
             )
         }

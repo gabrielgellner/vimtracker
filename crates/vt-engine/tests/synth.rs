@@ -17,7 +17,7 @@ const STEP: usize = 6000;
 fn song(steps: &[&str]) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
-    song.tracks[0].machine = Machine::Plaits;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::default());
     let steps = steps.iter().map(|text| text.parse().unwrap()).collect();
     song.tracks[0]
         .phrases
@@ -88,9 +88,9 @@ fn it_goes_through_the_track_filter() {
 fn the_page_values_change_the_sound() {
     let plain = play(song(&[NOTE, REST]), 2);
     let change: [fn(&mut Song); 3] = [
-        |song| song.tracks[0].harmonics = 0xC0,
-        |song| song.tracks[0].timbre = 0x60,
-        |song| song.tracks[0].morph = 0x00,
+        |song| song.tracks[0].set_machine_value(0, 0xC0),
+        |song| song.tracks[0].set_machine_value(1, 0x60),
+        |song| song.tracks[0].set_machine_value(2, 0x00),
     ];
     for change in change {
         let mut changed = song(&[NOTE, REST]);
@@ -164,7 +164,7 @@ fn a_preview_plays_with_the_tracks_settings() {
 /// A song of one voice.
 fn on(voice: SynthVoice, steps: &[&str]) -> Song {
     let mut song = song(steps);
-    song.tracks[0].synth_voice = voice;
+    song.tracks[0].machine = Machine::Plaits(voice);
     song
 }
 
@@ -174,7 +174,7 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         // With some of its second setting, as FM with none is a sine whatever else is set.
         let with_some = |steps: &[&str]| {
             let mut song = on(voice, steps);
-            song.tracks[0].timbre = 0x40;
+            song.tracks[0].set_machine_value(1, 0x40);
             song
         };
         let out = play(with_some(&[NOTE, REST]), 2);
@@ -182,8 +182,9 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
         for command in ["HAR", "TIM", "MOR"] {
             // 6-op's Harm is a patch number, so past its last patch it plays the same one.
+            // Not 6-op's default patch, `20`, which wouldn't change it.
             let value = if voice == SynthVoice::SixOp && command == "HAR" {
-                "20"
+                "10"
             } else {
                 "F0"
             };
@@ -201,13 +202,13 @@ fn accent_changes_how_a_struck_voice_sounds_and_nothing_else() {
         let hard = play(on(voice, &["C-3 7F ACCFF ---00 ---00", REST]), 2);
         assert_eq!(
             soft != hard,
-            voice.uses_accent(),
+            vt_model::settings::SettingId::voice(voice, 3).is_some(),
             "{voice:?}: does accent change it?"
         );
     }
     // The track's own accent does the same as a step's.
     let mut set = on(SynthVoice::Modal, &[NOTE, REST]);
-    set.tracks[0].accent = 0xFF;
+    set.tracks[0].set_machine_value(3, 0xFF);
     let locked = on(SynthVoice::Modal, &["C-2 7F ACCFF ---00 ---00", REST]);
     assert_eq!(play(set, 2), play(locked, 2));
 }
@@ -244,7 +245,7 @@ fn a_harder_strike_is_brighter_on_a_string() {
 fn a_kick_dies_away_while_fm_holds() {
     let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
     let mut kick = on(SynthVoice::Kick, &steps);
-    kick.tracks[0].morph = 0x20;
+    kick.tracks[0].set_machine_value(2, 0x20);
     let out = play(kick, 8);
     assert!(peak(&out, 7) < peak(&out, 0) * 0.05, "{}", peak(&out, 7));
     let out = play(on(SynthVoice::Fm, &steps), 8);
@@ -255,7 +256,7 @@ fn a_kick_dies_away_while_fm_holds() {
 fn a_new_note_hits_a_kick_again() {
     let steps = [NOTE, REST, REST, REST, NOTE, REST, REST, REST];
     let mut kick = on(SynthVoice::Kick, &steps);
-    kick.tracks[0].morph = 0x20;
+    kick.tracks[0].set_machine_value(2, 0x20);
     let out = play(kick, 8);
     assert!(peak(&out, 4) > peak(&out, 3) * 2.0);
 }
@@ -282,7 +283,7 @@ fn the_drums_die_away_by_themselves() {
     let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
     for voice in SynthVoice::ALL.into_iter().filter(|voice| !voice.holds()) {
         let mut drum = on(voice, &steps);
-        drum.tracks[0].morph = 0x20;
+        drum.tracks[0].set_machine_value(2, 0x20);
         let out = play(drum, 8);
         assert!(
             peak(&out, 7) < peak(&out, 0) * 0.05,
@@ -299,7 +300,7 @@ fn each_snare_hit_has_its_own_noise_and_a_render_repeats() {
         SynthVoice::Snare,
         &[NOTE, REST, REST, REST, NOTE, REST, REST, REST],
     );
-    snare.tracks[0].harmonics = 0xC0;
+    snare.tracks[0].set_machine_value(0, 0xC0);
     let out = play(snare.clone(), 8);
     let first = &out[..STEP * 2];
     let second = &out[4 * STEP * 2..5 * STEP * 2];

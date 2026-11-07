@@ -633,10 +633,26 @@ impl Engine {
                 (FxCommand::Pan, before.pan, track.pan),
                 (FxCommand::SendA, before.send_a, track.send_a),
                 (FxCommand::SendB, before.send_b, track.send_b),
-                (FxCommand::Har, before.harmonics, track.harmonics),
-                (FxCommand::Tim, before.timbre, track.timbre),
-                (FxCommand::Mor, before.morph, track.morph),
-                (FxCommand::Acc, before.accent, track.accent),
+                (
+                    FxCommand::Har,
+                    before.machine_value(0),
+                    track.machine_value(0),
+                ),
+                (
+                    FxCommand::Tim,
+                    before.machine_value(1),
+                    track.machine_value(1),
+                ),
+                (
+                    FxCommand::Mor,
+                    before.machine_value(2),
+                    track.machine_value(2),
+                ),
+                (
+                    FxCommand::Acc,
+                    before.machine_value(3),
+                    track.machine_value(3),
+                ),
             ];
             for (command, was, now) in controls {
                 if was != now {
@@ -892,7 +908,7 @@ impl Engine {
         }
         let (sample, synth) = match owner.machine {
             Machine::Sample => ((*self.current.track_samples.get(track)?)?, None),
-            Machine::Plaits => (0, Some(owner.synth_voice)),
+            Machine::Plaits(voice) => (0, Some(voice)),
         };
         Some(NoteOn {
             sample,

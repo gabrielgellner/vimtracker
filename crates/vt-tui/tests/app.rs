@@ -1561,8 +1561,21 @@ fn track_text(app: &App) -> Vec<String> {
         .collect()
 }
 
+/// Choose a machine with `K` on the Sound page's Machine row, by typing its name.
+fn choose_machine(app: &mut App, name: &str) {
+    press(app, " 4gg");
+    press(app, "K");
+    press(app, name);
+    special(app, KeyCode::Enter);
+}
+
+/// The value of the track's machine's setting at this place.
+fn machine_value(app: &App, setting: usize) -> u8 {
+    app.song().tracks[0].machine_value(setting)
+}
+
 #[test]
-fn k_on_machine_chooses_plaits_and_shows_its_settings() {
+fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
@@ -1574,127 +1587,133 @@ fn k_on_machine_chooses_plaits_and_shows_its_settings() {
     );
     let depth = app.history.undo_depth();
     press(&mut app, "K");
-    press(&mut app, "pl");
+    assert_eq!(
+        app.picker.as_ref().unwrap().shown().count(),
+        Machine::ALL.len()
+    );
+    press(&mut app, "VA");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::Plaits);
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::VirtualAnalog)
+    );
     assert_eq!(app.history.undo_depth(), depth + 1);
     let text = track_text(&app);
     assert!(
-        text[2].contains("Machine") && text[2].contains("Plaits"),
+        text[2].contains("Machine") && text[2].contains("VA"),
         "{text:?}"
     );
     assert!(
-        text[3].contains("Voice") && text[3].contains("VA"),
+        text[3].contains("Detune") && text[3].contains("80"),
         "{text:?}"
     );
     assert!(
-        text[4].contains("Detune") && text[4].contains("80"),
+        text[4].contains("Square") && text[4].contains("00"),
         "{text:?}"
     );
     assert!(
-        text[5].contains("Square") && text[5].contains("00"),
+        text[5].contains("Saw") && text[5].contains("████"),
         "{text:?}"
     );
     assert!(
-        text[6].contains("Saw") && text[6].contains("████"),
-        "{text:?}"
+        text[6].contains("Swing"),
+        "a voice of three settings: {text:?}"
     );
-    assert!(!text.iter().any(|line| line.contains("File")), "{text:?}");
+    assert!(
+        !text
+            .iter()
+            .any(|line| line.contains("File") || line.contains("Voice"))
+    );
 
-    press(&mut app, "jj");
+    press(&mut app, "j");
     assert_eq!(column_name(&app), "Detune");
     press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].harmonics, 0x81);
+    assert_eq!(machine_value(&app, 0), 0x81);
     press(&mut app, "j");
     press(&mut app, "i60");
-    assert_eq!(app.song().tracks[0].timbre, 0x60);
+    assert_eq!(machine_value(&app, 1), 0x60);
     press(&mut app, "x");
-    assert_eq!(app.song().tracks[0].timbre, 0);
-    press(&mut app, "kkl");
+    assert_eq!(machine_value(&app, 1), 0);
+    press(&mut app, "kl");
     assert_eq!(column_name(&app), "Pan");
-    press(&mut app, "ggh=");
-    assert_eq!(app.song().tracks[0].machine, Machine::Sample, "goes round");
+    press(&mut app, "jjj");
+    assert_eq!(column_name(&app), "Swing", "the row with only swing");
+    press(&mut app, "ggh-");
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Sample,
+        "VA comes after Sample"
+    );
     assert!(track_text(&app)[2].contains("Sample"));
     press(&mut app, "=x");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample);
 }
 
 #[test]
-fn k_on_voice_chooses_a_synth_and_names_its_settings() {
+fn each_voice_keeps_its_own_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     let names = |app: &App| -> Vec<String> {
         let text = track_text(app);
-        (4..7)
+        (3..6)
             .map(|row| text[row].split_whitespace().next().unwrap().to_owned())
             .collect()
     };
-    press(&mut app, " 4K");
-    press(&mut app, "Plaits");
-    special(&mut app, KeyCode::Enter);
-    press(&mut app, "j");
-    assert_eq!(column_name(&app), "Voice");
-    let depth = app.history.undo_depth();
-    press(&mut app, "K");
+    choose_machine(&mut app, "FM");
     assert_eq!(
-        app.picker.as_ref().unwrap().shown().count(),
-        SynthVoice::ALL.len()
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::Fm)
     );
-    press(&mut app, "FM");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
-    assert_eq!(app.history.undo_depth(), depth + 1);
     assert_eq!(names(&app), ["Ratio", "Index", "Feedback"]);
-    press(&mut app, "j");
-    assert_eq!(column_name(&app), "Ratio");
-    press(&mut app, "k=");
+    press(&mut app, "jj");
+    assert_eq!(column_name(&app), "Index");
+    press(&mut app, "i40");
+    assert_eq!(machine_value(&app, 1), 0x40);
+
+    // Another voice starts from its own defaults.
+    press(&mut app, "gg=");
     assert_eq!(
-        app.song().tracks[0].synth_voice,
-        SynthVoice::Waveshaping,
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::Waveshaping),
         "the next"
     );
     assert_eq!(names(&app), ["Shape", "Fold", "Slope"]);
-    press(&mut app, "jj");
-    assert_eq!(column_name(&app), "Fold");
-    press(&mut app, "i40");
-    assert_eq!(app.song().tracks[0].timbre, 0x40);
-    press(&mut app, "kkx");
-    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::VirtualAnalog);
+    assert_eq!(machine_value(&app, 1), 0, "Fold's own");
+    press(&mut app, "jji20");
+    assert_eq!(machine_value(&app, 1), 0x20);
 
-    // Back to samples and to the synth again keeps the voice.
-    press(&mut app, "=");
-    press(&mut app, "k-");
+    // Back to FM finds it as it was, and the same through samples.
+    press(&mut app, "gg-");
+    assert_eq!(machine_value(&app, 1), 0x40);
+    choose_machine(&mut app, "Sample");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample);
-    press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
+    choose_machine(&mut app, "Fold");
+    assert_eq!(machine_value(&app, 1), 0x20);
 }
 
 #[test]
 fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    let patch = |app: &App| app.song().tracks[0].harmonics;
-    press(&mut app, " 4K");
-    press(&mut app, "Plaits");
-    special(&mut app, KeyCode::Enter);
-    press(&mut app, "jK");
-    press(&mut app, "6-op");
-    special(&mut app, KeyCode::Enter);
+    let patch = |app: &App| machine_value(app, 0);
+    choose_machine(&mut app, "6-op");
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Patch");
-
-    // From a value past the last patch, it moves from the last one shown.
-    assert_eq!(patch(&app), 0x80);
+    assert_eq!(patch(&app), 0x20, "E.PIANO 1 to start");
     assert!(
-        track_text(&app)[4].contains("5F BR TRUMPET"),
+        track_text(&app)[3].contains("20 E.PIANO 1"),
         "{:?}",
         track_text(&app)
     );
+    assert!(
+        track_text(&app)[4].contains("Bright    80"),
+        "as the patch was made"
+    );
     press(&mut app, "-");
-    assert_eq!(patch(&app), 0x5E);
+    assert_eq!(patch(&app), 0x1F);
     press(&mut app, "i00=");
     assert_eq!(patch(&app), 1, "one patch a step");
-    assert!(track_text(&app)[4].contains("01 Mooger Low"));
+    assert!(track_text(&app)[3].contains("01 Mooger Low"));
     press(&mut app, "i5F=");
     assert_eq!(patch(&app), 0x5F, "it stops at the last");
     press(&mut app, "i90");
@@ -1705,7 +1724,7 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
     press(&mut app, "MARIMBA");
     special(&mut app, KeyCode::Enter);
     assert!(
-        track_text(&app)[4].contains("MARIMBA"),
+        track_text(&app)[3].contains("MARIMBA"),
         "{:?}",
         track_text(&app)
     );
@@ -1716,18 +1735,13 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
 fn the_sound_page_sets_a_synths_accent() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    let accent = |app: &App| app.song().tracks[0].accent;
-    press(&mut app, " 4K");
-    press(&mut app, "Plaits");
-    special(&mut app, KeyCode::Enter);
-    press(&mut app, "jK");
-    press(&mut app, "Kick");
-    special(&mut app, KeyCode::Enter);
+    let accent = |app: &App| machine_value(app, 3);
+    choose_machine(&mut app, "Kick");
     press(&mut app, "jjjj");
     assert_eq!(column_name(&app), "Accent");
     assert_eq!(accent(&app), 0xCC, "Plaits' own strength to start");
     assert!(
-        track_text(&app)[7].starts_with("Accent    CC"),
+        track_text(&app)[6].starts_with("Accent    CC"),
         "{:?}",
         track_text(&app)
     );
@@ -1744,9 +1758,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
     let (mut app, _realtime) = app();
     let kit = kit_file();
     command(&mut app, &format!("kit {}", kit.display()));
-    press(&mut app, " 4K");
-    press(&mut app, "Plaits");
-    special(&mut app, KeyCode::Enter);
+    choose_machine(&mut app, "VA");
     press(&mut app, " 5");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].machine, Machine::Sample);
@@ -1872,10 +1884,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        harmonics: 0x80,
-        timbre: 0,
-        morph: 0x80,
-        accent: 0xCC,
+        machine: [0x80, 0, 0x80, 0xCC],
         inserts: Default::default(),
     });
     assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
@@ -2611,13 +2620,13 @@ fn the_gap_above_the_filter_is_only_on_screen() {
 
     // A synth has more above its filter, and the gap stays just above it.
     press(&mut app, "kkK");
-    press(&mut app, "pl");
+    press(&mut app, "kick");
     special(&mut app, KeyCode::Enter);
     let lines = track_page_text(&app);
-    assert!(lines[6].starts_with("Saw"), "{}", lines[6]);
-    assert!(lines[7].starts_with("Accent"), "{}", lines[7]);
-    assert!(lines[8].trim().is_empty(), "{}", lines[8]);
-    assert!(lines[9].starts_with("Filter"), "{}", lines[9]);
+    assert!(lines[5].starts_with("Decay"), "{}", lines[5]);
+    assert!(lines[6].starts_with("Accent"), "{}", lines[6]);
+    assert!(lines[7].trim().is_empty(), "{}", lines[7]);
+    assert!(lines[8].starts_with("Filter"), "{}", lines[8]);
 }
 
 #[test]
@@ -4414,10 +4423,7 @@ fn the_filter_curve_moves_with_what_plays() {
         resonance,
         send_a: track.send_a,
         send_b: track.send_b,
-        harmonics: track.harmonics,
-        timbre: track.timbre,
-        morph: track.morph,
-        accent: track.accent,
+        machine: [0, 1, 2, 3].map(|setting| track.machine_value(setting)),
         inserts: Default::default(),
     };
 
@@ -4505,10 +4511,8 @@ fn brackets_move_between_tracks_from_every_view() {
 #[test]
 fn the_track_picker_names_a_synths_voice_and_can_find_it() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4K");
-    press(&mut app, "pl");
-    special(&mut app, KeyCode::Enter);
-    let voice = app.song().tracks[0].synth_voice.name();
+    choose_machine(&mut app, "VA");
+    let voice = app.song().tracks[0].machine.name();
     press(&mut app, " fb");
     let labels: Vec<String> = app
         .picker
@@ -4532,7 +4536,7 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
 }
 
 fn jump_labels(app: &App) -> Vec<String> {
-    let voice = app.song().tracks[app.cursor.track].synth_voice;
+    let track = app.song().tracks[app.cursor.track].clone();
     let jump = app.field_jump.as_ref().unwrap();
     let mut labels: Vec<String> = app
         .track_page
@@ -4540,7 +4544,7 @@ fn jump_labels(app: &App) -> Vec<String> {
         .iter()
         .flat_map(|row| row.iter())
         .filter_map(|control| {
-            let name = control.label_on(voice);
+            let name = control.label_on(&track);
             jump.label(*control).map(|label| format!("{label} {name}"))
         })
         .collect();
@@ -5552,10 +5556,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        harmonics: 0x80,
-        timbre: 0,
-        morph: 0x80,
-        accent: 0xCC,
+        machine: [0x80, 0, 0x80, 0xCC],
         inserts: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
@@ -5595,13 +5596,12 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
 
     // On a synth they're there under their names on this voice.
-    press(&mut app, " 4HKpl");
+    press(&mut app, " 4HKfm");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "jK");
-    press(&mut app, "fm");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::Plaits);
-    assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::Fm)
+    );
     let dest = labels(&mut app, "LggjjK/");
     assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
     let steps = labels(&mut app, " 3K");

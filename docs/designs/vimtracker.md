@@ -1681,7 +1681,7 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
 *   **Distort's Amount is one setting.** On Crush it's shown as Bits, from 2 to 12, as it is now, with the same id and label.
 *   **The grid gets narrower.** A command's name takes 9 columns now, for names like `1 Amount`. A label takes 5 and a gap, so a cell reads `CUT   40 .` or `2FDBK 40 .`, which saves 9 columns a track across a step's three FX cells.
 
-**Machines and Plaits' voices.** Each Plaits voice is a machine with its own settings. `Machine` becomes `Sample` or `Plaits(SynthVoice)`, so `K` on Machine lists Sample, then the voices grouped under Plaits, and the Voice row goes. Sample registers no settings. Each voice's code takes the same values as now, given as an array in the order the voice registers them.
+**Machines and Plaits' voices.** Each Plaits voice is a machine with its own settings. `Machine` becomes `Sample` or `Plaits(SynthVoice)`, so `K` on Machine lists Sample, then each voice, searched by typing its name, and the Voice row goes. Sample registers no settings. Each voice's code takes the same values as now, given as an array in the order the voice registers them.
 
 | Voice | Settings and labels |
 |---|---|
@@ -1699,7 +1699,7 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
 
 *   **Names.** VA's settings are named for what they move, where Harm, Timbre and Morph name Plaits' knobs. Noise's third is Ring, because Res would match the filter's `RES`.
 *   **Kinds and defaults** carry over from today, with the first and third settings centred where `centred()` says, the first and third starting at `80`, the second at `00`, and Accent at `CC`, apart from these: 6-op's Patch is a list of its 96 patches, starting at `20`, `E.PIANO 1`; its Bright starts at `80`, which is the patch as made; and String's and Modal's Material start at `40`, a string or bar in tune.
-*   **Patch names** move into `vt-model` as a table generated from Plaits' patch banks, as the sine table was, so the registry can list them. A list's value reaches the voice as its index; a level's as a fraction from 0 to 1, as now.
+*   **Patch names** move into `vt-model` as a table generated from Plaits' patch banks, as the sine table was, so the registry can list them. Every value reaches the voice as a fraction from 0 to 1, as now, and 6-op turns its Patch back into a patch's number.
 *   **Each voice keeps its own settings.** A track keeps every voice's values, so switching from String to Kick and back finds String as it was. A voice the track hasn't played starts from its defaults. In the file, a track lists the settings it has changed from their defaults, by id, such as `string.decay: 0x90`, and anything not listed is at its default.
 
 **Steps.** An FX cell holds an event, or a lock of a setting by its `SettingId`, with a value and its mark: `.` for a lock, `h` for a hold or `g` for a glide, as M4 defines them.
@@ -1763,6 +1763,8 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
     *   `cut` then `Enter` locks Cutoff, `2fdbk` then `Enter` locks slot 2's Delay feedback, and `xyz` then `Enter` opens `K` showing `xyz`.
     *   A String lock on a Kick track, and a slot 2 Delay lock with a Reverb in slot 2, do nothing, are drawn faint, and play again when String or the Delay comes back. The same for an LFO's and an envelope's `Dest`.
     *   No allocation in the callback.
+
+**Issue 2 built** on 2026-11-07. The voices keep `Settings`, with its four fields, as their view of the array they're given, so their code and tests are unchanged. A voice with three settings has a last row of only Swing on the Sound page, and output settings stay in the right column.
 
 **Done when** each issue's tests pass, and the author has used locks of track, effect and voice settings in a jam, typing and `K` feel quick to them, and the grid stays readable to them.
 
