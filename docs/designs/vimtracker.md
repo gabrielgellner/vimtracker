@@ -1850,6 +1850,7 @@ Kind::Stepped {
 *   **Changing Type keeps each mode's value,** as a track keeps every voice's, so going from Crush to Soft and back finds Bits where it was.
 *   **A lock for another mode,** such as `1BITS` with Soft in the slot, is grey and does nothing, like a String lock on a Kick track, and plays again when Crush is back.
 *   **Type isn't lockable,** like the slot's effect and the track's machine. Choosing a mode chooses a sound, not something to modulate, and a Type lock would make settings appear for one step. `1TYPE` goes, and Type is set on the Sound page.
+
 **In the grid.** A continuous value shows four digits: `CUT   4080 .`. Its coarse digits are bold in `MAUVE`, the colour the track page uses for values. Its fine digits are in `MAUVE` set back 30% toward the FX band. A stepped value and an event show only two digits. An event's value is bold `PEACH`, as it isn't a setting, like Renoise's own colour for timing commands. A lock the track doesn't have now is grey with no colour (`OVERLAY2`). An empty cell is faint (`OVERLAY0`), as a code editor dims whitespace, so what's written stands out. Each slot is 2 columns wider than now.
 
 | Cell | Coarse | Fine | Label and mark |
