@@ -4159,3 +4159,165 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
         Some(Pick::Track(0))
     );
 }
+
+fn jump_labels(app: &App) -> Vec<String> {
+    let voice = app.song().tracks[app.cursor.track].synth_voice;
+    let jump = app.field_jump.as_ref().unwrap();
+    let mut labels: Vec<String> = app
+        .track_page
+        .rows(app.song().tracks[app.cursor.track].machine)
+        .iter()
+        .flat_map(|row| row.iter())
+        .filter_map(|control| {
+            let name = control.label_on(voice);
+            jump.label(*control).map(|label| format!("{label} {name}"))
+        })
+        .collect();
+    labels.sort();
+    labels
+}
+
+#[test]
+fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4/");
+    assert_eq!(app.mode, Mode::Jump);
+    assert!(jump_labels(&app).is_empty(), "nothing until you type");
+    // Machine takes `a` for the `c`, and goes when the search narrows, leaving the rest as they were.
+    press(&mut app, "cu");
+    assert_eq!(jump_labels(&app), ["d Low cut", "f High cut", "s Cut"]);
+
+    press(&mut app, "d");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.field_jump.is_none());
+    assert_eq!(column_name(&app), "Low cut");
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].low_cut, 1, "ready to change");
+
+    // The nearest is now Low cut itself.
+    press(&mut app, "/c");
+    assert_eq!(jump_labels(&app)[0], "a Low cut");
+}
+
+#[test]
+fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4/c");
+    let first = jump_labels(&app);
+    assert!(first.iter().any(|label| label.ends_with("Machine")));
+    assert!(
+        !first.iter().any(|label| label.starts_with(['h', 'u'])),
+        "Machine goes on to h and Cut to u: {first:?}"
+    );
+    let label_of = |labels: &[String], name: &str| {
+        labels
+            .iter()
+            .find(|label| label.ends_with(name))
+            .cloned()
+            .unwrap()
+    };
+    let cut = label_of(&first, " Cut");
+    press(&mut app, "u");
+    assert_eq!(
+        label_of(&jump_labels(&app), " Cut"),
+        cut,
+        "it keeps its label"
+    );
+    press(&mut app, "t");
+    assert_eq!(app.field_jump.as_ref().unwrap().query, "cut");
+    assert_eq!(jump_labels(&app).len(), 3);
+    assert_eq!(label_of(&jump_labels(&app), " Cut"), cut);
+}
+
+#[test]
+fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L/dep");
+    assert_eq!(jump_labels(&app).len(), 4, "{:?}", jump_labels(&app));
+
+    // A slip keeps the search.
+    press(&mut app, "Q");
+    assert_eq!(app.field_jump.as_ref().unwrap().query, "dep");
+    special(&mut app, KeyCode::Backspace);
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.field_jump.as_ref().unwrap().query, "d");
+    special(&mut app, KeyCode::Backspace);
+    assert!(jump_labels(&app).is_empty());
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.mode, Mode::Normal);
+
+    press(&mut app, "/dep");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(column_name(&app), "Dest", "it hasn't moved");
+
+    // Enter goes to the nearest.
+    press(&mut app, "/dep");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(column_name(&app), "Depth");
+    assert_eq!(app.track_row, 0);
+}
+
+#[test]
+fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
+    use vt_tui::track_page::Page;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4jj");
+    let start = (app.track_row, app.track_field);
+    press(&mut app, "/res");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(column_name(&app), "Res");
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!((app.track_row, app.track_field), start);
+    assert_eq!(app.view, View::Track);
+
+    // It goes back to the page it left, too.
+    press(&mut app, "/res");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "L");
+    assert_eq!(app.track_page, Page::Mod);
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(app.track_page, Page::Sound);
+    assert_eq!((app.track_row, app.track_field), start);
+}
+
+#[test]
+fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4/res");
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .unwrap();
+    let label = &jump_labels(&app)[0][..1];
+    let text = track_text(&app).join("\n");
+    assert!(text.contains(&format!("Res       {label}0 ")), "{text}");
+    assert!(text.contains("Cut       FF "), "{text}");
+    let buffer = terminal.backend().buffer().clone();
+    let y = (0..24)
+        .find(|y| (0..3).map(|x| buffer[(x, *y)].symbol()).collect::<String>() == "Res")
+        .unwrap();
+    assert_eq!(buffer[(10, y)].bg, vt_tui::theme::PEACH);
+
+    let backend = ratatui::backend::TestBackend::new(80, 2);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .unwrap();
+    let last: String = (0..4)
+        .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_owned())
+        .collect();
+    assert_eq!(last, "/res");
+}
+
+#[test]
+fn slash_only_jumps_on_the_track_page() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 3/");
+    assert_ne!(app.mode, Mode::Jump);
+    assert!(app.field_jump.is_none());
+}

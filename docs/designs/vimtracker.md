@@ -640,6 +640,7 @@ Made by the author on 2026-11-06, after a review of this section:
 19. **Fold adds a third tone colour**, from Plaits' waveshaping model, its main output. Its tables are generated from the formulas in `lookup_tables.py` and kept in the source. Added on 2026-11-06.
 20. **Small drawings use kitty's graphics protocol where it's available**, as plain one-colour lines of solid dots, after Elektron's screens: the envelopes, each LFO's shape, and the filter's curve, worked out from the filter's exact response. Other terminals get Braille diagrams and no icons, as does `--no-graphics`. Inside tmux, this needs `allow-passthrough on`. Placeholder characters mark where an image goes, so it stays in its pane and windows can draw over it. A changed image takes a new id, because kitty doesn't reconnect unchanged placeholders to a replaced image. Added on 2026-11-06.
 21. **A value's bar moves with what's playing**, as in modern plugins: its fill follows the value after step commands and modulation, with a dim mark where it's set, and its number stays the setting. The callback reports these values for the track the cursor is on. The filter's curve moves the same way, sending a new image whenever `Cut` or `Res` changes, at most once a frame. Added on 2026-11-06.
+22. **`/` on the track page jumps to a setting by name**, following the author's flash.nvim: labels go over the values of the matches on this page, nearest the cursor first, a label is never a letter that could carry on the search, and a match keeps its label as you type. It lands in Normal mode, and `Ctrl-O` comes back. The other views can follow. Added on 2026-11-06.
 
 ## Alternatives Considered
 
@@ -840,6 +841,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `{ }` | Previous or next beat |
 | Normal | `gg G` | First or last step |
 | Normal | `H M L` | Cursor to the top, middle or bottom of the view |
+| Track | `/` | Jump to a setting by part of its name, with labels as in flash.nvim |
 | Normal | `Ctrl-D`, `Ctrl-U` | Half a screen down or up, keeping the cursor mid-screen |
 | Normal | `Ctrl-E`, `Ctrl-Y` | Scroll the view down or up 3 steps without moving the cursor, unless it reaches the edge |
 | Normal | `]p [p`, `]P [P` | Next or previous phrase in the chain; last or first phrase |

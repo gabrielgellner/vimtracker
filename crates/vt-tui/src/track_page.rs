@@ -402,7 +402,7 @@ impl App {
         });
     }
 
-    fn move_control(&mut self, row: usize, field: usize) {
+    pub(crate) fn move_control(&mut self, row: usize, field: usize) {
         let rows = self.page_rows();
         self.track_row = row.min(rows.len() - 1);
         self.track_field = field.min(rows[self.track_row].len() - 1);
@@ -453,6 +453,7 @@ impl App {
                 self.track_page = page;
                 self.move_control(0, field);
             }
+            Cmd::FieldJump => self.open_field_jump(),
             Cmd::Increase => self.adjust_control(true, times, false),
             Cmd::Decrease => self.adjust_control(false, times, false),
             Cmd::IncreaseLarge => self.adjust_control(true, times, true),

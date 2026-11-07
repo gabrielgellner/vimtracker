@@ -36,6 +36,7 @@ use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
+use crate::jumping::FieldJump;
 use crate::picking::kit_path;
 use crate::shaping::ShapePanel;
 use crate::track_page::Page;
@@ -189,6 +190,8 @@ pub struct App {
     pub(crate) anchor_track: Option<usize>,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
+    /// The search for a setting under way.
+    pub field_jump: Option<FieldJump>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
@@ -281,6 +284,7 @@ impl App {
             anchor: None,
             anchor_track: None,
             shape: None,
+            field_jump: None,
             shape_seed: 0,
             kit: Vec::new(),
             replacing_selection: None,
@@ -477,6 +481,7 @@ impl App {
             Mode::Guide => self.guide_key(key),
             Mode::Picker => self.picker_key(key),
             Mode::Shape => self.shape_key(key, now),
+            Mode::Jump => self.jump_key(key, now),
             Mode::Restore => self.restore_key(key),
         }
     }

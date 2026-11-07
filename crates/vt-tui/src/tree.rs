@@ -10,6 +10,7 @@ use crate::app::{App, Cursor, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::track_page::Page;
 
 /// How many places the jump list remembers.
 const JUMP_LIMIT: usize = 100;
@@ -26,6 +27,10 @@ pub enum ChainColumn {
 pub struct Place {
     view: View,
     cursor: Cursor,
+    /// Where on the track page, as a jump can land on another of its settings.
+    track_page: Page,
+    track_row: usize,
+    track_field: usize,
 }
 
 impl App {
@@ -46,6 +51,9 @@ impl App {
         Place {
             view: self.view,
             cursor: self.cursor,
+            track_page: self.track_page,
+            track_row: self.track_row,
+            track_field: self.track_field,
         }
     }
 
@@ -64,6 +72,10 @@ impl App {
         self.note_view(place.view);
         self.cursor = place.cursor;
         self.clamp_cursor();
+        if place.view == View::Track {
+            self.track_page = place.track_page;
+            self.move_control(place.track_row, place.track_field);
+        }
     }
 
     fn jump_back(&mut self) {

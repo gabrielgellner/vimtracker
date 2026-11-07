@@ -108,6 +108,8 @@ pub enum Cmd {
     Capture,
     /// Go to a part of the track page.
     ShowPage(Page),
+    /// Search this page for a setting to jump to.
+    FieldJump,
 }
 
 /// One row of the table.
@@ -298,6 +300,7 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("G", Cmd::Move(Motion::Last), "Last row"),
     ("H", Cmd::ShowPage(Page::Sound), "Sound page"),
     ("L", Cmd::ShowPage(Page::Mod), "Mod page"),
+    ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     ("h", Cmd::Move(Motion::Left), "Previous setting"),
     ("l", Cmd::Move(Motion::Right), "Next setting"),
     ("0", Cmd::Move(Motion::RowStart), "First setting"),

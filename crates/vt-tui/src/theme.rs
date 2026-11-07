@@ -49,6 +49,11 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// A label to press to jump somewhere.
+pub fn jump_label() -> Style {
+    Style::new().fg(BASE).bg(PEACH).add_modifier(Modifier::BOLD)
+}
+
 /// Text that matters less than what is around it.
 pub fn dim() -> Style {
     Style::new().fg(OVERLAY2)

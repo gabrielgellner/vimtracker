@@ -94,7 +94,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
-            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape => theme::TEAL,
+            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Jump => theme::TEAL,
             Mode::Replace | Mode::Restore => theme::RED,
         })
         .add_modifier(Modifier::BOLD);
@@ -150,6 +150,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ]);
     let message = if app.mode == Mode::Command {
         format!(":{}", app.command_line)
+    } else if let Some(jump) = &app.field_jump {
+        format!("/{}", jump.query)
     } else {
         app.status.clone()
     };

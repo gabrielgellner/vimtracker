@@ -137,6 +137,18 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     }
 }
 
+/// A setting's value, with a jump's label over its first letter if it has one.
+fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<Span<'static>> {
+    let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
+    match label {
+        Some(label) => vec![
+            Span::styled(label.to_string(), theme::jump_label()),
+            Span::styled(text.chars().skip(1).collect::<String>(), style),
+        ],
+        None => vec![Span::styled(text, style)],
+    }
+}
+
 /// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
 fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
     let current = app.track_control();
@@ -166,7 +178,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             Style::new()
         };
         used += text.chars().count();
-        spans.push(Span::styled(text, style));
+        spans.extend(value_spans(app, *control, text, style));
         if let Some((value, centred)) = bar_value(*control, track) {
             let live = app
                 .live
@@ -297,7 +309,7 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let room = width(*control);
         let mut gap = room.saturating_sub(text.chars().count());
         let length = text.chars().count();
-        spans.push(Span::styled(text, style));
+        spans.extend(value_spans(app, *control, text, style));
         // A drawing of an LFO's shape follows its name, with the column the same width without one.
         if let (Control::Lfo(slot, LfoField::Shape), Some(ids)) = (*control, app.lfo_images) {
             let before = LFO_SHAPE_NAME.saturating_sub(length);

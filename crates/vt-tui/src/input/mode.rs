@@ -49,6 +49,8 @@ pub enum Mode {
     Help,
     /// The shape panel is open.
     Shape,
+    /// Searching the track page for a setting to jump to.
+    Jump,
     /// Reading a guide.
     Guide,
     Picker,
@@ -76,6 +78,7 @@ impl Mode {
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Shape => "SHAPE",
+            Self::Jump => "JUMP",
             Self::Guide => "GUIDE",
             Self::Picker => "PICK",
             Self::Restore => "RESTORE",
