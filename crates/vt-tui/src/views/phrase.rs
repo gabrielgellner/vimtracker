@@ -405,6 +405,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let pending = pending_step(app, step, typing);
         let step = pending.as_ref().unwrap_or(step);
         let mut text = step_text(step, app.track_here());
+        // A label being typed shows in its command's place, and the first digit of a value in its.
+        if typing
+            && let Field::FxCommand(_) = app.cursor.field
+            && !app.entry.text.is_empty()
+        {
+            let (start, end) = field_range(app.cursor.field);
+            if end <= text.len() {
+                let typed = format!("{}_", app.entry.text);
+                text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
+            }
+        }
         // The first digit of a value being typed shows in its place.
         if typing
             && matches!(app.cursor.field, Field::FxValue(_) | Field::Velocity)
@@ -472,6 +483,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             if start < end {
                 styles[start - 1..end].fill(style);
+            }
+        }
+        // A lock for a voice or an effect this track doesn't have now stays, faint, so it isn't
+        // taken for an empty cell and typed over. It plays again when its owner is back.
+        if let Some(track) = app.track_here() {
+            for (slot, fx) in step.fx.iter().enumerate() {
+                if fx.command.is_some_and(|command| !command.exists_on(track)) {
+                    let (start, end) = slot_columns(slot);
+                    let end = end.min(text.len());
+                    if start < end {
+                        styles[start..end].fill(theme::faint());
+                    }
+                }
             }
         }
         // The FX sit on a band a shade lighter than the screen, so the two parts read apart.

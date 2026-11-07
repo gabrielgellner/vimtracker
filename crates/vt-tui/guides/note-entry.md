@@ -114,7 +114,7 @@ Press `l` in Normal mode to move to another column, then `i`:
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`, then it moves down |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
-| FX | A name then two hex digits, such as `CUT40`. See **FX commands** |
+| FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
 
 ## Gates
 

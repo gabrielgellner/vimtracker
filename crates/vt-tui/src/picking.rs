@@ -308,7 +308,7 @@ impl App {
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
-            Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot),
+            Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot, ""),
             Field::Gate => self.open_gate_picker(),
             Field::Note | Field::Velocity => {
                 self.status = "K chooses on the gate and FX columns".to_owned();
@@ -348,30 +348,30 @@ impl App {
         self.set_field(FieldValue::Gate(gate));
     }
 
-    /// List the FX commands, with what each does and this slot's current one highlighted.
-    fn open_fx_picker(&mut self, slot: usize) {
+    /// List the FX commands this track has, grouped as `Dest` is: the filter, output, the voice,
+    /// each slot's effect, then the events. It opens on its search, so typing finds a label or a
+    /// name at once, and `/` goes to the groups. A query starts it searching for that.
+    pub(crate) fn open_fx_picker(&mut self, slot: usize, query: &str) {
         let current = self.current_slot(slot).and_then(|s| s.command);
+        let track = self.song().tracks.get(self.cursor.track);
+        // Only what this track has, from its machine and its slots.
+        let commands: Vec<FxCommand> =
+            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
         let empty = Item {
-            label: "---  Empty".to_owned(),
+            label: "---   Empty".to_owned(),
             pick: Pick::FxCommand {
                 slot,
                 command: None,
             },
         };
-        let track = self.song().tracks.get(self.cursor.track);
-        // Only what this track has, from its machine and its slots.
-        let commands: Vec<FxCommand> =
-            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
         let items = std::iter::once(empty)
             .chain(commands.iter().map(|command| {
-                let meaning = match (command, track) {
-                    (FxCommand::Set(id), Some(track)) => {
-                        format!("{}: {}", id.group(), id.name_on(track))
-                    }
+                let name = match (command, track) {
+                    (FxCommand::Set(id), Some(track)) => id.name_on(track),
                     _ => command.meaning(),
                 };
                 Item {
-                    label: format!("{:<6}{meaning}", command.name()),
+                    label: format!("{:<6}{name}", command.name()),
                     pick: Pick::FxCommand {
                         slot,
                         command: Some(*command),
@@ -379,12 +379,21 @@ impl App {
                 }
             }))
             .collect();
+        let groups = std::iter::once("---".to_owned())
+            .chain(commands.iter().map(|command| match command {
+                FxCommand::Set(id) => id.group(),
+                _ => "Events".to_owned(),
+            }))
+            .collect();
         let position = commands
             .iter()
             .position(|command| Some(*command) == current)
             .map_or(0, |position| position + 1);
-        let mut picker = Picker::new("FX commands", items);
-        picker.move_highlight(position as isize);
+        let mut picker = Picker::grouped("FX commands", items, groups, position);
+        picker.toggle_search();
+        if !query.is_empty() {
+            picker.set_query(query.to_owned());
+        }
         self.picker = Some(picker);
         self.mode = Mode::Picker;
     }

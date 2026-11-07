@@ -552,7 +552,7 @@ fn partly_typed_values_are_dropped_on_esc() {
 #[test]
 fn a_typed_command_takes_effect_only_with_its_value() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llliCUT");
+    keys(&mut app, "llliCUT<Enter>");
     assert_eq!(
         steps(&app)[0],
         E,
@@ -565,22 +565,25 @@ fn a_typed_command_takes_effect_only_with_its_value() {
 
 #[test]
 fn lowercase_commands_are_uppercased() {
-    check(&[E], "llliret14<Esc>", &["--- -- ret:14 --- ---"]);
+    check(&[E], "llliret<Enter>14<Esc>", &["--- -- ret:14 --- ---"]);
 }
 
 #[test]
 fn an_invalid_command_is_refused() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "llliXYZ");
+    keys(&mut app, "llliXYZ<Enter>");
     assert_eq!(steps(&app), [A]);
-    assert!(app.status.contains("isn't an FX command"));
+    assert!(app.status.contains("isn't a label"), "{}", app.status);
+    assert_eq!(app.picker.as_ref().unwrap().query, "xyz");
+    keys(&mut app, "<Esc>");
+    assert_eq!(steps(&app), [A]);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
 }
 
 #[test]
 fn esc_after_a_command_writes_nothing() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "llliVOL<Esc>");
+    keys(&mut app, "llliVOL<Enter><Esc>");
     assert_eq!(steps(&app), [A]);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert!(app.status.contains("needs a value"));
@@ -854,9 +857,13 @@ fn r_takes_a_whole_value_in_the_other_columns() {
     check(&[FULL], "lr40", &["C-4 40 vol:10 pan:20 cut:30"]);
     check(&[FULL], "lllr04", &["C-4 70 vol:10 pan:20 cut:30"]);
     check(&[FULL], "llllr7f", &["C-4 70 vol:7F pan:20 cut:30"]);
-    check(&[FULL], "lllrres7f", &["C-4 70 res:7F pan:20 cut:30"]);
+    check(
+        &[FULL],
+        "lllrres<Enter>7f",
+        &["C-4 70 res:7F pan:20 cut:30"],
+    );
     let (mut app, _rt) = app_with(&[FULL]);
-    keys(&mut app, "lllrres7f");
+    keys(&mut app, "lllrres<Enter>7f");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert_eq!(app.cursor.step, 0);
     assert_eq!(app.mode, Mode::Normal);
@@ -924,7 +931,7 @@ fn dot_repeats_a_replace_at_the_cursor() {
     );
     check(
         &[FULL, FULL],
-        "lllrres7fj.",
+        "lllrres<Enter>7fj.",
         &["C-4 70 res:7F pan:20 cut:30", "C-4 70 res:7F pan:20 cut:30"],
     );
 }
@@ -955,7 +962,7 @@ fn s_works_on_the_other_columns() {
     check(&[FULL, E], "ls<Esc>", &["C-4 -- vol:10 pan:20 cut:30", E]);
     check(
         &[FULL, E],
-        "lllsres7f<Esc>",
+        "lllsres<Enter>7f<Esc>",
         &["C-4 70 res:7F pan:20 cut:30", E],
     );
 }
@@ -1081,7 +1088,7 @@ fn visual_r_puts_a_velocity_only_on_notes() {
 #[test]
 fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "lllvjrCUT40");
+    keys(&mut app, "lllvjrCUT<Enter>40");
     assert_eq!(
         steps(&app),
         ["--- -- cut:40 --- ---", "--- -- cut:40 --- ---",]
@@ -1155,7 +1162,7 @@ fn rotating_all_the_way_round_leaves_no_undo_step() {
 #[test]
 fn level_fx_values_snap_to_the_top_of_the_scale() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "lllrVOLFF");
+    keys(&mut app, "lllrVOL<Enter>FF");
     assert_eq!(steps(&app)[0], "--- -- vol:F8 --- ---");
     keys(&mut app, "lrFE");
     assert_eq!(steps(&app)[0], "--- -- vol:F8 --- ---");
@@ -1164,10 +1171,10 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
 
     // Filling a selection snaps too, and other commands keep their whole range.
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "lllvjrSNAFF");
+    keys(&mut app, "lllvjrSNA<Enter>FF");
     assert_eq!(steps(&app)[1], "--- -- sna:F8 --- ---");
     let (mut app, _rt) = app_with(&[E]);
-    keys(&mut app, "lllrCUTFF");
+    keys(&mut app, "lllrCUT<Enter>FF");
     assert_eq!(steps(&app)[0], "--- -- cut:FF --- ---");
 }
 
@@ -1728,12 +1735,12 @@ fn a_typed_value_copies_the_mark_above_it_without_wrapping() {
     let above = "C-4 40 cut:20h --- ---";
     let typed = "--- -- cut:40h --- ---";
     let plain = "--- -- cut:40 --- ---";
-    check(&[above, empty], "jllliCUT40<Esc>", &[above, typed]);
-    check(&[empty, above], "llliCUT40<Esc>", &[plain, above]);
+    check(&[above, empty], "jllliCUT<Enter>40<Esc>", &[above, typed]);
+    check(&[empty, above], "llliCUT<Enter>40<Esc>", &[plain, above]);
     let event_between = "C-4 40 del:10 --- ---";
     check(
         &[above, event_between, empty],
-        "2jllliCUT40<Esc>",
+        "2jllliCUT<Enter>40<Esc>",
         &[above, event_between, typed],
     );
 }
@@ -1747,12 +1754,12 @@ fn a_value_typed_over_another_keeps_its_mark() {
         "jllllr55",
         &[above, "--- -- cut:55h --- ---"],
     );
-    check(&[start], "lllrRES40", &["--- -- res:40 --- ---"]);
+    check(&[start], "lllrRES<Enter>40", &["--- -- res:40 --- ---"]);
 }
 
 #[test]
 fn changing_a_value_to_an_event_drops_its_mark() {
-    check(&[MARKED], "lllrDEL10", &["C-4 40 del:10 --- ---"]);
+    check(&[MARKED], "lllrDEL<Enter>10", &["C-4 40 del:10 --- ---"]);
 }
 
 #[test]

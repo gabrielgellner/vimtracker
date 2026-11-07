@@ -204,7 +204,7 @@
 <text x="963" y="413" fill="#949cbb" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     L  R  G</text>
 <rect x="0" y="418" width="72" height="19" fill="#8caaee"/>
 <text x="0" y="432" fill="#303446" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> NORMAL </text>
-<rect x="72" y="418" width="117" height="19" fill="#51576d"/>
-<text x="72" y="432" fill="#c6d0f5" font-weight="bold" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> FX1 command </text>
-<text x="189" y="432" fill="#c6d0f5" textLength="891" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> playing  120 BPM  Swing 50  Oct 4 Vel 64  Grid 1/4  TVol E0 *                                     </text>
+<rect x="72" y="418" width="144" height="19" fill="#51576d"/>
+<text x="72" y="432" fill="#c6d0f5" font-weight="bold" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Output: Send A </text>
+<text x="216" y="432" fill="#c6d0f5" textLength="864" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> playing  120 BPM  Swing 50  Oct 4 Vel 64  Grid 1/4  TVol E0 *                                  </text>
 </svg>

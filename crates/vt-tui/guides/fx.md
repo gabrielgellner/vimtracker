@@ -1,11 +1,18 @@
 # FX commands
 
 Each step has FX slots to the right of the Velocity column. A slot is a
-three-letter command and a two-digit hex value.
+command and a two-digit hex value.
 
-To write one, go to the slot with `l` in Normal mode, press `i` and type it,
-such as `CUT40`. The status line says `FX1 command`, then `FX1 value`. A slot
-only takes effect once its value is typed.
+`K` on a slot lists the commands this track has, grouped as an LFO's `Dest` is:
+the filter, the output, the voice, each slot's effect, then the events. It opens
+searching, so `send b` or `decay` finds its command, and `Enter` takes it. Type
+the value next.
+
+To type one instead, press `i` on the slot, type its label, such as `CUT` or
+`2FDBK`, and press `Enter`, then type the value, such as `40`. A label that isn't
+on the track opens `K`, searching for what you typed. A slot only takes effect
+once its value is typed. The status line names what the cursor is on, such as
+`Filter: Cut`.
 
 ## Values and their marks
 
@@ -17,18 +24,20 @@ only takes effect once its value is typed.
 | `RES` | Filter resonance |
 | `SNA` | Send to return `A` |
 | `SNB` | Send to return `B` |
-| `HAR` | A synth's first setting, shown by its label, like `PNCH` on `Kick` |
-| `TIM` | A synth's second setting |
-| `MOR` | A synth's third setting |
-| `ACC` | How hard a synth is struck, on the voices it changes |
+| `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 
-A slot's settings can be set from a step, the same way as the rest. `K` on a command lists them
-while the slot holds something, under the names they have in an LFO's `Dest`, like `1 Amount`, or
-type the slot's number and the first letters, like `1am`. The grid shows each by its slot's digit and
-a short label, like `1AMNT` or `2FDBK`. `Bits` takes whole bits, so `06` is 6 bits,
-and `Type` takes its place in the list, from `00`. A step's setting belongs to the slot and its place
-in the effect's list, so it reads as whatever's now there, and does nothing in an empty slot.
+Each voice has its own settings, and the track keeps every voice's values, so
+changing voice and back loses nothing. A lock for a voice the track isn't
+playing, or an effect no longer in its slot, is drawn faint and does nothing
+until its voice or effect is back.
+
+A slot's settings can be set from a step, the same way as the rest, while the
+slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`
+or `2FDBK`, and `K` lists them under the effect's group with the names they have
+in an LFO's `Dest`, like `1 Amount`. `Bits` takes whole bits, so `06` is 6 bits,
+and `Type` takes its place in the list, from `00`. A step's setting belongs to
+that effect, so a `2FDBK` lock does nothing once slot 2 holds a Reverb.
 
 `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback
