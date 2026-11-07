@@ -9,6 +9,7 @@ use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot};
 
@@ -131,6 +132,25 @@ impl App {
             .collect();
         let mut picker = Picker::new("Views", items);
         picker.move_highlight(1);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// Open the list of scales, with this one highlighted.
+    pub(crate) fn open_scale_picker(&mut self) {
+        self.count = None;
+        let items = ScaleKind::ALL
+            .map(|kind| Item {
+                label: kind.name().to_owned(),
+                pick: Pick::Scale(kind),
+            })
+            .to_vec();
+        let at = ScaleKind::ALL
+            .iter()
+            .position(|kind| *kind == self.scale.kind)
+            .unwrap_or(0);
+        let mut picker = Picker::new("Scales", items);
+        picker.move_highlight(at as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
     }
@@ -453,6 +473,11 @@ impl App {
                     }
                     Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
                     Some(Pick::SectionChain(chain)) => self.pick_section_chain(chain),
+                    Some(Pick::Scale(kind)) => self.set_scale(Scale {
+                        on: true,
+                        kind,
+                        ..self.scale
+                    }),
                     Some(Pick::ShapeFill(kind)) => self.pick_shape_fill(kind),
                     Some(Pick::ShapeWave(wave)) => self.pick_shape_wave(wave),
                     Some(Pick::ShapeRate(rate)) => self.pick_shape_rate(rate),

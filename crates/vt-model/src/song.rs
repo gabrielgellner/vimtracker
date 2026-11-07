@@ -13,6 +13,7 @@ use crate::constants::{
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
+use crate::scale::Scale;
 use crate::selection::Extent;
 use crate::step::{FxCommand, FxSlot, Step};
 
@@ -698,6 +699,9 @@ pub struct Song {
     /// How far the left and right arrows move in Insert.
     #[serde(default = "default_skip")]
     pub skip: u32,
+    /// The scale for entering and moving notes, kept with the song and not used to play it.
+    #[serde(default)]
+    pub scale: Scale,
     /// Whether the main output clips at full level. Off, a render keeps levels above it.
     #[serde(default = "default_limiter")]
     pub limiter: bool,
@@ -719,6 +723,7 @@ impl Song {
             seed: 0,
             step: 1,
             skip: default_skip(),
+            scale: Scale::default(),
             limiter: default_limiter(),
             swing: 500,
             launch: Launch::default(),

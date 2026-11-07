@@ -57,6 +57,42 @@ Set how far each note moves, which suits drums.
 | `:set step=0` | Stay put, to audition notes on one step |
 | `:set step=1` | Back to the start setting |
 
+## Scales
+
+Set a scale and the home row plays it, with `a` on the root, going up through
+the scale from `a` to `;`. The row above is silent, so every key is in key. The
+grid still shows real note names.
+
+```
+ a s d f g h j k l ;
+ 1 2 3 4 5 6 7 1 2 3     scale degrees, in a seven-note scale
+```
+
+| Keys | Does |
+|---|---|
+| `:set scale=dorian` | Choose the kind, and turn it on |
+| `:set root=d` | Choose the root, like `F#` or `Bb`, and turn it on |
+| `:scale` | Choose the kind from a list |
+| `Option-s` | Off and on, in Normal and Insert, keeping both |
+| `:set scale=off`, `on` | The same as a command |
+| `:scale fit` | Move this phrase's notes to the nearest in the scale |
+
+A kind with two words takes a dash, as in `:set scale=harmonic-minor`. If two notes
+are as near, `:scale fit` takes the lower.
+
+While it's on, `=` `-` `>` `<` move a note through the scale, and a count moves that
+many notes along it. From a note outside the scale, a step lands on the next one in.
+`+` and `_` are still an octave, and `C-a` and `C-x` are still a semitone, for a note
+outside the scale on purpose.
+
+A scale is only for entering and moving notes. It changes nothing you've written,
+so it can't change how a song sounds, unless you run `:scale fit`. Notes outside it
+show in a different colour, and the status line shows `Scale D Dor`. It's saved with
+the song, and `u` doesn't undo it.
+
+A chain's `Transpose` plays a phrase higher or lower whatever the scale, so the grid
+judges the notes as written.
+
 ## Velocity while you play
 
 Every note you write gets the velocity on the status line, as `Vel`, and you

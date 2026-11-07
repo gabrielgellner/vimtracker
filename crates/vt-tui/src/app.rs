@@ -24,6 +24,7 @@ use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
+use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Scope, StepRange};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
@@ -31,7 +32,7 @@ use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, 
 
 use crate::grammar::Change;
 use crate::guides::Guide;
-use crate::input::bindings::{Cmd, Op, Table, note_key};
+use crate::input::bindings::{Cmd, Op, Table, degree_key, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -166,6 +167,8 @@ pub struct App {
     pub should_quit: bool,
     /// Live mute and solo per track, kept outside undo and written to the song on save.
     pub levels: Vec<TrackLive>,
+    /// The scale, likewise, as it's for entering notes and isn't part of what's undone.
+    pub scale: Scale,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
     pub top: usize,
@@ -214,6 +217,7 @@ impl App {
         rate: u32,
     ) -> Self {
         let levels = live_from(&song);
+        let scale = song.scale;
         let mut app = Self {
             history: History::new(Arc::new(song)),
             folder,
@@ -264,6 +268,7 @@ impl App {
             last_tick: Instant::now(),
             should_quit: false,
             levels,
+            scale,
             entry: Entry::default(),
             top: 0,
             view_height: 16,
@@ -311,9 +316,10 @@ impl App {
         }
     }
 
-    /// The song as saved: with live mute and solo written into it.
+    /// The song as saved: with live mute, solo and the scale written into it.
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
+        song.scale = self.scale;
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
@@ -671,6 +677,7 @@ impl App {
                 self.guard = Some((key, now));
             }
             Cmd::Quit => self.quit(false),
+            Cmd::ToggleScale => self.toggle_scale(),
             Cmd::NarrowGrid => self.change_grid(false),
             Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
@@ -1025,6 +1032,7 @@ impl App {
             match key.code {
                 KeyCode::Char('1') => self.change_grid(false),
                 KeyCode::Char('2') => self.change_grid(true),
+                KeyCode::Char('s') => self.toggle_scale(),
                 _ => {}
             }
             return;
@@ -1062,6 +1070,40 @@ impl App {
         }
     }
 
+    /// Set the scale, which isn't an edit to undo, and say what it now does.
+    pub(crate) fn set_scale(&mut self, scale: Scale) {
+        self.scale = scale;
+        self.dirty = true;
+        self.status = if scale.on {
+            format!("Scale {} {}", scale.root_name(), scale.kind.name())
+        } else {
+            "Scale off".to_owned()
+        };
+    }
+
+    fn toggle_scale(&mut self) {
+        self.count = None;
+        self.set_scale(Scale {
+            on: !self.scale.on,
+            ..self.scale
+        });
+    }
+
+    /// Move this phrase's notes to the nearest in the scale.
+    fn fit_to_scale(&mut self) {
+        if !self.scale.on {
+            self.status = "The scale is off".to_owned();
+            return;
+        }
+        if let Some(phrase) = self.phrase_id() {
+            self.apply(&Action::FitToScale {
+                track: self.cursor.track,
+                phrase,
+                scale: self.scale,
+            });
+        }
+    }
+
     /// Halve or double the skip setting, as a grid narrows or widens in Ableton. A size between
     /// these goes to the next one along, and one past them only comes back.
     fn change_grid(&mut self, wider: bool) {
@@ -1095,9 +1137,17 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
-                if let Some(semitones) = note_key(c) {
-                    let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
-                    let midi = midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8;
+                // With a scale, the home row goes up through it from the root, and the row above
+                // is silent, so every key is in key.
+                let played = if self.scale.on {
+                    degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
+                } else {
+                    note_key(c).map(|semitones| {
+                        let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
+                        midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
+                    })
+                };
+                if let Some(midi) = played {
                     let on_step = self
                         .phrase_here()
                         .cloned()
@@ -1428,6 +1478,19 @@ impl App {
             Line::Double => self.double(),
             Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
+            Line::SetScale(kind) => self.set_scale(Scale {
+                on: true,
+                kind,
+                ..self.scale
+            }),
+            Line::SetRoot(root) => self.set_scale(Scale {
+                on: true,
+                root,
+                ..self.scale
+            }),
+            Line::ScaleOn(on) => self.set_scale(Scale { on, ..self.scale }),
+            Line::PickScale => self.open_scale_picker(),
+            Line::FitToScale => self.fit_to_scale(),
             Line::SetLimiter(on) => {
                 self.apply(&Action::SetLimiter(on));
                 self.status = if on {
@@ -1589,6 +1652,7 @@ impl App {
         let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
         self.samples = Arc::new(pool);
         self.levels = live_from(&song);
+        self.scale = song.scale;
         self.send_live();
         self.history = History::new(Arc::new(song));
         self.folder = folder;

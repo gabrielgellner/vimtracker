@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::Scope;
-use vt_model::step::{FxSlot, Mark, Step};
+use vt_model::step::{FxSlot, Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
 use crate::input::mode::Mode;
@@ -320,6 +320,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::faint()
         };
         let mut styles = vec![body; text.len()];
+        if let Note::On(midi) = step.note
+            && plays
+            && app.scale.on
+            && !app.scale.contains(midi)
+        {
+            let (start, end) = field_range(Field::Note);
+            styles[start..end].fill(body.patch(theme::out_of_scale()));
+        }
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.is_value() && fx.mark == Mark::Lock {
                 let at = field_range(Field::FxValue(slot)).1 + MARK_WIDTH - 1;

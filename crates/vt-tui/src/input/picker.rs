@@ -6,6 +6,7 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
+use vt_model::scale::ScaleKind;
 use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterType, Machine, SynthVoice};
 use vt_model::step::FxCommand;
@@ -62,6 +63,8 @@ pub enum Pick {
     RowPhrase(u32),
     /// A chain, or none, for the song view cell under the cursor.
     SectionChain(Option<u32>),
+    /// The kind of scale.
+    Scale(ScaleKind),
     /// What the shape panel fills with.
     ShapeFill(FillKind),
     /// The wave the shape panel follows.

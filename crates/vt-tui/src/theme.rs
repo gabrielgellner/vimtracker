@@ -49,6 +49,11 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// A note outside the scale.
+pub fn out_of_scale() -> Style {
+    Style::new().fg(PEACH)
+}
+
 /// A label to press to jump somewhere.
 pub fn jump_label() -> Style {
     Style::new().fg(BASE).bg(PEACH).add_modifier(Modifier::BOLD)
