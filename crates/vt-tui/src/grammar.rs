@@ -100,6 +100,7 @@ impl App {
         if self.pending.is_empty()
             && let KeyCode::Char(c) = key.code
             && !key.ctrl
+            && !key.alt
         {
             if c == '"' {
                 self.awaiting_register = true;

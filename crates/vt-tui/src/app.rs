@@ -671,6 +671,8 @@ impl App {
                 self.guard = Some((key, now));
             }
             Cmd::Quit => self.quit(false),
+            Cmd::NarrowGrid => self.change_grid(false),
+            Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
             Cmd::PreviousTrack => self.move_track(-1),
             Cmd::ToggleMute => self.toggle_mute(),
@@ -1019,6 +1021,14 @@ impl App {
             KeyCode::BackTab => return self.run(Cmd::PlayFromStart, key, now),
             _ => {}
         }
+        if self.view == View::Phrase && key.alt {
+            match key.code {
+                KeyCode::Char('1') => self.change_grid(false),
+                KeyCode::Char('2') => self.change_grid(true),
+                _ => {}
+            }
+            return;
+        }
         let skip = self.song().skip as usize;
         let arrow = match (key.code, key.shift) {
             (KeyCode::Up, _) => Some(-1),
@@ -1049,6 +1059,21 @@ impl App {
             Field::Note => self.insert_note(key),
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
+        }
+    }
+
+    /// Halve or double the skip setting, as a grid narrows or widens in Ableton. A size between
+    /// these goes to the next one along, and one past them only comes back.
+    fn change_grid(&mut self, wider: bool) {
+        self.count = None;
+        let skip = self.song().skip;
+        let next = if wider {
+            GRID_SIZES.iter().find(|size| **size > skip)
+        } else {
+            GRID_SIZES.iter().rfind(|size| **size < skip)
+        };
+        if let Some(next) = next {
+            self.apply(&Action::SetSkipSize(*next));
         }
     }
 
@@ -1638,6 +1663,9 @@ impl App {
         }
     }
 }
+
+/// The grid sizes `Option-1` and `Option-2` go through, in steps: `1/16` up to a bar.
+const GRID_SIZES: [u32; 5] = [1, 2, 4, 8, 16];
 
 /// How far to move from a row to reach the next multiple of the skip, so a jump lands on the grid
 /// wherever it starts.

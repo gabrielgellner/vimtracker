@@ -89,8 +89,12 @@ impl std::fmt::Display for Key {
 #[error("not a key name: {0:?}")]
 pub struct KeyParseError(pub String);
 
-/// Parse one key, such as `x`, `C-r` or `Enter`.
+/// Parse one key, such as `x`, `C-r`, `M-1` or `Enter`.
 pub fn parse(text: &str) -> Result<Key, KeyParseError> {
+    let (alt, text) = match text.strip_prefix("M-") {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
     let (ctrl, name) = match text.strip_prefix("C-") {
         Some(rest) => (true, rest),
         None => (false, text),
@@ -115,7 +119,7 @@ pub fn parse(text: &str) -> Result<Key, KeyParseError> {
     Ok(Key {
         code,
         ctrl,
-        alt: false,
+        alt,
         shift: false,
     })
 }
@@ -148,6 +152,7 @@ mod tests {
             "Tab",
             "S-Tab",
             "Backspace",
+            "M-1",
         ] {
             assert_eq!(parse(name).unwrap().to_string(), name);
         }

@@ -41,8 +41,10 @@ A plain arrow keeps a note's place in the beat. For hats on the "and", start
 on step 2 and press `a` then `Right` over and over: steps 2, 6, A and E. If
 you haven't just written a note, it counts from the cursor.
 
-Run `:set skip=8` to move 8 steps instead of a beat, for a kick on every other
-beat. Anything half typed in another column is dropped when you move.
+The distance is the grid, shown as `Grid` on the status line. As in Ableton,
+`Option-1` makes it narrower and `Option-2` wider, halving or doubling it from
+`1/16` up to a bar, in Insert and Normal. `:set skip=8` sets it to any number of
+steps. Anything half typed in another column is dropped when you move.
 
 ## Writing every few steps
 

@@ -641,6 +641,7 @@ Made by the author on 2026-11-06, after a review of this section:
 20. **Small drawings use kitty's graphics protocol where it's available**, as plain one-colour lines of solid dots, after Elektron's screens: the envelopes, each LFO's shape, and the filter's curve, worked out from the filter's exact response. Other terminals get Braille diagrams and no icons, as does `--no-graphics`. Inside tmux, this needs `allow-passthrough on`. Placeholder characters mark where an image goes, so it stays in its pane and windows can draw over it. A changed image takes a new id, because kitty doesn't reconnect unchanged placeholders to a replaced image. Added on 2026-11-06.
 21. **A value's bar moves with what's playing**, as in modern plugins: its fill follows the value after step commands and modulation, with a dim mark where it's set, and its number stays the setting. The callback reports these values for the track the cursor is on. The filter's curve moves the same way, sending a new image whenever `Cut` or `Res` changes, at most once a frame. Added on 2026-11-06.
 22. **`/` on the track page or mixer jumps to a setting by name**, following the author's flash.nvim: labels go over the values of the matches on this page, nearest the cursor first, a label is never a letter that could carry on the search, and a match keeps its label as you type. The mixer labels the cursor's track, which it stays on. It lands in Normal mode, and `Ctrl-O` comes back. Added on 2026-11-06.
+23. **`Option-1` and `Option-2` narrow and widen the grid the arrows move by in Insert**, after Ableton's `Cmd-1` and `Cmd-2`. Terminals don't deliver `Ctrl` with a number: `Ctrl-1` arrives as `1` and `Ctrl-3` as `Esc`. Rows are 16ths, so there's no triplet grid. Added on 2026-11-06.
 
 ## Alternatives Considered
 
@@ -841,6 +842,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `{ }` | Previous or next beat |
 | Normal | `gg G` | First or last step |
 | Normal | `H M L` | Cursor to the top, middle or bottom of the view |
+| Normal, Insert | `M-1 M-2` | Halve or double the skip setting, like Ableton's `Cmd-1` and `Cmd-2`. `1/16` up to a bar |
 | Track, Mixer | `/` | Jump to a setting by part of its name, with labels as in flash.nvim |
 | Normal | `Ctrl-D`, `Ctrl-U` | Half a screen down or up, keeping the cursor mid-screen |
 | Normal | `Ctrl-E`, `Ctrl-Y` | Scroll the view down or up 3 steps without moving the cursor, unless it reaches the edge |
@@ -930,7 +932,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:kit [name or path]` | Make a kit's sounds the ones `Space 5` lists first, or choose a kit. With `all` after it, put them on tracks from the first as one undo step. See Decision 14 |
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
-| `:set skip=n` | How far `Left` and `Right` move in Insert |
+| `:set skip=n` | How far `Left` and `Right` move in Insert, the grid on the status line |
 | `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
 | `:len n` | How many steps the loop plays, while stopped. Decimal, or hex after `0x` as in Rust: `:len 0x10`. `:reset` reads numbers the same way. Steps outside it are kept and saved |
 | `:double` | Double the loop, while stopped |
