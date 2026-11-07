@@ -253,13 +253,91 @@ impl FxSlot {
     }
 }
 
+/// How a row's note behaves over its pulses, as on Metropolix.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum GateKind {
+    /// One note, on the first pulse.
+    #[default]
+    Single,
+    /// A note on each pulse.
+    Multi,
+    /// One note, tied into the next row's note with no new attack.
+    Hold,
+    /// No note, and it ends one that's sounding.
+    Rest,
+}
+
+impl GateKind {
+    /// Every kind, in the order a list shows them.
+    pub const ALL: [Self; 4] = [Self::Single, Self::Multi, Self::Hold, Self::Rest];
+
+    /// Its three letters, as a gate cell shows them.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Single => "SGL",
+            Self::Multi => "MLT",
+            Self::Hold => "HLD",
+            Self::Rest => "RST",
+        }
+    }
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Single => "One note, on the first pulse",
+            Self::Multi => "A note on every pulse",
+            Self::Hold => "One note, tied into the next row's",
+            Self::Rest => "No note, and it ends one that's sounding",
+        }
+    }
+
+    /// The kind with these three letters.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
+}
+
+/// A row's gate cell: what its note does, and how many pulses, or steps, the row lasts. Every
+/// gate command's argument is its length, and `0` skips the row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Gate {
+    pub kind: GateKind,
+    pub pulses: u8,
+}
+
+/// The most pulses a row can last.
+pub const MAX_PULSES: u8 = 8;
+
+impl Default for Gate {
+    fn default() -> Self {
+        Self {
+            kind: GateKind::Single,
+            pulses: 1,
+        }
+    }
+}
+
 /// One position in a phrase.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     pub note: Note,
     /// `None` means full level.
     pub velocity: Option<u8>,
+    /// `None` plays as one pulse of `Single`, as every row did before gates.
+    pub gate: Option<Gate>,
     pub fx: Vec<FxSlot>,
+}
+
+impl Step {
+    /// How many steps the row lasts.
+    pub fn pulses(&self) -> usize {
+        usize::from(self.gate.map_or(1, |gate| gate.pulses))
+    }
+
+    /// What its note does over its pulses.
+    pub fn gate_kind(&self) -> GateKind {
+        self.gate.map_or(GateKind::Single, |gate| gate.kind)
+    }
 }
 
 impl Default for Step {
@@ -267,6 +345,7 @@ impl Default for Step {
         Self {
             note: Note::Empty,
             velocity: None,
+            gate: None,
             fx: vec![FxSlot::default(); FX_SLOTS],
         }
     }

@@ -168,6 +168,10 @@ pub struct TrackState {
     pub playing: Option<u32>,
     /// The running count its chain began at. A cursor partway through a chain can put it below 0.
     pub started: i64,
+    /// Whether the row playing passed its `CHA`, which is rolled once for all its pulses.
+    pub row_plays: bool,
+    /// Whether the note sounding is a `Hold`, to be tied into the next row's note.
+    pub tied: bool,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
     /// on its step. Anything that sets `started` again sets these back to 0.
     pub lane_offsets: [i64; FX_SLOTS],
@@ -293,6 +297,8 @@ impl TrackState {
             playing: None,
             started: 0,
             lane_offsets: [0; FX_SLOTS],
+            row_plays: true,
+            tied: false,
             voice: Voice::default(),
             tail: Voice::default(),
             reading: Reading::default(),
@@ -354,6 +360,13 @@ impl TrackState {
     pub fn restart(&mut self, started: i64) {
         self.started = started;
         self.lane_offsets = [0; FX_SLOTS];
+        self.tied = false;
+    }
+
+    /// Carry the sounding note on as this one, with no new attack.
+    pub fn tie(&mut self, note: NoteOn) {
+        self.last_note = Some(note);
+        self.voice.tie(note.note, note.gain);
     }
 
     /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values
@@ -614,6 +627,7 @@ impl TrackState {
         self.off_at = None;
         self.retrigger = None;
         self.swung = None;
+        self.tied = false;
         self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }
 

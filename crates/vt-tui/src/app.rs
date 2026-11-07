@@ -424,7 +424,7 @@ impl App {
             .iter()
             .take(self.cursor.slot)
             .filter_map(|e| track.phrases.get(&e.phrase))
-            .map(|p| p.len())
+            .map(|p| p.time())
             .sum()
     }
 
@@ -441,7 +441,9 @@ impl App {
         } else {
             0
         };
-        self.slot_start() + row
+        // Rows before it last their pulses.
+        let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
+        self.slot_start() + time
     }
 
     /// Put the cursor on the first step that plays, at the top of the screen.

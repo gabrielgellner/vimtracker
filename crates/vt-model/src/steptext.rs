@@ -1,13 +1,17 @@
 //! The readable text form of a step, used on disk and in tests.
 //!
-//! `NOTE VEL INST FX FX FX`, such as `C-4 64 01 CUT40 ---00 RET14`.
+//! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 CUT40 ---00 RET14`. A row without a gate cell
+//! leaves it out, as every row did before gates: `C-4 64 CUT40 ---00 RET14`.
 
 use std::fmt;
 use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
+use crate::step::{
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
+    Step,
+};
 
 /// Why a step's text could not be read.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -22,6 +26,31 @@ pub enum StepTextError {
     Slot(String),
     #[error("unknown FX command: {0:?}")]
     Command(String),
+    #[error("not a gate: {0:?}, which is a gate and 0 to 8 pulses, like HLD3")]
+    Gate(String),
+}
+
+impl FromStr for Gate {
+    type Err = StepTextError;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let bad = || StepTextError::Gate(text.to_owned());
+        let (name, pulses) = text.split_at_checked(3).ok_or_else(bad)?;
+        let kind = GateKind::from_name(name).ok_or_else(bad)?;
+        let pulses = match pulses.as_bytes() {
+            [digit @ b'0'..=b'9'] => digit - b'0',
+            _ => return Err(bad()),
+        };
+        (pulses <= MAX_PULSES)
+            .then_some(Self { kind, pulses })
+            .ok_or_else(bad)
+    }
+}
+
+impl fmt::Display for Gate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.kind.name(), self.pulses)
+    }
 }
 
 /// Read two uppercase hex digits.
@@ -140,8 +169,22 @@ impl FromStr for Step {
                     .ok_or_else(|| StepTextError::Velocity(other.to_owned()))?,
             ),
         };
+        let mut fields = fields.peekable();
+        // A gate cell is a gate's name and one digit, where an FX slot is five or six characters.
+        let is_gate = |field: &&str| {
+            field.len() == 4 && field.get(..3).and_then(GateKind::from_name).is_some()
+        };
+        let gate = match fields.next_if(is_gate) {
+            Some(field) => Some(field.parse()?),
+            None => None,
+        };
         let fx = fields.map(str::parse).collect::<Result<Vec<_>, _>>()?;
-        Ok(Self { note, velocity, fx })
+        Ok(Self {
+            note,
+            velocity,
+            gate,
+            fx,
+        })
     }
 }
 
@@ -151,6 +194,9 @@ impl fmt::Display for Step {
         match self.velocity {
             Some(velocity) => write!(f, " {velocity:02X}")?,
             None => f.write_str(" --")?,
+        }
+        if let Some(gate) = self.gate {
+            write!(f, " {gate}")?;
         }
         for slot in &self.fx {
             write!(f, " {slot}")?;
@@ -173,6 +219,9 @@ mod tests {
             "G-9 -- SNA20 SNB30",
             "C#3 --",
             "C-4 64 CUT40h SNA20g PAN80",
+            "C-4 64 HLD3 CUT40 ---00 ---00",
+            "--- -- RST4 ---00 ---00 ---00",
+            "E-4 -- MLT0",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);
@@ -192,6 +241,24 @@ mod tests {
         for text in ["DEL10h", "RET14g", "---00h", "CUT40x", "CUT40."] {
             assert!(text.parse::<FxSlot>().is_err(), "{text} should be refused");
         }
+    }
+
+    #[test]
+    fn a_gate_is_a_kind_and_up_to_8_pulses() {
+        let gate = |text: &str| text.parse::<Gate>();
+        assert_eq!(
+            gate("HLD3"),
+            Ok(Gate {
+                kind: GateKind::Hold,
+                pulses: 3
+            })
+        );
+        for text in ["HLD9", "XYZ1", "HLD", "HLD10", "hld3"] {
+            assert!(gate(text).is_err(), "{text} should be refused");
+        }
+        let step: Step = "C-4 64 ---00 ---00 ---00".parse().unwrap();
+        assert_eq!(step.gate, None, "a row from before gates has none");
+        assert_eq!(step.pulses(), 1);
     }
 
     #[test]

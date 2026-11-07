@@ -1552,7 +1552,7 @@ Made with the author's agreement on 2026-11-07, after a review, and revised with
 *   **A cell on a row without a note** still sets the row's length, so `RST4` on an empty row is 4 steps of nothing. Without a note, the gate type does nothing, only the length.
 *   **`0` skips the row,** whatever the gate command. It takes no time and fires nothing, FX included, as Metropolix's `SKIP` does. A phrase whose loop sums to 0 pulses is passed over in its chain, and a chain summing to 0 is empty, as a missing chain is now. Looking for the next row stops after one pass, so it can't hang.
 *   **Lengths in rows, time in steps.** `:len`, `gs`, `ge` and `:double` count rows. A chain lasts the sum of its rows' pulses, and a section's length, `Launch::Every`, the `:reset` period, render lengths and swing count steps. Swing goes by the step, as now, so it doesn't depend on rows.
-*   **Finding the row.** The edit thread works out each phrase's running totals of pulses when it publishes a version, in `Published::new`. The callback finds a place's row by searching them. `chain_position`, the playhead and audition all use the same search.
+*   **Finding the row.** `chain_position` walks the rows of the chain's phrases, adding up their pulses, and the playhead and audition use it too. Running totals worked out in `Published::new`, with a search, are the fallback if the walk's cost in the callback turns out to matter, which issue 2 measures.
 
 **Gate types.**
 
@@ -1573,7 +1573,7 @@ Made with the author's agreement on 2026-11-07, after a review, and revised with
 *   **The cell** shows as `HLD3`, or `----` when empty, between velocity and FX 1, so the cell itself shows each row's length.
 *   **Keys** are an FX cell's: `K` chooses the gate command, `=` and `-` change the pulses, typing `HLD3` enters it, and `x` empties it. It's a column group for selections, paste and the shape panel.
 *   **Beat rows.** A row is lit as a beat when it starts on a beat in time. Row numbers still count rows, so `5G` is still the fifth row.
-*   **The step text** gains the cell after velocity: `C-4 64 HLD3 CUT40 ...`. It reads the old form, without one, as an empty cell.
+*   **The step text** gains the cell after velocity when a row has one: `C-4 64 HLD3 CUT40 ...`. A row without one is written as before, so saved songs and every step written as text in the tests stay as they are.
 *   **Only sound tracks** have a gate column. Returns and the master have no notes.
 
 **Alternatives considered.**
