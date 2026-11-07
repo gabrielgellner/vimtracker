@@ -6,6 +6,7 @@ pub mod drums;
 pub mod filter;
 pub mod fm;
 pub mod kick;
+pub mod memory;
 pub mod oversampler;
 pub mod reverb;
 pub mod smoother;

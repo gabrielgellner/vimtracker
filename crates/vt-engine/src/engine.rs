@@ -11,8 +11,7 @@ use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_
 use vt_model::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
 use vt_model::target::Target;
 
-use crate::dsp::delay::Delay;
-use crate::dsp::reverb::Reverb;
+use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
 use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
@@ -21,7 +20,7 @@ use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackStat
 use crate::voice::{NoteOn, Voice};
 
 /// Delay time: 3/16 of a note, in ticks.
-const DELAY_TICKS: u64 = TICKS_PER_QUARTER * 3 / 4;
+pub const DELAY_TICKS: u64 = TICKS_PER_QUARTER * 3 / 4;
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
 
@@ -76,8 +75,8 @@ pub struct Engine {
     millibpm: u32,
     smoothing: f32,
     fast_smoothing: f32,
-    delay: Delay,
-    reverb: Reverb,
+    /// The long buffers no slot is using.
+    memory: MemoryPool,
     /// The master's levels since the last report.
     reading: Reading,
     /// Frames until LFOs are next worked out.
@@ -117,7 +116,7 @@ impl Engine {
     pub fn new(rate: u32, current: Arc<Published>) -> Self {
         let millibpm = current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         let seed = current.song.seed;
-        let delay_frames = sample_of_tick(DELAY_TICKS, rate, MIN_MILLIBPM) as usize + 1;
+        let memory = MemoryPool::for_song(&current.song, rate);
         let mut engine = Self {
             rate,
             current,
@@ -136,8 +135,7 @@ impl Engine {
             millibpm,
             smoothing: coefficient(rate),
             fast_smoothing: fast_coefficient(rate),
-            delay: Delay::new(delay_frames),
-            reverb: Reverb::new(rate),
+            memory,
             reading: Reading::default(),
             lfo_countdown: 0,
         };
@@ -442,6 +440,26 @@ impl Engine {
         true
     }
 
+    /// Keep a long buffer the edit thread has sent, for a version it's about to send.
+    pub fn receive_memory(&mut self, memory: Memory) {
+        self.memory.put(memory);
+    }
+
+    /// The edit thread wants this many back, as they're more than its versions need.
+    pub fn release_memory(&mut self, count: MemoryCount) {
+        self.memory.owe(count);
+    }
+
+    /// The next long buffer to send back to be freed.
+    pub fn next_freed_memory(&mut self) -> Option<Memory> {
+        self.memory.next_owed()
+    }
+
+    /// How many long buffers are held that no slot is using.
+    pub fn spare_memory(&self) -> usize {
+        self.memory.spare()
+    }
+
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
     ///
     /// A shorter phrase wraps by the modulo in sequencing. An ID that no longer exists is silent,
@@ -456,6 +474,7 @@ impl Engine {
             track.cued = None;
             track.mute = false;
             track.solo = false;
+            track.give_back_memory(&mut self.memory);
         }
         self.follow_levels();
         self.retune();
@@ -577,6 +596,7 @@ impl Engine {
             clock: self.clock,
             rate: self.rate,
             seed: self.current.song.seed,
+            delay_frames: sample_of_tick(DELAY_TICKS, self.rate, self.millibpm) as usize,
         }
     }
 
@@ -585,7 +605,7 @@ impl Engine {
         let stopped = self.transport == Transport::Stopped;
         let tracks = self.tracks.iter_mut().enumerate();
         for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
-            state.modulate(track, index, now, stopped);
+            state.modulate(track, index, now, stopped, &mut self.memory);
         }
     }
 
@@ -603,7 +623,7 @@ impl Engine {
                 start.clock = now.clock;
             }
         }
-        state.modulate(track, index, now, false);
+        state.modulate(track, index, now, false, &mut self.memory);
     }
 
     /// Begin the release of a track's envelopes, when its note ends.
@@ -1141,7 +1161,6 @@ impl Engine {
     /// Render voices and effects into a run of frames with no events in it.
     fn render(&mut self, out: &mut [f32]) {
         let samples = Arc::clone(&self.current.samples);
-        let delay_frames = sample_of_tick(DELAY_TICKS, self.rate, self.millibpm) as usize;
         let limiter = self.current.song.limiter;
         let return_a = self.sounds();
         let (return_b, master_track) = (return_a + 1, return_a + 2);
@@ -1152,7 +1171,9 @@ impl Engine {
             let mut send_b = [0.0_f32; 2];
             for (index, track) in self.tracks.iter_mut().enumerate() {
                 let previewing = index == self.preview_track && self.preview.active();
-                if !track.sounding() && !previewing {
+                // The fixed tracks have their turn after this, with what's sent to them.
+                let fixed = (return_a..=master_track).contains(&index);
+                if fixed || (!track.sounding() && !previewing && !track.ringing(self.rate)) {
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));
@@ -1182,13 +1203,11 @@ impl Engine {
                 send_b[1] += shaped.send_b[1];
             }
             let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
-            let delayed = self.delay.process(send_a, delay_frames);
-            let delayed = self.tracks[return_a].process_return(delayed, smoothing, fast, rate);
-            let reverbed = self.reverb.process(send_b);
-            let reverbed = self.tracks[return_b].process_return(reverbed, smoothing, fast, rate);
+            let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate);
+            let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate);
             let mixed = [
-                mix[0] + delayed[0] + reverbed[0],
-                mix[1] + delayed[1] + reverbed[1],
+                mix[0] + from_a[0] + from_b[0],
+                mix[1] + from_a[1] + from_b[1],
             ];
             let mastered = self.tracks[master_track].process_master(mixed, smoothing, fast, rate);
             let out = master(mastered, limiter);

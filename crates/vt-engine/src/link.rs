@@ -7,9 +7,10 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, MAX_TRACKS, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
 };
 
+use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, Transport};
 use crate::mixer::Reading;
 use crate::published::Published;
@@ -51,6 +52,8 @@ pub enum Command {
     Launch { track: usize, chain: Option<u32> },
     /// Carry on in a captured section, with launched chains still running.
     ContinueIn { section: usize, length: usize },
+    /// Send this many long buffers back to be freed, as they come free.
+    ReleaseMemory(MemoryCount),
 }
 
 /// What one track is doing while jamming. The outer `None`s mean it's following its section and
@@ -87,6 +90,13 @@ pub struct Handle {
     telemetry: Consumer<Telemetry>,
     jam: Consumer<(usize, JamState)>,
     pending: Option<Arc<Published>>,
+    memories: Producer<Memory>,
+    freed: Consumer<Memory>,
+    /// Long buffers that can't go until there's room in the queue. A version waits for them.
+    unsent: Vec<Memory>,
+    /// How many long buffers the callback has or is getting, beyond any it's been told to release.
+    held: MemoryCount,
+    rate: u32,
 }
 
 /// The callback's end. Nothing here allocates, frees or locks.
@@ -97,6 +107,8 @@ pub struct Realtime {
     commands: Consumer<Command>,
     telemetry: Producer<Telemetry>,
     jam: Producer<(usize, JamState)>,
+    memories: Consumer<Memory>,
+    freed: Producer<Memory>,
     /// What the edit thread has been told about each track.
     reported: [JamState; MAX_TRACKS],
     /// The track whose live values are reported.
@@ -110,6 +122,10 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (command_tx, command_rx) = RingBuffer::new(COMMAND_QUEUE);
     let (telemetry_tx, telemetry_rx) = RingBuffer::new(TELEMETRY_QUEUE);
     let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
+    let (memory_tx, memory_rx) = RingBuffer::new(MEMORY_QUEUE);
+    let (freed_tx, freed_rx) = RingBuffer::new(MEMORY_QUEUE);
+    let held = MemoryCount::of(&engine.current().song);
+    let rate = engine.rate();
     (
         Handle {
             versions: version_tx,
@@ -118,6 +134,11 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             telemetry: telemetry_rx,
             jam: jam_rx,
             pending: None,
+            memories: memory_tx,
+            freed: freed_rx,
+            unsent: Vec::new(),
+            held,
+            rate,
         },
         Realtime {
             engine,
@@ -126,6 +147,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             commands: command_rx,
             telemetry: telemetry_tx,
             jam: jam_tx,
+            memories: memory_rx,
+            freed: freed_tx,
             reported: [JamState::default(); MAX_TRACKS],
             watched: 0,
         },
@@ -135,13 +158,41 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
 impl Handle {
     /// Send a new version. If an unsent one is waiting, this replaces it, and it is freed here.
     pub fn publish(&mut self, version: Arc<Published>) {
+        self.meet_memory_needs(MemoryCount::of(&version.song));
         self.pending = Some(version);
         self.pump();
     }
 
-    /// Free returned versions and try to send the waiting one. Call this every frame.
+    /// Make the long buffers a version needs, or ask for back those it doesn't. They go ahead of
+    /// it, so what it needs is there when it arrives.
+    fn meet_memory_needs(&mut self, needed: MemoryCount) {
+        for _ in self.held.delay..needed.delay {
+            self.unsent.push(Memory::delay(self.rate));
+        }
+        for _ in self.held.reverb..needed.reverb {
+            self.unsent.push(Memory::reverb(self.rate));
+        }
+        let spare = MemoryCount {
+            delay: self.held.delay.saturating_sub(needed.delay),
+            reverb: self.held.reverb.saturating_sub(needed.reverb),
+        };
+        if spare != MemoryCount::default() {
+            self.send(Command::ReleaseMemory(spare));
+        }
+        self.held = needed;
+    }
+
+    /// Free returned versions and long buffers, and try to send what's waiting. Call this every
+    /// frame.
     pub fn pump(&mut self) {
         while self.returned.pop().is_ok() {}
+        while self.freed.pop().is_ok() {}
+        while let Some(memory) = self.unsent.pop() {
+            if let Err(rtrb::PushError::Full(memory)) = self.memories.push(memory) {
+                self.unsent.push(memory);
+                return;
+            }
+        }
         if let Some(version) = self.pending.take()
             && let Err(rtrb::PushError::Full(version)) = self.versions.push(version)
         {
@@ -184,6 +235,10 @@ impl Handle {
 impl Realtime {
     /// Fill one block of interleaved stereo output.
     pub fn process(&mut self, out: &mut [f32]) {
+        // What a version needs comes ahead of it.
+        while let Ok(memory) = self.memories.pop() {
+            self.engine.receive_memory(memory);
+        }
         // Take a new version only when the old one can be sent back to be freed.
         if !self.returned.is_full()
             && let Ok(version) = self.versions.pop()
@@ -194,6 +249,7 @@ impl Realtime {
         while let Ok(command) = self.commands.pop() {
             match command {
                 Command::Watch { track } => self.watched = track,
+                Command::ReleaseMemory(count) => self.engine.release_memory(count),
                 Command::PlayFrom { step } => self.engine.play_from(step),
                 Command::PauseOrResume => self.engine.pause_or_resume(),
                 Command::Return => self.engine.return_to_start(),
@@ -224,6 +280,11 @@ impl Realtime {
                     self.engine.continue_in(section, length);
                 }
             }
+        }
+        while !self.freed.is_full()
+            && let Some(memory) = self.engine.next_freed_memory()
+        {
+            let _ = self.freed.push(memory);
         }
         self.engine.process(out);
         let reading = self.engine.take_reading();
@@ -326,6 +387,61 @@ mod tests {
             handle.pump();
         }
         assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn choosing_a_long_effect_never_allocates_or_frees_in_the_callback() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = song(8, 16);
+            if round % 2 == 0 {
+                next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[2]];
+            }
+            handle.publish(published(next, &pool));
+            handle.pump();
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn long_buffers_go_ahead_of_their_version_and_come_back_to_be_freed() {
+        let pool = samples();
+        let plain = song(2, 16);
+        let needed = MemoryCount::of(&plain);
+        let engine = Engine::new(48_000, published(plain.clone(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        blocks(&mut rt, 1);
+        assert_eq!(rt.engine().spare_memory(), 0, "the returns have theirs");
+
+        let mut more = plain.clone();
+        more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[2]];
+        handle.publish(published(more, &pool));
+        assert_eq!(
+            handle.held,
+            MemoryCount {
+                delay: needed.delay + 2,
+                reverb: needed.reverb + 1,
+            }
+        );
+        blocks(&mut rt, 1);
+        assert_eq!(rt.engine().spare_memory(), 0, "the slots have theirs");
+
+        handle.publish(published(plain, &pool));
+        assert_eq!(handle.held, needed);
+        // One block to take the version, one to free the slots and one to send them.
+        blocks(&mut rt, 3);
+        assert_eq!(rt.engine().spare_memory(), 0, "nothing's kept");
+        let mut freed = 0;
+        while handle.freed.pop().is_ok() {
+            freed += 1;
+        }
+        assert_eq!(freed, 3);
     }
 
     #[test]

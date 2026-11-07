@@ -417,7 +417,14 @@ mod tests {
         let song = Song::new(1);
         let offered = |track: &Track| Target::on_track(track);
         let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
-        assert_eq!(offered(return_a), [Target::Pan, Target::Vol]);
+        let delay = [
+            Target::Slot { slot: 0, param: 0 },
+            Target::Slot { slot: 0, param: 1 },
+        ];
+        assert_eq!(
+            offered(return_a),
+            [Target::Pan, Target::Vol, delay[0], delay[1]]
+        );
         assert_eq!(offered(master), [Target::Vol]);
         assert!(FxCommand::Vol.exists_on(return_a));
         assert!(

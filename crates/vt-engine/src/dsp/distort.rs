@@ -3,10 +3,12 @@
 //! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
 //! program's own.
 
-use vt_model::insert::{Distort, DistortType, Insert, crush_bits};
+use vt_model::constants::UNITY_LEVEL;
+use vt_model::insert::{Delay, Distort, DistortType, Insert, Reverb, crush_bits};
 use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
+use crate::dsp::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::smoother::Smoothed;
 
@@ -16,8 +18,14 @@ const MOST_DRIVE_DB: f32 = 30.0;
 const LONGEST_HOLD: f32 = 0.01;
 
 /// What a track keeps for one of its slots. Nothing here allocates.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct InsertState {
+    /// What its effect keeps, if it needs a long buffer.
+    memory: Option<Memory>,
+    /// How many frames in a row it's been quiet. It starts with nothing to play.
+    quiet: u32,
+    /// How long a delay is now.
+    delay_frames: usize,
     insert: Insert,
     amount: Smoothed,
     mix: Smoothed,
@@ -31,6 +39,9 @@ pub struct InsertState {
 impl Default for InsertState {
     fn default() -> Self {
         Self {
+            memory: None,
+            quiet: u32::MAX,
+            delay_frames: 1,
             insert: Insert::Empty,
             amount: Smoothed::at(0.0),
             mix: Smoothed::at(0.0),
@@ -39,6 +50,15 @@ impl Default for InsertState {
             held: [0.0; 2],
             since: 0.0,
         }
+    }
+}
+
+/// Whether it's the same effect, so it carries on rather than starting afresh.
+fn same_effect(before: Insert, after: Insert) -> bool {
+    match (before, after) {
+        (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
+        (Insert::Delay(_), Insert::Delay(_)) | (Insert::Reverb(_), Insert::Reverb(_)) => true,
+        _ => false,
     }
 }
 
@@ -88,32 +108,82 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
 }
 
 impl InsertState {
-    /// Take what's now in the slot. A different effect starts afresh.
+    /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
+    /// there's none free yet, it's silent and asks again next time.
+    pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, delay_frames: usize) {
+        if !same_effect(self.insert, insert) {
+            self.give_back(pool);
+        }
+        self.set(insert);
+        self.delay_frames = delay_frames;
+        if self.memory.is_none() {
+            self.memory = pool.take(insert);
+        }
+    }
+
+    /// Give what it keeps back to the pool.
+    pub fn give_back(&mut self, pool: &mut MemoryPool) {
+        if let Some(memory) = self.memory.take() {
+            pool.put(memory);
+        }
+        self.quiet = u32::MAX;
+    }
+
+    /// Take what's now in the slot. A different effect starts afresh. What it keeps must be given
+    /// back first, as this drops it.
     pub fn set(&mut self, insert: Insert) {
-        let same_kind = matches!(
-            (self.insert, insert),
-            (Insert::Distort(before), Insert::Distort(after)) if before.kind == after.kind
-        );
-        if !same_kind {
-            *self = Self::default();
-            if let Insert::Distort(Distort {
+        let (amount, mix, gain) = match insert {
+            Insert::Empty => (0, 0, UNITY_LEVEL),
+            Insert::Distort(Distort {
                 amount, mix, gain, ..
-            }) = insert
-            {
-                self.amount = Smoothed::at(f32::from(amount) / 255.0);
-                self.mix = Smoothed::at(f32::from(mix) / 255.0);
-                self.gain = Smoothed::at(level_gain(f32::from(gain)));
+            }) => (amount, mix, gain),
+            Insert::Delay(Delay { mix, gain }) | Insert::Reverb(Reverb { mix, gain }) => {
+                (0, mix, gain)
             }
+        };
+        let (amount, mix, gain) = (
+            f32::from(amount) / 255.0,
+            f32::from(mix) / 255.0,
+            level_gain(f32::from(gain)),
+        );
+        if !same_effect(self.insert, insert) {
+            *self = Self::default();
+            self.amount = Smoothed::at(amount);
+            self.mix = Smoothed::at(mix);
+            self.gain = Smoothed::at(gain);
         }
         self.insert = insert;
-        if let Insert::Distort(Distort {
-            amount, mix, gain, ..
-        }) = insert
-        {
-            self.amount.target = f32::from(amount) / 255.0;
-            self.mix.target = f32::from(mix) / 255.0;
-            self.gain.target = level_gain(f32::from(gain));
+        self.amount.target = amount;
+        self.mix.target = mix;
+        self.gain.target = gain;
+    }
+
+    /// Whether it's got something left to play with nothing going in.
+    #[inline]
+    pub fn ringing(&self, rate: u32) -> bool {
+        self.memory
+            .as_ref()
+            .is_some_and(|memory| self.quiet < memory.quiet_frames(self.delay_frames, rate))
+    }
+
+    /// One frame through what the slot keeps. Once it's quiet with nothing going in, it does no work.
+    #[inline]
+    fn ring(&mut self, input: [f32; 2], rate: u32) -> [f32; 2] {
+        let nothing_in = input == [0.0, 0.0];
+        if nothing_in && !self.ringing(rate) {
+            return [0.0, 0.0];
         }
+        let Some(memory) = &mut self.memory else {
+            return [0.0, 0.0];
+        };
+        let wet = memory.process(input, self.delay_frames);
+        let quiet = nothing_in && wet[0].abs() < SILENT && wet[1].abs() < SILENT;
+        self.quiet = if quiet {
+            self.quiet.saturating_add(1)
+        } else {
+            0
+        };
+        wet
     }
 
     /// Jump to the settings, for playing from the start.
@@ -126,15 +196,21 @@ impl InsertState {
     /// One frame through the slot. An empty one does nothing else.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
-        let Insert::Distort(Distort {
-            kind, amount: set, ..
-        }) = self.insert
-        else {
-            return input;
+        let (kind, set) = match self.insert {
+            Insert::Empty => return input,
+            Insert::Distort(Distort { kind, amount, .. }) => (Some(kind), amount),
+            Insert::Delay(_) | Insert::Reverb(_) => (None, 0),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
         let gain = self.gain.next(smoothing);
+        let Some(kind) = kind else {
+            let wet = self.ring(input, rate);
+            return [
+                (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+                (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+            ];
+        };
         let wet = match kind {
             DistortType::Crush => {
                 // Whole bits change at once, so this isn't smoothed.

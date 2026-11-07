@@ -103,6 +103,9 @@ song's position.
 that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
 nothing until it's back.
 
+`Delay` and `Reverb` can go in any slot, starting half wet, with `Mix` and `Gain` for
+now. Their tails carry on after a note ends.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
@@ -122,8 +125,11 @@ track list go through them, and `:track add` and `:track del` work before them, 
 always stay last.
 
 `A` and `B` are returns, as in Ableton: what a track's `Send A` and `Send B` send plays
-through them, and comes out alongside the track. For now `A` is the delay and `B` the
-reverb. `M` is the master: everything goes through it, and then the limiter.
+through their slots, and comes out alongside the track. A new song has a `Delay` in
+`A`'s first slot and a `Reverb` in `B`'s, each with `Mix` at `FF`, so you only hear
+what comes back. You can change them, and with nothing in its slots a return just
+passes on what it's sent. `M` is the master: everything goes through it, and then the
+limiter.
 
 They make no sound of their own, so they have no machine or filter, and their Sound
 page has just `Level` and `Pan`, and the master only `Level`. The rest works as on any
