@@ -540,6 +540,17 @@ impl App {
                     Some(Pick::SynthVoice { track, voice }) => {
                         self.apply(&Action::SetTrackSynthVoice { track, voice });
                     }
+                    Some(Pick::Base {
+                        track,
+                        control,
+                        value,
+                    }) => {
+                        self.apply(&Action::SetTrackBase {
+                            track,
+                            control,
+                            value,
+                        });
+                    }
                     Some(Pick::FilterType { track, filter }) => {
                         self.apply(&Action::SetFilterType { track, filter });
                     }

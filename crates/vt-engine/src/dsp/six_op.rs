@@ -36,7 +36,7 @@ const BLOCK: usize = 24;
 const OPERATORS: usize = 6;
 const PATCH_SIZE: usize = 128;
 /// Every patch, in bank order.
-pub const PATCHES: usize = 96;
+pub const PATCHES: usize = vt_model::song::SIX_OP_PATCHES as usize;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
 /// How hard a note is played, as Plaits plays one with nothing patched to its level.
@@ -44,9 +44,10 @@ const VELOCITY: f32 = 0.8;
 
 static BANKS: &[u8; PATCHES * PATCH_SIZE] = include_bytes!("tables/plaits_fm_patches.bin");
 
-/// The patch a `Harm` on `0..=1` chooses.
+/// The patch a `Harm` on `0..=1` chooses. Its value is the patch's number, so a step's `HAR20`
+/// plays patch `20`, and anything past the last patch plays that.
 pub fn patch_index(harmonics: f32) -> usize {
-    ((harmonics.clamp(0.0, 1.0) * PATCHES as f32) as usize).min(PATCHES - 1)
+    ((harmonics.max(0.0) * 255.0).round() as usize).min(PATCHES - 1)
 }
 
 /// A patch's name, as the DX7 stores it, without its trailing spaces.
@@ -984,7 +985,7 @@ mod tests {
 
     fn index_of(name: &str) -> f32 {
         let index = (0..PATCHES).find(|i| patch_name(*i) == name).unwrap();
-        (index as f32 + 0.5) / PATCHES as f32
+        index as f32 / 255.0
     }
 
     #[test]
@@ -993,7 +994,9 @@ mod tests {
         assert_eq!(patch_name(32), "E.PIANO 1");
         assert_eq!(patch_name(95), "BR TRUMPET");
         assert_eq!(patch_index(0.0), 0);
-        assert_eq!(patch_index(1.0), 95);
+        assert_eq!(patch_index(1.0 / 255.0), 1);
+        assert_eq!(patch_index(95.0 / 255.0), 95);
+        assert_eq!(patch_index(1.0), 95, "past the last plays the last");
         assert_eq!(patch_name(patch_index(index_of("MARIMBA"))), "MARIMBA");
     }
 
@@ -1042,7 +1045,7 @@ mod tests {
             for hertz in [30.0, 440.0, 4_000.0] {
                 for (timbre, morph) in [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)] {
                     let s = Settings {
-                        harmonics: (index as f32 + 0.5) / PATCHES as f32,
+                        harmonics: index as f32 / 255.0,
                         timbre,
                         morph,
                     };

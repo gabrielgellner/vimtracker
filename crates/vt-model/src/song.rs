@@ -376,6 +376,9 @@ impl Machine {
     }
 }
 
+/// How many patches 6-op has, which its `Patch` counts from `00`.
+pub const SIX_OP_PATCHES: u8 = 96;
+
 /// Which synth the Plaits machine plays.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SynthVoice {
@@ -462,6 +465,14 @@ impl SynthVoice {
             Self::Wavetable => [false, false, false],
             Self::SixOp => [false, true, true],
             Self::Kick | Self::Snare | Self::Hat => [false, false, false],
+        }
+    }
+
+    /// The highest value `Harm` takes. 6-op's is a patch number, so it stops at the last patch.
+    pub fn harmonics_top(self) -> u8 {
+        match self {
+            Self::SixOp => SIX_OP_PATCHES - 1,
+            _ => 0xFF,
         }
     }
 

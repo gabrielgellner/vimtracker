@@ -1643,6 +1643,49 @@ fn k_on_voice_chooses_a_synth_and_names_its_settings() {
 }
 
 #[test]
+fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    let patch = |app: &App| app.song().tracks[0].harmonics;
+    press(&mut app, " 4K");
+    press(&mut app, "Plaits");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "jK");
+    press(&mut app, "6-op");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Patch");
+
+    // From a value past the last patch, it moves from the last one shown.
+    assert_eq!(patch(&app), 0x80);
+    assert!(
+        track_text(&app)[4].contains("5F BR TRUMPET"),
+        "{:?}",
+        track_text(&app)
+    );
+    press(&mut app, "-");
+    assert_eq!(patch(&app), 0x5E);
+    press(&mut app, "i00=");
+    assert_eq!(patch(&app), 1, "one patch a step");
+    assert!(track_text(&app)[4].contains("01 Mooger Low"));
+    press(&mut app, "i5F=");
+    assert_eq!(patch(&app), 0x5F, "it stops at the last");
+    press(&mut app, "i90");
+    assert_eq!(patch(&app), 0x5F);
+
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 96);
+    press(&mut app, "MARIMBA");
+    special(&mut app, KeyCode::Enter);
+    assert!(
+        track_text(&app)[4].contains("MARIMBA"),
+        "{:?}",
+        track_text(&app)
+    );
+    assert_eq!(usize::from(patch(&app)), 49);
+}
+
+#[test]
 fn choosing_a_sample_goes_back_to_playing_samples() {
     let (mut app, _realtime) = app();
     let kit = kit_file();

@@ -151,7 +151,7 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
 /// The name of the patch a 6-op track's `Patch` chooses, shown on its row.
 fn patch_name(control: Control, track: &Track) -> Option<String> {
     (control == Control::Base(TrackControl::Harmonics) && track.synth_voice == SynthVoice::SixOp)
-        .then(|| six_op::patch_name(six_op::patch_index(f32::from(track.harmonics) / 255.0)))
+        .then(|| six_op::patch_name(usize::from(track.harmonics)))
 }
 
 /// The value a control shows a bar for, and how. True is a mark either side of a centre.
@@ -286,7 +286,9 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
     match control {
         Control::Machine => track.machine.name().to_owned(),
         Control::SynthVoice => track.synth_voice.name().to_owned(),
-        Control::Base(TrackControl::Harmonics) => hex(track.harmonics),
+        Control::Base(TrackControl::Harmonics) => {
+            hex(track.harmonics.min(track.synth_voice.harmonics_top()))
+        }
         Control::Base(TrackControl::Timbre) => hex(track.timbre),
         Control::Base(TrackControl::Morph) => hex(track.morph),
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),

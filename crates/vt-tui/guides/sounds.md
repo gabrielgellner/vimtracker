@@ -50,11 +50,11 @@ vocal, then the harsher waves of older digital synths, then all of them shuffled
 bells, organs, pads and brass. Each patch has envelopes of its own, which the track's
 first envelope shapes again, so give it a long Release to hear a patch's tail. A new
 track's `Bright` starts at `00`, which is dark, so set it to `80` to hear a patch as it was
-made.
+made. A new patch takes over on the next note.
 
 | Setting | Does |
 |---|---|
-| `Patch` | Which patch, named beside it. It changes on the next note |
+| `Patch` | Which patch, `00` to `5F`, named beside it. `K` lists them by name |
 | `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
 | `Time` | Attack and decay: as patched at `80`, faster below, slower above |
 
