@@ -10,6 +10,7 @@ pub mod lfo;
 pub mod project;
 pub mod sample;
 pub mod samples;
+pub mod scale;
 pub mod selection;
 pub mod shape;
 pub mod song;

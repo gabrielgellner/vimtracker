@@ -113,6 +113,11 @@ pub enum Cmd {
     /// Halve or double how far the left and right arrows move in Insert.
     NarrowGrid,
     WidenGrid,
+    /// Turn the scale on or off.
+    ToggleScale,
+    /// Move a value, and a note by a semitone whatever the scale.
+    IncreaseChromatic,
+    DecreaseChromatic,
 }
 
 /// One row of the table.
@@ -218,8 +223,16 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("-", Cmd::Decrease, "Decrease the value"),
     ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
     ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
+    (
+        "C-a",
+        Cmd::IncreaseChromatic,
+        "Increase the value, by a semitone in a scale",
+    ),
+    (
+        "C-x",
+        Cmd::DecreaseChromatic,
+        "Decrease the value, by a semitone in a scale",
+    ),
     (
         "~",
         Cmd::CycleMark,
@@ -235,6 +248,7 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "Narrower grid for the arrows in Insert",
     ),
     ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
+    ("M-s", Cmd::ToggleScale, "Scale on or off"),
     ("Space p d", Cmd::Double, "Double this phrase"),
     ("K", Cmd::PickValue, "Choose this field from a list"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
@@ -428,8 +442,16 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         Cmd::DecreaseLarge,
         "Decrease the selection's values, a large step",
     ),
-    ("C-a", Cmd::Increase, "Increase the selection's values"),
-    ("C-x", Cmd::Decrease, "Decrease the selection's values"),
+    (
+        "C-a",
+        Cmd::IncreaseChromatic,
+        "Increase the selection's values, by a semitone in a scale",
+    ),
+    (
+        "C-x",
+        Cmd::DecreaseChromatic,
+        "Decrease the selection's values, by a semitone in a scale",
+    ),
     ("~", Cmd::CycleMark, "Cycle the selected values' marks"),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
 ];
@@ -575,6 +597,11 @@ pub fn note_key(key: char) -> Option<u8> {
         ';' => 16,
         _ => return None,
     })
+}
+
+/// The home row's place along a scale, with `a` on the root.
+pub fn degree_key(key: char) -> Option<usize> {
+    "asdfghjkl;".chars().position(|degree| degree == key)
 }
 
 #[cfg(test)]

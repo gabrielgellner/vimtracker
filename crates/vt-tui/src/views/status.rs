@@ -156,11 +156,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         String::new()
     };
+    let scale = if app.view == View::Phrase && app.scale.on {
+        format!(
+            "  Scale {} {}",
+            app.scale.root_name(),
+            app.scale.kind.short_name()
+        )
+    } else {
+        String::new()
+    };
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
         Span::styled(format!(" {} ", column_name(app)), theme::selected()),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}{grid}  TVol {level:02X}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,

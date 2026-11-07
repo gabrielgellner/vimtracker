@@ -642,6 +642,7 @@ Made by the author on 2026-11-06, after a review of this section:
 21. **A value's bar moves with what's playing**, as in modern plugins: its fill follows the value after step commands and modulation, with a dim mark where it's set, and its number stays the setting. The callback reports these values for the track the cursor is on. The filter's curve moves the same way, sending a new image whenever `Cut` or `Res` changes, at most once a frame. Added on 2026-11-06.
 22. **`/` on the track page or mixer jumps to a setting by name**, following the author's flash.nvim: labels go over the values of the matches on this page, nearest the cursor first, a label is never a letter that could carry on the search, and a match keeps its label as you type. The mixer labels the cursor's track, which it stays on. It lands in Normal mode, and `Ctrl-O` comes back. Added on 2026-11-06.
 23. **`Option-1` and `Option-2` narrow and widen the grid the arrows move by in Insert**, after Ableton's `Cmd-1` and `Cmd-2`. Terminals don't deliver `Ctrl` with a number: `Ctrl-1` arrives as `1` and `Ctrl-3` as `Esc`. Rows are 16ths, so there's no triplet grid. Added on 2026-11-06.
+24. **A scale is an aid to input, for the whole song.** It has a root and a kind held apart, and an on and off that keeps them. While it's on, the home row is the scale's degrees from `a` on the root, after Elektron's `KB FOLD`, and the row above is silent. `=` `-` `>` `<` move through it, and `C-a` `C-x` stay chromatic. Written notes never move on their own, after Ableton, and `:scale fit` moves them when asked. Nothing that plays the song reads it. It's outside undo and written on save, as mutes are. Added on 2026-11-06.
 
 ## Alternatives Considered
 
@@ -760,7 +761,7 @@ This list comes after Milestones after M3, in order, as jams ask for it. Each en
 3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M11.
 4.  **Song view and looping.** Moved up to M8, apart from per-track speed and grooves, which stay here. Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
 5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
-6.  **Smaller items.** Chasing held values on play, scales and `:set scale`, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
+6.  **Smaller items.** Chasing held values on play, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
 
 --------------------------------------------------------------------------------
 
@@ -843,6 +844,8 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `gg G` | First or last step |
 | Normal | `H M L` | Cursor to the top, middle or bottom of the view |
 | Normal, Insert | `M-1 M-2` | Halve or double the skip setting, like Ableton's `Cmd-1` and `Cmd-2`. `1/16` up to a bar |
+| Normal, Insert | `M-s` | Scale on or off, keeping its root and kind |
+| Normal, Visual | `C-a C-x` | Move a value, and a note by a semitone whatever the scale |
 | Track, Mixer | `/` | Jump to a setting by part of its name, with labels as in flash.nvim |
 | Normal | `Ctrl-D`, `Ctrl-U` | Half a screen down or up, keeping the cursor mid-screen |
 | Normal | `Ctrl-E`, `Ctrl-Y` | Scroll the view down or up 3 steps without moving the cursor, unless it reaches the edge |
@@ -933,6 +936,9 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:seed n` | Project random seed |
 | `:set step=n` | Insert step |
 | `:set skip=n` | How far `Left` and `Right` move in Insert, the grid on the status line |
+| `:set scale=kind`, `:set root=note` | A scale's kind and root, either turning it on |
+| `:set scale=on`, `off` | Turn the scale on or off |
+| `:scale`, `:scale fit` | Choose a kind from a list, or move this phrase's notes into the scale |
 | `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
 | `:len n` | How many steps the loop plays, while stopped. Decimal, or hex after `0x` as in Rust: `:len 0x10`. `:reset` reads numbers the same way. Steps outside it are kept and saved |
 | `:double` | Double the loop, while stopped |

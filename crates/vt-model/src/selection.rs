@@ -1,6 +1,7 @@
 //! Motions, targets and what operators do to the steps they cover. No terminal is needed here.
 
 use crate::constants::BEAT_STEPS;
+use crate::scale::Scale;
 use crate::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 /// One editable part of a step.
@@ -312,6 +313,8 @@ pub enum Shift {
     Operator,
     /// `=` and `-`. The same.
     Increment,
+    /// `C-a` and `C-x`. The same, but a note moves by a semitone whatever the scale.
+    Chromatic,
     /// `+` and `_`. The same again in large steps: an octave, or the top hex digit.
     Large,
 }
@@ -338,16 +341,21 @@ fn shift_fx(command: FxCommand, value: u8, by: i32, kind: Shift) -> u8 {
     (i32::from(value) + by).clamp(0, i32::from(command.highest())) as u8
 }
 
-/// Move the covered values of a step, clamping to each field's range.
-pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift) {
+/// Move the covered values of a step, clamping to each field's range. With a scale, a note moves
+/// through it, except by a large step, as an octave stays in key, or a chromatic one.
+pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift, scale: Option<Scale>) {
     let by = by.clamp(-0xFFFF, 0xFFFF);
     let large = kind == Shift::Large;
     if scope.covers(0)
         && let Note::On(midi) = step.note
     {
-        let by = if large { by * LARGE_NOTE } else { by };
-        let moved = (i32::from(midi) + by).clamp(i32::from(MIN_NOTE), i32::from(MAX_NOTE));
-        step.note = Note::On(moved as u8);
+        step.note = Note::On(match scale.filter(|_| !large && kind != Shift::Chromatic) {
+            Some(scale) => scale.moved(midi, by),
+            None => {
+                let by = if large { by * LARGE_NOTE } else { by };
+                (i32::from(midi) + by).clamp(i32::from(MIN_NOTE), i32::from(MAX_NOTE)) as u8
+            }
+        });
     }
     if scope.is_whole() {
         return;

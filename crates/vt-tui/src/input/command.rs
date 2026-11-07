@@ -1,6 +1,7 @@
 //! The `:` command line.
 
 use std::path::PathBuf;
+use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
 use vt_model::constants::MAX_LABEL_CHARS;
@@ -35,6 +36,13 @@ pub enum Line {
     SetStep(u32),
     SetSkip(u32),
     SetLimiter(bool),
+    SetScale(ScaleKind),
+    SetRoot(u8),
+    ScaleOn(bool),
+    /// Choose a kind of scale from a list.
+    PickScale,
+    /// Move this phrase's notes to the nearest in the scale.
+    FitToScale,
     Seed(u64),
     Swing(u16),
     Chain(u32),
@@ -69,8 +77,10 @@ pub enum LineError {
     Len,
     #[error(":track takes add [n] or del")]
     Track,
-    #[error(":set takes step=n, skip=n, or limiter=on or off")]
+    #[error(":set takes step=n, skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
     Set,
+    #[error(":scale takes fit, or nothing to choose from a list")]
+    Scale,
     #[error(":chain takes a chain ID in hex")]
     Chain,
     #[error(":render takes a path, --rows n, --tail and --stems")]
@@ -245,7 +255,18 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             Some(("skip", n)) => n.parse().map(Line::SetSkip).map_err(|_| LineError::Set),
             Some(("limiter", "on")) => Ok(Line::SetLimiter(true)),
             Some(("limiter", "off")) => Ok(Line::SetLimiter(false)),
+            Some(("scale", "on")) => Ok(Line::ScaleOn(true)),
+            Some(("scale", "off")) => Ok(Line::ScaleOn(false)),
+            Some(("scale", kind)) => ScaleKind::parse(kind)
+                .map(Line::SetScale)
+                .ok_or(LineError::Set),
+            Some(("root", root)) => parse_root(root).map(Line::SetRoot).ok_or(LineError::Set),
             _ => Err(LineError::Set),
+        },
+        "scale" => match argument {
+            "" => Ok(Line::PickScale),
+            "fit" => Ok(Line::FitToScale),
+            _ => Err(LineError::Scale),
         },
         "loop" => Ok(Line::Loop),
         "mute" => Ok(Line::Mute),
@@ -370,6 +391,26 @@ mod tests {
         assert_eq!(parse("set step=2"), Ok(Line::SetStep(2)));
         assert_eq!(parse("set skip=8"), Ok(Line::SetSkip(8)));
         assert_eq!(parse("set skip"), Err(LineError::Set));
+        assert_eq!(
+            parse("set scale=dorian"),
+            Ok(Line::SetScale(ScaleKind::Dorian))
+        );
+        assert_eq!(
+            parse("set scale=harmonic minor"),
+            Ok(Line::SetScale(ScaleKind::HarmonicMinor))
+        );
+        assert_eq!(
+            parse("set scale=Minor-Pentatonic"),
+            Ok(Line::SetScale(ScaleKind::MinorPentatonic))
+        );
+        assert_eq!(parse("set scale=on"), Ok(Line::ScaleOn(true)));
+        assert_eq!(parse("set scale=off"), Ok(Line::ScaleOn(false)));
+        assert_eq!(parse("set scale=nope"), Err(LineError::Set));
+        assert_eq!(parse("set root=F#"), Ok(Line::SetRoot(6)));
+        assert_eq!(parse("set root=h"), Err(LineError::Set));
+        assert_eq!(parse("scale"), Ok(Line::PickScale));
+        assert_eq!(parse("scale fit"), Ok(Line::FitToScale));
+        assert_eq!(parse("scale nope"), Err(LineError::Scale));
         assert_eq!(parse("set limiter=off"), Ok(Line::SetLimiter(false)));
         assert_eq!(parse("set limiter=on"), Ok(Line::SetLimiter(true)));
         assert_eq!(parse("set limiter=2"), Err(LineError::Set));

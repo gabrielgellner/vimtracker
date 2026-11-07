@@ -10,6 +10,7 @@ use crate::constants::{
 };
 use crate::envelope::Envelope;
 use crate::lfo::Lfo;
+use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
@@ -112,6 +113,14 @@ pub enum Action {
         scope: Scope,
         by: i32,
         kind: Shift,
+        /// The scale notes move through, if it's on.
+        scale: Option<Scale>,
+    },
+    /// Move the notes in a phrase to the nearest in a scale.
+    FitToScale {
+        track: usize,
+        phrase: u32,
+        scale: Scale,
     },
     /// Write a copied block some number of times end to end. Past the last stored step this stores
     /// more without changing the loop. Merging leaves steps alone where the copy is empty, and
@@ -498,6 +507,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             scope,
             by,
             kind,
+            scale,
         } => {
             for index in range.first..=range.last {
                 shift_step(
@@ -505,7 +515,25 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     *scope,
                     *by,
                     *kind,
+                    *scale,
                 );
+            }
+        }
+        Action::FitToScale {
+            track,
+            phrase,
+            scale,
+        } => {
+            let stored = next
+                .tracks
+                .get(*track)
+                .and_then(|state| state.phrases.get(phrase))
+                .map_or(0, |found| found.steps().len());
+            for index in 0..stored {
+                let step = step_mut(&mut next, *track, *phrase, index)?;
+                if let Note::On(midi) = step.note {
+                    step.note = Note::On(scale.fitted(midi));
+                }
             }
         }
         Action::Paste {

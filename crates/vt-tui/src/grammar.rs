@@ -177,6 +177,8 @@ impl App {
             }
             Cmd::Increase => self.increment(1, Shift::Increment),
             Cmd::Decrease => self.increment(-1, Shift::Increment),
+            Cmd::IncreaseChromatic => self.increment(1, Shift::Chromatic),
+            Cmd::DecreaseChromatic => self.increment(-1, Shift::Chromatic),
             Cmd::IncreaseLarge => self.increment(1, Shift::Large),
             Cmd::DecreaseLarge => self.increment(-1, Shift::Large),
             Cmd::Repeat => self.repeat(),
@@ -389,6 +391,7 @@ impl App {
             Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
+                let scale = self.scale.on.then_some(self.scale);
                 self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
                     track,
                     phrase,
@@ -396,6 +399,7 @@ impl App {
                     scope,
                     by,
                     kind: Shift::Operator,
+                    scale,
                 });
             }
         }
@@ -628,6 +632,7 @@ impl App {
         tracks: TrackSpan,
         kind: Shift,
     ) {
+        let scale = self.scale.on.then_some(self.scale);
         self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
             track,
             phrase,
@@ -635,6 +640,7 @@ impl App {
             scope,
             by,
             kind,
+            scale,
         });
     }
 
