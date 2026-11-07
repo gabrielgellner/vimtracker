@@ -892,8 +892,16 @@ impl App {
                 pick: Pick::Lfo { track, slot, lfo },
             })
             .collect();
-        let mut picker = Picker::new(title, items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
+        let picker = if field == LfoField::Destination {
+            let groups = std::iter::once("---".to_owned())
+                .chain(Target::for_lfo(&page, slot).into_iter().map(Target::group))
+                .collect();
+            Picker::grouped(title, items, groups, position.unwrap_or(0))
+        } else {
+            let mut picker = Picker::new(title, items);
+            picker.move_highlight(position.unwrap_or(0) as isize);
+            picker
+        };
         self.picker = Some(picker);
         self.mode = Mode::Picker;
     }
@@ -1068,8 +1076,16 @@ impl App {
                 },
             })
             .collect();
-        let mut picker = Picker::new(title, items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
+        let picker = if field == EnvelopeField::Destination {
+            let groups = std::iter::once("---".to_owned())
+                .chain(Target::for_envelope(&page).into_iter().map(Target::group))
+                .collect();
+            Picker::grouped(title, items, groups, position.unwrap_or(0))
+        } else {
+            let mut picker = Picker::new(title, items);
+            picker.move_highlight(position.unwrap_or(0) as isize);
+            picker
+        };
         self.picker = Some(picker);
         self.mode = Mode::Picker;
     }
