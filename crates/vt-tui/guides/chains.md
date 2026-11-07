@@ -14,8 +14,9 @@ Each track loops at its own length, for as long as the song plays. A 3-step
 hat against a 4-step kick drifts, and lines up again every 12 steps. Playing
 from the top lines everything up.
 
-In the phrase view, the notes beside your track are the other tracks' own
-phrases, each with its own `>`. Row `00` is each track's loop start, and a
+In the phrase view, the notes beside your track are every track's own phrase,
+in order, each with its own `>`. Your track is among them, with its number
+marked in green. Row `00` is each track's loop start, and a
 column ends where its track ends. Notes on one row don't always sound
 together, so follow the `>` marks to see how tracks line up.
 
