@@ -70,8 +70,8 @@ pub struct LiveValues {
     pub pan: u8,
     pub cutoff: u8,
     pub resonance: u8,
-    pub delay: u8,
-    pub reverb: u8,
+    pub send_a: u8,
+    pub send_b: u8,
     pub harmonics: u8,
     pub timbre: u8,
     pub morph: u8,
@@ -88,8 +88,8 @@ const VALUE_COMMANDS: [FxCommand; 9 + INSERTS * MAX_PARAMS] = {
         FxCommand::Pan,
         FxCommand::Cut,
         FxCommand::Res,
-        FxCommand::Dly,
-        FxCommand::Rev,
+        FxCommand::SendA,
+        FxCommand::SendB,
         FxCommand::Har,
         FxCommand::Tim,
         FxCommand::Mor,
@@ -170,6 +170,8 @@ pub struct TrackState {
     /// Live controls, kept here rather than in the song so undo can't change them.
     pub mute: bool,
     pub solo: bool,
+    /// On a return, whether it's heard, so muting fades.
+    pub heard: Smoothed,
     pub rng: Pcg32,
     pub last_note: Option<NoteOn>,
     pub delayed: Option<DelayedNote>,
@@ -180,19 +182,19 @@ pub struct TrackState {
     pub swung: Option<(u64, usize)>,
     /// What each value is set to, in `VALUE_COMMANDS`' order. The fields below it are what's heard.
     values: [ValueLayers; VALUE_COMMANDS.len()],
-    /// Held `VOL`, `DLY` and `REV`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
+    /// Held `VOL`, `SNA` and `SNB`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
     /// curve is only worked out when they or an LFO change.
     vol: f32,
-    delay: f32,
-    reverb: f32,
+    send_a: f32,
+    send_b: f32,
     gain: Smoothed,
     /// The track's level from the song, which playback going back to the top leaves alone.
     pub level: Smoothed,
     pan: Smoothed,
     cutoff: Smoothed,
     resonance: Smoothed,
-    delay_send: Smoothed,
-    reverb_send: Smoothed,
+    send_a_gain: Smoothed,
+    send_b_gain: Smoothed,
     filter: [Channel; 2],
     filter_type: FilterType,
     drive: Smoothed,
@@ -287,6 +289,7 @@ impl TrackState {
             reading: Reading::default(),
             mute: false,
             solo: false,
+            heard: Smoothed::at(1.0),
             rng: Pcg32::new(seed, index as u64),
             last_note: None,
             delayed: None,
@@ -318,15 +321,15 @@ impl TrackState {
             ],
             swung: None,
             vol: f32::from(UNITY_LEVEL),
-            delay: 0.0,
-            reverb: 0.0,
+            send_a: 0.0,
+            send_b: 0.0,
             gain: Smoothed::at(1.0),
             level: Smoothed::at(1.0),
             pan: Smoothed::at(0.5),
             cutoff: Smoothed::at(1.0),
             resonance: Smoothed::at(0.0),
-            delay_send: Smoothed::at(0.0),
-            reverb_send: Smoothed::at(0.0),
+            send_a_gain: Smoothed::at(0.0),
+            send_b_gain: Smoothed::at(0.0),
             filter: [Channel::default(); 2],
             filter_type: FilterType::LowPass,
             drive: Smoothed::at(0.0),
@@ -367,8 +370,8 @@ impl TrackState {
             track.pan,
             track.cutoff,
             track.resonance,
-            track.delay,
-            track.reverb,
+            track.send_a,
+            track.send_b,
             track.harmonics,
             track.timbre,
             track.morph,
@@ -502,8 +505,8 @@ impl TrackState {
             pan: moved(self.pan.target, Target::Pan),
             cutoff: moved(self.cutoff.target, Target::Cut),
             resonance: moved(self.resonance.target, Target::Res),
-            delay: on_level(self.delay, Target::Dly),
-            reverb: on_level(self.reverb, Target::Rev),
+            send_a: on_level(self.send_a, Target::SendA),
+            send_b: on_level(self.send_b, Target::SendB),
             harmonics: shown(synth.harmonics),
             timbre: shown(synth.timbre),
             morph: shown(synth.morph),
@@ -562,14 +565,14 @@ impl TrackState {
         let gain = |held: f32, destination: Target| {
             level_gain((held + self.offsets[destination.index()] * 255.0).clamp(0.0, 255.0))
         };
-        let (vol, delay, reverb) = (
+        let (vol, send_a, send_b) = (
             gain(self.vol, Target::Vol),
-            gain(self.delay, Target::Dly),
-            gain(self.reverb, Target::Rev),
+            gain(self.send_a, Target::SendA),
+            gain(self.send_b, Target::SendB),
         );
         self.gain.target = vol;
-        self.delay_send.target = delay;
-        self.reverb_send.target = reverb;
+        self.send_a_gain.target = send_a;
+        self.send_b_gain.target = send_b;
     }
 
     /// Start a new note, cancelling anything pending for the old one.
@@ -695,8 +698,8 @@ impl TrackState {
             FxCommand::Pan => self.pan.target = pan_position(value),
             FxCommand::Cut => self.cutoff.target = value / 255.0,
             FxCommand::Res => self.resonance.target = value / 255.0,
-            FxCommand::Dly => self.delay = value,
-            FxCommand::Rev => self.reverb = value,
+            FxCommand::SendA => self.send_a = value,
+            FxCommand::SendB => self.send_b = value,
             FxCommand::Har => self.synth[0] = value / 255.0,
             FxCommand::Tim => self.synth[1] = value / 255.0,
             FxCommand::Mor => self.synth[2] = value / 255.0,
@@ -723,8 +726,9 @@ impl TrackState {
         self.pan.settle();
         self.cutoff.settle();
         self.resonance.settle();
-        self.delay_send.settle();
-        self.reverb_send.settle();
+        self.send_a_gain.settle();
+        self.send_b_gain.settle();
+        self.heard.settle();
         self.cut_offset.settle();
         self.res_offset.settle();
         self.pan_offset.settle();
@@ -848,30 +852,95 @@ impl TrackState {
                 fast
             }
         };
-        let (vol, dly, rev) = (
+        let (vol, to_a, to_b) = (
             keeping_up(Target::Vol),
-            keeping_up(Target::Dly),
-            keeping_up(Target::Rev),
+            keeping_up(Target::SendA),
+            keeping_up(Target::SendB),
         );
         let gain = self.gain.next(vol) * self.level.next(smoothing);
         let (left, right) = pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
-        let delay = self.delay_send.next(dly);
-        let reverb = self.reverb_send.next(rev);
+        let send_a = self.send_a_gain.next(to_a);
+        let send_b = self.send_b_gain.next(to_b);
         ShapedFrame {
             dry,
-            delay: [dry[0] * delay, dry[1] * delay],
-            reverb: [dry[0] * reverb, dry[1] * reverb],
+            send_a: [dry[0] * send_a, dry[1] * send_a],
+            send_b: [dry[0] * send_b, dry[1] * send_b],
         }
+    }
+
+    /// Run a frame through the slots and level of a track with no voice of its own.
+    #[inline]
+    fn slots_and_level(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+    ) -> [f32; 2] {
+        let mut frame = input;
+        for (slot, insert) in self.inserts.iter_mut().enumerate() {
+            let keeping_up = if self.slot_moving[slot] {
+                fast
+            } else {
+                smoothing
+            };
+            frame = insert.process(frame, keeping_up, rate);
+        }
+        let vol = if self.offsets[Target::Vol.index()] == 0.0 {
+            smoothing
+        } else {
+            fast
+        };
+        let gain = self.gain.next(vol) * self.level.next(smoothing);
+        [frame[0] * gain, frame[1] * gain]
+    }
+
+    /// What a return adds to the mix for what its effect gave: its slots, level and pan, then
+    /// whether it's heard, faded so muting doesn't click.
+    #[inline]
+    pub fn process_return(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+    ) -> [f32; 2] {
+        let frame = self.slots_and_level(input, smoothing, fast, rate);
+        let position =
+            (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
+                .clamp(0.0, 1.0);
+        // At the centre, what the effect gave comes through untouched, where `pan_gains` is only close.
+        let (left, right) = if position == 0.5 {
+            (1.0, 1.0)
+        } else {
+            pan_gains(position)
+        };
+        let heard = self.heard.next(smoothing);
+        let out = [frame[0] * left * heard, frame[1] * right * heard];
+        self.reading.add(out, out);
+        out
+    }
+
+    /// The master's slots and level, for the whole mix.
+    #[inline]
+    pub fn process_master(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+    ) -> [f32; 2] {
+        self.slots_and_level(input, smoothing, fast, rate)
     }
 }
 
-/// One track's frame, and what it sends to the effects.
+/// One track's frame, and what it sends to the returns.
 #[derive(Debug, Clone, Copy)]
 pub struct ShapedFrame {
     pub dry: [f32; 2],
-    pub delay: [f32; 2],
-    pub reverb: [f32; 2],
+    pub send_a: [f32; 2],
+    pub send_b: [f32; 2],
 }
 
 #[cfg(test)]

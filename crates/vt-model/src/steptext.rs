@@ -170,9 +170,9 @@ mod tests {
             "--- -- ---00 ---00 ---00",
             "OFF 7F PAN80 CHAFF",
             "C-0 00 KIL02 OFF03",
-            "G-9 -- DLY20 REV30",
+            "G-9 -- SNA20 SNB30",
             "C#3 --",
-            "C-4 64 CUT40h DLY20g PAN80",
+            "C-4 64 CUT40h SNA20g PAN80",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);

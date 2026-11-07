@@ -9,7 +9,7 @@ use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert};
 use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::song::{FilterType, Machine, SynthVoice, Track};
+use vt_model::song::{FilterType, Machine, SynthVoice, Track, TrackKind};
 use vt_model::target::Target;
 
 use crate::app::{App, Entry};
@@ -109,8 +109,8 @@ pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
 pub const MIXER: [Control; 6] = [
     Control::Level,
     Control::Base(TrackControl::Pan),
-    Control::Base(TrackControl::Delay),
-    Control::Base(TrackControl::Reverb),
+    Control::Base(TrackControl::SendA),
+    Control::Base(TrackControl::SendB),
     Control::Mute,
     Control::Solo,
 ];
@@ -156,8 +156,8 @@ const fn base(control: TrackControl) -> Control {
 pub const SAMPLE_ROWS: [&[Control]; 8] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
-    &[Control::FilterType, base(TrackControl::Delay)],
-    &[base(TrackControl::Cutoff), base(TrackControl::Reverb)],
+    &[Control::FilterType, base(TrackControl::SendA)],
+    &[base(TrackControl::Cutoff), base(TrackControl::SendB)],
     &[base(TrackControl::Resonance), Control::Swing],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -167,8 +167,8 @@ pub const SAMPLE_ROWS: [&[Control]; 8] = [
 pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[Control::Machine, Control::Level],
     &[Control::SynthVoice, base(TrackControl::Pan)],
-    &[base(TrackControl::Harmonics), base(TrackControl::Delay)],
-    &[base(TrackControl::Timbre), base(TrackControl::Reverb)],
+    &[base(TrackControl::Harmonics), base(TrackControl::SendA)],
+    &[base(TrackControl::Timbre), base(TrackControl::SendB)],
     &[base(TrackControl::Morph), Control::Swing],
     &[Control::FilterType],
     &[base(TrackControl::Cutoff)],
@@ -177,6 +177,10 @@ pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
+/// The Sound page of a return, which has no machine or filter.
+pub const RETURN_ROWS: [&[Control]; 2] = [&[Control::Level], &[base(TrackControl::Pan)]];
+/// The Sound page of the master.
+pub const MASTER_ROWS: [&[Control]; 1] = [&[Control::Level]];
 /// The Mod page's rows, top to bottom.
 pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
     [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
@@ -237,8 +241,8 @@ impl Control {
             Self::Base(TrackControl::Cutoff) => "Cut",
             Self::Base(TrackControl::Resonance) => "Res",
             Self::Base(TrackControl::Pan) => "Pan",
-            Self::Base(TrackControl::Delay) => "Delay",
-            Self::Base(TrackControl::Reverb) => "Reverb",
+            Self::Base(TrackControl::SendA) => "Send A",
+            Self::Base(TrackControl::SendB) => "Send B",
             Self::Base(TrackControl::Drive) => "Drive",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
@@ -282,10 +286,15 @@ impl Control {
         }
     }
 
-    /// Whether this track has the setting: a slot only has the settings of what's in it.
+    /// Whether this track has the setting: a slot only has the settings of what's in it, a fixed
+    /// track sends nowhere, and the master can't be panned, muted or soloed.
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
+            Self::Base(TrackControl::SendA | TrackControl::SendB) => track.is_sound(),
+            Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
+                track.kind != TrackKind::Master
+            }
             _ => true,
         }
     }
@@ -362,14 +371,17 @@ impl App {
         })
     }
 
-    /// The rows of the page showing, which depend on the track's machine.
+    /// The rows of the page showing, which depend on the track's kind and machine.
     pub(crate) fn page_rows(&self) -> &'static [&'static [Control]] {
-        let machine = self
-            .song()
-            .tracks
-            .get(self.cursor.track)
-            .map_or(Machine::Sample, |track| track.machine);
-        self.track_page.rows(machine)
+        let track = self.song().tracks.get(self.cursor.track);
+        let kind = track.map_or(TrackKind::Sound, |track| track.kind);
+        match (self.track_page, kind) {
+            (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
+            (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
+            _ => self
+                .track_page
+                .rows(track.map_or(Machine::Sample, |track| track.machine)),
+        }
     }
 
     fn page_track(&self) -> Track {
@@ -390,6 +402,11 @@ impl App {
 
     fn set_hex(&mut self, control: Control, value: u8) {
         let track = self.cursor.track;
+        // On the mixer, the cursor can be on a setting this track doesn't have.
+        let tracks = &self.song().tracks;
+        if tracks.get(track).is_some_and(|t| !control.exists_on(t)) {
+            return;
+        }
         match control {
             Control::Base(control) => self.apply(&Action::SetTrackBase {
                 track,
@@ -450,8 +467,8 @@ impl App {
                     TrackControl::Cutoff => track.cutoff,
                     TrackControl::Resonance => track.resonance,
                     TrackControl::Pan => track.pan,
-                    TrackControl::Delay => track.delay,
-                    TrackControl::Reverb => track.reverb,
+                    TrackControl::SendA => track.send_a,
+                    TrackControl::SendB => track.send_b,
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
@@ -727,8 +744,8 @@ impl App {
                     TrackControl::Cutoff => track.cutoff,
                     TrackControl::Resonance => track.resonance,
                     TrackControl::Pan => track.pan,
-                    TrackControl::Delay => track.delay,
-                    TrackControl::Reverb => track.reverb,
+                    TrackControl::SendA => track.send_a,
+                    TrackControl::SendB => track.send_b,
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,

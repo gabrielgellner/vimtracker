@@ -166,14 +166,20 @@ impl App {
             .enumerate()
             .map(|(track, state)| {
                 let sound = match state.machine {
+                    _ if !state.is_sound() => state.kind.title(),
                     Machine::Sample => state
                         .sample
                         .as_deref()
                         .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample)),
                     Machine::Plaits => state.synth_voice.name(),
                 };
+                let number = if state.is_sound() {
+                    format!("{:02}", track + 1)
+                } else {
+                    String::new()
+                };
                 Item {
-                    label: format!("{:02}  {:<4}{sound}", track + 1, state.name),
+                    label: format!("{number:<2}  {:<4}{sound}", state.name),
                     pick: Pick::Track(track),
                 }
             })

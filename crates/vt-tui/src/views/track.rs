@@ -118,8 +118,8 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
         Control::Base(TrackControl::Morph) => Some(live.morph),
         Control::Base(TrackControl::Cutoff) => Some(live.cutoff),
         Control::Base(TrackControl::Resonance) => Some(live.resonance),
-        Control::Base(TrackControl::Delay) => Some(live.delay),
-        Control::Base(TrackControl::Reverb) => Some(live.reverb),
+        Control::Base(TrackControl::SendA) => Some(live.send_a),
+        Control::Base(TrackControl::SendB) => Some(live.send_b),
         _ => None,
     }
 }
@@ -138,8 +138,8 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Base(TrackControl::Morph) => Some((track.morph, track.synth_voice.centred()[2])),
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),
         Control::Base(TrackControl::Resonance) => level(track.resonance),
-        Control::Base(TrackControl::Delay) => level(track.delay),
-        Control::Base(TrackControl::Reverb) => level(track.reverb),
+        Control::Base(TrackControl::SendA) => level(track.send_a),
+        Control::Base(TrackControl::SendB) => level(track.send_b),
         Control::Base(TrackControl::Drive) => level(track.drive),
         Control::Base(TrackControl::LowCut) => level(track.low_cut),
         Control::Base(TrackControl::HighCut) => level(track.high_cut),
@@ -257,8 +257,8 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
         Control::Base(TrackControl::Resonance) => hex(track.resonance),
         Control::Base(TrackControl::Pan) => hex(track.pan),
-        Control::Base(TrackControl::Delay) => hex(track.delay),
-        Control::Base(TrackControl::Reverb) => hex(track.reverb),
+        Control::Base(TrackControl::SendA) => hex(track.send_a),
+        Control::Base(TrackControl::SendB) => hex(track.send_b),
         Control::Base(TrackControl::Drive) => hex(track.drive),
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
@@ -324,7 +324,7 @@ fn width(control: Control) -> usize {
     match control {
         Control::Lfo(_, LfoField::Rate) => 9,
         Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + LFO_ICON_WIDTH + 2,
-        Control::Base(TrackControl::Reverb) | Control::Lfo(_, LfoField::Retrig) => 8,
+        Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 8,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
             _,
@@ -562,10 +562,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(text, theme::dim())
         }
     });
-    let mut title = vec![Span::styled(
-        format!("Track {:02} {} ", app.cursor.track + 1, track.name),
-        bold,
-    )];
+    let name = if track.is_sound() {
+        format!("Track {:02} {} ", app.cursor.track + 1, track.name)
+    } else {
+        format!("{} ", track.kind.title())
+    };
+    let mut title = vec![Span::styled(name, bold)];
     title.extend(tabs);
     let mut lines = vec![Line::from(title), Line::raw("")];
     match app.track_page {
@@ -577,7 +579,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 }
                 lines.push(sound_row(app, track, controls));
             }
-            lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
+            if track.is_sound() {
+                lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
+            }
         }
         Page::Fx => {
             for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {

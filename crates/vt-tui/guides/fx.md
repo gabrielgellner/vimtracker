@@ -15,8 +15,8 @@ only takes effect once its value is typed.
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
-| `DLY` | Delay send |
-| `REV` | Reverb send |
+| `SNA` | Send to return `A` |
+| `SNB` | Send to return `B` |
 | `HAR` | A synth's first setting, shown by its name on that voice |
 | `TIM` | A synth's second setting |
 | `MOR` | A synth's third setting |
@@ -28,7 +28,7 @@ type the slot's number and the first letters, like `1am`. `Bits` takes whole bit
 and `Type` takes its place in the list, from `00`. A step's setting belongs to the slot and its place
 in the effect's list, so it reads as whatever's now there, and does nothing in an empty slot.
 
-`VOL`, `DLY` and `REV` are on the level scale in **Phrases and chains**. The
+`VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
 a step has put it. See **The track page, envelopes and LFOs**.

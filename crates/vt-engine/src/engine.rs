@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
-    TICKS_PER_QUARTER, TICKS_PER_STEP,
+    FIXED_TRACKS, GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING, MAX_TRACKS,
+    MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
@@ -448,30 +448,62 @@ impl Engine {
     /// and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
+        self.keep_fixed_tracks(old.song.sound_tracks());
         self.follow_base(&old);
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
             track.stop();
             track.launched = None;
             track.cued = None;
+            track.mute = false;
+            track.solo = false;
         }
         self.follow_levels();
         self.retune();
         old
     }
 
+    /// The fixed tracks come after the others, so as those come and go, what the fixed tracks keep
+    /// moves with them.
+    fn keep_fixed_tracks(&mut self, was: usize) {
+        let now = self.sounds();
+        let was = was.min(MAX_SOUND_TRACKS);
+        let moved = &mut self.tracks[was.min(now)..was.max(now) + FIXED_TRACKS];
+        if now > was {
+            moved.rotate_right(now - was);
+        } else {
+            moved.rotate_left(was - now);
+        }
+    }
+
+    /// How many tracks play sounds, and so where the fixed tracks start.
+    fn sounds(&self) -> usize {
+        self.current.song.sound_tracks().min(MAX_SOUND_TRACKS)
+    }
+
     /// Hear a change to a track's page straight away. A held value a step has set since stays
     /// until something changes it, so this only acts on what actually changed.
     fn follow_base(&mut self, old: &Published) {
         let fresh = Track::default();
+        let (now, was) = (self.sounds(), old.song.sound_tracks());
         let tracks = self.tracks.iter_mut().enumerate();
         for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
-            let before = old.song.tracks.get(index).unwrap_or(&fresh);
+            // A fixed track is compared with what it was, wherever that was.
+            let then = if index >= now {
+                index - now + was
+            } else {
+                index
+            };
+            let before = if index >= now || index < was {
+                old.song.tracks.get(then).unwrap_or(&fresh)
+            } else {
+                &fresh
+            };
             let controls = [
                 (FxCommand::Cut, before.cutoff, track.cutoff),
                 (FxCommand::Res, before.resonance, track.resonance),
                 (FxCommand::Pan, before.pan, track.pan),
-                (FxCommand::Dly, before.delay, track.delay),
-                (FxCommand::Rev, before.reverb, track.reverb),
+                (FxCommand::SendA, before.send_a, track.send_a),
+                (FxCommand::SendB, before.send_b, track.send_b),
                 (FxCommand::Har, before.harmonics, track.harmonics),
                 (FxCommand::Tim, before.timbre, track.timbre),
                 (FxCommand::Mor, before.morph, track.morph),
@@ -657,7 +689,9 @@ impl Engine {
         self.apply_audibility();
     }
 
-    /// Set whether a track is soloed. While any track is soloed, only soloed tracks sound.
+    /// Set whether a track is soloed. While a track that plays sounds is soloed, only soloed ones
+    /// play, and the returns stay. While a return is soloed, only soloed returns are heard, and what
+    /// sends to them keeps playing without being heard itself.
     pub fn set_solo(&mut self, track: usize, solo: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
             state.solo = solo;
@@ -666,15 +700,28 @@ impl Engine {
     }
 
     fn any_solo(&self) -> bool {
-        self.tracks.iter().any(|t| t.solo)
+        self.tracks[..self.sounds()].iter().any(|t| t.solo)
+    }
+
+    /// Whether a return is soloed.
+    fn return_soloed(&self) -> bool {
+        self.tracks[self.sounds()..self.sounds() + 2]
+            .iter()
+            .any(|t| t.solo)
     }
 
     fn apply_audibility(&mut self) {
         let any_solo = self.any_solo();
-        for track in self.tracks.iter_mut() {
+        let return_soloed = self.return_soloed();
+        let sounds = self.sounds();
+        for track in self.tracks[..sounds].iter_mut() {
             if track.mute || (any_solo && !track.solo) {
                 track.cut_to_tail();
             }
+        }
+        for track in self.tracks[sounds..sounds + 2].iter_mut() {
+            let heard = !track.mute && (!return_soloed || track.solo);
+            track.heard.target = if heard { 1.0 } else { 0.0 };
         }
     }
 
@@ -708,6 +755,9 @@ impl Engine {
 
     fn note_on(&self, track: usize, note: u8, step_gain: f32, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
+        if !owner.is_sound() {
+            return None;
+        }
         let (sample, synth) = match owner.machine {
             Machine::Sample => ((*self.current.track_samples.get(track)?)?, None),
             Machine::Plaits => (0, Some(owner.synth_voice)),
@@ -1093,10 +1143,13 @@ impl Engine {
         let samples = Arc::clone(&self.current.samples);
         let delay_frames = sample_of_tick(DELAY_TICKS, self.rate, self.millibpm) as usize;
         let limiter = self.current.song.limiter;
+        let return_a = self.sounds();
+        let (return_b, master_track) = (return_a + 1, return_a + 2);
+        let wet_only = self.return_soloed();
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
-            let mut delay_in = [0.0_f32; 2];
-            let mut reverb_in = [0.0_f32; 2];
+            let mut send_a = [0.0_f32; 2];
+            let mut send_b = [0.0_f32; 2];
             for (index, track) in self.tracks.iter_mut().enumerate() {
                 let previewing = index == self.preview_track && self.preview.active();
                 if !track.sounding() && !previewing {
@@ -1119,21 +1172,28 @@ impl Engine {
                     self.rate,
                 );
                 track.reading.add(shaped.dry, shaped.dry);
-                mix[0] += shaped.dry[0];
-                mix[1] += shaped.dry[1];
-                delay_in[0] += shaped.delay[0];
-                delay_in[1] += shaped.delay[1];
-                reverb_in[0] += shaped.reverb[0];
-                reverb_in[1] += shaped.reverb[1];
+                if !wet_only || track.solo {
+                    mix[0] += shaped.dry[0];
+                    mix[1] += shaped.dry[1];
+                }
+                send_a[0] += shaped.send_a[0];
+                send_a[1] += shaped.send_a[1];
+                send_b[0] += shaped.send_b[0];
+                send_b[1] += shaped.send_b[1];
             }
-            let delayed = self.delay.process(delay_in, delay_frames);
-            let reverbed = self.reverb.process(reverb_in);
+            let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
+            let delayed = self.delay.process(send_a, delay_frames);
+            let delayed = self.tracks[return_a].process_return(delayed, smoothing, fast, rate);
+            let reverbed = self.reverb.process(send_b);
+            let reverbed = self.tracks[return_b].process_return(reverbed, smoothing, fast, rate);
             let mixed = [
                 mix[0] + delayed[0] + reverbed[0],
                 mix[1] + delayed[1] + reverbed[1],
             ];
-            let out = master(mixed, limiter);
-            self.reading.add(mixed, out);
+            let mastered = self.tracks[master_track].process_master(mixed, smoothing, fast, rate);
+            let out = master(mastered, limiter);
+            self.tracks[master_track].reading.add(mastered, out);
+            self.reading.add(mastered, out);
             *frame = out;
         }
     }

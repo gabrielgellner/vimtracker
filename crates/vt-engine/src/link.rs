@@ -255,7 +255,7 @@ impl Realtime {
 mod tests {
     use std::sync::Arc;
 
-    use vt_model::constants::MAX_TRACKS;
+    use vt_model::constants::MAX_SOUND_TRACKS;
     use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
     use vt_model::sample::SampleData;
     use vt_model::samples::SamplePool;
@@ -413,7 +413,7 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         handle.send(Command::PlayFrom { step: 0 });
         let mut violations = blocks(&mut rt, 4);
-        for tracks in [MAX_TRACKS, 1, 8] {
+        for tracks in [MAX_SOUND_TRACKS, 1, 8] {
             handle.publish(published(song(tracks, 16), &pool));
             violations += blocks(&mut rt, 4);
             handle.pump();
@@ -448,7 +448,7 @@ mod tests {
         }
         let texts = [
             "C-4 01 VOL80 PAN20 CUT40",
-            "C-4 -- RESC0 DLY80 REV80",
+            "C-4 -- RESC0 SNA80 SNB80",
             "C-4 -- DEL02 KIL03 OFF01",
             "C-4 -- RET52 CHA80 ---00",
             "OFF -- ---00 ---00 ---00",

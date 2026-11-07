@@ -66,7 +66,9 @@ fn parse_song(text: &str, path: &Path) -> Result<Song, ProjectError> {
             expected: FORMAT_VERSION,
         });
     }
-    ron::from_str(text).map_err(|e| parse(&e))
+    let mut song: Song = ron::from_str(text).map_err(|e| parse(&e))?;
+    song.ensure_fixed_tracks();
+    Ok(song)
 }
 
 /// Read a project's song.

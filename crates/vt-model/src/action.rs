@@ -5,7 +5,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::constants::{
-    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_SWING, MAX_TRACKS,
+    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING,
     MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
@@ -325,8 +325,8 @@ pub enum TrackControl {
     Cutoff,
     Resonance,
     Pan,
-    Delay,
-    Reverb,
+    SendA,
+    SendB,
     Drive,
     LowCut,
     HighCut,
@@ -368,7 +368,7 @@ pub enum EditError {
     NoStep { phrase: u32, step: usize },
     #[error("tempo must be from 20 to 400 BPM")]
     Tempo,
-    #[error("a project can have at most {MAX_TRACKS} tracks")]
+    #[error("a project can have at most {MAX_SOUND_TRACKS} tracks")]
     TooManyTracks,
     #[error("a project needs at least one track")]
     LastTrack,
@@ -611,8 +611,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Cutoff => track.cutoff = *value,
                 TrackControl::Resonance => track.resonance = *value,
                 TrackControl::Pan => track.pan = *value,
-                TrackControl::Delay => track.delay = (*value).min(MAX_LEVEL),
-                TrackControl::Reverb => track.reverb = (*value).min(MAX_LEVEL),
+                TrackControl::SendA => track.send_a = (*value).min(MAX_LEVEL),
+                TrackControl::SendB => track.send_b = (*value).min(MAX_LEVEL),
                 TrackControl::Drive => track.drive = *value,
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
@@ -720,7 +720,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             next.millibpm = *millibpm;
         }
         Action::AddTracks(count) => {
-            if next.tracks.len() + count > MAX_TRACKS {
+            if next.sound_tracks() + count > MAX_SOUND_TRACKS {
                 return Err(EditError::TooManyTracks);
             }
             for _ in 0..*count {
@@ -728,13 +728,10 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::RemoveLastTrack => {
-            if next.tracks.len() <= 1 {
+            if next.sound_tracks() <= 1 {
                 return Err(EditError::LastTrack);
             }
-            next.tracks.pop();
-            for section in &mut next.sections {
-                section.chains.pop();
-            }
+            next.remove_last_sound_track();
         }
         Action::SetTrackSample { track, sample } => {
             let owner = next
@@ -748,16 +745,22 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
         }
         Action::SetTrackName { track, name } => {
-            next.tracks
+            let owner = next
+                .tracks
                 .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .name = name.clone();
+                .ok_or(EditError::NoTrack(*track))?;
+            // A fixed track without a name goes back to its letter.
+            owner.name = if name.is_empty() {
+                owner.kind.letter().to_owned()
+            } else {
+                name.clone()
+            };
         }
         Action::LoadKit(sounds) => {
-            if sounds.len() > MAX_TRACKS {
+            if sounds.len() > MAX_SOUND_TRACKS {
                 return Err(EditError::TooManyTracks);
             }
-            while next.tracks.len() < sounds.len() {
+            while next.sound_tracks() < sounds.len() {
                 next.add_track();
             }
             for (track, sound) in next.tracks.iter_mut().zip(sounds) {

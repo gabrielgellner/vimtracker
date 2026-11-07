@@ -83,8 +83,8 @@ fn golden(name: &str, samples: &[f32]) {
 
 const FX_LOOP: [&str; 4] = [
     "C-4 60 CUT60h RES40h PAN40h",
-    "--- -- DLY80h ---00 ---00",
-    "G-4 40 REV60h RET14 ---00",
+    "--- -- SNA80h ---00 ---00",
+    "G-4 40 SNB60h RET14 ---00",
     "C-3 -- CHA80 DEL02 KIL04",
 ];
 
@@ -132,7 +132,7 @@ fn rows_set_the_length_and_start_from_the_top() {
 fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
     // A delay tail only sounds at the top if something came before it.
     let mut texts = vec!["--- -- ---00 ---00 ---00"; 16];
-    texts[15] = "C-4 -- DLYFF ---00 ---00";
+    texts[15] = "C-4 -- SNAFF ---00 ---00";
     let out = render(song(&texts), RenderOptions::default());
     assert!(
         peak(&out[..2 * 18_000]) > 0.01,
@@ -145,7 +145,7 @@ fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
 fn the_tail_extends_the_render_and_ends_at_silence() {
     // A hit on the last step is still ringing when the capture ends.
     let mut texts = vec!["--- -- ---00 ---00 ---00"; 16];
-    texts[15] = "C-4 -- REVFF ---00 ---00";
+    texts[15] = "C-4 -- SNBFF ---00 ---00";
     let plain = render(song(&texts), RenderOptions::default());
     let tailed = render(
         song(&texts),
@@ -223,11 +223,11 @@ fn three_tracks() -> Song {
     let sample = mix.tracks[0].sample.clone();
     for track in &mut mix.tracks {
         track.sample = sample.clone();
-        track.delay = 0x60;
-        track.reverb = 0x60;
+        track.send_a = 0x60;
+        track.send_b = 0x60;
     }
     for (id, text) in [
-        (1, "G-4 40 CHA80 DLY90h ---00"),
+        (1, "G-4 40 CHA80 SNA90h ---00"),
         (2, "C-3 7F CUT40 ---00 ---00"),
     ] {
         let phrase = Arc::make_mut(mix.tracks[id as usize].phrases.get_mut(&0).unwrap());

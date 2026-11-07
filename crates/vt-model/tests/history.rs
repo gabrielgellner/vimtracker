@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use vt_model::action::{Action, EditError, KitSound, edit};
-use vt_model::constants::MAX_TRACKS;
+use vt_model::constants::MAX_SOUND_TRACKS;
 use vt_model::history::History;
 use vt_model::song::{Launch, Song};
 use vt_model::step::Note;
@@ -137,13 +137,13 @@ fn a_kit_fills_tracks_from_the_first_and_adds_what_it_needs() {
     };
     let kit = Action::LoadKit(vec![sound("a.wav", "BD"), sound("b.wav", "")]);
     let next = edit(&start, &kit).unwrap();
-    assert_eq!(next.tracks.len(), 2);
-    assert_eq!(next.sections[0].chains.len(), 2);
+    assert_eq!(next.sound_tracks(), 2);
+    assert_eq!(next.sections[0].chains.len(), next.tracks.len());
     assert_eq!(next.tracks[0].sample.as_deref(), Some("a.wav"));
     assert_eq!(next.tracks[0].name, "BD");
     assert_eq!(next.tracks[0].cutoff, 0x40, "other settings stay");
     assert_eq!(next.tracks[1].sample.as_deref(), Some("b.wav"));
-    let huge = Action::LoadKit(vec![sound("a.wav", ""); MAX_TRACKS + 1]);
+    let huge = Action::LoadKit(vec![sound("a.wav", ""); MAX_SOUND_TRACKS + 1]);
     assert_eq!(edit(&start, &huge), Err(EditError::TooManyTracks));
 }
 

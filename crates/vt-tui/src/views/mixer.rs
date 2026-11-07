@@ -80,7 +80,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 
     let mut names = vec![Span::raw(" ".repeat(LABEL_WIDTH))];
     for index in shown.clone() {
-        let name = format!("{:02} {}", index + 1, song.tracks[index].name);
+        let track = &song.tracks[index];
+        let name = if track.is_sound() {
+            format!("{:02} {}", index + 1, track.name)
+        } else {
+            track.name.clone()
+        };
         let style = if index == app.cursor.track {
             bold
         } else {
@@ -115,6 +120,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             let here = index == app.cursor.track;
             let selected = here && control == current;
             let text = match control {
+                _ if !control.exists_on(track) => String::new(),
                 Control::Mute => if live.mute { "M" } else { "-" }.to_owned(),
                 Control::Solo => if live.solo { "S" } else { "-" }.to_owned(),
                 _ if selected && app.mode == Mode::Insert => format!("{}_", app.entry.text),

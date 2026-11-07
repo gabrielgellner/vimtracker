@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::insert::{INSERTS, MAX_PARAMS};
 use crate::lfo::LFOS_PER_TRACK;
-use crate::song::{Machine, Track};
+use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
 /// Something an LFO or an envelope can move, in the same units as its FX command.
@@ -15,8 +15,8 @@ pub enum Target {
     Res,
     Pan,
     Vol,
-    Dly,
-    Rev,
+    SendA,
+    SendB,
     /// In semitones, where the others are in their hex units.
     Pitch,
     Har,
@@ -57,8 +57,8 @@ impl Target {
         Self::Res,
         Self::Pan,
         Self::Vol,
-        Self::Dly,
-        Self::Rev,
+        Self::SendA,
+        Self::SendB,
         Self::Pitch,
         Self::Har,
         Self::Tim,
@@ -76,8 +76,8 @@ impl Target {
             Self::Res => 1,
             Self::Pan => 2,
             Self::Vol => 3,
-            Self::Dly => 4,
-            Self::Rev => 5,
+            Self::SendA => 4,
+            Self::SendB => 5,
             Self::Pitch => 6,
             Self::Har => 7,
             Self::Tim => 8,
@@ -110,8 +110,8 @@ impl Target {
             Self::Res => info("Res", "Filter", "Filter resonance", Some("RES")),
             Self::Pan => info("Pan", "Output", "Pan", Some("PAN")),
             Self::Vol => info("Vol", "Output", "Volume", Some("VOL")),
-            Self::Dly => info("Dly", "Output", "Delay send", Some("DLY")),
-            Self::Rev => info("Rev", "Output", "Reverb send", Some("REV")),
+            Self::SendA => info("Send A", "Output", "Send to return A", Some("SNA")),
+            Self::SendB => info("Send B", "Output", "Send to return B", Some("SNB")),
             Self::Pitch => info("Pitch", "Machine", "Pitch, with depth in semitones", None),
             Self::Har => info("Har", "Machine", "A synth's first setting", Some("HAR")),
             Self::Tim => info("Tim", "Machine", "A synth's second setting", Some("TIM")),
@@ -135,10 +135,16 @@ impl Target {
     }
 
     /// Whether this track has it: a machine's settings are on tracks playing that machine, and a
-    /// slot's while the slot holds something with that setting. Anything else does no work.
+    /// slot's while the slot holds something with that setting. A fixed track has no sound of its
+    /// own to filter or tune, and sends nowhere, and the master has no pan. Anything else does no
+    /// work.
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
-            Self::Har | Self::Tim | Self::Mor => track.machine == Machine::Plaits,
+            Self::Har | Self::Tim | Self::Mor => {
+                track.is_sound() && track.machine == Machine::Plaits
+            }
+            Self::Cut | Self::Res | Self::SendA | Self::SendB | Self::Pitch => track.is_sound(),
+            Self::Pan => track.kind != TrackKind::Master,
             Self::Slot { slot, param } => track
                 .inserts
                 .get(usize::from(slot))
@@ -255,8 +261,8 @@ impl FxCommand {
             Self::Pan => Some(Target::Pan),
             Self::Cut => Some(Target::Cut),
             Self::Res => Some(Target::Res),
-            Self::Dly => Some(Target::Dly),
-            Self::Rev => Some(Target::Rev),
+            Self::SendA => Some(Target::SendA),
+            Self::SendB => Some(Target::SendB),
             Self::Har => Some(Target::Har),
             Self::Tim => Some(Target::Tim),
             Self::Mor => Some(Target::Mor),
@@ -267,7 +273,9 @@ impl FxCommand {
 
     /// Whether this track has what this sets, so it belongs in a list to choose from.
     pub fn exists_on(self, track: &Track) -> bool {
-        self.target().is_none_or(|target| target.exists_on(track))
+        // Those with no value act on a note, and a track with no sound has none.
+        self.target()
+            .map_or(track.is_sound(), |target| target.exists_on(track))
     }
 
     /// The command for typed text: its name, or a slot's number and the start of a setting's name.
@@ -294,7 +302,7 @@ impl FxCommand {
 mod tests {
     use super::*;
     use crate::insert::Insert;
-    use crate::song::SynthVoice;
+    use crate::song::{Song, SynthVoice};
 
     #[test]
     fn every_target_has_its_own_place() {
@@ -402,6 +410,22 @@ mod tests {
         assert_eq!(FxCommand::Cut.name_on(&track), "CUT");
         track.synth_voice = SynthVoice::Kick;
         assert_eq!(Target::Har.name_on(&track), "Punch");
+    }
+
+    #[test]
+    fn a_fixed_track_only_offers_what_it_has() {
+        let song = Song::new(1);
+        let offered = |track: &Track| Target::on_track(track);
+        let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
+        assert_eq!(offered(return_a), [Target::Pan, Target::Vol]);
+        assert_eq!(offered(master), [Target::Vol]);
+        assert!(FxCommand::Vol.exists_on(return_a));
+        assert!(
+            !FxCommand::Ret.exists_on(return_a),
+            "it has no note to repeat"
+        );
+        assert!(!FxCommand::SendA.exists_on(return_a), "no way round");
+        assert!(!FxCommand::Pan.exists_on(master));
     }
 
     #[test]

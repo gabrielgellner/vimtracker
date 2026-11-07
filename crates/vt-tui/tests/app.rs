@@ -343,9 +343,9 @@ fn track_keys_move_and_keep_the_section_position() {
     assert_eq!(app.cursor.track, 1);
     assert_eq!(app.cursor.step, 3);
     assert_eq!(app.phrase_id(), Some(0), "its own first phrase");
-    press(&mut app, "W");
-    assert_eq!(app.cursor.track, 1, "the last track stops the cursor");
-    press(&mut app, "BB");
+    press(&mut app, "WWWW");
+    assert_eq!(app.cursor.track, 4, "the master stops the cursor");
+    press(&mut app, "BBBBB");
     assert_eq!(app.cursor.track, 0);
 }
 
@@ -353,8 +353,8 @@ fn track_keys_move_and_keep_the_section_position() {
 fn added_tracks_save_load_and_play() {
     let (mut app, mut rt) = app();
     command(&mut app, "track add 3");
-    assert_eq!(app.song().tracks.len(), 5);
-    assert_eq!(app.levels.len(), 5);
+    assert_eq!(app.song().sound_tracks(), 5);
+    assert_eq!(app.levels.len(), 8);
     press(&mut app, "WWWW");
     assert_eq!(app.cursor.track, 4);
     press(&mut app, "ia");
@@ -363,11 +363,11 @@ fn added_tracks_save_load_and_play() {
     command(&mut app, &format!("w {}", path.display()));
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", path.display()));
-    assert_eq!(other.song().tracks.len(), 5);
+    assert_eq!(other.song().sound_tracks(), 5);
     app.tick();
     let mut out = vec![0.0; 512];
     rt.process(&mut out);
-    assert_eq!(rt.engine().current().song.tracks.len(), 5);
+    assert_eq!(rt.engine().current().song.sound_tracks(), 5);
 }
 
 #[test]
@@ -375,24 +375,93 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     let (mut app, _rt) = app();
     press(&mut app, "W");
     command(&mut app, "track del");
-    assert_eq!(app.song().tracks.len(), 1);
+    assert_eq!(app.song().sound_tracks(), 1);
     assert_eq!(app.cursor.track, 0);
     assert_eq!(app.phrase_id(), Some(0));
     command(&mut app, "track del");
-    assert_eq!(app.song().tracks.len(), 1);
+    assert_eq!(app.song().sound_tracks(), 1);
     assert!(app.status.contains("at least one"));
     press(&mut app, "uj");
-    assert_eq!(app.song().tracks.len(), 2);
-    assert_eq!(app.levels.len(), 2);
+    assert_eq!(app.song().sound_tracks(), 2);
+    assert_eq!(app.levels.len(), 5);
+}
+
+#[test]
+fn the_fixed_tracks_stay_after_new_ones_and_cant_be_removed() {
+    let (mut app, _rt) = app();
+    press(&mut app, "WWWW");
+    assert_eq!(app.cursor.track, 4);
+    command(&mut app, "track add 2");
+    assert_eq!(app.cursor.track, 6, "still on the master");
+    assert_eq!(app.song().tracks[6].name, "M");
+    assert_eq!(app.song().sound_tracks(), 4);
+    command(&mut app, "track del");
+    assert_eq!(app.cursor.track, 5, "still on the master");
+    assert_eq!(app.song().tracks[5].name, "M");
+}
+
+#[test]
+fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
+    let (mut app, _rt) = app();
+    press(&mut app, "WW");
+    assert_eq!(app.song().tracks[app.cursor.track].name, "A");
+    press(&mut app, " m");
+    assert!(app.levels[2].mute);
+    command(&mut app, "track add");
+    assert!(app.levels[3].mute, "return A is here now");
+    assert!(!app.levels[2].mute, "and the new track isn't muted");
+    command(&mut app, "track del");
+    assert!(app.levels[2].mute);
+}
+
+#[test]
+fn the_master_cant_be_muted_or_soloed() {
+    let (mut app, _rt) = app();
+    press(&mut app, "WWWW");
+    press(&mut app, " m");
+    assert!(!app.levels[4].mute);
+    assert!(app.status.contains("master"), "{}", app.status);
+    press(&mut app, " s");
+    assert!(!app.levels[4].solo);
+}
+
+#[test]
+fn a_fixed_tracks_pages_only_show_what_it_has() {
+    let (mut app, _rt) = app();
+    press(&mut app, "WW 4");
+    let lines = track_page_text(&app);
+    assert!(lines[0].starts_with("Return A"), "{}", lines[0]);
+    assert!(lines[2].starts_with("Level"), "{}", lines[2]);
+    assert!(lines[3].starts_with("Pan"), "{}", lines[3]);
+    assert!(!lines.iter().any(|line| line.contains("Machine")));
+    press(&mut app, "WW");
+    let lines = track_page_text(&app);
+    assert!(lines[0].starts_with("Master"), "{}", lines[0]);
+    assert!(lines[2].starts_with("Level"), "{}", lines[2]);
+    assert!(!lines.iter().any(|line| line.contains("Pan")));
+}
+
+#[test]
+fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
+    let (mut app, _rt) = app();
+    press(&mut app, " 6");
+    press(&mut app, "lljj");
+    assert_eq!(app.cursor.track, 2);
+    press(&mut app, "i40");
+    assert_eq!(app.song().tracks[2].send_a, 0, "a return sends nowhere");
+    press(&mut app, "ll");
+    assert_eq!(app.cursor.track, 4);
+    press(&mut app, "ki40");
+    assert_eq!(app.song().tracks[4].pan, 0x80, "the master has no pan");
 }
 
 #[test]
 fn track_count_is_limited_to_the_constant() {
     let (mut app, _rt) = app();
     command(&mut app, "track add 62");
-    assert_eq!(app.song().tracks.len(), 64);
+    assert_eq!(app.song().sound_tracks(), 64);
     command(&mut app, "track add");
-    assert_eq!(app.song().tracks.len(), 64);
+    assert_eq!(app.song().sound_tracks(), 64);
     assert!(app.status.contains("at most"));
 }
 
@@ -1651,8 +1720,8 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         pan: 0x80,
         cutoff: 0x40,
         resonance: 0,
-        delay: 0,
-        reverb: 0,
+        send_a: 0,
+        send_b: 0,
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,
@@ -2244,9 +2313,9 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     press(&mut app, "jiFF");
     assert_eq!(track(&app).pan, 0xFF);
     press(&mut app, "jiFF");
-    assert_eq!(track(&app).delay, 0xF8);
+    assert_eq!(track(&app).send_a, 0xF8);
     press(&mut app, "jiFF");
-    assert_eq!(track(&app).reverb, 0xF8);
+    assert_eq!(track(&app).send_b, 0xF8);
 }
 
 #[test]
@@ -2676,9 +2745,9 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     press(&mut app, "ji40x");
     assert_eq!(track(&app).pan, 0x80);
     press(&mut app, "ji40x");
-    assert_eq!(track(&app).delay, 0);
+    assert_eq!(track(&app).send_a, 0);
     press(&mut app, "ji40x");
-    assert_eq!(track(&app).reverb, 0);
+    assert_eq!(track(&app).send_b, 0);
 
     // Only the setting under the cursor goes back.
     press(&mut app, "Ljj0=");
@@ -2783,7 +2852,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
     assert!(lines[4].trim().is_empty(), "{}", lines[4]);
-    assert!(lines[5].starts_with("Filter") && lines[5].contains("Delay"));
+    assert!(lines[5].starts_with("Filter") && lines[5].contains("Send A"));
     assert!(lines[6].starts_with("Cut") && lines[6].contains("FF ▕█████████▏"));
     assert!(lines[7].starts_with("Res") && lines[7].contains("Swing"));
 }
@@ -2865,7 +2934,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let mut song = Song::new(1);
     let step = |text: &str| text.parse::<Step>().unwrap();
     let phrase = Phrase::from_steps(vec![
-        step("C-4 40 CUT40 DLY20h RES10g"),
+        step("C-4 40 CUT40 SNA20h RES10g"),
         step("C-4 40 DEL10 ---00 ---00"),
     ]);
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
@@ -2876,7 +2945,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).contains("CUT      40 . DLY      20 h RES      10 g"),
+        row(2).contains("CUT      40 . SNA      20 h RES      10 g"),
         "{}",
         row(2)
     );
@@ -2970,13 +3039,13 @@ fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
     assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
     assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
     assert_eq!(app.status, "Kit 909: 3 tracks");
-    assert_eq!(app.song().tracks.len(), 3, "it added the track it needed");
-    assert_eq!(app.levels.len(), 3);
+    assert_eq!(app.song().sound_tracks(), 3, "it added the track it needed");
+    assert_eq!(app.levels.len(), 6);
     assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
 
     press(&mut app, "u");
     assert_eq!(sample_of(&app, 0), None);
-    assert_eq!(app.song().tracks.len(), 2);
+    assert_eq!(app.song().sound_tracks(), 2);
 }
 
 #[test]
@@ -3217,14 +3286,14 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     press(&mut app, "x");
     assert_eq!(app.song().tracks[1].pan, 0x80);
     press(&mut app, "j+");
-    assert_eq!(app.song().tracks[1].delay, 0x10);
+    assert_eq!(app.song().tracks[1].send_a, 0x10);
     press(&mut app, "j");
-    assert_eq!(column_name(&app), "Reverb");
+    assert_eq!(column_name(&app), "Send B");
     press(&mut app, "Gk0");
     assert_eq!(app.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.cursor.track, 4);
     press(&mut app, "gg");
     assert_eq!(column_name(&app), "Level");
 }
@@ -3274,9 +3343,10 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
         mixer_text(&app)[2]
     );
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 31);
+    assert_eq!(app.cursor.track, 34);
     let names = &mixer_text(&app)[2];
     assert!(names.contains("32"), "{names}");
+    assert!(names.contains(" A ") && names.contains(" M"), "{names}");
     assert!(!names.contains("01"), "{names}");
 }
 
@@ -3456,7 +3526,7 @@ fn the_song_view_edits_length_start_and_chains() {
     press(&mut app, "=");
     assert_eq!(app.song().sections[0].chains[1], Some(6));
     press(&mut app, "$");
-    assert_eq!(column_name(&app), "Track 02 chain");
+    assert_eq!(column_name(&app), "Master chain");
     press(&mut app, "0");
     assert_eq!(column_name(&app), "Length");
 }
@@ -4135,8 +4205,8 @@ fn the_filter_curve_moves_with_what_plays() {
         pan: track.pan,
         cutoff,
         resonance,
-        delay: track.delay,
-        reverb: track.reverb,
+        send_a: track.send_a,
+        send_b: track.send_b,
         harmonics: track.harmonics,
         timbre: track.timbre,
         morph: track.morph,
@@ -5272,8 +5342,8 @@ fn the_fx_pages_bars_follow_what_plays() {
         pan: 0x80,
         cutoff: 0xFF,
         resonance: 0,
-        delay: 0,
-        reverb: 0,
+        send_a: 0,
+        send_b: 0,
         harmonics: 0x80,
         timbre: 0,
         morph: 0x80,

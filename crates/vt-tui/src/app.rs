@@ -15,8 +15,8 @@ use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_engine::track_state::LiveValues;
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
-    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS, TRACK_ENVELOPES,
-    TRANSPORT_GUARD_MS,
+    DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
+    TRACK_ENVELOPES, TRANSPORT_GUARD_MS,
 };
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
@@ -27,7 +27,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Scope, StepRange};
-use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
+use vt_model::song::{ChainEntry, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
 use crate::grammar::Change;
@@ -910,18 +910,19 @@ impl App {
 
     /// Keep one set of live controls per track as tracks come and go.
     pub(crate) fn fit_levels(&mut self) {
+        // Those of the fixed tracks stay with them, and the engine clears any no longer used.
         let tracks = self.song().tracks.len();
-        for removed in tracks..self.levels.len() {
-            self.handle.send(Command::SetMute {
-                track: removed,
-                mute: false,
-            });
-            self.handle.send(Command::SetSolo {
-                track: removed,
-                solo: false,
-            });
+        let was = self.levels.len();
+        let (from, to) = (
+            was.saturating_sub(FIXED_TRACKS),
+            tracks.saturating_sub(FIXED_TRACKS),
+        );
+        if tracks > was {
+            let added = std::iter::repeat_n(TrackLive::default(), tracks - was);
+            self.levels.splice(from..from, added);
+        } else {
+            self.levels.drain(to..from);
         }
-        self.levels.resize(tracks, TrackLive::default());
     }
 
     /// Move to another track, staying at the same position in the section.
@@ -952,7 +953,23 @@ impl App {
         }
     }
 
+    /// Whether this track can be muted and soloed, saying so if not.
+    fn can_silence(&mut self) -> bool {
+        let master = self
+            .song()
+            .tracks
+            .get(self.cursor.track)
+            .is_some_and(|track| track.kind == TrackKind::Master);
+        if master {
+            self.status = "The master can't be muted or soloed".to_owned();
+        }
+        !master
+    }
+
     pub(crate) fn toggle_mute(&mut self) {
+        if !self.can_silence() {
+            return;
+        }
         let track = self.cursor.track;
         if let Some(live) = self.levels.get_mut(track) {
             live.mute = !live.mute;
@@ -963,6 +980,9 @@ impl App {
     }
 
     pub(crate) fn toggle_solo(&mut self) {
+        if !self.can_silence() {
+            return;
+        }
         let track = self.cursor.track;
         if let Some(live) = self.levels.get_mut(track) {
             live.solo = !live.solo;
@@ -1463,15 +1483,23 @@ impl App {
             }),
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
             Line::TrackAdd(count) => {
+                let was = self.song().sound_tracks();
                 self.apply(&Action::AddTracks(count));
                 self.fit_levels();
+                // A cursor on a fixed track stays on it.
+                if self.cursor.track >= was {
+                    self.cursor.track += self.song().sound_tracks() - was;
+                }
             }
             Line::TrackDel => {
+                let was = self.song().sound_tracks();
                 self.apply(&Action::RemoveLastTrack);
                 self.fit_levels();
-                let last = self.song().tracks.len() - 1;
-                if self.cursor.track > last {
-                    self.cursor.track = last;
+                let now = self.song().sound_tracks();
+                if self.cursor.track >= was {
+                    self.cursor.track -= was - now;
+                } else if self.cursor.track >= now {
+                    self.cursor.track = now - 1;
                     self.cursor.slot = 0;
                     self.clamp_cursor();
                 }

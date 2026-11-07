@@ -363,15 +363,15 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
     let mut song = song(&["C-4 -- ---00 ---00 ---00"]);
     let track = &mut song.tracks[0];
     (track.level, track.pan, track.cutoff, track.resonance) = (0x90, 0x30, 0x70, 0x20);
-    (track.delay, track.reverb) = (0x11, 0x22);
+    (track.send_a, track.send_b) = (0x11, 0x22);
     (track.harmonics, track.timbre, track.morph) = (0x33, 0x44, 0x55);
     let expected = LiveValues {
         level: 0x90,
         pan: 0x30,
         cutoff: 0x70,
         resonance: 0x20,
-        delay: 0x11,
-        reverb: 0x22,
+        send_a: 0x11,
+        send_b: 0x22,
         harmonics: 0x33,
         timbre: 0x44,
         morph: 0x55,
@@ -405,8 +405,8 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
     });
     assert_eq!(live_after(har, 1).harmonics, 0xA0);
 
-    let dly = moved(Target::Dly, |song| song.tracks[0].delay = 0x40);
-    assert_eq!(live_after(dly, 1).delay, 0x60);
+    let dly = moved(Target::SendA, |song| song.tracks[0].send_a = 0x40);
+    assert_eq!(live_after(dly, 1).send_a, 0x60);
 
     // `Vol` shows on the track's level, around its own setting.
     let vol = moved(Target::Vol, |song| song.tracks[0].level = 0x90);

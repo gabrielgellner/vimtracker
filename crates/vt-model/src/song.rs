@@ -8,8 +8,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
-    BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FORMAT_VERSION,
-    MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
+    BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
+    FORMAT_VERSION, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::insert::{INSERTS, Insert};
@@ -73,9 +73,50 @@ impl FilterType {
     }
 }
 
+/// What a track is. Only `Sound` tracks have a machine, and the rest are fixed, after them, in this
+/// order.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrackKind {
+    #[default]
+    Sound,
+    /// A return, which other tracks send to.
+    ReturnA,
+    ReturnB,
+    /// What everything ends up in.
+    Master,
+}
+
+impl TrackKind {
+    /// The fixed tracks, in order.
+    pub const FIXED: [Self; FIXED_TRACKS] = [Self::ReturnA, Self::ReturnB, Self::Master];
+
+    /// The short name of a fixed track.
+    pub fn letter(self) -> &'static str {
+        match self {
+            Self::Sound => "",
+            Self::ReturnA => "A",
+            Self::ReturnB => "B",
+            Self::Master => "M",
+        }
+    }
+
+    /// What a fixed track is called in full.
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Sound => "",
+            Self::ReturnA => "Return A",
+            Self::ReturnB => "Return B",
+            Self::Master => "Master",
+        }
+    }
+}
+
 /// One voice's lane through the song.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
+    /// Whether it plays sounds, or is one of the fixed tracks at the end.
+    #[serde(default)]
+    pub kind: TrackKind,
     /// Two characters, or empty for none.
     #[serde(default)]
     pub name: String,
@@ -102,7 +143,7 @@ pub struct Track {
     /// This track's own swing, in tenths of a percent, instead of the project's.
     pub swing: Option<u16>,
     /// The track's level, set outside its patterns. It also scales what the track sends to the
-    /// delay and reverb.
+    /// returns.
     #[serde(default = "unity_level")]
     pub level: u8,
     /// What the track's held `CUT` starts from, and what its LFOs move around until a step sets it.
@@ -128,12 +169,12 @@ pub struct Track {
     /// Where held `PAN` starts.
     #[serde(default = "centre")]
     pub pan: u8,
-    /// Where held `DLY` starts.
+    /// How much it sends to return `A`, and where held `SNA` starts.
     #[serde(default)]
-    pub delay: u8,
-    /// Where held `REV` starts.
+    pub send_a: u8,
+    /// How much it sends to return `B`, and where held `SNB` starts.
     #[serde(default)]
-    pub reverb: u8,
+    pub send_b: u8,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -147,6 +188,21 @@ pub struct Track {
 }
 
 impl Track {
+    /// A fixed track: named for what it is, and with no chain until one is given to it, so it
+    /// doesn't change how long a section is.
+    fn fixed(kind: TrackKind) -> Self {
+        Self {
+            kind,
+            name: kind.letter().to_owned(),
+            ..Self::default()
+        }
+    }
+
+    /// Whether this track plays sounds.
+    pub fn is_sound(&self) -> bool {
+        self.kind == TrackKind::Sound
+    }
+
     /// The total steps in a chain. A missing or empty chain has none.
     pub fn chain_steps(&self, chain: u32) -> usize {
         self.chains.get(&chain).map_or(0, |chain| {
@@ -213,6 +269,7 @@ impl Track {
 impl Default for Track {
     fn default() -> Self {
         Self {
+            kind: TrackKind::default(),
             name: String::new(),
             machine: Machine::default(),
             synth_voice: SynthVoice::default(),
@@ -232,8 +289,8 @@ impl Default for Track {
             high_cut: open_cutoff(),
             inserts: Default::default(),
             pan: centre(),
-            delay: 0,
-            reverb: 0,
+            send_a: 0,
+            send_b: 0,
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),
@@ -735,19 +792,52 @@ impl Song {
             tracks: Vec::new(),
             sections: vec![Section::default()],
         };
+        song.ensure_fixed_tracks();
         for _ in 0..tracks.max(1) {
             song.add_track();
         }
         song
     }
 
-    /// Add a track at the end, with a new chain and phrase in the first section and none in the rest.
+    /// Give a song without them its fixed tracks, as a song from before them has none.
+    pub fn ensure_fixed_tracks(&mut self) {
+        if self.tracks.iter().all(Track::is_sound) {
+            self.tracks.extend(TrackKind::FIXED.map(Track::fixed));
+            for section in &mut self.sections {
+                section.chains.resize(self.tracks.len(), None);
+            }
+        }
+    }
+
+    /// How many tracks play sounds. They come first, and then the fixed tracks.
+    pub fn sound_tracks(&self) -> usize {
+        self.tracks.len().saturating_sub(FIXED_TRACKS)
+    }
+
+    /// Add a track after the last that plays sounds, with a new chain and phrase in the first
+    /// section and none in the rest.
     pub fn add_track(&mut self) {
         let mut track = Track::default();
         track.add_chain(0);
-        self.tracks.push(track);
+        let at = self.sound_tracks();
+        self.tracks.insert(at, track);
         for (index, section) in self.sections.iter_mut().enumerate() {
-            section.chains.push((index == 0).then_some(0));
+            section
+                .chains
+                .insert(at.min(section.chains.len()), (index == 0).then_some(0));
+        }
+    }
+
+    /// Remove the last track that plays sounds.
+    pub fn remove_last_sound_track(&mut self) {
+        let Some(at) = self.sound_tracks().checked_sub(1) else {
+            return;
+        };
+        self.tracks.remove(at);
+        for section in &mut self.sections {
+            if at < section.chains.len() {
+                section.chains.remove(at);
+            }
         }
     }
 
@@ -838,13 +928,49 @@ mod tests {
     #[test]
     fn a_new_song_has_a_chain_and_phrase_per_track() {
         let song = Song::new(DEFAULT_TRACKS);
-        assert_eq!(song.tracks.len(), DEFAULT_TRACKS);
+        assert_eq!(song.sound_tracks(), DEFAULT_TRACKS);
         assert_eq!(song.sections.len(), 1);
-        assert_eq!(song.sections[0].chains.len(), DEFAULT_TRACKS);
-        for track in &song.tracks {
+        assert_eq!(song.sections[0].chains.len(), song.tracks.len());
+        for track in &song.tracks[..DEFAULT_TRACKS] {
             assert_eq!((track.chains.len(), track.phrases.len()), (1, 1));
         }
         assert_eq!(song.section_steps(&song.sections[0]), DEFAULT_PHRASE_STEPS);
+    }
+
+    #[test]
+    fn the_fixed_tracks_stay_last_and_dont_set_a_sections_length() {
+        let mut song = Song::new(2);
+        let kinds = |song: &Song| song.tracks.iter().map(|t| t.kind).collect::<Vec<_>>();
+        use TrackKind::{Master, ReturnA, ReturnB, Sound};
+        assert_eq!(kinds(&song), [Sound, Sound, ReturnA, ReturnB, Master]);
+        let names: Vec<&str> = song.tracks[2..].iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, ["A", "B", "M"]);
+        assert_eq!(song.sections[0].chains[2..], [None, None, None]);
+
+        song.add_track();
+        assert_eq!(
+            kinds(&song),
+            [Sound, Sound, Sound, ReturnA, ReturnB, Master]
+        );
+        assert_eq!(song.sections[0].chains[2], Some(0), "the new one's chain");
+        assert_eq!(song.sections[0].chains[3], None, "A's stays A's");
+
+        song.remove_last_sound_track();
+        assert_eq!(kinds(&song), [Sound, Sound, ReturnA, ReturnB, Master]);
+        assert_eq!(song.sections[0].chains.len(), 5);
+    }
+
+    #[test]
+    fn a_song_from_before_the_fixed_tracks_gets_them_once() {
+        let mut song = Song::new(2);
+        song.tracks.truncate(2);
+        song.sections[0].chains.truncate(2);
+        song.ensure_fixed_tracks();
+        assert_eq!(song.tracks.len(), 5);
+        assert_eq!(song.sound_tracks(), 2);
+        assert_eq!(song.sections[0].chains.len(), 5);
+        song.ensure_fixed_tracks();
+        assert_eq!(song.tracks.len(), 5);
     }
 
     #[test]
