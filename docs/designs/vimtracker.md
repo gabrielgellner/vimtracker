@@ -1338,7 +1338,7 @@ Dest
 | The groups | `j` `k` | Choose a group, showing what's in it |
 | The groups | `l` or `Enter` | Go to the list |
 | Either | `/` | Go to the search, or back |
-| The search | Typing | Narrows across every group, showing each match's group, and `Enter` chooses the first |
+| The search | Typing | Narrows across every group, showing each match's group, and `Enter` chooses the highlighted one |
 | Any | `Esc` | Close, changing nothing |
 
 It opens on the list, on the current choice. A group comes from what's on the track, so an empty slot isn't there, and a group with one thing in it shows that thing directly. A short list with no groups stays as pickers are now, opening on the search, so `K` then `pl` still works. Two levels are enough for targets. More levels, and tags that cut across groups as the Digitakt II's do, wait for something that needs them, like a sample browser. Step commands and the sample picker can use this later.

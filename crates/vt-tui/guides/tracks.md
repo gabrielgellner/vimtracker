@@ -85,6 +85,15 @@ both LFOs', so `Env 2` can bring in an LFO's depth with each note. It only goes 
 `LFO 2` can't reach `LFO 1`. `Rate` can't be moved, as LFOs work out where they are from the
 song's position.
 
+`K` on `Dest` shows it by group, opening on what's chosen:
+
+| Keys | Does |
+|---|---|
+| `j` `k` | Move in the list, or choose a group |
+| `h` `l` | Go to the groups or back to the list |
+| `/` | Go to the search and back. It reaches every group |
+| `Enter` | Choose, or on a group, go into it |
+
 `Dest` and step commands only list what's loaded: a synth's settings under their names on
 that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
 nothing until it's back.

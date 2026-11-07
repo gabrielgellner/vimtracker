@@ -18,7 +18,7 @@ use crate::app::{App, Entry, Field};
 use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::picker::{Item, Pick, Picker};
+use crate::input::picker::{Focus, Item, Pick, Picker};
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 
 /// How many files the sample browser lists, and how many folders deep it looks.
@@ -442,6 +442,31 @@ impl App {
             self.mode = Mode::Normal;
             return;
         };
+        if picker.has_groups() {
+            match (picker.focus, key.code) {
+                (_, KeyCode::Char('/')) => return picker.toggle_search(),
+                (Focus::List, KeyCode::Char('j')) => return picker.move_highlight(1),
+                (Focus::List, KeyCode::Char('k')) => return picker.move_highlight(-1),
+                (Focus::List, KeyCode::Char('h')) => {
+                    picker.focus = Focus::Groups;
+                    return;
+                }
+                (Focus::Groups, KeyCode::Char('j')) => return picker.move_group(1),
+                (Focus::Groups, KeyCode::Char('k')) => return picker.move_group(-1),
+                (Focus::Groups, KeyCode::Char('l')) => {
+                    picker.focus = Focus::List;
+                    return;
+                }
+                // Into a group of more than one, and a lone item is chosen below.
+                (Focus::Groups, KeyCode::Enter) if picker.in_group() > 1 => {
+                    picker.focus = Focus::List;
+                    return;
+                }
+                // Browsing doesn't type.
+                (Focus::List | Focus::Groups, KeyCode::Char(_)) => return,
+                _ => {}
+            }
+        }
         match key.code {
             KeyCode::Esc => {
                 self.picker = None;

@@ -2317,7 +2317,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 
     // The second LFO's Dest, on the next track.
     press(&mut app, "W");
-    press(&mut app, "Ljjj0K");
+    press(&mut app, "Ljjj0K/");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
@@ -2337,11 +2337,13 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     // It opens on what's set, and leaves the other settings alone. Esc changes nothing.
     typed_rate_on_second_lfo(&mut app);
     press(&mut app, "0K");
-    assert_eq!(app.picker.as_ref().unwrap().selected, 2);
+    assert_eq!(
+        app.picker.as_ref().unwrap().current().unwrap().label,
+        "Res  Filter resonance"
+    );
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.song().tracks[1].lfos[1].destination, Some(Target::Res));
-    press(&mut app, "K");
-    press(&mut app, "pan");
+    press(&mut app, "K/pan");
     special(&mut app, KeyCode::Enter);
     let lfo = app.song().tracks[1].lfos[1];
     assert_eq!(lfo.destination, Some(Target::Pan));
@@ -2483,8 +2485,12 @@ fn the_track_page_sets_envelopes() {
     // Env 2, its depth in hex and its destination from a list.
     press(&mut app, "j0K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().selected, 1, "opens on Cut");
-    press(&mut app, "pitch");
+    assert_eq!(
+        app.picker.as_ref().unwrap().current().unwrap().label,
+        "Cut  Filter cutoff",
+        "opens on what's chosen"
+    );
+    press(&mut app, "/pitch");
     special(&mut app, KeyCode::Enter);
     assert_eq!(env(&app, 1).destination, Some(Target::Pitch));
     press(&mut app, "lllll");
@@ -2537,8 +2543,7 @@ fn the_track_page_draws_each_envelopes_shape() {
 
     // The first envelope on Vol has no depth to show, and off it, it does.
     assert!(page(&app)[3].contains("--"));
-    press(&mut app, "0K");
-    press(&mut app, "cut");
+    press(&mut app, "0K/cut");
     special(&mut app, KeyCode::Enter);
     assert!(page(&app)[3].contains("00"));
 }
@@ -2555,7 +2560,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
         assert_eq!(app.mode, Mode::Normal);
     };
     press(&mut app, "Ljj0");
-    choose(&mut app, "cut");
+    choose(&mut app, "/cut");
     assert_eq!(lfo(&app).destination, Some(Target::Cut));
 
     press(&mut app, "l");
@@ -5124,7 +5129,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     // LFO 1's Dest is on the Mod page, its third row.
     press(&mut app, " 4Ljj");
     let list = |app: &mut App| {
-        press(app, "K");
+        press(app, "K/");
         let labels: Vec<String> = app
             .picker
             .as_ref()
@@ -5148,7 +5153,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     );
 
     // Choosing one saves it, and it reads back on the page.
-    press(&mut app, "K1 amount");
+    press(&mut app, "K/1 amount");
     special(&mut app, KeyCode::Enter);
     let target = Target::Slot { slot: 0, param: 1 };
     assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
@@ -5305,7 +5310,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
     // A sample track has no synth settings, in Dest or for a step.
-    let dest = labels(&mut app, " 4LjjK");
+    let dest = labels(&mut app, " 4LjjK/");
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
     let steps = labels(&mut app, " 3llK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
@@ -5318,13 +5323,13 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].machine, Machine::Plaits);
     assert_eq!(app.song().tracks[0].synth_voice, SynthVoice::Fm);
-    let dest = labels(&mut app, "LggjjK");
+    let dest = labels(&mut app, "LggjjK/");
     assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
     let steps = labels(&mut app, " 3K");
     assert!(on(&steps, "Index"), "{steps:?}");
 
     // One chosen stays through a change of machine, and says what happened.
-    press(&mut app, " 4Kratio");
+    press(&mut app, " 4K/ratio");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].lfos[0].destination, Some(Target::Har));
     press(&mut app, "HggK");
@@ -5360,24 +5365,24 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
-    let first = labels(&mut app, " 4LjjK");
+    let first = labels(&mut app, " 4LjjK/");
     assert!(
         has(&first, "L2 Depth") && has(&first, "L2 Phase"),
         "{first:?}"
     );
     assert!(!has(&first, "L1 Depth"), "{first:?}");
-    let second = labels(&mut app, "jK");
+    let second = labels(&mut app, "jK/");
     assert!(
         !has(&second, "L1 Depth") && !has(&second, "L2 Depth"),
         "{second:?}"
     );
-    let envelope = labels(&mut app, "ggK");
+    let envelope = labels(&mut app, "ggK/");
     assert!(
         has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase"),
         "{envelope:?}"
     );
 
-    press(&mut app, "jjKl2 depth");
+    press(&mut app, "jjK/l2 depth");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
@@ -5388,4 +5393,122 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
         .find(|line| line.starts_with("LFO 1"))
         .unwrap();
     assert!(line.contains("L2 Depth"), "{line}");
+}
+
+#[test]
+fn dest_can_be_browsed_by_group_as_well_as_searched() {
+    use vt_model::target::Target;
+    use vt_tui::input::picker::Focus;
+    let (mut app, _realtime) = app();
+    // Distort in slot 1, then LFO 1's Dest.
+    press(&mut app, " 4LL=HjjK");
+    let current = |app: &App| {
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|item| item.label.clone())
+            .unwrap_or_default()
+    };
+    let focus = |app: &App| app.picker.as_ref().unwrap().focus;
+    assert_eq!(focus(&app), Focus::List);
+    assert!(current(&app).starts_with("---"), "{}", current(&app));
+
+    // h to the groups, down to Filter, which shows its own.
+    press(&mut app, "hj");
+    assert_eq!(focus(&app), Focus::Groups);
+    assert!(current(&app).starts_with("Cut"), "{}", current(&app));
+
+    // l into it, and down the list.
+    press(&mut app, "lj");
+    assert_eq!(focus(&app), Focus::List);
+    assert!(current(&app).starts_with("Res"), "{}", current(&app));
+    assert_eq!(app.mode, Mode::Picker, "browsing doesn't type or choose");
+    press(&mut app, "x");
+    assert!(app.picker.as_ref().unwrap().query.is_empty());
+
+    // Enter on a group goes in, and Enter in the list chooses.
+    press(&mut app, "hj");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(focus(&app), Focus::List);
+    assert!(current(&app).starts_with("Pan"), "{}", current(&app));
+
+    // The search reaches everything, and / comes back.
+    press(&mut app, "/1 mi");
+    assert_eq!(focus(&app), Focus::Search);
+    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
+    press(&mut app, "/");
+    assert_eq!(focus(&app), Focus::List);
+    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::Slot { slot: 0, param: 2 })
+    );
+
+    // It opens on what's chosen, and Esc leaves it.
+    press(&mut app, "K");
+    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
+    press(&mut app, "hk");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::Slot { slot: 0, param: 2 }),
+        "changing nothing"
+    );
+
+    // A lone item in the groups is chosen right there. On a sample track, Machine holds Pitch.
+    press(&mut app, "Kh");
+    let picker = app.picker.as_ref().unwrap();
+    let at = picker
+        .group_names()
+        .iter()
+        .position(|name| name == "Pitch")
+        .unwrap();
+    let by = at as isize - picker.group as isize;
+    for _ in 0..by.unsigned_abs() {
+        press(&mut app, if by > 0 { "j" } else { "k" });
+    }
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::Pitch)
+    );
+}
+
+#[test]
+fn dests_window_draws_groups_beside_the_list() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LjjKhj");
+    let picker = app.picker.as_ref().unwrap();
+    let backend = ratatui::backend::TestBackend::new(100, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: String = (0..24)
+        .map(|y| {
+            (0..100)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(text.contains("  ---       Cut  Filter cutoff"), "{text}");
+    assert!(text.contains("> Filter    Res  Filter resonance"), "{text}");
+    assert!(text.contains("  Output"), "{text}");
+    assert!(text.contains("/ search"), "{text}");
+}
+
+#[test]
+fn a_plain_list_still_opens_on_its_search() {
+    // `K` then typing on Machine, and / is just a letter.
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4Kpl");
+    assert_eq!(app.picker.as_ref().unwrap().query, "pl");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "K/");
+    assert_eq!(app.picker.as_ref().unwrap().query, "/");
 }

@@ -170,6 +170,14 @@ impl Target {
         )
     }
 
+    /// What it's listed with, so each slot has its own group.
+    pub fn group(self) -> String {
+        match self {
+            Self::Slot { slot, .. } => format!("FX {}", slot + 1),
+            _ => self.info().group.to_owned(),
+        }
+    }
+
     /// What it does, for a list to choose from, on this track.
     pub fn meaning_on(self, track: &Track) -> String {
         if self.machine_setting().is_some() {
@@ -426,6 +434,13 @@ mod tests {
         assert!(lfos(&Target::on_track(&track)).is_empty(), "nor on a step");
         assert_eq!(Target::LfoDepth { lfo: 1 }.name_on(&track), "L2 Depth");
         assert_eq!(Target::LfoPhase { lfo: 0 }.name_on(&track), "L1 Phase");
+    }
+
+    #[test]
+    fn each_slot_and_lfo_is_its_own_group_in_a_row() {
+        assert_eq!(Target::Cut.group(), "Filter");
+        assert_eq!(Target::Slot { slot: 1, param: 0 }.group(), "FX 2");
+        assert_eq!(Target::LfoPhase { lfo: 1 }.group(), "LFO 2");
     }
 
     #[test]
