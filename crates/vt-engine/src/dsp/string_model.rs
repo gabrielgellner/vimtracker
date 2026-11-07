@@ -1,7 +1,7 @@
 //! A plucked string, modelled as a delay line with damping, dispersion and a curved bridge, from
 //! Mutable Instruments' Plaits. Ported to Rust from `string_engine.cc`,
 //! `physical_modelling/string_voice.cc` and `physical_modelling/string.cc`, with its main output,
-//! limited as Plaits limits it.
+//! limited as Plaits limits it, after a gain that brings it level with the other voices.
 //!
 //! It plays one string. Plaits keeps three, so one rings on under the next note, which a track's
 //! own voice does here instead.
@@ -36,6 +36,9 @@ const LINE: usize = 1024;
 const ACCENT: f32 = 0.8;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
+/// A pluck puts little into the string, so Plaits' string is about 20 dB quieter than its other
+/// voices. This brings it level with them before the limiter, which catches the brightest.
+const PRE_GAIN: f32 = 8.0;
 
 #[inline]
 fn semitones(interval: f32) -> f32 {
@@ -151,7 +154,7 @@ impl StringModel {
             &mut output,
         );
         for (out, sample) in self.output.iter_mut().zip(output) {
-            *out = self.limiter.process(1.0, sample);
+            *out = self.limiter.process(PRE_GAIN, sample);
         }
         self.fresh = false;
     }
@@ -270,7 +273,7 @@ mod tests {
 
     #[test]
     fn a_pluck_rings_at_its_note_and_dies_away() {
-        let out = run(220.0, plain(), 48_000);
+        let out = run(220.0, plain(), 120_000);
         let loud = peak(&out[..4_800]);
         assert!(loud > 0.05, "{loud}");
         let upward = out[2_400..7_200]
@@ -278,7 +281,8 @@ mod tests {
             .filter(|pair| pair[0] < 0.0 && pair[1] >= 0.0)
             .count();
         assert!((upward as i32 - 22).abs() <= 2, "{upward}");
-        assert!(peak(&out[43_200..]) < loud * 0.1, "it rings on");
+        // The limiter evens out the loud start, so the tail is measured a little later.
+        assert!(peak(&out[96_000..100_800]) < loud * 0.1, "it rings on");
     }
 
     #[test]
