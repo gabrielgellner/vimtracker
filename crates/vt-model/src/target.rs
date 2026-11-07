@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::insert::{INSERTS, MAX_PARAMS};
+use crate::lfo::LFOS_PER_TRACK;
 use crate::song::{Machine, Track};
 use crate::step::FxCommand;
 
@@ -25,6 +26,14 @@ pub enum Target {
     Slot {
         slot: u8,
         param: u8,
+    },
+    /// How far an LFO swings, from another moving it.
+    LfoDepth {
+        lfo: u8,
+    },
+    /// Where an LFO is in its cycle, from another moving it.
+    LfoPhase {
+        lfo: u8,
     },
 }
 
@@ -57,7 +66,7 @@ impl Target {
     ];
 
     /// How many places sources add to.
-    pub const COUNT: usize = Self::ALL.len() + INSERTS * MAX_PARAMS;
+    pub const COUNT: usize = Self::ALL.len() + INSERTS * MAX_PARAMS + LFOS_PER_TRACK * 2;
 
     /// Its place among those.
     #[inline]
@@ -76,6 +85,8 @@ impl Target {
             Self::Slot { slot, param } => {
                 Self::ALL.len() + slot as usize * MAX_PARAMS + param as usize
             }
+            Self::LfoDepth { lfo } => Self::ALL.len() + INSERTS * MAX_PARAMS + lfo as usize * 2,
+            Self::LfoPhase { lfo } => Self::ALL.len() + INSERTS * MAX_PARAMS + lfo as usize * 2 + 1,
         }
     }
 
@@ -106,6 +117,10 @@ impl Target {
             Self::Tim => info("Tim", "Machine", "A synth's second setting", Some("TIM")),
             Self::Mor => info("Mor", "Machine", "A synth's third setting", Some("MOR")),
             Self::Slot { .. } => info("Setting", "FX", "A setting of what's in a slot", None),
+            Self::LfoDepth { lfo: 0 } => info("L1 Depth", "LFO 1", "How far LFO 1 swings", None),
+            Self::LfoPhase { lfo: 0 } => info("L1 Phase", "LFO 1", "Where LFO 1 is", None),
+            Self::LfoDepth { .. } => info("L2 Depth", "LFO 2", "How far LFO 2 swings", None),
+            Self::LfoPhase { .. } => info("L2 Phase", "LFO 2", "Where LFO 2 is", None),
         }
     }
 
@@ -168,6 +183,27 @@ impl Target {
             .get(usize::from(slot))
             .map_or("---", |insert| insert.name());
         format!("{effect} in slot {}", slot + 1)
+    }
+
+    /// What an envelope can move: what's on the track, and either LFO's settings, as envelopes run
+    /// first.
+    pub fn for_envelope(track: &Track) -> Vec<Self> {
+        let mut targets = Self::on_track(track);
+        targets.extend(Self::lfo_settings());
+        targets
+    }
+
+    /// What an LFO can move: what's on the track, and the settings of the LFOs after it, as each
+    /// runs in order, so there's never a way back round.
+    pub fn for_lfo(track: &Track, lfo: usize) -> Vec<Self> {
+        let mut targets = Self::on_track(track);
+        targets.extend(Self::lfo_settings().skip((lfo + 1) * 2));
+        targets
+    }
+
+    /// Every LFO's settings, in order.
+    fn lfo_settings() -> impl Iterator<Item = Self> {
+        (0..LFOS_PER_TRACK as u8).flat_map(|lfo| [Self::LfoDepth { lfo }, Self::LfoPhase { lfo }])
     }
 
     /// What's on a track to choose from: what it has from its machine, and the settings of what's
@@ -259,7 +295,7 @@ mod tests {
             inserts: [Insert::ALL[1]; INSERTS],
             ..Track::default()
         };
-        let targets = Target::on_track(&track);
+        let targets = Target::for_envelope(&track);
         for (at, target) in targets.iter().enumerate() {
             assert_eq!(target.index(), at, "{target:?}");
         }
@@ -368,6 +404,28 @@ mod tests {
             }
         }
         assert_eq!(FxCommand::Del.target(), None);
+    }
+
+    #[test]
+    fn lfos_can_only_reach_those_after_them_and_envelopes_reach_both() {
+        let track = Track::default();
+        let lfos = |list: &[Target]| {
+            list.iter()
+                .filter(|target| {
+                    matches!(target, Target::LfoDepth { .. } | Target::LfoPhase { .. })
+                })
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            lfos(&Target::for_lfo(&track, 0)),
+            [Target::LfoDepth { lfo: 1 }, Target::LfoPhase { lfo: 1 }]
+        );
+        assert!(lfos(&Target::for_lfo(&track, 1)).is_empty(), "no way back");
+        assert_eq!(lfos(&Target::for_envelope(&track)).len(), 4);
+        assert!(lfos(&Target::on_track(&track)).is_empty(), "nor on a step");
+        assert_eq!(Target::LfoDepth { lfo: 1 }.name_on(&track), "L2 Depth");
+        assert_eq!(Target::LfoPhase { lfo: 0 }.name_on(&track), "L1 Phase");
     }
 
     #[test]

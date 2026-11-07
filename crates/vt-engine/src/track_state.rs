@@ -3,7 +3,7 @@
 use vt_model::constants::{TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
-use vt_model::lfo::{LFOS_PER_TRACK, wave};
+use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
 use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 use vt_model::target::Target;
@@ -391,38 +391,8 @@ impl TrackState {
         if !stopped {
             self.advance_glides(now);
         }
-        let mut offsets = [0.0_f32; Target::COUNT];
         self.filter_moving = false;
-        for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
-            let Some(destination) = lfo.destination else {
-                continue;
-            };
-            // A target that isn't on this track does no work.
-            if lfo.depth == 0 || !destination.exists_on(track) {
-                continue;
-            }
-            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
-            if stopped {
-                continue;
-            }
-            let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
-            let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
-            let key = now.seed ^ ((index as u64) << 8 | slot as u64);
-            let value = wave(lfo.shape, cycles + f64::from(lfo.phase) / 360.0, key);
-            offsets[destination.index()] += value * f32::from(lfo.depth) / 255.0;
-        }
-        // A different filter starts from silence rather than from another's state.
-        if self.filter_type != track.filter {
-            self.filter_type = track.filter;
-            self.filter = [Channel::default(); 2];
-            self.coefficients = None;
-        }
-        self.drive.target = f32::from(track.drive) / 255.0;
-        self.low_cut.target = f32::from(track.low_cut) / 255.0;
-        self.high_cut.target = f32::from(track.high_cut) / 255.0;
-        self.cut_offset.target = offsets[Target::Cut.index()];
-        self.res_offset.target = offsets[Target::Res.index()];
-        self.pan_offset.target = offsets[Target::Pan.index()];
+        // Envelopes, then each LFO, so each reads what's before it, and there's no way back round.
         let mut moved = [0.0_f32; Target::COUNT];
         for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
             let Some(destination) = envelope.destination else {
@@ -442,6 +412,43 @@ impl TrackState {
             let level = run.level(envelope, now.clock, now.rate);
             moved[destination.index()] += level * f32::from(envelope.depth) / 255.0;
         }
+        let mut offsets = [0.0_f32; Target::COUNT];
+        for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
+            let Some(destination) = lfo.destination else {
+                continue;
+            };
+            let moved_by = |target: Target| offsets[target.index()] + moved[target.index()];
+            let at = slot as u8;
+            let depth = f32::from(lfo.depth) + moved_by(Target::LfoDepth { lfo: at }) * 255.0;
+            // A target that isn't on this track does no work.
+            if depth == 0.0 || !destination.exists_on(track) {
+                continue;
+            }
+            self.filter_moving |= matches!(destination, Target::Cut | Target::Res);
+            if stopped {
+                continue;
+            }
+            let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
+            let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
+            let key = now.seed ^ ((index as u64) << 8 | slot as u64);
+            let phase =
+                f64::from(lfo.phase) / 360.0 + f64::from(moved_by(Target::LfoPhase { lfo: at }));
+            let value = wave(lfo.shape, cycles + phase, key);
+            let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
+            offsets[destination.index()] += value * depth / 255.0;
+        }
+        // A different filter starts from silence rather than from another's state.
+        if self.filter_type != track.filter {
+            self.filter_type = track.filter;
+            self.filter = [Channel::default(); 2];
+            self.coefficients = None;
+        }
+        self.drive.target = f32::from(track.drive) / 255.0;
+        self.low_cut.target = f32::from(track.low_cut) / 255.0;
+        self.high_cut.target = f32::from(track.high_cut) / 255.0;
+        self.cut_offset.target = offsets[Target::Cut.index()];
+        self.res_offset.target = offsets[Target::Res.index()];
+        self.pan_offset.target = offsets[Target::Pan.index()];
         self.cut_envelope.target = moved[Target::Cut.index()];
         self.res_envelope.target = moved[Target::Res.index()];
         self.pan_envelope.target = moved[Target::Pan.index()];

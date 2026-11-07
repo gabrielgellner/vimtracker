@@ -2262,8 +2262,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(Target::Pitch),
-        "the last on a sample track"
+        Some(Target::LfoPhase { lfo: 1 }),
+        "the last for LFO 1 on a sample track"
     );
 
     press(&mut app, "l=");
@@ -5337,4 +5337,55 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
         .find(|line| line.starts_with("LFO 1"))
         .unwrap();
     assert!(line.contains("Har ---"), "{line}");
+}
+
+#[test]
+fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
+    use vt_model::target::Target;
+    let (mut app, _realtime) = app();
+    let labels = |app: &mut App, keys: &str| {
+        press(app, keys);
+        let found: Vec<String> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .shown()
+            .map(|item| item.label.clone())
+            .collect();
+        special(app, KeyCode::Esc);
+        found
+    };
+    let has = |labels: &[String], name: &str| {
+        labels
+            .iter()
+            .any(|label| label.starts_with(&format!("{name}  ")))
+    };
+    let first = labels(&mut app, " 4LjjK");
+    assert!(
+        has(&first, "L2 Depth") && has(&first, "L2 Phase"),
+        "{first:?}"
+    );
+    assert!(!has(&first, "L1 Depth"), "{first:?}");
+    let second = labels(&mut app, "jK");
+    assert!(
+        !has(&second, "L1 Depth") && !has(&second, "L2 Depth"),
+        "{second:?}"
+    );
+    let envelope = labels(&mut app, "ggK");
+    assert!(
+        has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase"),
+        "{envelope:?}"
+    );
+
+    press(&mut app, "jjKl2 depth");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().tracks[0].lfos[0].destination,
+        Some(Target::LfoDepth { lfo: 1 })
+    );
+    let line = track_page_text(&app)
+        .into_iter()
+        .find(|line| line.starts_with("LFO 1"))
+        .unwrap();
+    assert!(line.contains("L2 Depth"), "{line}");
 }

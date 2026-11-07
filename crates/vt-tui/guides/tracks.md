@@ -80,6 +80,11 @@ brings them in, and `Mix` blends it with the sound going in, from `00` dry to `F
 turns down what comes out, as `Amount` can make it much louder, on the level scale,
 where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
+An LFO can move another: `LFO 1`'s `Dest` has `L2 Depth` and `L2 Phase`, and an envelope's has
+both LFOs', so `Env 2` can bring in an LFO's depth with each note. It only goes one way, so
+`LFO 2` can't reach `LFO 1`. `Rate` can't be moved, as LFOs work out where they are from the
+song's position.
+
 `Dest` and step commands only list what's loaded: a synth's settings under their names on
 that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
 nothing until it's back.
