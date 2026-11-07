@@ -57,10 +57,10 @@ loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
 | Row | Does |
 |---|---|
+| Fill | `Ramp` between the ends, `Random`, `Wave` or `Alternate`. `r` picks anew |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
-| Fill | `Ramp` between them, `Random`, `Wave` or `Alternate`. `r` picks anew |
 | Where | Which rows change, with `Amount` below it for some |
 
 `Wave` swings between the ends, for movement like a pulse across a hat's

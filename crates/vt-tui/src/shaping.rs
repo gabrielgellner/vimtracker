@@ -87,19 +87,15 @@ pub struct ShapePanel {
 }
 
 impl ShapePanel {
-    /// The rows on show. A wave and `Alternate` have their own settings in place of a curve, and
-    /// `Amount` only means something for some choices of rows.
+    /// The rows on show. `Fill` comes first, as it decides the rest: a wave and `Alternate` have
+    /// their own settings in place of a curve, and `Amount` only means something for some choices
+    /// of rows.
     pub fn rows(&self) -> Vec<ShapeRow> {
-        let mut rows = vec![ShapeRow::From, ShapeRow::To];
+        let mut rows = vec![ShapeRow::Fill, ShapeRow::From, ShapeRow::To];
         rows.extend_from_slice(match self.shape.kind {
-            FillKind::Ramp | FillKind::Random => &[ShapeRow::Curve, ShapeRow::S, ShapeRow::Fill],
-            FillKind::Wave => &[
-                ShapeRow::Fill,
-                ShapeRow::Wave,
-                ShapeRow::Rate,
-                ShapeRow::Phase,
-            ],
-            FillKind::Alternate => &[ShapeRow::Fill, ShapeRow::Run],
+            FillKind::Ramp | FillKind::Random => &[ShapeRow::Curve, ShapeRow::S],
+            FillKind::Wave => &[ShapeRow::Wave, ShapeRow::Rate, ShapeRow::Phase],
+            FillKind::Alternate => &[ShapeRow::Run],
         });
         rows.push(ShapeRow::Where);
         if matches!(self.shape.place, Where::Every(_) | Where::Chance(_)) {
@@ -203,7 +199,7 @@ impl App {
                 place: column.default_where(),
                 seed: base.seed.wrapping_add(self.shape_seed),
             },
-            row: ShapeRow::From,
+            row: ShapeRow::Fill,
             typing: None,
             base,
         };
