@@ -1,5 +1,5 @@
-//! `/` on the track page: type part of a setting's name, then a label to land on its value. The
-//! rules for labels are those of flash.nvim's `labeler.lua`.
+//! `/` on the track page or the mixer: type part of a setting's name, then a label to land on its
+//! value. The rules for labels are those of flash.nvim's `labeler.lua`.
 
 use std::time::Instant;
 
@@ -8,8 +8,8 @@ use ratatui::crossterm::event::KeyCode;
 use crate::app::App;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
-use crate::track_page::Control;
+use crate::input::mode::{Mode, View};
+use crate::track_page::{Control, MIXER_ROWS};
 
 /// The labels, with the easiest keys first.
 const LABELS: &str = "asdfghjklqwertyuiopzxcvbnm";
@@ -77,6 +77,16 @@ fn labelled(
 }
 
 impl App {
+    /// The settings a search looks through. The mixer's are those of the cursor's track, whose row
+    /// the cursor stays on.
+    fn jump_rows(&self) -> &'static [&'static [Control]] {
+        if self.view == View::Mixer {
+            &MIXER_ROWS
+        } else {
+            self.page_rows()
+        }
+    }
+
     /// The settings on this page whose names hold the search, nearest the cursor first, with their
     /// names in lower case.
     fn jump_hits(&self, query: &str) -> Vec<(Control, String)> {
@@ -89,8 +99,13 @@ impl App {
             .get(self.cursor.track)
             .map(|track| track.synth_voice)
             .unwrap_or_default();
+        let (from_row, from_field) = if self.view == View::Mixer {
+            (0, self.mixer_column)
+        } else {
+            (self.track_row, self.track_field)
+        };
         let mut hits: Vec<_> = self
-            .page_rows()
+            .jump_rows()
             .iter()
             .enumerate()
             .flat_map(|(row, controls)| {
@@ -105,12 +120,7 @@ impl App {
             })
             .filter(|(_, _, _, name)| name.contains(query))
             .collect();
-        hits.sort_by_key(|(row, field, _, _)| {
-            (
-                row.abs_diff(self.track_row),
-                field.abs_diff(self.track_field),
-            )
-        });
+        hits.sort_by_key(|(row, field, _, _)| (row.abs_diff(from_row), field.abs_diff(from_field)));
         hits.into_iter()
             .map(|(_, _, control, name)| (control, name))
             .collect()
@@ -144,7 +154,7 @@ impl App {
     fn land_on(&mut self, control: Control) {
         self.close_field_jump();
         let place = self
-            .page_rows()
+            .jump_rows()
             .iter()
             .enumerate()
             .find_map(|(row, controls)| {
@@ -153,7 +163,11 @@ impl App {
             });
         if let Some((row, field)) = place {
             self.record_jump();
-            self.move_control(row, field);
+            if self.view == View::Mixer {
+                self.mixer_column = field;
+            } else {
+                self.move_control(row, field);
+            }
         }
     }
 

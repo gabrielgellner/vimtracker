@@ -139,4 +139,5 @@ on a step.
 Press `Space 6` for every track's `Level`, `Pan`, `Delay`, `Reverb`, mute and
 solo on one page. `j` and `k` move between tracks, `h` and `l` between settings,
 and values edit as they do on the track page. On mute and solo, `=` switches on,
-`-` switches off, and `K` or `i` changes it.
+`-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
+it does on the track page, staying on the cursor's track.

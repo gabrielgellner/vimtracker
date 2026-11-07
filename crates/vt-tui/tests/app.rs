@@ -4360,7 +4360,55 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
 }
 
 #[test]
-fn slash_only_jumps_on_the_track_page() {
+fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 6j");
+    assert_eq!(app.view, View::Mixer);
+    assert_eq!(app.cursor.track, 1);
+    press(&mut app, "/s");
+    assert_eq!(app.mode, Mode::Jump);
+    let jump = app.field_jump.as_ref().unwrap();
+    let solo = jump.label(Control::Solo).unwrap();
+    assert!(jump.label(Control::Level).is_none());
+
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let line = |y: u16| {
+        (0..80)
+            .map(|x| buffer[(x, y)].symbol().to_owned())
+            .collect::<String>()
+    };
+    // The columns stay put, with the label in the name and on this track's value alone.
+    assert!(line(2).contains(&format!("S{solo}lo")), "{}", line(2));
+    let column = line(2).find('S').unwrap();
+    assert_eq!(buffer[(column as u16 + 1, 2)].bg, vt_tui::theme::PEACH);
+    assert_eq!(buffer[(column as u16, 3)].symbol(), "-", "track 1");
+    assert_eq!(
+        buffer[(column as u16, 4)].symbol(),
+        solo.to_string(),
+        "track 2"
+    );
+
+    press(&mut app, &solo.to_string());
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(column_name(&app), "Solo");
+    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.view, View::Mixer);
+
+    // Ctrl-O goes back to the column it left.
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(column_name(&app), "Level");
+    assert_eq!(app.view, View::Mixer);
+}
+
+#[test]
+fn slash_only_jumps_on_the_parameter_pages() {
     let (mut app, _realtime) = app();
     press(&mut app, " 3/");
     assert_ne!(app.mode, Mode::Jump);
