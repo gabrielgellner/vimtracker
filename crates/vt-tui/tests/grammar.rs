@@ -104,8 +104,8 @@ fn x_clears_one_field() {
 
 #[test]
 fn clearing_either_part_of_a_slot_clears_the_slot() {
-    check(&[A], "llx", &["C-4 40 ---00 ---00 ---00"]);
     check(&[A], "lllx", &["C-4 40 ---00 ---00 ---00"]);
+    check(&[A], "llllx", &["C-4 40 ---00 ---00 ---00"]);
 }
 
 #[test]
@@ -172,8 +172,8 @@ fn shifting_moves_notes_and_values_and_skips_the_rest() {
     // A volume column moves by 1, and an empty one is left alone.
     check(&[A, E], "l>j", &["C-4 41 CUT20 ---00 ---00", E]);
     // An FX value moves, and an empty slot is left alone.
-    check(&[A], "ll>>", &["C#4 40 CUT20 ---00 ---00"]);
-    check(&[A], "ll>j", &["C-4 40 CUT21 ---00 ---00"]);
+    check(&[A], "lll>>", &["C#4 40 CUT20 ---00 ---00"]);
+    check(&[A], "lll>j", &["C-4 40 CUT21 ---00 ---00"]);
     // Shifts below the range are clamped.
     check(
         &["C-0 00 ---00 ---00 ---00"],
@@ -187,7 +187,7 @@ fn increment_takes_a_count_as_its_amount() {
     check(&[A], "3=", &["D#4 40 CUT20 ---00 ---00"]);
     check(&[A], "12-", &["C-3 40 CUT20 ---00 ---00"]);
     check(&[A], "l3=", &["C-4 43 CUT20 ---00 ---00"]);
-    check(&[A], "ll=", &["C-4 40 CUT21 ---00 ---00"]);
+    check(&[A], "lll=", &["C-4 40 CUT21 ---00 ---00"]);
     check(&[A], "^a", &["C#4 40 CUT20 ---00 ---00"]);
     check(&[A], "^x", &["B-3 40 CUT20 ---00 ---00"]);
     // Values clamp to their ranges.
@@ -481,6 +481,8 @@ fn motions_move_the_cursor_and_stop_at_edges() {
     keys(&mut app, "w");
     assert_eq!(app.cursor.field, Field::Velocity);
     keys(&mut app, "w");
+    assert_eq!(app.cursor.field, Field::Gate);
+    keys(&mut app, "w");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     keys(&mut app, "l");
     assert_eq!(app.cursor.field, Field::FxValue(0));
@@ -529,8 +531,8 @@ fn a_velocity_above_the_top_writes_the_top() {
     check(&[E, E], "liff", &["--- 7F ---00 ---00 ---00", E]);
     check(&[FULL], "lrff", &["C-4 7F VOL10 PAN20 CUT30"]);
     // Other FX values have their own tops: the level scale's, or their whole range.
-    check(&[FULL], "lllrff", &["C-4 70 VOLF8 PAN20 CUT30"]);
-    check(&[FULL], "lllllrff", &["C-4 70 VOL10 PANFF CUT30"]);
+    check(&[FULL], "llllrff", &["C-4 70 VOLF8 PAN20 CUT30"]);
+    check(&[FULL], "llllllrff", &["C-4 70 VOL10 PANFF CUT30"]);
 }
 
 #[test]
@@ -541,7 +543,7 @@ fn partly_typed_values_are_dropped_on_esc() {
 #[test]
 fn a_typed_command_takes_effect_only_with_its_value() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "lliCUT");
+    keys(&mut app, "llliCUT");
     assert_eq!(
         steps(&app)[0],
         E,
@@ -554,13 +556,13 @@ fn a_typed_command_takes_effect_only_with_its_value() {
 
 #[test]
 fn lowercase_commands_are_uppercased() {
-    check(&[E], "lliret14<Esc>", &["--- -- RET14 ---00 ---00"]);
+    check(&[E], "llliret14<Esc>", &["--- -- RET14 ---00 ---00"]);
 }
 
 #[test]
 fn an_invalid_command_is_refused() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "lliXYZ");
+    keys(&mut app, "llliXYZ");
     assert_eq!(steps(&app), [A]);
     assert!(app.status.contains("isn't an FX command"));
     assert_eq!(app.cursor.field, Field::FxCommand(0));
@@ -569,7 +571,7 @@ fn an_invalid_command_is_refused() {
 #[test]
 fn esc_after_a_command_writes_nothing() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "lliVOL<Esc>");
+    keys(&mut app, "llliVOL<Esc>");
     assert_eq!(steps(&app), [A]);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert!(app.status.contains("needs a value"));
@@ -578,14 +580,14 @@ fn esc_after_a_command_writes_nothing() {
 #[test]
 fn a_value_needs_a_command() {
     let (mut app, _rt) = app_with(&[E]);
-    keys(&mut app, "llli40");
+    keys(&mut app, "lllli40");
     assert_eq!(steps(&app), [E]);
     assert!(app.status.contains("FX command first"));
 }
 
 #[test]
 fn a_value_on_an_existing_command_keeps_the_command() {
-    check(&[A], "llli7F<Esc>", &["C-4 40 CUT7F ---00 ---00"]);
+    check(&[A], "lllli7F<Esc>", &["C-4 40 CUT7F ---00 ---00"]);
 }
 
 #[test]
@@ -841,11 +843,11 @@ fn r_ignores_the_note_velocity_setting() {
 #[test]
 fn r_takes_a_whole_value_in_the_other_columns() {
     check(&[FULL], "lr40", &["C-4 40 VOL10 PAN20 CUT30"]);
-    check(&[FULL], "llr04", &["C-4 70 VOL10 PAN20 CUT30"]);
-    check(&[FULL], "lllr7f", &["C-4 70 VOL7F PAN20 CUT30"]);
-    check(&[FULL], "llrres7f", &["C-4 70 RES7F PAN20 CUT30"]);
+    check(&[FULL], "lllr04", &["C-4 70 VOL10 PAN20 CUT30"]);
+    check(&[FULL], "llllr7f", &["C-4 70 VOL7F PAN20 CUT30"]);
+    check(&[FULL], "lllrres7f", &["C-4 70 RES7F PAN20 CUT30"]);
     let (mut app, _rt) = app_with(&[FULL]);
-    keys(&mut app, "llrres7f");
+    keys(&mut app, "lllrres7f");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert_eq!(app.cursor.step, 0);
     assert_eq!(app.mode, Mode::Normal);
@@ -854,7 +856,7 @@ fn r_takes_a_whole_value_in_the_other_columns() {
 #[test]
 fn r_needs_a_command_before_an_fx_value() {
     let (mut app, _rt) = app_with(&[E]);
-    keys(&mut app, "lllr");
+    keys(&mut app, "llllr");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.status.contains("FX command"), "{}", app.status);
 }
@@ -863,10 +865,10 @@ fn r_needs_a_command_before_an_fx_value() {
 fn escape_or_a_bad_value_leaves_r_unchanged() {
     check(&[FULL], "r<Esc>", &[FULL]);
     check(&[FULL], "lr4<Esc>", &[FULL]);
-    check(&[FULL], "llrre<Esc>", &[FULL]);
-    check(&[FULL], "llrres<Esc>", &[FULL]);
+    check(&[FULL], "lllrre<Esc>", &[FULL]);
+    check(&[FULL], "lllrres<Esc>", &[FULL]);
     let (mut app, _rt) = app_with(&[FULL]);
-    keys(&mut app, "llrres<Esc>");
+    keys(&mut app, "lllrres<Esc>");
     assert_eq!(app.cursor.field, Field::FxCommand(0));
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.entry.text.is_empty());
@@ -909,7 +911,7 @@ fn dot_repeats_a_replace_at_the_cursor() {
     );
     check(
         &[FULL, FULL],
-        "llrres7fj.",
+        "lllrres7fj.",
         &["C-4 70 RES7F PAN20 CUT30", "C-4 70 RES7F PAN20 CUT30"],
     );
 }
@@ -940,7 +942,7 @@ fn s_works_on_the_other_columns() {
     check(&[FULL, E], "ls<Esc>", &["C-4 -- VOL10 PAN20 CUT30", E]);
     check(
         &[FULL, E],
-        "llsres7f<Esc>",
+        "lllsres7f<Esc>",
         &["C-4 70 RES7F PAN20 CUT30", E],
     );
 }
@@ -948,13 +950,13 @@ fn s_works_on_the_other_columns() {
 #[test]
 fn s_on_an_fx_value_keeps_its_command_for_the_new_value() {
     let (mut app, _rt) = app_with(&[FULL, E]);
-    keys(&mut app, "llls");
+    keys(&mut app, "lllls");
     assert_eq!(steps(&app)[0], "C-4 70 ---00 PAN20 CUT30");
     keys(&mut app, "60<Esc>");
     assert_eq!(steps(&app)[0], "C-4 70 VOL60 PAN20 CUT30");
 
     let (mut app, _rt) = app_with(&[FULL, E]);
-    keys(&mut app, "llls<Esc>");
+    keys(&mut app, "lllls<Esc>");
     assert_eq!(steps(&app)[0], "C-4 70 ---00 PAN20 CUT30");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
@@ -1069,7 +1071,7 @@ fn visual_r_puts_a_velocity_only_on_notes() {
 #[test]
 fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llvjrCUT40");
+    keys(&mut app, "lllvjrCUT40");
     assert_eq!(
         steps(&app),
         ["--- -- CUT40 ---00 ---00", "--- -- CUT40 ---00 ---00",]
@@ -1078,7 +1080,7 @@ fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
     assert_eq!(steps(&app), [E, E]);
 
     let (mut app, _rt) = app_with(&[E, "--- -- RES10 ---00 ---00", E, "--- -- CUT20 ---00 ---00"]);
-    keys(&mut app, "lllvGr7F");
+    keys(&mut app, "llllvGr7F");
     assert_eq!(
         steps(&app),
         [E, "--- -- RES7F ---00 ---00", E, "--- -- CUT7F ---00 ---00",]
@@ -1143,7 +1145,7 @@ fn rotating_all_the_way_round_leaves_no_undo_step() {
 #[test]
 fn level_fx_values_snap_to_the_top_of_the_scale() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llrVOLFF");
+    keys(&mut app, "lllrVOLFF");
     assert_eq!(steps(&app)[0], "--- -- VOLF8 ---00 ---00");
     keys(&mut app, "lrFE");
     assert_eq!(steps(&app)[0], "--- -- VOLF8 ---00 ---00");
@@ -1152,10 +1154,10 @@ fn level_fx_values_snap_to_the_top_of_the_scale() {
 
     // Filling a selection snaps too, and other commands keep their whole range.
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llvjrSNAFF");
+    keys(&mut app, "lllvjrSNAFF");
     assert_eq!(steps(&app)[1], "--- -- SNAF8 ---00 ---00");
     let (mut app, _rt) = app_with(&[E]);
-    keys(&mut app, "llrCUTFF");
+    keys(&mut app, "lllrCUTFF");
     assert_eq!(steps(&app)[0], "--- -- CUTFF ---00 ---00");
 }
 
@@ -1214,12 +1216,12 @@ fn plus_and_underscore_are_large_steps() {
     check(&[A], "_", &["C-3 40 CUT20 ---00 ---00"]);
     check(&[A], "l+", &["C-4 50 CUT20 ---00 ---00"]);
     check(&[A], "l_", &["C-4 30 CUT20 ---00 ---00"]);
-    check(&[A], "ll+", &["C-4 40 CUT30 ---00 ---00"]);
-    check(&[A], "ll2_", &["C-4 40 CUT00 ---00 ---00"]);
+    check(&[A], "lll+", &["C-4 40 CUT30 ---00 ---00"]);
+    check(&[A], "lll2_", &["C-4 40 CUT00 ---00 ---00"]);
     // They stop at each field's top.
     check(&[A], "l9+", &["C-4 7F CUT20 ---00 ---00"]);
-    check(&[A], "ll99+", &["C-4 40 CUTFF ---00 ---00"]);
-    check(&[B], "ll99+", &["D-4 50 VOLF8 ---00 ---00"]);
+    check(&[A], "lll99+", &["C-4 40 CUTFF ---00 ---00"]);
+    check(&[B], "lll99+", &["D-4 50 VOLF8 ---00 ---00"]);
 }
 
 #[test]
@@ -1228,7 +1230,7 @@ fn equals_and_minus_are_small_steps_and_carry() {
     check(&[A], "-", &["B-3 40 CUT20 ---00 ---00"]);
     check(
         &["--- -- CUT7F ---00 ---00"],
-        "ll=",
+        "llll=",
         &["--- -- CUT80 ---00 ---00"],
     );
 }
@@ -1236,13 +1238,13 @@ fn equals_and_minus_are_small_steps_and_carry() {
 #[test]
 fn ret_moves_each_digit_alone_and_never_carries() {
     let ret = "--- -- RET1F ---00 ---00";
-    check(&[ret], "ll=", &[ret]);
-    check(&[ret], "ll-", &["--- -- RET1E ---00 ---00"]);
-    check(&[ret], "ll+", &["--- -- RET2F ---00 ---00"]);
-    check(&[ret], "ll_", &["--- -- RET0F ---00 ---00"]);
-    check(&[ret], "ll_ll_", &["--- -- RET0F ---00 ---00"]);
+    check(&[ret], "lll=", &[ret]);
+    check(&[ret], "lll-", &["--- -- RET1E ---00 ---00"]);
+    check(&[ret], "lll+", &["--- -- RET2F ---00 ---00"]);
+    check(&[ret], "lll_", &["--- -- RET0F ---00 ---00"]);
+    check(&[ret], "lll_lll_", &["--- -- RET0F ---00 ---00"]);
     let top = "--- -- RETF4 ---00 ---00";
-    check(&[top], "ll+", &[top]);
+    check(&[top], "lll+", &[top]);
 }
 
 #[test]
@@ -1254,14 +1256,14 @@ fn large_steps_work_on_a_selection_and_repeat() {
         ["C-5 40 CUT20 ---00 ---00", "D-5 50 VOL30 ---00 ---00"]
     );
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "ll+.");
+    keys(&mut app, "lll+.");
     assert_eq!(steps(&app), ["C-4 40 CUT40 ---00 ---00"]);
 }
 
 #[test]
 fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     let (mut app, _rt) = app_with(&[E, E]);
-    keys(&mut app, "llK");
+    keys(&mut app, "lllK");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().shown().count(),
@@ -1282,7 +1284,7 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
 fn k_keeps_a_value_when_changing_the_command() {
     let (mut app, _rt) = app_with(&[A]);
     // On the command or the value, and it opens on what is there.
-    keys(&mut app, "lllK");
+    keys(&mut app, "llllK");
     assert_eq!(app.picker.as_ref().unwrap().selected, 3);
     keys(&mut app, "res<Enter>");
     assert_eq!(steps(&app)[0], "C-4 40 RES20 ---00 ---00");
@@ -1292,14 +1294,14 @@ fn k_keeps_a_value_when_changing_the_command() {
 
     // A level command snaps what it keeps.
     let (mut app, _rt) = app_with(&["--- -- CUTFF ---00 ---00"]);
-    keys(&mut app, "llKvol<Enter>");
+    keys(&mut app, "lllKvol<Enter>");
     assert_eq!(steps(&app)[0], "--- -- VOLF8 ---00 ---00");
 }
 
 #[test]
 fn k_can_empty_a_slot_and_esc_leaves_it() {
     let (mut app, _rt) = app_with(&[A]);
-    keys(&mut app, "llK<Esc>");
+    keys(&mut app, "lllK<Esc>");
     assert_eq!(steps(&app)[0], A);
     assert_eq!(app.mode, Mode::Normal);
     keys(&mut app, "K---<Enter>");
@@ -1307,7 +1309,7 @@ fn k_can_empty_a_slot_and_esc_leaves_it() {
 
     // Leaving before the value writes nothing.
     let (mut app, _rt) = app_with(&[E]);
-    keys(&mut app, "llKcut<Enter><Esc>");
+    keys(&mut app, "lllKcut<Enter><Esc>");
     assert_eq!(steps(&app)[0], E);
     assert_eq!(app.mode, Mode::Normal);
 }
@@ -1412,7 +1414,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
         "C-4 -- ---00 ---00 ---00",
         "--- -- CUT30 ---00 ---00",
     ]);
-    keys(&mut app, "llvGS");
+    keys(&mut app, "lllvGS");
     let shape = |app: &App| app.shape.as_ref().unwrap().shape;
     let fx =
         |app: &App| -> Vec<String> { steps(app).iter().map(|s| s[7..12].to_owned()).collect() };
@@ -1634,7 +1636,7 @@ fn the_transport_keys_work_with_the_panel_open() {
 #[test]
 fn a_shape_on_an_fx_column_snaps_to_its_commands_top() {
     let (mut app, _rt) = app_with(&["--- -- VOL10 ---00 ---00", "--- -- VOL20 ---00 ---00"]);
-    keys(&mut app, "llvGS");
+    keys(&mut app, "lllvGS");
     keys(&mut app, "jjiFF");
     assert_eq!(app.shape.as_ref().unwrap().shape.to, 0xF8);
     keys(&mut app, "<Enter>");
@@ -1646,16 +1648,16 @@ const GLIDING: &str = "C-4 40 CUT20g ---00 ---00";
 
 #[test]
 fn tilde_cycles_a_values_mark_from_either_of_its_fields() {
-    check(&[A], "ll~", &[MARKED]);
     check(&[A], "lll~", &[MARKED]);
-    check(&[A], "ll~~", &[GLIDING]);
-    check(&[A], "ll~~~", &[A]);
+    check(&[A], "llll~", &[MARKED]);
+    check(&[A], "lll~~", &[GLIDING]);
+    check(&[A], "lll~~~", &[A]);
 }
 
 #[test]
 fn tilde_is_one_undo_step_and_dot_repeats_it() {
-    check(&[A], "ll~u", &[A]);
-    check(&[A, A], "ll~j.", &[MARKED, MARKED]);
+    check(&[A], "lll~u", &[A]);
+    check(&[A, A], "lll~j.", &[MARKED, MARKED]);
 }
 
 #[test]
@@ -1696,9 +1698,9 @@ fn visual_tilde_makes_a_mixed_selection_the_same() {
 fn visual_tilde_stays_in_the_selected_column_and_repeats() {
     let start = ["C-4 40 CUT20 RES30 ---00", "C-4 40 CUT20 RES30 ---00"];
     let one = "C-4 40 CUT20h RES30 ---00";
-    check(&start, "llvj~", &[one, one]);
+    check(&start, "lllvj~", &[one, one]);
     let (mut app, _rt) = app_with(&[start[0], start[1], start[0]]);
-    keys(&mut app, "llvj~jj.");
+    keys(&mut app, "lllvj~jj.");
     assert_eq!(steps(&app), [one, one, "C-4 40 CUT20h RES30 ---00"]);
 }
 
@@ -1708,12 +1710,12 @@ fn a_typed_value_copies_the_mark_above_it_without_wrapping() {
     let above = "C-4 40 CUT20h ---00 ---00";
     let typed = "--- -- CUT40h ---00 ---00";
     let plain = "--- -- CUT40 ---00 ---00";
-    check(&[above, empty], "jlliCUT40<Esc>", &[above, typed]);
-    check(&[empty, above], "lliCUT40<Esc>", &[plain, above]);
+    check(&[above, empty], "jllliCUT40<Esc>", &[above, typed]);
+    check(&[empty, above], "llliCUT40<Esc>", &[plain, above]);
     let event_between = "C-4 40 DEL10 ---00 ---00";
     check(
         &[above, event_between, empty],
-        "2jlliCUT40<Esc>",
+        "2jllliCUT40<Esc>",
         &[above, event_between, typed],
     );
 }
@@ -1724,15 +1726,15 @@ fn a_value_typed_over_another_keeps_its_mark() {
     let above = "C-4 40 CUT20g ---00 ---00";
     check(
         &[above, "--- -- CUT20h ---00 ---00"],
-        "jlllr55",
+        "jllllr55",
         &[above, "--- -- CUT55h ---00 ---00"],
     );
-    check(&[start], "llrRES40", &["--- -- RES40 ---00 ---00"]);
+    check(&[start], "lllrRES40", &["--- -- RES40 ---00 ---00"]);
 }
 
 #[test]
 fn changing_a_value_to_an_event_drops_its_mark() {
-    check(&[MARKED], "llrDEL10", &["C-4 40 DEL10 ---00 ---00"]);
+    check(&[MARKED], "lllrDEL10", &["C-4 40 DEL10 ---00 ---00"]);
 }
 
 #[test]
@@ -1741,8 +1743,8 @@ fn moving_a_slot_carries_its_mark_and_clearing_removes_it() {
     check(&[MARKED, empty], "yyjp", &[MARKED, MARKED]);
     check(&[MARKED, empty], "]r", &[empty, MARKED]);
     let cleared = "C-4 40 ---00 ---00 ---00";
-    check(&[MARKED], "llx", &[cleared]);
-    check(&[MARKED], "ll=", &["C-4 40 CUT21h ---00 ---00"]);
+    check(&[MARKED], "lllx", &[cleared]);
+    check(&[MARKED], "lll=", &["C-4 40 CUT21h ---00 ---00"]);
 }
 
 #[test]
@@ -1809,7 +1811,7 @@ fn b_reaches_backwards_and_operators_change_each_track() {
 #[test]
 fn replace_and_marks_work_across_tracks() {
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
-    keys(&mut app, "llvW~");
+    keys(&mut app, "lllvW~");
     assert_eq!(track_steps(&app, 0), ["C-4 40 CUT20h ---00 ---00"]);
     assert_eq!(track_steps(&app, 1), ["C-4 40 CUT20h ---00 ---00"]);
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
@@ -1886,4 +1888,54 @@ fn shape_refuses_several_tracks() {
     keys(&mut app, "lvjWS");
     assert_ne!(app.mode, Mode::Shape);
     assert!(app.status.contains("one track"), "{}", app.status);
+}
+
+#[test]
+fn a_gate_is_typed_as_its_name_and_pulses() {
+    check(
+        &[E, E],
+        "lliHLD3<Esc>",
+        &["--- -- HLD3 ---00 ---00 ---00", E],
+    );
+    check(&[E], "lli4<Esc>", &["--- -- SGL4 ---00 ---00 ---00"]);
+    let held = "C-4 40 HLD3 CUT20 ---00 ---00";
+    check(&[held], "lli6<Esc>", &["C-4 40 HLD6 CUT20 ---00 ---00"]);
+    check(&[held], "llrMLT2", &["C-4 40 MLT2 CUT20 ---00 ---00"]);
+    check(&[held], "llx", &["C-4 40 CUT20 ---00 ---00"]);
+}
+
+#[test]
+fn a_bad_gate_is_refused() {
+    let (mut app, _rt) = app_with(&[E]);
+    keys(&mut app, "lliXYZ");
+    assert!(app.status.contains("isn't a gate"), "{}", app.status);
+    keys(&mut app, "9<Esc>");
+    assert_eq!(steps(&app), [E]);
+    assert!(app.status.contains("0 to 8"), "{}", app.status);
+}
+
+#[test]
+fn equals_and_minus_change_a_gates_pulses() {
+    let held = "C-4 40 HLD3 ---00 ---00 ---00";
+    check(&[held], "ll=", &["C-4 40 HLD4 ---00 ---00 ---00"]);
+    check(&[held], "ll9=", &["C-4 40 HLD8 ---00 ---00 ---00"]);
+    check(&[held], "ll9-", &["C-4 40 HLD0 ---00 ---00 ---00"]);
+    check(&[E], "ll=", &["--- -- SGL2 ---00 ---00 ---00"]);
+}
+
+#[test]
+fn the_gate_column_is_selected_filled_and_pasted_as_a_column() {
+    let held = "C-4 40 HLD3 CUT20 ---00 ---00";
+    let plain = "C-4 40 CUT20 ---00 ---00";
+    check(
+        &[plain, plain],
+        "llvjrRST2",
+        &[
+            "C-4 40 RST2 CUT20 ---00 ---00",
+            "C-4 40 RST2 CUT20 ---00 ---00",
+        ],
+    );
+    check(&[held, plain, plain], "llvyjjp", &[held, plain, held]);
+    // The gate stays in its column: it doesn't land in an FX slot.
+    check(&[held, plain], "llvyjlp", &[held, plain]);
 }

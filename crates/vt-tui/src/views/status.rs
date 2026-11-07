@@ -45,6 +45,7 @@ pub fn column_name(app: &App) -> String {
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
+            Field::Gate => "Gate".to_owned(),
             Field::FxCommand(slot) => format!("FX{} command", slot + 1),
             Field::FxValue(slot) => format!("FX{} value", slot + 1),
         },

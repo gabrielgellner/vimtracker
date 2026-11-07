@@ -10,7 +10,7 @@ use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::scale::ScaleKind;
 use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterType, Machine, SynthVoice};
-use vt_model::step::FxCommand;
+use vt_model::step::{FxCommand, GateKind};
 
 use crate::guides::Guide;
 use crate::input::mode::View;
@@ -26,6 +26,8 @@ pub enum Pick {
         slot: usize,
         command: Option<FxCommand>,
     },
+    /// Put this gate type in the gate cell, or empty it.
+    Gate(Option<GateKind>),
     /// Replace one of a track's LFOs.
     Lfo {
         track: usize,

@@ -1609,6 +1609,15 @@ Made with the author's agreement on 2026-11-07, after a review, and revised with
 
 **Done when** the author has used pulses in a jam, the grid stays readable to them, and the cost of the search in the callback is measured in a release build.
 
+**Built** in two parts, with the keys as designed. Measured on 2026-11-07 by timing a render in a release build on an M5, 8 tracks of Plaits `VA` with a note on every row, as a share of one core:
+
+| Phrases | No gates | `MLT2` on every row |
+|---|---|---|
+| 16 rows | 1.73% | 1.71% |
+| 4096 rows, the most a phrase stores | 4.45% | 4.45% |
+
+The walk costs nothing to see at ordinary lengths, and about 2.7% of a core across 8 tracks of the longest phrases, as each step adds up every row's pulses. Running totals worked out in `Published::new` would remove that, if long phrases come up in use.
+
 ### Known Gaps From Review
 
 The EGM review concluded on 2026-11-05 with its re-audit limit used, and these findings were not resolved. They are accepted for now, and must be decided in the issue named before that issue is done. They override anything above that they contradict.

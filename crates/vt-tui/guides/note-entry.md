@@ -113,4 +113,26 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`, then it moves down |
+| Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
 | FX | A name then two hex digits, such as `CUT40`. See **FX commands** |
+
+## Gates
+
+The gate column, after velocity, says how long a row lasts and what its note does
+over that time. Its argument is always the row's length in pulses, which are
+steps, from `0` to `8`. An empty cell, `----`, is one pulse of `SGL`, as every row
+used to be.
+
+| Gate | Its pulses |
+|---|---|
+| `SGL` | One note, on the first |
+| `MLT` | A note on each |
+| `HLD` | One note, tied into the next row's note with no new attack |
+| `RST` | No note, and it ends one that's sounding |
+
+Any gate with `0` pulses skips the row: it takes no time and plays nothing. A gate on
+a row with no note still sets how long the row lasts, so `RST4` there is four steps
+of nothing. `K` chooses the gate, `=` and `-` change the pulses, and `x` empties
+it. The row's FX run on its first pulse, though a `MLT` runs its `DEL`, `KIL`,
+`OFF` and `RET` on each, and lanes keep running on every step. A beat row is one
+that starts on a beat, however long the rows before it.

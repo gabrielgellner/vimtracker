@@ -20,12 +20,13 @@ use crate::song::{
     Chain, ChainEntry, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section, SectionStart,
     Song, SynthVoice, Track, lowest_unused,
 };
-use crate::step::{FxCommand, FxSlot, Mark, Note, Step};
+use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldValue {
     Velocity(Option<u8>),
+    Gate(Option<Gate>),
     Slot(usize, FxSlot),
 }
 
@@ -39,6 +40,8 @@ pub enum Fill {
         velocity: u8,
     },
     Velocity(Option<u8>),
+    /// A gate cell, which goes on every row, as a row without a note still takes its time.
+    Gate(Option<Gate>),
     Slot(usize, FxSlot),
     SlotValue(usize, u8),
 }
@@ -438,6 +441,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             let target = step_mut(&mut next, *track, *phrase, *step)?;
             match value {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
+                FieldValue::Gate(gate) => target.gate = *gate,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
                 }
@@ -477,6 +481,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     }
                     Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
                     Fill::Velocity(_) => {}
+                    Fill::Gate(gate) => target.gate = *gate,
                     Fill::Slot(slot, value) => {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);
