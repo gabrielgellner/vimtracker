@@ -5784,3 +5784,19 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
         .unwrap_or_default();
     assert!(!note_row.is_empty(), "the notes' own playhead is on row 4");
 }
+
+#[test]
+fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
+    let (mut app, _realtime) = app();
+    // FX 1's lane is steps 4 to 6 of the phrase's 16.
+    press(&mut app, "ll4jgs");
+    command(&mut app, "len 3");
+    press(&mut app, "G");
+    assert_eq!(app.cursor.step, 6, "the lane's last step");
+    press(&mut app, "gg");
+    assert_eq!(app.cursor.step, 4, "the lane's first");
+    press(&mut app, "2G");
+    assert_eq!(app.cursor.step, 5, "a count goes by the lane too");
+    press(&mut app, "hhG");
+    assert_eq!(app.cursor.step, 15, "the notes go by the phrase's loop");
+}

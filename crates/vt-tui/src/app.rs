@@ -26,7 +26,7 @@ use vt_model::sample::load_wav;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Extent, Scope, StepRange};
+use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
 use vt_model::song::{ChainEntry, Lane, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step};
 
@@ -382,6 +382,23 @@ impl App {
     /// The keys typed so far in a sequence.
     pub fn pending(&self) -> &[Key] {
         &self.pending
+    }
+
+    /// What `gg` and `G` go by: the cursor's FX column's lane if it has one, and the phrase's loop
+    /// otherwise. Beats always go by the phrase's loop.
+    pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
+        let extent = self.extent();
+        let lane = match (motion, self.cursor.field) {
+            (Motion::First | Motion::Last, Field::FxCommand(slot) | Field::FxValue(slot)) => {
+                self.phrase_here().and_then(|phrase| phrase.lane(slot))
+            }
+            _ => None,
+        };
+        lane.map_or(extent, |lane| Extent {
+            start: lane.start,
+            length: lane.length,
+            ..extent
+        })
     }
 
     /// Where the cursor's phrase's loop sits.

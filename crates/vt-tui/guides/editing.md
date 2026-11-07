@@ -185,7 +185,9 @@ somewhere new each pass, as tracks of different lengths do.
 | `:len 3` | Make the lane 3 steps long |
 | `:len` | Follow the phrase's loop again |
 
-On the note or velocity column these set the phrase's loop, as above. A
+On the note or velocity column these set the phrase's loop, as above. On a
+column with a lane, `gg` and `G` go to its first and last steps, and `5G` to
+its fifth. A
 column with a lane shows its length in the title, like `FX1:3`, dims the steps
 outside its lane, and has its own `>` while playing. Editing works on rows as
 usual, whatever loop a column plays. Anything that starts a track's chain over
