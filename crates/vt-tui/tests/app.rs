@@ -3268,6 +3268,29 @@ fn the_status_line_names_the_setting_a_cell_locks() {
 }
 
 #[test]
+fn the_status_line_shows_a_value_in_its_units() {
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = app_with_a_lock_for_another_voice();
+    press(&mut app, "lll");
+    // `cut:40` is a quarter of the way up ten octaves from 20 Hz.
+    assert_eq!(value_shown(&app).as_deref(), Some("113 Hz"));
+    press(&mut app, "ll");
+    assert_eq!(value_shown(&app), None, "not on this track");
+    press(&mut app, "ll");
+    assert_eq!(value_shown(&app), None, "an event has no units");
+    press(&mut app, " 4");
+    let mut rows = Vec::new();
+    for _ in 0..12 {
+        rows.extend(value_shown(&app));
+        press(&mut app, "j");
+    }
+    assert!(
+        rows.contains(&"20.0 kHz".to_owned()),
+        "the open cutoff: {rows:?}"
+    );
+}
+
+#[test]
 fn a_lock_the_track_doesnt_have_is_drawn_faint() {
     let (app, _realtime) = app_with_a_lock_for_another_voice();
     let buffer = screen(&app);
