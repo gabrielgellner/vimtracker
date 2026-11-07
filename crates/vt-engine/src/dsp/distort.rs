@@ -45,10 +45,11 @@ fn drive_of(amount: f32) -> f32 {
     10.0_f32.powf(amount * MOST_DRIVE_DB / 20.0)
 }
 
-/// The distance between the steps `Crush` rounds to.
+/// The distance between the steps `Crush` rounds to. Losing bits can't be heard until about 10 are
+/// left, so the square root gets there early and spreads the rest over most of `Amount`.
 #[inline]
 fn crush_step(amount: f32) -> f32 {
-    2.0_f32.powf(1.0 - (CRUSH_BITS.0 + (CRUSH_BITS.1 - CRUSH_BITS.0) * amount))
+    2.0_f32.powf(1.0 - (CRUSH_BITS.0 + (CRUSH_BITS.1 - CRUSH_BITS.0) * amount.sqrt()))
 }
 
 /// A shape that needs a higher rate, given what's already been driven.
@@ -239,6 +240,25 @@ mod tests {
         let heavy = distinct(&played(DistortType::Crush, 0xFF, 0xFF, 1.0));
         assert!(heavy <= 5, "{heavy} values, for steps of a half");
         assert!(light > heavy * 10, "{light} and {heavy}");
+    }
+
+    #[test]
+    fn crush_is_audible_for_most_of_its_range() {
+        let bits = |amount: u8| 1.0 - crush_step(f32::from(amount) / 255.0).log2();
+        let close = |a: f32, b: f32| assert!((a - b).abs() < 0.1, "{a} and {b}");
+        close(bits(0x00), 16.0);
+        close(bits(0xFF), 2.0);
+        // By the default, it's already below where it can be heard, and it keeps going.
+        close(bits(0x40), 9.0);
+        close(bits(0x80), 6.1);
+        close(bits(0xC0), 3.9);
+        let lost = |amount: u8| {
+            let plain: Vec<f32> = sine(220.0, 0.5, RATE as usize / 10).collect();
+            differs(&played(DistortType::Crush, amount, 0xFF, 0.5), &plain)
+        };
+        assert!(lost(0x40) > 0.001, "{}", lost(0x40));
+        assert!(lost(0x80) > lost(0x40) * 3.0);
+        assert!(lost(0xC0) > lost(0x80) * 2.0);
     }
 
     #[test]
