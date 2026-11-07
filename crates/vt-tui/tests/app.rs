@@ -1185,7 +1185,11 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     press(&mut app, "W");
     let buffer = screen(&app);
     let title: String = (55..80).map(|x| buffer[(x, 0)].symbol()).collect();
-    assert!(title.starts_with(" 01  02  A   B   M"), "{title}");
+    assert_eq!(
+        title.trim_end(),
+        " 01  02",
+        "the returns and master are left out"
+    );
     assert_eq!(
         buffer[(60, 0)].bg,
         vt_tui::theme::GREEN,
@@ -1195,11 +1199,11 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(headings.trim_end(), "         Note        FX");
     assert_eq!(
-        buffer[(21, 2)].fg,
-        vt_tui::theme::LAVENDER,
-        "the FX are tinted"
+        buffer[(21, 2)].bg,
+        vt_tui::theme::SURFACE0,
+        "the FX sit on a band"
     );
-    assert_ne!(buffer[(9, 2)].fg, vt_tui::theme::LAVENDER);
+    assert_ne!(buffer[(9, 2)].bg, vt_tui::theme::SURFACE0);
 }
 
 #[test]

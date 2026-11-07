@@ -152,19 +152,24 @@ fn slot_columns(slot: usize) -> (usize, usize) {
 }
 
 /// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
-/// those near it in view.
+/// those near it in view. Returns and the master have their notes elsewhere, so they're left out
+/// unless one is the track being edited.
 fn neighbours(app: &App, width: usize) -> Vec<usize> {
-    let tracks = app.song().tracks.len();
-    let shown = (width / NEIGHBOUR_WIDTH).min(tracks);
+    let tracks: Vec<usize> = app
+        .song()
+        .tracks
+        .iter()
+        .enumerate()
+        .filter(|(index, track)| track.is_sound() || *index == app.cursor.track)
+        .map(|(index, _)| index)
+        .collect();
+    let shown = (width / NEIGHBOUR_WIDTH).min(tracks.len());
     if shown == 0 {
         return Vec::new();
     }
-    let start = app
-        .cursor
-        .track
-        .saturating_sub(shown / 2)
-        .min(tracks - shown);
-    (start..start + shown).collect()
+    let centre = tracks.partition_point(|track| *track < app.cursor.track);
+    let start = centre.saturating_sub(shown / 2).min(tracks.len() - shown);
+    tracks[start..start + shown].to_vec()
 }
 
 /// The headings over the grid's two parts, the note and its FX, at the columns they start at.
@@ -469,10 +474,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 styles[start - 1..end].fill(style);
             }
         }
-        // The FX take a cooler tint than the note, so the two parts read apart.
+        // The FX sit on a band a shade lighter than the screen, so the two parts read apart.
+        // A selection's or the cursor's colour goes over it.
         for style in styles.iter_mut().skip(FX_START) {
-            if *style == Style::new() {
-                *style = Style::new().fg(theme::LAVENDER);
+            if style.bg.is_none() {
+                *style = style.bg(theme::SURFACE0);
             }
         }
         for (slot, fx) in step.fx.iter().enumerate() {
