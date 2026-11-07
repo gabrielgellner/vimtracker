@@ -245,6 +245,16 @@ impl Track {
         None
     }
 
+    /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them.
+    pub fn chain_place(&self, chain: u32, slot: usize, row: usize) -> Option<usize> {
+        let entries = &self.chains.get(&chain)?.entries;
+        let length = |entry: &ChainEntry| self.phrases.get(&entry.phrase).map(|p| p.len());
+        if row >= length(entries.get(slot)?)? {
+            return None;
+        }
+        Some(entries[..slot].iter().filter_map(length).sum::<usize>() + row)
+    }
+
     /// The step at a position, once a chain position has been found.
     pub fn step_at(&self, position: ChainPosition) -> Option<&Step> {
         self.phrases
@@ -976,6 +986,28 @@ mod tests {
         assert_eq!(song.sections[0].chains.len(), 5);
         song.ensure_fixed_tracks();
         assert_eq!(song.tracks.len(), 5);
+    }
+
+    #[test]
+    fn a_slot_and_row_find_their_place_in_a_chain_if_they_are_still_there() {
+        let mut song = Song::new(1);
+        song.tracks[0].phrases.insert(7, Arc::new(Phrase::new(4)));
+        let entry = |phrase| ChainEntry {
+            phrase,
+            transpose: 0,
+        };
+        song.tracks[0].chains.insert(
+            0,
+            Arc::new(Chain {
+                entries: vec![entry(0), entry(7)],
+                label: String::new(),
+            }),
+        );
+        let track = &song.tracks[0];
+        assert_eq!(track.chain_place(0, 1, 2), Some(16 + 2));
+        assert_eq!(track.chain_place(0, 1, 4), None, "past its loop");
+        assert_eq!(track.chain_place(0, 2, 0), None, "no third slot");
+        assert_eq!(track.chain_place(9, 0, 0), None, "no such chain");
     }
 
     #[test]

@@ -463,11 +463,12 @@ impl Engine {
 
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
     ///
-    /// A shorter phrase wraps by the modulo in sequencing. An ID that no longer exists is silent,
-    /// and a removed track's voices fade.
+    /// A track whose chain changed length stays on the row it was going to play next. An ID that
+    /// no longer exists is silent, and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
         self.keep_fixed_tracks(old.song.sound_tracks());
+        self.keep_places(&old.song);
         self.follow_base(&old);
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
             track.stop();
@@ -492,6 +493,58 @@ impl Engine {
             moved.rotate_right(now - was);
         } else {
             moved.rotate_left(was - now);
+        }
+    }
+
+    /// Keep each playing track on the row it was going to play next, as its chain's length changes:
+    /// the same slot of its chain and row of that phrase's loop, or its chain's first row if those
+    /// have gone. Only `started` moves, and a track whose chain didn't change is left alone, so its
+    /// count since its chain started carries on.
+    fn keep_places(&mut self, old: &Song) {
+        if self.transport == Transport::Stopped {
+            return;
+        }
+        let place = self.place as i64;
+        let (now, was) = (self.sounds(), old.sound_tracks());
+        for index in 0..self.current.song.tracks.len().min(MAX_TRACKS) {
+            // A fixed track is compared with what it was, wherever that was, and a new one is new.
+            let then = match index {
+                _ if index >= now => index - now + was,
+                _ if index < was => index,
+                _ => continue,
+            };
+            let old_chain = match self.tracks[index].launched {
+                Some(launched) => launched,
+                None => old
+                    .sections
+                    .get(self.section)
+                    .and_then(|s| s.chains.get(then).copied().flatten()),
+            };
+            let (Some(chain), Some(before)) = (self.track_chain(index), old.tracks.get(then))
+            else {
+                continue;
+            };
+            if old_chain != Some(chain) {
+                continue;
+            }
+            let track = &self.current.song.tracks[index];
+            let (old_length, length) = (
+                before.chain_steps(chain) as i64,
+                track.chain_steps(chain) as i64,
+            );
+            if old_length == 0 || length == 0 {
+                continue;
+            }
+            let count = place - self.tracks[index].started;
+            let next = count.rem_euclid(old_length);
+            let kept = before
+                .chain_position(chain, next as usize)
+                .and_then(|at| track.chain_place(chain, at.slot, at.step))
+                .unwrap_or(0) as i64;
+            if length != old_length || kept != next {
+                let laps = count.div_euclid(old_length);
+                self.tracks[index].started = place - (laps * length + kept);
+            }
         }
     }
 

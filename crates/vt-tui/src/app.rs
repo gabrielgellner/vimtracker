@@ -717,20 +717,8 @@ impl App {
         }
     }
 
-    /// Whether a phrase's length can change now. A new length moves where playback lands, so it
-    /// has to wait until playback has stopped, unlike a slide.
-    fn can_change_length(&mut self) -> bool {
-        let allowed = self.transport != Transport::Playing;
-        if !allowed {
-            self.status = "Length changes wait until paused. Slides work now: ]l [l".to_owned();
-        }
-        allowed
-    }
-
     fn double(&mut self) {
-        if let Some(phrase) = self.phrase_id()
-            && self.can_change_length()
-        {
+        if let Some(phrase) = self.phrase_id() {
             self.apply(&Action::Double {
                 track: self.cursor.track,
                 phrase,
@@ -809,7 +797,6 @@ impl App {
         let length = row + 1;
         if let Some(phrase) = self.phrase_id()
             && length != extent.length
-            && self.can_change_length()
         {
             self.apply(&Action::SetLength {
                 track: self.cursor.track,
@@ -1566,9 +1553,7 @@ impl App {
             Line::Mute => self.toggle_mute(),
             Line::Solo => self.toggle_solo(),
             Line::Len(length) => {
-                if let Some(phrase) = self.phrase_id()
-                    && self.can_change_length()
-                {
+                if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength {
                         track: self.cursor.track,
                         phrase,

@@ -373,6 +373,25 @@ mod tests {
     }
 
     #[test]
+    fn a_length_changing_while_playing_never_allocates_in_the_callback() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = song(8, 16);
+            for track in next.tracks.iter_mut().take(8) {
+                Arc::make_mut(track.phrases.get_mut(&0).unwrap()).set_len(1 + round % 16);
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
     fn publishing_never_allocates_or_frees_in_the_callback() {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(8, 16), &pool));

@@ -165,8 +165,9 @@ the notes move under it. Sliding past either end adds empty steps.
 Rotating wraps whole steps round within the loop, and leaves dim steps
 alone. It works while playing, and counts work: `3]r`.
 
-`ge`, `:len` and `:double` wait until you pause, since a new length moves where playback
-lands. The loop is saved with the phrase, along with what is outside it.
+`ge`, `:len` and `:double` work while playing too. Each track stays on the row it was going
+to play next, or starts its chain again if that row has gone. The loop is saved with the
+phrase, along with what is outside it.
 
 A phrase used in two places shares one loop. Copy it with `gc` to give one
 place its own.
