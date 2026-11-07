@@ -3,7 +3,7 @@
 //! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
 //! program's own.
 
-use vt_model::insert::{Distort, DistortType, Insert};
+use vt_model::insert::{Distort, DistortType, Insert, crush_bits};
 use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
@@ -12,8 +12,6 @@ use crate::dsp::smoother::Smoothed;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
 const MOST_DRIVE_DB: f32 = 30.0;
-/// The bit depths `Crush` runs through, from `Amount` at `00` to `FF`.
-const CRUSH_BITS: (f32, f32) = (16.0, 2.0);
 /// The longest `Down` holds a sample, in seconds, so it's the same at any device rate.
 const LONGEST_HOLD: f32 = 0.01;
 
@@ -65,11 +63,10 @@ fn overdrive_gains(amount: f32) -> (f32, f32) {
     (pre, 1.0 / soft_clip(0.33 + squashed * (pre - 0.33)))
 }
 
-/// The distance between the steps `Crush` rounds to. Losing bits can't be heard until about 10 are
-/// left, so the square root gets there early and spreads the rest over most of `Amount`.
+/// The distance between the steps `Crush` rounds to, for some whole bits.
 #[inline]
-fn crush_step(amount: f32) -> f32 {
-    2.0_f32.powf(1.0 - (CRUSH_BITS.0 + (CRUSH_BITS.1 - CRUSH_BITS.0) * amount.sqrt()))
+fn crush_step(bits: u8) -> f32 {
+    2.0_f32.powi(1 - i32::from(bits))
 }
 
 /// A shape that needs a higher rate, given what's already been driven.
@@ -129,7 +126,10 @@ impl InsertState {
     /// One frame through the slot. An empty one does nothing else.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
-        let Insert::Distort(Distort { kind, .. }) = self.insert else {
+        let Insert::Distort(Distort {
+            kind, amount: set, ..
+        }) = self.insert
+        else {
             return input;
         };
         let amount = self.amount.next(smoothing);
@@ -137,7 +137,8 @@ impl InsertState {
         let gain = self.gain.next(smoothing);
         let wet = match kind {
             DistortType::Crush => {
-                let step = crush_step(amount);
+                // Whole bits change at once, so this isn't smoothed.
+                let step = crush_step(crush_bits(set));
                 input.map(|sample| (sample / step).round() * step)
             }
             DistortType::Down => {
@@ -337,22 +338,18 @@ mod tests {
     }
 
     #[test]
-    fn crush_is_audible_for_most_of_its_range() {
-        let bits = |amount: u8| 1.0 - crush_step(f32::from(amount) / 255.0).log2();
-        let close = |a: f32, b: f32| assert!((a - b).abs() < 0.1, "{a} and {b}");
-        close(bits(0x00), 16.0);
-        close(bits(0xFF), 2.0);
-        // By the default, it's already below where it can be heard, and it keeps going.
-        close(bits(0x40), 9.0);
-        close(bits(0x80), 6.1);
-        close(bits(0xC0), 3.9);
-        let lost = |amount: u8| {
-            let plain: Vec<f32> = sine(220.0, 0.5, RATE as usize / 10).collect();
-            differs(&played(DistortType::Crush, amount, 0xFF, 0.5), &plain)
-        };
-        assert!(lost(0x40) > 0.001, "{}", lost(0x40));
-        assert!(lost(0x80) > lost(0x40) * 3.0);
-        assert!(lost(0xC0) > lost(0x80) * 2.0);
+    fn crush_changes_bits_at_once() {
+        let mut state = state(DistortType::Crush, 0x00, 0xFF);
+        let settings = Insert::Distort(Distort {
+            kind: DistortType::Crush,
+            amount: 0xFF,
+            mix: 0xFF,
+            ..Distort::default()
+        });
+        state.set(settings);
+        // The smoother is still at the old amount, but the steps are already a half.
+        let out = state.process([0.3; 2], 0.0001, RATE)[0];
+        assert_eq!(out, 0.5);
     }
 
     #[test]

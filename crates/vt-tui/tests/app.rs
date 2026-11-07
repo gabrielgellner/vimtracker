@@ -5054,3 +5054,55 @@ fn a_jump_labels_a_slots_effect_once() {
     press(&mut app, &labels[2].to_string());
     assert_eq!(app.track_row, 4);
 }
+
+#[test]
+fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "=lK");
+    press(&mut app, "crush");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Bits");
+    let line = fx_line(&app, 0);
+    assert!(line.contains("Bits   9"), "{line}");
+    assert!(!line.contains("Amount"), "{line}");
+    press(&mut app, "=");
+    assert!(fx_line(&app, 0).contains("Bits   10"));
+    press(&mut app, "=====");
+    assert!(
+        fx_line(&app, 0).contains("Bits   12"),
+        "it stops at the top"
+    );
+    press(&mut app, "x");
+    assert!(fx_line(&app, 0).contains("Bits   9"));
+    for _ in 0..12 {
+        press(&mut app, "-");
+    }
+    assert!(
+        fx_line(&app, 0).contains("Bits   2"),
+        "it stops at the bottom"
+    );
+    // It's a list to choose from, and not typed.
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "6");
+    special(&mut app, KeyCode::Enter);
+    assert!(
+        fx_line(&app, 0).contains("Bits   6"),
+        "{}",
+        fx_line(&app, 0)
+    );
+    // Another type shows how hard that was, and a jump finds it by name.
+    press(&mut app, "k-");
+    assert!(
+        fx_line(&app, 0).contains("Type   Sine"),
+        "{}",
+        fx_line(&app, 0)
+    );
+    assert!(
+        fx_line(&app, 0).contains("Amount 99"),
+        "{}",
+        fx_line(&app, 0)
+    );
+}

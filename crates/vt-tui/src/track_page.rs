@@ -456,11 +456,15 @@ impl App {
                     return;
                 };
                 let value = insert.value(param);
+                let count = found.choices.len() as u8;
                 let moved = if found.choices.is_empty() {
                     change(value)
-                } else {
-                    let count = found.choices.len() as u8;
+                } else if found.wraps {
                     (value + if up { 1 } else { count - 1 }) % count
+                } else if up {
+                    (value + 1).min(count - 1)
+                } else {
+                    value.saturating_sub(1)
                 };
                 self.set_insert(slot, insert.with_value(param, moved));
             }

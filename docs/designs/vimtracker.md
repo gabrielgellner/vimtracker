@@ -1232,7 +1232,7 @@ Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert 
 | Setting | Values | Default |
 |---|---|---|
 | `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down` | `Soft` |
-| `Amount` | `00` to `FF`, more of what `Type` does | `40` |
+| `Amount` | `00` to `FF`, more of what `Type` does. `Crush` has `Bits` here | `40` |
 | `Mix` | `00` dry to `FF` wet | `FF` |
 | `Gain` | On the level scale, after `Mix` | `E0`, which is 0 dB |
 
@@ -1242,7 +1242,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 *   `Hard`: `x * d`, clamped to -1 and 1.
 *   `Fold`: a triangle wave of `x * d`, from Vital's linear fold.
 *   `Sine`: a sine of `x * d`, from Vital's sine fold.
-*   `Crush`: `x` rounded to steps of a size set by `Amount`.
+*   `Crush`: `x` rounded to steps for whole `Bits`, from `12` to `2`, in place of `Amount`, by the author's decision. Bit depth is a set of whole values, so it changes at once, with nothing in between to smooth. Nothing is lost, as a step's lock gives the same instant change, and there's no special rule: an LFO can still be assigned to it, and just steps.
 *   `Down`: holds a sample for a time set by `Amount`, in time rather than samples, so it sounds the same at any device rate.
 
 `Soft`, `Hard`, `Fold` and `Sine` run inside the `Oversampler` at 2x, which moves out of `filter.rs` to be shared. `Crush` and `Down` are meant to alias, and don't. `Mix` is a straight blend outside the oversampling. Vital's file doesn't define how it scales drive, or have a mix or level compensation, so these are ours: for the types other than `Soft`, `d` runs from 0 dB at `00` to +30 dB at `FF`, and there's no compensation to begin with. `Amount` and `Mix` are smoothed as other values are, so they can move without clicks.
@@ -1269,7 +1269,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 *   **`dd`** takes the effect out of its slot, and **`p`** puts the last one taken into the slot under the cursor, swapping with what's there, to change the order. This only works on this page. Moving an effect starts its state afresh, which may click if it's playing.
 *   **`/`** finds these as it does the other pages, from their names, and the bars move with what's playing, as on the Sound page.
 
-**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
+**Steps and modulation.** `DST` and `DMX` are new value commands for `Amount` and `Mix`, and `Dst` and `Dmx` are new `Dest` choices, so they take locks, holds, glides, LFOs and envelopes as `CUT` does. They reach the first `Distort` on the track, and do nothing if there isn't one. On `Crush`, whatever moves it lands on whole bits, with no special cases for locks, glides, LFOs or envelopes. A second `Distort` is set from its page alone. `Type` can't be set from a step, as a jump between shapes would click.
 
 **Left out.** Other effects, which are M11. Send, mix and bus tracks, which are M10. Saving an effect's settings alone. Reaching a second copy of an effect from steps or modulation. Moving `Drive` onto the list.
 
@@ -1277,7 +1277,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 *   How `Amount` feels across its range, and whether `+30 dB` is too much for `Hard` and the folds.
 *   Whether a quiet sound coming up with `Amount` is a problem on `Soft` and `Hard`. `Level` is there if not.
-*   What `Crush` and `Down` should span, which is set by ear.
+*   What `Down` should span, which is set by ear, and whether `Crush` should stop short of `2` bits, as quiet sounds drop out.
 *   Whether the click from moving an effect while playing matters.
 
 **Issues.**
