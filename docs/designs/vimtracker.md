@@ -1540,17 +1540,19 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. E
 
 ### M13 design: pulses
 
-Made with the author's agreement on 2026-11-07, after a review. Not built yet. A note gets a length in pulses and a gate type, so rows take their own time. Pulses stay with the note, as a note is often just a trigger, and the gate is part of what that note does.
+Made with the author's agreement on 2026-11-07, after a review, and revised with the author the same day. Not built yet. A gate column beside the note gives each row a gate type and a length in pulses, so rows take their own time. It's part of the note column, as a note is often just a trigger and the gate is what that trigger does, so it can never have a lane of its own.
 
 **Prior art.** Each Metropolix stage has a `PULSE COUNT` of 1 to 8 clock pulses, and a `GATE TYPE`: `HOLD`, one gate for all its pulses, tied into the next stage; `MULTIPLE`, a gate on each pulse; `SINGLE`, one gate on the first; and `REST`, none. `SKIP` treats a stage as if it isn't there.
 
 **Pulses.**
 
 *   **A pulse is one step,** 240 ticks. From here, a phrase's positions are rows, and steps are only time.
-*   **A note has `Pulses` and a `Gate`.** `Pulses` is `0` to `8`, and a new note has `1` and `Single`, so a song saved without them plays as before. They're on any row with a note event, `OFF` included. A row with no note is always 1 pulse.
-*   **`0` skips the row.** It takes no time and fires nothing, FX included, as Metropolix's `SKIP` does. A phrase whose loop sums to 0 pulses is passed over in its chain, and a chain summing to 0 is empty, as a missing chain is now. Looking for the next row stops after one pass, so it can't hang.
+*   **The gate column.** It sits between velocity and the first FX column, and works like an FX column: a cell holds a gate command, and its argument is the row's length in pulses, `0` to `8`. The commands are `SGL`, `MLT`, `HLD` and `RST`, the gate types below, so `HLD3` holds a note for 3 pulses. An empty cell plays as `SGL1`, as rows do now, so a song saved without the column plays as before.
+*   **Every gate command's argument is its length.** That's the rule that keeps the column about time, and new gate commands follow it. Anything else a gate type needs, like a slide's time, goes in an FX column.
+*   **A cell on a row without a note** still sets the row's length, so `RST4` on an empty row is 4 steps of nothing. Without a note, the gate type does nothing, only the length.
+*   **`0` skips the row,** whatever the gate command. It takes no time and fires nothing, FX included, as Metropolix's `SKIP` does. A phrase whose loop sums to 0 pulses is passed over in its chain, and a chain summing to 0 is empty, as a missing chain is now. Looking for the next row stops after one pass, so it can't hang.
 *   **Lengths in rows, time in steps.** `:len`, `gs`, `ge` and `:double` count rows. A chain lasts the sum of its rows' pulses, and a section's length, `Launch::Every`, the `:reset` period, render lengths and swing count steps. Swing goes by the step, as now, so it doesn't depend on rows.
-*   **Finding the row.** The edit thread works out each phrase's running totals of pulses when it publishes a version, in `Published::new`. The callback finds a place's row by searching them. `chain_position`, the playhead and audition all use the same search.
+*   **Finding the row.** `chain_position` walks the rows of the chain's phrases, adding up their pulses, and the playhead and audition use it too. Running totals worked out in `Published::new`, with a search, are the fallback if the walk's cost in the callback turns out to matter, which issue 2 measures.
 
 **Gate types.**
 
@@ -1566,28 +1568,31 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. A
 *   **FX columns.** A column with no lane of its own follows the note rows, and its row's FX fire on the row's first pulse. A lane runs on steps, as in M12, so it drifts against long rows.
 *   **Returns and the master** have no notes, so pulses don't apply to them.
 
-**On screen and in files.** The note column grows by a pulse digit and a gate letter: `C-4 64 4M`. The step text reads the old form, with no pulses or gate, as `1` and `Single`.
+**On screen, keys and files.**
 
-**To decide with the author** before issue 1:
-
-*   The keys for pulses and the gate.
-*   How a row's length shows. A bar beside the note is the first try.
-*   Whether the beat rows still mark beats when rows have pulses.
+*   **The cell** shows as `HLD3`, or `----` when empty, between velocity and FX 1, so the cell itself shows each row's length.
+*   **Keys** are an FX cell's: `K` chooses the gate command, `=` and `-` change the pulses, typing `HLD3` enters it, and `x` empties it. It's a column group for selections, paste and the shape panel.
+*   **Beat rows.** A row is lit as a beat when it starts on a beat in time. Row numbers still count rows, so `5G` is still the fifth row.
+*   **The step text** gains the cell after velocity when a row has one: `C-4 64 HLD3 CUT40 ...`. A row without one is written as before, so saved songs and every step written as text in the tests stay as they are.
+*   **Only sound tracks** have a gate column. Returns and the master have no notes.
 
 **Alternatives considered.**
 
 *   **A stage generator writing ordinary rows,** as the Non-Goals once said: rejected with the author, as phasing between lanes and long notes is the point, and that comes from how the grid plays, not from what's written in it.
 *   **Pulses as an FX command:** a command in a drifting lane would land on different rows each pass, so rhythm itself would wander.
+*   **A pulse digit and gate letter on the note,** as first designed: it gives the vocabulary nowhere to grow. The gate column has room for new gate commands.
+*   **`RET`, `CHA`, `DEL`, `KIL` and `OFF` in the gate column:** they stay in FX columns, as drifting ratchet and chance lanes are Metropolix's own, and only work from a column that can drift. The gate column says how long a note's gate is and how it behaves over its pulses. FX columns say what happens during it.
 *   **A clock division for each track,** as Metropolix's `DIV`: it stretches a whole track evenly, not each row, and is left for later.
 
 **Risks.**
 
-*   **Reading the grid.** A row of notes and the same row of a lane aren't the same moment once rows have pulses. This is tried with the author, with the pulse bar, before more is built.
+*   **Reading the grid.** A row of notes and the same row of a lane aren't the same moment once rows have pulses. The gate cell shows each row's length, and the beat rows show time. This is tried with the author before more is built.
+*   **The step text changes,** so every test that writes a step as text changes with it.
 *   **The tie is new to every machine.** Each one is tested.
 
 **Issues.**
 
-1.  **Pulses and gate types:** the fields on a note, the step text, running totals in `Published`, the search, the gate types and the tie.
+1.  **Pulses and gate types:** the gate cell on a step, the step text, running totals in `Published`, the search, the gate types and the tie.
     **Tests:**
     *   Golden renders unchanged.
     *   A row lasts its pulses, and a chain the sum of its rows'.
@@ -1599,8 +1604,8 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. A
     *   A lane drifts against long rows, and a default column follows them.
     *   Pulses changed while playing keep the row, as in M11.
     *   No allocation in the callback.
-2.  **Pulses on screen and in the grammar:** the keys, the pulse bar and audition.
-    **Tests:** entering and changing each value, and auditioning a row with pulses.
+2.  **The gate column on screen and in the grammar:** the cell, its keys, its column group, beat rows by time, and audition.
+    **Tests:** entering, changing and emptying a cell, `K` choosing a command, selecting and pasting the column, beat rows with long rows, and auditioning a row with pulses.
 
 **Done when** the author has used pulses in a jam, the grid stays readable to them, and the cost of the search in the callback is measured in a release build.
 

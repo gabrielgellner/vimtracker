@@ -8,7 +8,9 @@ use vt_model::constants::{
 };
 use vt_model::envelope::Envelope;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
-use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note};
+use vt_model::step::{
+    FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
+};
 use vt_model::target::Target;
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
@@ -543,9 +545,19 @@ impl Engine {
             let Some(was_at) = before.chain_position(chain, next as usize) else {
                 continue;
             };
+            // The same pulse of the row too, as far as the row still lasts.
             let kept = track
                 .chain_place(chain, was_at.slot, was_at.step)
-                .unwrap_or(0) as i64;
+                .map_or(0, |start| {
+                    let pulses = track
+                        .chains
+                        .get(&chain)
+                        .and_then(|c| c.entries.get(was_at.slot))
+                        .and_then(|entry| track.phrases.get(&entry.phrase))
+                        .and_then(|phrase| phrase.loop_steps().get(was_at.step))
+                        .map_or(1, Step::pulses);
+                    start + was_at.pulse.min(pulses.saturating_sub(1))
+                }) as i64;
             let moved = length != old_length || kept != next;
             if moved {
                 let laps = count.div_euclid(old_length);
@@ -1107,7 +1119,18 @@ impl Engine {
         let Some(step) = owner.step_at(position) else {
             return;
         };
-        // Each FX column reads its own lane's step if it has one, and the note's step if not.
+        // A row's later pulses repeat its note only on a `Multi`, and run only the note's own timing.
+        let first = position.pulse == 0;
+        let gate = step.gate_kind();
+        let row_fx = |slot: &FxSlot| {
+            first
+                || gate == GateKind::Multi
+                    && matches!(
+                        slot.command,
+                        Some(FxCommand::Del | FxCommand::Kil | FxCommand::Off | FxCommand::Ret)
+                    )
+        };
+        // Each FX column reads its own lane's step if it has one, and the note's row if not.
         let phrase = owner.phrases.get(&position.phrase);
         let count = section_step as i64 - self.tracks[index].started;
         let mut lane_steps = [None; FX_SLOTS];
@@ -1120,7 +1143,7 @@ impl Engine {
                     lane_steps[number] = Some(at);
                     phrase.steps().get(at).and_then(|step| step.fx.get(number))
                 }
-                None => step.fx.get(number),
+                None => step.fx.get(number).filter(|slot| row_fx(slot)),
             };
             *read = found.copied().unwrap_or_default();
         }
@@ -1128,12 +1151,25 @@ impl Engine {
         let mut kill_units = None;
         let mut off_units = None;
         let mut retrigger = None;
-        // `CHA` goes first, as whether the note plays decides whether locks end.
-        let mut plays = true;
+        // `CHA` goes first, as whether the note plays decides whether locks end. A row's own is
+        // rolled once, on its first pulse.
+        let mut plays = first || self.tracks[index].row_plays;
         for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
             plays &= self.tracks[index].rng.chance(slot.value);
         }
-        if plays && matches!(step.note, Note::On(_)) {
+        if first {
+            self.tracks[index].row_plays = plays;
+        }
+        // What the row's note does on this pulse.
+        let event = match (step.note, gate) {
+            (Note::On(_), GateKind::Rest) if first => Note::Off,
+            (Note::On(_), GateKind::Rest) => Note::Empty,
+            (Note::On(midi), GateKind::Multi) => Note::On(midi),
+            (note, _) if first => note,
+            _ => Note::Empty,
+        };
+        let tying = first && self.tracks[index].tied && self.tracks[index].voice.active();
+        if plays && first && matches!(event, Note::On(_)) && !tying {
             self.tracks[index].end_locks();
         }
         for (number, slot) in fx.iter().enumerate() {
@@ -1150,7 +1186,9 @@ impl Engine {
                     let to = phrase.and_then(|phrase| {
                         match lane_steps[number] {
                             Some(at) => phrase.next_in_lane(number, at, value),
-                            None => phrase.next_value(position.step, number, value),
+                            None => phrase
+                                .next_value(position.step, number, value)
+                                .map(|(rows, to)| (phrase.time_between(position.step, rows), to)),
                         }
                         .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
                     });
@@ -1160,7 +1198,8 @@ impl Engine {
                 value => self.tracks[index].set_value(value, slot.value, slot.mark),
             }
         }
-        if plays && delay_units.is_none() && matches!(step.note, Note::On(_)) {
+        let tie = tying && plays && delay_units.is_none() && matches!(event, Note::On(_));
+        if plays && delay_units.is_none() && matches!(event, Note::On(_)) && !tie {
             self.start_modulation(index);
         }
         if !self.tracks[index].sounding() {
@@ -1168,7 +1207,11 @@ impl Engine {
         }
         let start_frames = delay_units.map_or(0, |units| self.groove_units(units));
         let start_at = self.clock + start_frames;
-        match step.note {
+        if first {
+            self.tracks[index].tied =
+                gate == GateKind::Hold && plays && matches!(event, Note::On(_));
+        }
+        match event {
             Note::Empty => {}
             Note::Off if plays => {
                 self.release_modulation(index);
@@ -1184,6 +1227,8 @@ impl Engine {
                 let gain = step.velocity.map_or(1.0, velocity_gain);
                 let on = self.note_on(index, note, gain, self.note_shape(index));
                 match on {
+                    // A `Hold` before it ties into this note, with no new attack.
+                    Some(on) if tie => self.tracks[index].tie(on),
                     Some(on) if start_frames > 0 => {
                         self.tracks[index].last_note = Some(on);
                         self.tracks[index].delayed = Some(DelayedNote {

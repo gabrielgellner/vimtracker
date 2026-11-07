@@ -194,6 +194,13 @@ impl Voice {
         self.level
     }
 
+    /// Carry on as another note, with no new attack: a sample keeps playing at the new note's
+    /// speed, and a synth changes pitch without starting its envelope again.
+    pub fn tie(&mut self, note: u8, gain: f32) {
+        self.increment = 2_f64.powf((f64::from(note) - 60.0) / 12.0);
+        self.gain = gain;
+    }
+
     /// Where modulation wants its speed.
     pub fn set_pitch(&mut self, pitch: f64) {
         self.pitch_target = pitch;

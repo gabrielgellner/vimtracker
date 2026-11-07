@@ -31,13 +31,20 @@ const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
 
 /// The gap and mark after a slot's value.
 const MARK_WIDTH: usize = 2;
+/// How an empty gate cell shows, which plays as one pulse of `SGL`.
+const GATE_EMPTY: &str = "----";
+/// Where the first FX slot starts: after the note, velocity and gate cell.
+const FX_START: usize = 12;
 
 /// A step's text on screen, naming a slot's settings from what's on this track.
 fn step_text(step: &Step, track: Option<&Track>) -> String {
     let velocity = step
         .velocity
         .map_or("--".to_owned(), |v| format!("{v:02X}"));
-    let mut text = format!("{} {velocity}", step.note);
+    let gate = step
+        .gate
+        .map_or_else(|| GATE_EMPTY.to_owned(), |gate| gate.to_string());
+    let mut text = format!("{} {velocity} {gate}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
             (Some(command), Some(track)) => command.name_on(track),
@@ -70,7 +77,7 @@ fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
 
 /// The character range of a field within a step's text.
 fn field_range(field: Field) -> (usize, usize) {
-    let fx_start = |slot: usize| 7 + slot * SLOT_WIDTH;
+    let fx_start = |slot: usize| FX_START + slot * SLOT_WIDTH;
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),

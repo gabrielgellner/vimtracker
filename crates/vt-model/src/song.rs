@@ -208,14 +208,15 @@ impl Track {
         self.kind == TrackKind::Sound
     }
 
-    /// The total steps in a chain. A missing or empty chain has none.
+    /// The total steps a chain lasts: the pulses of every row in its phrases' loops. A missing or
+    /// empty chain has none, and so does one whose rows are all skipped.
     pub fn chain_steps(&self, chain: u32) -> usize {
         self.chains.get(&chain).map_or(0, |chain| {
             chain
                 .entries
                 .iter()
                 .filter_map(|entry| self.phrases.get(&entry.phrase))
-                .map(|phrase| phrase.len())
+                .map(|phrase| phrase.time())
                 .sum()
         })
     }
@@ -232,15 +233,18 @@ impl Track {
             let Some(phrase) = self.phrases.get(&entry.phrase) else {
                 continue;
             };
-            if remaining < phrase.len() {
+            let time = phrase.time();
+            if remaining < time {
+                let (step, pulse) = phrase.row_at(remaining)?;
                 return Some(ChainPosition {
                     slot,
                     phrase: entry.phrase,
-                    step: remaining,
+                    step,
+                    pulse,
                     transpose: entry.transpose,
                 });
             }
-            remaining -= phrase.len();
+            remaining -= time;
         }
         None
     }
@@ -248,11 +252,16 @@ impl Track {
     /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them.
     pub fn chain_place(&self, chain: u32, slot: usize, row: usize) -> Option<usize> {
         let entries = &self.chains.get(&chain)?.entries;
-        let length = |entry: &ChainEntry| self.phrases.get(&entry.phrase).map(|p| p.len());
-        if row >= length(entries.get(slot)?)? {
+        let phrase = self.phrases.get(&entries.get(slot)?.phrase)?;
+        if row >= phrase.len() {
             return None;
         }
-        Some(entries[..slot].iter().filter_map(length).sum::<usize>() + row)
+        let before: usize = entries[..slot]
+            .iter()
+            .filter_map(|entry| self.phrases.get(&entry.phrase))
+            .map(|phrase| phrase.time())
+            .sum();
+        Some(before + phrase.time_to(row))
     }
 
     /// The step at a position, once a chain position has been found.
@@ -733,7 +742,40 @@ impl Phrase {
         })
     }
 
-    /// The number of steps that play.
+    /// How many steps its loop lasts: each row's pulses, so a skipped row takes none.
+    pub fn time(&self) -> usize {
+        self.loop_steps().iter().map(Step::pulses).sum()
+    }
+
+    /// How many steps into the loop a row of it starts.
+    pub fn time_to(&self, row: usize) -> usize {
+        self.loop_steps().iter().take(row).map(Step::pulses).sum()
+    }
+
+    /// The row of the loop playing this many steps in, and which of its pulses. Skipped rows are
+    /// passed over, and a loop that takes no time has none.
+    pub fn row_at(&self, time: usize) -> Option<(usize, usize)> {
+        let mut left = time;
+        for (row, step) in self.loop_steps().iter().enumerate() {
+            let pulses = step.pulses();
+            if left < pulses {
+                return Some((row, left));
+            }
+            left -= pulses;
+        }
+        None
+    }
+
+    /// How many steps there are from the start of a row of the loop to a row this many after it,
+    /// wrapping round, for a glide's time.
+    pub fn time_between(&self, row: usize, rows: usize) -> usize {
+        let steps = self.loop_steps();
+        (0..rows)
+            .map(|at| steps[(row + at) % steps.len()].pulses())
+            .sum()
+    }
+
+    /// The number of rows that play.
     pub fn len(&self) -> usize {
         self.length
     }
@@ -833,7 +875,10 @@ impl Phrase {
 pub struct ChainPosition {
     pub slot: usize,
     pub phrase: u32,
+    /// The row of the phrase's loop.
     pub step: usize,
+    /// Which of the row's pulses, from 0 for its first.
+    pub pulse: usize,
     pub transpose: i8,
 }
 
@@ -1179,6 +1224,61 @@ mod tests {
         assert_eq!(song.sections[0].chains.len(), 5);
         song.ensure_fixed_tracks();
         assert_eq!(song.tracks.len(), 5);
+    }
+
+    fn gated(gates: &[&str]) -> Phrase {
+        Phrase::from_steps(
+            gates
+                .iter()
+                .map(|gate| format!("C-4 -- {gate} ---00 ---00 ---00").parse().unwrap())
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn a_row_lasts_its_pulses_and_a_skipped_one_none() {
+        let phrase = gated(&["SGL1", "HLD3", "MLT0", "RST2"]);
+        assert_eq!(phrase.time(), 6);
+        let rows: Vec<(usize, usize)> = (0..6).filter_map(|t| phrase.row_at(t)).collect();
+        assert_eq!(rows, [(0, 0), (1, 0), (1, 1), (1, 2), (3, 0), (3, 1)]);
+        assert_eq!(phrase.row_at(6), None);
+        assert_eq!(phrase.time_to(3), 4, "the skipped row takes no time");
+        assert_eq!(phrase.time_between(3, 2), 2 + 1, "wrapping to row 0");
+        let skipped = gated(&["SGL0", "HLD0"]);
+        assert_eq!(skipped.time(), 0);
+        assert_eq!(skipped.row_at(0), None, "nothing to play, and no hang");
+    }
+
+    #[test]
+    fn a_chain_lasts_its_rows_pulses_and_finds_them() {
+        let mut song = Song::new(1);
+        song.tracks[0]
+            .phrases
+            .insert(0, Arc::new(gated(&["HLD3", "SGL1"])));
+        song.tracks[0].phrases.insert(7, Arc::new(gated(&["MLT2"])));
+        let entry = |phrase| ChainEntry {
+            phrase,
+            transpose: 0,
+        };
+        song.tracks[0].chains.insert(
+            0,
+            Arc::new(Chain {
+                entries: vec![entry(0), entry(7)],
+                label: String::new(),
+            }),
+        );
+        let track = &song.tracks[0];
+        assert_eq!(track.chain_steps(0), 6);
+        let at = |step| {
+            let found = track.chain_position(0, step).unwrap();
+            (found.slot, found.step, found.pulse)
+        };
+        assert_eq!(at(2), (0, 0, 2));
+        assert_eq!(at(3), (0, 1, 0));
+        assert_eq!(at(5), (1, 0, 1));
+        assert_eq!(at(6), (0, 0, 0), "and round again");
+        assert_eq!(track.chain_place(0, 1, 0), Some(4));
+        assert_eq!(track.chain_place(0, 0, 1), Some(3));
     }
 
     #[test]
