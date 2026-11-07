@@ -149,17 +149,31 @@ fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<S
     }
 }
 
-/// A setting's name on the Sound page, with a jump's label after it, where the eye is while searching.
-fn name_spans(app: &App, control: Control, name: &str) -> Vec<Span<'static>> {
-    let Some(label) = app.field_jump.as_ref().and_then(|jump| jump.label(control)) else {
-        return vec![Span::styled(format!("{name:<SOUND_LABEL$}"), theme::dim())];
+/// A setting's name in its column, with any labels from a jump over the letters just after what's
+/// been typed, as flash.nvim draws them, since that's where the eye is while searching.
+fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Vec<Span<'static>> {
+    let letters: Vec<char> = name.chars().collect();
+    let typed = app.field_jump.as_ref().and_then(|jump| {
+        let at = name.to_lowercase().find(&jump.query)?;
+        Some(at + jump.query.len())
+    });
+    let Some(typed) = typed.filter(|_| !labels.is_empty()) else {
+        return vec![Span::styled(format!("{name:<room$}"), theme::dim())];
     };
-    let shown: String = name.chars().take(SOUND_LABEL - 1).collect();
-    let rest = SOUND_LABEL - 1 - shown.chars().count();
+    let count = labels.chars().count();
+    let before = typed.min(room.saturating_sub(count));
+    let after: String = letters.iter().skip(before + count).collect();
+    let used = before + count + after.chars().count();
     vec![
-        Span::styled(shown, theme::dim()),
-        Span::styled(label.to_string(), theme::jump_label()),
-        Span::raw(" ".repeat(rest)),
+        Span::styled(
+            letters[..before.min(letters.len())]
+                .iter()
+                .collect::<String>(),
+            theme::dim(),
+        ),
+        Span::styled(labels.to_owned(), theme::jump_label()),
+        Span::styled(after, theme::dim()),
+        Span::raw(" ".repeat(room.saturating_sub(used))),
     ]
 }
 
@@ -172,10 +186,15 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         if column > 0 {
             spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
         }
+        let label = app
+            .field_jump
+            .as_ref()
+            .and_then(|jump| jump.label(*control));
         spans.extend(name_spans(
             app,
-            *control,
             control.label_on(track.synth_voice),
+            &label.map_or_else(String::new, String::from),
+            SOUND_LABEL,
         ));
         used = SOUND_LABEL;
         let typing = *control == current && app.mode == Mode::Insert;
@@ -291,19 +310,16 @@ fn width(control: Control) -> usize {
     }
 }
 
-/// The column names over some rows, with a jump's labels for those rows after each name.
+/// The column names over some rows, with a jump's labels for those rows on each name.
 fn heading<const N: usize>(app: &App, rows: &[[Control; N]]) -> Line<'static> {
     let mut spans = vec![Span::raw(" ".repeat(NAME_WIDTH))];
     for column in 0..N {
-        let name = rows[0][column].label();
+        let control = rows[0][column];
         let labels: String = rows
             .iter()
             .filter_map(|row| app.field_jump.as_ref()?.label(row[column]))
             .collect();
-        let room = width(rows[0][column]).saturating_sub(name.chars().count() + labels.len());
-        spans.push(Span::styled(name, theme::dim()));
-        spans.push(Span::styled(labels, theme::jump_label()));
-        spans.push(Span::raw(" ".repeat(room)));
+        spans.extend(name_spans(app, control.label(), &labels, width(control)));
     }
     Line::from(spans)
 }

@@ -4327,11 +4327,14 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
             .find(|line| line.starts_with(name))
             .unwrap()
     };
-    // In the same columns as without a label.
-    assert!(line(&app, "Cut").starts_with("Cuts      sF ▕"));
-    assert!(line(&app, "Low cut").starts_with("Low cutd  d0 ▕"));
-    assert!(line(&app, "High cut").starts_with("High cutf fF ▕"));
+    // Over the letter after what's typed, in the same columns as without a label.
+    assert!(line(&app, "Cus").starts_with("Cus       sF ▕"));
+    assert!(line(&app, "Low cud").starts_with("Low cud   d0 ▕"));
+    assert!(line(&app, "High cuf").starts_with("High cuf  fF ▕"));
     assert!(line(&app, "Res").starts_with("Res       00 ▕"));
+    // It moves along as you type, and past the end of a name it sits just after it.
+    press(&mut app, "t");
+    assert!(line(&app, "Cuts").starts_with("Cuts      sF ▕"));
     special(&mut app, KeyCode::Esc);
 
     // A name over two rows has both their labels, and the columns stay put.
@@ -4343,7 +4346,11 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
         labels.iter().all(|label| label.ends_with("Depth")),
         "{labels:?}"
     );
-    assert!(heading.contains("Depth"), "{heading}");
+    let after = &heading[heading.find("Dep").unwrap() + 3..];
+    assert!(
+        !after.starts_with("th"),
+        "two labels over the rest: {heading}"
+    );
     assert!(heading.contains("Reset"), "{heading}");
     let at = |line: &str, word: &str| line.find(word).unwrap();
     special(&mut app, KeyCode::Esc);
