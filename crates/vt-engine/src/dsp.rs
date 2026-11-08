@@ -30,6 +30,7 @@ pub mod six_op;
 pub mod smoother;
 pub mod string_model;
 pub mod swarm;
+pub mod tape;
 mod variable_shape;
 pub mod virtual_analog;
 pub mod virtual_analog_vcf;

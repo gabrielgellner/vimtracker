@@ -6,7 +6,7 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Insert, Limiter, Phaser,
-    Reverb,
+    Reverb, Tape,
 };
 use vt_model::song::level_gain;
 
@@ -80,7 +80,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Compressor(_), Insert::Compressor(_))
         | (Insert::Limit(_), Insert::Limit(_))
         | (Insert::Phaser(_), Insert::Phaser(_))
-        | (Insert::Flanger(_), Insert::Flanger(_)) => true,
+        | (Insert::Flanger(_), Insert::Flanger(_))
+        | (Insert::Tape(_), Insert::Tape(_)) => true,
         _ => false,
     }
 }
@@ -194,7 +195,8 @@ impl InsertState {
             | Insert::Compressor(Compressor { mix, gain, .. })
             | Insert::Limit(Limiter { mix, gain, .. })
             | Insert::Phaser(Phaser { mix, gain, .. })
-            | Insert::Flanger(Flanger { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Flanger(Flanger { mix, gain, .. })
+            | Insert::Tape(Tape { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -354,9 +356,11 @@ impl InsertState {
                     .map(|sample| sample * gain);
             }
             Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
-            Insert::Delay(_) | Insert::Reverb(_) | Insert::Chorus(_) | Insert::Flanger(_) => {
-                (None, 0)
-            }
+            Insert::Delay(_)
+            | Insert::Reverb(_)
+            | Insert::Chorus(_)
+            | Insert::Flanger(_)
+            | Insert::Tape(_) => (None, 0),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);

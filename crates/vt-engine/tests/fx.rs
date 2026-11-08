@@ -854,3 +854,32 @@ fn a_flanger_changes_the_sound_and_spreads_it_with_feedback_either_way() {
     }));
     assert_ne!(up, down);
 }
+
+#[test]
+fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
+    use vt_model::insert::Tape;
+    let peak = |out: &[[f32; 2]]| out.iter().flatten().fold(0.0_f32, |a, b| a.max(b.abs()));
+    let plain = distorted([Insert::Empty; 3]);
+    let gentle = distorted([Insert::Tape(Tape::DEFAULT), Insert::Empty, Insert::Empty]);
+    assert_ne!(gentle, plain);
+    // As it starts, it's about as loud as it was.
+    assert!(
+        (peak(&gentle) / peak(&plain) - 1.0).abs() < 0.1,
+        "{} {}",
+        peak(&gentle),
+        peak(&plain)
+    );
+    // Driven hard, it clips under -0.5 dB of what went in at full scale, which is a half here.
+    let driven = distorted([
+        Insert::Tape(Tape {
+            drive: 0xFF,
+            ..Tape::DEFAULT
+        }),
+        Insert::Empty,
+        Insert::Empty,
+    ]);
+    assert!(driven.iter().flatten().all(|s| s.is_finite()));
+    let most = peak(&plain) / 0.5 * 0.94;
+    assert!(peak(&driven) <= most * 1.001, "{} {most}", peak(&driven));
+    assert!(peak(&driven) > peak(&plain) * 1.5, "{}", peak(&driven));
+}

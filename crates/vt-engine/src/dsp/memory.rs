@@ -12,6 +12,7 @@ use crate::dsp::delay::Delay;
 use crate::dsp::flanger::Flanger;
 use crate::dsp::limiter::Limiter;
 use crate::dsp::reverb::Reverb;
+use crate::dsp::tape::Tape;
 use crate::engine::sample_of_tick;
 
 /// How long a reverb has to stay below `SILENT` to be done, in seconds. It's longer than the way
@@ -28,6 +29,7 @@ pub enum Memory {
     Chorus(Box<Chorus>),
     Limit(Box<Limiter>),
     Flanger(Box<Flanger>),
+    Tape(Box<Tape>),
 }
 
 impl Memory {
@@ -58,6 +60,11 @@ impl Memory {
         Self::Flanger(Box::new(Flanger::new(rate)))
     }
 
+    /// A tape's, with a line for its wow and flutter.
+    pub fn tape(rate: u32) -> Self {
+        Self::Tape(Box::new(Tape::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -67,6 +74,7 @@ impl Memory {
             Self::Chorus(chorus) => chorus.process(input),
             Self::Limit(limiter) => limiter.process_alone(input),
             Self::Flanger(flanger) => flanger.process(input),
+            Self::Tape(tape) => tape.process(input),
         }
     }
 
@@ -78,6 +86,7 @@ impl Memory {
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,
             Self::Flanger(flanger) => flanger.frames() as u32,
+            Self::Tape(tape) => tape.quiet_frames(),
         }
     }
 
@@ -94,6 +103,7 @@ impl Memory {
             (Self::Flanger(flanger), Insert::Flanger(settings)) => {
                 flanger.follow(settings, frames_per_tick);
             }
+            (Self::Tape(tape), Insert::Tape(settings)) => tape.follow(settings),
             _ => {}
         }
     }
@@ -106,6 +116,7 @@ impl Memory {
             Self::Chorus(chorus) => chorus.settle(),
             Self::Limit(limiter) => limiter.settle(),
             Self::Flanger(flanger) => flanger.settle(),
+            Self::Tape(tape) => tape.settle(),
         }
     }
 
@@ -116,6 +127,7 @@ impl Memory {
             Self::Chorus(chorus) => chorus.clear(),
             Self::Limit(limiter) => limiter.clear(),
             Self::Flanger(flanger) => flanger.clear(),
+            Self::Tape(tape) => tape.clear(),
         }
     }
 }
@@ -128,6 +140,7 @@ pub struct MemoryCount {
     pub chorus: u16,
     pub limit: u16,
     pub flanger: u16,
+    pub tape: u16,
 }
 
 impl MemoryCount {
@@ -141,6 +154,7 @@ impl MemoryCount {
                 Insert::Chorus(_) => count.chorus += 1,
                 Insert::Limit(_) => count.limit += 1,
                 Insert::Flanger(_) => count.flanger += 1,
+                Insert::Tape(_) => count.tape += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -160,6 +174,7 @@ pub struct MemoryPool {
     choruses: Vec<Memory>,
     limiters: Vec<Memory>,
     flangers: Vec<Memory>,
+    tapes: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -176,6 +191,7 @@ impl MemoryPool {
             choruses: Vec::with_capacity(POOL_CAPACITY),
             limiters: Vec::with_capacity(POOL_CAPACITY),
             flangers: Vec::with_capacity(POOL_CAPACITY),
+            tapes: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -194,6 +210,9 @@ impl MemoryPool {
         for _ in 0..needed.flanger {
             pool.put(Memory::flanger(rate));
         }
+        for _ in 0..needed.tape {
+            pool.put(Memory::tape(rate));
+        }
         pool
     }
 
@@ -205,6 +224,7 @@ impl MemoryPool {
             Memory::Chorus(_) => &mut self.choruses,
             Memory::Limit(_) => &mut self.limiters,
             Memory::Flanger(_) => &mut self.flangers,
+            Memory::Tape(_) => &mut self.tapes,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -223,6 +243,7 @@ impl MemoryPool {
             Insert::Chorus(_) => &mut self.choruses,
             Insert::Limit(_) => &mut self.limiters,
             Insert::Flanger(_) => &mut self.flangers,
+            Insert::Tape(_) => &mut self.tapes,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -243,6 +264,7 @@ impl MemoryPool {
         self.owed.chorus += count.chorus;
         self.owed.limit += count.limit;
         self.owed.flanger += count.flanger;
+        self.owed.tape += count.tape;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -277,6 +299,12 @@ impl MemoryPool {
             self.owed.flanger -= 1;
             return Some(memory);
         }
+        if self.owed.tape > 0
+            && let Some(memory) = self.tapes.pop()
+        {
+            self.owed.tape -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -287,6 +315,7 @@ impl MemoryPool {
             + self.choruses.len()
             + self.limiters.len()
             + self.flangers.len()
+            + self.tapes.len()
     }
 }
 

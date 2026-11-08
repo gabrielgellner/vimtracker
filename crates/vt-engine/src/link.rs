@@ -183,12 +183,16 @@ impl Handle {
         for _ in self.held.flanger..needed.flanger {
             self.unsent.push(Memory::flanger(self.rate));
         }
+        for _ in self.held.tape..needed.tape {
+            self.unsent.push(Memory::tape(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
             chorus: self.held.chorus.saturating_sub(needed.chorus),
             limit: self.held.limit.saturating_sub(needed.limit),
             flanger: self.held.flanger.saturating_sub(needed.flanger),
+            tape: self.held.tape.saturating_sub(needed.tape),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -346,6 +350,8 @@ mod tests {
     /// A flanger, which takes a short line from the pool, and a phaser, which needs none.
     const FLANGER: Insert = Insert::Flanger(vt_model::insert::Flanger::DEFAULT);
     const PHASER: Insert = Insert::Phaser(vt_model::insert::Phaser::DEFAULT);
+    /// A tape, which takes a short line from the pool for its wow and flutter.
+    const TAPE: Insert = Insert::Tape(vt_model::insert::Tape::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -469,6 +475,8 @@ mod tests {
                 next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT];
             } else if round % 4 == 1 {
                 next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER];
+            } else {
+                next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -490,7 +498,7 @@ mod tests {
 
         let mut more = plain.clone();
         more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
-        more.tracks[1].inserts = [LIMIT, FLANGER, PHASER];
+        more.tracks[1].inserts = [LIMIT, FLANGER, TAPE];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -500,6 +508,7 @@ mod tests {
                 chorus: needed.chorus + 1,
                 limit: needed.limit + 1,
                 flanger: needed.flanger + 1,
+                tape: needed.tape + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -514,7 +523,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 5);
+        assert_eq!(freed, 6);
     }
 
     #[test]

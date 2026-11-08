@@ -221,6 +221,22 @@ notches, and sweeps how late it is, for the jet-plane sound.
 | `Delay` | How late the copy is at the middle, from 0.5 ms to 10 ms |
 | `Feedback` | None at `80`. Above, it rings brighter; below, hollower |
 
+`Tape` puts a sound on tape and plays it back, after Airwindows' ToTape, with
+Beads' wow and flutter. It warms and thickens what's loud, softens loud highs,
+and lifts the lows a little around 69 Hz, while a quiet sound comes through
+nearly as it was. It never comes out louder than -0.5 dB, however hard it's
+driven, so `Gain` is there to bring it back down. It's a few samples late,
+more with wow, so `Mix` below `FF` can blend in a faint chorus.
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
+| `Tone` | Flat at `80`. Above, the highs come out brighter; below, darker |
+| `Bias` | None at `80`. Above, it softens fast edges; below, it crackles |
+| `Bump` | How much the heads lift the lows. It starts half way |
+| `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
+| `Flutter` | A faster, steady wobble, about twice a second |
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
