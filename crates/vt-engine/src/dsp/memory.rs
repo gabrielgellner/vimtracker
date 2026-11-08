@@ -243,7 +243,8 @@ impl MemoryCount {
                 | Insert::Eq(_)
                 | Insert::Compressor(_)
                 | Insert::Lpg(_)
-                | Insert::Phaser(_) => {}
+                | Insert::Phaser(_)
+                | Insert::Vowel(_) => {}
             }
         }
         count
@@ -375,7 +376,8 @@ impl MemoryPool {
             | Insert::Eq(_)
             | Insert::Compressor(_)
             | Insert::Lpg(_)
-            | Insert::Phaser(_) => {
+            | Insert::Phaser(_)
+            | Insert::Vowel(_) => {
                 return None;
             }
         };

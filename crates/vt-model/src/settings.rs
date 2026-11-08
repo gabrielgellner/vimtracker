@@ -8,9 +8,10 @@ use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
     EQ_PARAMS, FLANGER_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS,
     PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, Setting,
-    TAPE_PARAMS, Triggering, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents,
-    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
-    limit_release_ms, plate_size, ratio, release_ms, tape_drive_db, threshold_db,
+    TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms,
+    ceiling_db, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
+    grain_time_seconds, input_db, limit_release_ms, plate_size, ratio, release_ms, tape_drive_db,
+    threshold_db, vowel_blend,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -79,6 +80,8 @@ pub enum Units {
     Density,
     /// Where Warps' algorithm knob is, by the algorithms it's between.
     Algorithm,
+    /// Where a vowel filter is, by the vowels it's between.
+    Vowel,
     /// The acid voice's cutoff, its filter envelope's decay, how long it slides and how hard it
     /// drives its filter.
     AcidCutoff,
@@ -203,6 +206,7 @@ impl Kind {
                     Triggering::Random(hertz) => format!("{} rnd", rate(hertz)),
                 },
                 Units::Algorithm => algorithm_text(coarse as f32),
+                Units::Vowel => vowel_text(coarse as f32),
                 Units::AcidCutoff => hertz(f64::from(acid_cutoff_hz(coarse as f32))),
                 Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
                 Units::Slide => milliseconds(slide_ms(coarse as f32)),
@@ -247,6 +251,16 @@ fn algorithm_text(value: f32) -> String {
         by if by < 0.05 => ALGORITHM_NAMES[from].to_owned(),
         by if by > 0.95 => ALGORITHM_NAMES[to].to_owned(),
         _ => format!("{}>{}", ALGORITHM_NAMES[from], ALGORITHM_NAMES[to]),
+    }
+}
+
+/// Where a vowel filter is: a vowel, or the two it's between, as `A>E`.
+fn vowel_text(value: f32) -> String {
+    let (from, to, by) = vowel_blend(value);
+    match by {
+        by if by < 0.05 => VOWEL_NAMES[from].to_owned(),
+        by if by > 0.95 => VOWEL_NAMES[to].to_owned(),
+        _ => format!("{}>{}", VOWEL_NAMES[from], VOWEL_NAMES[to]),
     }
 }
 
@@ -611,10 +625,11 @@ pub enum Effect {
     Lpg,
     Reso,
     Comb,
+    Vowel,
 }
 
 impl Effect {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -632,6 +647,7 @@ impl Effect {
         Self::Lpg,
         Self::Reso,
         Self::Comb,
+        Self::Vowel,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -655,6 +671,7 @@ impl Effect {
             Self::Lpg => &LPG_PARAMS,
             Self::Reso => &RESO_PARAMS,
             Self::Comb => &COMB_PARAMS,
+            Self::Vowel => &VOWEL_PARAMS,
         }
     }
 
@@ -677,6 +694,7 @@ impl Effect {
             Self::Lpg => "lpg",
             Self::Reso => "reso",
             Self::Comb => "comb",
+            Self::Vowel => "vowel",
         }
     }
 
@@ -699,6 +717,7 @@ impl Effect {
             Self::Lpg => "LPG",
             Self::Reso => "Reso",
             Self::Comb => "Comb",
+            Self::Vowel => "Vowel",
         }
     }
 
@@ -723,6 +742,7 @@ impl Effect {
             Insert::Lpg(_) => Some(Self::Lpg),
             Insert::Reso(_) => Some(Self::Reso),
             Insert::Comb(_) => Some(Self::Comb),
+            Insert::Vowel(_) => Some(Self::Vowel),
         }
     }
 }
@@ -759,6 +779,7 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Length => (false, Units::GrainLength),
                 Setting::Density => (false, Units::Density),
                 Setting::Algorithm => (false, Units::Algorithm),
+                Setting::Vowel => (false, Units::Vowel),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -985,6 +1006,25 @@ const fn effect_start(effect: Effect) -> usize {
                 + LPG_PARAMS.len()
                 + RESO_PARAMS.len()
         }
+        Effect::Vowel => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+        }
     }
 }
 
@@ -1007,7 +1047,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + WARPS_PARAMS.len()
     + LPG_PARAMS.len()
     + RESO_PARAMS.len()
-    + COMB_PARAMS.len();
+    + COMB_PARAMS.len()
+    + VOWEL_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.
