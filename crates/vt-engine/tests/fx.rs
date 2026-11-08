@@ -706,3 +706,51 @@ fn a_flat_eq_changes_nothing_and_a_boost_does() {
         peak(&plain)
     );
 }
+
+/// Two tracks holding a note, the first muted, and the second through a compressor in its first
+/// slot.
+fn ducked(compressor: Insert) -> Vec<[f32; 2]> {
+    let mut song = Song::new(2);
+    for track in 0..2 {
+        song.tracks[track].sample = Some("s".to_owned());
+        song.tracks[track].envelopes[0].attack_ms = 0;
+        song.tracks[track].envelopes[0].release_ms = 0;
+        let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
+        *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+    }
+    song.tracks[1].inserts[0] = compressor;
+    let mut engine = Engine::new(RATE, Arc::new(Published::new(Arc::new(song), flat(0.5))));
+    engine.set_mute(0, true);
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    out.as_chunks::<2>().0.to_vec()
+}
+
+#[test]
+fn a_compressor_hearing_a_muted_track_ducks_under_it() {
+    use vt_model::insert::Compressor;
+    let hard = |source| {
+        Insert::Compressor(Compressor {
+            threshold: 0x00,
+            ratio: 0xFF,
+            attack: 0x00,
+            source,
+            ..Compressor::DEFAULT
+        })
+    };
+    let plain = ducked(Insert::Empty);
+    let under = ducked(hard(1));
+    let at = STEP / 2;
+    assert!(level_at(&plain, at) > 0.1, "{}", level_at(&plain, at));
+    // Track 01 is muted, but it's heard after its slots, so it still ducks the second track.
+    assert!(
+        level_at(&under, at) < level_at(&plain, at) * 0.05,
+        "{} {}",
+        level_at(&under, at),
+        level_at(&plain, at)
+    );
+    // A source that's silent leaves it alone: track 64 has nothing on it.
+    let silent = ducked(hard(64));
+    assert_eq!(silent, plain);
+}

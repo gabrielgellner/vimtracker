@@ -1,6 +1,6 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
-use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
+use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
@@ -226,6 +226,8 @@ pub struct TrackState {
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
+    /// Its sound after its slots in the latest frame, for a compressor on another track to hear.
+    pub key: [f32; 2],
 }
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
@@ -363,6 +365,7 @@ impl TrackState {
             lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
             held_pitch: 128.0,
             filter_moving: false,
+            key: [0.0; 2],
         }
     }
 
@@ -882,7 +885,14 @@ impl TrackState {
 
     /// Filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
-    pub fn shape(&mut self, input: [f32; 2], smoothing: f32, fast: f32, rate: u32) -> ShapedFrame {
+    pub fn shape(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> ShapedFrame {
         let cutoff = (self.cutoff.next(smoothing)
             + self.cut_offset.next(fast)
             + self.cut_envelope.next(fast))
@@ -927,8 +937,9 @@ impl TrackState {
             } else {
                 smoothing
             };
-            filtered = insert.process(filtered, keeping_up, rate);
+            filtered = insert.process(filtered, keeping_up, rate, keys);
         }
+        self.key = filtered;
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
         let keeping_up = |target: SettingId| {
             if self.offsets[target.index()] == 0.0 {
@@ -962,6 +973,7 @@ impl TrackState {
         smoothing: f32,
         fast: f32,
         rate: u32,
+        keys: &Keys,
     ) -> [f32; 2] {
         let mut frame = input;
         for (slot, insert) in self.inserts.iter_mut().enumerate() {
@@ -970,8 +982,9 @@ impl TrackState {
             } else {
                 smoothing
             };
-            frame = insert.process(frame, keeping_up, rate);
+            frame = insert.process(frame, keeping_up, rate, keys);
         }
+        self.key = frame;
         let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
             smoothing
         } else {
@@ -991,11 +1004,13 @@ impl TrackState {
         smoothing: f32,
         fast: f32,
         rate: u32,
+        keys: &Keys,
     ) -> [f32; 2] {
         if input == [0.0, 0.0] && !self.ringing(rate) {
+            self.key = [0.0, 0.0];
             return [0.0, 0.0];
         }
-        let frame = self.slots_and_level(input, smoothing, fast, rate);
+        let frame = self.slots_and_level(input, smoothing, fast, rate, keys);
         let position =
             (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
                 .clamp(0.0, 1.0);
@@ -1019,8 +1034,35 @@ impl TrackState {
         smoothing: f32,
         fast: f32,
         rate: u32,
+        keys: &Keys,
     ) -> [f32; 2] {
-        self.slots_and_level(input, smoothing, fast, rate)
+        self.slots_and_level(input, smoothing, fast, rate, keys)
+    }
+}
+
+/// Each track's sound after its slots and before its level and mute, from the latest frame, for a
+/// compressor that hears another track. A track renders in order, so one later than the listener
+/// is heard a frame late, which is far too little to hear.
+#[derive(Debug, Clone)]
+pub struct Keys {
+    pub frames: [[f32; 2]; MAX_TRACKS],
+    /// How many sound tracks there are, so the returns' places are known.
+    pub sounds: usize,
+}
+
+impl Default for Keys {
+    fn default() -> Self {
+        Self {
+            frames: [[0.0; 2]; MAX_TRACKS],
+            sounds: 0,
+        }
+    }
+}
+
+impl Keys {
+    /// A track's latest frame, or silence for one that isn't there.
+    pub fn of(&self, track: usize) -> [f32; 2] {
+        self.frames.get(track).copied().unwrap_or_default()
     }
 }
 

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
+use crate::constants::{MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::lfo::DIVISION_NAMES;
 
 /// How many a track has.
@@ -18,6 +18,7 @@ pub enum Insert {
     Reverb(Reverb),
     Chorus(Chorus),
     Eq(Equaliser),
+    Compressor(Compressor),
 }
 
 /// What a distortion does to the sound.
@@ -85,6 +86,12 @@ pub enum Setting {
     MidQ,
     HighFrequency,
     High,
+    /// A compressor's: where it starts turning down, by how much, how fast, and what it hears.
+    Threshold,
+    Ratio,
+    Attack,
+    Release,
+    Source,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -106,6 +113,7 @@ impl Setting {
         match self {
             Self::Type => DistortType::ALL.len() as u8 - 1,
             Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
+            Self::Source => SOURCE_NAMES.len() as u8 - 1,
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
@@ -119,6 +127,7 @@ impl Setting {
         match self {
             Self::Type => (DistortType::ALL.len() - 1) as f32,
             Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
+            Self::Source => (SOURCE_NAMES.len() - 1) as f32,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::PingPong => 1.0,
@@ -402,6 +411,87 @@ pub(crate) const EQ_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// What a compressor can hear: its own input, a track by its number, or a return.
+pub const SOURCE_NAMES: [&str; MAX_SOUND_TRACKS + 3] = [
+    "Self", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14",
+    "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+    "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46",
+    "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62",
+    "63", "64", "A", "B",
+];
+
+/// A compressor's threshold in dB, for a value on the `00` to `FF` scale: from -60 dB to 0 dB.
+pub fn threshold_db(value: f32) -> f32 {
+    value / 255.0 * 60.0 - 60.0
+}
+
+/// A compressor's ratio for a value on the `00` to `FF` scale: 1:1 at `00`, rising faster as it
+/// goes, to 20:1 just below the top, and as hard as a limiter at `FF`.
+pub fn ratio(value: f32) -> f32 {
+    if value >= 255.0 {
+        f32::INFINITY
+    } else {
+        1.0 + (value / 255.0).powi(2) * 19.0
+    }
+}
+
+/// A compressor's attack in ms: from 0.1 ms at `00` to 100 ms at `FF`, evenly in ratio.
+pub fn attack_ms(value: f32) -> f32 {
+    0.1 * 1000_f32.powf(value / 255.0)
+}
+
+/// A compressor's release in ms: from 10 ms at `00` to a second at `FF`, evenly in ratio.
+pub fn release_ms(value: f32) -> f32 {
+    10.0 * 100_f32.powf(value / 255.0)
+}
+
+/// A compressor's, in the order the page shows them.
+pub(crate) const COMPRESSOR_PARAMS: [Param; 7] = [
+    hex_param(
+        "Threshold",
+        "threshold",
+        "THRS",
+        Setting::Threshold,
+        Compressor::DEFAULT.threshold,
+    ),
+    hex_param(
+        "Ratio",
+        "ratio",
+        "RTIO",
+        Setting::Ratio,
+        Compressor::DEFAULT.ratio,
+    ),
+    hex_param(
+        "Attack",
+        "attack",
+        "ATK",
+        Setting::Attack,
+        Compressor::DEFAULT.attack,
+    ),
+    hex_param(
+        "Release",
+        "release",
+        "REL",
+        Setting::Release,
+        Compressor::DEFAULT.release,
+    ),
+    Param {
+        name: "Source",
+        key: "source",
+        // What it hears is part of how it's set up, so steps don't change it.
+        label: None,
+        setting: Setting::Source,
+        choices: &SOURCE_NAMES,
+        wraps: false,
+        default: 0,
+    },
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -410,13 +500,14 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
         Self::Reverb(Reverb::DEFAULT),
         Self::Chorus(Chorus::DEFAULT),
         Self::Eq(Equaliser::DEFAULT),
+        Self::Compressor(Compressor::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -440,6 +531,7 @@ impl Insert {
             Self::Reverb(_) => "Reverb",
             Self::Chorus(_) => "Chorus",
             Self::Eq(_) => "EQ3",
+            Self::Compressor(_) => "Comp",
         }
     }
 
@@ -452,6 +544,7 @@ impl Insert {
             Self::Reverb(_) => "Puts the sound in a room",
             Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
             Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
+            Self::Compressor(_) => "Evens out its level, or ducks it under another track",
         }
     }
 
@@ -468,6 +561,7 @@ impl Insert {
             Self::Reverb(_) => &REVERB_PARAMS,
             Self::Chorus(_) => &CHORUS_PARAMS,
             Self::Eq(_) => &EQ_PARAMS,
+            Self::Compressor(_) => &COMPRESSOR_PARAMS,
         }
     }
 
@@ -517,6 +611,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| eq.read(setting));
             }
+            Self::Compressor(compressor) => {
+                return COMPRESSOR_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| compressor.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -541,6 +641,9 @@ impl Insert {
             Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
             Self::Chorus(chorus) => return Self::Chorus(chorus.written(setting, whole)),
             Self::Eq(eq) => return Self::Eq(eq.written(setting, whole)),
+            Self::Compressor(compressor) => {
+                return Self::Compressor(compressor.written(setting, whole));
+            }
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -866,6 +969,83 @@ impl Equaliser {
             _ => {}
         }
         eq
+    }
+}
+
+/// A compressor's settings. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Compressor {
+    pub threshold: u8,
+    pub ratio: u8,
+    pub attack: u8,
+    pub release: u8,
+    /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
+    pub source: u8,
+    /// From `00`, all dry, to `FF`, all compressed, for compressing in parallel.
+    pub mix: u8,
+    /// What comes out, on the level scale, to make up what it took.
+    pub gain: u8,
+}
+
+impl Default for Compressor {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Compressor {
+    /// As it starts: -15 dB, about 3.7:1, a quick attack and a 100 ms release, hearing itself.
+    pub const DEFAULT: Self = Self {
+        threshold: 0xC0,
+        ratio: 0x60,
+        attack: 0x55,
+        release: 0x80,
+        source: 0,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// The track it hears, by its place among the tracks, if not its own input. The returns come
+    /// after the sound tracks, at `sounds` and the one after.
+    pub fn source_track(self, sounds: usize) -> Option<usize> {
+        let source = usize::from(self.source);
+        match source {
+            0 => None,
+            track if track <= MAX_SOUND_TRACKS => Some(track - 1),
+            other => Some(sounds + other - MAX_SOUND_TRACKS - 1),
+        }
+    }
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Threshold => self.threshold,
+            Setting::Ratio => self.ratio,
+            Setting::Attack => self.attack,
+            Setting::Release => self.release,
+            Setting::Source => self.source,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut compressor = self;
+        match setting {
+            Setting::Threshold => compressor.threshold = value,
+            Setting::Ratio => compressor.ratio = value,
+            Setting::Attack => compressor.attack = value,
+            Setting::Release => compressor.release = value,
+            Setting::Source => compressor.source = value,
+            Setting::Mix => compressor.mix = value,
+            Setting::Gain => compressor.gain = value,
+            _ => {}
+        }
+        compressor
     }
 }
 
