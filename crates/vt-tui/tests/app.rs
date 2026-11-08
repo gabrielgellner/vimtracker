@@ -770,6 +770,36 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
 }
 
 #[test]
+fn the_sample_browser_lists_and_loads_aiff_and_flac() {
+    let (mut app, _realtime) = app();
+    let folder = std::env::temp_dir().join(format!("vt-browse-formats-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let made = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../vt-model/tests/samples");
+    std::fs::copy(made.join("stereo-16.aif"), folder.join("hat.aif")).unwrap();
+    std::fs::copy(made.join("stereo-16.aif"), folder.join("ride.aiff")).unwrap();
+    std::fs::copy(made.join("stereo-16.flac"), folder.join("tom.flac")).unwrap();
+    wav(&folder.join("kick.wav"));
+    std::fs::write(folder.join("loop.mp3"), "not read").unwrap();
+
+    command(&mut app, &format!("sample {}", folder.display()));
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["hat.aif", "kick.wav", "ride.aiff", "tom.flac"]);
+    press(&mut app, "tom");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.status, "Track 01 sample loaded");
+    let chosen = app.song().tracks[0].sample.clone().unwrap();
+    assert!(chosen.ends_with("tom.flac"), "{chosen}");
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
 fn a_plain_write_keeps_live_mutes_and_solos() {
     let (mut app, _realtime) = app();
     let folder = std::env::temp_dir().join(format!("vt-mute-{}", std::process::id()));
