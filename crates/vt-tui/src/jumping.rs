@@ -1,8 +1,6 @@
 //! `/` on the track page or the mixer: type part of a setting's name, then a label to land on its
 //! value. The rules for labels are those of flash.nvim's `labeler.lua`.
 
-use std::time::Instant;
-
 use ratatui::crossterm::event::KeyCode;
 
 use crate::app::App;
@@ -177,13 +175,13 @@ impl App {
     }
 
     /// Handle a key during a search.
-    pub(crate) fn jump_key(&mut self, key: Key, now: Instant) {
+    pub(crate) fn jump_key(&mut self, key: Key) {
         let Some(jump) = self.field_jump.clone() else {
             return;
         };
         match key.code {
-            KeyCode::Tab => self.run(Cmd::PauseOrResume, key, now),
-            KeyCode::BackTab => self.run(Cmd::PlayFromStart, key, now),
+            KeyCode::Tab => self.run(Cmd::PauseOrResume),
+            KeyCode::BackTab => self.run(Cmd::PlayFromStart),
             KeyCode::Esc => self.close_field_jump(),
             KeyCode::Enter => match self.jump_hits(&jump.query).first() {
                 Some((control, _)) => self.land_on(*control),

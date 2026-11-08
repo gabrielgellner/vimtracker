@@ -178,6 +178,7 @@ fn the_transport_keys_play_pause_and_restart() {
     let mut hit = |app: &mut App, rt: &mut Realtime, key: Key| {
         now += Duration::from_millis(1000);
         app.key(key, now);
+        app.key_released(key);
         block(rt, app);
     };
     let space_c = |app: &mut App| press(app, " c");
@@ -227,28 +228,36 @@ fn enter_does_not_play_from_any_mode() {
 #[test]
 fn a_held_transport_key_is_ignored_while_it_repeats() {
     let (mut app, mut rt) = app();
-    let start = Instant::now();
-    for gap in 0..20 {
-        app.key(
-            Key::new(KeyCode::Tab),
-            start + Duration::from_millis(gap * 40),
-        );
+    let (tab, now) = (Key::new(KeyCode::Tab), Instant::now());
+    app.key(tab, now);
+    for _ in 0..20 {
+        app.key_repeated(tab, now);
     }
+    // Repeats sent as presses too, as kitty on macOS has sent some keys'.
+    app.key(tab, now);
     block(&mut rt, &mut app);
     assert_eq!(
         app.transport,
         Transport::Playing,
         "only the first press counts"
     );
+    // In Insert too, where Tab plays without leaving it.
+    app.key_released(tab);
+    press(&mut app, "i");
+    app.key(tab, now);
+    app.key_repeated(tab, now);
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Paused);
 }
 
 #[test]
 fn quick_taps_of_tab_all_count() {
     let (mut app, mut rt) = app();
-    let mut now = Instant::now();
+    let (tab, now) = (Key::new(KeyCode::Tab), Instant::now());
     let mut expected = Transport::Playing;
     for _ in 0..6 {
-        app.key(Key::new(KeyCode::Tab), now);
+        app.key(tab, now);
+        app.key_released(tab);
         block(&mut rt, &mut app);
         assert_eq!(app.transport, expected);
         expected = if expected == Transport::Playing {
@@ -256,21 +265,84 @@ fn quick_taps_of_tab_all_count() {
         } else {
             Transport::Playing
         };
-        now += Duration::from_millis(150);
     }
+}
+
+#[test]
+fn shift_tab_let_go_after_shift_still_counts_as_let_go() {
+    let (mut app, mut rt) = app();
+    let now = Instant::now();
+    // Shift-Tab, with Shift let go first, so the release is plain Tab's.
+    app.key(Key::new(KeyCode::BackTab), now);
+    app.key_released(Key::new(KeyCode::Tab));
+    for _ in 0..100 {
+        block(&mut rt, &mut app);
+    }
+    assert!(app.playhead > 0);
+    app.key(Key::new(KeyCode::BackTab), now);
+    block(&mut rt, &mut app);
+    assert_eq!(app.playhead, 0, "the next Shift-Tab plays from the start");
 }
 
 #[test]
 fn repeats_after_a_leader_transport_key_dont_reach_normal_keys() {
     let (mut app, mut rt) = app();
-    let start = Instant::now();
-    app.key(Key::char(' '), start);
-    for gap in 0..10 {
-        app.key(Key::char('c'), start + Duration::from_millis(gap * 40));
+    let now = Instant::now();
+    app.key(Key::char(' '), now);
+    app.key(Key::char('c'), now);
+    for _ in 0..10 {
+        app.key_repeated(Key::char('c'), now);
     }
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Playing);
     assert!(app.pending().is_empty());
+}
+
+#[test]
+fn a_held_motion_repeats() {
+    let (mut app, _rt) = app();
+    let (j, now) = (Key::char('j'), Instant::now());
+    app.key(j, now);
+    app.key_repeated(j, now);
+    app.key_repeated(j, now);
+    // A press of the key that's down is a repeat too, and still moves.
+    app.key(j, now);
+    assert_eq!(app.cursor.step, 4);
+    app.key_released(j);
+    app.key(j, now);
+    assert_eq!(app.cursor.step, 5);
+}
+
+#[test]
+fn keys_from_the_terminal_reach_the_app_as_their_characters() {
+    use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
+    let (mut app, _rt) = app();
+    let now = Instant::now();
+    let send = |app: &mut App, code: KeyCode, modifiers: KeyModifiers| {
+        let key = Key::from_event(KeyEvent::new(code, modifiers));
+        app.key_event(key, KeyEventKind::Press, now);
+        app.key_event(key, KeyEventKind::Release, now);
+    };
+    // Shift alone comes as a key, and does nothing.
+    send(
+        &mut app,
+        KeyCode::Modifier(ModifierKeyCode::LeftShift),
+        KeyModifiers::SHIFT,
+    );
+    send(&mut app, KeyCode::CapsLock, KeyModifiers::NONE);
+    assert!(app.status.is_empty(), "{}", app.status);
+    // Shift-; as kitty's remote control sends it, with no shifted key.
+    send(&mut app, KeyCode::Char(';'), KeyModifiers::SHIFT);
+    assert_eq!(app.mode, Mode::Command);
+    send(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert_eq!(app.mode, Mode::Normal);
+    // Shift-g goes to the last step, and Shift-4 to the last field.
+    send(&mut app, KeyCode::Char('g'), KeyModifiers::SHIFT);
+    assert_eq!(app.cursor.step, 15);
+    send(&mut app, KeyCode::Char('4'), KeyModifiers::SHIFT);
+    let last = app.cursor.field;
+    send(&mut app, KeyCode::Char('0'), KeyModifiers::NONE);
+    assert_ne!(app.cursor.field, last);
 }
 
 #[test]
@@ -1425,6 +1497,7 @@ fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     press(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     app.key(Key::new(KeyCode::Tab), start + Duration::from_millis(1000));
+    app.key_released(Key::new(KeyCode::Tab));
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Paused);
     assert_eq!(app.mode, Mode::Insert);
@@ -6278,10 +6351,9 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
 }
 
 #[test]
-fn where_the_terminal_reports_releases_a_held_key_holds_its_note() {
+fn a_held_key_on_the_keyboard_holds_its_note() {
     let (mut app, mut realtime) = app();
     choose_machine(&mut app, "VA");
-    app.key_releases = true;
     press(&mut app, ";");
     press(&mut app, "a");
     let _ = loudest(&mut realtime, 48_000);
@@ -6327,7 +6399,6 @@ fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
     }
     writer.finalize().unwrap();
     command(&mut app, &format!("sample {}", path.display()));
-    app.key_releases = true;
     press(&mut app, " 4;a");
     let _ = loudest(&mut realtime, 24_000);
     let held = loudest(&mut realtime, 2400);
@@ -6343,15 +6414,6 @@ fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 2400) > held * 1.5);
     std::fs::remove_dir_all(&dir).unwrap();
-}
-
-#[test]
-fn without_releases_a_key_plays_a_short_note() {
-    let (mut app, mut realtime) = app();
-    choose_machine(&mut app, "VA");
-    press(&mut app, ";a");
-    let _ = loudest(&mut realtime, 48_000);
-    assert!(loudest(&mut realtime, 4800) < 1e-3);
 }
 
 #[test]
