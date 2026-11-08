@@ -6760,55 +6760,58 @@ fn the_keyboard_plays_a_chord_and_each_key_lets_go_of_its_own_note() {
 }
 
 #[test]
-fn in_insert_the_first_key_of_a_chord_writes_and_the_others_only_sound() {
+fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
     let (mut app, mut realtime) = app();
     choose_machine(&mut app, "VA");
     press(&mut app, " 3");
     entering_steps_down(&mut app);
+    // With auto-jump, keys rolled one into the next each write and move on, and sound together
+    // while they're down.
     press(&mut app, "ia");
-    assert_eq!(written_notes(&app), [Note::On(60)]);
-    assert_eq!(app.cursor.step, 1);
-    // Keys pressed while it's down sound with it, and neither write nor move on.
     press(&mut app, "dg");
+    assert_eq!(
+        written_notes(&app),
+        [Note::On(60), Note::On(64), Note::On(67)]
+    );
+    assert_eq!(app.cursor.step, 3);
     assert_eq!(voices(&mut realtime), 3);
-    assert_eq!(written_notes(&app), [Note::On(60)]);
-    assert_eq!(app.cursor.step, 1);
-    // While any of the chord is down, another key still only sounds.
+    // Their repeats, and presses of a key that's down, write nothing more.
+    app.key_repeated(Key::char('g'), Instant::now());
+    press(&mut app, "a");
+    assert_eq!(written_notes(&app).len(), 3);
+    assert_eq!(app.cursor.step, 3);
+    assert_eq!(voices(&mut realtime), 3);
     let_go(&mut app, &mut realtime, "a");
-    press(&mut app, "h");
-    assert_eq!(voices(&mut realtime), 3);
-    assert_eq!(written_notes(&app), [Note::On(60)]);
-    let_go(&mut app, &mut realtime, "dgh");
+    assert_eq!(voices(&mut realtime), 2, "the other two still sound");
+    let_go(&mut app, &mut realtime, "dg");
     assert_eq!(voices(&mut realtime), 0);
-    // With every key up, the next writes.
-    press(&mut app, "s");
-    assert_eq!(written_notes(&app), [Note::On(60), Note::On(62)]);
-    assert_eq!(app.cursor.step, 2);
 
-    let_go(&mut app, &mut realtime, "s");
+    // Without it, the last key down wins the cell, and the chord is still heard.
+    app.auto_jump = false;
+    press(&mut app, "sf");
+    assert_eq!(written_notes(&app)[3], Note::On(65));
+    assert_eq!(app.cursor.step, 3);
+    assert_eq!(voices(&mut realtime), 2);
+    let_go(&mut app, &mut realtime, "sf");
 
     // Two keys holding the same note, an octave apart, hold it until both are let go.
     press(&mut app, "kxa");
+    assert_eq!(written_notes(&app)[3], Note::On(72));
     assert_eq!(voices(&mut realtime), 1, "C-5 twice is one note");
     let_go(&mut app, &mut realtime, "k");
     assert_eq!(voices(&mut realtime), 1);
     let_go(&mut app, &mut realtime, "a");
     assert_eq!(voices(&mut realtime), 0);
     press(&mut app, "z");
-    assert_eq!(
-        written_notes(&app),
-        [Note::On(60), Note::On(62), Note::On(72)]
-    );
 
     // Losing focus lets go of the whole chord, and leaving Insert does too.
     press(&mut app, "fd");
     assert_eq!(voices(&mut realtime), 2);
-    assert_eq!(written_notes(&app).len(), 4);
     app.focus_lost(Instant::now());
     let _ = loudest(&mut realtime, 48_000);
     assert_eq!(voices(&mut realtime), 0);
     press(&mut app, "dg");
-    assert_eq!(written_notes(&app).len(), 5, "the next key after writes");
+    assert_eq!(written_notes(&app)[3], Note::On(67), "the keys write after");
     assert_eq!(voices(&mut realtime), 2);
     special(&mut app, KeyCode::Esc);
     let _ = loudest(&mut realtime, 48_000);

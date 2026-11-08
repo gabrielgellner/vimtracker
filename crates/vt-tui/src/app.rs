@@ -142,7 +142,6 @@ struct HeldNote {
     key: KeyCode,
     track: usize,
     note: u8,
-    velocity: u8,
 }
 
 /// A momentary change, the key it's held by, and when that key went down.
@@ -774,7 +773,6 @@ impl App {
             key: key.physical(),
             track,
             note,
-            velocity,
         });
         self.repeats_ignored = true;
         self.handle.send(Command::HoldPreview {
@@ -1636,14 +1634,6 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
-                // One note goes in a row, so a key pressed while another note's key is down only
-                // sounds, at the velocity of the first, to make a chord.
-                if let Some(first) = self.held_notes.first().copied() {
-                    if let Some(midi) = self.played_key(c) {
-                        self.hold_note(key, midi, first.velocity);
-                    }
-                    return;
-                }
                 if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()
