@@ -41,17 +41,23 @@ pub enum FilterType {
     Ladder,
     /// A saturating diode ladder, the kind in Roland's TB-303, which costs more too.
     Diode,
+    /// The Korg 35 low-pass in Korg's MS-20, which screams as it self-oscillates and costs more.
+    Ms20LowPass,
+    /// The Korg 35's high-pass, from the same circuit.
+    Ms20HighPass,
 }
 
 impl FilterType {
     /// Every type, in the order a list shows them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::LowPass,
         Self::HighPass,
         Self::BandPass,
         Self::Notch,
         Self::Ladder,
         Self::Diode,
+        Self::Ms20LowPass,
+        Self::Ms20HighPass,
     ];
 
     /// The name on screen.
@@ -63,6 +69,8 @@ impl FilterType {
             Self::Notch => "Notch",
             Self::Ladder => "Ladder",
             Self::Diode => "Diode",
+            Self::Ms20LowPass => "MS20 LP",
+            Self::Ms20HighPass => "MS20 HP",
         }
     }
 
@@ -75,12 +83,17 @@ impl FilterType {
             Self::Notch => "Notch, clean",
             Self::Ladder => "Saturating low-pass, 24 dB, self-oscillates",
             Self::Diode => "Diode ladder low-pass, 303 style, self-oscillates",
+            Self::Ms20LowPass => "Korg 35 low-pass, MS-20 style, 12 dB, screams",
+            Self::Ms20HighPass => "Korg 35 high-pass, MS-20 style, 6 dB, screams",
         }
     }
 
     /// Whether it always saturates, at twice the rate, rather than only when driven.
     pub fn saturates(self) -> bool {
-        matches!(self, Self::Ladder | Self::Diode)
+        matches!(
+            self,
+            Self::Ladder | Self::Diode | Self::Ms20LowPass | Self::Ms20HighPass
+        )
     }
 }
 

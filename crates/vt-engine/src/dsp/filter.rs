@@ -1,9 +1,10 @@
 //! Each track's filter. The clean modes share a TPT state-variable filter, which stays stable near
-//! the top of the range. The ladder is the character filter, and costs more.
+//! the top of the range. The ladder, diode and Korg 35 are the character filters, and cost more.
 
 use vt_model::song::{FilterType, Track};
 
 use crate::dsp::diode_filter::{self, DiodeFilter, RESONANT_SHARE};
+use crate::dsp::korg35::{self, Korg35};
 use crate::dsp::oversampler::Oversampler;
 
 /// How far `Drive` turns up what goes into the filter, at full.
@@ -55,6 +56,9 @@ pub struct Coefficients {
     diode_cutoff: f32,
     diode_feedback: f32,
     resonance: f32,
+    /// The Korg 35's one-pole coefficient at twice the rate, `g / (1 + g)`, and its feedback.
+    korg_coefficient: f32,
+    korg_feedback: f32,
 }
 
 impl Coefficients {
@@ -82,6 +86,8 @@ impl Coefficients {
             },
             diode_feedback: diode_filter::feedback_coefficient(2.0 * rate as f32),
             resonance,
+            korg_coefficient: double_g / (1.0 + double_g),
+            korg_feedback: resonance * korg35::MOST_FEEDBACK,
         }
     }
 }
@@ -169,6 +175,7 @@ pub struct Channel {
     svf: Svf,
     ladder: Ladder,
     diode: DiodeFilter,
+    korg: Korg35,
     oversampler: Oversampler,
 }
 
@@ -199,6 +206,16 @@ impl Channel {
             let ladder = &mut self.ladder;
             self.oversampler
                 .process(input * gain, |x| ladder.step(x, c))
+        } else if kind == FilterType::Ms20LowPass {
+            let korg = &mut self.korg;
+            self.oversampler.process(input * gain, |x| {
+                korg.low_pass(x, c.korg_coefficient, c.korg_feedback)
+            })
+        } else if kind == FilterType::Ms20HighPass {
+            let korg = &mut self.korg;
+            self.oversampler.process(input * gain, |x| {
+                korg.high_pass(x, c.korg_coefficient, c.korg_feedback)
+            })
         } else {
             let svf = &mut self.svf;
             self.oversampler.process(input * gain, |x| {
@@ -224,6 +241,9 @@ pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, her
                 c.diode_feedback,
                 hertz / (2.0 * rate as f32),
             )
+    } else if matches!(kind, FilterType::Ms20LowPass | FilterType::Ms20HighPass) {
+        let along = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
+        korg35::response(kind == FilterType::Ms20HighPass, c.korg_feedback, along)
     } else if kind == FilterType::Ladder {
         // Four one-poles in a loop: 1 / ((1 + jw)^4 + k).
         let w = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
@@ -239,7 +259,11 @@ pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, her
             FilterType::HighPass => w2 * w2,
             FilterType::BandPass => k2 * w2,
             FilterType::Notch => rest,
-            FilterType::LowPass | FilterType::Ladder | FilterType::Diode => 1.0,
+            FilterType::LowPass
+            | FilterType::Ladder
+            | FilterType::Diode
+            | FilterType::Ms20LowPass
+            | FilterType::Ms20HighPass => 1.0,
         };
         top / (rest + k2 * w2)
     };
@@ -313,7 +337,11 @@ fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, c: &Coefficient
         FilterType::HighPass => input - c.k * band - low,
         FilterType::BandPass => c.k * band,
         FilterType::Notch => input - c.k * band,
-        FilterType::LowPass | FilterType::Ladder | FilterType::Diode => low,
+        FilterType::LowPass
+        | FilterType::Ladder
+        | FilterType::Diode
+        | FilterType::Ms20LowPass
+        | FilterType::Ms20HighPass => low,
     }
 }
 
@@ -356,8 +384,7 @@ mod tests {
 
     #[test]
     fn the_worked_out_response_matches_the_filter_itself() {
-        use FilterType::{BandPass, Diode, HighPass, Ladder, LowPass, Notch};
-        for kind in [LowPass, HighPass, BandPass, Notch, Ladder, Diode] {
+        for kind in FilterType::ALL {
             for res in [0.0, 0.5, 0.8] {
                 for hertz in [100.0, 400.0, 1000.0, 2500.0, 8000.0] {
                     let worked_out = response_db(kind, cutoff(1000.0), res, RATE, hertz);
@@ -368,7 +395,7 @@ mod tests {
                     let measured = gain_db(kind, 1000.0, res, 0.0, hertz, 0.01);
                     // The diode's stages hear each other a sample late, which the analog model
                     // doesn't, so it's a little out at its peak.
-                    let within = if kind == Diode { 1.0 } else { 0.5 };
+                    let within = if kind == FilterType::Diode { 1.0 } else { 0.5 };
                     assert!(
                         (worked_out - measured).abs() < within,
                         "{kind:?} res {res} at {hertz}: {worked_out} and {measured}"
@@ -463,9 +490,21 @@ mod tests {
 
     #[test]
     fn drive_keeps_the_level_in_hand() {
-        for kind in [FilterType::LowPass, FilterType::Ladder, FilterType::Diode] {
+        for kind in [
+            FilterType::LowPass,
+            FilterType::Ladder,
+            FilterType::Diode,
+            FilterType::Ms20LowPass,
+            FilterType::Ms20HighPass,
+        ] {
+            // Open, so only the drive changes the level.
+            let cut = if kind == FilterType::Ms20HighPass {
+                20.0
+            } else {
+                20_000.0
+            };
             for drive in [0.25, 0.5, 1.0] {
-                let db = gain_db(kind, 20_000.0, 0.0, drive, 200.0, 0.5);
+                let db = gain_db(kind, cut, 0.0, drive, 200.0, 0.5);
                 near(db, 0.0, 8.0);
             }
         }
@@ -587,7 +626,14 @@ mod tests {
             20.0 * (level_at(kind, 1.0, 5000.0, alias) / level_at(kind, 1.0, 5000.0, 5000.0))
                 .log10()
         };
-        for kind in [FilterType::Ladder, FilterType::LowPass, FilterType::Diode] {
+        let kinds = [
+            FilterType::Ladder,
+            FilterType::LowPass,
+            FilterType::Diode,
+            FilterType::Ms20LowPass,
+            FilterType::Ms20HighPass,
+        ];
+        for kind in kinds {
             for (alias, most) in [(3000.0, -50.0), (13_000.0, -50.0), (23_000.0, -30.0)] {
                 let found = db(kind, alias);
                 assert!(found < most, "{kind:?} {alias} is at {found} dB");
@@ -661,5 +707,117 @@ mod tests {
             "{peak_at} frames is about {} ms",
             peak_at as f32 / 48.0
         );
+    }
+
+    #[test]
+    fn the_korg_35_low_pass_keeps_its_bass_and_slopes_at_12_db() {
+        let db = |res, hertz| gain_db(FilterType::Ms20LowPass, 1000.0, res, 0.0, hertz, 0.01);
+        // Its feedback goes through a high-pass, so unlike the ladder's it leaves the bass alone.
+        for res in [0.0, 0.5, 0.9] {
+            near(db(res, 50.0), 0.0, 0.1);
+        }
+        // Two one-poles at the cutoff, each 3 dB down there.
+        near(db(0.0, 1000.0), -6.0, 0.2);
+        near(db(0.0, 4000.0) - db(0.0, 8000.0), 12.0, 1.0);
+    }
+
+    #[test]
+    fn the_korg_35_high_pass_keeps_its_top_and_slopes_at_6_db() {
+        let db = |res, hertz| gain_db(FilterType::Ms20HighPass, 1000.0, res, 0.0, hertz, 0.01);
+        for res in [0.0, 0.5, 0.9] {
+            near(db(res, 16_000.0), 0.0, 0.2);
+        }
+        // The MS-20's high-pass falls at 6 dB an octave under its peak, however high `Res` goes.
+        for res in [0.0, 0.9] {
+            near(db(res, 100.0) - db(res, 50.0), 6.0, 0.3);
+        }
+    }
+
+    #[test]
+    fn the_korg_35_peaks_at_its_cutoff_and_self_oscillates_there() {
+        for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
+            for cut in [200.0, 1000.0, 4000.0] {
+                // With strong resonance, its peak is louder at `Cut` than a semitone either side.
+                let db = |hertz| gain_db(kind, cut, 0.9, 0.0, hertz, 0.01);
+                let semitone = 2_f32.powf(1.0 / 12.0);
+                assert!(db(cut) > db(cut * semitone) && db(cut) > db(cut / semitone));
+            }
+            for cut in [50.0, 200.0, 1000.0, 4000.0, 8000.0, 12_000.0, 16_000.0] {
+                let pitch = ringing_at(kind, cut, 1.0);
+                // A semitone is 100 cents, and counting whole cycles in a second is 9 cents out at
+                // 200 Hz.
+                let cents = 1200.0 * (pitch / cut).log2();
+                assert!(cents.abs() < 15.0, "{kind:?} {cut} rang at {pitch}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_korg_35_stays_in_bounds_at_full_resonance_with_loud_input_and_fast_sweeps() {
+        for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
+            for drive in [0.0, 1.0] {
+                let mut channel = Channel::default();
+                let mut most = 0.0_f32;
+                for frame in 0..RATE as usize * 2 {
+                    // Up and down the whole range eight times a second, with a full-level saw in.
+                    let along = frame as f32 / RATE as f32;
+                    let sweep = (along * 8.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+                    let c = Coefficients::new(sweep, 1.0, RATE);
+                    let input = (along * 55.0).fract() * 2.0 - 1.0;
+                    let output = channel.process(input, kind, drive, &c);
+                    assert!(output.is_finite(), "{kind:?} {output}");
+                    most = most.max(output.abs());
+                }
+                assert!(most < 1.5, "{kind:?} at drive {drive} reached {most}");
+            }
+        }
+    }
+
+    #[test]
+    fn moving_the_korg_35s_settings_in_steps_glides_without_a_step() {
+        // The biggest jump between frames from a tone through it, with the settings smoothed and its
+        // coefficients worked out every 32 frames, as a track does. They're held at one of two, or
+        // jump between them every 64 frames, as a knob or an LFO steps them block by block.
+        let biggest_jump = |kind: FilterType, at: fn(usize) -> bool| {
+            let smoothing = crate::dsp::smoother::coefficient(RATE);
+            let (mut cut, mut res, mut drive) = (
+                crate::dsp::smoother::Smoothed::at(cutoff(500.0)),
+                crate::dsp::smoother::Smoothed::at(0.3),
+                crate::dsp::smoother::Smoothed::at(0.0),
+            );
+            let mut channel = Channel::default();
+            let mut c = Coefficients::new(cut.value, res.value, RATE);
+            let (mut last, mut most) = (0.0_f32, 0.0_f32);
+            for frame in 0..RATE as usize * 2 {
+                if at(frame) {
+                    (cut.target, res.target, drive.target) = (cutoff(2000.0), 0.9, 0.6);
+                } else {
+                    (cut.target, res.target, drive.target) = (cutoff(500.0), 0.3, 0.0);
+                }
+                let (cut, res, drive) = (
+                    cut.next(smoothing),
+                    res.next(smoothing),
+                    drive.next(smoothing),
+                );
+                if frame % 32 == 0 {
+                    c = Coefficients::new(cut, res, RATE);
+                }
+                let tone = (frame as f32 / RATE as f32 * 700.0 * std::f32::consts::TAU).sin();
+                let output = channel.process(tone * 0.5, kind, drive, &c);
+                if frame > RATE as usize / 2 {
+                    most = most.max((output - last).abs());
+                }
+                last = output;
+            }
+            most
+        };
+        for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
+            let held = biggest_jump(kind, |_| false).max(biggest_jump(kind, |_| true));
+            let moving = biggest_jump(kind, |frame| frame / 64 % 2 == 1);
+            assert!(
+                moving < held * 1.5,
+                "{kind:?}: {held} held and {moving} moving"
+            );
+        }
     }
 }

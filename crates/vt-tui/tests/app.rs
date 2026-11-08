@@ -2870,7 +2870,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 6);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 8);
     press(&mut app, "ladder");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Ladder);
@@ -2885,6 +2885,11 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     assert!(track_page_text(&app)[5].contains("Ladder"));
     press(&mut app, "u");
     assert_eq!(track(&app).filter, FilterType::LowPass);
+    press(&mut app, "K");
+    press(&mut app, "ms20 hp");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).filter, FilterType::Ms20HighPass);
+    assert!(track_page_text(&app)[5].contains("MS20 HP"));
 }
 
 #[test]

@@ -42,7 +42,7 @@ digits keep it, and at the top there's none. An effect's settings are whole.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode`. `K` lists them |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP`. `K` lists them |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
@@ -56,7 +56,11 @@ it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
 rises, and near `FF` it sings by itself while a note lasts. `Diode` is the
 303's filter, the one in `Acid`: rubbery and softer at first, as it starts
 falling well under `Cut`, with a peak at `Cut` that grows sharp and squelchy
-and thins the bass more than `Ladder` does. These two cost more than the
+and thins the bass more than `Ladder` does. `MS20 LP` and `MS20 HP` are the
+Korg MS-20's filter, at 12 dB and 6 dB. With much `Res` their peak is at
+`Cut`. They keep the bass, or for `MS20 HP` the top, however high `Res` goes,
+so they get louder and harsher as it rises, and near `FF` they scream by
+themselves, much louder than `Ladder`. `Drive` makes them grittier. These four cost more than the
 others, which matters only for tracks using them.
 
 A curve in a box under the filter's rows shows what the filter and utility filter
