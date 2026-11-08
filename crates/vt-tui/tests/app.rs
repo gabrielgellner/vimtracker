@@ -6235,3 +6235,29 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
     press(&mut app, "l");
     assert!(!app.track_fine);
 }
+
+#[test]
+fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    let before = app.song().clone();
+    let row = app.track_row;
+    press(&mut app, ";");
+    assert_eq!(app.mode, Mode::Keys);
+    assert_eq!(loudest(&mut realtime, 480), 0.0, "nothing until a key");
+    press(&mut app, "j");
+    assert!(loudest(&mut realtime, 4800) > 0.01, "j plays a note");
+    assert_eq!(app.track_row, row, "and doesn't move");
+    press(&mut app, "x");
+    assert_eq!(app.octave, 5, "x goes up an octave");
+    assert!(Arc::ptr_eq(&before, app.song()), "nothing is written");
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .unwrap();
+    let corner = &terminal.backend().buffer()[(0, 0)];
+    assert_eq!((corner.symbol(), corner.fg), ("┌", vt_tui::theme::YELLOW));
+    press(&mut app, ";");
+    assert_eq!(app.mode, Mode::Normal);
+}

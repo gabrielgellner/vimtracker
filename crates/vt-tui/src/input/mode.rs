@@ -56,6 +56,8 @@ pub enum Mode {
     Picker,
     /// Waiting for an answer about restoring an autosave.
     Restore,
+    /// The keyboard plays the track's sound, from the track page, without writing anything.
+    Keys,
     /// Normal mode's keys in the chain view. Only the binding table and the label use this.
     Chain,
     /// Normal mode's keys on the track page. Only the binding table and the label use this.
@@ -82,6 +84,7 @@ impl Mode {
             Self::Guide => "GUIDE",
             Self::Picker => "PICK",
             Self::Restore => "RESTORE",
+            Self::Keys => "KEYS",
             Self::Chain => "CHAIN",
             Self::Track => "TRACK",
             Self::Mixer => "MIX",

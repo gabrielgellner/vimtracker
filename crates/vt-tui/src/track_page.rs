@@ -921,6 +921,10 @@ impl App {
                 self.move_control(0, field);
             }
             Cmd::FieldJump => self.open_field_jump(),
+            Cmd::Audition => {
+                self.mode = Mode::Keys;
+                self.status = "The keyboard plays the sound. ; or Esc stops".to_owned();
+            }
             Cmd::RemoveRow | Cmd::Paste if self.track_page != Page::Fx => {
                 self.status = "dd and p move effects, on the FX page".to_owned();
             }

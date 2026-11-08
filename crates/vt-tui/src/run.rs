@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::widgets::Block;
 use thiserror::Error;
 use vt_engine::engine::Engine;
@@ -214,7 +214,13 @@ pub fn draw_screen(
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Song => views::song::draw(frame, view, app),
     }
-    views::system::draw(frame, view, app, stats);
+    // Inside the box the track page has while the keyboard plays it.
+    let free = if app.mode == Mode::Keys {
+        view.inner(Margin::new(1, 1))
+    } else {
+        view
+    };
+    views::system::draw(frame, free, app, stats);
     if let Some(meter) = meter {
         views::meter::draw(frame, meter, &app.meter, app.song().limiter);
     }

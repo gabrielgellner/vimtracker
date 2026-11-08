@@ -394,6 +394,11 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("C-x", Cmd::Decrease, "Decrease the value"),
     ("x", Cmd::ClearField, "Back to its default"),
     ("K", Cmd::PickValue, "Choose this setting from a list"),
+    (
+        ";",
+        Cmd::Audition,
+        "Play the sound from the keyboard, until ; again",
+    ),
 ];
 
 const SONG: &[(&str, Cmd, &str)] = &[

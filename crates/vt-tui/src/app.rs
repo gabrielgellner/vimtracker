@@ -527,6 +527,49 @@ impl App {
             Mode::Shape => self.shape_key(key, now),
             Mode::Jump => self.jump_key(key, now),
             Mode::Restore => self.restore_key(key),
+            Mode::Keys => self.keys_key(key, now),
+        }
+    }
+
+    /// Play the track's sound from the keyboard, as Insert does, without writing anything. Each
+    /// key plays a short note, as a terminal can't tell when a key is let go.
+    fn keys_key(&mut self, key: Key, now: Instant) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char(';') => {
+                self.mode = Mode::Normal;
+                self.status.clear();
+            }
+            KeyCode::Tab => self.run(Cmd::PauseOrResume, key, now),
+            KeyCode::BackTab => self.run(Cmd::PlayFromStart, key, now),
+            KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
+            KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char('c') => {
+                self.note_velocity = next_note_velocity(self.note_velocity, false);
+            }
+            KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
+            KeyCode::Char(c) if !key.ctrl && !key.alt => {
+                if let Some(note) = self.played_key(c) {
+                    self.handle.send(Command::Preview {
+                        track: self.cursor.track,
+                        note,
+                        velocity: self.note_velocity,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The note a key plays in the current octave. With a scale, the home row goes up through it
+    /// from the root, and the row above is silent, so every key is in key.
+    fn played_key(&self, c: char) -> Option<u8> {
+        if self.scale.on {
+            degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
+        } else {
+            note_key(c).map(|semitones| {
+                let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
+                midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
+            })
         }
     }
 
@@ -1249,17 +1292,7 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
-                // With a scale, the home row goes up through it from the root, and the row above
-                // is silent, so every key is in key.
-                let played = if self.scale.on {
-                    degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
-                } else {
-                    note_key(c).map(|semitones| {
-                        let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
-                        midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
-                    })
-                };
-                if let Some(midi) = played {
+                if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()
                         .cloned()
