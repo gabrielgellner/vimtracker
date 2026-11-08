@@ -6,7 +6,7 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Grains, Insert, Limiter,
-    LowPassGate, Phaser, Pitch, Plate, Reverb, Tape, Warps,
+    LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -52,7 +52,8 @@ pub struct InsertState {
     gate: Gate,
     /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
     on: Smoothed,
-    /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator to follow.
+    /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator or resonator to
+    /// follow.
     note: f32,
 }
 
@@ -96,7 +97,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Pitch(_), Insert::Pitch(_))
         | (Insert::Grains(_), Insert::Grains(_))
         | (Insert::Warps(_), Insert::Warps(_))
-        | (Insert::Lpg(_), Insert::Lpg(_)) => true,
+        | (Insert::Lpg(_), Insert::Lpg(_))
+        | (Insert::Reso(_), Insert::Reso(_)) => true,
         _ => false,
     }
 }
@@ -223,7 +225,8 @@ impl InsertState {
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
-            | Insert::Lpg(LowPassGate { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Lpg(LowPassGate { mix, gain, .. })
+            | Insert::Reso(Resonator { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -346,7 +349,33 @@ impl InsertState {
         [warps.process(input, modulator, self.note, smoothing) * fade; 2]
     }
 
-    /// Follow the track's note, for an oscillator of the slot's own.
+    /// One frame through a resonator, all wet, tuned to the track's note. Like `ring`, once it's
+    /// quiet with nothing going in it does no work, and when it starts again it's at the note and
+    /// what's set, rather than gliding there from where it stopped.
+    #[inline]
+    fn resonate(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
+        let nothing_in = input == [0.0, 0.0];
+        let resting = !self.ringing(rate);
+        if nothing_in && resting {
+            return [0.0; 2];
+        }
+        let Some(Memory::Reso(resonator)) = &mut self.memory else {
+            return [0.0; 2];
+        };
+        if resting {
+            resonator.settle();
+        }
+        let wet = resonator.process(input, self.note, smoothing);
+        let quiet = nothing_in && wet[0].abs() < SILENT && wet[1].abs() < SILENT;
+        self.quiet = if quiet {
+            self.quiet.saturating_add(1)
+        } else {
+            0
+        };
+        wet
+    }
+
+    /// Follow the track's note, for an oscillator or resonator of the slot's own.
     pub fn follow_note(&mut self, note: f32) {
         self.note = note;
     }
@@ -426,6 +455,15 @@ impl InsertState {
             }
             Insert::Warps(settings) => {
                 let wet = self.warps(input, settings, smoothing, keys);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            Insert::Reso(_) => {
+                let wet = self.resonate(input, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [

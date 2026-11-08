@@ -28,6 +28,7 @@ pub enum Insert {
     Grains(Grains),
     Warps(Warps),
     Lpg(LowPassGate),
+    Reso(Resonator),
 }
 
 /// What a distortion does to the sound.
@@ -154,6 +155,11 @@ pub enum Setting {
     Base,
     Resonance,
     Response,
+    /// A resonator's: how its partials spread, how long its high ones ring, and where it's struck
+    /// and heard. Its `Decay` and `Width` are the reverb's and the delay's.
+    Material,
+    Bright,
+    Pickup,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -1157,6 +1163,58 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// A resonator's, in the order the page shows them, as columns of two: its pitch and how its
+/// partials spread, how bright and how long it rings, then where it's struck and how wide it is.
+pub(crate) const RESO_PARAMS: [Param; 8] = [
+    Param {
+        name: "Tune",
+        key: "tune",
+        label: Some("TUNE"),
+        default: Resonator::DEFAULT.tune,
+        ..PITCH_PARAMS[0]
+    },
+    hex_param(
+        "Material",
+        "material",
+        "MATL",
+        Setting::Material,
+        Resonator::DEFAULT.material,
+    ),
+    hex_param(
+        "Bright",
+        "bright",
+        "BRT",
+        Setting::Bright,
+        Resonator::DEFAULT.bright,
+    ),
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::Decay,
+        Resonator::DEFAULT.decay,
+    ),
+    hex_param(
+        "Position",
+        "position",
+        "POS",
+        Setting::Pickup,
+        Resonator::DEFAULT.position,
+    ),
+    hex_param(
+        "Width",
+        "width",
+        "WDTH",
+        Setting::Width,
+        Resonator::DEFAULT.width,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1165,7 +1223,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1182,6 +1240,7 @@ impl Insert {
         Self::Grains(Grains::DEFAULT),
         Self::Warps(Warps::DEFAULT),
         Self::Lpg(LowPassGate::DEFAULT),
+        Self::Reso(Resonator::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1215,6 +1274,7 @@ impl Insert {
             Self::Grains(_) => "Grains",
             Self::Warps(_) => "Warps",
             Self::Lpg(_) => "LPG",
+            Self::Reso(_) => "Reso",
         }
     }
 
@@ -1237,6 +1297,7 @@ impl Insert {
             Self::Grains(_) => "Records it and plays it back as a cloud of grains",
             Self::Warps(_) => "Ring mods, folds or vocodes it with another track",
             Self::Lpg(_) => "Gates or filters it by its level, or another track's",
+            Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
         }
     }
 
@@ -1263,6 +1324,7 @@ impl Insert {
             Self::Grains(_) => &GRAINS_PARAMS,
             Self::Warps(_) => &WARPS_PARAMS,
             Self::Lpg(_) => &LPG_PARAMS,
+            Self::Reso(_) => &RESO_PARAMS,
         }
     }
 
@@ -1372,6 +1434,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| gate.read(setting));
             }
+            Self::Reso(resonator) => {
+                return RESO_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| resonator.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1408,6 +1476,7 @@ impl Insert {
             Self::Grains(grains) => return Self::Grains(grains.written(setting, whole)),
             Self::Warps(warps) => return Self::Warps(warps.written(setting, whole)),
             Self::Lpg(gate) => return Self::Lpg(gate.written(setting, whole)),
+            Self::Reso(resonator) => return Self::Reso(resonator.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -2495,6 +2564,87 @@ impl LowPassGate {
             _ => {}
         }
         gate
+    }
+}
+
+/// A resonator's settings: a bank of modes tuned to the track's note, after Mutable Instruments'
+/// Plaits, Rings and Elements, which the slot's sound strikes. One a file doesn't have starts as
+/// new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Resonator {
+    /// How far its pitch is from the track's note, as a place in the list from two octaves down to
+    /// two up.
+    pub tune: u8,
+    /// Plaits' structure: its partials bunched low, in tune from `40`, then spread wider, as a
+    /// bell's are.
+    pub material: u8,
+    /// How long its high partials ring against its lowest.
+    pub bright: u8,
+    /// How long it rings, Plaits' damping.
+    pub decay: u8,
+    /// Where it's struck and heard, from its end at `00` to its middle at `FF`.
+    pub position: u8,
+    /// How far a second pickup, wandering slowly along it, spreads it across the sides, as
+    /// Elements' does.
+    pub width: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Resonator {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Resonator {
+    /// As it starts: in tune with the note, its partials whole multiples of it, ringing for about
+    /// a third of a second at middle C, struck near its end as Plaits strikes its own, a little
+    /// wide, and all wet.
+    pub const DEFAULT: Self = Self {
+        tune: MOST_SHIFT,
+        material: 0x40,
+        bright: 0x80,
+        decay: 0x80,
+        position: 0x08,
+        width: 0x80,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Shift => self.tune,
+            Setting::Material => self.material,
+            Setting::Bright => self.bright,
+            Setting::Decay => self.decay,
+            Setting::Pickup => self.position,
+            Setting::Width => self.width,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut resonator = self;
+        match setting {
+            Setting::Shift => resonator.tune = value,
+            Setting::Material => resonator.material = value,
+            Setting::Bright => resonator.bright = value,
+            Setting::Decay => resonator.decay = value,
+            Setting::Pickup => resonator.position = value,
+            Setting::Width => resonator.width = value,
+            Setting::Mix => resonator.mix = value,
+            Setting::Gain => resonator.gain = value,
+            _ => {}
+        }
+        resonator
     }
 }
 
