@@ -21,6 +21,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::chord_bank::{ChordBank, VOICES};
+use super::plaits_parts::DcBlocker;
 use super::virtual_analog::{BLOCK, Moving, Settings, SyncedSquare};
 
 /// How loud it is against the other machines. A major chord of plain squares at its root comes
@@ -29,6 +30,8 @@ use super::virtual_analog::{BLOCK, Moving, Settings, SyncedSquare};
 /// model's 0.8. A half brings it to within a decibel. Thin pulses, at the bottom of Morph, are
 /// quieter, as they are in Plaits.
 const LEVEL: f32 = 0.5;
+/// The DC blocker's pole: a corner of about 3 Hz at 48 kHz, below anything played.
+const DC_POLE: f32 = 1.0 - 20.0 / 48_000.0;
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +43,9 @@ pub struct Chiptune {
     output: [f32; BLOCK],
     at: usize,
     fresh: bool,
+    /// Thin pulses leave an offset, which Plaits' output coupling takes away in hardware. Here it
+    /// would thump as the track's envelope opens and closes.
+    dc_blocker: DcBlocker,
 }
 
 impl Default for Chiptune {
@@ -57,6 +63,7 @@ impl Chiptune {
             output: [0.0; BLOCK],
             at: BLOCK,
             fresh: true,
+            dc_blocker: DcBlocker::new(DC_POLE),
         }
     }
 
@@ -67,7 +74,7 @@ impl Chiptune {
             self.render(frequency.clamp(0.0, 0.5), settings);
             self.at = 0;
         }
-        let sample = self.output[self.at];
+        let sample = self.dc_blocker.process(self.output[self.at]);
         self.at += 1;
         sample * LEVEL
     }
@@ -82,7 +89,8 @@ impl Chiptune {
         } else {
             1.0 + 16.0 * (shape - 0.5) * (shape - 0.5)
         };
-        self.chords.set_chord(settings.harmonics.clamp(0.0, 1.0));
+        // Harmonics is a place in the list of chords.
+        self.chords.set_listed(settings.harmonics.clamp(0.0, 1.0));
         let (ratios, mut amplitudes) = self.chords.inversion(settings.timbre);
         // Plaits turns every other voice upside down.
         for amplitude in amplitudes.iter_mut().skip(1).step_by(2) {
@@ -152,6 +160,24 @@ mod tests {
     }
 
     #[test]
+    fn it_has_no_offset_once_it_settles() {
+        for (timbre, morph) in [(0.5, 0.0), (0.7, 0.0), (0.4, 0.25)] {
+            let settings = Settings {
+                harmonics: 1.0,
+                timbre,
+                morph,
+                ..Settings::default()
+            };
+            let mut voice = Chiptune::new();
+            let out: Vec<f32> = (0..96_000)
+                .map(|_| voice.next(220.0 / 48_000.0, settings))
+                .collect();
+            let mean = out[48_000..].iter().sum::<f32>() / 48_000.0;
+            assert!(mean.abs() < 0.01, "{mean} at {settings:?}");
+        }
+    }
+
+    #[test]
     fn it_sounds() {
         let out = run(220.0, plain(), 48_000);
         assert!(energy(&out[24_000..]) > 1e-3, "{}", energy(&out[24_000..]));
@@ -174,7 +200,11 @@ mod tests {
     #[test]
     fn each_setting_changes_the_sound() {
         let plain = run(220.0, plain(), 9_600);
-        for other in [at(0.3, 0.4, 0.5), at(1.0, 0.7, 0.5), at(1.0, 0.4, 0.2)] {
+        for other in [
+            at(3.0 / 255.0, 0.4, 0.5),
+            at(1.0, 0.7, 0.5),
+            at(1.0, 0.4, 0.2),
+        ] {
             let changed = run(220.0, other, 9_600);
             let difference: Vec<f32> = plain.iter().zip(&changed).map(|(a, b)| a - b).collect();
             assert!(

@@ -194,13 +194,15 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         assert!(peak(&out, 0) > 0.05, "{voice:?}: {}", peak(&out, 0));
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
         for setting in 0..3 {
-            // 6-op's Patch is a patch number, and not its default patch, `20`.
-            let value = if voice == SynthVoice::SixOp && setting == 0 {
-                "10"
-            } else {
-                "F0"
+            // A list, like 6-op's patches or the chords, takes a place half way along it.
+            let id = SettingId::voice(voice, setting).unwrap();
+            let value = match id.entry().kind {
+                vt_model::settings::Kind::Stepped { .. } => {
+                    format!("{:02X}", id.entry().kind.top() / 2)
+                }
+                _ => "F0".to_owned(),
             };
-            let locked = lock(voice, setting, value);
+            let locked = lock(voice, setting, &value);
             let changed = play(with_some(&[&locked, REST]), 2);
             assert!(changed != out, "{voice:?} {setting}");
         }

@@ -66,6 +66,14 @@ impl ChordBank {
     }
 
     #[inline]
+    /// Choose a chord by its place in the list, as the setting gives it: on `0..=1` as `00` to `FF`,
+    /// so `00` is the first chord and `0A` the last. It lands in the middle of the quantiser's
+    /// zone, so it never flickers.
+    pub(super) fn set_listed(&mut self, place: f32) {
+        let index = (place * 255.0).round().clamp(0.0, (COUNT - 1) as f32);
+        self.set_chord((index + 0.5) / COUNT as f32 / 1.02);
+    }
+
     pub(super) fn chord_index(&self) -> usize {
         self.quantizer.value()
     }
@@ -108,6 +116,17 @@ impl ChordBank {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_listed_chord_is_the_one_at_its_place() {
+        let mut bank = ChordBank::new();
+        for index in 0..COUNT {
+            bank.set_listed(index as f32 / 255.0);
+            assert_eq!(bank.chord_index(), index);
+        }
+        bank.set_listed(1.0);
+        assert_eq!(bank.chord_index(), COUNT - 1, "past the end is the last");
+    }
 
     #[test]
     fn harmonics_steps_through_every_chord_in_order() {

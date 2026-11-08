@@ -261,6 +261,36 @@ const SWARM: [Entry; 3] = [
     level("density", "Density", "DENS", 0x80),
     level("overlap", "Overlap", "OVLP", 0x99),
 ];
+/// The chords Chord and Chiptune play, in the order Plaits lists them.
+const CHORD_NAMES: [&str; 11] = [
+    "Octave", "5", "sus4", "m", "m7", "m9", "m11", "6/9", "M9", "M7", "M",
+];
+/// A chord, chosen from the list. It starts major.
+const CHORD_TYPE: Entry = Entry {
+    key: "chord",
+    name: "Chord",
+    label: Some("CHRD"),
+    kind: Kind::Stepped {
+        choices: &CHORD_NAMES,
+        wraps: false,
+    },
+    default: 10,
+};
+const TERRAIN: [Entry; 3] = [
+    level("terrain", "Terrain", "TERR", 0x00),
+    level("size", "Size", "SIZE", 0x80),
+    level("offset", "Offset", "OFST", 0x80),
+];
+const CHORD: [Entry; 3] = [
+    CHORD_TYPE,
+    level("inversion", "Inversion", "INV", 0x66),
+    level("wave", "Wave", "WAVE", 0x40),
+];
+const CHIPTUNE: [Entry; 3] = [
+    CHORD_TYPE,
+    level("inversion", "Inversion", "INV", 0x66),
+    centred("shape", "Shape", "SHPE"),
+];
 const FOLD: [Entry; 3] = [
     centred("shape", "Shape", "SHPE"),
     level("fold", "Fold", "FOLD", 0x00),
@@ -334,6 +364,9 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Formant => &FORMANT,
         SynthVoice::Additive => &ADDITIVE,
         SynthVoice::Swarm => &SWARM,
+        SynthVoice::WaveTerrain => &TERRAIN,
+        SynthVoice::Chord => &CHORD,
+        SynthVoice::Chiptune => &CHIPTUNE,
         SynthVoice::Wavetable => &WAVES,
         SynthVoice::SixOp => &SIX_OP,
         SynthVoice::String | SynthVoice::Modal => &STRUCK,
@@ -356,6 +389,9 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Formant => "formant",
         SynthVoice::Additive => "additive",
         SynthVoice::Swarm => "swarm",
+        SynthVoice::WaveTerrain => "terrain",
+        SynthVoice::Chord => "chord",
+        SynthVoice::Chiptune => "chiptune",
         SynthVoice::Wavetable => "waves",
         SynthVoice::SixOp => "6op",
         SynthVoice::String => "string",

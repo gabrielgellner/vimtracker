@@ -325,7 +325,8 @@ impl Chord {
         }
         self.morph += 0.1 * (morph - self.morph);
         self.timbre += 0.1 * (timbre - self.timbre);
-        self.chords.set_chord(settings.harmonics.clamp(0.0, 1.0));
+        // Harmonics is a place in the list of chords.
+        self.chords.set_listed(settings.harmonics.clamp(0.0, 1.0));
 
         // The lower half of Morph runs back through the registrations, the upper scans the waves.
         let harmonics = registration((1.0 - self.morph * 2.15).max(0.0));
@@ -426,7 +427,11 @@ mod tests {
     #[test]
     fn each_setting_changes_the_sound() {
         let plain = run(220.0, plain(), 9_600);
-        for other in [at(0.3, 0.4, 0.25), at(1.0, 0.7, 0.25), at(1.0, 0.4, 0.8)] {
+        for other in [
+            at(3.0 / 255.0, 0.4, 0.25),
+            at(1.0, 0.7, 0.25),
+            at(1.0, 0.4, 0.8),
+        ] {
             let changed = run(220.0, other, 9_600);
             let difference: Vec<f32> = plain.iter().zip(&changed).map(|(a, b)| a - b).collect();
             assert!(
