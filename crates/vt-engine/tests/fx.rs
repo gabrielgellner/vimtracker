@@ -660,3 +660,28 @@ fn inserts_run_in_order() {
         distinct(&crushed_first)
     );
 }
+
+#[test]
+fn a_chorus_and_an_ensemble_each_change_the_sound_and_spread_it() {
+    use vt_model::insert::{Chorus, ChorusType};
+    let plain = distorted([Insert::Empty; 3]);
+    let chorus = |kind| {
+        Insert::Chorus(Chorus {
+            kind,
+            depth: 0xFF,
+            ..Chorus::DEFAULT
+        })
+    };
+    let one = distorted([chorus(ChorusType::Chorus), Insert::Empty, Insert::Empty]);
+    let other = distorted([chorus(ChorusType::Ensemble), Insert::Empty, Insert::Empty]);
+    assert_ne!(one, plain);
+    assert_ne!(one, other);
+    for out in [&one, &other] {
+        assert!(out.iter().any(|[l, r]| (l - r).abs() > 0.01), "it spreads");
+        assert!(
+            out.iter()
+                .flatten()
+                .all(|s| s.is_finite() && s.abs() <= 1.0)
+        );
+    }
+}

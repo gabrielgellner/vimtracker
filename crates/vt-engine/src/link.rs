@@ -174,9 +174,13 @@ impl Handle {
         for _ in self.held.reverb..needed.reverb {
             self.unsent.push(Memory::reverb(self.rate));
         }
+        for _ in self.held.chorus..needed.chorus {
+            self.unsent.push(Memory::chorus(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
+            chorus: self.held.chorus.saturating_sub(needed.chorus),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -446,7 +450,7 @@ mod tests {
         for round in 0..200 {
             let mut next = song(8, 16);
             if round % 2 == 0 {
-                next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[2]];
+                next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -467,13 +471,14 @@ mod tests {
         assert_eq!(rt.engine().spare_memory(), 0, "the returns have theirs");
 
         let mut more = plain.clone();
-        more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[2]];
+        more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
             MemoryCount {
-                delay: needed.delay + 2,
+                delay: needed.delay + 1,
                 reverb: needed.reverb + 1,
+                chorus: needed.chorus + 1,
             }
         );
         blocks(&mut rt, 1);

@@ -135,6 +135,17 @@ note ends. `Reverb` has these:
 | `Low cut`, `High cut` | Take more from each repeat |
 | `Drive` | Saturates louder repeats each time round |
 
+`Chorus` thickens a sound with copies of it that drift in time, after Mutable
+Instruments' Rings. It starts half wet, which is the classic sound. Its `Chorus` type
+has two slowly drifting copies, and `Ensemble` three on a slow and a fast wobble, as a
+string machine has.
+
+| Setting | Does |
+|---|---|
+| `Type` | `Chorus` or `Ensemble` |
+| `Rate` | How fast they move: as Rings has it at `80` |
+| `Depth` | How far they move. `00` leaves fixed copies |
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

@@ -4,7 +4,9 @@
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
-use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS, Setting};
+use crate::insert::{
+    CHORUS_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS, Setting,
+};
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, SynthVoice};
@@ -410,10 +412,11 @@ pub enum Effect {
     Distort,
     Delay,
     Reverb,
+    Chorus,
 }
 
 impl Effect {
-    pub const ALL: [Self; 3] = [Self::Distort, Self::Delay, Self::Reverb];
+    pub const ALL: [Self; 4] = [Self::Distort, Self::Delay, Self::Reverb, Self::Chorus];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
     /// show only their own.
@@ -422,6 +425,7 @@ impl Effect {
             Self::Distort => &DISTORT_PARAMS,
             Self::Delay => &DELAY_PARAMS,
             Self::Reverb => &REVERB_PARAMS,
+            Self::Chorus => &CHORUS_PARAMS,
         }
     }
 
@@ -430,6 +434,7 @@ impl Effect {
             Self::Distort => "distort",
             Self::Delay => "delay",
             Self::Reverb => "reverb",
+            Self::Chorus => "chorus",
         }
     }
 
@@ -438,6 +443,7 @@ impl Effect {
             Self::Distort => "Distort",
             Self::Delay => "Delay",
             Self::Reverb => "Reverb",
+            Self::Chorus => "Chorus",
         }
     }
 
@@ -448,6 +454,7 @@ impl Effect {
             Insert::Distort(_) => Some(Self::Distort),
             Insert::Delay(_) => Some(Self::Delay),
             Insert::Reverb(_) => Some(Self::Reverb),
+            Insert::Chorus(_) => Some(Self::Chorus),
         }
     }
 }
@@ -533,13 +540,15 @@ const fn effect_start(effect: Effect) -> usize {
         Effect::Distort => 0,
         Effect::Delay => DISTORT_PARAMS.len(),
         Effect::Reverb => DISTORT_PARAMS.len() + DELAY_PARAMS.len(),
+        Effect::Chorus => DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len(),
     }
 }
 
 const VOICES_START: usize = TRACK.len();
 const SLOTS_START: usize = VOICES_START + voices_size();
 /// The places a slot's settings take: one for each setting of each effect it could hold.
-const SLOT_SIZE: usize = DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len();
+const SLOT_SIZE: usize =
+    DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len() + CHORUS_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.
