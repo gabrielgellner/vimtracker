@@ -277,6 +277,21 @@ impl Voice {
         }
     }
 
+    /// Whether its note sounds until something ends it, as a synth's like `VA` does.
+    pub fn holds(&self) -> bool {
+        self.holds
+    }
+
+    /// Start the release once the note has been held this many frames, or now if it has.
+    pub fn release_once_sounded(&mut self, frames: u32) {
+        if matches!(self.stage, Stage::Held { .. }) {
+            match u64::from(frames).checked_sub(self.elapsed) {
+                Some(left) if left > 0 => self.release_after = Some(left as u32),
+                _ => self.release(),
+            }
+        }
+    }
+
     pub fn set_synth(&mut self, settings: Settings) {
         self.settings = settings;
     }

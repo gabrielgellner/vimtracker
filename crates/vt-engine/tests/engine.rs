@@ -438,6 +438,54 @@ fn a_held_preview_lasts_until_its_key_is_let_go() {
 }
 
 #[test]
+fn a_finished_preview_sounds_as_long_as_a_short_one_however_soon_it_ends() {
+    let level = |engine: &mut Engine, frames: usize| {
+        let mut out = vec![0.0; frames * 2];
+        engine.process(&mut out);
+        out[out.len() - 2].abs()
+    };
+    let samples = pool(&[("flat", flat(SECOND * 2, 0.25))]);
+    let mut engine = Engine::new(48_000, version(song_with_notes(1, &[]), samples));
+    engine.hold_preview(0, 60, 0xFF);
+    let _ = level(&mut engine, 2400);
+    engine.finish_preview(60);
+    assert!(level(&mut engine, 4800) > 0.1, "it plays on after a tap");
+    assert!(
+        level(&mut engine, 24_000) < 1e-3,
+        "and ends as a short one does"
+    );
+    // Finished after it's sounded that long, it ends at once.
+    engine.hold_preview(0, 60, 0xFF);
+    let _ = level(&mut engine, 24_000);
+    engine.finish_preview(60);
+    assert!(level(&mut engine, 480) < 1e-3);
+}
+
+#[test]
+fn ending_a_held_audition_lets_go_of_its_notes_but_not_playbacks() {
+    let level = |engine: &mut Engine, frames: usize| {
+        let mut out = vec![0.0; frames * 2];
+        engine.process(&mut out);
+        out[out.len() - 2].abs()
+    };
+    let samples = pool(&[("flat", flat(SECOND * 2, 0.25))]);
+    let mut engine = Engine::new(48_000, version(song_with_notes(1, &[0]), samples));
+    engine.audition(0);
+    assert!(level(&mut engine, 2400) > 0.1);
+    engine.end_audition(false);
+    assert!(level(&mut engine, 2400) > 0.1, "a tapped sample plays out");
+    engine.audition(0);
+    engine.end_audition(true);
+    assert!(level(&mut engine, 2400) < 1e-3, "a held one stops");
+    // Once playing, the tracks are playback's.
+    engine.audition(0);
+    engine.play_from(0);
+    let _ = level(&mut engine, 240);
+    engine.end_audition(true);
+    assert!(level(&mut engine, 2400) > 0.1, "playback's note carries on");
+}
+
+#[test]
 fn a_preview_plays_without_touching_sequenced_notes() {
     let song = song_with_notes(1, &[0]);
     let samples = pool(&[("flat", flat(SECOND, 0.25))]);

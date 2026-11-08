@@ -79,6 +79,10 @@ an edit changes all of them.
 | `Space s` | Solo or unsolo this track |
 | `Space M` | Clear all mutes and solos |
 
+A tap of `m` or `s` switches the mute or solo and leaves it. Hold the key down
+for longer than about a third of a second and it switches back when you let go,
+for a drop while jamming. A save while the key is down keeps it as it was.
+
 ## The level scale
 
 Levels work like Ableton's faders: even steps in dB, with room above 0. Track

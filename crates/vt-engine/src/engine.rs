@@ -59,6 +59,8 @@ pub struct Engine {
     preview_track: usize,
     /// The note the preview voice is playing, for letting go of a held key.
     preview_note: Option<u8>,
+    /// The tracks the last audition started a note on, for letting go of them when its key is.
+    auditioned: [bool; MAX_TRACKS],
     /// Each track's sound after its slots, for compressors and Warps that hear another track.
     keys: Keys,
     /// Which tracks a compressor or Warps somewhere hears, which keep playing while muted so it
@@ -141,6 +143,7 @@ impl Engine {
             preview: Voice::default(),
             preview_track: 0,
             preview_note: None,
+            auditioned: [false; MAX_TRACKS],
             keys: Keys::default(),
             listened: [false; MAX_TRACKS],
             transport: Transport::Stopped,
@@ -906,6 +909,16 @@ impl Engine {
         }
     }
 
+    /// Let go of the preview voice's note, if it's still this one, once it has sounded as long as
+    /// a preview does: an audition's key tapped rather than held.
+    pub fn finish_preview(&mut self, note: u8) {
+        if self.preview_note == Some(note) {
+            self.preview
+                .release_once_sounded(PREVIEW_MS * self.rate / 1000);
+            self.preview_note = None;
+        }
+    }
+
     fn start_preview(&mut self, track: usize, note: u8, velocity: u8, release_after: Option<u32>) {
         let shape = self.note_shape(track);
         let Some(on) = self.note_on(track, note, velocity, shape) else {
@@ -1338,6 +1351,7 @@ impl Engine {
         let Some(section) = song.sections.get(section) else {
             return;
         };
+        self.auditioned = [false; MAX_TRACKS];
         for index in 0..song.tracks.len().min(self.tracks.len()) {
             self.tracks[index].cut_to_tail();
             if !self.plays(index) {
@@ -1370,6 +1384,31 @@ impl Engine {
             let last_note = track.last_note;
             track.start(on, self.rate);
             track.last_note = last_note;
+            self.auditioned[index] = true;
+        }
+    }
+
+    /// The audition's key was let go. After a hold, every note it started is let go. After a tap,
+    /// a sample plays out, and a synth's note that would otherwise sound until something ends it
+    /// is let go once it has sounded as long as a preview does. Once playing has started, the
+    /// tracks are playback's and are left alone.
+    pub fn end_audition(&mut self, held: bool) {
+        let auditioned = std::mem::replace(&mut self.auditioned, [false; MAX_TRACKS]);
+        if self.transport == Transport::Playing {
+            return;
+        }
+        let preview = PREVIEW_MS * self.rate / 1000;
+        for (track, _) in self
+            .tracks
+            .iter_mut()
+            .zip(auditioned)
+            .filter(|(_, auditioned)| *auditioned)
+        {
+            if held {
+                track.voice.release();
+            } else if track.voice.holds() {
+                track.voice.release_once_sounded(preview);
+            }
         }
     }
 
