@@ -17,6 +17,7 @@ pub enum Insert {
     Delay(Delay),
     Reverb(Reverb),
     Chorus(Chorus),
+    Eq(Equaliser),
 }
 
 /// What a distortion does to the sound.
@@ -76,6 +77,14 @@ pub enum Setting {
     ChorusType,
     /// How far a chorus's copies move.
     Depth,
+    /// An EQ's bands: where each sits, how much each boosts or cuts, and how wide the middle is.
+    LowFrequency,
+    Low,
+    MidFrequency,
+    Mid,
+    MidQ,
+    HighFrequency,
+    High,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -350,6 +359,49 @@ pub(crate) const CHORUS_PARAMS: [Param; 5] = [
     GAIN_PARAM,
 ];
 
+/// An EQ's, in the order the page shows them.
+pub(crate) const EQ_PARAMS: [Param; 8] = [
+    hex_param(
+        "Low freq",
+        "lowfreq",
+        "LFRQ",
+        Setting::LowFrequency,
+        Equaliser::DEFAULT.low_frequency,
+    ),
+    hex_param("Low", "low", "LOW", Setting::Low, Equaliser::DEFAULT.low),
+    hex_param(
+        "Mid freq",
+        "midfreq",
+        "MFRQ",
+        Setting::MidFrequency,
+        Equaliser::DEFAULT.mid_frequency,
+    ),
+    hex_param("Mid", "mid", "MID", Setting::Mid, Equaliser::DEFAULT.mid),
+    hex_param(
+        "High freq",
+        "highfreq",
+        "HFRQ",
+        Setting::HighFrequency,
+        Equaliser::DEFAULT.high_frequency,
+    ),
+    hex_param(
+        "High",
+        "high",
+        "HIGH",
+        Setting::High,
+        Equaliser::DEFAULT.high,
+    ),
+    // After the bands, so the page shows each band's frequency over its boost.
+    hex_param(
+        "Mid Q",
+        "midq",
+        "MIDQ",
+        Setting::MidQ,
+        Equaliser::DEFAULT.mid_q,
+    ),
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -358,12 +410,13 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
         Self::Reverb(Reverb::DEFAULT),
         Self::Chorus(Chorus::DEFAULT),
+        Self::Eq(Equaliser::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -386,6 +439,7 @@ impl Insert {
             Self::Delay(_) => "Delay",
             Self::Reverb(_) => "Reverb",
             Self::Chorus(_) => "Chorus",
+            Self::Eq(_) => "EQ",
         }
     }
 
@@ -397,6 +451,7 @@ impl Insert {
             Self::Delay(_) => "Repeats the sound, bouncing side to side",
             Self::Reverb(_) => "Puts the sound in a room",
             Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
+            Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
         }
     }
 
@@ -412,6 +467,7 @@ impl Insert {
             Self::Delay(_) => &DELAY_PARAMS,
             Self::Reverb(_) => &REVERB_PARAMS,
             Self::Chorus(_) => &CHORUS_PARAMS,
+            Self::Eq(_) => &EQ_PARAMS,
         }
     }
 
@@ -455,6 +511,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| chorus.read(setting));
             }
+            Self::Eq(eq) => {
+                return EQ_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| eq.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -478,6 +540,7 @@ impl Insert {
             Self::Delay(delay) => return Self::Delay(delay.written(setting, whole)),
             Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
             Self::Chorus(chorus) => return Self::Chorus(chorus.written(setting, whole)),
+            Self::Eq(eq) => return Self::Eq(eq.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -736,6 +799,76 @@ impl Chorus {
     }
 }
 
+/// An EQ's settings. Each band's boost or cut is centred on `80`, where it leaves the sound as it
+/// is. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Equaliser {
+    /// Where each band sits, from 20 Hz at `00` to 20 kHz at `FF`, evenly in pitch, as the cutoff.
+    pub low_frequency: u8,
+    pub low: u8,
+    pub mid_frequency: u8,
+    pub mid: u8,
+    /// How narrow the middle band is.
+    pub mid_q: u8,
+    pub high_frequency: u8,
+    pub high: u8,
+    pub gain: u8,
+}
+
+impl Default for Equaliser {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Equaliser {
+    /// As it starts: flat, with the shelves at about 100 Hz and 8 kHz, and the middle at 1 kHz.
+    pub const DEFAULT: Self = Self {
+        low_frequency: 0x3B,
+        low: 0x80,
+        mid_frequency: 0x90,
+        mid: 0x80,
+        mid_q: 0x40,
+        high_frequency: 0xDD,
+        high: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::LowFrequency => self.low_frequency,
+            Setting::Low => self.low,
+            Setting::MidFrequency => self.mid_frequency,
+            Setting::Mid => self.mid,
+            Setting::MidQ => self.mid_q,
+            Setting::HighFrequency => self.high_frequency,
+            Setting::High => self.high,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut eq = self;
+        match setting {
+            Setting::LowFrequency => eq.low_frequency = value,
+            Setting::Low => eq.low = value,
+            Setting::MidFrequency => eq.mid_frequency = value,
+            Setting::Mid => eq.mid = value,
+            Setting::MidQ => eq.mid_q = value,
+            Setting::HighFrequency => eq.high_frequency = value,
+            Setting::High => eq.high = value,
+            Setting::Gain => eq.gain = value,
+            _ => {}
+        }
+        eq
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -984,8 +1117,9 @@ mod tests {
     fn stepping_goes_round_the_effects_and_keeps_nothing() {
         let changed = Insert::ALL[1].with_value(1, 0x12);
         assert_eq!(changed.stepped(true), Insert::ALL[2]);
-        assert_eq!(Insert::ALL[4].stepped(true), Insert::Empty);
+        let last = Insert::ALL[Insert::ALL.len() - 1];
+        assert_eq!(last.stepped(true), Insert::Empty);
         assert_eq!(Insert::Empty.stepped(true), Insert::ALL[1]);
-        assert_eq!(Insert::Empty.stepped(false), Insert::ALL[4]);
+        assert_eq!(Insert::Empty.stepped(false), last);
     }
 }

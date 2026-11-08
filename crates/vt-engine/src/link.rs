@@ -514,6 +514,19 @@ mod tests {
     }
 
     #[test]
+    fn every_effect_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut song = song(8, 16);
+        for (track, insert) in song.tracks.iter_mut().zip(Insert::ALL) {
+            track.inserts = [insert; INSERTS];
+        }
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
+    #[test]
     fn modulating_a_slot_never_allocates_in_the_callback() {
         let pool = samples();
         let mut song = song(1, 16);

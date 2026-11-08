@@ -5,7 +5,8 @@
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
-    CHORUS_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS, Setting,
+    CHORUS_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS,
+    Setting,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -45,6 +46,26 @@ pub enum Units {
     Degrees,
     /// Semitones either side of `80`, one a coarse step, with the fine part in cents.
     Semitones,
+    /// An EQ band's boost or cut, up to `BAND_DB` either side of `80`.
+    Boost,
+    /// An EQ band's width, from `LEAST_Q` at `00` to `MOST_Q` at `FF`, evenly in ratio.
+    Q,
+}
+
+/// How far an EQ band boosts or cuts, in dB, at either end.
+pub const BAND_DB: f32 = 15.0;
+/// An EQ band's narrowest and widest.
+pub const LEAST_Q: f32 = 0.25;
+pub const MOST_Q: f32 = 16.0;
+
+/// An EQ band's gain in dB for a value on the `00` to `FF` scale, `0` at `80`.
+pub fn band_db(value: f32) -> f32 {
+    side(f64::from(value)) as f32 * BAND_DB
+}
+
+/// An EQ band's Q for a value on the `00` to `FF` scale.
+pub fn band_q(value: f32) -> f32 {
+    LEAST_Q * (MOST_Q / LEAST_Q).powf(value / 255.0)
 }
 
 impl Kind {
@@ -93,6 +114,8 @@ impl Kind {
                     side => format!("{:.0} % R", side * 100.0),
                 },
                 Units::Depth => depth_text(depth_of(coarse as f32).round() as i16),
+                Units::Boost => format!("{:+.1} dB", band_db(coarse as f32)),
+                Units::Q => format!("Q {:.2}", band_q(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -413,10 +436,17 @@ pub enum Effect {
     Delay,
     Reverb,
     Chorus,
+    Eq,
 }
 
 impl Effect {
-    pub const ALL: [Self; 4] = [Self::Distort, Self::Delay, Self::Reverb, Self::Chorus];
+    pub const ALL: [Self; 5] = [
+        Self::Distort,
+        Self::Delay,
+        Self::Reverb,
+        Self::Chorus,
+        Self::Eq,
+    ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
     /// show only their own.
@@ -426,6 +456,7 @@ impl Effect {
             Self::Delay => &DELAY_PARAMS,
             Self::Reverb => &REVERB_PARAMS,
             Self::Chorus => &CHORUS_PARAMS,
+            Self::Eq => &EQ_PARAMS,
         }
     }
 
@@ -435,6 +466,7 @@ impl Effect {
             Self::Delay => "delay",
             Self::Reverb => "reverb",
             Self::Chorus => "chorus",
+            Self::Eq => "eq",
         }
     }
 
@@ -444,6 +476,7 @@ impl Effect {
             Self::Delay => "Delay",
             Self::Reverb => "Reverb",
             Self::Chorus => "Chorus",
+            Self::Eq => "EQ",
         }
     }
 
@@ -455,6 +488,7 @@ impl Effect {
             Insert::Delay(_) => Some(Self::Delay),
             Insert::Reverb(_) => Some(Self::Reverb),
             Insert::Chorus(_) => Some(Self::Chorus),
+            Insert::Eq(_) => Some(Self::Eq),
         }
     }
 }
@@ -466,14 +500,19 @@ fn param_entry(param: &Param) -> Entry {
         name: param.name,
         label: param.label,
         kind: if param.choices.is_empty() {
+            let (middle, units) = match param.setting {
+                Setting::Gain => (false, Units::Decibels),
+                Setting::LowFrequency | Setting::MidFrequency | Setting::HighFrequency => {
+                    (false, Units::Hertz)
+                }
+                Setting::Low | Setting::Mid | Setting::High => (true, Units::Boost),
+                Setting::MidQ => (false, Units::Q),
+                _ => (false, Units::Percent),
+            };
             Kind::Continuous {
                 top: param.setting.highest(),
-                middle: false,
-                units: if param.setting == Setting::Gain {
-                    Units::Decibels
-                } else {
-                    Units::Percent
-                },
+                middle,
+                units,
             }
         } else {
             Kind::Stepped {
@@ -541,14 +580,20 @@ const fn effect_start(effect: Effect) -> usize {
         Effect::Delay => DISTORT_PARAMS.len(),
         Effect::Reverb => DISTORT_PARAMS.len() + DELAY_PARAMS.len(),
         Effect::Chorus => DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len(),
+        Effect::Eq => {
+            DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len() + CHORUS_PARAMS.len()
+        }
     }
 }
 
 const VOICES_START: usize = TRACK.len();
 const SLOTS_START: usize = VOICES_START + voices_size();
 /// The places a slot's settings take: one for each setting of each effect it could hold.
-const SLOT_SIZE: usize =
-    DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len() + CHORUS_PARAMS.len();
+const SLOT_SIZE: usize = DISTORT_PARAMS.len()
+    + DELAY_PARAMS.len()
+    + REVERB_PARAMS.len()
+    + CHORUS_PARAMS.len()
+    + EQ_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.
@@ -889,6 +934,12 @@ mod tests {
             )
         );
         assert!(phase.entry().kind.wraps() && !depth.entry().kind.wraps());
+        let eq = |at| SettingId::slot(0, Effect::Eq, at).unwrap();
+        assert_eq!(shown(eq(0), 0x3B00), "99 Hz");
+        assert_eq!(shown(eq(1), 0x8000), "+0.0 dB");
+        assert_eq!(shown(eq(1), 0xFF00), "+15.0 dB");
+        assert_eq!(shown(eq(1), 0x0000), "-15.0 dB");
+        assert_eq!(shown(eq(6), 0x4000), "Q 0.71");
     }
 
     #[test]

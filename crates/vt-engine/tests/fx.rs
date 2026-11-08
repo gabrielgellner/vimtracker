@@ -685,3 +685,24 @@ fn a_chorus_and_an_ensemble_each_change_the_sound_and_spread_it() {
         );
     }
 }
+
+#[test]
+fn a_flat_eq_changes_nothing_and_a_boost_does() {
+    use vt_model::insert::Equaliser;
+    let plain = distorted([Insert::Empty; 3]);
+    let flat = distorted([Insert::Eq(Equaliser::DEFAULT), Insert::Empty, Insert::Empty]);
+    assert_eq!(flat, plain, "a flat band mixes back exactly what went in");
+    let boosted = Insert::Eq(Equaliser {
+        mid_frequency: 0x6E,
+        mid: 0xFF,
+        ..Equaliser::DEFAULT
+    });
+    let loud = distorted([boosted, Insert::Empty, Insert::Empty]);
+    let peak = |out: &[[f32; 2]]| out.iter().fold(0.0_f32, |most, f| most.max(f[0].abs()));
+    assert!(
+        peak(&loud) > peak(&plain) * 2.0,
+        "{} {}",
+        peak(&loud),
+        peak(&plain)
+    );
+}

@@ -4,10 +4,11 @@
 //! program's own.
 
 use vt_model::constants::UNITY_LEVEL;
-use vt_model::insert::{Chorus, Delay, Distort, DistortType, Insert, Reverb};
+use vt_model::insert::{Chorus, Delay, Distort, DistortType, Equaliser, Insert, Reverb};
 use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
+use crate::dsp::eq::ThreeBands;
 use crate::dsp::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::smoother::Smoothed;
@@ -32,6 +33,8 @@ pub struct InsertState {
     held: [f32; 2],
     /// How many frames since `Down` last took a sample.
     since: f32,
+    /// An EQ's bands, which are small enough to keep in every slot.
+    eq: ThreeBands,
 }
 
 impl Default for InsertState {
@@ -46,6 +49,7 @@ impl Default for InsertState {
             oversampler: [Oversampler::default(); 2],
             held: [0.0; 2],
             since: 0.0,
+            eq: ThreeBands::default(),
         }
     }
 }
@@ -56,7 +60,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
         (Insert::Delay(_), Insert::Delay(_))
         | (Insert::Reverb(_), Insert::Reverb(_))
-        | (Insert::Chorus(_), Insert::Chorus(_)) => true,
+        | (Insert::Chorus(_), Insert::Chorus(_))
+        | (Insert::Eq(_), Insert::Eq(_)) => true,
         _ => false,
     }
 }
@@ -159,6 +164,8 @@ impl InsertState {
             Insert::Delay(Delay { mix, gain, .. })
             | Insert::Reverb(Reverb { mix, gain, .. })
             | Insert::Chorus(Chorus { mix, gain, .. }) => (0, mix, gain),
+            // An EQ is all wet: what it leaves alone comes through as it is.
+            Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
         let (amount, mix, gain) = (
             f32::from(amount) / 255.0,
@@ -170,6 +177,13 @@ impl InsertState {
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
+        }
+        if let Insert::Eq(settings) = insert {
+            let fresh = !same_effect(self.insert, insert);
+            self.eq.follow(settings);
+            if fresh {
+                self.eq.settle();
+            }
         }
         self.insert = insert;
         self.amount.target = amount;
@@ -217,6 +231,13 @@ impl InsertState {
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
         let (kind, set) = match self.insert {
             Insert::Empty => return input,
+            Insert::Eq(_) => {
+                let gain = self.gain.next(smoothing);
+                return self
+                    .eq
+                    .process(input, smoothing, rate)
+                    .map(|sample| sample * gain);
+            }
             Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
             Insert::Delay(_) | Insert::Reverb(_) | Insert::Chorus(_) => (None, 0),
         };
