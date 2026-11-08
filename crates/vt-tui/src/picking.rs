@@ -55,24 +55,35 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// The kits in a folder: its RON files, by name.
+/// The kits in a folder and the folders in it, as the importer writes them: its RON files, by
+/// path, those in the folder itself first.
 pub fn kits_in(root: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return Vec::new();
+    let mut kits = Vec::new();
+    walk_kits(root, 0, &mut kits);
+    kits
+}
+
+fn walk_kits(folder: &Path, depth: usize, kits: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
     };
-    let mut kits: Vec<PathBuf> = entries
+    let mut paths: Vec<PathBuf> = entries
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| {
-            is_visible(path)
-                && path.is_file()
-                && path
-                    .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("ron"))
-        })
+        .filter(|path| is_visible(path))
         .collect();
-    kits.sort();
-    kits
+    paths.sort();
+    let (folders, files): (Vec<PathBuf>, Vec<PathBuf>) =
+        paths.into_iter().partition(|path| path.is_dir());
+    kits.extend(files.into_iter().filter(|path| {
+        path.extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("ron"))
+    }));
+    if depth < MAX_DEPTH {
+        for folder in folders {
+            walk_kits(&folder, depth + 1, kits);
+        }
+    }
 }
 
 fn is_visible(path: &Path) -> bool {
@@ -80,10 +91,13 @@ fn is_visible(path: &Path) -> bool {
         .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
 }
 
-/// A kit's name: its file name without the extension.
-fn kit_name(path: &Path) -> String {
-    path.file_stem()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+/// A kit as `:kit` takes it: its path in its kit folder, without the extension.
+fn kit_name(folder: &Path, path: &Path) -> String {
+    path.strip_prefix(folder)
+        .unwrap_or(path)
+        .with_extension("")
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// A row for a kit's sound: its label and its name.
@@ -214,10 +228,11 @@ impl App {
             .settings
             .kit_folders()
             .iter()
-            .flat_map(|folder| kits_in(folder))
-            .map(|path| Item {
-                label: kit_name(&path),
-                pick: Pick::Kit(path),
+            .flat_map(|folder| {
+                kits_in(folder).into_iter().map(move |path| Item {
+                    label: kit_name(folder, &path),
+                    pick: Pick::Kit(path),
+                })
             })
             .collect();
         if items.is_empty() {
