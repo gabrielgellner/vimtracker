@@ -162,7 +162,7 @@ as it is, and goes 15 dB either way. It stays smooth as an LFO sweeps it.
 down whenever that one plays: put it on a bass, hearing the kick, for the pumping
 sidechain sound. It hears the other track after that track's slots and before its level
 and mute, so a muted kick track still ducks the bass, and turning the kick down doesn't
-change it.
+change it. Leave `Auto` off for ducking, or the bass is louder between kicks.
 
 | Setting | Does |
 |---|---|
@@ -170,8 +170,9 @@ change it.
 | `Ratio` | How much: 1:1 at `00`, 20:1 near the top, a limiter at `FF` |
 | `Attack`, `Release` | How fast it turns down and lets go |
 | `Source` | `Self`, a track by its number, or return `A` or `B` |
+| `Auto` | `On` makes up what it takes, so full level stays full |
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
-| `Gain` | Makes up what it took, on the level scale |
+| `Gain` | Makes up what it took, or trims `Auto`, on the level scale |
 
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars

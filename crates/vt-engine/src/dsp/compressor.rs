@@ -19,6 +19,8 @@ struct Set {
     slope: f32,
     attack: f32,
     release: f32,
+    /// What it makes up by itself, as a gain: what it would take from full level, or none.
+    makeup: f32,
 }
 
 /// The detector's state and the settings it was worked out from.
@@ -65,12 +67,17 @@ impl Compressor {
         {
             return set;
         }
-        let set = Set {
+        let mut set = Set {
             threshold: threshold_db(f32::from(settings.threshold)),
             slope: 1.0 / ratio(f32::from(settings.ratio)),
             attack: keeps(attack_ms(f32::from(settings.attack)), rate),
             release: keeps(release_ms(f32::from(settings.release)), rate),
+            makeup: 1.0,
         };
+        // As Giannoulis, Massberg and Reiss define it: what the curve takes at 0 dB, given back.
+        if settings.auto > 0 {
+            set.makeup = 10_f32.powf(-computed(0.0, &set) / 20.0);
+        }
         self.set = Some((settings, set));
         set
     }
@@ -96,7 +103,7 @@ impl Compressor {
             set.release
         };
         self.reduction = keep * self.reduction + (1.0 - keep) * wanted;
-        let gain = 10_f32.powf(-self.reduction / 20.0);
+        let gain = 10_f32.powf(-self.reduction / 20.0) * set.makeup;
         input.map(|sample| sample * gain)
     }
 }
@@ -147,6 +154,7 @@ mod tests {
             slope: 0.25,
             attack: 0.0,
             release: 0.0,
+            makeup: 1.0,
         };
         let at = |level: f32| level - computed(level, &set);
         assert_eq!(at(-23.0), 0.0, "where the knee starts");
@@ -156,6 +164,26 @@ mod tests {
         );
         // Halfway through, it's already turning down a little, not jumping.
         assert!(at(-20.0) > 0.0 && at(-20.0) < at(-17.0));
+    }
+
+    #[test]
+    fn auto_gain_brings_a_full_level_back_to_full_level() {
+        let auto = Settings {
+            auto: 1,
+            ..settings(0xC0, 0x6E)
+        };
+        let mut compressor = Compressor::default();
+        let mut out = [0.0; 2];
+        for _ in 0..RATE {
+            out = compressor.process([1.0; 2], [1.0; 2], auto, RATE);
+        }
+        assert!((out[0] - 1.0).abs() < 0.01, "{out:?}");
+        // And it's off unless asked for.
+        let mut plain = Compressor::default();
+        for _ in 0..RATE {
+            out = plain.process([1.0; 2], [1.0; 2], settings(0xC0, 0x6E), RATE);
+        }
+        assert!(out[0] < 0.5, "{out:?}");
     }
 
     #[test]

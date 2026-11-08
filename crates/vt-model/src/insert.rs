@@ -92,6 +92,8 @@ pub enum Setting {
     Attack,
     Release,
     Source,
+    /// Whether a compressor makes up what it takes by itself.
+    AutoGain,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -114,6 +116,7 @@ impl Setting {
             Self::Type => DistortType::ALL.len() as u8 - 1,
             Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
             Self::Source => SOURCE_NAMES.len() as u8 - 1,
+            Self::AutoGain => 1,
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
@@ -128,6 +131,7 @@ impl Setting {
             Self::Type => (DistortType::ALL.len() - 1) as f32,
             Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
             Self::Source => (SOURCE_NAMES.len() - 1) as f32,
+            Self::AutoGain => 1.0,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::PingPong => 1.0,
@@ -446,7 +450,7 @@ pub fn release_ms(value: f32) -> f32 {
 }
 
 /// A compressor's, in the order the page shows them.
-pub(crate) const COMPRESSOR_PARAMS: [Param; 7] = [
+pub(crate) const COMPRESSOR_PARAMS: [Param; 8] = [
     hex_param(
         "Threshold",
         "threshold",
@@ -483,6 +487,15 @@ pub(crate) const COMPRESSOR_PARAMS: [Param; 7] = [
         setting: Setting::Source,
         choices: &SOURCE_NAMES,
         wraps: false,
+        default: 0,
+    },
+    Param {
+        name: "Auto",
+        key: "auto",
+        label: Some("AUTO"),
+        setting: Setting::AutoGain,
+        choices: &["Off", "On"],
+        wraps: true,
         default: 0,
     },
     Param {
@@ -982,6 +995,9 @@ pub struct Compressor {
     pub release: u8,
     /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
     pub source: u8,
+    /// `1` to make up by itself what it would take from a sound at full level, so the loudest
+    /// peaks come back to where they were. Off for ducking, which shouldn't be louder unducked.
+    pub auto: u8,
     /// From `00`, all dry, to `FF`, all compressed, for compressing in parallel.
     pub mix: u8,
     /// What comes out, on the level scale, to make up what it took.
@@ -1002,6 +1018,7 @@ impl Compressor {
         attack: 0x55,
         release: 0x80,
         source: 0,
+        auto: 0,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -1025,6 +1042,7 @@ impl Compressor {
             Setting::Attack => self.attack,
             Setting::Release => self.release,
             Setting::Source => self.source,
+            Setting::AutoGain => self.auto,
             Setting::Mix => self.mix,
             Setting::Gain => self.gain,
             _ => 0,
@@ -1041,6 +1059,7 @@ impl Compressor {
             Setting::Attack => compressor.attack = value,
             Setting::Release => compressor.release = value,
             Setting::Source => compressor.source = value,
+            Setting::AutoGain => compressor.auto = value,
             Setting::Mix => compressor.mix = value,
             Setting::Gain => compressor.gain = value,
             _ => {}
