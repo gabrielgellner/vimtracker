@@ -167,6 +167,10 @@ pub struct App {
     watched: usize,
     pub track_row: usize,
     pub track_field: usize,
+    /// Where `j` and `k` last left the cursor, as its row and field, and the field it was on before
+    /// a shorter row moved it in. Moving up or down from there goes back to that field where a row
+    /// has it, as Vim keeps its column.
+    pub(crate) track_wanted: Option<(usize, usize, usize)>,
     /// Whether the cursor is on the fine digits of the track page's setting.
     pub track_fine: bool,
     /// Most recently used first, starting with the view on screen.
@@ -281,6 +285,7 @@ impl App {
             watched: 0,
             track_row: 0,
             track_field: 0,
+            track_wanted: None,
             audio: AudioState::default(),
             audio_request: None,
             audio_row: 0,

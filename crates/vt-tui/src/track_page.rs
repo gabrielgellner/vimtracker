@@ -901,15 +901,44 @@ impl App {
     /// slot's effect is in both its rows.
     fn step_row(&mut self, by: isize) {
         let before = self.track_control();
+        let wanted = self.wanted_field();
         let last = self.page_rows().len() - 1;
         let mut row = self.track_row;
         while let Some(next) = row.checked_add_signed(by).filter(|next| *next <= last) {
             row = next;
-            self.move_control(row, self.track_field);
+            self.move_control(row, wanted);
             if self.track_control() != before {
-                return;
+                break;
             }
         }
+        self.track_wanted = Some((self.track_row, self.track_field, wanted));
+    }
+
+    /// The field `j` and `k` aim for: the one before a shorter row moved the cursor in, if it hasn't
+    /// moved since.
+    fn wanted_field(&self) -> usize {
+        match self.track_wanted {
+            Some((row, field, wanted)) if (row, field) == (self.track_row, self.track_field) => {
+                wanted
+            }
+            _ => self.track_field,
+        }
+    }
+
+    /// Up or down to a row, aiming for the field `j` and `k` aim for.
+    fn move_row_keeping_field(&mut self, row: usize) {
+        let wanted = self.wanted_field();
+        self.move_control(row, wanted);
+        self.track_wanted = Some((self.track_row, self.track_field, wanted));
+    }
+
+    /// The first field drawn on the cursor's line. A slot's effect is one tall column drawn on its
+    /// top line, so on its bottom line the row starts at its first setting there.
+    fn row_start(&self) -> usize {
+        let rows = self.page_rows();
+        let row = self.track_row.min(rows.len() - 1);
+        let bottom_of_slot = self.track_page == Page::Fx && row % SLOT_ROWS == SLOT_ROWS - 1;
+        usize::from(bottom_of_slot && self.fields_in(rows[row]) > 1)
     }
 
     /// Run a command on the mixer. `h` and `l` go between its strips, and `j` and `k` up and down
@@ -952,11 +981,11 @@ impl App {
                 let slot = (row / SLOT_ROWS).saturating_sub(times);
                 self.track_row = slot * SLOT_ROWS + row % SLOT_ROWS;
             }
-            Cmd::Move(Motion::First) => self.move_control(0, field),
-            Cmd::Move(Motion::Last) => self.move_control(usize::MAX, field),
+            Cmd::Move(Motion::First) => self.move_row_keeping_field(0),
+            Cmd::Move(Motion::Last) => self.move_row_keeping_field(usize::MAX),
             Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.step_right()),
             Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.step_left()),
-            Cmd::Move(Motion::RowStart) => self.move_control(row, 0),
+            Cmd::Move(Motion::RowStart) => self.move_control(row, self.row_start()),
             Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
             Cmd::PreviousPage | Cmd::NextPage => {
                 self.track_page = self.track_page.beside(cmd == Cmd::NextPage);

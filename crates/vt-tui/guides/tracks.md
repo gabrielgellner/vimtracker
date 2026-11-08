@@ -12,8 +12,8 @@ hat pattern.
 |---|---|
 | `H` `L` | The Sound page or the Mod page |
 | `W` `B`, `]b` `[b` | Next or previous track |
-| `j` `k` | Next or previous row |
-| `h` `l` | Previous or next setting. `0` and `$` go to the ends |
+| `j` `k` | Next or previous row, back in the column they left |
+| `h` `l` | Previous or next setting. `0` and `$` go to the line's ends |
 | `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
@@ -86,6 +86,7 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
 next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
+On a slot's bottom line, `0` goes to its first setting there, and `h` from it to the effect.
 
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.
