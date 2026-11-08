@@ -8,6 +8,7 @@ pub mod chorus;
 pub mod delay;
 pub mod distort;
 pub mod drums;
+pub mod eq;
 pub mod filter;
 pub mod fm;
 pub mod grain;

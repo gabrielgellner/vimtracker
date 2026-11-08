@@ -146,6 +146,17 @@ string machine has.
 | `Rate` | How fast they move: as Rings has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
 
+`EQ3` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
+shelf at the top. Each band's boost or cut is centred on `80`, where it leaves the sound
+as it is, and goes 15 dB either way. It stays smooth as an LFO sweeps it.
+
+| Setting | Does |
+|---|---|
+| `Low freq`, `Low` | The low shelf: where it sits, and how far it boosts or cuts |
+| `Mid freq`, `Mid` | The middle band, the same |
+| `Mid Q` | How narrow the middle is: wide at `00`, sharp at `FF` |
+| `High freq`, `High` | The high shelf |
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
