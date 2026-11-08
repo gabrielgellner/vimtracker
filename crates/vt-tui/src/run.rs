@@ -24,6 +24,7 @@ use vt_model::song::Song;
 
 use crate::app::App;
 use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
+use crate::config::Settings;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics};
@@ -215,6 +216,15 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         devices: audio::devices(),
         ..crate::app::AudioState::default()
     };
+    if let Some(path) = Settings::path() {
+        let (settings, note) = Settings::load(&path);
+        app.settings = settings;
+        if let Some(note) = note
+            && status.is_empty()
+        {
+            status = note;
+        }
+    }
     app.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();
