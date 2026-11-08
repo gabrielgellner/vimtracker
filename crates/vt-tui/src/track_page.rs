@@ -1319,7 +1319,7 @@ impl App {
         let current = self.page_track().machine;
         let items = Machine::ALL
             .map(|machine| Item {
-                label: format!("{:<8}{}", machine.name(), machine.meaning()),
+                label: format!("{:<9}{}", machine.name(), machine.meaning()),
                 pick: Pick::Machine { track, machine },
             })
             .to_vec();

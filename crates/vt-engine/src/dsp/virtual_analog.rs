@@ -101,10 +101,25 @@ impl Moving {
         }
     }
 
+    /// The same across some other number of frames.
+    #[inline]
+    pub(super) fn across(state: f32, target: f32, frames: usize) -> Self {
+        Self {
+            value: state,
+            step: (target - state) / frames as f32,
+        }
+    }
+
     #[inline]
     pub(super) fn next(&mut self) -> f32 {
         self.value += self.step;
         self.value
+    }
+
+    /// Where it is a fraction `t` of the way to its next frame, without moving it.
+    #[inline]
+    pub(super) fn subsample(&self, t: f32) -> f32 {
+        self.value + self.step * t
     }
 }
 

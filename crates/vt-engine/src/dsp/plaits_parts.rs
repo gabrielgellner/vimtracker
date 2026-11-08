@@ -1,7 +1,7 @@
 //! Shared parts of Mutable Instruments' Plaits and its library stmlib, for the voices ported from
-//! it: the state variable filter and its tangent approximations, a DC blocker, a limiter, a
-//! cosine oscillator, Plaits' delay line, and two of its tables, taken from its generated
-//! `resources.cc`. Ported to Rust from `stmlib/dsp/filter.h`, `stmlib/dsp/limiter.h`,
+//! it: the state variable filter and its tangent approximations, a one-pole filter, a DC blocker,
+//! a limiter, a cosine oscillator, Plaits' delay line, and two of its tables, taken from its
+//! generated `resources.cc`. Ported to Rust from `stmlib/dsp/filter.h`, `stmlib/dsp/limiter.h`,
 //! `stmlib/dsp/cosine_oscillator.h` and `plaits/dsp/physical_modelling/delay_line.h`.
 //!
 //! Copyright 2014, 2016 Emilie Gillet.
@@ -147,6 +147,27 @@ impl DcBlocker {
         self.x = input;
         self.y = self.y * self.pole + input - previous;
         self.y
+    }
+}
+
+/// A one-pole filter, as stmlib's `OnePole` with its quick tangent.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct OnePole {
+    gain: f32,
+    state: f32,
+}
+
+impl OnePole {
+    pub(super) fn set_dirty(&mut self, f: f32) {
+        let g = tan_dirty(f);
+        self.gain = g / (1.0 + g);
+    }
+
+    #[inline]
+    pub(super) fn high_pass(&mut self, input: f32) -> f32 {
+        let low = (input - self.state) * self.gain + self.state;
+        self.state = (input - self.state) * self.gain + low;
+        input - low
     }
 }
 

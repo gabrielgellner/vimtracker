@@ -233,6 +233,34 @@ const FM: [Entry; 3] = [
     level("index", "Index", "INDX", 0x00),
     centred("feedback", "Feedback", "FDBK"),
 ];
+const VCF: [Entry; 3] = [
+    centred("resonance", "Resonance", "RESO"),
+    level("frequency", "Frequency", "FREQ", 0x80),
+    level("wave", "Wave", "WAVE", 0x40),
+];
+const PD: [Entry; 3] = [
+    level("ratio", "Ratio", "RAT", 0x80),
+    level("amount", "Amount", "AMNT", 0x80),
+    level("skew", "Skew", "SKEW", 0x40),
+];
+const FORMANT: [Entry; 3] = [
+    Entry {
+        default: 0x99,
+        ..centred("interval", "Interval", "INTV")
+    },
+    level("formant", "Formant", "FRMT", 0x80),
+    level("width", "Width", "WDTH", 0x80),
+];
+const ADDITIVE: [Entry; 3] = [
+    level("bumps", "Bumps", "BMPS", 0x00),
+    level("peak", "Peak", "PEAK", 0x4D),
+    level("shape", "Shape", "SHPE", 0x80),
+];
+const SWARM: [Entry; 3] = [
+    level("spread", "Spread", "SPRD", 0x66),
+    level("density", "Density", "DENS", 0x80),
+    level("overlap", "Overlap", "OVLP", 0x99),
+];
 const FOLD: [Entry; 3] = [
     centred("shape", "Shape", "SHPE"),
     level("fold", "Fold", "FOLD", 0x00),
@@ -299,8 +327,13 @@ const HAT: [Entry; 4] = [
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     match voice {
         SynthVoice::VirtualAnalog => &VA,
+        SynthVoice::VirtualAnalogVcf => &VCF,
         SynthVoice::Fm => &FM,
+        SynthVoice::PhaseDistortion => &PD,
         SynthVoice::Waveshaping => &FOLD,
+        SynthVoice::Formant => &FORMANT,
+        SynthVoice::Additive => &ADDITIVE,
+        SynthVoice::Swarm => &SWARM,
         SynthVoice::Wavetable => &WAVES,
         SynthVoice::SixOp => &SIX_OP,
         SynthVoice::String | SynthVoice::Modal => &STRUCK,
@@ -316,8 +349,13 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
 pub const fn voice_key(voice: SynthVoice) -> &'static str {
     match voice {
         SynthVoice::VirtualAnalog => "va",
+        SynthVoice::VirtualAnalogVcf => "vcf",
         SynthVoice::Fm => "fm",
+        SynthVoice::PhaseDistortion => "pd",
         SynthVoice::Waveshaping => "fold",
+        SynthVoice::Formant => "formant",
+        SynthVoice::Additive => "additive",
+        SynthVoice::Swarm => "swarm",
         SynthVoice::Wavetable => "waves",
         SynthVoice::SixOp => "6op",
         SynthVoice::String => "string",

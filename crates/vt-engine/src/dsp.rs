@@ -1,23 +1,29 @@
 //! Effects, one per file so each can be tested alone.
 
+pub mod additive;
 pub mod delay;
 pub mod distort;
 pub mod drums;
 pub mod filter;
 pub mod fm;
+pub mod grain;
 pub mod kick;
 pub mod memory;
 pub mod modal;
 pub mod noise;
 pub mod oversampler;
 pub mod particle;
+pub mod phase_distortion;
 mod plaits_parts;
 pub mod reverb;
 mod sine_table;
 pub mod six_op;
 pub mod smoother;
 pub mod string_model;
+pub mod swarm;
+mod variable_shape;
 pub mod virtual_analog;
+pub mod virtual_analog_vcf;
 pub mod waveshaping;
 mod waveshaping_tables;
 pub mod wavetable;

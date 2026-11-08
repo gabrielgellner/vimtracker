@@ -58,7 +58,7 @@ fn sine_pm(phase: u32, modulation: f32) -> f32 {
 }
 
 /// How far the modulator is from the carrier for a `Harm` on `0..=1`, in semitones.
-fn ratio(harmonics: f32) -> f32 {
+pub(super) fn ratio(harmonics: f32) -> f32 {
     let at = harmonics.clamp(0.0, 1.0) * 128.0;
     let whole = at as usize;
     RATIOS[whole] + (RATIOS[whole + 1] - RATIOS[whole]) * (at - whole as f32)
