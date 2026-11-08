@@ -468,14 +468,24 @@ pub enum SynthVoice {
     /// A square and a saw.
     #[default]
     VirtualAnalog,
+    /// A saw or a square, with a sub, through a resonant filter.
+    VirtualAnalogVcf,
     /// Two-operator FM.
     Fm,
+    /// A sine bent by a second wave's phase.
+    PhaseDistortion,
     /// A slope through a waveshaper and a wavefolder.
     Waveshaping,
+    /// Two formants, made of grains.
+    Formant,
+    /// 24 harmonics, in bumps along the spectrum.
+    Additive,
     /// A grid of waves in four banks.
     Wavetable,
     /// Six-operator FM, playing DX7 patches.
     SixOp,
+    /// A cloud of eight saws in grains.
+    Swarm,
     /// A plucked string.
     String,
     /// A struck resonator.
@@ -494,12 +504,17 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 17] = [
         Self::VirtualAnalog,
+        Self::VirtualAnalogVcf,
         Self::Fm,
+        Self::PhaseDistortion,
         Self::Waveshaping,
+        Self::Formant,
+        Self::Additive,
         Self::Wavetable,
         Self::SixOp,
+        Self::Swarm,
         Self::String,
         Self::Modal,
         Self::Dust,
@@ -513,8 +528,13 @@ impl SynthVoice {
     pub fn name(self) -> &'static str {
         match self {
             Self::VirtualAnalog => "VA",
+            Self::VirtualAnalogVcf => "VA VCF",
             Self::Fm => "FM",
+            Self::PhaseDistortion => "PD",
             Self::Waveshaping => "Fold",
+            Self::Formant => "Formant",
+            Self::Additive => "Additive",
+            Self::Swarm => "Swarm",
             Self::Wavetable => "Waves",
             Self::SixOp => "6-op",
             Self::String => "String",
@@ -531,6 +551,11 @@ impl SynthVoice {
     pub fn meaning(self) -> &'static str {
         match self {
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
+            Self::VirtualAnalogVcf => "A saw or square through a filter, for acid",
+            Self::PhaseDistortion => "A sine bent out of shape, as on Casio's CZ",
+            Self::Formant => "Two formants of grains, for vowels and leads",
+            Self::Additive => "24 harmonics in bumps, for organs and glass",
+            Self::Swarm => "Eight saws in grains, for pads and drones",
             Self::Fm => "Two-operator FM, for bass, bells and keys",
             Self::Waveshaping => "A wave folded into harmonics, for bass and leads",
             Self::Wavetable => "Waves in four banks to sweep, for pads and leads",
@@ -550,10 +575,15 @@ impl SynthVoice {
         matches!(
             self,
             Self::VirtualAnalog
+                | Self::VirtualAnalogVcf
                 | Self::Fm
+                | Self::PhaseDistortion
                 | Self::Waveshaping
+                | Self::Formant
+                | Self::Additive
                 | Self::Wavetable
                 | Self::SixOp
+                | Self::Swarm
                 | Self::Dust
                 | Self::Noise
         )

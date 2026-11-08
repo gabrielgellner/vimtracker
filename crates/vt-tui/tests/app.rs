@@ -1671,8 +1671,8 @@ fn each_voice_keeps_its_own_settings() {
     press(&mut app, "i40");
     assert_eq!(machine_value(&app, 1), 0x40);
 
-    // Another voice starts from its own defaults.
-    press(&mut app, "gg=");
+    // Another voice starts from its own defaults. Fold is two along, past PD.
+    press(&mut app, "gg==");
     assert_eq!(
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::Waveshaping),
@@ -1684,7 +1684,7 @@ fn each_voice_keeps_its_own_settings() {
     assert_eq!(machine_value(&app, 1), 0x20);
 
     // Back to FM finds it as it was, and the same through samples.
-    press(&mut app, "gg-");
+    press(&mut app, "gg--");
     assert_eq!(machine_value(&app, 1), 0x40);
     choose_machine(&mut app, "Sample");
     assert_eq!(app.song().tracks[0].machine, Machine::Sample);

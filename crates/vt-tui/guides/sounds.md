@@ -21,6 +21,15 @@ the track starts from its own defaults.
 | `Square` | The square: none at `00`, then a pulse, a square and hard sync |
 | `Saw` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
 
+`VA VCF` is a saw or a square, with a sub an octave down, through a resonant filter, for
+acid lines and fat bass. Try a note around `C-2`.
+
+| Setting | Does |
+|---|---|
+| `Resonance` | Steep below `80`, gentle above, ringing more at either end |
+| `Frequency` | The cutoff, from two octaves under the note to far above |
+| `Wave` | Saw and sub, saw, square, pulse, then square and sub at `FF` |
+
 `FM` is two sine waves, one bending the other, for bass, bells and keys.
 
 | Setting | Does |
@@ -28,6 +37,15 @@ the track starts from its own defaults.
 | `Ratio` | The second wave's pitch, in steps that catch: from 1/2 to 8 times |
 | `Index` | How hard it bends: a pure sine at `00`, and brighter going up |
 | `Feedback` | None at `80`, gritty above, and unstable pitch below |
+
+`PD` is phase distortion, as on Casio's CZ synths: a sine whose phase is bent by a second
+wave, for bass, keys and resonant sweeps.
+
+| Setting | Does |
+|---|---|
+| `Ratio` | The bending wave's pitch, catching on ratios. An octave at `80` |
+| `Amount` | How far it's bent: a pure sine at `00`, and brighter going up |
+| `Skew` | Which way it's bent, for an edge like a saw or a pulse |
 
 `Fold` is a wave folded back on itself into harmonics, for bass and leads with a
 west-coast edge. Try a note around `C-2`.
@@ -37,6 +55,25 @@ west-coast edge. Try a note around `C-2`.
 | `Shape` | The waveshaper before the fold, plain at `80` |
 | `Fold` | How far it's folded: smooth at `00`, and rich going up |
 | `Slope` | The wave's tilt, from a triangle at `00` to a ramp |
+
+`Formant` is two formants made of grains, like a voice's, for vowels and nasal leads.
+Move `Formant` slowly for a talking sweep. Below `80`, `Interval` also brings in a bare
+pulse.
+
+| Setting | Does |
+|---|---|
+| `Interval` | The second formant, up to two octaves from the first |
+| `Formant` | Where the formants sit, from low and muffled to bright |
+| `Width` | How wide and soft the formants are |
+
+`Additive` is 24 harmonics, set in bumps along the spectrum, for organs and glassy, bright
+tones.
+
+| Setting | Does |
+|---|---|
+| `Bumps` | How many bumps: one at `00`, and more going up |
+| `Peak` | Which harmonic is loudest, from the fundamental up |
+| `Shape` | The bumps' shape, from wide and flat to narrow and peaked |
 
 `Waves` sweeps through a grid of 8 by 8 waves, in four banks: soft and organ-like, then
 vocal, then the harsher waves of older digital synths, then all of them shuffled. Below
@@ -59,6 +96,15 @@ takes over on the next note.
 | `Patch` | Which patch, `00` to `5F`, named beside it. `K` lists them by name |
 | `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
 | `Time` | Attack and decay: as patched at `80`, faster below, slower above |
+
+`Swarm` is eight saws, each in grains that start and stop, for pads, drones and clouds.
+Each note starts a fresh burst of grains.
+
+| Setting | Does |
+|---|---|
+| `Spread` | How far the saws' pitches spread, up to four octaves |
+| `Density` | How often grains start: sparse at `00`, a cloud at `FF` |
+| `Overlap` | How long grains are. Near `FF`, held tones that glide |
 
 `String` is a plucked string: a burst of noise ringing in a modelled string, which dies
 away by itself. Try a note around `C-3`.

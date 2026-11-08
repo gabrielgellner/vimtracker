@@ -1,14 +1,19 @@
 //! Sample playback and its envelope.
 
+use crate::dsp::additive::Additive;
 use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
+use crate::dsp::grain::Grain;
 use crate::dsp::kick::Kick;
 use crate::dsp::modal::Modal;
 use crate::dsp::noise::Noise;
 use crate::dsp::particle::ParticleNoise;
+use crate::dsp::phase_distortion::PhaseDistortion;
 use crate::dsp::six_op::SixOp;
 use crate::dsp::string_model::StringModel;
+use crate::dsp::swarm::Swarm;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
+use crate::dsp::virtual_analog_vcf::VirtualAnalogVcf;
 use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
@@ -45,7 +50,12 @@ const MIDDLE_C: f64 = 261.625_565_3;
 #[allow(clippy::large_enum_variant)]
 enum Synth {
     VirtualAnalog(VirtualAnalog),
+    VirtualAnalogVcf(VirtualAnalogVcf),
     Fm(Fm),
+    PhaseDistortion(PhaseDistortion),
+    Formant(Grain),
+    Additive(Additive),
+    Swarm(Swarm),
     Kick(Kick),
     Snare(Snare),
     Hat(Hat),
@@ -63,6 +73,11 @@ impl Synth {
     fn new(voice: SynthVoice, rate: u32) -> Self {
         match voice {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
+            SynthVoice::VirtualAnalogVcf => Self::VirtualAnalogVcf(VirtualAnalogVcf::new()),
+            SynthVoice::PhaseDistortion => Self::PhaseDistortion(PhaseDistortion::new()),
+            SynthVoice::Formant => Self::Formant(Grain::new()),
+            SynthVoice::Additive => Self::Additive(Additive::new()),
+            SynthVoice::Swarm => Self::Swarm(Swarm::new()),
             SynthVoice::Fm => Self::Fm(Fm::new(rate)),
             SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
             SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
@@ -81,6 +96,11 @@ impl Synth {
     fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         match self {
             Self::VirtualAnalog(synth) => synth.next(frequency, settings),
+            Self::VirtualAnalogVcf(synth) => synth.next(frequency, settings),
+            Self::PhaseDistortion(synth) => synth.next(frequency, settings),
+            Self::Formant(synth) => synth.next(frequency, settings),
+            Self::Additive(synth) => synth.next(frequency, settings),
+            Self::Swarm(synth) => synth.next(frequency, settings),
             Self::Fm(synth) => synth.next(frequency, settings),
             Self::Kick(synth) => synth.next(frequency, settings),
             Self::Snare(synth) => synth.next(frequency, settings),
@@ -199,6 +219,7 @@ impl Voice {
             Some(Synth::String(synth)) => synth.seed(seed),
             Some(Synth::Dust(synth)) => synth.seed(seed),
             Some(Synth::Noise(synth)) => synth.seed(seed),
+            Some(Synth::Swarm(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -213,6 +234,7 @@ impl Voice {
                     | Synth::String(_)
                     | Synth::Dust(_)
                     | Synth::Noise(_)
+                    | Synth::Swarm(_)
             )
         )
     }
