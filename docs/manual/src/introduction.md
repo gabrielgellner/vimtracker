@@ -37,3 +37,8 @@ it the waveform of the sample it plays:
 and its envelopes and LFO shapes on its Mod page:
 
 ![A track's Mod page, with its envelopes and LFO shapes](images/track-mod.svg)
+
+and on its FX page, a compressor's curve, with a meter beside it of how far it's turning
+down, and the same meter for a limiter:
+
+![A track's FX page, with a compressor's curve and gain reduction](images/track-fx.svg)

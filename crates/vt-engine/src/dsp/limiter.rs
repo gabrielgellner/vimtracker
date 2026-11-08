@@ -43,6 +43,8 @@ pub struct Limiter {
     now: u32,
     /// What's let go after the hold.
     released: f32,
+    /// The gain it last turned the sound down by, before the ceiling, for a meter.
+    turned: f32,
     /// The released gains over the window, and their total, for the moving average.
     averaged: Vec<f32>,
     averaged_at: usize,
@@ -75,6 +77,7 @@ impl Limiter {
             held_count: 0,
             now: 0,
             released: 1.0,
+            turned: 1.0,
             averaged: vec![1.0; window],
             averaged_at: 0,
             total: window as f64,
@@ -99,6 +102,12 @@ impl Limiter {
         self.ahead
     }
 
+    /// How far it's turning down now, in dB, for a meter: what it's taking off peaks over the
+    /// ceiling, not the ceiling itself.
+    pub fn reduction(&self) -> f32 {
+        -20.0 * self.turned.log10()
+    }
+
     /// Forget what's in it, for a fresh start.
     pub fn clear(&mut self) {
         for line in self.lines.iter_mut().chain(&mut self.dry) {
@@ -111,6 +120,7 @@ impl Limiter {
     pub fn rest(&mut self) {
         self.held_count = 0;
         self.released = 1.0;
+        self.turned = 1.0;
         self.averaged.fill(1.0);
         self.total = self.averaged.len() as f64;
     }
@@ -194,7 +204,8 @@ impl Limiter {
         } else {
             held + (self.released - held) * self.keep
         };
-        let gain = self.average(self.released) * ceiling;
+        self.turned = self.average(self.released);
+        let gain = self.turned * ceiling;
         let read = self.write.wrapping_sub(self.ahead) & self.mask;
         [
             [self.lines[0][read] * gain, self.lines[1][read] * gain],

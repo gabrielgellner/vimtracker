@@ -1122,3 +1122,57 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
     let silent = played(64);
     assert!(silent.iter().flatten().all(|s| *s == 0.0));
 }
+
+/// How far each slot of the first track is turning down, in dB, once a loud note has played a
+/// while, and once it's stopped.
+fn reduction_playing_and_after(insert: Insert, slot: usize) -> ([f32; 3], [f32; 3]) {
+    let mut song = song(&["C-4 -- --- --- ---", "OFF -- --- --- ---"]);
+    song.tracks[0].inserts[slot] = insert;
+    let version = Arc::new(Published::new(Arc::new(song), flat(0.9)));
+    let mut engine = Engine::new(RATE, version);
+    engine.play_from(0);
+    let mut out = vec![0.0; 512 * 2];
+    for _ in 0..(STEP / 512) {
+        engine.process(&mut out);
+    }
+    let playing = engine.live(0).reduction;
+    for _ in 0..(STEP * 8 / 512) {
+        engine.process(&mut out);
+    }
+    (playing, engine.live(0).reduction)
+}
+
+#[test]
+fn a_compressor_reports_how_far_its_turning_down() {
+    use vt_engine::dsp::compressor::curve_db;
+    use vt_model::insert::Compressor;
+    let settings = Compressor {
+        threshold: 0x80,
+        ratio: 0xC0,
+        attack: 0x00,
+        ..Compressor::DEFAULT
+    };
+    let (playing, after) = reduction_playing_and_after(Insert::Compressor(settings), 1);
+    // A steady level going in is turned down by the static curve's difference, once settled. The
+    // sample comes in at 0.9, under the track's level and filter, so only roughly that.
+    let level = 20.0 * 0.9_f32.log10();
+    let most = level - curve_db(level, settings);
+    assert!(
+        playing[1] > 3.0 && playing[1] <= most + 0.5,
+        "{playing:?}, {most}"
+    );
+    assert_eq!([playing[0], playing[2]], [0.0, 0.0]);
+    assert_eq!(after, [0.0; 3], "once nothing plays through it");
+}
+
+#[test]
+fn a_limiter_reports_how_far_its_turning_down() {
+    use vt_model::insert::Limiter;
+    let settings = Limiter {
+        input: 0xFF,
+        ..Limiter::DEFAULT
+    };
+    let (playing, _) = reduction_playing_and_after(Insert::Limit(settings), 0);
+    // 24 dB in, and a level near full: most of that is taken off again.
+    assert!(playing[0] > 15.0 && playing[0] < 30.0, "{playing:?}");
+}
