@@ -410,6 +410,34 @@ fn stopping_fades_and_doesnt_click() {
 }
 
 #[test]
+fn a_held_preview_lasts_until_its_key_is_let_go() {
+    let level = |engine: &mut Engine, frames: usize| {
+        let mut out = vec![0.0; frames * 2];
+        engine.process(&mut out);
+        out[out.len() - 2].abs()
+    };
+    let samples = pool(&[("flat", flat(SECOND * 2, 0.25))]);
+    let song = song_with_notes(1, &[]);
+    let mut short = Engine::new(48_000, version(song.clone(), Arc::clone(&samples)));
+    short.preview(0, 60, 0xFF);
+    assert!(
+        level(&mut short, 24_000) < 1e-3,
+        "a short one ends by half a second"
+    );
+
+    let mut held = Engine::new(48_000, version(song, samples));
+    held.hold_preview(0, 60, 0xFF);
+    assert!(level(&mut held, 24_000) > 0.1, "a held one is still going");
+    held.release_preview(62);
+    assert!(
+        level(&mut held, 24_000) > 0.1,
+        "another key's release doesn't end it"
+    );
+    held.release_preview(60);
+    assert!(level(&mut held, 24_000) < 1e-3, "its own does");
+}
+
+#[test]
 fn a_preview_plays_without_touching_sequenced_notes() {
     let song = song_with_notes(1, &[0]);
     let samples = pool(&[("flat", flat(SECOND, 0.25))]);

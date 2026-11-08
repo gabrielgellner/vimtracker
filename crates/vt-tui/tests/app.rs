@@ -6278,6 +6278,45 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
 }
 
 #[test]
+fn where_the_terminal_reports_releases_a_held_key_holds_its_note() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    app.key_releases = true;
+    press(&mut app, ";");
+    press(&mut app, "a");
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(
+        loudest(&mut realtime, 4800) > 0.01,
+        "still sounding after a second"
+    );
+    // The terminal's repeats don't start it again, and another key's release doesn't end it.
+    app.key_repeated(Key::char('a'), Instant::now());
+    app.key_released(Key::char('s'));
+    let _ = loudest(&mut realtime, 4800);
+    assert!(loudest(&mut realtime, 4800) > 0.01);
+    app.key_released(Key::char('a'));
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3, "letting go ends it");
+
+    // Leaving the keyboard lets go too.
+    press(&mut app, "a");
+    let _ = loudest(&mut realtime, 4800);
+    press(&mut app, ";");
+    assert_eq!(app.mode, Mode::Normal);
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3);
+}
+
+#[test]
+fn without_releases_a_key_plays_a_short_note() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    press(&mut app, ";a");
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3);
+}
+
+#[test]
 fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     use vt_tui::views::status::column_name;
     let (mut app, mut realtime) = app();

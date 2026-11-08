@@ -42,6 +42,14 @@ pub enum Command {
         note: u8,
         velocity: u8,
     },
+    /// Play a note on the preview voice for as long as its key is held.
+    HoldPreview {
+        track: usize,
+        note: u8,
+        velocity: u8,
+    },
+    /// The held key was let go.
+    ReleasePreview { note: u8 },
     /// Hear a row of the section while not playing.
     Audition { section: usize, section_step: usize },
     /// Mute or unmute a track.
@@ -292,6 +300,12 @@ impl Realtime {
                     note,
                     velocity,
                 } => self.engine.preview(track, note, velocity),
+                Command::HoldPreview {
+                    track,
+                    note,
+                    velocity,
+                } => self.engine.hold_preview(track, note, velocity),
+                Command::ReleasePreview { note } => self.engine.release_preview(note),
                 Command::PlaySection {
                     section,
                     step,

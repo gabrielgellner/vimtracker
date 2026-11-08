@@ -23,6 +23,13 @@ These were sent with `tmux send-keys` to a private tmux server using the author'
 `1`, `Ctrl-2` as `Ctrl-Space`, `Ctrl-3` as `Esc`, `Ctrl-8` as `Backspace`, and `Ctrl-9` and
 `Ctrl-0` as plain digits. Only `Ctrl-4` to `Ctrl-7` arrive as themselves.
 
+## The kitty keyboard protocol
+
+The track page's keyboard (`;`) asks for it, so a held key holds its note. Inside tmux 3.8 with
+the author's `.tmux.conf`, on 2026-11-08, crossterm's support query answered no: tmux answers
+the query itself and doesn't report key releases. So inside tmux, the keyboard plays short
+notes. `probe-keys --kitty` shows whether a terminal supports it and what it sends.
+
 ## Checked on a real keyboard
 
 *   `Option-1`, `Option-2` and `Option-s` work in kitty, on 2026-11-06. That needs

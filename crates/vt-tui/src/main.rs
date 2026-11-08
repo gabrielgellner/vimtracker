@@ -18,7 +18,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Print the key events your terminal delivers.
-    ProbeKeys,
+    ProbeKeys {
+        /// Ask for the kitty keyboard protocol, as the track page's keyboard does, to see
+        /// releases.
+        #[arg(long)]
+        kitty: bool,
+    },
     /// Render a saved project to a WAV file.
     Render {
         project: PathBuf,
@@ -57,7 +62,7 @@ enum Command {
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
+        Some(Command::ProbeKeys { kitty }) => vt_tui::probe::run(kitty).map_err(|e| e.to_string()),
         Some(Command::Bench {
             project,
             rate,

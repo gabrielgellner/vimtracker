@@ -74,7 +74,8 @@ sample gathered into it, ready to move or share.
 | `:render path [--rows n] [--tail]` | Render to a WAV file |
 
 `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` renders
-without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends.
+without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends, and
+`--kitty` asks for the kitty keyboard protocol, so key releases show.
 `vimtracker bench <project> [--rate n] [--block n] [--seconds n]` measures how much of a core a
 project takes to play, stopped and playing. `cargo build --profile profiling` builds with symbols
 for a profiler.
