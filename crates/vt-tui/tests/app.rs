@@ -1634,7 +1634,8 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     assert_eq!(machine_value(&app, 1), 0x60);
     press(&mut app, "x");
     assert_eq!(machine_value(&app, 1), 0);
-    press(&mut app, "kl");
+    // Past Detune's fine digits to Pan.
+    press(&mut app, "kll");
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "jjj");
     assert_eq!(column_name(&app), "Swing", "the row with only swing");
@@ -1780,7 +1781,7 @@ fn bars_show_where_a_value_is() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     let text = track_text(&app).join("\n");
-    assert!(text.contains("80 ▕    │    ▏"), "{text}");
+    assert!(text.contains("8000 ▕    │    ▏"), "{text}");
 }
 
 #[test]
@@ -1876,7 +1877,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
             .find(|line| line.starts_with("Cut"))
             .unwrap()
     };
-    assert!(cut(&app).contains("FF ▕█████████▏"), "{}", cut(&app));
+    assert!(cut(&app).contains("FF00 ▕█████████▏"), "{}", cut(&app));
     app.live = Some(vt_engine::track_state::LiveValues {
         level: 0xE0,
         pan: 0x80,
@@ -1887,7 +1888,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         machine: [0x80, 0, 0x80, 0xCC],
         inserts: Default::default(),
     });
-    assert!(cut(&app).contains("FF ▕██▎     │▏"), "{}", cut(&app));
+    assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
 
 #[test]
@@ -3045,7 +3046,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
     assert!(lines[4].trim().is_empty(), "{}", lines[4]);
     assert!(lines[5].starts_with("Filter") && lines[5].contains("Send A"));
-    assert!(lines[6].starts_with("Cut") && lines[6].contains("FF ▕█████████▏"));
+    assert!(lines[6].starts_with("Cut") && lines[6].contains("FF00 ▕█████████▏"));
     assert!(lines[7].starts_with("Res") && lines[7].contains("Swing"));
 }
 
@@ -4498,7 +4499,7 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
-        String::from_utf8(out).unwrap().matches(",c=22,").count()
+        String::from_utf8(out).unwrap().matches(",c=24,").count()
     };
     press(&mut app, " 4");
     assert_eq!(sync(&mut app, &mut graphics), 1);
@@ -4534,7 +4535,7 @@ fn the_filter_curve_moves_with_what_plays() {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
-        (out.matches(",c=22,").count(), out.matches("a=d,").count())
+        (out.matches(",c=24,").count(), out.matches("a=d,").count())
     };
     press(&mut app, " 4");
     sync(&mut app, &mut graphics);
@@ -4795,10 +4796,10 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
     let label = &jump_labels(&app)[0][..1];
     let text = track_text(&app).join("\n");
     assert!(
-        text.contains(&format!("Res{label}      {label}0 ")),
+        text.contains(&format!("Res{label}      {label}000 ")),
         "{text}"
     );
-    assert!(text.contains("Cut       FF "), "{text}");
+    assert!(text.contains("Cut       FF00 "), "{text}");
     let buffer = terminal.backend().buffer().clone();
     let y = (0..24)
         .find(|y| (0..3).map(|x| buffer[(x, *y)].symbol()).collect::<String>() == "Res")
@@ -4827,13 +4828,13 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
             .unwrap()
     };
     // Over the letter after what's typed, in the same columns as without a label.
-    assert!(line(&app, "Cus").starts_with("Cus       sF ▕"));
-    assert!(line(&app, "Low cud").starts_with("Low cud   d0 ▕"));
-    assert!(line(&app, "High cuf").starts_with("High cuf  fF ▕"));
-    assert!(line(&app, "Res").starts_with("Res       00 ▕"));
+    assert!(line(&app, "Cus").starts_with("Cus       sF00 ▕"));
+    assert!(line(&app, "Low cud").starts_with("Low cud   d0   ▕"));
+    assert!(line(&app, "High cuf").starts_with("High cuf  fF   ▕"));
+    assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
-    assert!(line(&app, "Cuts").starts_with("Cuts      sF ▕"));
+    assert!(line(&app, "Cuts").starts_with("Cuts      sF00 ▕"));
     special(&mut app, KeyCode::Esc);
 
     // A name over two rows has both their labels, and the columns stay put.
@@ -6183,4 +6184,54 @@ fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
     assert_eq!(value_shown(&app).as_deref(), Some("+7 st"));
+}
+
+#[test]
+fn the_sound_page_stops_on_a_values_fine_digits() {
+    use vt_model::settings::SettingId;
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = on_track_page();
+    assert_eq!(column_name(&app), "Cut");
+    let cut = |app: &App| {
+        let track = &app.song().tracks[0];
+        (track.cutoff, track.fine(SettingId::CUT))
+    };
+    // Cut starts open, at the top, where there's no fine part, so come down a step first.
+    press(&mut app, "-");
+    assert_eq!(cut(&app), (0xFE, 0));
+    press(&mut app, "l");
+    assert!(app.track_fine);
+    assert_eq!(column_name(&app), "Cut", "still Cut, on its fine digits");
+    press(&mut app, "i80");
+    assert_eq!(cut(&app), (0xFE, 0x80));
+    assert!(
+        track_page_text(&app)
+            .iter()
+            .any(|line| line.starts_with("Cut       FE80"))
+    );
+    // The value's own digits keep it, and the top has none.
+    press(&mut app, "h-");
+    assert_eq!(cut(&app), (0xFD, 0x80));
+    press(&mut app, "l");
+    for _ in 0..0x80 {
+        press(&mut app, "=");
+    }
+    assert_eq!(cut(&app), (0xFE, 0), "a fine nudge carries");
+    press(&mut app, "-");
+    assert_eq!(cut(&app), (0xFD, 0xFF));
+    press(&mut app, "x");
+    assert_eq!(cut(&app), (0xFD, 0), "x sets it back to 00");
+    press(&mut app, "16-");
+    assert_eq!(cut(&app), (0xFC, 0xF0));
+    assert!(value_shown(&app).is_some());
+    press(&mut app, "h==");
+    assert_eq!(cut(&app), (0xFE, 0xF0));
+    press(&mut app, "=");
+    assert_eq!(cut(&app), (0xFF, 0), "none at the top");
+    // Drive is whole, so it has no fine digits to stop on.
+    press(&mut app, "/dri");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(column_name(&app), "Drive");
+    press(&mut app, "l");
+    assert!(!app.track_fine);
 }

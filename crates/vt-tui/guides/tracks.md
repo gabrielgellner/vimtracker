@@ -23,6 +23,12 @@ hat pattern.
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
 
+Cut, Res, Pan, the sends and the machine's settings that sweep have a fine part,
+the dim pair of digits after the value, as FX values do in a phrase. `l` stops on
+it before the next setting, and there `=` `-` `+` `_`, `i` and `x` work on the
+fine part alone, carrying into the value past `FF` or below `00`. The value's own
+digits keep it, and at the top there's none. An effect's settings are whole.
+
 ## The filter
 
 | Setting | Value |

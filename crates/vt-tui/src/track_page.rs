@@ -325,7 +325,9 @@ impl Control {
     /// The setting this is on this track, and its value there, for the status line to show in
     /// its units. The filters' drive and cuts aren't settings yet.
     pub fn value_on(self, track: &Track) -> Option<(SettingId, u16)> {
-        let base = |id: SettingId, value: u8| Some((id, u16::from(value) << 8));
+        let base = |id: SettingId, value: u8| {
+            Some((id, u16::from(value) << 8 | u16::from(track.fine(id))))
+        };
         match self {
             Self::Setting(_) => self
                 .setting_on(track)
@@ -354,6 +356,19 @@ impl Control {
             }
             _ => None,
         }
+    }
+
+    /// The setting whose fine part this shows on the Sound page, if it has one: the track's own
+    /// that steps can set too, and its machine's that sweep. An effect's settings are whole, as
+    /// effects only hear those.
+    pub fn fine_on(self, track: &Track) -> Option<SettingId> {
+        let id = match self {
+            Self::Base(which) => which.setting()?,
+            Self::Setting(_) => self.setting_on(track)?,
+            _ => return None,
+        };
+        let sweeps = matches!(id.entry().kind, Kind::Continuous { .. });
+        (sweeps && self.exists_on(track)).then_some(id)
     }
 
     /// The setting of the track's machine this is, if it's one.
@@ -761,6 +776,83 @@ impl App {
         let rows = self.page_rows();
         self.track_row = row.min(rows.len() - 1);
         self.track_field = field.min(self.fields_in(rows[self.track_row]) - 1);
+        self.track_fine = false;
+    }
+
+    /// Whether the setting under the cursor has fine digits to stop on.
+    fn has_fine_here(&self) -> bool {
+        self.track_control().fine_on(&self.page_track()).is_some()
+    }
+
+    /// `l`: onto the fine digits of a setting that has them, and then on to the next.
+    fn step_right(&mut self) {
+        if !self.track_fine && self.has_fine_here() {
+            self.track_fine = true;
+        } else {
+            self.move_control(self.track_row, self.track_field.saturating_add(1));
+        }
+    }
+
+    /// `h`: back off the fine digits, and onto the previous setting's if it has them.
+    fn step_left(&mut self) {
+        if self.track_fine {
+            self.track_fine = false;
+            return;
+        }
+        let before = self.track_field;
+        self.move_control(self.track_row, before.saturating_sub(1));
+        self.track_fine = self.track_field != before && self.has_fine_here();
+    }
+
+    /// Move the fine part of the setting under the cursor, carrying into its value past `FF` or
+    /// below `00`, as one undo step.
+    fn adjust_fine(&mut self, up: bool, count: usize, large: bool) {
+        let control = self.track_control();
+        let track = self.page_track();
+        let Some(id) = control.fine_on(&track) else {
+            return;
+        };
+        let Some(coarse) = track.coarse(id) else {
+            return;
+        };
+        let size = if large { HEX_JUMP } else { 1 } * count as i64;
+        let value = i64::from(coarse) << 8 | i64::from(track.fine(id));
+        let top = i64::from(id.entry().kind.top()) << 8;
+        let moved = (value + if up { size } else { -size }).clamp(0, top);
+        let (coarse_now, fine) = ((moved >> 8) as u8, (moved & 0xFF) as u8);
+        let index = self.cursor.track;
+        let mut actions = Vec::new();
+        if coarse_now != coarse {
+            actions.push(match control {
+                Control::Base(control) => Action::SetTrackBase {
+                    track: index,
+                    control,
+                    value: coarse_now,
+                },
+                _ => Action::SetTrackSetting {
+                    track: index,
+                    setting: id,
+                    value: coarse_now,
+                },
+            });
+        }
+        actions.push(Action::SetTrackFine {
+            track: index,
+            setting: id,
+            fine,
+        });
+        self.apply(&Action::Batch(actions));
+    }
+
+    /// Set the fine part of the setting under the cursor.
+    fn set_fine_here(&mut self, fine: u8) {
+        if let Some(setting) = self.track_control().fine_on(&self.page_track()) {
+            self.apply(&Action::SetTrackFine {
+                track: self.cursor.track,
+                setting,
+                fine,
+            });
+        }
     }
 
     /// Move a row up or down, past any that would leave the cursor on the same setting, as an empty
@@ -820,8 +912,8 @@ impl App {
             }
             Cmd::Move(Motion::First) => self.move_control(0, field),
             Cmd::Move(Motion::Last) => self.move_control(usize::MAX, field),
-            Cmd::Move(Motion::Right) => self.move_control(row, field.saturating_add(times)),
-            Cmd::Move(Motion::Left) => self.move_control(row, field.saturating_sub(times)),
+            Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.step_right()),
+            Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.step_left()),
             Cmd::Move(Motion::RowStart) => self.move_control(row, 0),
             Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
             Cmd::PreviousPage | Cmd::NextPage => {
@@ -834,6 +926,11 @@ impl App {
             }
             Cmd::RemoveRow => self.take_insert(),
             Cmd::Paste => self.put_insert(),
+            Cmd::Increase if self.track_fine => self.adjust_fine(true, times, false),
+            Cmd::Decrease if self.track_fine => self.adjust_fine(false, times, false),
+            Cmd::IncreaseLarge if self.track_fine => self.adjust_fine(true, times, true),
+            Cmd::DecreaseLarge if self.track_fine => self.adjust_fine(false, times, true),
+            Cmd::ClearField if self.track_fine => self.set_fine_here(0),
             Cmd::Increase => self.adjust_control(true, times, false),
             Cmd::Decrease => self.adjust_control(false, times, false),
             Cmd::IncreaseLarge => self.adjust_control(true, times, true),
@@ -1353,7 +1450,13 @@ impl App {
                 if self.entry.text.len() == 2 {
                     let text = std::mem::take(&mut self.entry.text);
                     self.mode = Mode::Normal;
-                    self.commit_control(control, &text);
+                    if self.track_fine {
+                        if let Ok(fine) = u8::from_str_radix(&text, 16) {
+                            self.set_fine_here(fine);
+                        }
+                    } else {
+                        self.commit_control(control, &text);
+                    }
                 }
             }
             KeyCode::Char(c) if !control.is_hex() && self.entry.text.len() < 12 => {

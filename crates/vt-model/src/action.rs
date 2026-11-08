@@ -283,6 +283,12 @@ pub enum Action {
         setting: SettingId,
         value: u8,
     },
+    /// Set the fine part of one of a track's own settings or its machine's.
+    SetTrackFine {
+        track: usize,
+        setting: SettingId,
+        fine: u8,
+    },
     /// Choose a track's filter.
     SetFilterType {
         track: usize,
@@ -345,6 +351,20 @@ pub enum TrackControl {
     Drive,
     LowCut,
     HighCut,
+}
+
+impl TrackControl {
+    /// The setting this is the base of, if steps can set it too.
+    pub fn setting(self) -> Option<SettingId> {
+        match self {
+            Self::Cutoff => Some(SettingId::CUT),
+            Self::Resonance => Some(SettingId::RES),
+            Self::Pan => Some(SettingId::PAN),
+            Self::SendA => Some(SettingId::SEND_A),
+            Self::SendB => Some(SettingId::SEND_B),
+            Self::Drive | Self::LowCut | Self::HighCut => None,
+        }
+    }
 }
 
 /// An FX slot with its value within what its command takes, and a fine part only on what has
@@ -647,6 +667,10 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
             }
+            // At the top, a fine part goes.
+            if let Some(id) = control.setting() {
+                track.set_fine(id, track.fine(id));
+            }
         }
         Action::SetInsert {
             track,
@@ -927,6 +951,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .set_setting(*setting, *value);
+            let track = &mut next.tracks[*track];
+            track.set_fine(*setting, track.fine(*setting));
+        }
+        Action::SetTrackFine {
+            track,
+            setting,
+            fine,
+        } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .set_fine(*setting, *fine);
         }
         Action::SetFilterType { track, filter } => {
             next.tracks
