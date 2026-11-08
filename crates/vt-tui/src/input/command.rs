@@ -107,12 +107,7 @@ pub enum LineError {
 
 /// Expand a leading `~/` using the home directory.
 fn path(text: &str) -> PathBuf {
-    if let Some(rest) = text.strip_prefix("~/")
-        && let Some(home) = std::env::var_os("HOME")
-    {
-        return PathBuf::from(home).join(rest);
-    }
-    PathBuf::from(text)
+    crate::config::expand_home(text)
 }
 
 /// Read a tempo as thousandths of a BPM, so `137.63` is exact.

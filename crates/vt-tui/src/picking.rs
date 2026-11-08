@@ -86,18 +86,6 @@ fn kit_name(path: &Path) -> String {
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
-/// Where kits are looked for by name, from where the program ran.
-const KITS_DIR: &str = "samples/kits";
-
-/// A kit named in `samples/kits`, or at a path.
-pub(crate) fn kit_path(name: &Path) -> PathBuf {
-    if name.is_file() {
-        name.to_path_buf()
-    } else {
-        Path::new(KITS_DIR).join(name).with_extension("ron")
-    }
-}
-
 /// A row for a kit's sound: its name and its file.
 fn kit_item(entry: &KitEntry) -> Item {
     let file = entry
@@ -114,6 +102,26 @@ fn kit_item(entry: &KitEntry) -> Item {
 }
 
 impl App {
+    /// A kit at a path, or by name in the first of the settings' kit folders that has it. A
+    /// name found nowhere is looked for in the first folder, so the error names it.
+    pub(crate) fn kit_path(&self, name: &Path) -> PathBuf {
+        if name.is_file() {
+            return name.to_path_buf();
+        }
+        let candidates: Vec<PathBuf> = self
+            .settings
+            .kit_folders()
+            .iter()
+            .map(|folder| folder.join(name).with_extension("ron"))
+            .collect();
+        candidates
+            .iter()
+            .find(|candidate| candidate.is_file())
+            .or(candidates.first())
+            .cloned()
+            .unwrap_or_else(|| name.with_extension("ron"))
+    }
+
     /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
     pub(crate) fn open_view_picker(&mut self) {
         self.count = None;
@@ -204,17 +212,23 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// Choose a kit from those in `samples/kits`.
+    /// Choose a kit from those in the settings' kit folders, folder by folder.
     pub(crate) fn open_kit_picker(&mut self) {
-        let items: Vec<Item> = kits_in(Path::new(KITS_DIR))
-            .into_iter()
+        let items: Vec<Item> = self
+            .settings
+            .kit_folders()
+            .iter()
+            .flat_map(|folder| kits_in(folder))
             .map(|path| Item {
                 label: kit_name(&path),
                 pick: Pick::Kit(path),
             })
             .collect();
         if items.is_empty() {
-            self.status = format!("No kits yet: add a kit file to {KITS_DIR}, such as 909.ron");
+            self.status = match self.settings.kits.first() {
+                Some(folder) => format!("No kits yet: add a kit file to {folder}, such as 909.ron"),
+                None => "No kit folders: add one to kits in settings.ron".to_owned(),
+            };
             return;
         }
         self.picker = Some(Picker::new("Kits", items));
@@ -459,11 +473,17 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// The folders the sample browser starts from: the project's samples, then where we ran.
+    /// The folders the sample browser starts from: the project's samples, the settings' sample
+    /// folders, then where we ran.
     pub(crate) fn sample_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         if let Some(folder) = &self.folder {
             roots.push(folder.join("samples"));
+        }
+        for folder in self.settings.sample_folders() {
+            if !roots.contains(&folder) {
+                roots.push(folder);
+            }
         }
         if let Ok(current) = std::env::current_dir()
             && !self
