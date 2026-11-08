@@ -6425,3 +6425,66 @@ fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
     press(&mut app, "x");
     assert_eq!(bypassed(&app), [false; 3]);
 }
+
+#[test]
+fn zero_and_dollar_on_the_fx_page_stay_on_the_line_the_cursor_is_on() {
+    use vt_tui::track_page::Control;
+    let (mut app, _rt) = app();
+    press(&mut app, " 4LL");
+    press(&mut app, "K");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    // Down onto the slot's bottom line, whose first setting is Feedback.
+    press(&mut app, "lj");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 1));
+    press(&mut app, "$");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 7));
+    press(&mut app, "0");
+    assert_eq!(
+        app.track_control(),
+        Control::InsertParam(0, 1),
+        "not the effect, drawn on the line above"
+    );
+    press(&mut app, "h");
+    assert_eq!(
+        app.track_control(),
+        Control::Insert(0),
+        "h still reaches it"
+    );
+    // On the top line, the effect is the start.
+    press(&mut app, "lk0");
+    assert_eq!(app.track_control(), Control::Insert(0));
+    press(&mut app, "$");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+}
+
+#[test]
+fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
+    use vt_tui::track_page::Control;
+    let (mut app, _rt) = app();
+    press(&mut app, " 4LL");
+    press(&mut app, "K");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    // Gain is the last on the top line, which is longer than the bottom.
+    press(&mut app, "$");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 7));
+    press(&mut app, "k");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    // A move along the row forgets the column.
+    press(&mut app, "jhk");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 4));
+
+    // On the Sound page, down past the rows with nothing on the right and back.
+    press(&mut app, "HHlgg");
+    assert_eq!(app.track_control(), Control::Level);
+    press(&mut app, "jjjj");
+    assert_eq!(app.track_control(), Control::Swing);
+    press(&mut app, "jjj");
+    press(&mut app, "kkk");
+    assert_eq!(app.track_control(), Control::Swing);
+    press(&mut app, "Ggg");
+    assert_eq!(app.track_control(), Control::Level, "G and gg keep it too");
+}
