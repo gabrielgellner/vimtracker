@@ -216,6 +216,10 @@ pub struct App {
     guard: Option<(Key, Instant)>,
 }
 
+/// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
+/// page's own.
+const KEYS_NOTES: &str = "awsedf";
+
 /// The longest a typed label is: a slot's digit and 4 letters.
 const LONGEST_LABEL: usize = 5;
 impl App {
@@ -527,6 +531,51 @@ impl App {
             Mode::Shape => self.shape_key(key, now),
             Mode::Jump => self.jump_key(key, now),
             Mode::Restore => self.restore_key(key),
+            Mode::Keys => self.keys_key(key, now),
+        }
+    }
+
+    /// Play the track's sound from a few keys, `a` `w` `s` `e` `d` `f`, without writing anything,
+    /// while every other key works on the page as it does, so settings change as it plays. Each
+    /// key plays a short note, as a terminal can't tell when a key is let go.
+    fn keys_key(&mut self, key: Key, now: Instant) {
+        let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
+        match key.code {
+            KeyCode::Esc | KeyCode::Char(';') if self.pending.is_empty() => {
+                self.mode = Mode::Normal;
+                self.status.clear();
+            }
+            KeyCode::Char('<') if plain => self.octave = self.octave.saturating_sub(1),
+            KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
+                if let Some(note) = self.played_key(c) {
+                    self.handle.send(Command::Preview {
+                        track: self.cursor.track,
+                        note,
+                        velocity: self.note_velocity,
+                    });
+                }
+            }
+            _ => {
+                self.command_key_normal(key, now);
+                // The keys only play on the track page.
+                if self.mode == Mode::Keys && self.view != View::Track {
+                    self.mode = Mode::Normal;
+                }
+            }
+        }
+    }
+
+    /// The note a key plays in the current octave. With a scale, the home row goes up through it
+    /// from the root, and the row above is silent, so every key is in key.
+    fn played_key(&self, c: char) -> Option<u8> {
+        if self.scale.on {
+            degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
+        } else {
+            note_key(c).map(|semitones| {
+                let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
+                midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
+            })
         }
     }
 
@@ -541,6 +590,7 @@ impl App {
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
     pub fn key_scope(&self) -> Mode {
         match (self.mode, self.view) {
+            (Mode::Keys, View::Track) => Mode::Track,
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
@@ -1249,17 +1299,7 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
-                // With a scale, the home row goes up through it from the root, and the row above
-                // is silent, so every key is in key.
-                let played = if self.scale.on {
-                    degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
-                } else {
-                    note_key(c).map(|semitones| {
-                        let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
-                        midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
-                    })
-                };
-                if let Some(midi) = played {
+                if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()
                         .cloned()

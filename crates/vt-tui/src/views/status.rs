@@ -158,6 +158,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::Command => theme::PEACH,
             Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Jump => theme::TEAL,
             Mode::Replace | Mode::Restore => theme::RED,
+            Mode::Keys => theme::YELLOW,
         })
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {
@@ -216,7 +217,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         String::new()
     };
     let status = Line::from(vec![
-        Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
+        // The keyboard takes the page's keys, but is its own mode.
+        Span::styled(
+            format!(
+                " {} ",
+                if app.mode == Mode::Keys {
+                    Mode::Keys.label()
+                } else {
+                    app.key_scope().label()
+                }
+            ),
+            mode_style,
+        ),
         Span::styled(
             match value_shown(app) {
                 Some(value) => format!(" {}, {value} ", column_name(app)),
