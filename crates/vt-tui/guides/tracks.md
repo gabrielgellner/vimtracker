@@ -170,7 +170,7 @@ change it. Leave `Auto` off for ducking, or the bass is louder between kicks.
 | `Ratio` | How much: 1:1 at `00`, 20:1 near the top, a limiter at `FF` |
 | `Attack`, `Release` | How fast it turns down and lets go |
 | `Source` | `Self`, a track by its number, or return `A` or `B` |
-| `Auto` | `On` gives back what it takes on average, so loudness holds |
+| `Auto` | `On` makes it come out as loud as it went in |
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
 | `Gain` | Makes up what it took, or trims `Auto`, on the level scale |
 

@@ -995,8 +995,8 @@ pub struct Compressor {
     pub release: u8,
     /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
     pub source: u8,
-    /// `1` to make up by itself what it's taken lately, averaged over about a second, so it comes
-    /// out about as loud as it went in. Off for ducking, which shouldn't be louder unducked.
+    /// `1` to make up by itself how much quieter it comes out than it went in, each measured over
+    /// about a second, so it comes out as loud as it went in. Off for ducking, which shouldn't be louder unducked.
     pub auto: u8,
     /// From `00`, all dry, to `FF`, all compressed, for compressing in parallel.
     pub mix: u8,

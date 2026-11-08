@@ -12,21 +12,29 @@ use crate::dsp::smoother::Smoothed;
 const KNEE_DB: f32 = 6.0;
 /// Below this, a level counts as silence, about -120 dB, so the log stays finite.
 const FLOOR: f32 = 1e-6;
-/// How long Auto takes to follow what it's turning down, so it gives back the average and not
-/// each hit.
+/// How long Auto listens to how loud it is going in and coming out, so it follows the sound's
+/// level and not each hit.
 const AUTO_MS: f32 = 1_000.0;
+/// Below this power going in, about -80 dB, Auto holds what it's giving rather than chase the
+/// silence.
+const AUTO_QUIET: f32 = 1e-8;
+/// The most Auto gives, in dB, however hard it's turned down.
+const AUTO_MOST: f32 = 60.0;
 
 /// The detector's state, and where its curve sits, moving smoothly to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Compressor {
     /// How far it's turning down now, in dB.
     reduction: f32,
-    /// How far it's turned down lately, in dB, for Auto to give back.
-    average: f32,
+    /// How loud it's been going in lately, and coming out before Auto, as power.
+    heard: f32,
+    left: f32,
+    /// What Auto gives back, in dB: the difference between those two.
+    makeup: f32,
     threshold: Smoothed,
     /// One over the ratio, so a limiter is `0`.
     slope: Smoothed,
-    /// How much of `average` it gives back: all of it with Auto on, none with it off.
+    /// How much of `makeup` it gives back: all of it with Auto on, none with it off.
     auto: Smoothed,
     /// The settings the times were worked out from, and how much of the last value each keeps:
     /// the attack, the release and Auto's.
@@ -60,7 +68,9 @@ impl Compressor {
     /// Forget how far it was turning down, for a fresh start.
     pub fn clear(&mut self) {
         self.reduction = 0.0;
-        self.average = 0.0;
+        self.heard = 0.0;
+        self.left = 0.0;
+        self.makeup = 0.0;
     }
 
     /// Take what's set now, jumping to it the first time.
@@ -111,11 +121,18 @@ impl Compressor {
             release
         };
         self.reduction = keep * self.reduction + (1.0 - keep) * wanted;
-        // Auto gives back what it's taken on average, so it's about as loud as it went in, and
-        // switching it in or out compares like with like.
-        self.average = auto * self.average + (1.0 - auto) * self.reduction;
-        let given = self.average * self.auto.next(smoothing);
-        let gain = 10_f32.powf((given - self.reduction) / 20.0);
+        let turned = 10_f32.powf(-self.reduction / 20.0);
+        // Auto matches how loud it comes out to how loud it went in, so switching it in or out
+        // compares like with like, however hard it's turned down.
+        let power = (input[0] * input[0] + input[1] * input[1]) / 2.0;
+        self.heard = auto * self.heard + (1.0 - auto) * power;
+        self.left = auto * self.left + (1.0 - auto) * power * turned * turned;
+        if self.heard > AUTO_QUIET {
+            let difference = 10.0 * (self.heard / self.left.max(AUTO_QUIET * 1e-6)).log10();
+            self.makeup = difference.clamp(0.0, AUTO_MOST);
+        }
+        let given = self.makeup * self.auto.next(smoothing);
+        let gain = turned * 10_f32.powf(given / 20.0);
         input.map(|sample| sample * gain)
     }
 }
@@ -199,6 +216,36 @@ mod tests {
         }
         // And it's off unless asked for.
         assert!(comes_out(-6.0, settings(0x00, 0xFF)) < -50.0);
+    }
+
+    #[test]
+    fn auto_gain_keeps_hits_and_gaps_as_loud_as_they_went_in() {
+        // A hit every quarter second, a 220 Hz tone dying away, as a drum loop is.
+        let hit = |frame: usize| {
+            let since = (frame % (RATE as usize / 4)) as f32 / RATE as f32;
+            (since * 220.0 * std::f32::consts::TAU).sin() * (-since * 20.0).exp() * 0.8
+        };
+        let power =
+            |samples: &[f32]| samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32;
+        for (threshold, ratio) in [(0x00, 0xFF), (0x20, 0xC0), (0x80, 0x60), (0xC0, 0x30)] {
+            let auto = Settings {
+                auto: 1,
+                release: 0x60,
+                ..settings(threshold, ratio)
+            };
+            let mut compressor = Compressor::default();
+            let (mut went_in, mut came_out) = (Vec::new(), Vec::new());
+            for frame in 0..RATE as usize * 6 {
+                let sample = hit(frame);
+                let out = compressor.process([sample; 2], [sample; 2], auto, 1.0, RATE)[0];
+                if frame >= RATE as usize * 4 {
+                    went_in.push(sample);
+                    came_out.push(out);
+                }
+            }
+            let db = 10.0 * (power(&came_out) / power(&went_in)).log10();
+            assert!(db.abs() < 1.0, "{threshold:x} {ratio:x}: {db} dB");
+        }
     }
 
     #[test]
