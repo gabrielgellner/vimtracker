@@ -6289,7 +6289,8 @@ fn where_the_terminal_reports_releases_a_held_key_holds_its_note() {
         loudest(&mut realtime, 4800) > 0.01,
         "still sounding after a second"
     );
-    // The terminal's repeats don't start it again, and another key's release doesn't end it.
+    // The terminal's repeats don't start it again, even sent as presses, as kitty sends `a`'s,
+    // and another key's release doesn't end it.
     app.key_repeated(Key::char('a'), Instant::now());
     app.key_released(Key::char('s'));
     let _ = loudest(&mut realtime, 4800);
@@ -6305,6 +6306,43 @@ fn where_the_terminal_reports_releases_a_held_key_holds_its_note() {
     assert_eq!(app.mode, Mode::Normal);
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3);
+}
+
+#[test]
+fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
+    // A sample that fades out over a second, so starting it again is loud.
+    let (mut app, mut realtime) = app();
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("fade.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+    for frame in 0..48_000 {
+        writer.write_sample((16_000 - frame / 3) as i16).unwrap();
+    }
+    writer.finalize().unwrap();
+    command(&mut app, &format!("sample {}", path.display()));
+    app.key_releases = true;
+    press(&mut app, " 4;a");
+    let _ = loudest(&mut realtime, 24_000);
+    let held = loudest(&mut realtime, 2400);
+    // kitty on macOS has sent a held `a`'s repeats as presses, with no release between.
+    press(&mut app, "a");
+    let after = loudest(&mut realtime, 2400);
+    assert!(
+        after < held,
+        "{after} after the press, {held} before: it started again"
+    );
+    // After a release, a press starts it again.
+    app.key_released(Key::char('a'));
+    press(&mut app, "a");
+    assert!(loudest(&mut realtime, 2400) > held * 1.5);
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
