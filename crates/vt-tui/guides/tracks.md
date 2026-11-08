@@ -36,7 +36,7 @@ digits keep it, and at the top there's none. An effect's settings are whole.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder`. `K` lists them |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode`. `K` lists them |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
@@ -47,8 +47,11 @@ Unlike `Cut`, steps and modulators don't move them.
 
 `LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
 it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
-rises, and near `FF` it sings by itself while a note lasts. It costs more than
-the others, which matters only for tracks using it.
+rises, and near `FF` it sings by itself while a note lasts. `Diode` is the
+303's filter, the one in `Acid`: rubbery and softer at first, as it starts
+falling well under `Cut`, with a peak at `Cut` that grows sharp and squelchy
+and thins the bass more than `Ladder` does. These two cost more than the
+others, which matters only for tracks using them.
 
 In kitty, a curve in a box under the filter's rows shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's

@@ -3,6 +3,7 @@
 
 use vt_model::song::{FilterType, Track};
 
+use crate::dsp::diode_filter::{self, DiodeFilter, RESONANT_SHARE};
 use crate::dsp::oversampler::Oversampler;
 
 /// How far `Drive` turns up what goes into the filter, at full.
@@ -11,6 +12,16 @@ const DRIVE_GAIN: f32 = 7.0;
 const LADDER_FEEDBACK: f32 = 4.3;
 /// A stage's slope can't fall below this, or a loud signal would stop it responding.
 const LADDER_MIN_SLOPE: f32 = 0.01;
+/// What goes into the diode ladder, and what comes out of it at no resonance, as gains. Its last
+/// stage clips at 1, so a full-level sound goes in at half, and comes out about as loud as it went
+/// in.
+const DIODE_INPUT: f32 = 0.5;
+const DIODE_OUTPUT: f32 = 1.04;
+/// How much higher the diode ladder's cutoff is set for each fraction of its rate. Its stages hear
+/// each other a sample late, which pulls its resonance flat as the cutoff rises.
+const DIODE_HIGH_TUNING: f32 = 2.2;
+/// How far its feedback high-pass pulls its resonance sharp near the bottom, in Hz.
+const DIODE_LOW_TUNING: f32 = 12.0;
 /// What the rational `tanh` is good for.
 const TANH_RANGE: f32 = 4.0;
 
@@ -39,6 +50,11 @@ pub struct Coefficients {
     double_a1: f32,
     /// The ladder's feedback.
     ladder_k: f32,
+    /// The diode ladder's cutoff as a fraction of twice the rate, set so it resonates at the cutoff
+    /// asked for, and its feedback high-pass at that rate.
+    diode_cutoff: f32,
+    diode_feedback: f32,
+    resonance: f32,
 }
 
 impl Coefficients {
@@ -59,6 +75,13 @@ impl Coefficients {
             double_g,
             double_a1: 1.0 / (1.0 + double_g * (double_g + k)),
             ladder_k: resonance * LADDER_FEEDBACK,
+            diode_cutoff: {
+                let share = frequency / RESONANT_SHARE / (2.0 * rate as f32);
+                let low = (1.0 - DIODE_LOW_TUNING / frequency).max(0.5);
+                share * (1.0 + DIODE_HIGH_TUNING * share) * low
+            },
+            diode_feedback: diode_filter::feedback_coefficient(2.0 * rate as f32),
+            resonance,
         }
     }
 }
@@ -145,6 +168,7 @@ impl Ladder {
 pub struct Channel {
     svf: Svf,
     ladder: Ladder,
+    diode: DiodeFilter,
     oversampler: Oversampler,
 }
 
@@ -152,7 +176,7 @@ impl Channel {
     /// Filter one sample. `drive` runs from 0, which takes the clean path, to 1.
     #[inline]
     pub fn process(&mut self, input: f32, kind: FilterType, drive: f32, c: &Coefficients) -> f32 {
-        if drive <= 0.0 && kind != FilterType::Ladder {
+        if drive <= 0.0 && !kind.saturates() {
             let (band, low) = self.svf.tick(input, c);
             return svf_output(kind, input, band, low, c);
         }
@@ -164,6 +188,13 @@ impl Channel {
     #[inline(never)]
     fn saturating(&mut self, input: f32, kind: FilterType, drive: f32, c: &Coefficients) -> f32 {
         let gain = 1.0 + drive * DRIVE_GAIN;
+        if kind == FilterType::Diode {
+            // The diode ladder takes the drive itself, and evens out its level.
+            let diode = &mut self.diode;
+            return self.oversampler.process(input * DIODE_INPUT, |x| {
+                diode.next(x, c.diode_cutoff, c.resonance, gain, c.diode_feedback) * DIODE_OUTPUT
+            });
+        }
         let output = if kind == FilterType::Ladder {
             let ladder = &mut self.ladder;
             self.oversampler
@@ -184,7 +215,16 @@ impl Channel {
 pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, hertz: f32) -> f32 {
     let c = Coefficients::new(cutoff, resonance, rate);
     let hertz = hertz.min(rate as f32 * 0.499);
-    let power = if kind == FilterType::Ladder {
+    let power = if kind == FilterType::Diode {
+        let gain = DIODE_INPUT * DIODE_OUTPUT;
+        gain * gain
+            * diode_filter::response(
+                c.diode_cutoff,
+                resonance,
+                c.diode_feedback,
+                hertz / (2.0 * rate as f32),
+            )
+    } else if kind == FilterType::Ladder {
         // Four one-poles in a loop: 1 / ((1 + jw)^4 + k).
         let w = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
         let w2 = w * w;
@@ -199,7 +239,7 @@ pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, her
             FilterType::HighPass => w2 * w2,
             FilterType::BandPass => k2 * w2,
             FilterType::Notch => rest,
-            FilterType::LowPass | FilterType::Ladder => 1.0,
+            FilterType::LowPass | FilterType::Ladder | FilterType::Diode => 1.0,
         };
         top / (rest + k2 * w2)
     };
@@ -273,7 +313,7 @@ fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, c: &Coefficient
         FilterType::HighPass => input - c.k * band - low,
         FilterType::BandPass => c.k * band,
         FilterType::Notch => input - c.k * band,
-        FilterType::LowPass | FilterType::Ladder => low,
+        FilterType::LowPass | FilterType::Ladder | FilterType::Diode => low,
     }
 }
 
@@ -316,8 +356,8 @@ mod tests {
 
     #[test]
     fn the_worked_out_response_matches_the_filter_itself() {
-        use FilterType::{BandPass, HighPass, Ladder, LowPass, Notch};
-        for kind in [LowPass, HighPass, BandPass, Notch, Ladder] {
+        use FilterType::{BandPass, Diode, HighPass, Ladder, LowPass, Notch};
+        for kind in [LowPass, HighPass, BandPass, Notch, Ladder, Diode] {
             for res in [0.0, 0.5, 0.8] {
                 for hertz in [100.0, 400.0, 1000.0, 2500.0, 8000.0] {
                     let worked_out = response_db(kind, cutoff(1000.0), res, RATE, hertz);
@@ -326,8 +366,11 @@ mod tests {
                         continue;
                     }
                     let measured = gain_db(kind, 1000.0, res, 0.0, hertz, 0.01);
+                    // The diode's stages hear each other a sample late, which the analog model
+                    // doesn't, so it's a little out at its peak.
+                    let within = if kind == Diode { 1.0 } else { 0.5 };
                     assert!(
-                        (worked_out - measured).abs() < 0.5,
+                        (worked_out - measured).abs() < within,
                         "{kind:?} res {res} at {hertz}: {worked_out} and {measured}"
                     );
                 }
@@ -420,7 +463,7 @@ mod tests {
 
     #[test]
     fn drive_keeps_the_level_in_hand() {
-        for kind in [FilterType::LowPass, FilterType::Ladder] {
+        for kind in [FilterType::LowPass, FilterType::Ladder, FilterType::Diode] {
             for drive in [0.25, 0.5, 1.0] {
                 let db = gain_db(kind, 20_000.0, 0.0, drive, 200.0, 0.5);
                 near(db, 0.0, 8.0);
@@ -480,15 +523,24 @@ mod tests {
     }
 
     #[test]
+    fn the_diode_passes_the_bass_at_its_level_and_loses_it_as_resonance_rises() {
+        let db = |res| gain_db(FilterType::Diode, 2000.0, res, 0.0, 100.0, 0.05);
+        near(db(0.0), 0.0, 1.0);
+        assert!(db(0.8) < db(0.0) - 3.0, "{} and {}", db(0.8), db(0.0));
+    }
+
+    #[test]
+    fn the_diode_self_oscillates_near_its_cutoff() {
+        for cut in [200.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0] {
+            let pitch = ringing_at(FilterType::Diode, cut, 1.0);
+            let cents = 1200.0 * (pitch / cut).log2();
+            assert!(cents.abs() < 50.0, "{cut} rang at {pitch}");
+        }
+    }
+
+    #[test]
     fn every_type_survives_the_extremes_and_fast_changes() {
-        let kinds = [
-            FilterType::LowPass,
-            FilterType::HighPass,
-            FilterType::BandPass,
-            FilterType::Notch,
-            FilterType::Ladder,
-        ];
-        for kind in kinds {
+        for kind in FilterType::ALL {
             for drive in [0.0, 1.0] {
                 let mut channel = Channel::default();
                 for frame in 0..RATE as usize {
@@ -535,7 +587,7 @@ mod tests {
             20.0 * (level_at(kind, 1.0, 5000.0, alias) / level_at(kind, 1.0, 5000.0, 5000.0))
                 .log10()
         };
-        for kind in [FilterType::Ladder, FilterType::LowPass] {
+        for kind in [FilterType::Ladder, FilterType::LowPass, FilterType::Diode] {
             for (alias, most) in [(3000.0, -50.0), (13_000.0, -50.0), (23_000.0, -30.0)] {
                 let found = db(kind, alias);
                 assert!(found < most, "{kind:?} {alias} is at {found} dB");

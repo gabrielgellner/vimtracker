@@ -39,16 +39,19 @@ pub enum FilterType {
     Notch,
     /// A saturating four-pole ladder, which self-oscillates and costs more.
     Ladder,
+    /// A saturating diode ladder, the kind in Roland's TB-303, which costs more too.
+    Diode,
 }
 
 impl FilterType {
     /// Every type, in the order a list shows them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::LowPass,
         Self::HighPass,
         Self::BandPass,
         Self::Notch,
         Self::Ladder,
+        Self::Diode,
     ];
 
     /// The name on screen.
@@ -59,6 +62,7 @@ impl FilterType {
             Self::BandPass => "BP",
             Self::Notch => "Notch",
             Self::Ladder => "Ladder",
+            Self::Diode => "Diode",
         }
     }
 
@@ -70,7 +74,13 @@ impl FilterType {
             Self::BandPass => "Band-pass, clean",
             Self::Notch => "Notch, clean",
             Self::Ladder => "Saturating low-pass, 24 dB, self-oscillates",
+            Self::Diode => "Diode ladder low-pass, 303 style, self-oscillates",
         }
+    }
+
+    /// Whether it always saturates, at twice the rate, rather than only when driven.
+    pub fn saturates(self) -> bool {
+        matches!(self, Self::Ladder | Self::Diode)
     }
 }
 

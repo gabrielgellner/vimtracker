@@ -26,7 +26,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::diode_filter::{DiodeFilter, RESONANT_SHARE};
+use super::diode_filter::{DiodeFilter, RESONANT_SHARE, feedback_coefficient};
 use super::drums::soft_clip;
 use super::oversampler::Oversampler;
 use super::smoother::{Smoothed, coefficient as smoothing_coefficient};
@@ -143,6 +143,8 @@ pub struct Acid {
     amplitude: f32,
     high_pass: f32,
     filter: DiodeFilter,
+    /// The filter's [`feedback_coefficient`] at twice the rate.
+    feedback: f32,
     oversampler: Oversampler,
     smoothed: [Smoothed; SMOOTHED],
     smoothing: f32,
@@ -185,7 +187,8 @@ impl Acid {
             open: 0.0,
             amplitude: 0.0,
             high_pass: 0.0,
-            filter: DiodeFilter::new(rate * 2.0),
+            filter: DiodeFilter::default(),
+            feedback: feedback_coefficient(rate * 2.0),
             oversampler: Oversampler::default(),
             smoothed: [Smoothed::default(); SMOOTHED],
             smoothing: smoothing_coefficient(rate as u32),
@@ -353,9 +356,9 @@ impl Acid {
         let drive = (acid_drive_db(values[DRIVE] * 255.0) / DECIBELS_PER_OCTAVE).exp2();
         // The filter resonates under the cutoff it's given, and Open303's are where a 303 resonates.
         let cutoff = self.cutoff / RESONANT_SHARE / (self.rate * 2.0);
-        let filter = &mut self.filter;
+        let (filter, feedback) = (&mut self.filter, self.feedback);
         let filtered = self.oversampler.process(input, |sample| {
-            filter.next(sample, cutoff, resonance, drive)
+            filter.next(sample, cutoff, resonance, drive, feedback)
         });
         soft_clip(filtered * self.amplitude * LEVEL)
     }
