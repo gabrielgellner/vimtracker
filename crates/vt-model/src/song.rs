@@ -1084,9 +1084,11 @@ pub struct Song {
     /// Tempo, in thousandths of a BPM.
     pub millibpm: u32,
     pub seed: u64,
-    /// How far Insert moves down after a note.
-    pub step: u32,
-    /// How far the left and right arrows move in Insert.
+    /// Whether entering something in Insert moves on by the grid, `skip`. Kept with the song and
+    /// not used to play it.
+    #[serde(default)]
+    pub auto_jump: bool,
+    /// The grid: how far the left and right arrows move in Insert, and auto-jump with them.
     #[serde(default = "default_skip")]
     pub skip: u32,
     /// The scale for entering and moving notes, kept with the song and not used to play it.
@@ -1111,7 +1113,7 @@ impl Song {
             format_version: FORMAT_VERSION,
             millibpm: DEFAULT_MILLIBPM,
             seed: 0,
-            step: 1,
+            auto_jump: false,
             skip: default_skip(),
             scale: Scale::default(),
             limiter: default_limiter(),

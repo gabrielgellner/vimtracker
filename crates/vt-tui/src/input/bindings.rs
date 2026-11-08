@@ -684,15 +684,13 @@ pub fn note_key(key: char) -> Option<u8> {
         'k' => 12,
         'o' => 13,
         'l' => 14,
-        'p' => 15,
-        ';' => 16,
         _ => return None,
     })
 }
 
 /// The home row's place along a scale, with `a` on the root.
 pub fn degree_key(key: char) -> Option<usize> {
-    "asdfghjkl;".chars().position(|degree| degree == key)
+    "asdfghjkl".chars().position(|degree| degree == key)
 }
 
 #[cfg(test)]
@@ -757,8 +755,9 @@ mod tests {
 
     #[test]
     fn note_keys_run_chromatically() {
-        let notes: Vec<u8> = "awsedftgyhujkolp;".chars().filter_map(note_key).collect();
-        assert_eq!(notes, (0..17).collect::<Vec<u8>>());
-        assert_eq!("zxcvqrinmb".chars().filter_map(note_key).count(), 0);
+        let notes: Vec<u8> = "awsedftgyhujkol".chars().filter_map(note_key).collect();
+        assert_eq!(notes, (0..15).collect::<Vec<u8>>());
+        // As in Ableton, the keyboard stops at `l`, and `;` toggles auto-jump.
+        assert_eq!("zxcvqrinmbp;".chars().filter_map(note_key).count(), 0);
     }
 }

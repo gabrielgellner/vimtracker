@@ -592,7 +592,6 @@ impl App {
             Field::FxFine(_) => {
                 self.do_change(&Change::ClearField);
                 self.entry = Entry::default();
-                self.last_entry = None;
                 self.mode = Mode::Insert;
                 return;
             }
@@ -603,7 +602,6 @@ impl App {
             command,
             ..Entry::default()
         };
-        self.last_entry = None;
         self.mode = Mode::Insert;
     }
 

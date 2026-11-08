@@ -36,7 +36,6 @@ pub enum Line {
     Mute,
     Solo,
     Double,
-    SetStep(u32),
     SetSkip(u32),
     SetLimiter(bool),
     SetScale(ScaleKind),
@@ -82,7 +81,7 @@ pub enum LineError {
     Lane,
     #[error(":track takes add [n] or del")]
     Track,
-    #[error(":set takes step=n, skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
+    #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
     Set,
     #[error(":scale takes fit, or nothing to choose from a list")]
     Scale,
@@ -260,7 +259,6 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             .map_err(|_| LineError::Chain),
         "double" => Ok(Line::Double),
         "set" => match argument.split_once('=') {
-            Some(("step", n)) => n.parse().map(Line::SetStep).map_err(|_| LineError::Set),
             Some(("skip", n)) => n.parse().map(Line::SetSkip).map_err(|_| LineError::Set),
             Some(("limiter", "on")) => Ok(Line::SetLimiter(true)),
             Some(("limiter", "off")) => Ok(Line::SetLimiter(false)),
@@ -397,7 +395,6 @@ mod tests {
         assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
         assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
         assert_eq!(parse("track del"), Ok(Line::TrackDel));
-        assert_eq!(parse("set step=2"), Ok(Line::SetStep(2)));
         assert_eq!(parse("set skip=8"), Ok(Line::SetSkip(8)));
         assert_eq!(parse("set skip"), Err(LineError::Set));
         assert_eq!(

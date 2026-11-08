@@ -44,6 +44,9 @@ fn keys(app: &mut App, text: &str) {
         } else if let Some(tail) = rest.strip_prefix("<BS>") {
             app.key(Key::new(KeyCode::Backspace), now);
             rest = tail;
+        } else if let Some(tail) = rest.strip_prefix("<Down>") {
+            app.key(Key::new(KeyCode::Down), now);
+            rest = tail;
         } else if let Some(tail) = rest.strip_prefix('^') {
             let c = tail.chars().next().unwrap();
             app.key(
@@ -527,12 +530,12 @@ fn viewport_keys_move_within_the_screen() {
 }
 
 #[test]
-fn value_entry_commits_two_digits_and_moves_down() {
+fn value_entry_commits_two_digits_and_stays() {
     check(&[E, E], "li7f", &["--- 7F --- --- ---", E]);
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "li2B<Esc>");
     assert_eq!(steps(&app)[0], "--- 2B --- --- ---");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.cursor.step, 0);
 }
 
 #[test]
@@ -603,10 +606,13 @@ fn a_value_on_an_existing_command_keeps_the_command() {
 }
 
 #[test]
-fn the_step_setting_changes_how_far_entry_moves() {
+fn auto_jump_moves_entry_on_by_the_grid() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
-    keys(&mut app, ":set step=2<Enter>ia");
+    keys(&mut app, ":set skip=2<Enter>i;a");
     assert_eq!(app.cursor.step, 2);
+    keys(&mut app, "<Esc>li40");
+    assert_eq!(steps(&app)[2], "--- 40 --- --- ---", "values move on too");
+    assert_eq!(app.cursor.step, 3, "clamped at the last row");
 }
 
 #[test]
@@ -952,7 +958,7 @@ fn s_clears_the_field_and_starts_insert_there() {
     // A note typed in Insert takes the current velocity, as it always does.
     keys(&mut app, "k");
     assert_eq!(steps(&app)[0], "C-5 64 vol:10 pan:20 cut:30");
-    assert_eq!(app.cursor.step, 1, "Insert moves down as usual");
+    assert_eq!(app.cursor.step, 0, "Insert stays put as usual");
     keys(&mut app, "<Esc>uu");
     assert_eq!(steps(&app)[0], FULL);
 }
@@ -2013,7 +2019,7 @@ fn typing_coarse_digits_keeps_the_fine_part_up_to_the_top() {
 fn the_fine_digits_are_typed_replaced_and_cleared_on_their_own() {
     check(
         &["--- -- cut:40 --- ---", "--- -- cut:50 --- ---"],
-        "lllllia0b0<Esc>",
+        "lllllia0<Down>b0<Esc>",
         &["--- -- cut:40A0 --- ---", "--- -- cut:50B0 --- ---"],
     );
     check(

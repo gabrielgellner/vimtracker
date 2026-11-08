@@ -205,7 +205,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let reset = format!("{section}{reset}");
     // The grid only means something where notes are entered.
     let grid = if app.view == View::Phrase {
-        format!("  Grid {}", grid_name(app.song().skip))
+        let jump = if app.auto_jump { " Jump" } else { "" };
+        format!("  Grid {}{jump}", grid_name(app.song().skip))
     } else {
         String::new()
     };
