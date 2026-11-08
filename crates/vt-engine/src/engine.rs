@@ -1144,7 +1144,7 @@ impl Engine {
         // rolled once, on its first pulse.
         let mut plays = first || self.tracks[index].row_plays;
         for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
-            plays &= self.tracks[index].rng.chance(slot.value);
+            plays &= self.tracks[index].rng.chance(slot.coarse());
         }
         if first {
             self.tracks[index].row_plays = plays;
@@ -1166,10 +1166,10 @@ impl Engine {
                 continue;
             };
             match command {
-                FxCommand::Del => delay_units = Some(slot.value),
-                FxCommand::Kil => kill_units = Some(slot.value),
-                FxCommand::Off => off_units = Some(slot.value),
-                FxCommand::Ret => retrigger = Some(slot.value),
+                FxCommand::Del => delay_units = Some(slot.coarse()),
+                FxCommand::Kil => kill_units = Some(slot.coarse()),
+                FxCommand::Off => off_units = Some(slot.coarse()),
+                FxCommand::Ret => retrigger = Some(slot.coarse()),
                 FxCommand::Cha => {}
                 FxCommand::Set(id) if slot.mark == Mark::Glide => {
                     let value = command;

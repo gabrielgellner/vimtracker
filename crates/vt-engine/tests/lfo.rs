@@ -113,7 +113,7 @@ fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
     let out = render(song(&["C-4 -- vol:E0 --- ---"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let mut limitless = song(&["C-4 -- vol:FF --- ---"]);
+    let mut limitless = song(&["C-4 -- vol:F8 --- ---"]);
     limitless.limiter = false;
     let out = render(limitless, flat(), STEP);
     let top = left(&out, STEP - 1);
@@ -481,6 +481,7 @@ fn with_distort(mut song: Song, kind: DistortType) -> Song {
         amount: 0x40,
         mix: 0xC0,
         gain: 0xD0,
+        ..Distort::DEFAULT
     });
     song
 }
@@ -489,6 +490,7 @@ const AMOUNT: usize = 1;
 const MIX: usize = 2;
 const GAIN: usize = 3;
 const AMOUNT_TARGET: SettingId = SettingId::slot(0, Effect::Distort, 1).unwrap();
+const BITS_TARGET: SettingId = SettingId::slot(0, Effect::Distort, 2).unwrap();
 
 fn slot_live(song: Song, steps: usize) -> [u8; vt_model::insert::MAX_PARAMS] {
     live_after(song, steps).inserts[0]
@@ -563,13 +565,18 @@ fn a_command_does_nothing_in_an_empty_slot() {
 }
 
 #[test]
-fn a_command_goes_by_its_place_so_it_means_bits_on_crush() {
-    // Bits show as a place in the list, from 2 up, so 6 bits is the fifth.
+fn bits_are_crushs_own_and_an_amount_does_nothing_there() {
+    // Bits are a place in the list, from 2 up, so 6 bits is the fifth. On Crush, Bits is second.
     let crushed = with_distort(
-        song(&["C-4 -- 1.distort.amount:06 --- ---"]),
+        song(&["C-4 -- 1.distort.bits:04 --- ---"]),
         DistortType::Crush,
     );
     assert_eq!(slot_live(crushed, 1)[AMOUNT], 4);
+    let amount = with_distort(
+        song(&["C-4 -- 1.distort.amount:80 --- ---"]),
+        DistortType::Crush,
+    );
+    assert_eq!(slot_live(amount, 1)[AMOUNT], 7, "still 9 bits");
 }
 
 fn moved_by_lfo(
@@ -618,9 +625,9 @@ fn an_lfo_on_a_slots_setting_stops_at_its_range() {
 fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
     let crushed = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Crush);
     // A setting of 9 bits is place 7, and half of full depth is 5 of the 10 places.
-    let moved = moved_by_lfo(crushed.clone(), AMOUNT_TARGET, 0x80, 2)[AMOUNT];
+    let moved = moved_by_lfo(crushed.clone(), BITS_TARGET, 0x80, 2)[AMOUNT];
     assert_eq!(moved, 10, "stops at the most bits");
-    let moved = moved_by_lfo(crushed, AMOUNT_TARGET, 0x80, 4)[AMOUNT];
+    let moved = moved_by_lfo(crushed, BITS_TARGET, 0x80, 4)[AMOUNT];
     assert_eq!(moved, 2);
     let soft = with_distort(song(&["C-4 -- --- --- ---"]), DistortType::Soft);
     let kind = moved_by_lfo(

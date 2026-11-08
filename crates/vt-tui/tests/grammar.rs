@@ -188,9 +188,9 @@ fn increment_takes_a_count_as_its_amount() {
     check(&[A], "^x", &["B-3 40 cut:20 --- ---"]);
     // Values clamp to their ranges.
     check(
-        &["C-4 7F vol:FF --- ---"],
+        &["C-4 7F vol:F8 --- ---"],
         "l9+",
-        &["C-4 7F vol:FF --- ---"],
+        &["C-4 7F vol:F8 --- ---"],
     );
     check(&["G-9 -- --- --- ---"], "+", &["G-9 -- --- --- ---"]);
 }

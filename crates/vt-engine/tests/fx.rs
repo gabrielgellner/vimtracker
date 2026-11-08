@@ -284,7 +284,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     let late = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert_eq!(late(&dry), 0.0);
     let delayed = render(
-        song(&["C-4 -- sna:FF --- ---"]),
+        song(&["C-4 -- sna:F8 --- ---"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -293,7 +293,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     assert_eq!(delayed[17_000][0], 0.0);
     assert_ne!(delayed[18_100][0], 0.0);
     let reverbed = render(
-        song(&["C-4 -- snb:FF --- ---"]),
+        song(&["C-4 -- snb:F8 --- ---"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -444,7 +444,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
 
 #[test]
 fn track_level_also_turns_down_the_sends() {
-    let text = ["C-4 -- sna:FF snb:FF ---"];
+    let text = ["C-4 -- sna:F8 snb:F8 ---"];
     let mut silent = song(&text);
     silent.tracks[0].level = 0;
     let out = render(silent, flat(0.5), STEP * 8);
@@ -608,10 +608,13 @@ fn distorted(inserts: [Insert; 3]) -> Vec<[f32; 2]> {
     render(song, pool(sine.collect()), 4800)
 }
 
+/// A distortion going as hard as `amount` says in its mode: its drive, or fewer of `Crush`'s
+/// bits, from 12 at `00` to 2 at `FF`.
 fn distort(kind: DistortType, amount: u8) -> Insert {
     Insert::Distort(Distort {
         kind,
         amount,
+        bits: 12 - (f32::from(amount) / 25.5).round() as u8,
         mix: 0xFF,
         ..Distort::default()
     })

@@ -6,7 +6,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::constants::FX_SLOTS;
-use crate::settings::SettingId;
+use crate::settings::{Kind, SettingId};
 
 /// Lowest note the format can write, `C-0`.
 pub const MIN_NOTE: u8 = 12;
@@ -106,6 +106,20 @@ impl FxCommand {
         }
     }
 
+    /// Whether its value has a fine part: a continuous setting's does, and an event's or a list's
+    /// doesn't.
+    pub fn has_fine(self) -> bool {
+        matches!(
+            self,
+            Self::Set(id) if matches!(id.entry().kind, Kind::Continuous { .. })
+        )
+    }
+
+    /// The highest value this takes with its fine part, which is `00` at the top.
+    pub fn highest_value(self) -> u16 {
+        u16::from(self.highest()) << 8
+    }
+
     /// Whether the value stays in force after this step: a setting's does, an event's doesn't.
     pub fn holds(self) -> bool {
         matches!(self, Self::Set(_))
@@ -148,11 +162,23 @@ impl Mark {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FxSlot {
     pub command: Option<FxCommand>,
-    pub value: u8,
+    /// A coarse byte and a fine one, so `4080` is half a step above `40`. Only a continuous
+    /// setting's has a fine part, and an event's or a list's is always `xx00`.
+    pub value: u16,
     pub mark: Mark,
 }
 
 impl FxSlot {
+    /// Its value's coarse byte, the two digits typed for it.
+    pub fn coarse(self) -> u8 {
+        (self.value >> 8) as u8
+    }
+
+    /// Its value's fine byte.
+    pub fn fine(self) -> u8 {
+        (self.value & 0xFF) as u8
+    }
+
     /// Whether this is a value, which has a mark, rather than an event or nothing.
     pub fn is_value(self) -> bool {
         self.command.is_some_and(FxCommand::holds)

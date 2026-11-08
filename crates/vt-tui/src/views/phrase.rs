@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::constants::{BEAT_STEPS, FX_SLOTS};
 use vt_model::selection::Scope;
 use vt_model::song::{Phrase, Track};
-use vt_model::step::{Mark, Note, Step};
+use vt_model::step::{FxCommand, Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
 use crate::input::mode::Mode;
@@ -26,8 +26,11 @@ pub const ROWS_AROUND_STEPS: u16 = 3;
 /// Room for a slot's command on screen, a label of up to 5 characters like `2FDBK`, and a gap.
 const COMMAND_WIDTH: usize = 6;
 
-/// A slot on screen: its command and value, its mark, and the gap before the next.
-const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + MARK_WIDTH + 1;
+/// A slot on screen: its command, coarse and fine value, its mark, and the gap before the next.
+const SLOT_WIDTH: usize = COMMAND_WIDTH + 2 + FINE_WIDTH + MARK_WIDTH + 1;
+
+/// The fine part of a value, after its coarse digits.
+const FINE_WIDTH: usize = 2;
 
 /// The gap and mark after a slot's value.
 const MARK_WIDTH: usize = 2;
@@ -57,7 +60,17 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
         } else {
             ' '
         };
-        text.push_str(&format!(" {name:<COMMAND_WIDTH$}{:02X} {mark}", slot.value));
+        // Only a continuous setting's value has a fine part. An event's or a list's is whole, and
+        // an empty cell has none.
+        let fine = if slot.command.is_some_and(FxCommand::has_fine) {
+            format!("{:02X}", slot.fine())
+        } else {
+            "  ".to_owned()
+        };
+        text.push_str(&format!(
+            " {name:<COMMAND_WIDTH$}{:02X}{fine} {mark}",
+            slot.coarse()
+        ));
     }
     text
 }
@@ -113,7 +126,7 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
     let last = scope.last.min(2 + slots);
     let (start, _) = field_range(Field::of_group(scope.first.min(last)));
     let end = match Field::of_group(last) {
-        Field::FxCommand(slot) => field_range(Field::FxValue(slot)).1 + MARK_WIDTH,
+        Field::FxCommand(slot) => field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH,
         field => field_range(field).1,
     };
     (start.min(length), end.min(length))
@@ -148,7 +161,10 @@ fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
 /// The characters an FX slot takes in a step's text, with its mark.
 fn slot_columns(slot: usize) -> (usize, usize) {
     let (start, _) = field_range(Field::FxCommand(slot));
-    (start, field_range(Field::FxValue(slot)).1 + MARK_WIDTH)
+    (
+        start,
+        field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH,
+    )
 }
 
 /// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
@@ -459,6 +475,29 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::faint()
         };
         let mut styles = vec![body; text.len()];
+        // What's empty is faint, as a code editor dims whitespace, so what's written stands out.
+        let mut empty = Vec::new();
+        if step.note == Note::Empty {
+            empty.push(field_range(Field::Note));
+        }
+        if step.velocity.is_none() {
+            empty.push(field_range(Field::Velocity));
+        }
+        if step.gate.is_none() {
+            empty.push(field_range(Field::Gate));
+        }
+        for (slot, fx) in step.fx.iter().enumerate() {
+            if fx.command.is_none() {
+                empty.push(slot_columns(slot));
+            }
+        }
+        for (start, end) in empty {
+            for style in &mut styles[start..end.min(text.len())] {
+                if style.fg.is_none() {
+                    *style = style.patch(theme::faint());
+                }
+            }
+        }
         if let Note::On(midi) = step.note
             && plays
             && app.scale.on
@@ -485,15 +524,39 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 styles[start - 1..end].fill(style);
             }
         }
-        // A lock for a voice or an effect this track doesn't have now stays, faint, so it isn't
-        // taken for an empty cell and typed over. It plays again when its owner is back.
+        // A lock for a voice or an effect this track doesn't have now stays, grey with no colour
+        // and brighter than an empty cell, so it isn't typed over. It plays again when its owner is
+        // back.
         if let Some(track) = app.track_here() {
             for (slot, fx) in step.fx.iter().enumerate() {
                 if fx.command.is_some_and(|command| !command.exists_on(track)) {
                     let (start, end) = slot_columns(slot);
                     let end = end.min(text.len());
                     if start < end {
-                        styles[start..end].fill(theme::faint());
+                        styles[start..end].fill(theme::dim());
+                    }
+                }
+            }
+        }
+        // A setting's value is in the value colour, its coarse digits bright and bold and its fine
+        // ones set back. An event's is in its own colour, as it isn't a setting. Rows already
+        // coloured keep theirs.
+        for (slot, fx) in step.fx.iter().enumerate() {
+            if fx.command.is_none() {
+                continue;
+            }
+            let hue = if fx.is_value() {
+                theme::MAUVE
+            } else {
+                theme::PEACH
+            };
+            let (start, end) = field_range(Field::FxValue(slot));
+            let coarse = Style::new().fg(hue).add_modifier(Modifier::BOLD);
+            let fine = Style::new().fg(theme::fine(hue));
+            for (range, look) in [(start..end, coarse), (end..end + FINE_WIDTH, fine)] {
+                for style in &mut styles[range] {
+                    if style.fg.is_none() {
+                        *style = style.patch(look);
                     }
                 }
             }
@@ -507,8 +570,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.is_value() && fx.mark == Mark::Lock {
-                let at = field_range(Field::FxValue(slot)).1 + MARK_WIDTH - 1;
-                styles[at] = body.patch(theme::dim());
+                let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
+                if styles[at].fg.is_none() {
+                    styles[at] = styles[at].patch(theme::dim());
+                }
             }
         }
         let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));

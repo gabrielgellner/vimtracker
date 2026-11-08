@@ -1,7 +1,11 @@
 # FX commands
 
 Each step has FX slots to the right of the Velocity column. A slot is a
-command and a two-digit hex value.
+command and a hex value. A setting that sweeps, like `CUT`, shows four digits,
+`CUT   4080`: the bold pair is the value you type, and the dim pair after it is a
+fine part, for dialling in between two values. A list's value, like `1BITS`,
+and an event's, like `DEL`, are only two digits. Events are in their own colour,
+a lock the track doesn't have is grey, and empty cells are faint.
 
 `K` on a slot lists the commands this track has, grouped as an LFO's `Dest` is:
 the filter, the output, the voice, each slot's effect, then the events. It opens
@@ -11,8 +15,9 @@ the value next.
 To type one instead, press `i` on the slot, type its label, such as `CUT` or
 `2FDBK`, and press `Enter`, then type the value, such as `40`. A label that isn't
 on the track opens `K`, searching for what you typed. A slot only takes effect
-once its value is typed. The status line names what the cursor is on, such as
-`Filter: Cut`.
+once its value is typed. The status line names what the cursor is on and its
+value in real units, such as `Filter: Cut, 1.21 kHz`. Typing over a value of the
+same setting keeps its fine part.
 
 ## Values and their marks
 
@@ -35,9 +40,11 @@ until its voice or effect is back.
 A slot's settings can be set from a step, the same way as the rest, while the
 slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`
 or `2FDBK`, and `K` lists them under the effect's group with the names they have
-in an LFO's `Dest`, like `1 Amount`. `Bits` takes whole bits, so `06` is 6 bits,
-and `Type` takes its place in the list, from `00`. A step's setting belongs to
-that effect, so a `2FDBK` lock does nothing once slot 2 holds a Reverb.
+in an LFO's `Dest`, like `1 Amount`. `Bits` takes its place among the depths,
+from 2 bits at `00`, so `04` is 6 bits. A step's setting belongs to that effect,
+and a mode's to that mode, so a `2FDBK` lock does nothing once slot 2 holds a
+Reverb, and a `1BITS` lock waits for `Crush`. A Distort's `Type` isn't set from
+a step, as choosing a mode chooses a sound.
 
 `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback

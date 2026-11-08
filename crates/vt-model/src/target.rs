@@ -32,7 +32,7 @@ const TRACK_ORDER: [SettingId; 7] = [
 
 impl SettingId {
     /// Whether this track has it now: a voice's settings while it plays that voice, and an
-    /// effect's while that effect is in its slot. A fixed track has no sound of its own to filter
+    /// effect's while that effect is in its slot, in a mode that has it. A fixed track has no sound of its own to filter
     /// or tune, and sends nowhere, and the master has no pan.
     pub fn exists_on(self, track: &Track) -> bool {
         match self.owner() {
@@ -40,10 +40,13 @@ impl SettingId {
             (Owner::Track, _) if self == Self::PAN => track.kind != TrackKind::Master,
             (Owner::Track, _) => track.is_sound(),
             (Owner::Voice(voice), _) => track.voice() == Some(voice),
-            (Owner::Slot { slot, effect }, _) => track
-                .inserts
-                .get(slot)
-                .is_some_and(|insert| Effect::of(*insert) == Some(effect)),
+            (Owner::Slot { slot, effect }, at) => track.inserts.get(slot).is_some_and(|insert| {
+                Effect::of(*insert) == Some(effect)
+                    && insert
+                        .params()
+                        .iter()
+                        .any(|param| param.setting == effect.params()[at].setting)
+            }),
             (Owner::Lfo(_), _) => true,
         }
     }
@@ -53,20 +56,13 @@ impl SettingId {
         self.entry().label.is_some()
     }
 
-    /// Its name on this track, where an effect's setting reads as what's in the slot shows it, as
-    /// Distort's Amount reads as Bits on Crush. One the track doesn't have now says so.
+    /// Its name on this track. One the track doesn't have now says so.
     pub fn name_on(self, track: &Track) -> String {
         let here = self.exists_on(track);
         match self.owner() {
             // A slot's setting with the effect gone says only which slot, so it fits a column.
             (Owner::Slot { slot, .. }, _) if !here => format!("{} ---", slot + 1),
-            (Owner::Slot { slot, .. }, at) => {
-                let shown = track.inserts[slot]
-                    .params()
-                    .get(at)
-                    .map_or(self.name(), |param| param.name);
-                format!("{} {shown}", slot + 1)
-            }
+            (Owner::Slot { slot, .. }, _) => format!("{} {}", slot + 1, self.name()),
             (Owner::Lfo(lfo), _) => format!("L{} {}", lfo + 1, self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
@@ -84,7 +80,8 @@ impl SettingId {
         }
     }
 
-    /// What's on a track to choose from, in order: its own, its machine's, and its slots' effects'.
+    /// What's on a track to choose from, in order: its own, its machine's, and its slots' effects',
+    /// in the modes they're in.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let mut settings: Vec<Self> = TRACK_ORDER
             .into_iter()
@@ -97,7 +94,9 @@ impl SettingId {
         for slot in 0..INSERTS {
             if let Some(effect) = Effect::of(track.inserts[slot]) {
                 settings.extend(
-                    (0..effect.params().len()).filter_map(|at| Self::slot(slot, effect, at)),
+                    (0..effect.params().len())
+                        .filter_map(|at| Self::slot(slot, effect, at))
+                        .filter(|id| id.exists_on(track)),
                 );
             }
         }
@@ -209,15 +208,26 @@ mod tests {
     }
 
     #[test]
-    fn distorts_amount_reads_as_bits_on_crush() {
+    fn a_distorts_modes_each_have_their_own_setting() {
         let mut track = Track::default();
         track.inserts[0] = Insert::ALL[1];
         let amount = SettingId::slot(0, Effect::Distort, 1).unwrap();
-        assert_eq!(amount.name_on(&track), "1 Amount");
+        let bits = SettingId::slot(0, Effect::Distort, 2).unwrap();
+        assert_eq!(
+            (amount.name_on(&track), bits.name_on(&track)),
+            ("1 Amount".into(), "1 ---".into())
+        );
         if let Insert::Distort(distort) = &mut track.inserts[0] {
             distort.kind = DistortType::Crush;
         }
-        assert_eq!(amount.name_on(&track), "1 Bits");
+        assert_eq!(bits.name_on(&track), "1 Bits");
+        assert!(!amount.exists_on(&track), "Crush has no Amount");
+        let offered = FxCommand::on_track(&track);
+        assert!(offered.contains(&FxCommand::Set(bits)));
+        assert!(!offered.contains(&FxCommand::Set(amount)));
+        let kind = SettingId::slot(0, Effect::Distort, 0).unwrap();
+        assert!(!kind.lockable(), "a mode isn't locked from a step");
+        assert_eq!(FxCommand::typed("1type", &track), None);
     }
 
     #[test]

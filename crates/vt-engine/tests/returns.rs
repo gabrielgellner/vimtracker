@@ -78,6 +78,7 @@ fn hard() -> Insert {
         amount: 0xFF,
         mix: 0xFF,
         gain: 0xE0,
+        ..Distort::DEFAULT
     })
 }
 

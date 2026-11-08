@@ -340,21 +340,24 @@ const LARGE_HEX: i32 = 0x10;
 /// How much one large step is for a note.
 const LARGE_NOTE: i32 = 12;
 
-/// Move an FX value, within what its command takes. `RET`'s two digits mean separate things, a
-/// fade and a rate, so each moves alone and never carries into the other.
-fn shift_fx(command: FxCommand, value: u8, by: i32, kind: Shift) -> u8 {
+/// Move an FX value's coarse digits, within what its command takes, keeping its fine part. `RET`'s
+/// two digits mean separate things, a fade and a rate, so each moves alone and never carries into
+/// the other.
+fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
     let large = kind == Shift::Large;
+    let coarse = slot.coarse();
     if command == FxCommand::Ret {
-        let (fade, rate) = (i32::from(value >> 4), i32::from(value & 0x0F));
+        let (fade, rate) = (i32::from(coarse >> 4), i32::from(coarse & 0x0F));
         let (fade, rate) = if large {
             ((fade + by).clamp(0, 0x0F), rate)
         } else {
             (fade, (rate + by).clamp(0, 0x0F))
         };
-        return (fade << 4 | rate) as u8;
+        return ((fade << 4 | rate) as u16) << 8;
     }
     let by = if large { by * LARGE_HEX } else { by };
-    (i32::from(value) + by).clamp(0, i32::from(command.highest())) as u8
+    let coarse = (i32::from(coarse) + by).clamp(0, i32::from(command.highest())) as u16;
+    (coarse << 8 | u16::from(slot.fine())).min(command.highest_value())
 }
 
 /// Move the covered values of a step, clamping to each field's range. With a scale, a note moves
@@ -396,7 +399,7 @@ pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift, scale: Op
         if scope.covers(FX_GROUP + index)
             && let Some(command) = slot.command
         {
-            slot.value = shift_fx(command, slot.value, by, kind);
+            slot.value = shift_fx(command, *slot, by, kind);
         }
     }
 }

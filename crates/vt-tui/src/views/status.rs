@@ -9,6 +9,7 @@ use vt_engine::engine::Transport;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 
+use vt_model::settings::SettingId;
 use vt_model::step::FxCommand;
 
 use crate::app::{App, Field};
@@ -98,6 +99,33 @@ pub fn column_name(app: &App) -> String {
             }
         },
     }
+}
+
+/// The value under the cursor in its setting's units, like `1.21 kHz`, where it's a setting the
+/// track has: a lock in the grid, or a row of the track page.
+pub fn value_shown(app: &App) -> Option<String> {
+    let track = app.track_here()?;
+    let (id, value) = match app.view {
+        View::Phrase => match app.cursor.field {
+            Field::FxCommand(slot) | Field::FxValue(slot) => {
+                let cell = app.current_slot(slot)?;
+                let id = cell.command?.setting()?;
+                (id, cell.value)
+            }
+            _ => return None,
+        },
+        View::Track | View::Mixer => {
+            let (id, value) = app.track_control().value_on(track)?;
+            (id, u16::from(value) << 8)
+        }
+        _ => return None,
+    };
+    id.exists_on(track).then(|| shown(id, value))
+}
+
+/// A value of a setting in its units.
+fn shown(id: SettingId, value: u16) -> String {
+    id.entry().kind.shown(value)
 }
 
 /// A grid size as a note division where it is one, or otherwise in steps.
@@ -190,7 +218,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let status = Line::from(vec![
         Span::styled(format!(" {} ", app.key_scope().label()), mode_style),
-        Span::styled(format!(" {} ", column_name(app)), theme::selected()),
+        Span::styled(
+            match value_shown(app) {
+                Some(value) => format!(" {}, {value} ", column_name(app)),
+                None => format!(" {} ", column_name(app)),
+            },
+            theme::selected(),
+        ),
         Span::raw(format!(
             " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),

@@ -344,11 +344,17 @@ pub enum TrackControl {
     HighCut,
 }
 
-/// An FX slot with its value within what its command takes.
+/// An FX slot with its value within what its command takes, and a fine part only on what has
+/// one.
 fn snapped(slot: FxSlot) -> FxSlot {
-    let highest = slot.command.map_or(0xFF, FxCommand::highest);
+    let highest = slot.command.map_or(0xFF00, FxCommand::highest_value);
+    let value = if slot.command.is_some_and(FxCommand::has_fine) {
+        slot.value
+    } else {
+        slot.value & 0xFF00
+    };
     FxSlot {
-        value: slot.value.min(highest),
+        value: value.min(highest),
         ..slot
     }
     .with_valid_mark()
@@ -485,11 +491,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);
                     }
+                    // Typing coarse digits keeps the fine part.
                     Fill::SlotValue(slot, value) => {
                         let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
                         if slot.command.is_some() {
                             *slot = snapped(FxSlot {
-                                value: *value,
+                                value: u16::from(*value) << 8 | u16::from(slot.fine()),
                                 ..*slot
                             });
                         }

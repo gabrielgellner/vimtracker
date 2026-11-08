@@ -148,7 +148,7 @@ fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
 /// The choice a machine's setting that's a list is on, such as 6-op's patch, shown on its row.
 fn choice_name(control: Control, track: &Track) -> Option<String> {
     let id = control.setting_on(track)?;
-    let Kind::List { choices, .. } = id.entry().kind else {
+    let Kind::Stepped { choices, .. } = id.entry().kind else {
         return None;
     };
     choices
@@ -166,9 +166,9 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Setting(_) => {
             let id = control.setting_on(track)?;
             match id.entry().kind {
-                Kind::Level { .. } => level(track.setting(id)),
-                Kind::Centred => Some((track.setting(id), true)),
-                Kind::List { .. } => None,
+                Kind::Continuous { middle: false, .. } => level(track.setting(id)),
+                Kind::Continuous { middle: true, .. } => Some((track.setting(id), true)),
+                Kind::Stepped { .. } => None,
             }
         }
         Control::Base(TrackControl::Cutoff) => level(track.cutoff),

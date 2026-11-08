@@ -9,7 +9,7 @@ use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
 use vt_model::selection::Motion;
-use vt_model::settings::{Kind, SettingId, voice_entries};
+use vt_model::settings::{Effect, Kind, SettingId, voice_entries};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
 use crate::app::{App, Entry};
@@ -317,6 +317,32 @@ impl Control {
             | Self::Swing
             | Self::Base(TrackControl::Pan | TrackControl::SendA | TrackControl::SendB) => 1,
             _ => 0,
+        }
+    }
+
+    /// The setting this is on this track, and its value there, for the status line to show in
+    /// its units. The filters' drive and cuts aren't settings yet.
+    pub fn value_on(self, track: &Track) -> Option<(SettingId, u8)> {
+        let base = |id: SettingId, value: u8| Some((id, value));
+        match self {
+            Self::Setting(_) => self.setting_on(track).map(|id| (id, track.setting(id))),
+            Self::Level => base(SettingId::VOL, track.level),
+            Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
+            Self::Base(TrackControl::Resonance) => base(SettingId::RES, track.resonance),
+            Self::Base(TrackControl::Pan) => base(SettingId::PAN, track.pan),
+            Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
+            Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
+            Self::InsertParam(slot, param) => {
+                let insert = track.inserts[slot];
+                let setting = insert.params().get(param)?.setting;
+                let effect = Effect::of(insert)?;
+                let at = effect
+                    .params()
+                    .iter()
+                    .position(|found| found.setting == setting)?;
+                Some((SettingId::slot(slot, effect, at)?, insert.value(param)))
+            }
+            _ => None,
         }
     }
 
@@ -1013,7 +1039,7 @@ impl App {
             return;
         }
         if let Some(id) = self.track_control().setting_on(&self.page_track())
-            && let Kind::List { choices, .. } = id.entry().kind
+            && let Kind::Stepped { choices, .. } = id.entry().kind
         {
             self.open_setting_picker(id, choices);
             return;

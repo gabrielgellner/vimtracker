@@ -617,7 +617,7 @@ impl App {
             Field::Velocity => Fill::Velocity(value.velocity),
             Field::Gate => Fill::Gate(value.gate),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
-            Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].value),
+            Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].coarse()),
         };
         self.edit_across(range, tracks, |track, phrase, range| Action::Fill {
             track,

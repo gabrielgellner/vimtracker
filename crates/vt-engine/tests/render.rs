@@ -129,7 +129,7 @@ fn rows_set_the_length_and_start_from_the_top() {
 fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
     // A delay tail only sounds at the top if something came before it.
     let mut texts = vec!["--- -- --- --- ---"; 16];
-    texts[15] = "C-4 -- sna:FF --- ---";
+    texts[15] = "C-4 -- sna:F8 --- ---";
     let out = render(song(&texts), RenderOptions::default());
     assert!(
         peak(&out[..2 * 18_000]) > 0.01,
@@ -142,7 +142,7 @@ fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
 fn the_tail_extends_the_render_and_ends_at_silence() {
     // A hit on the last step is still ringing when the capture ends.
     let mut texts = vec!["--- -- --- --- ---"; 16];
-    texts[15] = "C-4 -- snb:FF --- ---";
+    texts[15] = "C-4 -- snb:F8 --- ---";
     let plain = render(song(&texts), RenderOptions::default());
     let tailed = render(
         song(&texts),

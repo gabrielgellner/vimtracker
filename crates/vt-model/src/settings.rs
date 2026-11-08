@@ -3,8 +3,8 @@
 //! long name for finding it, a short label for the grid, its kind and its default. A setting's
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
-use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
-use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS};
+use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
+use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS, Setting};
 use crate::lfo::LFOS_PER_TRACK;
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, SynthVoice};
@@ -13,28 +13,86 @@ use crate::step::FxCommand;
 /// The most settings a machine has.
 pub const MAX_MACHINE_SETTINGS: usize = 4;
 
-/// What values a setting takes.
+/// What values a setting takes, and what they mean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
-    /// From `00` up to a top: `FF`, or the level scale's top for volume, sends and gain.
-    Level { top: u8 },
-    /// Either side of `80`, like pan.
-    Centred,
-    /// A place in a list of choices, which goes round past the end or stops.
-    List {
+    /// A value that sweeps from `00` up to a top: `FF`, or the level scale's top for volume, sends
+    /// and gain. A centred one has its middle at `80`, like pan.
+    Continuous { top: u8, middle: bool, units: Units },
+    /// One of a list of choices, which goes round past the end or stops.
+    Stepped {
         choices: &'static [&'static str],
         wraps: bool,
     },
+}
+
+/// How a continuous value reads in real units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Units {
+    /// How far along its range, or either side of the middle.
+    Percent,
+    /// Left or right of centre.
+    Pan,
+    /// The filter's cutoff, from 20 Hz to 20 kHz evenly in pitch.
+    Hertz,
+    /// The level scale, where `E0` is 0 dB and `00` is silent.
+    Decibels,
 }
 
 impl Kind {
     /// The highest value it takes: a list's last choice, or a level's top.
     pub fn top(self) -> u8 {
         match self {
-            Self::Level { top } => top,
-            Self::Centred => 0xFF,
-            Self::List { choices, .. } => choices.len().saturating_sub(1).min(0xFF) as u8,
+            Self::Continuous { top, .. } => top,
+            Self::Stepped { choices, .. } => choices.len().saturating_sub(1).min(0xFF) as u8,
         }
+    }
+
+    /// Whether it has a middle that bars draw from.
+    pub fn centred(self) -> bool {
+        matches!(self, Self::Continuous { middle: true, .. })
+    }
+
+    /// A value in real units, for the status line: `1.21 kHz`, `-6.0 dB`, `25 % L` or a choice's
+    /// name. `value` has a coarse byte and a fine one, so `4080` is half a step above `40`.
+    pub fn shown(self, value: u16) -> String {
+        let coarse = f64::from(value) / 256.0;
+        match self {
+            Self::Stepped { choices, .. } => choices
+                .get(usize::from(value >> 8))
+                .map_or_else(String::new, |choice| (*choice).to_owned()),
+            Self::Continuous { units, middle, top } => match units {
+                Units::Hertz => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
+                Units::Decibels if value == 0 => "-inf dB".to_owned(),
+                Units::Decibels => format!(
+                    "{:+.1} dB",
+                    (coarse - f64::from(UNITY_LEVEL)) * f64::from(DB_PER_LEVEL)
+                ),
+                Units::Pan => match side(coarse) {
+                    side if side.abs() < 0.005 => "Centre".to_owned(),
+                    side if side < 0.0 => format!("{:.0} % L", side.abs() * 100.0),
+                    side => format!("{:.0} % R", side * 100.0),
+                },
+                Units::Percent if middle => format!("{:+.0} %", side(coarse) * 100.0),
+                Units::Percent => format!("{:.0} %", coarse / f64::from(top) * 100.0),
+            },
+        }
+    }
+}
+
+/// How far a centred value is to either side, from -1 to 1. The sides have their own scales, as
+/// there are 128 values below the middle and 127 above.
+fn side(coarse: f64) -> f64 {
+    let from_middle = coarse - 128.0;
+    from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 }
+}
+
+/// A frequency as it reads best: `440 Hz` or `1.21 kHz`.
+fn hertz(hertz: f64) -> String {
+    match hertz {
+        hertz if hertz < 1000.0 => format!("{hertz:.0} Hz"),
+        hertz if hertz < 10_000.0 => format!("{:.2} kHz", hertz / 1000.0),
+        hertz => format!("{:.1} kHz", hertz / 1000.0),
     }
 }
 
@@ -56,7 +114,11 @@ const fn level(key: &'static str, name: &'static str, label: &'static str, defau
         key,
         name,
         label: Some(label),
-        kind: Kind::Level { top: 0xFF },
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
         default,
     }
 }
@@ -66,7 +128,7 @@ const fn centred(key: &'static str, name: &'static str, label: &'static str) -> 
         key,
         name,
         label: Some(label),
-        kind: Kind::Centred,
+        kind: CENTRED,
         default: 0x80,
     }
 }
@@ -78,16 +140,41 @@ const fn on_level_scale(
     default: u8,
 ) -> Entry {
     Entry {
-        kind: Kind::Level { top: MAX_LEVEL },
+        kind: ON_LEVEL_SCALE,
         ..level(key, name, label, default)
     }
 }
 
+const CENTRED: Kind = Kind::Continuous {
+    top: 0xFF,
+    middle: true,
+    units: Units::Percent,
+};
+const ON_LEVEL_SCALE: Kind = Kind::Continuous {
+    top: MAX_LEVEL,
+    middle: false,
+    units: Units::Decibels,
+};
+
 /// The track's own, in the order the table keeps them.
 const TRACK: [Entry; 7] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
-    centred("pan", "Pan", "PAN"),
-    level("cut", "Cut", "CUT", 0xFF),
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Pan,
+        },
+        ..centred("pan", "Pan", "PAN")
+    },
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Hertz,
+        },
+        ..level("cut", "Cut", "CUT", 0xFF)
+    },
     level("res", "Res", "RES", 0x00),
     on_level_scale("sna", "Send A", "SNA", 0x00),
     on_level_scale("snb", "Send B", "SNB", 0x00),
@@ -95,7 +182,7 @@ const TRACK: [Entry; 7] = [
         key: "pitch",
         name: "Pitch",
         label: None,
-        kind: Kind::Centred,
+        kind: CENTRED,
         default: 0x80,
     },
 ];
@@ -131,7 +218,7 @@ const SIX_OP: [Entry; 4] = [
         key: "patch",
         name: "Patch",
         label: Some("PAT"),
-        kind: Kind::List {
+        kind: Kind::Stepped {
             choices: &PATCH_NAMES,
             wraps: false,
         },
@@ -224,8 +311,8 @@ pub enum Effect {
 impl Effect {
     pub const ALL: [Self; 3] = [Self::Distort, Self::Delay, Self::Reverb];
 
-    /// Its settings, in the order its slot keeps them. Distort's Amount is shown as Bits on
-    /// Crush, and is the same setting.
+    /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
+    /// show only their own.
     pub const fn params(self) -> &'static [Param] {
         match self {
             Self::Distort => &DISTORT_PARAMS,
@@ -266,13 +353,19 @@ fn param_entry(param: &Param) -> Entry {
     Entry {
         key: param.key,
         name: param.name,
-        label: Some(param.label),
+        label: param.label,
         kind: if param.choices.is_empty() {
-            Kind::Level {
+            Kind::Continuous {
                 top: param.setting.highest(),
+                middle: false,
+                units: if param.setting == Setting::Gain {
+                    Units::Decibels
+                } else {
+                    Units::Percent
+                },
             }
         } else {
-            Kind::List {
+            Kind::Stepped {
                 choices: param.choices,
                 wraps: param.wraps,
             }
@@ -286,14 +379,18 @@ const LFO: [Entry; 2] = [
         key: "depth",
         name: "Depth",
         label: None,
-        kind: Kind::Centred,
+        kind: CENTRED,
         default: 0x80,
     },
     Entry {
         key: "phase",
         name: "Phase",
         label: None,
-        kind: Kind::Level { top: 0xFF },
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
         default: 0x00,
     },
 ];
@@ -605,7 +702,9 @@ mod tests {
         for effect in Effect::ALL {
             let mut seen = HashSet::new();
             for at in 0..effect.params().len() {
-                let label = SettingId::slot(0, effect, at).unwrap().label().unwrap();
+                let Some(label) = SettingId::slot(0, effect, at).unwrap().label() else {
+                    continue;
+                };
                 assert!(seen.insert(label.clone()), "{label} twice on {effect:?}");
             }
         }
@@ -615,7 +714,7 @@ mod tests {
     fn a_voices_defaults_are_its_own() {
         let six_op = |at| SettingId::voice(SynthVoice::SixOp, at).unwrap().entry();
         assert_eq!(PATCH_NAMES[usize::from(six_op(0).default)], "E.PIANO 1");
-        assert!(matches!(six_op(0).kind, Kind::List { choices, .. } if choices.len() == 96));
+        assert!(matches!(six_op(0).kind, Kind::Stepped { choices, .. } if choices.len() == 96));
         assert_eq!(six_op(1).default, 0x80, "Bright as the patch was made");
         let string = SettingId::voice(SynthVoice::String, 0).unwrap().entry();
         assert_eq!(string.default, 0x40);
@@ -627,6 +726,26 @@ mod tests {
             DEFAULT_ACCENT
         );
         assert_eq!(SettingId::voice(SynthVoice::VirtualAnalog, 3), None);
+    }
+
+    #[test]
+    fn a_value_reads_in_its_settings_units() {
+        let shown = |id: SettingId, value: u16| id.entry().kind.shown(value);
+        assert_eq!(shown(SettingId::CUT, 0xFF00), "20.0 kHz");
+        assert_eq!(shown(SettingId::CUT, 0x0000), "20 Hz");
+        assert_eq!(shown(SettingId::VOL, 0xE000), "+0.0 dB");
+        assert_eq!(shown(SettingId::VOL, 0xC000), "-8.0 dB");
+        assert_eq!(shown(SettingId::VOL, 0x0000), "-inf dB");
+        assert_eq!(shown(SettingId::PAN, 0x8000), "Centre");
+        assert_eq!(shown(SettingId::PAN, 0x0000), "100 % L");
+        assert_eq!(shown(SettingId::PAN, 0xFF00), "100 % R");
+        assert_eq!(shown(SettingId::RES, 0x8000), "50 %");
+        let patch = SettingId::voice(SynthVoice::SixOp, 0).unwrap();
+        assert_eq!(shown(patch, 0x2000), "E.PIANO 1");
+        let detune = SettingId::voice(SynthVoice::VirtualAnalog, 0).unwrap();
+        assert_eq!(shown(detune, 0x8000), "+0 %");
+        let gain = SettingId::slot(0, Effect::Reverb, 6).unwrap();
+        assert_eq!(shown(gain, 0xE000), "+0.0 dB");
     }
 
     #[test]

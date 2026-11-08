@@ -96,6 +96,12 @@ pub fn dimmed(color: Color) -> Color {
     mix(color, BASE, 0.55)
 }
 
+/// A value's fine digits: its colour set back toward the FX band, but still brighter than
+/// what's faint.
+pub fn fine(color: Color) -> Color {
+    mix(color, SURFACE0, 0.3)
+}
+
 /// A colour some share of the way from one to another.
 fn mix(from: Color, to: Color, share: f32) -> Color {
     let (Color::Rgb(r0, g0, b0), Color::Rgb(r1, g1, b1)) = (from, to) else {

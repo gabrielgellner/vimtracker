@@ -86,7 +86,7 @@ pub struct LiveValues {
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
 #[derive(Debug, Clone, Copy)]
 struct Glide {
-    from: u8,
+    from: u16,
     to: FxSlot,
     start_tick: f64,
     ticks: f64,
@@ -94,16 +94,18 @@ struct Glide {
 
 /// What can set one value. What's heard is the glide if there is one, then the lock, then the base.
 #[derive(Debug, Clone, Copy)]
+/// A value's layers, each with a coarse byte and a fine one, as steps give them.
 struct ValueLayers {
-    base: u8,
-    lock: Option<u8>,
+    base: u16,
+    lock: Option<u16>,
     glide: Option<Glide>,
 }
 
 impl ValueLayers {
+    /// A base from the track, which has no fine part.
     fn at(base: u8) -> Self {
         Self {
-            base,
+            base: u16::from(base) << 8,
             lock: None,
             glide: None,
         }
@@ -256,12 +258,9 @@ pub fn base_of(id: SettingId, track: &Track) -> u8 {
         (Owner::Voice(_), _) => track.setting(id),
         (Owner::Slot { slot, effect }, at) => {
             let insert = track.inserts[slot];
+            // A distortion keeps every mode's settings, so one its mode doesn't show still reads.
             if Effect::of(insert) == Some(effect) {
-                insert
-                    .params()
-                    .get(at)
-                    .and_then(|param| insert.read(param.setting))
-                    .unwrap_or(0)
+                insert.read(effect.params()[at].setting).unwrap_or(0)
             } else {
                 id.entry().default
             }
@@ -271,8 +270,14 @@ pub fn base_of(id: SettingId, track: &Track) -> u8 {
 }
 
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
-fn heard(layers: &ValueLayers) -> u8 {
-    layers.lock.unwrap_or(layers.base)
+/// On the `00` to `FF` scale, with the fine part as the fraction.
+fn heard(layers: &ValueLayers) -> f32 {
+    scaled(layers.lock.unwrap_or(layers.base))
+}
+
+/// A value with a fine part on the `00` to `FF` scale, so `4080` is 64.5.
+fn scaled(value: u16) -> f32 {
+    f32::from(value) / 256.0
 }
 
 impl TrackState {
@@ -384,7 +389,7 @@ impl TrackState {
             if let Some(voice) = voice {
                 for at in 0..MAX_MACHINE_SETTINGS {
                     if let Some(id) = SettingId::voice(voice, at) {
-                        self.synth[at] = f32::from(heard(&self.values[id.index()])) / 255.0;
+                        self.synth[at] = heard(&self.values[id.index()]) / 255.0;
                     }
                 }
             }
@@ -400,7 +405,7 @@ impl TrackState {
             };
             for at in 0..effect.params().len() {
                 if let Some(id) = SettingId::slot(slot, effect, at) {
-                    self.slot_values[slot][at] = f32::from(heard(&self.values[id.index()]));
+                    self.slot_values[slot][at] = heard(&self.values[id.index()]);
                 }
             }
         }
@@ -490,12 +495,21 @@ impl TrackState {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
             let effect = Effect::of(insert);
-            for (param, found) in insert.params().iter().enumerate() {
-                let id = effect.and_then(|effect| SettingId::slot(slot, effect, param));
+            // A mode shows some of its effect's settings, so each is found by what it is.
+            for found in insert.params() {
                 let setting = found.setting;
-                let added = id.map_or(0.0, |id| offsets[id.index()]) * setting.span();
+                let Some((at, id)) = effect.and_then(|effect| {
+                    let at = effect
+                        .params()
+                        .iter()
+                        .position(|param| param.setting == setting)?;
+                    Some((at, SettingId::slot(slot, effect, at)?))
+                }) else {
+                    continue;
+                };
+                let added = offsets[id.index()] * setting.span();
                 self.slot_moving[slot] |= added != 0.0;
-                let value = self.slot_values[slot][param] + added;
+                let value = self.slot_values[slot][at] + added;
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
@@ -644,7 +658,7 @@ impl TrackState {
     }
 
     /// Run a lock or hold value from a step. Anything else on that value gives way to it.
-    pub fn set_value(&mut self, id: SettingId, value: u8, mark: Mark) {
+    pub fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
         let layers = &mut self.values[id.index()];
         layers.glide = None;
         if mark == Mark::Hold {
@@ -653,7 +667,7 @@ impl TrackState {
         } else {
             layers.lock = Some(value);
         }
-        self.write_value(id, f32::from(value));
+        self.write_value(id, scaled(value));
     }
 
     /// Run a glide value from a step, toward the next value of its parameter if there is one.
@@ -661,7 +675,7 @@ impl TrackState {
     pub fn start_glide(
         &mut self,
         id: SettingId,
-        value: u8,
+        value: u16,
         to: Option<(FxSlot, f64)>,
         now: SongTime,
     ) {
@@ -684,7 +698,7 @@ impl TrackState {
             let layers = &mut self.values[id.index()];
             if layers.lock.take().is_some() && layers.glide.is_none() {
                 let base = layers.base;
-                self.write_value(id, f32::from(base));
+                self.write_value(id, scaled(base));
             }
         }
     }
@@ -692,7 +706,7 @@ impl TrackState {
     /// The track page changed a value. A lock or glide on top stays until it ends.
     pub fn set_base(&mut self, id: SettingId, value: u8) {
         let layers = &mut self.values[id.index()];
-        layers.base = value;
+        layers.base = u16::from(value) << 8;
         if layers.lock.is_none() && layers.glide.is_none() {
             self.write_value(id, f32::from(value));
         }
@@ -706,7 +720,7 @@ impl TrackState {
             };
             let progress = (now.tick - glide.start_tick) / glide.ticks;
             if progress < 1.0 {
-                let (from, to) = (f32::from(glide.from), f32::from(glide.to.value));
+                let (from, to) = (scaled(glide.from), scaled(glide.to.value));
                 self.write_value(id, from + (to - from) * progress.max(0.0) as f32);
             } else {
                 // Its row hasn't run, as a chain moved on, so this takes that row's place.
@@ -719,7 +733,8 @@ impl TrackState {
         }
     }
 
-    /// Set what's heard for a value, on the `00` to `FF` scale.
+    /// Set what's heard for a value, on the `00` to `FF` scale, with any fine part as the
+    /// fraction.
     /// A setting of a voice or an effect that isn't loaded keeps its value for when it is, and
     /// isn't heard.
     fn write_value(&mut self, id: SettingId, value: f32) {
@@ -1010,7 +1025,7 @@ mod tests {
         state.load(&on(SynthVoice::Kick));
         let kick_decay = state.synth_settings().morph;
         let string_decay = SettingId::voice(SynthVoice::String, 2).unwrap();
-        state.set_value(string_decay, 0x10, Mark::Hold);
+        state.set_value(string_decay, 0x1000, Mark::Hold);
         assert_eq!(
             state.synth_settings().morph,
             kick_decay,
@@ -1021,6 +1036,20 @@ mod tests {
     }
 
     #[test]
+    fn a_values_fine_part_is_heard_between_its_coarse_steps() {
+        let mut state = TrackState::new(0, 0);
+        state.load(&Track::default());
+        state.set_value(SettingId::CUT, 0x4080, Mark::Lock);
+        assert_eq!(state.cutoff.target, 64.5 / 255.0);
+        state.set_value(SettingId::CUT, 0x4000, Mark::Lock);
+        assert_eq!(
+            state.cutoff.target,
+            0x40 as f32 / 255.0,
+            "the same as before fine parts"
+        );
+    }
+
+    #[test]
     fn a_value_for_an_effect_not_in_its_slot_waits_for_it() {
         use vt_model::insert::Insert;
         let mut state = TrackState::new(0, 0);
@@ -1028,7 +1057,7 @@ mod tests {
         track.inserts[1] = Insert::ALL[3];
         state.load(&track);
         let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
-        state.set_value(feedback, 0x30, Mark::Hold);
+        state.set_value(feedback, 0x3000, Mark::Hold);
         assert_ne!(
             state.slot_values[1][1], 0x30 as f32,
             "the Reverb doesn't hear it"
