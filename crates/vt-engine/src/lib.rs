@@ -4,6 +4,7 @@ pub mod dsp;
 pub mod engine;
 pub mod link;
 pub mod mixer;
+mod preview;
 pub mod published;
 pub mod render;
 pub mod rng;

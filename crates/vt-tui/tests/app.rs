@@ -90,12 +90,12 @@ fn entering_steps_down(app: &mut App) {
 #[test]
 fn insert_mode_writes_notes_where_the_cursor_is() {
     let (mut app, _rt) = app();
-    press(&mut app, "i");
+    tap(&mut app, "i");
     assert_eq!(app.mode, Mode::Insert);
-    press(&mut app, "a");
+    tap(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     assert_eq!(app.cursor.step, 0, "it stays, to play another in");
-    press(&mut app, "k");
+    tap(&mut app, "k");
     assert_eq!(notes(&app)[0], Note::On(72));
     special(&mut app, KeyCode::Backspace);
     assert_eq!(notes(&app)[0], Note::Empty, "Backspace clears it there");
@@ -108,11 +108,11 @@ fn insert_mode_writes_notes_where_the_cursor_is() {
 fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     let (mut app, _rt) = app();
     let depth = app.history.undo_depth();
-    press(&mut app, "i;");
+    tap(&mut app, "i;");
     assert!(app.auto_jump);
     assert_eq!(app.history.undo_depth(), depth, "it isn't an edit to undo");
     assert!(app.dirty, "but it is saved");
-    press(&mut app, "ak1");
+    tap(&mut app, "ak1");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(60));
     assert_eq!(written[4], Note::On(72));
@@ -122,13 +122,13 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     special(&mut app, KeyCode::Backspace);
     assert_eq!(app.cursor.step, 8);
     assert_eq!(notes(&app)[8], Note::Empty);
-    press(&mut app, ";");
+    tap(&mut app, ";");
     assert!(!app.auto_jump);
-    press(&mut app, "a");
+    tap(&mut app, "a");
     assert_eq!(app.cursor.step, 8);
 
     // It's kept with the song.
-    press(&mut app, ";");
+    tap(&mut app, ";");
     special(&mut app, KeyCode::Esc);
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
@@ -142,7 +142,7 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
 fn octave_keys_change_entered_notes() {
     let (mut app, _rt) = app();
     entering_steps_down(&mut app);
-    press(&mut app, "izaxxa");
+    tap(&mut app, "izaxxa");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(48));
     assert_eq!(written[1], Note::On(72));
@@ -1251,46 +1251,46 @@ fn an_arrow_drops_a_half_typed_value() {
 #[test]
 fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     let (mut app, _realtime) = app();
-    press(&mut app, "ia");
+    tap(&mut app, "ia");
     assert_eq!(notes(&app)[0], Note::On(60));
-    press(&mut app, "w");
+    tap(&mut app, "w");
     assert_eq!(notes(&app)[0], Note::On(61));
-    press(&mut app, "k");
+    tap(&mut app, "k");
     assert_eq!(notes(&app)[0], Note::On(72));
-    press(&mut app, "xl");
+    tap(&mut app, "xl");
     assert_eq!(notes(&app)[0], Note::On(86), "up to `l`, as in Ableton");
-    press(&mut app, "zz");
+    tap(&mut app, "zz");
     assert_eq!(app.octave, 3);
 
     let velocity = |app: &App| app.song().tracks[0].phrases[&0].steps()[0].velocity;
-    press(&mut app, "a");
+    tap(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x64), "filled in from the default");
-    press(&mut app, "c");
+    tap(&mut app, "c");
     assert_eq!(app.note_velocity, 0x54, "only the top digit moves");
-    press(&mut app, "a");
+    tap(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x54));
     assert_eq!(notes(&app)[0], Note::On(48));
 
     // The whole note is one undo step.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "u");
+    tap(&mut app, "u");
     assert_eq!(velocity(&app), Some(0x64));
 
-    press(&mut app, "i");
-    press(&mut app, "v");
+    tap(&mut app, "i");
+    tap(&mut app, "v");
     assert_eq!(app.note_velocity, 0x64, "back on the default");
-    press(&mut app, "v");
+    tap(&mut app, "v");
     assert_eq!(app.note_velocity, 0x74);
-    press(&mut app, "v");
+    tap(&mut app, "v");
     assert_eq!(app.note_velocity, 0x7F);
-    press(&mut app, "v");
+    tap(&mut app, "v");
     assert_eq!(app.note_velocity, 0x7F);
-    press(&mut app, "c");
+    tap(&mut app, "c");
     assert_eq!(app.note_velocity, 0x74, "steps back on from the top");
-    press(&mut app, "c");
+    tap(&mut app, "c");
     assert_eq!(app.note_velocity, 0x64);
     for _ in 0..12 {
-        press(&mut app, "c");
+        tap(&mut app, "c");
     }
     assert_eq!(app.note_velocity, 0x04);
 }
@@ -1385,9 +1385,9 @@ fn tvol_sets_this_tracks_level_and_can_be_undone() {
 #[test]
 fn a_note_then_right_lands_on_the_next_beat() {
     let (mut app, _realtime) = app();
-    press(&mut app, "i");
+    tap(&mut app, "i");
     for _ in 0..4 {
-        press(&mut app, "a");
+        tap(&mut app, "a");
         special(&mut app, KeyCode::Right);
     }
     assert_eq!(app.cursor.step, 15);
@@ -1420,9 +1420,9 @@ fn shifted(app: &mut App, code: KeyCode) {
 #[test]
 fn right_keeps_a_notes_offset_within_the_beat() {
     let (mut app, _realtime) = app();
-    press(&mut app, "jji");
+    tap(&mut app, "jji");
     for _ in 0..4 {
-        press(&mut app, "a");
+        tap(&mut app, "a");
         special(&mut app, KeyCode::Right);
     }
     assert_eq!(written_steps(&app), [2, 6, 10, 14]);
@@ -1432,9 +1432,9 @@ fn right_keeps_a_notes_offset_within_the_beat() {
 fn left_and_right_move_by_the_grid_from_the_cursor() {
     let (mut app, _realtime) = app();
     command(&mut app, "set skip=8");
-    press(&mut app, "ia");
+    tap(&mut app, "ia");
     special(&mut app, KeyCode::Right);
-    press(&mut app, "a");
+    tap(&mut app, "a");
     assert_eq!(written_steps(&app), [0, 8]);
     special(&mut app, KeyCode::Left);
     assert_eq!(app.cursor.step, 0);
@@ -1442,8 +1442,8 @@ fn left_and_right_move_by_the_grid_from_the_cursor() {
     // With auto-jump the cursor is already on the next cell, and an arrow goes on from there.
     let (mut app, _realtime) = self::app();
     app.auto_jump = true;
-    press(&mut app, "8Gi");
-    press(&mut app, "a");
+    tap(&mut app, "8Gi");
+    tap(&mut app, "a");
     assert_eq!(app.cursor.step, 11);
     special(&mut app, KeyCode::Right);
     assert_eq!(app.cursor.step, 15);
@@ -2398,13 +2398,16 @@ fn the_note_heard_while_typing_uses_the_velocity() {
     let heard = |app: &mut App, rt: &mut Realtime, keys: &str| {
         press(app, keys);
         let level = loudest(rt, 2000);
+        for c in keys.chars() {
+            app.key_released(Key::char(c), Instant::now());
+        }
         let _ = loudest(rt, 96_000);
         level
     };
     let quiet = heard(&mut app, &mut rt, "icccccc");
     assert_eq!(quiet, 0.0, "changing velocity plays nothing");
     let soft = heard(&mut app, &mut rt, "a");
-    press(&mut app, "vvvvvvvv");
+    tap(&mut app, "vvvvvvvv");
     let full = heard(&mut app, &mut rt, "a");
     assert!(soft * 2.0 < full, "{soft} vs {full}");
 }
@@ -5273,7 +5276,7 @@ fn with_a_scale_the_home_row_goes_up_it_from_the_root() {
     command(&mut app, "set scale=dorian");
     assert!(app.scale.on, "setting one turns it on");
     entering_steps_down(&mut app);
-    press(&mut app, "iasdfghjkl");
+    tap(&mut app, "iasdfghjkl");
     assert_eq!(
         written_notes(&app),
         [62, 64, 65, 67, 69, 71, 72, 74, 76].map(Note::On)
@@ -5399,7 +5402,7 @@ fn with_the_scale_off_notes_move_chromatically() {
 fn scale_fit_moves_a_phrases_notes_and_can_be_undone() {
     let (mut app, _realtime) = app();
     entering_steps_down(&mut app);
-    press(&mut app, "iawe");
+    tap(&mut app, "iawe");
     special(&mut app, KeyCode::Esc);
     let before = written_notes(&app);
     assert_eq!(before, [60, 61, 63].map(Note::On));
@@ -5410,7 +5413,7 @@ fn scale_fit_moves_a_phrases_notes_and_can_be_undone() {
     assert_eq!(written_notes(&app), before, "setting a scale moves nothing");
     command(&mut app, "scale fit");
     assert_eq!(written_notes(&app), [60, 60, 62].map(Note::On));
-    press(&mut app, "u");
+    tap(&mut app, "u");
     assert_eq!(written_notes(&app), before);
 }
 
@@ -5449,10 +5452,10 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     };
     let (mut app, _realtime) = app();
     entering_steps_down(&mut app);
-    press(&mut app, "iaw");
+    tap(&mut app, "iaw");
     special(&mut app, KeyCode::Esc);
     // The cursor isn't on these.
-    press(&mut app, "G");
+    tap(&mut app, "G");
     let peach = |app: &App| {
         let buffer = draw(app);
         (0..24)
@@ -6712,6 +6715,104 @@ fn losing_focus_lets_go_of_a_held_note() {
         [Note::On(62)],
         "the next note is written"
     );
+}
+
+/// How many preview voices are sounding after a short block.
+fn voices(realtime: &mut Realtime) -> usize {
+    let _ = loudest(realtime, 480);
+    realtime.engine().previews_sounding()
+}
+
+/// Let go of keys, and wait for what they held to finish its release.
+fn let_go(app: &mut App, realtime: &mut Realtime, keys: &str) {
+    for c in keys.chars() {
+        app.key_released(Key::char(c), Instant::now());
+    }
+    let _ = loudest(realtime, 48_000);
+}
+
+#[test]
+fn the_keyboard_plays_a_chord_and_each_key_lets_go_of_its_own_note() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    press(&mut app, ";ad");
+    assert_eq!(voices(&mut realtime), 2);
+    press(&mut app, "f");
+    assert_eq!(voices(&mut realtime), 3);
+    // The terminal repeats the newest key, and kitty may send an older one's as presses, and
+    // neither starts a note again.
+    press(&mut app, "a");
+    app.key_repeated(Key::char('f'), Instant::now());
+    assert_eq!(voices(&mut realtime), 3);
+    let_go(&mut app, &mut realtime, "d");
+    assert_eq!(voices(&mut realtime), 2, "the other two still sound");
+    assert!(loudest(&mut realtime, 4800) > 0.01);
+    let_go(&mut app, &mut realtime, "af");
+    assert_eq!(voices(&mut realtime), 0);
+
+    // Leaving the keyboard lets go of every note.
+    press(&mut app, "as");
+    assert_eq!(voices(&mut realtime), 2);
+    press(&mut app, ";");
+    assert_eq!(app.mode, Mode::Normal);
+    let _ = loudest(&mut realtime, 48_000);
+    assert_eq!(voices(&mut realtime), 0);
+}
+
+#[test]
+fn in_insert_the_first_key_of_a_chord_writes_and_the_others_only_sound() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    press(&mut app, " 3");
+    entering_steps_down(&mut app);
+    press(&mut app, "ia");
+    assert_eq!(written_notes(&app), [Note::On(60)]);
+    assert_eq!(app.cursor.step, 1);
+    // Keys pressed while it's down sound with it, and neither write nor move on.
+    press(&mut app, "dg");
+    assert_eq!(voices(&mut realtime), 3);
+    assert_eq!(written_notes(&app), [Note::On(60)]);
+    assert_eq!(app.cursor.step, 1);
+    // While any of the chord is down, another key still only sounds.
+    let_go(&mut app, &mut realtime, "a");
+    press(&mut app, "h");
+    assert_eq!(voices(&mut realtime), 3);
+    assert_eq!(written_notes(&app), [Note::On(60)]);
+    let_go(&mut app, &mut realtime, "dgh");
+    assert_eq!(voices(&mut realtime), 0);
+    // With every key up, the next writes.
+    press(&mut app, "s");
+    assert_eq!(written_notes(&app), [Note::On(60), Note::On(62)]);
+    assert_eq!(app.cursor.step, 2);
+
+    let_go(&mut app, &mut realtime, "s");
+
+    // Two keys holding the same note, an octave apart, hold it until both are let go.
+    press(&mut app, "kxa");
+    assert_eq!(voices(&mut realtime), 1, "C-5 twice is one note");
+    let_go(&mut app, &mut realtime, "k");
+    assert_eq!(voices(&mut realtime), 1);
+    let_go(&mut app, &mut realtime, "a");
+    assert_eq!(voices(&mut realtime), 0);
+    press(&mut app, "z");
+    assert_eq!(
+        written_notes(&app),
+        [Note::On(60), Note::On(62), Note::On(72)]
+    );
+
+    // Losing focus lets go of the whole chord, and leaving Insert does too.
+    press(&mut app, "fd");
+    assert_eq!(voices(&mut realtime), 2);
+    assert_eq!(written_notes(&app).len(), 4);
+    app.focus_lost(Instant::now());
+    let _ = loudest(&mut realtime, 48_000);
+    assert_eq!(voices(&mut realtime), 0);
+    press(&mut app, "dg");
+    assert_eq!(written_notes(&app).len(), 5, "the next key after writes");
+    assert_eq!(voices(&mut realtime), 2);
+    special(&mut app, KeyCode::Esc);
+    let _ = loudest(&mut realtime, 48_000);
+    assert_eq!(voices(&mut realtime), 0);
 }
 
 #[test]

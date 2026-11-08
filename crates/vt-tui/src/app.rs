@@ -129,8 +129,20 @@ enum Momentary {
     },
     /// A row is sounding on every track.
     Audition,
-    /// A row outside the loop is sounding this note on the preview voice.
-    AuditionNote(u8),
+    /// A row outside the loop is sounding this note through a track on a preview voice.
+    AuditionNote {
+        track: usize,
+        note: u8,
+    },
+}
+
+/// A key holding a note, on the keyboard or in Insert, and the note it started.
+#[derive(Debug, Clone, Copy)]
+struct HeldNote {
+    key: KeyCode,
+    track: usize,
+    note: u8,
+    velocity: u8,
 }
 
 /// A momentary change, the key it's held by, and when that key went down.
@@ -241,8 +253,9 @@ pub struct App {
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
     repeats_ignored: bool,
-    /// The key holding a note, on the keyboard or in Insert, and that note.
-    held_key: Option<(KeyCode, u8)>,
+    /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
+    /// they play a chord.
+    held_notes: Vec<HeldNote>,
     /// What the key that's down started that lasts while it's held.
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
@@ -363,7 +376,7 @@ impl App {
             auto_jump,
             key_down: None,
             repeats_ignored: false,
-            held_key: None,
+            held_notes: Vec::new(),
             momentary: None,
             started: None,
             entry: Entry::default(),
@@ -451,7 +464,7 @@ impl App {
                         track.solo = was;
                     }
                 }
-                Momentary::Audition | Momentary::AuditionNote(_) => {}
+                Momentary::Audition | Momentary::AuditionNote { .. } => {}
             }
         }
         Arc::new(song)
@@ -634,8 +647,8 @@ impl App {
     pub fn key(&mut self, key: Key, now: Instant) {
         // A real second press comes after a release, so a press of the key that's down is the
         // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
-        // presses.
-        if self.key_down == Some(key.physical()) {
+        // presses. A key holding a note is down too, even after another key has gone down.
+        if self.key_down == Some(key.physical()) || self.holds_note(key) {
             self.key_repeated(key, now);
             return;
         }
@@ -647,24 +660,26 @@ impl App {
     /// A key the terminal repeats while it's held. A transport key acts once however long it's
     /// held, and a note on the keyboard is already held; anything else repeats as a press.
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
-        if self.repeats_ignored && self.key_down == Some(key.physical()) {
+        if (self.repeats_ignored && self.key_down == Some(key.physical())) || self.holds_note(key) {
             return;
         }
         self.press(key, now);
     }
 
-    /// A key let go: the held note ends if it was this key's, and so does what it started that
-    /// lasts while it's held.
+    /// A key let go: its held note ends, leaving any others held, and so does what it started
+    /// that lasts while it's held.
     pub fn key_released(&mut self, key: Key, now: Instant) {
         if self.key_down == Some(key.physical()) {
             self.key_down = None;
             self.repeats_ignored = false;
         }
-        if self
-            .held_key
-            .is_some_and(|(code, _)| code == key.physical())
+        if let Some(at) = self
+            .held_notes
+            .iter()
+            .position(|held| held.key == key.physical())
         {
-            self.let_go_of_held_key();
+            let held = self.held_notes.remove(at);
+            self.let_go_of(held);
         }
         if self
             .momentary
@@ -703,18 +718,41 @@ impl App {
             Momentary::Audition => {
                 self.handle.send(Command::EndAudition { held: long });
             }
-            Momentary::AuditionNote(note) if long => {
-                self.handle.send(Command::ReleasePreview { note });
+            Momentary::AuditionNote { track, note } if long => {
+                self.handle.send(Command::ReleasePreview { track, note });
             }
-            Momentary::AuditionNote(note) => {
-                self.handle.send(Command::FinishPreview { note });
+            Momentary::AuditionNote { track, note } => {
+                self.handle.send(Command::FinishPreview { track, note });
             }
         }
     }
 
-    fn let_go_of_held_key(&mut self) {
-        if let Some((_, note)) = self.held_key.take() {
-            self.handle.send(Command::ReleasePreview { note });
+    /// Whether this key is holding a note.
+    fn holds_note(&self, key: Key) -> bool {
+        self.held_notes
+            .iter()
+            .any(|held| held.key == key.physical())
+    }
+
+    /// End a held key's note, unless another key still down is holding the same one, as a key an
+    /// octave up and one an octave down can.
+    fn let_go_of(&mut self, held: HeldNote) {
+        let shared = self
+            .held_notes
+            .iter()
+            .any(|other| other.track == held.track && other.note == held.note);
+        if !shared {
+            self.handle.send(Command::ReleasePreview {
+                track: held.track,
+                note: held.note,
+            });
+        }
+    }
+
+    /// End every held note.
+    fn let_go_of_held_notes(&mut self) {
+        for held in std::mem::take(&mut self.held_notes) {
+            self.let_go_of(held);
         }
     }
 
@@ -724,16 +762,23 @@ impl App {
     pub fn focus_lost(&mut self, now: Instant) {
         self.key_down = None;
         self.repeats_ignored = false;
-        self.let_go_of_held_key();
+        self.let_go_of_held_notes();
         self.end_momentary(now);
     }
 
-    /// Sound a note for as long as this key is down, ignoring the key's repeats.
+    /// Sound a note for as long as this key is down, ignoring the key's repeats. Each key held
+    /// sounds its own note, so several play a chord.
     fn hold_note(&mut self, key: Key, note: u8, velocity: u8) {
-        self.held_key = Some((key.physical(), note));
+        let track = self.cursor.track;
+        self.held_notes.push(HeldNote {
+            key: key.physical(),
+            track,
+            note,
+            velocity,
+        });
         self.repeats_ignored = true;
         self.handle.send(Command::HoldPreview {
-            track: self.cursor.track,
+            track,
             note,
             velocity,
         });
@@ -757,7 +802,7 @@ impl App {
         }
         // Leaving the keyboard, or Insert, lets go of what it's holding.
         if matches!(was, Mode::Keys | Mode::Insert) && self.mode != was {
-            self.let_go_of_held_key();
+            self.let_go_of_held_notes();
         }
     }
 
@@ -1257,7 +1302,10 @@ impl App {
             note,
             velocity,
         });
-        self.started = Some(Momentary::AuditionNote(note));
+        self.started = Some(Momentary::AuditionNote {
+            track: self.cursor.track,
+            note,
+        });
     }
 
     fn stored_steps(&self) -> usize {
@@ -1588,6 +1636,14 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
+                // One note goes in a row, so a key pressed while another note's key is down only
+                // sounds, at the velocity of the first, to make a chord.
+                if let Some(first) = self.held_notes.first().copied() {
+                    if let Some(midi) = self.played_key(c) {
+                        self.hold_note(key, midi, first.velocity);
+                    }
+                    return;
+                }
                 if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()

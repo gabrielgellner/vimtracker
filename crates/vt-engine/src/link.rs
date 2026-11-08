@@ -36,27 +36,28 @@ pub enum Command {
     PauseOrResume,
     /// Opening a project: stop, and go back to the start.
     Return,
-    /// Play an entered note on the preview voice.
+    /// Play an entered note on a preview voice for a short while.
     Preview {
         track: usize,
         note: u8,
         velocity: u8,
     },
-    /// Play a note on the preview voice for as long as its key is held.
+    /// Play a note on a preview voice for as long as its key is held. Each held key has a voice
+    /// of its own, so held keys play a chord.
     HoldPreview {
         track: usize,
         note: u8,
         velocity: u8,
     },
-    /// The held key was let go.
-    ReleasePreview { note: u8 },
+    /// A held key was let go: its note ends, and any others held carry on.
+    ReleasePreview { track: usize, note: u8 },
     /// Hear a row of the section while not playing.
     Audition { section: usize, section_step: usize },
     /// The audition's key was let go, after a hold or a tap.
     EndAudition { held: bool },
-    /// An audition's key on the preview voice was tapped: let its note go once it has sounded
+    /// An audition's key on a preview voice was tapped: let its note go once it has sounded
     /// as long as a preview does.
-    FinishPreview { note: u8 },
+    FinishPreview { track: usize, note: u8 },
     /// Mute or unmute a track.
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
@@ -310,7 +311,9 @@ impl Realtime {
                     note,
                     velocity,
                 } => self.engine.hold_preview(track, note, velocity),
-                Command::ReleasePreview { note } => self.engine.release_preview(note),
+                Command::ReleasePreview { track, note } => {
+                    self.engine.release_preview(track, note);
+                }
                 Command::PlaySection {
                     section,
                     step,
@@ -327,7 +330,9 @@ impl Realtime {
                     section_step,
                 } => self.engine.audition_section(section, section_step),
                 Command::EndAudition { held } => self.engine.end_audition(held),
-                Command::FinishPreview { note } => self.engine.finish_preview(note),
+                Command::FinishPreview { track, note } => {
+                    self.engine.finish_preview(track, note);
+                }
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
@@ -682,6 +687,47 @@ mod tests {
                 velocity: 0x7F,
             }));
             violations += blocks(&mut rt, 2);
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn held_chords_and_taking_voices_over_never_allocate_in_the_callback() {
+        use vt_model::song::{Machine, SynthVoice};
+        let pool = samples();
+        let mut song = song(4, 16);
+        song.tracks[1].machine = Machine::Plaits(SynthVoice::Acid);
+        song.tracks[2].machine = Machine::Plaits(SynthVoice::SixOp);
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = 0;
+        for round in 0..40 {
+            let track = round % 4;
+            // Twelve keys down, so the bank of eight is taken over, and on `Acid` they slide.
+            for note in 0..12 {
+                assert!(handle.send(Command::HoldPreview {
+                    track,
+                    note: 48 + note,
+                    velocity: 0x7F,
+                }));
+                violations += blocks(&mut rt, 1);
+            }
+            for note in (0..12).rev() {
+                let command = if note % 2 == 0 {
+                    Command::ReleasePreview {
+                        track,
+                        note: 48 + note,
+                    }
+                } else {
+                    Command::FinishPreview {
+                        track,
+                        note: 48 + note,
+                    }
+                };
+                assert!(handle.send(command));
+                violations += blocks(&mut rt, 1);
+            }
         }
         assert_eq!(violations, 0);
     }
