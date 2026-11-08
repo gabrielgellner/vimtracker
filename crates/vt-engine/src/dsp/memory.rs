@@ -7,6 +7,7 @@ use vt_model::insert::{INSERTS, Insert};
 use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::Song;
 
+use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
 use crate::dsp::reverb::Reverb;
 use crate::engine::sample_of_tick;
@@ -22,6 +23,7 @@ pub const SILENT: f32 = 0.00001;
 pub enum Memory {
     Delay(Box<Delay>),
     Reverb(Box<Reverb>),
+    Chorus(Box<Chorus>),
 }
 
 impl Memory {
@@ -37,12 +39,18 @@ impl Memory {
         Self::Reverb(Box::new(Reverb::new(rate)))
     }
 
+    /// A chorus's.
+    pub fn chorus(rate: u32) -> Self {
+        Self::Chorus(Box::new(Chorus::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         match self {
             Self::Delay(delay) => delay.process(input),
             Self::Reverb(reverb) => reverb.process(input),
+            Self::Chorus(chorus) => chorus.process(input),
         }
     }
 
@@ -51,6 +59,7 @@ impl Memory {
         match self {
             Self::Delay(delay) => delay.frames() as u32,
             Self::Reverb(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
+            Self::Chorus(chorus) => chorus.frames() as u32,
         }
     }
 
@@ -62,6 +71,7 @@ impl Memory {
                 delay.follow(settings, frames_per_tick);
             }
             (Self::Reverb(reverb), Insert::Reverb(settings)) => reverb.follow(settings, frames),
+            (Self::Chorus(chorus), Insert::Chorus(settings)) => chorus.follow(settings),
             _ => {}
         }
     }
@@ -71,6 +81,7 @@ impl Memory {
         match self {
             Self::Delay(delay) => delay.settle(),
             Self::Reverb(reverb) => reverb.settle(),
+            Self::Chorus(chorus) => chorus.settle(),
         }
     }
 
@@ -78,6 +89,7 @@ impl Memory {
         match self {
             Self::Delay(delay) => delay.clear(),
             Self::Reverb(reverb) => reverb.clear(),
+            Self::Chorus(chorus) => chorus.clear(),
         }
     }
 }
@@ -87,6 +99,7 @@ impl Memory {
 pub struct MemoryCount {
     pub delay: u16,
     pub reverb: u16,
+    pub chorus: u16,
 }
 
 impl MemoryCount {
@@ -97,6 +110,7 @@ impl MemoryCount {
             match insert {
                 Insert::Delay(_) => count.delay += 1,
                 Insert::Reverb(_) => count.reverb += 1,
+                Insert::Chorus(_) => count.chorus += 1,
                 Insert::Empty | Insert::Distort(_) => {}
             }
         }
@@ -109,6 +123,7 @@ impl MemoryCount {
 pub struct MemoryPool {
     delays: Vec<Memory>,
     reverbs: Vec<Memory>,
+    choruses: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -122,6 +137,7 @@ impl MemoryPool {
         let mut pool = Self {
             delays: Vec::with_capacity(POOL_CAPACITY),
             reverbs: Vec::with_capacity(POOL_CAPACITY),
+            choruses: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -131,6 +147,9 @@ impl MemoryPool {
         for _ in 0..needed.reverb {
             pool.put(Memory::reverb(rate));
         }
+        for _ in 0..needed.chorus {
+            pool.put(Memory::chorus(rate));
+        }
         pool
     }
 
@@ -139,6 +158,7 @@ impl MemoryPool {
         let held = match memory {
             Memory::Delay(_) => &mut self.delays,
             Memory::Reverb(_) => &mut self.reverbs,
+            Memory::Chorus(_) => &mut self.choruses,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -154,6 +174,7 @@ impl MemoryPool {
         let held = match insert {
             Insert::Delay(_) => &mut self.delays,
             Insert::Reverb(_) => &mut self.reverbs,
+            Insert::Chorus(_) => &mut self.choruses,
             Insert::Empty | Insert::Distort(_) => return None,
         };
         let mut memory = held.pop()?;
@@ -165,6 +186,7 @@ impl MemoryPool {
     pub fn owe(&mut self, count: MemoryCount) {
         self.owed.delay += count.delay;
         self.owed.reverb += count.reverb;
+        self.owed.chorus += count.chorus;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -181,12 +203,18 @@ impl MemoryPool {
             self.owed.reverb -= 1;
             return Some(memory);
         }
+        if self.owed.chorus > 0
+            && let Some(memory) = self.choruses.pop()
+        {
+            self.owed.chorus -= 1;
+            return Some(memory);
+        }
         None
     }
 
     /// How many are free.
     pub fn spare(&self) -> usize {
-        self.delays.len() + self.reverbs.len()
+        self.delays.len() + self.reverbs.len() + self.choruses.len()
     }
 }
 
@@ -235,7 +263,7 @@ mod tests {
         let held = pool.take(DELAY).unwrap();
         pool.owe(MemoryCount {
             delay: 1,
-            reverb: 0,
+            ..MemoryCount::default()
         });
         assert!(pool.next_owed().is_none(), "a slot still has it");
         pool.put(held);

@@ -4,7 +4,7 @@
 //! program's own.
 
 use vt_model::constants::UNITY_LEVEL;
-use vt_model::insert::{Delay, Distort, DistortType, Insert, Reverb};
+use vt_model::insert::{Chorus, Delay, Distort, DistortType, Insert, Reverb};
 use vt_model::song::level_gain;
 
 use crate::dsp::drums::soft_clip;
@@ -54,7 +54,9 @@ impl Default for InsertState {
 fn same_effect(before: Insert, after: Insert) -> bool {
     match (before, after) {
         (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
-        (Insert::Delay(_), Insert::Delay(_)) | (Insert::Reverb(_), Insert::Reverb(_)) => true,
+        (Insert::Delay(_), Insert::Delay(_))
+        | (Insert::Reverb(_), Insert::Reverb(_))
+        | (Insert::Chorus(_), Insert::Chorus(_)) => true,
         _ => false,
     }
 }
@@ -154,9 +156,9 @@ impl InsertState {
             Insert::Distort(Distort {
                 amount, mix, gain, ..
             }) => (amount, mix, gain),
-            Insert::Delay(Delay { mix, gain, .. }) | Insert::Reverb(Reverb { mix, gain, .. }) => {
-                (0, mix, gain)
-            }
+            Insert::Delay(Delay { mix, gain, .. })
+            | Insert::Reverb(Reverb { mix, gain, .. })
+            | Insert::Chorus(Chorus { mix, gain, .. }) => (0, mix, gain),
         };
         let (amount, mix, gain) = (
             f32::from(amount) / 255.0,
@@ -216,7 +218,7 @@ impl InsertState {
         let (kind, set) = match self.insert {
             Insert::Empty => return input,
             Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
-            Insert::Delay(_) | Insert::Reverb(_) => (None, 0),
+            Insert::Delay(_) | Insert::Reverb(_) | Insert::Chorus(_) => (None, 0),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);

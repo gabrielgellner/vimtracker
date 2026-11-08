@@ -4,6 +4,7 @@ pub mod additive;
 pub mod chiptune;
 pub mod chord;
 mod chord_bank;
+pub mod chorus;
 pub mod delay;
 pub mod distort;
 pub mod drums;

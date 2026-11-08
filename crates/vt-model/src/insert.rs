@@ -16,6 +16,7 @@ pub enum Insert {
     Distort(Distort),
     Delay(Delay),
     Reverb(Reverb),
+    Chorus(Chorus),
 }
 
 /// What a distortion does to the sound.
@@ -47,14 +48,34 @@ impl DistortType {
     }
 }
 
+/// How a chorus moves its copies, after Mutable Instruments' Rings.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChorusType {
+    /// Two copies, slowly drifting apart from each other.
+    #[default]
+    Chorus,
+    /// Three copies on a slow and a fast wobble, a third of a turn apart, as a string machine has.
+    Ensemble,
+}
+
+impl ChorusType {
+    pub const ALL: [Self; 2] = [Self::Chorus, Self::Ensemble];
+}
+
+const CHORUS_TYPE_NAMES: [&str; 2] = ["Chorus", "Ensemble"];
+
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Setting {
     Type,
     Amount,
     Bits,
-    /// How long `Down` holds each sample.
+    /// How long `Down` holds each sample, or how fast a chorus moves.
     Rate,
+    /// A chorus's kind.
+    ChorusType,
+    /// How far a chorus's copies move.
+    Depth,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -75,6 +96,7 @@ impl Setting {
     pub const fn highest(self) -> u8 {
         match self {
             Self::Type => DistortType::ALL.len() as u8 - 1,
+            Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
@@ -87,6 +109,7 @@ impl Setting {
     pub const fn span(self) -> f32 {
         match self {
             Self::Type => (DistortType::ALL.len() - 1) as f32,
+            Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::PingPong => 1.0,
@@ -303,6 +326,30 @@ pub(crate) const DELAY_PARAMS: [Param; 9] = [
     GAIN_PARAM,
 ];
 
+/// A chorus's, in the order the page shows them.
+pub(crate) const CHORUS_PARAMS: [Param; 5] = [
+    Param {
+        name: "Type",
+        key: "type",
+        // Choosing a mode chooses a sound, so steps don't lock it.
+        label: None,
+        setting: Setting::ChorusType,
+        choices: &CHORUS_TYPE_NAMES,
+        wraps: true,
+        default: 0,
+    },
+    hex_param("Rate", "rate", "RATE", Setting::Rate, Chorus::DEFAULT.rate),
+    hex_param(
+        "Depth",
+        "depth",
+        "DPTH",
+        Setting::Depth,
+        Chorus::DEFAULT.depth,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -311,11 +358,12 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
         Self::Reverb(Reverb::DEFAULT),
+        Self::Chorus(Chorus::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -337,6 +385,7 @@ impl Insert {
             Self::Distort(_) => "Distort",
             Self::Delay(_) => "Delay",
             Self::Reverb(_) => "Reverb",
+            Self::Chorus(_) => "Chorus",
         }
     }
 
@@ -347,6 +396,7 @@ impl Insert {
             Self::Distort(_) => "Clips, folds or crushes the sound",
             Self::Delay(_) => "Repeats the sound, bouncing side to side",
             Self::Reverb(_) => "Puts the sound in a room",
+            Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
         }
     }
 
@@ -361,6 +411,7 @@ impl Insert {
             },
             Self::Delay(_) => &DELAY_PARAMS,
             Self::Reverb(_) => &REVERB_PARAMS,
+            Self::Chorus(_) => &CHORUS_PARAMS,
         }
     }
 
@@ -398,6 +449,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| reverb.read(setting));
             }
+            Self::Chorus(chorus) => {
+                return CHORUS_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| chorus.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -420,6 +477,7 @@ impl Insert {
             Self::Distort(distort) => distort,
             Self::Delay(delay) => return Self::Delay(delay.written(setting, whole)),
             Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
+            Self::Chorus(chorus) => return Self::Chorus(chorus.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -614,6 +672,67 @@ impl Reverb {
             _ => {}
         }
         reverb
+    }
+}
+
+/// A chorus's settings. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Chorus {
+    pub kind: ChorusType,
+    /// How fast the copies move: as Rings has it at `80`, two octaves slower at `00` and faster at
+    /// `FF`.
+    pub rate: u8,
+    /// How far they move.
+    pub depth: u8,
+    /// From `00`, all dry, to `FF`, all wet. Half is the classic chorus.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Chorus {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Chorus {
+    /// As it starts.
+    pub const DEFAULT: Self = Self {
+        kind: ChorusType::Chorus,
+        rate: 0x80,
+        depth: 0x80,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::ChorusType => self.kind as u8,
+            Setting::Rate => self.rate,
+            Setting::Depth => self.depth,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut chorus = self;
+        match setting {
+            Setting::ChorusType => {
+                chorus.kind = ChorusType::ALL[usize::from(value).min(ChorusType::ALL.len() - 1)];
+            }
+            Setting::Rate => chorus.rate = value,
+            Setting::Depth => chorus.depth = value,
+            Setting::Mix => chorus.mix = value,
+            Setting::Gain => chorus.gain = value,
+            _ => {}
+        }
+        chorus
     }
 }
 
@@ -865,8 +984,8 @@ mod tests {
     fn stepping_goes_round_the_effects_and_keeps_nothing() {
         let changed = Insert::ALL[1].with_value(1, 0x12);
         assert_eq!(changed.stepped(true), Insert::ALL[2]);
-        assert_eq!(Insert::ALL[3].stepped(true), Insert::Empty);
+        assert_eq!(Insert::ALL[4].stepped(true), Insert::Empty);
         assert_eq!(Insert::Empty.stepped(true), Insert::ALL[1]);
-        assert_eq!(Insert::Empty.stepped(false), Insert::ALL[3]);
+        assert_eq!(Insert::Empty.stepped(false), Insert::ALL[4]);
     }
 }
