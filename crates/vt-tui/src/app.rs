@@ -641,6 +641,13 @@ impl App {
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
                     let (track, velocity) = (self.cursor.track, self.note_velocity);
+                    // A real second press comes after a release, so a press of the key that's
+                    // held is the terminal repeating it. kitty on macOS has been seen sending a
+                    // held `a`'s repeats as presses.
+                    if self.key_releases && self.held_key.is_some_and(|(held, _)| held == key.code)
+                    {
+                        return;
+                    }
                     if self.key_releases {
                         self.held_key = Some((key.code, note));
                         self.handle.send(Command::HoldPreview {

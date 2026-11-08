@@ -30,6 +30,12 @@ the author's `.tmux.conf`, on 2026-11-08, crossterm's support query answered no:
 the query itself and doesn't report key releases. So inside tmux, the keyboard plays short
 notes. `probe-keys --kitty` shows whether a terminal supports it and what it sends.
 
+In a plain kitty window on macOS, on 2026-11-08, it's supported, and a held key holds its note.
+`probe-keys --kitty` showed a held `s` and `j` as one `Press`, `Repeat`s every 83 ms after
+500 ms, and a `Release`, but a held `a` as `Press` after `Press` at the same rhythm, with one
+`Release` at the end. So a press of the key already held is taken as a repeat: with releases
+reported, a real second press always comes after one.
+
 ## Checked on a real keyboard
 
 *   `Option-1`, `Option-2` and `Option-s` work in kitty, on 2026-11-06. That needs
