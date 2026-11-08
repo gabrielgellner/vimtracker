@@ -31,6 +31,7 @@ pub mod phaser;
 pub mod pitch_shifter;
 mod plaits_parts;
 pub mod plate;
+pub mod resonator;
 pub mod reverb;
 mod sine_table;
 pub mod six_op;

@@ -1176,3 +1176,34 @@ fn a_limiter_reports_how_far_its_turning_down() {
     // 24 dB in, and a level near full: most of that is taken off again.
     assert!(playing[0] > 15.0 && playing[0] < 30.0, "{playing:?}");
 }
+
+#[test]
+fn a_resonator_rings_at_the_note_the_track_plays() {
+    use vt_model::insert::Resonator;
+    // Clicks, every tenth of a second, played up a fifth at `G-4`.
+    let clicks: Vec<[f32; 2]> = (0..RATE as usize * 4)
+        .map(|frame| [if frame % 4800 == 0 { 0.8 } else { 0.0 }; 2])
+        .collect();
+    let played = |reso: bool| {
+        let mut song = song(&["G-4 -- --- --- ---"]);
+        if reso {
+            song.tracks[0].inserts[0] = Insert::Reso(Resonator {
+                bright: 0x00,
+                ..Resonator::DEFAULT
+            });
+        }
+        render(song, pool(clicks.clone()), STEP * 4)
+    };
+    let rung = played(true);
+    assert!(
+        rung.iter()
+            .flatten()
+            .all(|s| s.is_finite() && s.abs() <= 1.0)
+    );
+    let g = 440.0 * (-2.0_f32 / 12.0).exp2();
+    let (at_note, below) = (strength(&rung, g), strength(&rung, g * 0.75));
+    assert!(at_note > below * 10.0, "{at_note} {below}");
+    // The clicks alone have nothing in particular at the note.
+    let plain = played(false);
+    assert!(at_note > strength(&plain, g) * 10.0);
+}

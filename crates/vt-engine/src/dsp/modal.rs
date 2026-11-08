@@ -1,7 +1,8 @@
 //! A struck resonator of 24 modes, for bells, bars, plates and woodblocks, from Mutable
-//! Instruments' Plaits. Ported to Rust from `modal_engine.cc`,
-//! `physical_modelling/modal_voice.cc` and `physical_modelling/resonator.cc`, with its main
-//! output, limited as Plaits limits it.
+//! Instruments' Plaits. Ported to Rust from `modal_engine.cc` and
+//! `physical_modelling/modal_voice.cc`, with its main output, limited as Plaits limits it. The
+//! resonator itself, Plaits' `physical_modelling/resonator.cc`, is shared with the `Reso` slot
+//! effect, in `resonator.rs`.
 //!
 //! Copyright 2016 Emilie Gillet.
 //!
@@ -20,32 +21,16 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::plaits_parts::{CosineOscillator, Limiter, STIFFNESS, interpolate, tan_fast};
+use super::plaits_parts::{CosineOscillator, Limiter, tan_fast};
+use super::resonator::{MODES, Modes, semitones};
 use super::virtual_analog::Settings;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
-const MODES: usize = 24;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
 
-#[inline]
-fn semitones(interval: f32) -> f32 {
-    (interval / 12.0).exp2()
-}
-
-/// How much the third partial's stretch shifts the note, so it can be taken back out.
-fn nth_harmonic_compensation(n: usize, mut stiffness: f32) -> f32 {
-    let mut stretch = 1.0;
-    for _ in 0..n - 1 {
-        stretch += stiffness;
-        stiffness *= if stiffness < 0.0 { 0.93 } else { 0.98 };
-    }
-    1.0 / stretch
-}
-
-/// One band-pass or low-pass mode, as Plaits' `ResonatorSvf` with its frequency and Q set once a
-/// block.
+/// The strike's low-pass, as Plaits' `ResonatorSvf` with its frequency and Q set once a block.
 #[derive(Debug, Clone, Copy, Default)]
 struct Mode {
     state_1: f32,
@@ -53,16 +38,8 @@ struct Mode {
 }
 
 impl Mode {
-    /// Filter a block, adding `gain` times the band-pass, or the low-pass, into `out`.
-    fn process(
-        &mut self,
-        f: f32,
-        q: f32,
-        gain: f32,
-        low_pass: bool,
-        input: &[f32; BLOCK],
-        out: &mut [f32; BLOCK],
-    ) {
+    /// Filter a block, adding the low-pass into `out`.
+    fn process(&mut self, f: f32, q: f32, input: &[f32; BLOCK], out: &mut [f32; BLOCK]) {
         let g = tan_fast(f);
         let r = 1.0 / q;
         let h = 1.0 / (1.0 + r * g + g * g);
@@ -74,7 +51,7 @@ impl Mode {
             state_1 = g * hp + bp;
             let lp = g * bp + state_2;
             state_2 = g * bp + lp;
-            *out += gain * if low_pass { lp } else { bp };
+            *out += lp;
         }
         (self.state_1, self.state_2) = (state_1, state_2);
     }
@@ -86,7 +63,7 @@ pub struct Modal {
     harmonics_lp: f32,
     excitation: Mode,
     amplitudes: [f32; MODES],
-    modes: [Mode; MODES],
+    modes: Modes,
     limiter: Limiter,
     output: [f32; BLOCK],
     at: usize,
@@ -107,7 +84,7 @@ impl Modal {
             harmonics_lp: 0.0,
             excitation: Mode::default(),
             amplitudes: std::array::from_fn(|_| amplitudes.next() * 0.25),
-            modes: [Mode::default(); MODES],
+            modes: Modes::default(),
             limiter: Limiter::default(),
             output: [0.0; BLOCK],
             at: BLOCK,
@@ -153,36 +130,14 @@ impl Modal {
         }
         let mut excitation = [0.0; BLOCK];
         self.excitation
-            .process(cutoff, 1.5, 1.0, true, &strike, &mut excitation);
+            .process(cutoff, 1.5, &strike, &mut excitation);
 
         // The resonator.
-        let mut stiffness = interpolate(&STIFFNESS, structure, 64.0);
-        let f0 = f0 * nth_harmonic_compensation(3, stiffness);
-        let mut harmonic = f0;
-        let mut stretch = 1.0;
-        let q_sqrt = semitones(damping * 79.7);
-        let mut q = 500.0 * q_sqrt * q_sqrt;
-        brightness *= 1.0 - structure * 0.3;
-        brightness *= 1.0 - damping * 0.3;
-        let q_loss = brightness * (2.0 - brightness) * 0.85 + 0.15;
-        let mut output = [0.0; BLOCK];
-        for (mode, amplitude) in self.modes.iter_mut().zip(self.amplitudes) {
-            let frequency = (harmonic * stretch).min(0.499);
-            let attenuation = 1.0 - frequency * 2.0;
-            mode.process(
-                frequency,
-                1.0 + frequency * q,
-                amplitude * attenuation,
-                false,
-                &excitation,
-                &mut output,
-            );
-            stretch += stiffness;
-            // Partials mustn't fold back below nothing, and a few more fit at the top.
-            stiffness *= if stiffness < 0.0 { 0.93 } else { 0.98 };
-            harmonic += f0;
-            q *= q_loss;
-        }
+        self.modes.tune(f0, structure, brightness, damping, 1.0);
+        let gains = [std::array::from_fn(|mode| {
+            self.amplitudes[mode] * self.modes.attenuation[mode]
+        })];
+        let output = excitation.map(|sample| self.modes.process(sample, &gains)[0]);
         for (out, sample) in self.output.iter_mut().zip(output) {
             *out = self.limiter.process(1.0, sample);
         }

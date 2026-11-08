@@ -366,6 +366,35 @@ a slot has none, so the follower's rise stands in. To gate a pad with a
 drum, put `LPG` on the pad with `Source` on the drum's track. With a
 silent source, `Gate` and `VCA` stay shut.
 
+`Reso` is a resonator, after Mutable Instruments' Plaits, Rings and
+Elements: a bank of 24 modes tuned to the track's note, which the track's
+sound strikes, so it rings like a bar, a string or a bell. A drum loop
+through it plays as a pitch. It starts in tune with the note, its partials
+whole multiples of it, ringing for about a third of a second, all wet.
+
+| Setting | Does |
+|---|---|
+| `Tune` | Its pitch, in semitones from the track's note |
+| `Material` | Partials bunched low, in tune at `40`, spread like a bell high |
+| `Bright` | How long the high partials ring against the lowest |
+| `Decay` | How long it rings, from a thud at `00` to well over a minute at `FF` |
+| `Position` | Where it's struck and heard: its end at `00`, its middle at `FF` |
+| `Width` | How far a second, wandering pickup spreads it across the sides |
+
+It follows the track's note and `Pitch`, and glides to a new one over a
+moment, so a note change bends the ringing rather than clicking. A sample
+plays faster at a higher note, so to keep a loop at its own speed, play it
+at `C-4` and set `Tune` from steps, as `1TUNE`. `Material` is in tune
+from `40` to `4B`, and `Position` towards `FF` leaves out the even
+partials, for a hollow ring. A second pickup wanders slowly along it, as
+Elements' does, and `Width` spreads what it hears apart from the first
+across the sides; at `00` it's mono.
+
+At `Decay` `80` a drum comes out about as loud as it went in, at most
+notes, and a longer `Decay` rings on and builds up. A tone held at its note
+can ring very loud, so Rings' limiter holds what comes out under full
+scale, turning down at once and letting go over a second or so.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

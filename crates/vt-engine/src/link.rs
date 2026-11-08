@@ -221,6 +221,9 @@ impl Handle {
         for _ in self.held.warps..needed.warps {
             self.unsent.push(Memory::warps(self.rate));
         }
+        for _ in self.held.reso..needed.reso {
+            self.unsent.push(Memory::reso(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -232,6 +235,7 @@ impl Handle {
             pitch: self.held.pitch.saturating_sub(needed.pitch),
             grains: self.held.grains.saturating_sub(needed.grains),
             warps: self.held.warps.saturating_sub(needed.warps),
+            reso: self.held.reso.saturating_sub(needed.reso),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -428,6 +432,8 @@ mod tests {
     const GRAINS: Insert = Insert::Grains(vt_model::insert::Grains::DEFAULT);
     /// Warps, which takes its vocoder's filter bank from the pool.
     const WARPS: Insert = Insert::Warps(vt_model::insert::Warps::DEFAULT);
+    /// A resonator, which takes its modes from the pool.
+    const RESO: Insert = Insert::Reso(vt_model::insert::Resonator::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -559,8 +565,10 @@ mod tests {
                 next.tracks[round % 8].inserts = [PITCH, PLATE, PITCH];
             } else if round % 64 == 31 {
                 next.tracks[round % 8].inserts = [GRAINS, PITCH, GRAINS];
-            } else {
+            } else if round % 128 == 63 {
                 next.tracks[round % 8].inserts = [WARPS, GRAINS, WARPS];
+            } else {
+                next.tracks[round % 8].inserts = [RESO, WARPS, RESO];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -586,7 +594,7 @@ mod tests {
         more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty];
         more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty];
         more.tracks[4].inserts = [Insert::Empty, Insert::Empty, GRAINS];
-        more.tracks[5].inserts = [WARPS, Insert::Empty, Insert::Empty];
+        more.tracks[5].inserts = [WARPS, Insert::Empty, RESO];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -601,6 +609,7 @@ mod tests {
                 pitch: needed.pitch + 1,
                 grains: needed.grains + 1,
                 warps: needed.warps + 1,
+                reso: needed.reso + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -615,7 +624,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 10);
+        assert_eq!(freed, 11);
     }
 
     #[test]

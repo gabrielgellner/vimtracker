@@ -14,6 +14,7 @@ use crate::dsp::granular::Granular;
 use crate::dsp::limiter::Limiter;
 use crate::dsp::pitch_shifter::PitchShifter;
 use crate::dsp::plate::Plate;
+use crate::dsp::resonator::Resonator;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::tape::Tape;
 use crate::dsp::warps::Warps;
@@ -38,6 +39,7 @@ pub enum Memory {
     Pitch(Box<PitchShifter>),
     Grains(Box<Granular>),
     Warps(Box<Warps>),
+    Reso(Box<Resonator>),
 }
 
 impl Memory {
@@ -93,6 +95,11 @@ impl Memory {
         Self::Warps(Box::new(Warps::new(rate)))
     }
 
+    /// A resonator's, for its modes and their gains.
+    pub fn reso(rate: u32) -> Self {
+        Self::Reso(Box::new(Resonator::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -107,6 +114,7 @@ impl Memory {
             Self::Pitch(shifter) => shifter.process(input),
             Self::Grains(granular) => granular.process(input),
             Self::Warps(warps) => warps.process_alone(input),
+            Self::Reso(resonator) => resonator.process_alone(input),
         }
     }
 
@@ -122,6 +130,7 @@ impl Memory {
             Self::Pitch(shifter) => shifter.frames() as u32,
             Self::Grains(granular) => granular.quiet_frames(),
             Self::Warps(warps) => warps.quiet_frames(),
+            Self::Reso(resonator) => resonator.quiet_frames(),
         }
     }
 
@@ -143,6 +152,7 @@ impl Memory {
             (Self::Pitch(shifter), Insert::Pitch(settings)) => shifter.follow(settings),
             (Self::Grains(granular), Insert::Grains(settings)) => granular.follow(settings),
             (Self::Warps(warps), Insert::Warps(settings)) => warps.follow(settings),
+            (Self::Reso(resonator), Insert::Reso(settings)) => resonator.follow(settings),
             _ => {}
         }
     }
@@ -160,6 +170,7 @@ impl Memory {
             Self::Pitch(shifter) => shifter.settle(),
             Self::Grains(granular) => granular.settle(),
             Self::Warps(warps) => warps.settle(),
+            Self::Reso(resonator) => resonator.settle(),
         }
     }
 
@@ -175,6 +186,7 @@ impl Memory {
             Self::Pitch(shifter) => shifter.clear(),
             Self::Grains(granular) => granular.clear(),
             Self::Warps(warps) => warps.clear(),
+            Self::Reso(resonator) => resonator.clear(),
         }
     }
 }
@@ -192,6 +204,7 @@ pub struct MemoryCount {
     pub pitch: u16,
     pub grains: u16,
     pub warps: u16,
+    pub reso: u16,
 }
 
 impl MemoryCount {
@@ -210,6 +223,7 @@ impl MemoryCount {
                 Insert::Pitch(_) => count.pitch += 1,
                 Insert::Grains(_) => count.grains += 1,
                 Insert::Warps(_) => count.warps += 1,
+                Insert::Reso(_) => count.reso += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -235,6 +249,7 @@ pub struct MemoryPool {
     pitches: Vec<Memory>,
     grains: Vec<Memory>,
     warps: Vec<Memory>,
+    reso: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -256,6 +271,7 @@ impl MemoryPool {
             pitches: Vec::with_capacity(POOL_CAPACITY),
             grains: Vec::with_capacity(POOL_CAPACITY),
             warps: Vec::with_capacity(POOL_CAPACITY),
+            reso: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -289,6 +305,9 @@ impl MemoryPool {
         for _ in 0..needed.warps {
             pool.put(Memory::warps(rate));
         }
+        for _ in 0..needed.reso {
+            pool.put(Memory::reso(rate));
+        }
         pool
     }
 
@@ -305,6 +324,7 @@ impl MemoryPool {
             Memory::Pitch(_) => &mut self.pitches,
             Memory::Grains(_) => &mut self.grains,
             Memory::Warps(_) => &mut self.warps,
+            Memory::Reso(_) => &mut self.reso,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -328,6 +348,7 @@ impl MemoryPool {
             Insert::Pitch(_) => &mut self.pitches,
             Insert::Grains(_) => &mut self.grains,
             Insert::Warps(_) => &mut self.warps,
+            Insert::Reso(_) => &mut self.reso,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -354,6 +375,7 @@ impl MemoryPool {
         self.owed.pitch += count.pitch;
         self.owed.grains += count.grains;
         self.owed.warps += count.warps;
+        self.owed.reso += count.reso;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -418,6 +440,12 @@ impl MemoryPool {
             self.owed.warps -= 1;
             return Some(memory);
         }
+        if self.owed.reso > 0
+            && let Some(memory) = self.reso.pop()
+        {
+            self.owed.reso -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -433,6 +461,7 @@ impl MemoryPool {
             + self.pitches.len()
             + self.grains.len()
             + self.warps.len()
+            + self.reso.len()
     }
 }
 
