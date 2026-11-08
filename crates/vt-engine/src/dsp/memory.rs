@@ -111,7 +111,7 @@ impl MemoryCount {
                 Insert::Delay(_) => count.delay += 1,
                 Insert::Reverb(_) => count.reverb += 1,
                 Insert::Chorus(_) => count.chorus += 1,
-                Insert::Empty | Insert::Distort(_) | Insert::Eq(_) => {}
+                Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {}
             }
         }
         count
@@ -175,7 +175,9 @@ impl MemoryPool {
             Insert::Delay(_) => &mut self.delays,
             Insert::Reverb(_) => &mut self.reverbs,
             Insert::Chorus(_) => &mut self.choruses,
-            Insert::Empty | Insert::Distort(_) | Insert::Eq(_) => return None,
+            Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {
+                return None;
+            }
         };
         let mut memory = held.pop()?;
         memory.clear();

@@ -7,6 +7,7 @@ use vt_model::constants::{
     MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
+use vt_model::insert::Insert;
 use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{
@@ -18,7 +19,7 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, LiveValues, Retrigger, SongTime, TrackState, base_of};
+use crate::track_state::{DelayedNote, Keys, LiveValues, Retrigger, SongTime, TrackState, base_of};
 use crate::voice::{NoteOn, Voice};
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
@@ -55,6 +56,10 @@ pub struct Engine {
     preview: Voice,
     /// The track the preview voice goes through.
     preview_track: usize,
+    /// Each track's sound after its slots, for compressors that hear another track.
+    keys: Keys,
+    /// Which tracks a compressor somewhere hears, which keep playing while muted so it still does.
+    listened: [bool; MAX_TRACKS],
     transport: Transport,
     /// The section playing, and how many steps of it have fired.
     section: usize,
@@ -131,6 +136,8 @@ impl Engine {
                 .unwrap_or_else(|_| unreachable!("one state for each track")),
             preview: Voice::default(),
             preview_track: 0,
+            keys: Keys::default(),
+            listened: [false; MAX_TRACKS],
             transport: Transport::Stopped,
             section: 0,
             section_place: 0,
@@ -150,6 +157,7 @@ impl Engine {
         };
         engine.follow_levels();
         engine.reset_tracks();
+        engine.find_listened();
         for track in engine.tracks.iter_mut() {
             track.settle();
         }
@@ -489,7 +497,33 @@ impl Engine {
         }
         self.follow_levels();
         self.retune();
+        self.find_listened();
         old
+    }
+
+    /// Note which tracks a compressor hears. One that's muted keeps playing, silently, so a muted
+    /// kick can still duck a bass, and one that no longer is heard stops.
+    fn find_listened(&mut self) {
+        let song = &self.current.song;
+        let sounds = song.sound_tracks();
+        let mut listened = [false; MAX_TRACKS];
+        for insert in song.tracks.iter().flat_map(|track| track.inserts) {
+            if let Insert::Compressor(compressor) = insert
+                && let Some(track) = compressor.source_track(sounds)
+                && let Some(listened) = listened.get_mut(track)
+            {
+                *listened = true;
+            }
+        }
+        if listened != self.listened {
+            self.listened = listened;
+            self.apply_audibility();
+        }
+    }
+
+    /// Whether a track plays its notes: when it's heard, or when a compressor hears it.
+    fn plays(&self, index: usize) -> bool {
+        self.audible(index) || self.listened[index]
     }
 
     /// The fixed tracks come after the others, so as those come and go, what the fixed tracks keep
@@ -828,8 +862,11 @@ impl Engine {
         let any_solo = self.any_solo();
         let return_soloed = self.return_soloed();
         let sounds = self.sounds();
-        for track in self.tracks[..sounds].iter_mut() {
-            if track.mute || (any_solo && !track.solo) {
+        for (index, track) in self.tracks[..sounds].iter_mut().enumerate() {
+            let heard = !track.mute && (!any_solo || track.solo);
+            // One a compressor hears keeps playing, faded out of the mix and the sends.
+            track.heard.target = if heard { 1.0 } else { 0.0 };
+            if !heard && !self.listened[index] {
                 track.cut_to_tail();
             }
         }
@@ -998,7 +1035,7 @@ impl Engine {
             {
                 self.tracks[index].delayed = None;
                 self.start_modulation(index);
-                if self.audible(index) {
+                if self.plays(index) {
                     let (kill, off, retrigger) = {
                         let t = &self.tracks[index];
                         (t.kill_at, t.off_at, t.retrigger)
@@ -1030,7 +1067,7 @@ impl Engine {
 
     fn fire_retrigger(&mut self, index: usize, retrigger: Retrigger) {
         let rate = self.rate;
-        let audible = self.audible(index);
+        let audible = self.plays(index);
         if self.tracks[index].last_note.is_some() {
             self.start_modulation(index);
         }
@@ -1226,7 +1263,7 @@ impl Engine {
                             note: on,
                         });
                     }
-                    Some(on) if self.audible(index) => self.tracks[index].start(on, self.rate),
+                    Some(on) if self.plays(index) => self.tracks[index].start(on, self.rate),
                     Some(on) => {
                         self.tracks[index].last_note = Some(on);
                         self.tracks[index].cut_to_tail();
@@ -1273,7 +1310,7 @@ impl Engine {
         };
         for index in 0..song.tracks.len().min(self.tracks.len()) {
             self.tracks[index].cut_to_tail();
-            if !self.audible(index) {
+            if !self.plays(index) {
                 continue;
             }
             let Some(Some(chain)) = section.chains.get(index) else {
@@ -1313,6 +1350,7 @@ impl Engine {
         let return_a = self.sounds();
         let (return_b, master_track) = (return_a + 1, return_a + 2);
         let wet_only = self.return_soloed();
+        self.keys.sounds = return_a;
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
             let mut send_a = [0.0_f32; 2];
@@ -1322,6 +1360,9 @@ impl Engine {
                 // The fixed tracks have their turn after this, with what's sent to them.
                 let fixed = (return_a..=master_track).contains(&index);
                 if fixed || (!track.sounding() && !previewing && !track.ringing(self.rate)) {
+                    if !fixed {
+                        self.keys.frames[index] = [0.0; 2];
+                    }
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));
@@ -1339,25 +1380,34 @@ impl Engine {
                     self.smoothing,
                     self.fast_smoothing,
                     self.rate,
+                    &self.keys,
                 );
-                track.reading.add(shaped.dry, shaped.dry);
+                self.keys.frames[index] = track.key;
+                // Muted but heard by a compressor, it plays on, faded out of the mix and sends.
+                let heard = track.heard.next(self.smoothing);
+                let dry = shaped.dry.map(|sample| sample * heard);
+                track.reading.add(dry, dry);
                 if !wet_only || track.solo {
-                    mix[0] += shaped.dry[0];
-                    mix[1] += shaped.dry[1];
+                    mix[0] += dry[0];
+                    mix[1] += dry[1];
                 }
-                send_a[0] += shaped.send_a[0];
-                send_a[1] += shaped.send_a[1];
-                send_b[0] += shaped.send_b[0];
-                send_b[1] += shaped.send_b[1];
+                send_a[0] += shaped.send_a[0] * heard;
+                send_a[1] += shaped.send_a[1] * heard;
+                send_b[0] += shaped.send_b[0] * heard;
+                send_b[1] += shaped.send_b[1] * heard;
             }
             let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
-            let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate);
-            let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate);
+            let keys = &mut self.keys;
+            let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate, keys);
+            keys.frames[return_a] = self.tracks[return_a].key;
+            let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate, keys);
+            keys.frames[return_b] = self.tracks[return_b].key;
             let mixed = [
                 mix[0] + from_a[0] + from_b[0],
                 mix[1] + from_a[1] + from_b[1],
             ];
-            let mastered = self.tracks[master_track].process_master(mixed, smoothing, fast, rate);
+            let mastered =
+                self.tracks[master_track].process_master(mixed, smoothing, fast, rate, &self.keys);
             let out = master(mastered, limiter);
             self.tracks[master_track].reading.add(mastered, out);
             self.reading.add(mastered, out);

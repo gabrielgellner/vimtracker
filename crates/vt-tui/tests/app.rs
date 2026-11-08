@@ -5249,23 +5249,23 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
     let line = fx_line(&app, 0);
     assert!(line.starts_with("1  Distort"), "{line}");
-    assert!(line.contains("Type     Soft"), "{line}");
-    assert!(line.contains("Amount   40 ▕"), "{line}");
+    assert!(line.contains("Type      Soft"), "{line}");
+    assert!(line.contains("Amount    40 ▕"), "{line}");
     assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
     assert!(line.contains("Gain      E0 ▕"), "{line}");
 
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Type");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Type     Hard"));
+    assert!(fx_line(&app, 0).contains("Type      Hard"));
     press(&mut app, "-");
     press(&mut app, "-");
-    assert!(fx_line(&app, 0).contains("Type     Down"), "it goes round");
+    assert!(fx_line(&app, 0).contains("Type      Down"), "it goes round");
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
-    assert!(fx_line(&app, 0).contains("Type     Fold"));
+    assert!(fx_line(&app, 0).contains("Type      Fold"));
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
     special(&mut app, KeyCode::Esc);
@@ -5273,11 +5273,11 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Amount");
     press(&mut app, "+");
-    assert!(fx_line(&app, 0).contains("Amount   50"));
+    assert!(fx_line(&app, 0).contains("Amount    50"));
     press(&mut app, "ia7");
-    assert!(fx_line(&app, 0).contains("Amount   A7"));
+    assert!(fx_line(&app, 0).contains("Amount    A7"));
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Amount   40"));
+    assert!(fx_line(&app, 0).contains("Amount    40"));
     let depth = app.history.undo_depth();
     press(&mut app, "x");
     assert_eq!(
@@ -5339,7 +5339,7 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Amount   10"),
+        fx_line(&app, 0).contains("Amount    10"),
         "{}",
         fx_line(&app, 0)
     );
@@ -5366,7 +5366,7 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     // The name and the value both carry it, in the columns they had.
     let line = fx_line(&app, 1);
     assert!(
-        line.contains(&format!("Amo{second}nt   {second}0 ▕")),
+        line.contains(&format!("Amo{second}nt    {second}0 ▕")),
         "{line}"
     );
     press(&mut app, &second.to_string());
@@ -5491,22 +5491,22 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Bits");
     let line = fx_line(&app, 0);
-    assert!(line.contains("Bits     9"), "{line}");
+    assert!(line.contains("Bits      9"), "{line}");
     assert!(!line.contains("Amount"), "{line}");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Bits     10"));
+    assert!(fx_line(&app, 0).contains("Bits      10"));
     press(&mut app, "=====");
     assert!(
-        fx_line(&app, 0).contains("Bits     12"),
+        fx_line(&app, 0).contains("Bits      12"),
         "it stops at the top"
     );
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Bits     9"));
+    assert!(fx_line(&app, 0).contains("Bits      9"));
     for _ in 0..12 {
         press(&mut app, "-");
     }
     assert!(
-        fx_line(&app, 0).contains("Bits     2"),
+        fx_line(&app, 0).contains("Bits      2"),
         "it stops at the bottom"
     );
     // It's a list to choose from, and not typed.
@@ -5515,19 +5515,19 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "6");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Bits     6"),
+        fx_line(&app, 0).contains("Bits      6"),
         "{}",
         fx_line(&app, 0)
     );
     // Another mode has its own setting, as it was.
     press(&mut app, "k-");
     assert!(
-        fx_line(&app, 0).contains("Type     Sine"),
+        fx_line(&app, 0).contains("Type      Sine"),
         "{}",
         fx_line(&app, 0)
     );
     assert!(
-        fx_line(&app, 0).contains("Amount   40"),
+        fx_line(&app, 0).contains("Amount    40"),
         "{}",
         fx_line(&app, 0)
     );
@@ -5701,7 +5701,7 @@ fn the_fx_pages_bars_follow_what_plays() {
     app.live = Some(live);
     let line = fx_line(&app, 0);
     // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
-    assert!(line.contains("Amount   40 ▕█│███▏"), "{line}");
+    assert!(line.contains("Amount    40 ▕█│███▏"), "{line}");
     assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
 }
 

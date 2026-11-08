@@ -5,8 +5,8 @@
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
-    CHORUS_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS,
-    Setting,
+    CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, INSERTS, Insert,
+    Param, REVERB_PARAMS, Setting, attack_ms, ratio, release_ms, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -50,6 +50,11 @@ pub enum Units {
     Boost,
     /// An EQ band's width, from `LEAST_Q` at `00` to `MOST_Q` at `FF`, evenly in ratio.
     Q,
+    /// A compressor's threshold in dB, its ratio, and its times in ms.
+    Threshold,
+    Ratio,
+    Attack,
+    Release,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -116,6 +121,13 @@ impl Kind {
                 Units::Depth => depth_text(depth_of(coarse as f32).round() as i16),
                 Units::Boost => format!("{:+.1} dB", band_db(coarse as f32)),
                 Units::Q => format!("Q {:.2}", band_q(coarse as f32)),
+                Units::Threshold => format!("{:.1} dB", threshold_db(coarse as f32)),
+                Units::Ratio => match ratio(coarse as f32) {
+                    ratio if ratio.is_infinite() => "inf:1".to_owned(),
+                    ratio => format!("{ratio:.1}:1"),
+                },
+                Units::Attack => milliseconds(attack_ms(coarse as f32)),
+                Units::Release => milliseconds(release_ms(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -136,6 +148,15 @@ impl Kind {
 fn side(coarse: f64) -> f64 {
     let from_middle = coarse - 128.0;
     from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 }
+}
+
+/// A time as it reads best: `0.25 ms`, `12 ms` or `1.00 s`.
+fn milliseconds(ms: f32) -> String {
+    match ms {
+        ms if ms < 1.0 => format!("{ms:.2} ms"),
+        ms if ms < 1000.0 => format!("{ms:.0} ms"),
+        ms => format!("{:.2} s", ms / 1000.0),
+    }
 }
 
 /// A frequency as it reads best: `440 Hz` or `1.21 kHz`.
@@ -437,15 +458,17 @@ pub enum Effect {
     Reverb,
     Chorus,
     Eq,
+    Compressor,
 }
 
 impl Effect {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
         Self::Chorus,
         Self::Eq,
+        Self::Compressor,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -457,6 +480,7 @@ impl Effect {
             Self::Reverb => &REVERB_PARAMS,
             Self::Chorus => &CHORUS_PARAMS,
             Self::Eq => &EQ_PARAMS,
+            Self::Compressor => &COMPRESSOR_PARAMS,
         }
     }
 
@@ -467,6 +491,7 @@ impl Effect {
             Self::Reverb => "reverb",
             Self::Chorus => "chorus",
             Self::Eq => "eq3",
+            Self::Compressor => "comp",
         }
     }
 
@@ -477,6 +502,7 @@ impl Effect {
             Self::Reverb => "Reverb",
             Self::Chorus => "Chorus",
             Self::Eq => "EQ3",
+            Self::Compressor => "Comp",
         }
     }
 
@@ -489,6 +515,7 @@ impl Effect {
             Insert::Reverb(_) => Some(Self::Reverb),
             Insert::Chorus(_) => Some(Self::Chorus),
             Insert::Eq(_) => Some(Self::Eq),
+            Insert::Compressor(_) => Some(Self::Compressor),
         }
     }
 }
@@ -507,6 +534,10 @@ fn param_entry(param: &Param) -> Entry {
                 }
                 Setting::Low | Setting::Mid | Setting::High => (true, Units::Boost),
                 Setting::MidQ => (false, Units::Q),
+                Setting::Threshold => (false, Units::Threshold),
+                Setting::Ratio => (false, Units::Ratio),
+                Setting::Attack => (false, Units::Attack),
+                Setting::Release => (false, Units::Release),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -583,6 +614,13 @@ const fn effect_start(effect: Effect) -> usize {
         Effect::Eq => {
             DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len() + CHORUS_PARAMS.len()
         }
+        Effect::Compressor => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+        }
     }
 }
 
@@ -593,7 +631,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + DELAY_PARAMS.len()
     + REVERB_PARAMS.len()
     + CHORUS_PARAMS.len()
-    + EQ_PARAMS.len();
+    + EQ_PARAMS.len()
+    + COMPRESSOR_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.

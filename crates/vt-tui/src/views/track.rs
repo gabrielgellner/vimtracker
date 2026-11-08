@@ -37,7 +37,7 @@ pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 const FX_INDENT: usize = 3;
 const FX_EFFECT_WIDTH: usize = 10;
 /// Room for a setting's name on the FX page, and for its value and bar, so its columns line up.
-const FX_NAME_WIDTHS: [usize; FX_COLUMNS] = [9, 10, 10, 6, 5];
+const FX_NAME_WIDTHS: [usize; FX_COLUMNS] = [10, 10, 10, 6, 5];
 const FX_VALUE_WIDTH: usize = 12;
 /// Cells in a bar on the FX page, where there are more columns to fit.
 const FX_BAR_CELLS: usize = 5;
