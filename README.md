@@ -74,6 +74,9 @@ sample gathered into it, ready to move or share.
 
 `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` renders
 without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends.
+`vimtracker bench <project> [--rate n] [--block n] [--seconds n]` measures how much of a core a
+project takes to play, stopped and playing. `cargo build --profile profiling` builds with symbols
+for a profiler.
 
 Unsaved work is written to `song.autosave.ron` every minute once the project has a folder,
 and is offered back the next time you open it after a crash.

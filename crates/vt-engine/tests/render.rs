@@ -60,7 +60,8 @@ fn hash(samples: &[f32]) -> String {
     format!("{hash:016x}")
 }
 
-/// Compare with a saved hash. `VT_BLESS=1` updates it after an intended change to the sound.
+/// Compare with a saved hash. `VT_BLESS=1` updates it after an intended change to the sound, and
+/// `VT_DUMP=folder` writes the samples there, to compare two builds by how far apart they are.
 ///
 /// These hold on one platform: the filter and reverb use library math that can differ elsewhere.
 fn golden(name: &str, samples: &[f32]) {
@@ -68,6 +69,10 @@ fn golden(name: &str, samples: &[f32]) {
         .join("tests/golden")
         .join(format!("{name}.hash"));
     let found = hash(samples);
+    if let Some(dump) = std::env::var_os("VT_DUMP") {
+        let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        std::fs::write(format!("{}/{name}.raw", dump.to_string_lossy()), bytes).unwrap();
+    }
     if std::env::var_os("VT_BLESS").is_some() {
         std::fs::write(&path, format!("{found}\n")).unwrap();
         return;

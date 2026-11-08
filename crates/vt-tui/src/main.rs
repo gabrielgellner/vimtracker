@@ -39,12 +39,31 @@ enum Command {
         #[arg(long)]
         stems: bool,
     },
+    /// Measure how much of a core a saved project takes to play, as the status line's CPU figure.
+    Bench {
+        project: PathBuf,
+        /// The sample rate.
+        #[arg(long, default_value_t = 48_000)]
+        rate: u32,
+        /// The frames in each block, as the audio device asks for them.
+        #[arg(long, default_value_t = 512)]
+        block: usize,
+        /// How long to play, in seconds of audio.
+        #[arg(long, default_value_t = 60)]
+        seconds: u32,
+    },
 }
 
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
+        Some(Command::Bench {
+            project,
+            rate,
+            block,
+            seconds,
+        }) => vt_tui::run::bench(&project, rate, block, seconds).map_err(|e| e.to_string()),
         Some(Command::Render {
             project,
             out,

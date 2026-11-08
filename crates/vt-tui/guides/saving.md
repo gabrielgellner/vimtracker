@@ -54,6 +54,12 @@ length won't join up when the file repeats, so set a reset or use `--rows`.
 From a shell, `vimtracker render my-song out.wav` renders a saved project
 with no sound device. It stops if a sample is missing.
 
+`vimtracker bench my-song` plays a saved project as fast as it can, stopped
+and then playing, and says how much of a core it took. The CPU figure on the
+status line reads higher for the same project: it's the share of each block's
+time, and macOS runs a lightly loaded audio thread on a slower core or clock,
+then speeds it up as the load rises.
+
 ## Autosave
 
 Unsaved work is written to `song.autosave.ron` every minute once the project
