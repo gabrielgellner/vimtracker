@@ -180,11 +180,15 @@ impl Handle {
         for _ in self.held.limit..needed.limit {
             self.unsent.push(Memory::limit(self.rate));
         }
+        for _ in self.held.flanger..needed.flanger {
+            self.unsent.push(Memory::flanger(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
             chorus: self.held.chorus.saturating_sub(needed.chorus),
             limit: self.held.limit.saturating_sub(needed.limit),
+            flanger: self.held.flanger.saturating_sub(needed.flanger),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -339,6 +343,9 @@ mod tests {
 
     /// A limiter, which takes a short line from the pool.
     const LIMIT: Insert = Insert::Limit(vt_model::insert::Limiter::DEFAULT);
+    /// A flanger, which takes a short line from the pool, and a phaser, which needs none.
+    const FLANGER: Insert = Insert::Flanger(vt_model::insert::Flanger::DEFAULT);
+    const PHASER: Insert = Insert::Phaser(vt_model::insert::Phaser::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -458,8 +465,10 @@ mod tests {
             let mut next = song(8, 16);
             if round % 4 == 0 {
                 next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
-            } else if round % 2 == 0 {
+            } else if round % 4 == 2 {
                 next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT];
+            } else if round % 4 == 1 {
+                next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -481,7 +490,7 @@ mod tests {
 
         let mut more = plain.clone();
         more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
-        more.tracks[1].inserts[0] = LIMIT;
+        more.tracks[1].inserts = [LIMIT, FLANGER, PHASER];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -490,6 +499,7 @@ mod tests {
                 reverb: needed.reverb + 1,
                 chorus: needed.chorus + 1,
                 limit: needed.limit + 1,
+                flanger: needed.flanger + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -504,7 +514,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 4);
+        assert_eq!(freed, 5);
     }
 
     #[test]
@@ -527,7 +537,11 @@ mod tests {
     #[test]
     fn every_effect_never_allocates_in_the_callback() {
         let pool = samples();
-        let mut song = song(8, 16);
+        let mut song = song(Insert::ALL.len(), 16);
+        assert!(
+            song.tracks.len() >= Insert::ALL.len(),
+            "a track for every effect"
+        );
         for (track, insert) in song.tracks.iter_mut().zip(Insert::ALL) {
             track.inserts = [insert; INSERTS];
         }

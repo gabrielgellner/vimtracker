@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
-use crate::lfo::DIVISION_NAMES;
+use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
 /// How many a track has.
 pub const INSERTS: usize = 3;
@@ -20,6 +20,8 @@ pub enum Insert {
     Eq(Equaliser),
     Compressor(Compressor),
     Limit(Limiter),
+    Phaser(Phaser),
+    Flanger(Flanger),
 }
 
 /// What a distortion does to the sound.
@@ -99,6 +101,14 @@ pub enum Setting {
     Input,
     Ceiling,
     LimitRelease,
+    /// How long a phaser's or flanger's sweep takes, as a place in the list of sweeps.
+    SweepRate,
+    /// The frequency a phaser sweeps around, and how many all-passes it has.
+    Centre,
+    Stages,
+    /// A flanger's delay at the middle of its sweep, and its feedback, negative below `80`.
+    FlangerDelay,
+    FlangerFeedback,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -125,6 +135,8 @@ impl Setting {
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
+            Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
+            Self::Stages => STAGE_NAMES.len() as u8 - 1,
             Self::PingPong => 1,
             _ => 0xFF,
         }
@@ -139,6 +151,8 @@ impl Setting {
             Self::AutoGain => 1.0,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
+            Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
+            Self::Stages => (STAGE_NAMES.len() - 1) as f32,
             Self::PingPong => 1.0,
             _ => 255.0,
         }
@@ -561,6 +575,106 @@ pub(crate) const LIMIT_PARAMS: [Param; 5] = [
     GAIN_PARAM,
 ];
 
+/// How many semitones a phaser's `Depth` sweeps either way of its centre, at full.
+pub const MOST_PHASER_SEMITONES: f32 = 48.0;
+/// A flanger's shortest and longest delay at the middle of its sweep, in ms.
+pub const SHORTEST_FLANGE_MS: f32 = 0.5;
+pub const LONGEST_FLANGE_MS: f32 = 10.0;
+
+/// A flanger's delay in ms at the middle of its sweep, for a value on the `00` to `FF` scale: from
+/// 0.5 ms to 10 ms, evenly in ratio.
+pub fn flanger_delay_ms(value: f32) -> f32 {
+    SHORTEST_FLANGE_MS * (LONGEST_FLANGE_MS / SHORTEST_FLANGE_MS).powf(value / 255.0)
+}
+
+/// A flanger's feedback from -1 to 1 for a value on the `00` to `FF` scale, with none at `80`.
+/// The sides have their own scales, as there are 128 values below the middle and 127 above.
+pub fn flanger_feedback(value: f32) -> f32 {
+    let from_middle = value - 128.0;
+    from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 }
+}
+
+/// How many all-passes a phaser can have, as Vital's does: each four make two notches.
+pub const STAGE_NAMES: [&str; 3] = ["4", "8", "12"];
+
+/// The `Rate` of a phaser or flanger: how long its sweep takes, in note lengths.
+const fn sweep_param(default: u8) -> Param {
+    Param {
+        name: "Rate",
+        key: "rate",
+        label: Some("RATE"),
+        setting: Setting::SweepRate,
+        choices: &SWEEP_NAMES,
+        wraps: false,
+        default,
+    }
+}
+
+/// A phaser's, in the order the page shows them.
+pub(crate) const PHASER_PARAMS: [Param; 7] = [
+    sweep_param(Phaser::DEFAULT.rate),
+    hex_param(
+        "Depth",
+        "depth",
+        "DPTH",
+        Setting::Depth,
+        Phaser::DEFAULT.depth,
+    ),
+    hex_param(
+        "Centre",
+        "centre",
+        "CNTR",
+        Setting::Centre,
+        Phaser::DEFAULT.centre,
+    ),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        Phaser::DEFAULT.feedback,
+    ),
+    Param {
+        name: "Stages",
+        key: "stages",
+        label: Some("STGS"),
+        setting: Setting::Stages,
+        choices: &STAGE_NAMES,
+        wraps: false,
+        default: Phaser::DEFAULT.stages,
+    },
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// A flanger's, in the order the page shows them.
+pub(crate) const FLANGER_PARAMS: [Param; 6] = [
+    sweep_param(Flanger::DEFAULT.rate),
+    hex_param(
+        "Depth",
+        "depth",
+        "DPTH",
+        Setting::Depth,
+        Flanger::DEFAULT.depth,
+    ),
+    hex_param(
+        "Delay",
+        "delay",
+        "DLAY",
+        Setting::FlangerDelay,
+        Flanger::DEFAULT.delay,
+    ),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::FlangerFeedback,
+        Flanger::DEFAULT.feedback,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -569,7 +683,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -578,6 +692,8 @@ impl Insert {
         Self::Eq(Equaliser::DEFAULT),
         Self::Compressor(Compressor::DEFAULT),
         Self::Limit(Limiter::DEFAULT),
+        Self::Phaser(Phaser::DEFAULT),
+        Self::Flanger(Flanger::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -603,6 +719,8 @@ impl Insert {
             Self::Eq(_) => "EQ3",
             Self::Compressor(_) => "Comp",
             Self::Limit(_) => "Limit",
+            Self::Phaser(_) => "Phaser",
+            Self::Flanger(_) => "Flanger",
         }
     }
 
@@ -617,6 +735,8 @@ impl Insert {
             Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
             Self::Compressor(_) => "Evens out its level, or ducks it under another track",
             Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
+            Self::Phaser(_) => "Sweeps notches through it with all-passes",
+            Self::Flanger(_) => "Sweeps a comb through it with a short delay",
         }
     }
 
@@ -635,6 +755,8 @@ impl Insert {
             Self::Eq(_) => &EQ_PARAMS,
             Self::Compressor(_) => &COMPRESSOR_PARAMS,
             Self::Limit(_) => &LIMIT_PARAMS,
+            Self::Phaser(_) => &PHASER_PARAMS,
+            Self::Flanger(_) => &FLANGER_PARAMS,
         }
     }
 
@@ -696,6 +818,18 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| limiter.read(setting));
             }
+            Self::Phaser(phaser) => {
+                return PHASER_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| phaser.read(setting));
+            }
+            Self::Flanger(flanger) => {
+                return FLANGER_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| flanger.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -724,6 +858,8 @@ impl Insert {
                 return Self::Compressor(compressor.written(setting, whole));
             }
             Self::Limit(limiter) => return Self::Limit(limiter.written(setting, whole)),
+            Self::Phaser(phaser) => return Self::Phaser(phaser.written(setting, whole)),
+            Self::Flanger(flanger) => return Self::Flanger(flanger.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1196,6 +1332,142 @@ impl Limiter {
     }
 }
 
+/// A phaser's settings, after Vital's. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Phaser {
+    /// How long a sweep takes, as a place in the list of sweeps.
+    pub rate: u8,
+    /// How far it sweeps either way of its centre: up to 48 semitones at `FF`.
+    pub depth: u8,
+    /// The frequency it sweeps around, from 20 Hz to 20 kHz as the filter's cutoff.
+    pub centre: u8,
+    /// How much of what comes out goes round again, which sharpens the notches into peaks.
+    pub feedback: u8,
+    /// How many all-passes, as a place among 4, 8 and 12.
+    pub stages: u8,
+    /// From `00`, all dry, to `FF`, all through the all-passes. Half has the deepest notches.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Phaser {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Phaser {
+    /// As it starts: a sweep every 2 bars, 24 semitones either way of about 640 Hz, half
+    /// feedback and 8 stages, as Vital's starts, and half wet.
+    pub const DEFAULT: Self = Self {
+        rate: 18,
+        depth: 0x80,
+        centre: 0x80,
+        feedback: 0x80,
+        stages: 1,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::SweepRate => self.rate,
+            Setting::Depth => self.depth,
+            Setting::Centre => self.centre,
+            Setting::Feedback => self.feedback,
+            Setting::Stages => self.stages,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut phaser = self;
+        match setting {
+            Setting::SweepRate => phaser.rate = value,
+            Setting::Depth => phaser.depth = value,
+            Setting::Centre => phaser.centre = value,
+            Setting::Feedback => phaser.feedback = value,
+            Setting::Stages => phaser.stages = value,
+            Setting::Mix => phaser.mix = value,
+            Setting::Gain => phaser.gain = value,
+            _ => {}
+        }
+        phaser
+    }
+}
+
+/// A flanger's settings, after Vital's. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Flanger {
+    /// How long a sweep takes, as a place in the list of sweeps.
+    pub rate: u8,
+    /// How far the delay sweeps: at `FF`, from 0.5 ms to twice the middle and back.
+    pub depth: u8,
+    /// The delay at the middle of the sweep, from 0.5 ms to 10 ms.
+    pub delay: u8,
+    /// How much of the delay goes round again, from all of it upside down at `00`, through none at
+    /// `80`, to all of it at `FF`. It never quite reaches all, so it can't run away.
+    pub feedback: u8,
+    /// From `00`, all dry, to `FF`, all delayed. Half has the deepest comb.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Flanger {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Flanger {
+    /// As it starts: a sweep every bar, half depth around about 2.2 ms, and half feedback, as
+    /// Vital's starts, and half wet.
+    pub const DEFAULT: Self = Self {
+        rate: 17,
+        depth: 0x80,
+        delay: 0x80,
+        feedback: 0xC0,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::SweepRate => self.rate,
+            Setting::Depth => self.depth,
+            Setting::FlangerDelay => self.delay,
+            Setting::FlangerFeedback => self.feedback,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut flanger = self;
+        match setting {
+            Setting::SweepRate => flanger.rate = value,
+            Setting::Depth => flanger.depth = value,
+            Setting::FlangerDelay => flanger.delay = value,
+            Setting::FlangerFeedback => flanger.feedback = value,
+            Setting::Mix => flanger.mix = value,
+            Setting::Gain => flanger.gain = value,
+            _ => {}
+        }
+        flanger
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -1438,6 +1710,41 @@ mod tests {
         for (index, kind) in DistortType::ALL.into_iter().enumerate() {
             assert_eq!(DISTORT_PARAMS[0].choices[index], kind.name());
         }
+    }
+
+    #[test]
+    fn a_phaser_and_a_flanger_sweep_in_note_lengths() {
+        let phaser = Insert::Phaser(Phaser::DEFAULT);
+        let flanger = Insert::Flanger(Flanger::DEFAULT);
+        let rate = |effect: Insert| effect.params()[0].choices[usize::from(effect.value(0))];
+        assert_eq!(rate(phaser), "2 bars");
+        assert_eq!(rate(flanger), "1 bar");
+        assert_eq!(*SWEEP_NAMES.last().unwrap(), "16 bars");
+        assert_eq!(
+            phaser
+                .write(Setting::SweepRate, 300.0)
+                .read(Setting::SweepRate),
+            Some(SWEEP_NAMES.len() as u8 - 1)
+        );
+        let stages = phaser.params()[4];
+        assert_eq!(stages.choices[usize::from(phaser.value(4))], "8");
+        assert_eq!(
+            phaser.write(Setting::Stages, 9.0).read(Setting::Stages),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn a_flangers_settings_read_in_real_units() {
+        assert!((flanger_delay_ms(0.0) - 0.5).abs() < 1e-6);
+        assert!((flanger_delay_ms(255.0) - 10.0).abs() < 1e-4);
+        assert_eq!(flanger_feedback(128.0), 0.0);
+        assert_eq!(flanger_feedback(0.0), -1.0);
+        assert_eq!(flanger_feedback(255.0), 1.0);
+        // It reads nothing for a setting it hasn't got, as a delay's feedback.
+        let flanger = Insert::Flanger(Flanger::DEFAULT);
+        assert_eq!(flanger.read(Setting::Feedback), None);
+        assert_eq!(flanger.read(Setting::FlangerFeedback), Some(0xC0));
     }
 
     #[test]
