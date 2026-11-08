@@ -2,7 +2,6 @@
 //! heard while it's adjusted.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
@@ -294,10 +293,10 @@ impl App {
     }
 
     /// Handle a key while the panel is open.
-    pub(crate) fn shape_key(&mut self, key: Key, now: Instant) {
+    pub(crate) fn shape_key(&mut self, key: Key) {
         match key.code {
-            KeyCode::Tab => return self.run(Cmd::PauseOrResume, key, now),
-            KeyCode::BackTab => return self.run(Cmd::PlayFromStart, key, now),
+            KeyCode::Tab => return self.run(Cmd::PauseOrResume),
+            KeyCode::BackTab => return self.run(Cmd::PlayFromStart),
             _ => {}
         }
         if self.shape.as_ref().is_some_and(|p| p.typing.is_some()) {

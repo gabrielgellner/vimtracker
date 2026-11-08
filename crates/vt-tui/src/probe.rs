@@ -1,8 +1,9 @@
 //! `vimtracker probe-keys`: print the key events the terminal really delivers.
 //!
-//! No keyboard enhancement flags are pushed, as the program runs without them, except with
-//! `--kitty`, which asks for what the track page's keyboard asks for, so presses, repeats and
-//! releases show. Times show how a held key repeats, which the transport key guard depends on.
+//! It asks for the kitty keyboard protocol as the program does, so presses, repeats and releases
+//! show, and says whether the terminal offers it. It runs in any terminal, so it can show why the
+//! program won't start in one. Times show how a held key repeats, and each event shows the key the
+//! program reads it as.
 
 use std::io::{self, Write};
 use std::time::Instant;
@@ -12,51 +13,40 @@ use ratatui::crossterm::event::{
 };
 use ratatui::crossterm::{execute, terminal};
 
-use crate::input::keys::RELEASE_REPORTING;
+use crate::input::keys::{KEYBOARD_FLAGS, Key};
 
 /// Restores the terminal even if printing fails part way through.
-struct RawMode {
-    kitty: bool,
-}
+struct RawMode;
 
 impl RawMode {
-    fn enter(kitty: bool) -> io::Result<Self> {
+    fn enter() -> io::Result<Self> {
         terminal::enable_raw_mode()?;
-        if kitty {
-            execute!(
-                io::stdout(),
-                PushKeyboardEnhancementFlags(RELEASE_REPORTING)
-            )?;
-        }
-        Ok(Self { kitty })
+        execute!(io::stdout(), PushKeyboardEnhancementFlags(KEYBOARD_FLAGS))?;
+        Ok(Self)
     }
 }
 
 impl Drop for RawMode {
     fn drop(&mut self) {
-        if self.kitty {
-            let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
-        }
+        let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
         let _ = terminal::disable_raw_mode();
     }
 }
 
 /// Print each key event until `Ctrl-C`.
-pub fn run(kitty: bool) -> io::Result<()> {
-    let _raw = RawMode::enter(kitty)?;
+pub fn run() -> io::Result<()> {
+    let _raw = RawMode::enter()?;
     let mut out = io::stdout();
-    if kitty {
-        let supported = terminal::supports_keyboard_enhancement().unwrap_or(false);
-        write!(
-            out,
-            "The kitty keyboard protocol is {}.\r\n",
-            if supported {
-                "supported"
-            } else {
-                "not supported here"
-            }
-        )?;
-    }
+    let supported = terminal::supports_keyboard_enhancement().unwrap_or(false);
+    write!(
+        out,
+        "The kitty keyboard protocol is {}.\r\n",
+        if supported {
+            "supported"
+        } else {
+            "not supported here, so vimtracker won't start"
+        }
+    )?;
     write!(out, "Press keys to see their events. Ctrl-C exits.\r\n")?;
     let mut last = Instant::now();
     loop {
@@ -64,9 +54,15 @@ pub fn run(kitty: bool) -> io::Result<()> {
             let now = Instant::now();
             let gap = now.duration_since(last).as_millis();
             last = now;
+            let read = Key::from_event(key);
+            let read = if read.ignored() {
+                "ignored".to_owned()
+            } else {
+                read.to_string()
+            };
             write!(
                 out,
-                "+{gap:>5} ms  {:?}  modifiers={:?}  kind={:?}\r\n",
+                "+{gap:>5} ms  {:?}  modifiers={:?}  kind={:?}  reads as {read}\r\n",
                 key.code, key.modifiers, key.kind
             )?;
             out.flush()?;

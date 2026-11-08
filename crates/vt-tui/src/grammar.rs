@@ -134,7 +134,7 @@ impl App {
                 self.pending.clear();
                 self.pending_since = None;
                 self.status.clear();
-                self.run(cmd, key, now);
+                self.run(cmd);
             }
         }
     }

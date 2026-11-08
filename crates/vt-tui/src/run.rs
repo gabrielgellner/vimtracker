@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{
-    self, Event, KeyCode, KeyEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, Event, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::{execute, terminal};
 use ratatui::layout::{Constraint, Layout, Margin};
@@ -23,7 +23,7 @@ use vt_model::song::Song;
 
 use crate::app::App;
 use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
-use crate::input::keys::{Key, RELEASE_REPORTING};
+use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics, Support};
 use crate::theme;
@@ -42,6 +42,12 @@ pub enum RunError {
     Render(#[from] hound::Error),
     #[error("{0} couldn't be loaded, so the render would be missing it")]
     MissingSample(String),
+    #[error(
+        "this terminal doesn't offer the kitty keyboard protocol, which says when a key is held \
+         and let go. vimtracker runs in kitty and Ghostty, and not inside tmux. `render`, `bench` \
+         and `probe-keys` run anywhere"
+    )]
+    NoKeyboardProtocol,
 }
 
 /// What `vimtracker render` was asked for.
@@ -161,6 +167,10 @@ pub fn bench(folder: &Path, rate: u32, block: usize, seconds: u32) -> Result<(),
 
 /// Open a project, or start an unsaved one, and run until the user quits.
 pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
+    // Before anything opens, so a terminal that can't run it is told so straight away.
+    if !terminal::supports_keyboard_enhancement().unwrap_or(false) {
+        return Err(RunError::NoKeyboardProtocol);
+    }
     // What this machine played through last, or the system's own choice if that won't open.
     let choice = AudioChoice::load();
     let output = Output::open(&choice).or_else(|_| Output::open(&AudioChoice::default()))?;
@@ -208,8 +218,17 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
-    // Inside tmux and in most terminals this is false, and the keyboard plays short notes.
-    app.key_releases = terminal::supports_keyboard_enhancement().unwrap_or(false);
+    // Every key comes as a press, a repeat or a release from here to quitting. ratatui's own hook
+    // puts the terminal back after a panic, and this lets go of the flags first.
+    execute!(
+        std::io::stdout(),
+        PushKeyboardEnhancementFlags(KEYBOARD_FLAGS)
+    )?;
+    let restore = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+        restore(info);
+    }));
     let result = main_loop(
         &mut terminal,
         &mut app,
@@ -217,6 +236,7 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
         graphics.as_mut(),
         &mut stream,
     );
+    execute!(std::io::stdout(), PopKeyboardEnhancementFlags)?;
     if let Some(graphics) = &graphics {
         graphics.forget(&mut std::io::stdout())?;
     }
@@ -232,7 +252,6 @@ fn main_loop(
     stream: &mut Option<cpal::Stream>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
-    let mut reporting = false;
     while !app.should_quit {
         // A device that changes or goes away stops audio, and the audio page chooses again.
         if stream.is_some() && stats.lost.load(Ordering::Acquire) {
@@ -270,38 +289,11 @@ fn main_loop(
         terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
-                if let Event::Key(key) = event::read()?
-                    && !matches!(key.code, KeyCode::Modifier(_))
-                {
-                    let (event, now) = (Key::from_event(key), Instant::now());
-                    match key.kind {
-                        KeyEventKind::Press => app.key(event, now),
-                        KeyEventKind::Repeat => app.key_repeated(event, now),
-                        KeyEventKind::Release => app.key_released(event),
-                    }
-                    report_key_releases(app, &mut reporting)?;
+                if let Event::Key(key) = event::read()? {
+                    app.key_event(Key::from_event(key), key.kind, Instant::now());
                 }
             }
         }
-    }
-    if reporting {
-        execute!(std::io::stdout(), PopKeyboardEnhancementFlags)?;
-    }
-    Ok(())
-}
-
-/// Ask the terminal to say when keys are let go only while the keyboard on the track page plays,
-/// so everything else reads keys as it always has.
-fn report_key_releases(app: &App, reporting: &mut bool) -> std::io::Result<()> {
-    let wanted = app.key_releases && app.mode == Mode::Keys;
-    if wanted != *reporting {
-        let mut out = std::io::stdout();
-        if wanted {
-            execute!(out, PushKeyboardEnhancementFlags(RELEASE_REPORTING))?;
-        } else {
-            execute!(out, PopKeyboardEnhancementFlags)?;
-        }
-        *reporting = wanted;
     }
     Ok(())
 }

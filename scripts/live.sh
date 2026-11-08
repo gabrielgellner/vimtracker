@@ -8,9 +8,10 @@
 #   scripts/live.sh screen          print what's on screen
 #   scripts/live.sh stop            close it
 #
-# Each key is pressed and let go. The socket is VT_LIVE_SOCKET, /tmp/vimtracker-live.sock by
-# default; a Unix socket's path must stay short. The folder is VT_LIVE_DIR, or a fresh one in
-# the system's temporary folder. It uses the release build, so run `cargo build --release` first.
+# Each key is pressed and let go, and Option is Alt, as the program's Option keys need. The
+# socket is VT_LIVE_SOCKET, /tmp/vimtracker-live.sock by default; a Unix socket's path must stay
+# short. The folder is VT_LIVE_DIR, or a fresh one in the system's temporary folder. It uses the
+# release build, so run `cargo build --release` first.
 set -eu
 
 kitty=${KITTY:-/Applications/kitty.app/Contents/MacOS/kitty}
@@ -26,6 +27,7 @@ start)
     rm -f "$socket"
     folder=${VT_LIVE_DIR:-$(mktemp -d)}
     "$kitty" --config NONE -o allow_remote_control=socket-only --listen-on "unix:$socket" \
+        -o macos_option_as_alt=yes \
         -o macos_quit_when_last_window_closed=yes -o initial_window_width=120c \
         -o initial_window_height=30c -o remember_window_size=no --start-as=minimized \
         --title vimtracker-live --directory "$folder" \
@@ -59,7 +61,7 @@ stop)
     rm -f "$socket"
     ;;
 *)
-    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

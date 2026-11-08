@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::meter::Meter;
-use ratatui::crossterm::event::KeyCode;
+use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
@@ -16,7 +16,7 @@ use vt_engine::track_state::LiveValues;
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
-    TRACK_ENVELOPES, TRANSPORT_GUARD_MS,
+    TRACK_ENVELOPES,
 };
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
@@ -206,9 +206,11 @@ pub struct App {
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid, likewise.
     pub auto_jump: bool,
-    /// Whether the terminal says when a key is let go, through the kitty keyboard protocol. Then
-    /// the keyboard on the track page holds a note for as long as its key is down.
-    pub key_releases: bool,
+    /// The key last pressed, as it is on the keyboard, until it's let go.
+    key_down: Option<KeyCode>,
+    /// Whether the key that's down ignores its repeats, as a transport key and a note on the
+    /// keyboard do.
+    repeats_ignored: bool,
     /// The key the keyboard is holding a note for, and that note.
     held_key: Option<(KeyCode, u8)>,
     pub entry: Entry,
@@ -248,7 +250,6 @@ pub struct App {
     pub(crate) selection_scope: Option<Scope>,
     pub(crate) last_selection: Option<Selection>,
     pub(crate) last_change: Option<Change>,
-    guard: Option<(Key, Instant)>,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -326,7 +327,8 @@ impl App {
             levels,
             scale,
             auto_jump,
-            key_releases: false,
+            key_down: None,
+            repeats_ignored: false,
             held_key: None,
             entry: Entry::default(),
             top: 0,
@@ -356,7 +358,6 @@ impl App {
             selection_scope: None,
             last_selection: None,
             last_change: None,
-            guard: None,
         };
         app.send_live();
         app
@@ -558,19 +559,52 @@ impl App {
         }
     }
 
-    /// A key the terminal repeats while it's held. A note on the keyboard is already held, so
-    /// it's ignored; anything else repeats as a press.
-    pub fn key_repeated(&mut self, key: Key, now: Instant) {
-        let note = matches!(key.code, KeyCode::Char(c) if KEYS_NOTES.contains(c));
-        if self.mode == Mode::Keys && self.key_releases && note {
+    /// A key from the terminal, which the kitty keyboard protocol says is a press, a repeat or a
+    /// release. What a held key does, in every mode, is decided here and in the three below.
+    pub fn key_event(&mut self, key: Key, kind: KeyEventKind, now: Instant) {
+        if key.ignored() {
             return;
         }
-        self.key(key, now);
+        match kind {
+            KeyEventKind::Press => self.key(key, now),
+            KeyEventKind::Repeat => self.key_repeated(key, now),
+            KeyEventKind::Release => self.key_released(key),
+        }
+    }
+
+    /// A key pressed.
+    pub fn key(&mut self, key: Key, now: Instant) {
+        // A real second press comes after a release, so a press of the key that's down is the
+        // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
+        // presses.
+        if self.key_down == Some(key.physical()) {
+            self.key_repeated(key, now);
+            return;
+        }
+        self.key_down = Some(key.physical());
+        self.repeats_ignored = false;
+        self.press(key, now);
+    }
+
+    /// A key the terminal repeats while it's held. A transport key acts once however long it's
+    /// held, and a note on the keyboard is already held; anything else repeats as a press.
+    pub fn key_repeated(&mut self, key: Key, now: Instant) {
+        if self.repeats_ignored && self.key_down == Some(key.physical()) {
+            return;
+        }
+        self.press(key, now);
     }
 
     /// A key let go: the keyboard's note ends if it was this key's.
     pub fn key_released(&mut self, key: Key) {
-        if self.held_key.is_some_and(|(code, _)| code == key.code) {
+        if self.key_down == Some(key.physical()) {
+            self.key_down = None;
+            self.repeats_ignored = false;
+        }
+        if self
+            .held_key
+            .is_some_and(|(code, _)| code == key.physical())
+        {
             self.let_go_of_held_key();
         }
     }
@@ -581,8 +615,8 @@ impl App {
         }
     }
 
-    /// Handle one key.
-    pub fn key(&mut self, key: Key, now: Instant) {
+    /// Act on a press, or a repeat that acts as one.
+    fn press(&mut self, key: Key, now: Instant) {
         let was = self.mode;
         self.handle_key(key, now);
         // Leaving the keyboard lets go of what it's holding.
@@ -592,15 +626,6 @@ impl App {
     }
 
     fn handle_key(&mut self, key: Key, now: Instant) {
-        if let Some((guarded, seen)) = self.guard {
-            let window = Duration::from_millis(TRANSPORT_GUARD_MS);
-            if guarded == key && now.saturating_duration_since(seen) < window {
-                // A held key looks like repeated presses, so keep ignoring it while it repeats.
-                self.guard = Some((key, now));
-                return;
-            }
-            self.guard = None;
-        }
         match self.mode {
             Mode::Normal
             | Mode::OperatorPending
@@ -613,22 +638,22 @@ impl App {
             | Mode::Audio => {
                 self.command_key_normal(key, now);
             }
-            Mode::Insert => self.insert_key(key, now),
+            Mode::Insert => self.insert_key(key),
             Mode::Replace => self.replace_key(key),
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
             Mode::Guide => self.guide_key(key),
             Mode::Picker => self.picker_key(key),
-            Mode::Shape => self.shape_key(key, now),
-            Mode::Jump => self.jump_key(key, now),
+            Mode::Shape => self.shape_key(key),
+            Mode::Jump => self.jump_key(key),
             Mode::Restore => self.restore_key(key),
             Mode::Keys => self.keys_key(key, now),
         }
     }
 
     /// Play the track's sound from a few keys, `a` `w` `s` `e` `d` `f`, without writing anything,
-    /// while every other key works on the page as it does, so settings change as it plays. Each
-    /// key plays a short note, as a terminal can't tell when a key is let go.
+    /// while every other key works on the page as it does, so settings change as it plays. A note
+    /// lasts as long as its key is down.
     fn keys_key(&mut self, key: Key, now: Instant) {
         let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
         match key.code {
@@ -641,27 +666,13 @@ impl App {
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
                     let (track, velocity) = (self.cursor.track, self.note_velocity);
-                    // A real second press comes after a release, so a press of the key that's
-                    // held is the terminal repeating it. kitty on macOS has been seen sending a
-                    // held `a`'s repeats as presses.
-                    if self.key_releases && self.held_key.is_some_and(|(held, _)| held == key.code)
-                    {
-                        return;
-                    }
-                    if self.key_releases {
-                        self.held_key = Some((key.code, note));
-                        self.handle.send(Command::HoldPreview {
-                            track,
-                            note,
-                            velocity,
-                        });
-                    } else {
-                        self.handle.send(Command::Preview {
-                            track,
-                            note,
-                            velocity,
-                        });
-                    }
+                    self.held_key = Some((key.physical(), note));
+                    self.repeats_ignored = true;
+                    self.handle.send(Command::HoldPreview {
+                        track,
+                        note,
+                        velocity,
+                    });
                 }
             }
             _ => {
@@ -798,7 +809,7 @@ impl App {
         .min(last);
     }
 
-    pub(crate) fn run(&mut self, cmd: Cmd, key: Key, now: Instant) {
+    pub(crate) fn run(&mut self, cmd: Cmd) {
         let handled = match self.view {
             View::Chain => self.run_chain(cmd),
             View::Track => self.run_track_page(cmd),
@@ -857,11 +868,11 @@ impl App {
                     step,
                     track,
                 });
-                self.guard = Some((key, now));
+                self.repeats_ignored = true;
             }
             Cmd::PlayFromStart => {
                 self.handle.send(Command::PlayFrom { step: 0 });
-                self.guard = Some((key, now));
+                self.repeats_ignored = true;
             }
             Cmd::Audition => {
                 if self.extent().plays(self.cursor.step) {
@@ -873,7 +884,7 @@ impl App {
             }
             Cmd::PauseOrResume => {
                 self.handle.send(Command::PauseOrResume);
-                self.guard = Some((key, now));
+                self.repeats_ignored = true;
             }
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
@@ -1292,11 +1303,11 @@ impl App {
         }
     }
 
-    fn insert_key(&mut self, key: Key, now: Instant) {
+    fn insert_key(&mut self, key: Key) {
         // You can start and pause while writing, as `Tab` and `Shift-Tab` are never typed.
         match key.code {
-            KeyCode::Tab => return self.run(Cmd::PauseOrResume, key, now),
-            KeyCode::BackTab => return self.run(Cmd::PlayFromStart, key, now),
+            KeyCode::Tab => return self.run(Cmd::PauseOrResume),
+            KeyCode::BackTab => return self.run(Cmd::PlayFromStart),
             _ => {}
         }
         if self.view == View::Phrase && key.alt {

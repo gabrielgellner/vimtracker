@@ -26,9 +26,17 @@ cargo run --release -p vt-tui --bin vimtracker
 With [just](https://github.com/casey/just) installed, `just run my-song` does the same for a
 project, and `just test` runs the tests.
 
-In kitty, small drawings such as envelopes are images. Inside tmux, this needs `set -g allow-passthrough on` in your config. Other terminals get Braille, as does `--no-graphics`.
-
 Run the tests with `cargo test --workspace`.
+
+### Terminal
+
+vimtracker runs in [kitty](https://sw.kovidgoyal.net/kitty/) and [Ghostty](https://ghostty.org),
+and won't start in other terminals or inside tmux. It needs the kitty keyboard protocol, which
+says when a key is held and let go. The Option keys, such as `Option-1`, need kitty's
+`macos_option_as_alt yes` or Ghostty's `macos-option-as-alt = true` in your config.
+
+In kitty, small drawings such as envelopes are images. Elsewhere they're Braille, as with
+`--no-graphics`.
 
 ## Quick start
 
@@ -74,8 +82,8 @@ sample gathered into it, ready to move or share.
 | `:render path [--rows n] [--tail]` | Render to a WAV file |
 
 `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` renders
-without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends, and
-`--kitty` asks for the kitty keyboard protocol, so key releases show.
+without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends, with
+the kitty keyboard protocol on as the program has it, and runs in any terminal.
 `vimtracker bench <project> [--rate n] [--block n] [--seconds n]` measures how much of a core a
 project takes to play, stopped and playing. `cargo build --profile profiling` builds with symbols
 for a profiler.
