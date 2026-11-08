@@ -541,7 +541,7 @@ fn a_velocity_above_the_top_writes_the_top() {
     check(&[FULL], "lrff", &["C-4 7F vol:10 pan:20 cut:30"]);
     // Other FX values have their own tops: the level scale's, or their whole range.
     check(&[FULL], "llllrff", &["C-4 70 vol:F8 pan:20 cut:30"]);
-    check(&[FULL], "llllllrff", &["C-4 70 vol:10 pan:FF cut:30"]);
+    check(&[FULL], "lllllllrff", &["C-4 70 vol:10 pan:FF cut:30"]);
 }
 
 #[test]
@@ -793,10 +793,11 @@ fn zero_and_dollar_go_to_the_ends_of_the_row() {
     let (mut app, _rt) = app_with(&[FULL, FULL]);
     keys(&mut app, "ll0");
     assert_eq!(app.cursor.field, Field::Note);
+    // The last field is a setting's fine digits.
     keys(&mut app, "$");
-    assert_eq!(app.cursor.field, Field::FxValue(2));
+    assert_eq!(app.cursor.field, Field::FxFine(2));
     keys(&mut app, "$");
-    assert_eq!(app.cursor.field, Field::FxValue(2));
+    assert_eq!(app.cursor.field, Field::FxFine(2));
     keys(&mut app, "0");
     assert_eq!(app.cursor.field, Field::Note);
     assert_eq!(app.cursor.step, 0);
@@ -1452,7 +1453,8 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
     // Where, from Commands to All rows, writes the command on the empty rows.
     keys(&mut app, "jjjjKall<Enter>");
     assert_eq!(app.mode, Mode::Shape);
-    assert_eq!(fx(&app), ["cut:10", "cut:1B", "cut:25", "cut:30"]);
+    // A ramp on a setting fills its fine part, so it moves evenly.
+    assert_eq!(fx(&app), ["cut:10", "cut:1AAB", "cut:2555", "cut:30"]);
 
     keys(&mut app, "Knotes<Enter>");
     assert_eq!(fx(&app)[0], "cut:10");
@@ -1956,4 +1958,104 @@ fn the_gate_column_is_selected_filled_and_pasted_as_a_column() {
     check(&[held, plain, plain], "llvyjjp", &[held, plain, held]);
     // The gate stays in its column: it doesn't land in an FX slot.
     check(&[held, plain], "llvyjlp", &[held, plain]);
+}
+
+#[test]
+fn the_fine_digits_nudge_and_carry_and_the_coarse_ones_keep_them() {
+    check(
+        &["--- -- cut:40FF --- ---"],
+        "lllll=",
+        &["--- -- cut:41 --- ---"],
+    );
+    check(
+        &["--- -- cut:4100 --- ---"],
+        "lllll-",
+        &["--- -- cut:40FF --- ---"],
+    );
+    check(
+        &["--- -- cut:4012 --- ---"],
+        "lllll+",
+        &["--- -- cut:4022 --- ---"],
+    );
+    check(
+        &["--- -- cut:4012 --- ---"],
+        "llll=",
+        &["--- -- cut:4112 --- ---"],
+    );
+    check(
+        &["--- -- cut:FE80 --- ---"],
+        "llll=",
+        &["--- -- cut:FF --- ---"],
+    );
+}
+
+#[test]
+fn typing_coarse_digits_keeps_the_fine_part_up_to_the_top() {
+    check(
+        &["--- -- cut:3F80 --- ---"],
+        "lllli40<Esc>",
+        &["--- -- cut:4080 --- ---"],
+    );
+    check(
+        &["--- -- cut:3F80 --- ---"],
+        "llllrFF",
+        &["--- -- cut:FF --- ---"],
+    );
+    // Another setting's value starts afresh.
+    check(
+        &["--- -- cut:3F80 --- ---"],
+        "lllirES<Enter>40<Esc>",
+        &["--- -- res:40 --- ---"],
+    );
+}
+
+#[test]
+fn the_fine_digits_are_typed_replaced_and_cleared_on_their_own() {
+    check(
+        &["--- -- cut:40 --- ---", "--- -- cut:50 --- ---"],
+        "lllllia0b0<Esc>",
+        &["--- -- cut:40A0 --- ---", "--- -- cut:50B0 --- ---"],
+    );
+    check(
+        &["--- -- cut:40 --- ---"],
+        "lllllr12",
+        &["--- -- cut:4012 --- ---"],
+    );
+    check(
+        &["--- -- cut:4080 --- ---"],
+        "lllllx",
+        &["--- -- cut:40 --- ---"],
+    );
+    check(
+        &["--- -- cut:4080 --- ---"],
+        "lllllsa0<Esc>",
+        &["--- -- cut:40A0 --- ---"],
+    );
+    // A new value below starts with none, as its mark is copied and its fine part isn't.
+    check(
+        &["--- -- cut:4080h --- ---", E],
+        "jlllicut<Enter>50<Esc>",
+        &["--- -- cut:4080h --- ---", "--- -- cut:50h --- ---"],
+    );
+}
+
+#[test]
+fn a_list_or_an_event_has_no_fine_digits_and_a_list_doesnt_glide() {
+    let (mut app, _rt) = app_with(&["--- -- 1.distort.bits:03 del:10 cut:40"]);
+    keys(&mut app, "lllll");
+    assert_eq!(app.cursor.field, Field::FxCommand(1), "past the list's");
+    keys(&mut app, "ll");
+    assert_eq!(app.cursor.field, Field::FxCommand(2), "and the event's");
+    keys(&mut app, "hh");
+    assert_eq!(app.cursor.field, Field::FxCommand(1));
+    check(
+        &["--- -- 1.distort.bits:03 --- ---"],
+        "llll~",
+        &["--- -- 1.distort.bits:03h --- ---"],
+    );
+    check(
+        &["--- -- 1.distort.bits:03 --- ---"],
+        "llll~~",
+        &["--- -- 1.distort.bits:03 --- ---"],
+    );
 }

@@ -136,7 +136,12 @@ impl FromStr for FxSlot {
             _ => return Err(bad()),
         };
         let value = u16::from(coarse) << 8 | u16::from(fine);
-        if (mark != Mark::Lock && !command.holds()) || value > command.highest_value() {
+        let marked = match mark {
+            Mark::Lock => true,
+            Mark::Hold => command.holds(),
+            Mark::Glide => command.glides(),
+        };
+        if !marked || value > command.highest_value() {
             return Err(bad());
         }
         Ok(Self {
@@ -306,6 +311,10 @@ mod tests {
                 StepTextError::Slot("1.distort.bits:0380".into()),
             ),
             ("C-4 -- cut:408", StepTextError::Slot("cut:408".into())),
+            (
+                "C-4 -- 1.distort.bits:03g",
+                StepTextError::Slot("1.distort.bits:03g".into()),
+            ),
             ("C-4", StepTextError::TooFewFields("C-4".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");

@@ -148,13 +148,18 @@ impl ShapeColumn {
 
     /// Write a value to a step, with no fine part.
     pub fn write(self, step: &mut Step, value: u8) {
+        self.write_exact(step, u16::from(value) << 8);
+    }
+
+    /// Write a value with a fine part to a step. A velocity takes the whole value.
+    pub fn write_exact(self, step: &mut Step, value: u16) {
         match self {
-            Self::Velocity => step.velocity = Some(value),
+            Self::Velocity => step.velocity = Some((value >> 8) as u8),
             Self::Fx { slot, command } => {
                 if let Some(fx) = step.fx.get_mut(slot) {
                     *fx = FxSlot {
                         command: Some(command),
-                        value: u16::from(value) << 8,
+                        value,
                         mark: if fx.is_value() { fx.mark } else { Mark::Lock },
                     }
                     .with_valid_mark();
@@ -255,6 +260,48 @@ pub fn values(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u8)> {
+    shaped(steps, range, column, shape)
+        .into_iter()
+        .map(|(row, value)| (row, value.whole))
+        .collect()
+}
+
+/// The same with each value's fine part, where its column has one, so a ramp between two values
+/// a step apart still moves on every row. A column without one gets the whole values.
+pub fn exact_values(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+) -> Vec<(usize, u16)> {
+    let fine = matches!(column, ShapeColumn::Fx { command, .. } if command.has_fine());
+    let top = f64::from(column.highest()) * 256.0;
+    shaped(steps, range, column, shape)
+        .into_iter()
+        .map(|(row, value)| {
+            let value = if fine {
+                (value.exact * 256.0).round().clamp(0.0, top) as u16
+            } else {
+                u16::from(value.whole) << 8
+            };
+            (row, value)
+        })
+        .collect()
+}
+
+/// A shape's value on a row: where it falls exactly, and the whole value written without a fine
+/// part.
+struct Shaped {
+    exact: f64,
+    whole: u8,
+}
+
+fn shaped(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+) -> Vec<(usize, Shaped)> {
     let rows = targets(steps, range, column, shape.place, shape.seed);
     let (Some(&first), Some(&last)) = (rows.first(), rows.last()) else {
         return Vec::new();
@@ -263,30 +310,42 @@ pub fn values(
     let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
     let (low, high) = (from.min(to) as u64, from.max(to) as u64);
     let across = (last - first).max(1) as f64;
+    let whole = |value: f64| Shaped {
+        exact: value,
+        whole: value as u8,
+    };
     rows.iter()
         .enumerate()
         .map(|(index, &row)| {
             let value = match shape.kind {
                 FillKind::Ramp => {
                     let t = (row - first) as f64 / across;
+                    let along = curved(t, shape.curve, shape.s);
                     // Rounding the distance travelled means falling mirrors rising exactly.
-                    let moved = ((to - from).abs() * curved(t, shape.curve, shape.s) + 0.5).floor();
-                    (from + moved.copysign(to - from)).clamp(0.0, top) as u8
+                    let moved = ((to - from).abs() * along + 0.5).floor();
+                    Shaped {
+                        exact: from + (to - from) * along,
+                        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
+                    }
                 }
                 FillKind::Random => {
                     let span = high - low + 1;
-                    (low + mix(shape.seed, row - range.first) % span) as u8
+                    whole((low + mix(shape.seed, row - range.first) % span) as f64)
                 }
                 FillKind::Wave => {
                     let ticks = (row - range.first) as u64 * TICKS_PER_STEP;
                     let cycles =
                         shape.rate.cycles(ticks as f64, 0.0) + f64::from(shape.phase) / 360.0;
                     let t = (f64::from(wave(shape.wave, cycles, shape.seed)) + 1.0) / 2.0;
-                    (from + (to - from) * t).round().clamp(0.0, top) as u8
+                    let exact = from + (to - from) * t;
+                    Shaped {
+                        exact,
+                        whole: exact.round().clamp(0.0, top) as u8,
+                    }
                 }
                 FillKind::Alternate => {
                     let turn = index / usize::from(shape.run.max(1));
-                    (if turn.is_multiple_of(2) { from } else { to }) as u8
+                    whole(if turn.is_multiple_of(2) { from } else { to })
                 }
             };
             (row, value)
@@ -348,6 +407,34 @@ mod tests {
 
     fn all(steps: &[Step]) -> StepRange {
         StepRange::between(0, steps.len() - 1)
+    }
+
+    #[test]
+    fn a_ramp_on_a_setting_fills_its_fine_part() {
+        let steps: Vec<Step> = (0..4)
+            .map(|_| "C-4 -- cut:40 --- ---".parse().unwrap())
+            .collect();
+        let column = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::CUT,
+        };
+        let out: Vec<u16> = exact_values(&steps, all(&steps), column, &ramp(0x40, 0x41, 0, 0))
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(out, [0x4000, 0x4055, 0x40AB, 0x4100]);
+        let events = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::Del,
+        };
+        let steps: Vec<Step> = (0..4)
+            .map(|_| "C-4 -- del:40 --- ---".parse().unwrap())
+            .collect();
+        let whole: Vec<u16> = exact_values(&steps, all(&steps), events, &ramp(0x40, 0x41, 0, 0))
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert!(whole.iter().all(|value| value & 0xFF == 0), "{whole:X?}");
     }
 
     fn ramp(from: u8, to: u8, curve: i8, s: i8) -> Shape {

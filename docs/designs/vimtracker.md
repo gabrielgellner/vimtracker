@@ -1933,7 +1933,7 @@ Kind::Stepped {
     *   `=` on the fine digits of `40FF` gives `4100`, and `=` on the coarse digits of `4012` gives `4112`.
     *   `40` typed over `3F80` gives `4080`, and `FF` typed over it gives `FF00`.
     *   `x` on the fine digits of `4080` gives `4000`, and a new value under `4080` starts at `xx00`.
-    *   A ramp from `4000` to `4100` over 4 rows fills `4055` and `40AA` between them, rounded.
+    *   A ramp from `4000` to `4100` over 4 rows fills `4055` and `40AB` between them, rounded.
     *   On a stepped value, `l` skips to the next slot and `g` isn't offered.
 3.  **Locks for LFO settings and Pitch:** their labels, the engine reading their locks, and the Mod page showing their units.
     **Code:** `settings.rs`'s LFO and track entries; `track_state.rs`'s LFO and pitch paths; `lfo.rs`; `views/track.rs`.
@@ -1944,6 +1944,8 @@ Kind::Stepped {
     *   No allocation in the callback.
 
 **Issue 1 built** on 2026-11-07. Steps' values and the engine's layers are 16 bits, and the engine hears a fine part as the fraction on its `00` to `FF` scale. The track's own settings and a track's machine settings stay 8 bits until issue 2 gives the pages a way to set a fine part, and are read as coarse only. An effect's settings are also 8 bits, so a fine part rounds off when it reaches an effect; voices and the track's filter, pan and levels hear all of it. Typing over a value of the same setting already keeps its fine part, as issue 2 has it. The status line shows units for a setting the track has, and only names one it doesn't.
+
+**Issue 2 is built in two parts.** The first, on 2026-11-07, is the grid: the fine field and its editing rules, fine nudges that carry, `x`, `r`, `s` and typing on the fine digits, ramps and waves from the shape panel filling the fine part, and lists that hold but don't glide. On a row where the cell has no fine part, the cursor can still sit on the fine column, coming from above or below, and typing there says so. The second part is the pages: the track's own values, its machine's settings and its effects' settings become 16 bits, and the pages get a key for the fine part.
 
 **Done when** each issue's tests pass, and the author has dialled in values with the fine part, locked LFOs and Pitch in a jam, and the grid and its colours stay readable to them.
 

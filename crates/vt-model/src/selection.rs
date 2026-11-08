@@ -14,7 +14,10 @@ pub enum Field {
     /// The gate cell: a gate type and the row's length in pulses.
     Gate,
     FxCommand(usize),
+    /// An FX value's coarse digits.
     FxValue(usize),
+    /// An FX value's fine digits, which only a continuous setting's has.
+    FxFine(usize),
 }
 
 /// The column group of the gate cell.
@@ -29,7 +32,7 @@ impl Field {
             Self::Note => 0,
             Self::Velocity => 1,
             Self::Gate => GATE_GROUP,
-            Self::FxCommand(slot) | Self::FxValue(slot) => FX_GROUP + slot,
+            Self::FxCommand(slot) | Self::FxValue(slot) | Self::FxFine(slot) => FX_GROUP + slot,
         }
     }
 
@@ -49,8 +52,9 @@ impl Field {
             Self::Note => 0,
             Self::Velocity => 1,
             Self::Gate => 2,
-            Self::FxCommand(slot) => 3 + slot * 2,
-            Self::FxValue(slot) => 4 + slot * 2,
+            Self::FxCommand(slot) => 3 + slot * 3,
+            Self::FxValue(slot) => 4 + slot * 3,
+            Self::FxFine(slot) => 5 + slot * 3,
         }
     }
 
@@ -60,8 +64,11 @@ impl Field {
             0 => Self::Note,
             1 => Self::Velocity,
             2 => Self::Gate,
-            n if (n - 3).is_multiple_of(2) => Self::FxCommand((n - 3) / 2),
-            n => Self::FxValue((n - 4) / 2),
+            n => match (n - 3) % 3 {
+                0 => Self::FxCommand((n - 3) / 3),
+                1 => Self::FxValue((n - 3) / 3),
+                _ => Self::FxFine((n - 3) / 3),
+            },
         }
     }
 }
@@ -317,6 +324,7 @@ pub fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
     for (index, slot) in step.fx.iter_mut().enumerate() {
         if scope.covers(FX_GROUP + index) && slot.is_value() {
             slot.mark = mark;
+            *slot = slot.with_valid_mark();
         }
     }
 }
@@ -333,6 +341,11 @@ pub enum Shift {
     Chromatic,
     /// `+` and `_`. The same again in large steps: an octave, or the top hex digit.
     Large,
+    /// `=` and `-` on a value's fine digits, which carry into its coarse ones past `FF` or below
+    /// `00`. Only values with a fine part move.
+    Fine,
+    /// `+` and `_` on a value's fine digits, by 16.
+    FineLarge,
 }
 
 /// How much one large step is for a value in hex.
@@ -364,6 +377,22 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
 /// through it, except by a large step, as an octave stays in key, or a chromatic one.
 pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift, scale: Option<Scale>) {
     let by = by.clamp(-0xFFFF, 0xFFFF);
+    if matches!(kind, Shift::Fine | Shift::FineLarge) {
+        let by = if kind == Shift::FineLarge {
+            by * LARGE_HEX
+        } else {
+            by
+        };
+        for (index, slot) in step.fx.iter_mut().enumerate() {
+            if scope.covers(FX_GROUP + index)
+                && let Some(command) = slot.command.filter(|command| command.has_fine())
+            {
+                let moved = i32::from(slot.value) + by;
+                slot.value = moved.clamp(0, i32::from(command.highest_value())) as u16;
+            }
+        }
+        return;
+    }
     let large = kind == Shift::Large;
     if scope.covers(0)
         && let Note::On(midi) = step.note
@@ -571,6 +600,47 @@ mod tests {
         assert_eq!(Motion::Last.step(0, Some(usize::MAX), SLID), 31);
     }
 
+    fn shifted(text: &str, by: i32, kind: Shift) -> String {
+        let mut step: Step = text.parse().unwrap();
+        shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None);
+        step.to_string()
+    }
+
+    #[test]
+    fn a_fine_nudge_carries_into_the_coarse_digits_and_a_coarse_one_keeps_the_fine() {
+        assert_eq!(shifted("--- -- cut:40FF", 1, Shift::Fine), "--- -- cut:41");
+        assert_eq!(
+            shifted("--- -- cut:4100", -1, Shift::Fine),
+            "--- -- cut:40FF"
+        );
+        assert_eq!(
+            shifted("--- -- cut:4012", 1, Shift::Increment),
+            "--- -- cut:4112"
+        );
+        assert_eq!(
+            shifted("--- -- cut:4012", 1, Shift::FineLarge),
+            "--- -- cut:4022"
+        );
+        // At the top the fine part is 00, and at the bottom nothing goes below.
+        assert_eq!(shifted("--- -- cut:FF", 1, Shift::Fine), "--- -- cut:FF");
+        assert_eq!(
+            shifted("--- -- cut:FE80", 1, Shift::Increment),
+            "--- -- cut:FF"
+        );
+        assert_eq!(shifted("--- -- cut:00", -1, Shift::Fine), "--- -- cut:00");
+        // An event or a list has no fine part, so a fine nudge leaves it.
+        assert_eq!(shifted("--- -- del:10", 1, Shift::Fine), "--- -- del:10");
+    }
+
+    #[test]
+    fn a_list_can_hold_but_not_glide() {
+        let mut step: Step = "--- -- 1.distort.bits:03".parse().unwrap();
+        mark_step(&mut step, Scope::column(FX_GROUP), Mark::Glide);
+        assert_eq!(step.fx[0].mark, Mark::Lock);
+        mark_step(&mut step, Scope::column(FX_GROUP), Mark::Hold);
+        assert_eq!(step.fx[0].mark, Mark::Hold);
+    }
+
     #[test]
     fn line_motions_cross_the_loop_edges() {
         assert_eq!(Motion::Down.step(21, None, SLID), 22);
@@ -593,9 +663,12 @@ mod tests {
 
     #[test]
     fn field_order_and_groups_round_trip() {
-        for order in 0..9 {
+        for order in 0..12 {
             assert_eq!(Field::from_order(order).order(), order);
         }
+        assert_eq!(Field::from_order(5), Field::FxFine(0));
+        assert_eq!(Field::from_order(6), Field::FxCommand(1));
+        assert_eq!(Field::FxFine(1).group(), 4);
         assert_eq!(Field::FxValue(1).group(), 4);
         assert_eq!(Field::of_group(4), Field::FxCommand(1));
         assert_eq!(Field::of_group(GATE_GROUP), Field::Gate);

@@ -394,9 +394,10 @@ impl App {
     pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
         let extent = self.extent();
         let lane = match (motion, self.cursor.field) {
-            (Motion::First | Motion::Last, Field::FxCommand(slot) | Field::FxValue(slot)) => {
-                self.phrase_here().and_then(|phrase| phrase.lane(slot))
-            }
+            (
+                Motion::First | Motion::Last,
+                Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
+            ) => self.phrase_here().and_then(|phrase| phrase.lane(slot)),
             _ => None,
         };
         lane.map_or(extent, |lane| Extent {
@@ -799,7 +800,7 @@ impl App {
     /// The FX column the cursor is on.
     fn fx_column(&self) -> Option<usize> {
         match self.cursor.field {
-            Field::FxCommand(slot) | Field::FxValue(slot) => Some(slot),
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => Some(slot),
             Field::Note | Field::Velocity | Field::Gate => None,
         }
     }
@@ -1122,6 +1123,7 @@ impl App {
                 Field::Velocity | Field::FxValue(_) => self.insert_value(key),
                 Field::Gate => self.insert_gate(key),
                 Field::FxCommand(slot) => self.insert_command(key, slot),
+                Field::FxFine(slot) => self.insert_fine(key, slot),
             },
         }
     }
@@ -1173,6 +1175,7 @@ impl App {
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
             Field::Gate => self.insert_gate(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
+            Field::FxFine(slot) => self.insert_fine(key, slot),
         }
     }
 
@@ -1440,6 +1443,50 @@ impl App {
             _ => {}
         }
         self.advance();
+    }
+
+    /// Two hex digits set a value's fine part, keeping its coarse digits, and move down by the
+    /// step setting.
+    fn insert_fine(&mut self, key: Key, slot: usize) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.set_fine(slot, 0);
+                    self.move_step(-1);
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
+                let current = self.current_slot(slot).unwrap_or_default();
+                if !current.command.is_some_and(FxCommand::has_fine) {
+                    self.status = "Only a setting that sweeps has a fine part".to_owned();
+                    return;
+                }
+                self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 2 {
+                    let text = std::mem::take(&mut self.entry.text);
+                    if let Ok(fine) = u8::from_str_radix(&text, 16) {
+                        self.set_fine(slot, fine);
+                    }
+                    self.advance();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Set a value's fine part, where it has one.
+    pub(crate) fn set_fine(&mut self, slot: usize, fine: u8) {
+        let current = self.current_slot(slot).unwrap_or_default();
+        if current.command.is_some_and(FxCommand::has_fine) {
+            self.set_field(FieldValue::Slot(
+                slot,
+                FxSlot {
+                    value: current.value & 0xFF00 | u16::from(fine),
+                    ..current
+                },
+            ));
+        }
     }
 
     /// The mark a value typed here gets: the one it's typed over, or else the nearest value's

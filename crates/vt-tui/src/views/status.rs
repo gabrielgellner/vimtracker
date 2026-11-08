@@ -67,7 +67,9 @@ pub fn column_name(app: &App) -> String {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
             Field::Gate => "Gate".to_owned(),
-            Field::FxCommand(slot) | Field::FxValue(slot) => fx_name(app, slot),
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                fx_name(app, slot)
+            }
         },
         View::Chain => match app.chain_column {
             ChainColumn::Phrase => "Phrase".to_owned(),
@@ -107,7 +109,7 @@ pub fn value_shown(app: &App) -> Option<String> {
     let track = app.track_here()?;
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
-            Field::FxCommand(slot) | Field::FxValue(slot) => {
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 let cell = app.current_slot(slot)?;
                 let id = cell.command?.setting()?;
                 (id, cell.value)

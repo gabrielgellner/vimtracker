@@ -16,8 +16,16 @@ To type one instead, press `i` on the slot, type its label, such as `CUT` or
 `2FDBK`, and press `Enter`, then type the value, such as `40`. A label that isn't
 on the track opens `K`, searching for what you typed. A slot only takes effect
 once its value is typed. The status line names what the cursor is on and its
-value in real units, such as `Filter: Cut, 1.21 kHz`. Typing over a value of the
-same setting keeps its fine part.
+value in real units, such as `Filter: Cut, 1.21 kHz`.
+
+The fine digits are a field of their own: `l` goes from the value onto them, and
+passes them by on a list or an event, which have none. There `=` and `-` move the
+fine part by one, and carry into the value past `FF` or below `00`, `+` and `_`
+move it by 16, two digits in Insert or after `r` set it, and `x` sets it back to
+`00`. The value's own digits keep the fine part as they change, and stop at the
+top, where the fine part is `00`. A new value starts with none. A ramp from the
+shape panel fills the fine part too, so it moves evenly even between two values
+a step apart. A list's value can't glide, so `~` goes between lock and hold.
 
 ## Values and their marks
 
