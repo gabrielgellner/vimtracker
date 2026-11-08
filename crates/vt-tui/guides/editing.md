@@ -111,8 +111,8 @@ selection's own ends, and `Wave` and `Alternate` keep theirs.
 | `s` | Clear this field and start Insert there, as in Vim |
 | `=` `-` | Up or down a small step. `C-a` and `C-x` do the same |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `M-l` `M-h` | Option and `l` `h`: as `=` `-`, without moving |
-| `M-k` `M-j` | Option and `k` `j`: as `+` `_`, without moving |
+| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
+| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
 | `K` | On an FX column, choose from a list |
 | `.` | Repeat the last change |
 | `p` | Paste over, from the cursor down. Past the end it stores more |

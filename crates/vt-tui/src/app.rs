@@ -36,7 +36,7 @@ use vt_model::step::{
 
 use crate::grammar::Change;
 use crate::guides::Guide;
-use crate::input::bindings::{Cmd, Op, Table, degree_key, note_key};
+use crate::input::bindings::{Cmd, Op, Resolved, Table, degree_key, note_key};
 use crate::input::command::{self, Line};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -661,9 +661,9 @@ impl App {
         if key.ignored() {
             return;
         }
-        // Nothing is bound to Cmd, so `Cmd-a` isn't read as `a`. Its release still counts, as `a`
-        // can be held before Cmd goes down.
-        if key.command && kind != KeyEventKind::Release {
+        // Only a key bound with Cmd, such as `Cmd-l`, goes through, so `Cmd-a` isn't read as `a`.
+        // Its release still counts, as `a` can be held before Cmd goes down.
+        if key.command && kind != KeyEventKind::Release && !self.binds(key) {
             return;
         }
         match kind {
@@ -671,6 +671,28 @@ impl App {
             KeyEventKind::Repeat => self.key_repeated(key, now),
             KeyEventKind::Release => self.key_released(key, now),
         }
+    }
+
+    /// The terminal window's title: `vimtracker`, and the project's folder name once there is
+    /// one. kitty's `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be
+    /// left to this window alone.
+    pub fn window_title(&self) -> String {
+        match self
+            .folder
+            .as_deref()
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy())
+        {
+            Some(name) => format!("vimtracker: {name}"),
+            None => "vimtracker".to_owned(),
+        }
+    }
+
+    /// Whether a key, after any typed before it, means something here.
+    fn binds(&self, key: Key) -> bool {
+        let mut keys = self.pending.clone();
+        keys.push(key);
+        self.table.resolve(self.key_scope(), &keys) != Resolved::Unbound
     }
 
     /// A key pressed.

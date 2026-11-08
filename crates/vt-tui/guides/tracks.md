@@ -17,8 +17,8 @@ hat pattern.
 | `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `M-l` `M-h` | Option and `l` `h`: as `=` `-`, without moving |
-| `M-k` `M-j` | Option and `k` `j`: as `+` `_`, without moving |
+| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
+| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |

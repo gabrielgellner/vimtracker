@@ -33,7 +33,9 @@ Run the tests with `cargo test --workspace`.
 vimtracker runs in [kitty](https://sw.kovidgoyal.net/kitty/) and [Ghostty](https://ghostty.org),
 and won't start in other terminals or inside tmux. It needs the kitty keyboard protocol, which
 says when a key is held and let go. The Option keys, such as `Option-1`, need kitty's
-`macos_option_as_alt yes` or Ghostty's `macos-option-as-alt = true` in your config.
+`macos_option_as_alt yes` or Ghostty's `macos-option-as-alt = true` in your config. `Cmd-h`
+`Cmd-j` `Cmd-k` `Cmd-l` nudge a value, and kitty keeps three of them for itself until your
+`kitty.conf` frees them; [docs/terminal-notes.md](docs/terminal-notes.md#cmd-keys) has the lines.
 
 It also needs the kitty graphics protocol, as small drawings such as envelopes and the filter's
 curve are images. `vimtracker probe-keys` says whether a terminal has both, and `render`, `bench`

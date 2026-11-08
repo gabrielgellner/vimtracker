@@ -429,6 +429,36 @@ fn saving_needs_a_folder_then_round_trips() {
 }
 
 #[test]
+fn the_window_title_names_the_project() {
+    let (mut app, _rt) = app();
+    assert_eq!(app.window_title(), "vimtracker");
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    let name = path.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(
+        app.window_title(),
+        format!("vimtracker: {name}"),
+        "after save as"
+    );
+
+    let (mut other, _rt2) = self::app();
+    command(&mut other, &format!("e {}", path.display()));
+    assert_eq!(
+        other.window_title(),
+        format!("vimtracker: {name}"),
+        "after open"
+    );
+    let fresh = folder();
+    command(&mut other, &format!("new {}", fresh.display()));
+    let name = fresh.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(
+        other.window_title(),
+        format!("vimtracker: {name}"),
+        "after new"
+    );
+}
+
+#[test]
 fn a_sample_can_be_loaded_and_played() {
     let dir = folder();
     std::fs::create_dir_all(&dir).unwrap();
@@ -3055,25 +3085,28 @@ fn the_track_page_sets_the_utility_filter() {
 }
 
 #[test]
-fn option_with_the_movement_keys_changes_the_value_without_moving() {
+fn cmd_with_the_movement_keys_changes_the_value_without_moving() {
     let (mut app, _realtime) = on_track_page();
     let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
     press(&mut app, "L0l");
     typed(&mut app, "20");
     let label = app.track_control().label();
-    alt(&mut app, "M-l");
+    with_cmd(&mut app, "D-l");
     assert_eq!(attack(&app), 25, "as =");
-    alt(&mut app, "M-k");
+    with_cmd(&mut app, "D-k");
     assert_eq!(attack(&app), 75, "as +");
-    alt(&mut app, "M-h");
+    with_cmd(&mut app, "D-h");
     assert_eq!(attack(&app), 70, "as -");
-    alt(&mut app, "M-j");
+    with_cmd(&mut app, "D-j");
     assert_eq!(attack(&app), 20, "as _");
     assert_eq!(app.track_control().label(), label, "the cursor stays");
+    // Option no longer adjusts.
+    alt(&mut app, "M-l");
+    assert_eq!(attack(&app), 20, "Option is unbound");
 }
 
 #[test]
-fn option_with_the_movement_keys_changes_notes_and_selections() {
+fn cmd_with_the_movement_keys_changes_notes_and_selections() {
     let (mut app, _realtime) = app();
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
@@ -3081,13 +3114,40 @@ fn option_with_the_movement_keys_changes_notes_and_selections() {
         panic!("no note");
     };
     press(&mut app, "gg");
-    alt(&mut app, "M-l");
-    alt(&mut app, "M-k");
+    with_cmd(&mut app, "D-l");
+    with_cmd(&mut app, "D-k");
     assert_eq!(written_notes(&app), [Note::On(start + 13)]);
     press(&mut app, "V");
-    alt(&mut app, "M-h");
-    alt(&mut app, "M-j");
+    with_cmd(&mut app, "D-h");
+    with_cmd(&mut app, "D-j");
     assert_eq!(written_notes(&app), [Note::On(start)], "on a selection too");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_changes_the_mixer() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 6");
+    with_cmd(&mut app, "D-l");
+    assert_eq!(app.song().tracks[0].level, 0xE1);
+    with_cmd(&mut app, "D-j");
+    assert_eq!(app.song().tracks[0].level, 0xD1);
+}
+
+#[test]
+fn a_held_cmd_l_keeps_adjusting() {
+    use ratatui::crossterm::event::KeyEventKind;
+    let (mut app, _realtime) = on_track_page();
+    let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
+    press(&mut app, "L0l");
+    typed(&mut app, "20");
+    let key = parse_sequence("D-l").unwrap()[0];
+    let now = Instant::now();
+    app.key_event(key, KeyEventKind::Press, now);
+    app.key_event(key, KeyEventKind::Repeat, now);
+    // kitty on macOS sends a held key's repeats as presses.
+    app.key_event(key, KeyEventKind::Press, now);
+    app.key_event(key, KeyEventKind::Release, now);
+    assert_eq!(attack(&app), 35, "three steps of 5");
 }
 
 #[test]
@@ -5383,6 +5443,16 @@ fn alt(app: &mut App, name: &str) {
     app.key(parse_sequence(name).unwrap()[0], Instant::now());
 }
 
+/// A key with Cmd, pressed and let go as the terminal sends it, through the check that drops
+/// unbound Cmd keys.
+fn with_cmd(app: &mut App, name: &str) {
+    use ratatui::crossterm::event::KeyEventKind;
+    let key = parse_sequence(name).unwrap()[0];
+    let now = Instant::now();
+    app.key_event(key, KeyEventKind::Press, now);
+    app.key_event(key, KeyEventKind::Release, now);
+}
+
 fn written_notes(app: &App) -> Vec<Note> {
     app.phrase_here()
         .unwrap()
@@ -6665,13 +6735,13 @@ fn a_held_key_on_the_keyboard_holds_its_note() {
 }
 
 #[test]
-fn a_key_with_cmd_does_nothing_but_its_release_lets_go() {
+fn an_unbound_key_with_cmd_does_nothing_but_its_release_lets_go() {
     use ratatui::crossterm::event::KeyEventKind;
     let (mut app, mut realtime) = app();
     choose_machine(&mut app, "VA");
     let command_a = parse_sequence("D-a").unwrap()[0];
     let now = Instant::now();
-    // Nothing is bound to Cmd, so `Cmd-a` isn't read as `a` and writes no note.
+    // `Cmd-a` isn't bound, so it isn't read as `a` and writes no note.
     press(&mut app, " 3i");
     app.key_event(command_a, KeyEventKind::Press, now);
     app.key_event(command_a, KeyEventKind::Release, now);
