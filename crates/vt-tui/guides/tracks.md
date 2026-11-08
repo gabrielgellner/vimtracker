@@ -146,7 +146,7 @@ string machine has.
 | `Rate` | How fast they move: as Rings has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
 
-`EQ` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
+`EQ3` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
 shelf at the top. Each band's boost or cut is centred on `80`, where it leaves the sound
 as it is, and goes 15 dB either way. It stays smooth as an LFO sweeps it.
 

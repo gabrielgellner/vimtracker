@@ -466,7 +466,7 @@ impl Effect {
             Self::Delay => "delay",
             Self::Reverb => "reverb",
             Self::Chorus => "chorus",
-            Self::Eq => "eq",
+            Self::Eq => "eq3",
         }
     }
 
@@ -476,7 +476,7 @@ impl Effect {
             Self::Delay => "Delay",
             Self::Reverb => "Reverb",
             Self::Chorus => "Chorus",
-            Self::Eq => "EQ",
+            Self::Eq => "EQ3",
         }
     }
 

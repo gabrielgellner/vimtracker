@@ -439,7 +439,7 @@ impl Insert {
             Self::Delay(_) => "Delay",
             Self::Reverb(_) => "Reverb",
             Self::Chorus(_) => "Chorus",
-            Self::Eq(_) => "EQ",
+            Self::Eq(_) => "EQ3",
         }
     }
 
