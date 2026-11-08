@@ -7,7 +7,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
-use vt_model::sample::load_wav;
+use vt_model::sample::{is_sample_file, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
@@ -24,8 +24,8 @@ use crate::song_view::COLUMNS_BEFORE_TRACKS;
 const MAX_SAMPLES: usize = 2000;
 const MAX_DEPTH: usize = 4;
 
-/// Find WAV files under a folder, skipping hidden ones, in a stable order.
-pub fn find_wavs(folder: &Path) -> Vec<PathBuf> {
+/// Find WAV, AIFF and FLAC files under a folder, skipping hidden ones, in a stable order.
+pub fn find_samples(folder: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     walk(folder, 0, &mut found);
     found
@@ -49,7 +49,7 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
             if depth < MAX_DEPTH && !path.ends_with("target") {
                 walk(&path, depth + 1, found);
             }
-        } else if is_wav(&path) {
+        } else if is_sample_file(&path) {
             found.push(path);
         }
     }
@@ -80,27 +80,10 @@ fn is_visible(path: &Path) -> bool {
         .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
 }
 
-fn is_wav(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("wav"))
-}
-
 /// A kit's name: its file name without the extension.
 fn kit_name(path: &Path) -> String {
     path.file_stem()
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
-}
-
-/// Where kits are looked for by name, from where the program ran.
-const KITS_DIR: &str = "samples/kits";
-
-/// A kit named in `samples/kits`, or at a path.
-pub(crate) fn kit_path(name: &Path) -> PathBuf {
-    if name.is_file() {
-        name.to_path_buf()
-    } else {
-        Path::new(KITS_DIR).join(name).with_extension("ron")
-    }
 }
 
 /// A row for a kit's sound: its name and its file.
@@ -119,6 +102,26 @@ fn kit_item(entry: &KitEntry) -> Item {
 }
 
 impl App {
+    /// A kit at a path, or by name in the first of the settings' kit folders that has it. A
+    /// name found nowhere is looked for in the first folder, so the error names it.
+    pub(crate) fn kit_path(&self, name: &Path) -> PathBuf {
+        if name.is_file() {
+            return name.to_path_buf();
+        }
+        let candidates: Vec<PathBuf> = self
+            .settings
+            .kit_folders()
+            .iter()
+            .map(|folder| folder.join(name).with_extension("ron"))
+            .collect();
+        candidates
+            .iter()
+            .find(|candidate| candidate.is_file())
+            .or(candidates.first())
+            .cloned()
+            .unwrap_or_else(|| name.with_extension("ron"))
+    }
+
     /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
     pub(crate) fn open_view_picker(&mut self) {
         self.count = None;
@@ -209,17 +212,23 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// Choose a kit from those in `samples/kits`.
+    /// Choose a kit from those in the settings' kit folders, folder by folder.
     pub(crate) fn open_kit_picker(&mut self) {
-        let items: Vec<Item> = kits_in(Path::new(KITS_DIR))
-            .into_iter()
+        let items: Vec<Item> = self
+            .settings
+            .kit_folders()
+            .iter()
+            .flat_map(|folder| kits_in(folder))
             .map(|path| Item {
                 label: kit_name(&path),
                 pick: Pick::Kit(path),
             })
             .collect();
         if items.is_empty() {
-            self.status = format!("No kits yet: add a kit file to {KITS_DIR}, such as 909.ron");
+            self.status = match self.settings.kits.first() {
+                Some(folder) => format!("No kits yet: add a kit file to {folder}, such as 909.ron"),
+                None => "No kit folders: add one to kits in settings.ron".to_owned(),
+            };
             return;
         }
         self.picker = Some(Picker::new("Kits", items));
@@ -265,7 +274,7 @@ impl App {
             let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
             let loaded = stored.and_then(|stored| {
                 let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-                let data = load_wav(&resolved, self.rate).map_err(|e| e.to_string())?;
+                let data = load_sample(&resolved, self.rate).map_err(|e| e.to_string())?;
                 Ok((stored, data))
             });
             let (stored, data) = match loaded {
@@ -444,7 +453,7 @@ impl App {
     fn open_samples(&mut self, roots: &[PathBuf], with_kit: bool) {
         let kit = self.kit.iter().filter(|_| with_kit).map(kit_item);
         let files = roots.iter().flat_map(|root| {
-            find_wavs(root).into_iter().map(move |path| Item {
+            find_samples(root).into_iter().map(move |path| Item {
                 label: path
                     .strip_prefix(root)
                     .unwrap_or(&path)
@@ -455,7 +464,7 @@ impl App {
         });
         let items: Vec<Item> = kit.chain(files).collect();
         if items.is_empty() {
-            self.status = "No WAV files found here: type a path, or a folder of them".to_owned();
+            self.status = "No samples found here: type a path, or a folder of them".to_owned();
             self.command_line = "sample ".to_owned();
             self.mode = Mode::Command;
             return;
@@ -464,11 +473,17 @@ impl App {
         self.mode = Mode::Picker;
     }
 
-    /// The folders the sample browser starts from: the project's samples, then where we ran.
+    /// The folders the sample browser starts from: the project's samples, the settings' sample
+    /// folders, then where we ran.
     pub(crate) fn sample_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         if let Some(folder) = &self.folder {
             roots.push(folder.join("samples"));
+        }
+        for folder in self.settings.sample_folders() {
+            if !roots.contains(&folder) {
+                roots.push(folder);
+            }
         }
         if let Ok(current) = std::env::current_dir()
             && !self

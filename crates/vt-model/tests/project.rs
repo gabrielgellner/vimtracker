@@ -7,7 +7,7 @@ use vt_model::constants::FORMAT_VERSION;
 use vt_model::project::{
     ProjectError, create_project, import_sample, load_samples, load_song, save_as, save_song,
 };
-use vt_model::sample::{SampleError, load_wav};
+use vt_model::sample::{SampleError, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice};
 
@@ -150,7 +150,7 @@ fn mono_16_bit_loads_as_stereo() {
     let dir = folder();
     let path = dir.join("mono.wav");
     wav(&path, 1, 16, 48_000, 1000);
-    let sample = load_wav(&path, 48_000).unwrap();
+    let sample = load_sample(&path, 48_000).unwrap();
     assert_eq!(sample.frames.len(), 1000);
     assert!(sample.frames.iter().all(|f| f[0] == f[1]));
 }
@@ -160,7 +160,7 @@ fn stereo_24_bit_converts_rate_and_keeps_length() {
     let dir = folder();
     let path = dir.join("stereo.wav");
     wav(&path, 2, 24, 44_100, 44_100);
-    let sample = load_wav(&path, 48_000).unwrap();
+    let sample = load_sample(&path, 48_000).unwrap();
     let length = sample.frames.len() as i64;
     assert!((length - 48_000).abs() <= 2, "got {length} frames");
     let peak = sample.frames.iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
@@ -173,7 +173,7 @@ fn more_than_two_channels_are_refused() {
     let path = dir.join("surround.wav");
     wav(&path, 4, 16, 48_000, 10);
     assert!(matches!(
-        load_wav(&path, 48_000),
+        load_sample(&path, 48_000),
         Err(SampleError::Channels { channels: 4, .. })
     ));
 }

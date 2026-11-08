@@ -47,8 +47,8 @@ Use the release build for playing: the debug build uses far more of the audio de
 vimtracker my-song        # opens my-song, or creates it on the first :w
 ```
 
-1.  `Space 5` lists WAV files under the project and the folder you ran from, for the current
-    track. `:sample path` takes a file, or a folder to browse.
+1.  `Space 5` lists WAV, AIFF and FLAC files under the project, your sample folders and the
+    folder you ran from, for the current track. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
     `a` to `l` are white keys, `w` to `o` black keys, `z` and `x` change octave, `c` and `v` set
     the velocity written, and the arrows move without writing. A note stays where it's written,
@@ -63,10 +63,11 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 and `Space k` lists every key. If you pause after `Space` or another prefix, a popup shows what
 can come next.
 
-No samples come with the repo. Put your own WAV files in `samples/`, which git ignores, and run
-from the repo root to see them in the browser. A file in `samples/kits/` listing sounds, such as
-`909.ron`, is a kit: `:kit 909` puts its sounds on tracks from the first. Tracks can have
-two-character names like `BD` and `CH`. See the sounds guide.
+No samples come with the repo. Put your own WAV, AIFF or FLAC files in
+`~/Music/vimtracker/samples` to see them in the browser. A file in `~/Music/vimtracker/kits`
+listing sounds, such as `909.ron`, is a kit: `:kit 909 all` puts its sounds on tracks from the
+first. Both folders are lists you can change in `~/.config/vimtracker/settings.ron`. Tracks can
+have two-character names like `BD` and `CH`. See the sounds guide.
 
 Samples stay where they are, and a project refers to them. `:w new-folder` saves a copy with every
 sample gathered into it, ready to move or share.

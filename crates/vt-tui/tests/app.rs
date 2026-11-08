@@ -16,6 +16,7 @@ use vt_model::song::{
 };
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
+use vt_tui::config::Settings;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::input::picker::Pick;
@@ -766,6 +767,36 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
     assert_eq!(app.mode, Mode::Normal);
     let chosen = app.song().tracks[0].sample.clone().unwrap();
     assert!(chosen.ends_with("snare.WAV"), "{chosen}");
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn the_sample_browser_lists_and_loads_aiff_and_flac() {
+    let (mut app, _realtime) = app();
+    let folder = std::env::temp_dir().join(format!("vt-browse-formats-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let made = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../vt-model/tests/samples");
+    std::fs::copy(made.join("stereo-16.aif"), folder.join("hat.aif")).unwrap();
+    std::fs::copy(made.join("stereo-16.aif"), folder.join("ride.aiff")).unwrap();
+    std::fs::copy(made.join("stereo-16.flac"), folder.join("tom.flac")).unwrap();
+    wav(&folder.join("kick.wav"));
+    std::fs::write(folder.join("loop.mp3"), "not read").unwrap();
+
+    command(&mut app, &format!("sample {}", folder.display()));
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["hat.aif", "kick.wav", "ride.aiff", "tom.flac"]);
+    press(&mut app, "tom");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.status, "Track 01 sample loaded");
+    let chosen = app.song().tracks[0].sample.clone().unwrap();
+    assert!(chosen.ends_with("tom.flac"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
@@ -2067,11 +2098,91 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
 #[test]
 fn a_missing_kit_or_none_at_all_says_so() {
     let (mut app, _realtime) = app();
-    command(&mut app, "kit nothing-here");
-    assert!(app.status.contains("nothing-here"), "{}", app.status);
     command(&mut app, "kit");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("samples/kits"), "{}", app.status);
+    assert!(app.status.contains("settings.ron"), "{}", app.status);
+    app.settings = Settings {
+        kits: vec!["/nowhere/kits".to_owned(), "/nowhere/else".to_owned()],
+        samples: Vec::new(),
+    };
+    command(&mut app, "kit nothing-here");
+    assert!(
+        app.status.contains("/nowhere/kits/nothing-here.ron"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "kit");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("/nowhere/kits"), "{}", app.status);
+}
+
+#[test]
+fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
+    let (mut app, _realtime) = app();
+    let first = kit_file();
+    let second = kit_file();
+    std::fs::rename(
+        second.with_file_name("909.ron"),
+        second.with_file_name("808.ron"),
+    )
+    .unwrap();
+    let second = second.with_file_name("808.ron");
+    // A kit of the same name further down is passed over.
+    let shadowed = folder();
+    std::fs::create_dir_all(&shadowed).unwrap();
+    std::fs::write(shadowed.join("909.ron"), "(sounds: [])").unwrap();
+    let folders = [first.parent().unwrap(), &shadowed, second.parent().unwrap()];
+    app.settings = Settings {
+        kits: folders.iter().map(|f| f.display().to_string()).collect(),
+        samples: Vec::new(),
+    };
+
+    command(&mut app, "kit 808");
+    assert!(
+        app.status.starts_with("Kit 808: 3 sounds"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "kit 909");
+    assert!(
+        app.status.starts_with("Kit 909: 3 sounds"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "kit");
+    let shown: Vec<(String, Pick)> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| (item.label.clone(), item.pick.clone()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("909".to_owned(), Pick::Kit(first)),
+            ("909".to_owned(), Pick::Kit(shadowed.join("909.ron"))),
+            ("808".to_owned(), Pick::Kit(second)),
+        ]
+    );
+}
+
+#[test]
+fn the_sample_browser_lists_the_settings_sample_folders() {
+    let (mut app, _realtime) = app();
+    let library = folder();
+    std::fs::create_dir_all(library.join("hats")).unwrap();
+    wav(&library.join("hats/closed.wav"));
+    app.settings = Settings {
+        kits: Vec::new(),
+        samples: vec![library.display().to_string(), "/nowhere/samples".to_owned()],
+    };
+    press(&mut app, " 5");
+    assert_eq!(app.mode, Mode::Picker);
+    let first = app.picker.as_ref().unwrap().shown().next().unwrap().clone();
+    assert_eq!(first.label, "hats/closed.wav");
+    assert_eq!(first.pick, Pick::Sample(library.join("hats/closed.wav")));
+    std::fs::remove_dir_all(&library).unwrap();
 }
 
 #[test]

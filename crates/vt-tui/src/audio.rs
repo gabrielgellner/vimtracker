@@ -110,10 +110,7 @@ impl AudioChoice {
     /// Where it's kept: `audio.ron` in the config folder, `$XDG_CONFIG_HOME/vimtracker` or
     /// `~/.config/vimtracker`.
     pub fn path() -> Option<PathBuf> {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-        Some(base.join("vimtracker").join("audio.ron"))
+        crate::config::config_folder().map(|folder| folder.join("audio.ron"))
     }
 
     /// The choice kept from last time, or the system's own if there's none or it won't read.

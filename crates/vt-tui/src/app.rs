@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
+use crate::config::Settings;
 use crate::meter::Meter;
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use vt_engine::engine::Transport;
@@ -22,7 +23,7 @@ use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::project::{self, ProjectError};
-use vt_model::sample::load_wav;
+use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
@@ -41,7 +42,6 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
-use crate::picking::kit_path;
 use crate::recording::Recording;
 use crate::shaping::ShapePanel;
 use crate::track_page::{Page, TakenInsert};
@@ -187,6 +187,8 @@ pub struct App {
     pub audio_request: Option<AudioChoice>,
     /// The audio page's row: device, rate or buffer.
     pub audio_row: usize,
+    /// Where this machine keeps its kits and samples.
+    pub settings: Settings,
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
@@ -358,6 +360,7 @@ impl App {
             track_wanted: None,
             audio: AudioState::default(),
             audio_request: None,
+            settings: Settings::none(),
             audio_row: 0,
             track_fine: false,
             recent_views: View::ALL.to_vec(),
@@ -2081,8 +2084,8 @@ impl App {
             Line::Edit(path) => self.open(&path),
             Line::New(path) => self.new_project(&path),
             Line::Sample(path) => self.sample(&path),
-            Line::Kit(Some(name)) => self.use_kit(&kit_path(&name)),
-            Line::KitTracks(name) => self.load_kit(&kit_path(&name)),
+            Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
+            Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.apply(&Action::SetTrackName {
                 track: self.cursor.track,
@@ -2358,7 +2361,7 @@ impl App {
             }
         };
         let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-        match load_wav(&resolved, self.rate) {
+        match load_sample(&resolved, self.rate) {
             Ok(data) => {
                 let mut pool = SamplePool::clone(&self.samples);
                 pool.insert(&stored, data);

@@ -246,9 +246,9 @@ note on the track rings out, or lock it on a step for one hard hit.
 
 ## Choosing a sample
 
-Press `Space 5` to list WAV files in the project's `samples` folder and under
-the folder you ran from. Type to filter, and press `Enter` to put one on the
-current track.
+Press `Space 5` to list WAV, AIFF and FLAC files in the project's `samples`
+folder, in your sample folders, and under the folder you ran from. Type to
+filter, and press `Enter` to put one on the current track.
 
 | Command | Does |
 |---|---|
@@ -273,7 +273,8 @@ characters and starts with a letter. `:name` on its own clears it.
 
 ## Kits
 
-A kit fills tracks in one go. It is a file in `samples/kits`, such as `909.ron`:
+A kit fills tracks in one go. It is a file in a kit folder, such as
+`~/Music/vimtracker/kits/909.ron`:
 
 ```
 (
@@ -292,7 +293,7 @@ kit file, or absolute, or start with `~/`.
 
 | Command | Does |
 |---|---|
-| `:kit` | Choose a kit from `samples/kits` |
+| `:kit` | Choose a kit from the kit folders |
 | `:kit 909` | Choose sounds from that kit |
 | `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
 | `:kit 909 all` | Put every sound on tracks from the first, in order |
@@ -300,3 +301,19 @@ kit file, or absolute, or start with `~/`.
 `all` keeps a track's other settings, leaves later tracks alone, and adds tracks
 if it has more sounds than you have. If it replaces a different sample, the
 status line says which, and `u` undoes the whole load.
+
+## Kit and sample folders
+
+Where kits and samples are found is set for this machine in
+`~/.config/vimtracker/settings.ron`, made the first time the program runs:
+
+```
+(
+    kits: ["~/Music/vimtracker/kits"],
+    samples: ["~/Music/vimtracker/samples"],
+)
+```
+
+Each is a list of folders, looked through in order, and a folder that isn't
+there is passed over. `:kit 909` opens the first `909.ron` found. Changes are
+read the next time the program starts.
