@@ -63,6 +63,7 @@ fn fx_name(app: &App, slot: usize) -> String {
 /// The name of what the cursor is on, for the status line.
 pub fn column_name(app: &App) -> String {
     match app.view {
+        View::Audio => app.audio_row_here().name().to_owned(),
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
@@ -152,7 +153,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::Chain
             | Mode::Track
             | Mode::Mixer
-            | Mode::Song => theme::BLUE,
+            | Mode::Song
+            | Mode::Audio => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,

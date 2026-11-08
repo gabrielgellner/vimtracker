@@ -534,6 +534,7 @@ impl App {
                         self.sample_named(&path, name);
                     }
                     Some(Pick::Track(track)) => self.go_to_track(track),
+                    Some(Pick::Audio(choice)) => self.pick_audio(choice),
                     Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
                     Some(Pick::Gate(kind)) => self.pick_gate(kind),
                     Some(Pick::Lfo { track, slot, lfo }) => {

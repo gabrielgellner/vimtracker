@@ -3218,7 +3218,11 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
+    assert_eq!(
+        app.picker.as_ref().unwrap().shown().count(),
+        6,
+        "every view"
+    );
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
@@ -6268,4 +6272,136 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     // Leaving the track page leaves the keyboard too.
     press(&mut app, "; 3");
     assert_eq!((app.view, app.mode), (View::Phrase, Mode::Normal));
+}
+
+/// An app on the audio page, playing through the first of two devices.
+fn on_the_audio_page() -> (App, Realtime) {
+    use vt_tui::audio::DeviceInfo;
+    let (mut app, realtime) = app();
+    app.audio.devices = vec![
+        DeviceInfo {
+            id: "coreaudio:speakers".to_owned(),
+            name: "Speakers".to_owned(),
+            rates: vec![44_100, 48_000],
+            buffers: vec![64, 128, 256, 512],
+            default: true,
+        },
+        DeviceInfo {
+            id: "coreaudio:headset".to_owned(),
+            name: "Headset".to_owned(),
+            rates: vec![44_100],
+            buffers: vec![512, 1024],
+            default: false,
+        },
+    ];
+    app.audio.device = "Speakers".to_owned();
+    app.audio.buffer = Some(512);
+    app.audio.running = true;
+    press(&mut app, " 7");
+    assert_eq!(app.view, View::Audio);
+    assert!(app.audio.refresh, "it lists the devices afresh");
+    (app, realtime)
+}
+
+#[test]
+fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
+    use vt_tui::audio::AudioChoice;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_the_audio_page();
+    assert_eq!(column_name(&app), "Device");
+    // A smaller buffer, one step down from what's playing.
+    press(&mut app, "jj-");
+    assert_eq!(column_name(&app), "Buffer");
+    assert_eq!(
+        app.audio_request,
+        Some(AudioChoice {
+            buffer: Some(256),
+            ..AudioChoice::default()
+        })
+    );
+    // As if the main loop had opened it.
+    app.audio.choice = app.audio_request.take().unwrap();
+    app.audio.buffer = Some(256);
+    press(&mut app, "k-");
+    assert_eq!(app.audio_request.as_ref().unwrap().rate, Some(44_100));
+    app.audio_request = None;
+    // Another device keeps the buffer only if it takes it.
+    press(&mut app, "k=");
+    let request = app.audio_request.take().unwrap();
+    assert_eq!(request.device.as_deref(), Some("coreaudio:headset"));
+    assert_eq!(request.buffer, None, "the headset doesn't take 256");
+    // x goes back to the system's own choice for the row, and K lists the choices.
+    press(&mut app, "jjx");
+    assert_eq!(app.audio_request.take().unwrap().buffer, None);
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels[0], "64 frames, 1.3 ms", "{labels:?}");
+    assert_eq!(
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|item| item.label.as_str()),
+        Some("256 frames, 5.3 ms"),
+        "it opens on the one playing"
+    );
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.audio_request, None, "which is already playing");
+}
+
+#[test]
+fn the_audio_page_shows_what_plays_and_when_it_stops() {
+    let (mut app, _realtime) = on_the_audio_page();
+    app.audio.latency_us = 21_300;
+    let text = |app: &App| -> Vec<String> {
+        let backend = ratatui::backend::TestBackend::new(90, 12);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::audio::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..12)
+            .map(|y| (0..90).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .collect()
+    };
+    let lines = text(&app);
+    assert!(lines[2].contains("Speakers"), "{lines:?}");
+    assert!(lines[3].contains("48000 Hz"), "{lines:?}");
+    assert!(
+        lines[4].contains("512 frames, 10.7 ms, the device's own"),
+        "{lines:?}"
+    );
+    assert!(lines[6].contains("21.3 ms"), "{lines:?}");
+    app.audio.running = false;
+    assert!(text(&app).iter().any(|line| line.contains("Stopped")));
+}
+
+#[test]
+fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " m");
+    let song = Arc::clone(app.song());
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::clone(&song), Arc::clone(&samples)));
+    let (handle, _fresh) = connect(Engine::new(44_100, version));
+    app.reconnect(handle, samples, 44_100);
+    assert_eq!(app.rate, 44_100);
+    assert!(Arc::ptr_eq(&song, app.song()));
+    assert!(app.levels[0].mute, "still muted");
+    assert_eq!(app.transport, Transport::Stopped);
+    press(&mut app, "u");
+    assert_eq!(
+        notes(&app)[0],
+        Note::Empty,
+        "and undo still reaches before it"
+    );
 }

@@ -190,6 +190,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 4", Cmd::ShowView(View::Track), "Track page"),
     ("Space 5", Cmd::PickSample, "Choose this track's sample"),
     ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
+    (
+        "Space 7",
+        Cmd::ShowView(View::Audio),
+        "Audio: the device, rate and buffer",
+    ),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space f b", Cmd::TrackPicker, "Open the track picker"),
@@ -448,6 +453,17 @@ const SONG: &[(&str, Cmd, &str)] = &[
     (";", Cmd::Audition, "Hear the start of this section"),
 ];
 
+const AUDIO: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next setting"),
+    ("k", Cmd::Move(Motion::Up), "Previous setting"),
+    ("g g", Cmd::Move(Motion::First), "First setting"),
+    ("G", Cmd::Move(Motion::Last), "Last setting"),
+    ("=", Cmd::Increase, "The next choice"),
+    ("-", Cmd::Decrease, "The previous choice"),
+    ("x", Cmd::ClearField, "Back to the system's own choice"),
+    ("K", Cmd::PickValue, "List the choices"),
+];
+
 const MIXER: &[(&str, Cmd, &str)] = &[
     ("h", Cmd::Move(Motion::Left), "Previous track"),
     ("l", Cmd::Move(Motion::Right), "Next track"),
@@ -557,6 +573,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Mixer, MIXER);
     add(Mode::Mixer, ADJUST);
     add(Mode::Mixer, EVERY_VIEW);
+    add(Mode::Audio, AUDIO);
+    add(Mode::Audio, ADJUST);
+    add(Mode::Audio, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

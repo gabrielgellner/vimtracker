@@ -2249,6 +2249,8 @@ dependencies = [
  "hound",
  "nucleo-matcher",
  "ratatui",
+ "ron",
+ "serde",
  "thiserror 2.0.20",
  "vt-engine",
  "vt-model",
