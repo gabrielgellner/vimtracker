@@ -59,6 +59,14 @@ fn computed(level: f32, threshold: f32, slope: f32) -> f32 {
     }
 }
 
+/// How loud a steady level comes out, in dB, once it's settled, before `Auto`, `Mix` and `Gain`:
+/// the static curve, for drawing, worked out as the compressor does.
+pub fn curve_db(level: f32, settings: Settings) -> f32 {
+    let threshold = threshold_db(f32::from(settings.threshold));
+    let slope = 1.0 / ratio(f32::from(settings.ratio));
+    computed(level, threshold, slope)
+}
+
 impl Compressor {
     /// How far it's turning down now, in dB, for a meter.
     pub fn reduction(&self) -> f32 {

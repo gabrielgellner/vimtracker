@@ -207,6 +207,8 @@ pub struct App {
     pub filter_image: Option<u32>,
     /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
     pub waveform_image: Option<u32>,
+    /// The ids of the images of the FX page's slots, for those that have a drawing.
+    pub slot_images: [Option<u32>; vt_model::insert::INSERTS],
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
     watched: usize,
@@ -348,6 +350,7 @@ impl App {
             lfo_images: None,
             filter_image: None,
             waveform_image: None,
+            slot_images: [None; vt_model::insert::INSERTS],
             live: None,
             watched: 0,
             track_row: 0,

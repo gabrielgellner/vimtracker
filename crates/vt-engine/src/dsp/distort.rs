@@ -254,6 +254,19 @@ impl InsertState {
         self.gain.target = gain;
     }
 
+    /// How far a compressor or limiter in the slot is turning down now, in dB, for a meter. Any
+    /// other effect, or a bypassed one, turns down nothing.
+    pub fn reduction(&self) -> f32 {
+        if self.on.target == 0.0 {
+            return 0.0;
+        }
+        match (self.insert, &self.memory) {
+            (Insert::Compressor(_), _) => self.dynamics.reduction(),
+            (Insert::Limit(_), Some(Memory::Limit(limiter))) => limiter.reduction(),
+            _ => 0.0,
+        }
+    }
+
     /// Whether it's got something left to play with nothing going in.
     #[inline]
     pub fn ringing(&self, rate: u32) -> bool {

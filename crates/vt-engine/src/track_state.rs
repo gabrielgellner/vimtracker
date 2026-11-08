@@ -110,7 +110,7 @@ pub struct SongTime {
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
 /// `FF` scale as its settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct LiveValues {
     pub level: u8,
     pub pan: u8,
@@ -122,6 +122,8 @@ pub struct LiveValues {
     pub machine: [u8; MAX_MACHINE_SETTINGS],
     /// What each slot's settings are playing with, in the effect's order.
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
+    /// How far each slot's compressor or limiter is turning down, in dB, for a meter.
+    pub reduction: [f32; INSERTS],
 }
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
@@ -659,6 +661,7 @@ impl TrackState {
                 }
                 values
             }),
+            reduction: std::array::from_fn(|slot| self.inserts[slot].reduction()),
         }
     }
 

@@ -11,9 +11,11 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
+use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
+use vt_model::insert::{Compressor, INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
 use vt_model::sample::SampleData;
 use vt_model::song::{FilterType, Machine, Track};
@@ -25,8 +27,9 @@ use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::track::{
-    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
-    WAVEFORM_HEIGHT, WAVEFORM_WIDTH, envelope_being_edited, filter_being_edited, lfo_being_edited,
+    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
+    LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH, envelope_being_edited,
+    filter_being_edited, lfo_being_edited, slot_being_edited,
 };
 use crate::waveform;
 
@@ -62,6 +65,10 @@ const RANDOM_ICON_CYCLES: f64 = 4.0;
 /// has more room below than above, as a filter takes away more than it adds.
 const CURVE_BOTTOM_DB: f32 = -36.0;
 const CURVE_TOP_DB: f32 = 24.0;
+
+/// How far down a compressor's curve goes, in dB, both in and out, from `0` at the top and right.
+/// It's as far down as the threshold goes.
+const DYNAMICS_RANGE_DB: f32 = 60.0;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -204,6 +211,22 @@ pub fn filter_png(
     line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
+/// A compressor's static curve as a PNG: how loud a steady level comes out, against how loud it
+/// went in, each from -60 dB to 0, as the compressor works it out.
+pub fn compressor_png(
+    settings: Compressor,
+    color: [u8; 3],
+    columns: usize,
+    rows: usize,
+) -> Vec<u8> {
+    let level = |x: f32| {
+        let out = curve_db(DYNAMICS_RANGE_DB * (x - 1.0), settings);
+        out / DYNAMICS_RANGE_DB + 1.0
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
+}
+
 /// The scope's picture as a PNG, from the rows it covers in each column of dots.
 pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
     line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
@@ -306,6 +329,48 @@ pub fn supports_graphics() -> io::Result<bool> {
 /// The settings a filter curve is drawn from.
 type FilterSettings = (FilterType, u8, u8, u8, u8, u8);
 
+/// What an FX slot's drawing shows, which is all that's compared to tell if it's changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SlotDrawing {
+    /// A compressor's curve, from its threshold and ratio.
+    Compressor { threshold: u8, ratio: u8 },
+}
+
+impl SlotDrawing {
+    /// The drawing for an effect playing with these values, if it has one.
+    fn of(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
+        match insert {
+            Insert::Compressor(settings) => Some(Self::Compressor {
+                threshold: live.map_or(settings.threshold, |values| values[0]),
+                ratio: live.map_or(settings.ratio, |values| values[1]),
+            }),
+            _ => None,
+        }
+    }
+
+    /// How many characters across it is.
+    fn width(self) -> usize {
+        match self {
+            Self::Compressor { .. } => DYNAMICS_CURVE_WIDTH,
+        }
+    }
+
+    fn png(self, color: [u8; 3]) -> Vec<u8> {
+        match self {
+            Self::Compressor { threshold, ratio } => compressor_png(
+                Compressor {
+                    threshold,
+                    ratio,
+                    ..Compressor::DEFAULT
+                },
+                color,
+                self.width(),
+                SLOT_DRAWING_HEIGHT,
+            ),
+        }
+    }
+}
+
 /// The colour of a drawing, with the cursor on it or not.
 fn color(active: bool) -> [u8; 3] {
     let style = if active {
@@ -334,6 +399,8 @@ pub struct Graphics {
     /// The waveform of the sample the cursor's track plays. It's drawn once for each sample, which
     /// is held so another loaded later can't be mistaken for it.
     waveform: [Option<(Arc<SampleData>, u32)>; 2],
+    /// Each FX slot's drawing, with the cursor on its slot or not, and the settings it shows.
+    slots: [[Option<(SlotDrawing, u32)>; 2]; INSERTS],
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// How many times the screen has been brought up to date, for how often the scope is.
@@ -352,6 +419,7 @@ impl Graphics {
             shapes: [[None; 2]; Shape::ALL.len()],
             filter: [None; 2],
             waveform: [None, None],
+            slots: [[None; 2]; INSERTS],
             scope: None,
             frames: 0,
             retired: Vec::new(),
@@ -377,6 +445,12 @@ impl Graphics {
                     .any(|image| image.1 == id)
                 || self.filter.iter().flatten().any(|image| image.1 == id)
                 || self.waveform.iter().flatten().any(|image| image.1 == id)
+                || self
+                    .slots
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(|image| image.1 == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
                 || self.retired.contains(&id);
             if !in_use {
@@ -397,7 +471,7 @@ impl Graphics {
                 Page::Sound if track.is_sound() => self.sync_sound(app, &track, out)?,
                 Page::Sound => {}
                 Page::Mod => self.sync_mod(app, &track, out)?,
-                Page::Fx => {}
+                Page::Fx => self.sync_fx(app, &track, out)?,
             }
         }
         if app.scope_shown && self.frames.is_multiple_of(SCOPE_FRAMES) {
@@ -489,6 +563,35 @@ impl Graphics {
             }
         };
         app.waveform_image = Some(id);
+        Ok(())
+    }
+
+    /// Send the drawings of the FX page's slots, if the terminal lacks them: a compressor's curve.
+    /// Each is drawn from the settings it shows, so it's sent again only when they change.
+    fn sync_fx(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let edited = slot_being_edited(app);
+        let mut ids = [None; INSERTS];
+        for (slot, insert) in track.inserts.iter().enumerate() {
+            // It shows what's playing, as a value's bar does.
+            let live = app.live.map(|live| live.inserts[slot]);
+            let Some(shown) = SlotDrawing::of(*insert, live) else {
+                continue;
+            };
+            let active = edited == Some(slot);
+            let held = self.slots[slot][usize::from(active)];
+            ids[slot] = Some(match held {
+                Some((drawn, id)) if drawn == shown => id,
+                _ => {
+                    self.retired.extend(held.map(|(_, old)| old));
+                    let id = self.new_id();
+                    let png = shown.png(color(active));
+                    self.send(out, id, &png, shown.width(), SLOT_DRAWING_HEIGHT)?;
+                    self.slots[slot][usize::from(active)] = Some((shown, id));
+                    id
+                }
+            });
+        }
+        app.slot_images = ids;
         Ok(())
     }
 
@@ -586,11 +689,13 @@ impl Graphics {
         let shapes = self.shapes.iter().flatten().flatten();
         let filter = self.filter.iter().flatten().map(|image| &image.1);
         let waveform = self.waveform.iter().flatten().map(|image| &image.1);
+        let slots = self.slots.iter().flatten().flatten().map(|image| &image.1);
         let scope = self.scope.iter().map(|image| &image.1);
         for id in held
             .chain(shapes)
             .chain(filter)
             .chain(waveform)
+            .chain(slots)
             .chain(scope)
             .chain(&self.retired)
         {
@@ -794,6 +899,47 @@ mod tests {
         track.resonance = 0xC0;
         let peak = curve(&track).into_iter().fold(0.0, f32::max);
         assert!(peak > low.into_iter().fold(0.0, f32::max) + 0.1);
+    }
+
+    #[test]
+    fn a_compressors_curve_is_the_compressors_own_sum() {
+        let settings = Compressor {
+            threshold: 0x80,
+            ratio: 0xC0,
+            ..Compressor::DEFAULT
+        };
+        let (columns, rows) = (4, 2);
+        let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+        let (_, pixels) = decode(&compressor_png(settings, [255; 3], columns, rows));
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        // At the middle of each column of dots, the line covers the row the compressor's curve
+        // puts it on.
+        for column in 0..across {
+            let input = DYNAMICS_RANGE_DB * ((column as f32 + 0.5) / across as f32 - 1.0);
+            let out = curve_db(input, settings) / DYNAMICS_RANGE_DB + 1.0;
+            let row = ((1.0 - out) * (down - 1) as f32).round() as usize;
+            let x = column * DOT_PIXELS;
+            let lit: Vec<usize> = (0..down)
+                .filter(|row| pixels[row * DOT_PIXELS][x])
+                .collect();
+            assert!(
+                lit.iter().any(|lit| lit.abs_diff(row) <= 1),
+                "column {column}: {lit:?} against {row}"
+            );
+        }
+        // Below the threshold it's the diagonal, from the bottom left, and above it, flatter.
+        assert!(pixels[(down - 1) * DOT_PIXELS][0]);
+        let top: Vec<usize> = (0..across)
+            .map(|column| {
+                (0..down)
+                    .find(|row| pixels[row * DOT_PIXELS][column * DOT_PIXELS])
+                    .unwrap()
+            })
+            .collect();
+        assert!(top[across - 1] > 0, "a ratio over 1 keeps it off the top");
     }
 
     #[test]

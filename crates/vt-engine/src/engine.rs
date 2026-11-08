@@ -783,10 +783,21 @@ impl Engine {
         }
     }
 
-    /// What a track is playing with right now.
+    /// What a track is playing with right now. A sound track with nothing going through it isn't
+    /// run, so its slots turn nothing down, whatever they last did.
     pub fn live(&self, index: usize) -> LiveValues {
         match (self.tracks.get(index), self.current.song.tracks.get(index)) {
-            (Some(state), Some(track)) => state.live(track.level),
+            (Some(state), Some(track)) => {
+                let mut live = state.live(track.level);
+                let run = !track.is_sound()
+                    || state.sounding()
+                    || state.ringing(self.rate)
+                    || self.previews.on_track(&self.previews.sounding(), index);
+                if !run {
+                    live.reduction = Default::default();
+                }
+                live
+            }
             _ => LiveValues::default(),
         }
     }

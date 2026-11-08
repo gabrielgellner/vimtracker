@@ -2005,6 +2005,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         send_b: 0,
         machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
+        reduction: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -4820,6 +4821,7 @@ fn the_filter_curve_moves_with_what_plays() {
         send_b: track.send_b,
         machine: std::array::from_fn(|setting| track.machine_value(setting)),
         inserts: Default::default(),
+        reduction: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -5968,6 +5970,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         send_b: 0,
         machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
+        reduction: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
     app.live = Some(live);
@@ -7451,4 +7454,99 @@ fn a_samples_waveform_sits_beside_the_filters_curve_under_the_output() {
     assert_eq!(buffer[(37, top + 1)].fg, Color::Rgb(4, 5, 6));
     assert_eq!(buffer[(1, top + 1)].fg, Color::Rgb(1, 2, 3));
     assert_eq!(buffer[(61, top + 4)].symbol(), "┘");
+}
+
+#[test]
+fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() {
+    use vt_model::insert::{Compressor, Insert};
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out).unwrap().matches(",c=4,r=2,").count()
+    };
+    press(&mut app, " 4LL");
+    assert_eq!(sync(&mut app, &mut graphics), 0, "no slot has a drawing");
+    assert_eq!(app.slot_images, [None; 3]);
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    assert!(matches!(
+        app.song().tracks[0].inserts[0],
+        Insert::Compressor(_)
+    ));
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let first = app.slot_images[0].unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+
+    // The attack isn't on the curve, so changing it sends nothing.
+    press(&mut app, "ll=");
+    assert!(matches!(
+        app.song().tracks[0].inserts[0],
+        Insert::Compressor(Compressor { attack: 0x56, .. })
+    ));
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.slot_images[0], Some(first));
+    // The threshold is.
+    press(&mut app, "h=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.slot_images[0], Some(first));
+}
+
+#[test]
+fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
+    use vt_engine::track_state::LiveValues;
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(120, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LLK");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "jjjK");
+    press(&mut app, "Limit");
+    special(&mut app, KeyCode::Enter);
+    app.slot_images = [Some(0x01_02_03), None, None];
+    // 18 dB is three quarters of the meter: all of its top row and half of the one below.
+    app.live = Some(LiveValues {
+        reduction: [18.0, 0.0, 3.0],
+        ..LiveValues::default()
+    });
+    let buffer = draw(&app);
+    let row_of = |text: &str| {
+        (0..24)
+            .find(|y| {
+                (0..120)
+                    .map(|x| buffer[(x, *y)].symbol())
+                    .collect::<String>()
+                    .contains(text)
+            })
+            .unwrap()
+    };
+    let comp = row_of("Comp");
+    // The curve's placeholders, then a space, then the meter.
+    assert_eq!(buffer[(98, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(98, comp)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(101, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
+    assert_eq!(buffer[(103, comp)].symbol(), "█");
+    // Half a cell filled from the top: the lower half drawn in the background's colour.
+    assert_eq!(buffer[(103, comp + 1)].symbol(), "▄");
+    assert_eq!(buffer[(103, comp + 1)].fg, vt_tui::theme::BASE);
+    // A limiter has its meter alone, where the curve would start: 3 dB is the top quarter
+    // of its top row.
+    let limit = row_of("Limit");
+    assert_eq!(buffer[(98, limit)].symbol(), "▆");
+    assert_eq!(buffer[(98, limit + 1)].symbol(), " ");
+
+    // Bypassed, it turns nothing down, and its meter is empty.
+    press(&mut app, "b");
+    assert_eq!(app.song().tracks[0].bypassed, [false, false, true]);
+    assert_eq!(draw(&app)[(98, limit)].symbol(), "▔");
 }

@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use vt_engine::track_state::LiveValues;
@@ -36,12 +36,32 @@ pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 pub(crate) const WAVEFORM_WIDTH: usize = FILTER_CURVE_WIDTH;
 pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
 
+/// The size of a compressor's curve on the FX page, in characters, about square, and the rows a
+/// slot's drawing takes, which are its two rows of settings.
+pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 4;
+pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
+/// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom.
+const REDUCTION_METER_DB: f32 = 24.0;
+/// The characters for the bottom of a cell partly full, from one eighth to seven. Drawn in the
+/// page's background over the meter's colour, they leave the top of the cell filled.
+const LOWER_EIGHTHS: [char; 7] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇'];
+
 /// Room for a slot's number on the FX page, and for its effect's name.
 const FX_INDENT: usize = 3;
 const FX_EFFECT_WIDTH: usize = 10;
 /// Room for a setting's name on the FX page, and for its value and bar, so its columns line up.
 const FX_NAME_WIDTHS: [usize; FX_COLUMNS] = [10, 10, 10, 6, 5];
 const FX_VALUE_WIDTH: usize = 12;
+/// Where a slot's drawing starts on the FX page: a space after four columns of settings, which is
+/// as many as the effects with drawings have.
+const FX_DRAWING_COLUMN: usize = FX_INDENT
+    + FX_EFFECT_WIDTH
+    + FX_NAME_WIDTHS[0]
+    + FX_NAME_WIDTHS[1]
+    + FX_NAME_WIDTHS[2]
+    + FX_NAME_WIDTHS[3]
+    + 4 * FX_VALUE_WIDTH
+    + 1;
 /// Cells in a bar on the FX page, where there are more columns to fit.
 const FX_BAR_CELLS: usize = 5;
 /// Room for a section's name.
@@ -483,6 +503,14 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
     )
 }
 
+/// Which FX slot the cursor is on, if any.
+pub(crate) fn slot_being_edited(app: &App) -> Option<usize> {
+    match app.track_control() {
+        Control::Insert(slot) | Control::InsertParam(slot, _) => Some(slot),
+        _ => None,
+    }
+}
+
 /// Which LFO the cursor is on, if any.
 pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
@@ -549,7 +577,8 @@ fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
         line.spans
             .into_iter()
             .map(|span| {
-                if span.style == cursor {
+                // A drawing's placeholders keep their colour, which says which image they are.
+                if span.style == cursor || span.content.starts_with(kitty::PLACEHOLDER) {
                     span
                 } else {
                     span.style(theme::faint())
@@ -617,6 +646,61 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
             _ => {}
         }
     }
+    Line::from(spans)
+}
+
+/// One row of a gain reduction meter, which fills down from the top of its two rows as it turns
+/// down more.
+fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
+    let eighths = (db / REDUCTION_METER_DB * 16.0).round().clamp(0.0, 16.0) as usize;
+    let filled = eighths.saturating_sub(row * 8).min(8);
+    match filled {
+        0 if row == 0 => Span::styled("▔", theme::faint()),
+        0 => Span::raw(" "),
+        8 => Span::styled("█", Style::new().fg(color)),
+        _ => Span::styled(
+            LOWER_EIGHTHS[7 - filled].to_string(),
+            Style::new().fg(theme::BASE).bg(color),
+        ),
+    }
+}
+
+/// What follows a row of a slot on the FX page: a compressor's curve and how far it's turning
+/// down, or a limiter's meter alone.
+fn slot_drawing(app: &App, track: &Track, slot: usize, row: usize) -> Vec<Span<'static>> {
+    let style = if slot_being_edited(app) == Some(slot) {
+        theme::active()
+    } else {
+        theme::dim()
+    };
+    let color = style.fg.unwrap_or(theme::TEXT);
+    let reduction = app
+        .live
+        .filter(|_| !track.bypassed[slot])
+        .map_or(0.0, |live| live.reduction[slot]);
+    match (track.inserts[slot], app.slot_images[slot]) {
+        (Insert::Compressor(_), Some(id)) => vec![
+            Span::styled(
+                kitty::placeholder_lines(DYNAMICS_CURVE_WIDTH, SLOT_DRAWING_HEIGHT)[row].clone(),
+                Style::new().fg(kitty::id_color(id)),
+            ),
+            Span::raw(" "),
+            reduction_cell(reduction, row, color),
+        ],
+        (Insert::Limit(_), _) => vec![reduction_cell(reduction, row, color)],
+        _ => Vec::new(),
+    }
+}
+
+/// A line with something more after it, starting at a column.
+fn followed(line: Line<'static>, column: usize, more: Vec<Span<'static>>) -> Line<'static> {
+    if more.is_empty() {
+        return line;
+    }
+    let gap = column.saturating_sub(line.width());
+    let mut spans = line.spans;
+    spans.push(Span::raw(" ".repeat(gap)));
+    spans.extend(more);
     Line::from(spans)
 }
 
@@ -710,10 +794,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Page::Fx => {
             for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
                 let bypassed = track.bypassed[slot];
-                lines.push(faded(fx_row(app, track, rows[0], true), app, bypassed));
+                let first = fx_row(app, track, rows[0], true);
+                let drawing = slot_drawing(app, track, slot, 0);
+                lines.push(faded(
+                    followed(first, FX_DRAWING_COLUMN, drawing),
+                    app,
+                    bypassed,
+                ));
                 // An empty slot has nothing for its second row, and the slots stay apart.
                 if track.inserts[slot] != Insert::Empty {
-                    lines.push(faded(fx_row(app, track, rows[1], false), app, bypassed));
+                    let second = fx_row(app, track, rows[1], false);
+                    let drawing = slot_drawing(app, track, slot, 1);
+                    lines.push(faded(
+                        followed(second, FX_DRAWING_COLUMN, drawing),
+                        app,
+                        bypassed,
+                    ));
                 }
                 lines.push(Line::raw(""));
             }

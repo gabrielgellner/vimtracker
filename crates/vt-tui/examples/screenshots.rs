@@ -99,6 +99,14 @@ const SHOTS: &[Shot] = &[
         kick: true,
     },
     Shot {
+        name: "track-fx",
+        rows: LANE,
+        keys: " 4LLjjjKLimit<Enter>kkkKComp<Enter>li40<Tab>",
+        play: 6,
+        voice: Some(SynthVoice::VirtualAnalog),
+        kick: false,
+    },
+    Shot {
         name: "track-mod",
         rows: GATES,
         keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
