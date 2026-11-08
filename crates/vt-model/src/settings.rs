@@ -5,7 +5,7 @@
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{DELAY_PARAMS, DISTORT_PARAMS, INSERTS, Insert, Param, REVERB_PARAMS, Setting};
-use crate::lfo::LFOS_PER_TRACK;
+use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, SynthVoice};
 use crate::step::FxCommand;
@@ -37,6 +37,12 @@ pub enum Units {
     Hertz,
     /// The level scale, where `E0` is 0 dB and `00` is silent.
     Decibels,
+    /// An LFO's depth, in hex steps of what it moves, as the Mod page shows it.
+    Depth,
+    /// Round a cycle, where `FF` is a whole turn, so it goes round past either end.
+    Degrees,
+    /// Semitones either side of `80`, one a coarse step, with the fine part in cents.
+    Semitones,
 }
 
 impl Kind {
@@ -46,6 +52,17 @@ impl Kind {
             Self::Continuous { top, .. } => top,
             Self::Stepped { choices, .. } => choices.len().saturating_sub(1).min(0xFF) as u8,
         }
+    }
+
+    /// Whether it goes round past either end, as a phase does.
+    pub fn wraps(self) -> bool {
+        matches!(
+            self,
+            Self::Continuous {
+                units: Units::Degrees,
+                ..
+            }
+        )
     }
 
     /// Whether it has a middle that bars draw from.
@@ -73,6 +90,15 @@ impl Kind {
                     side if side < 0.0 => format!("{:.0} % L", side.abs() * 100.0),
                     side => format!("{:.0} % R", side * 100.0),
                 },
+                Units::Depth => depth_text(depth_of(coarse as f32).round() as i16),
+                Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
+                Units::Semitones => {
+                    let cents = ((coarse - 128.0) * 100.0).round() as i32;
+                    match (cents / 100, cents % 100) {
+                        (semitones, 0) => format!("{semitones:+} st"),
+                        (semitones, cents) => format!("{semitones:+} st {cents:+} ct"),
+                    }
+                }
                 Units::Percent if middle => format!("{:+.0} %", side(coarse) * 100.0),
                 Units::Percent => format!("{:.0} %", coarse / f64::from(top) * 100.0),
             },
@@ -181,8 +207,12 @@ const TRACK: [Entry; 7] = [
     Entry {
         key: "pitch",
         name: "Pitch",
-        label: None,
-        kind: CENTRED,
+        label: Some("PTCH"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Semitones,
+        },
         default: 0x80,
     },
 ];
@@ -378,18 +408,23 @@ const LFO: [Entry; 2] = [
     Entry {
         key: "depth",
         name: "Depth",
-        label: None,
-        kind: CENTRED,
+        // With the LFO's number after it, as `DEP1`.
+        label: Some("DEP"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Depth,
+        },
         default: 0x80,
     },
     Entry {
         key: "phase",
         name: "Phase",
-        label: None,
+        label: Some("PHS"),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: false,
-            units: Units::Percent,
+            units: Units::Degrees,
         },
         default: 0x00,
     },
@@ -563,11 +598,13 @@ impl SettingId {
         Self::all().find(|id| id.key() == key)
     }
 
-    /// Its label in the grid, with its slot's digit before an effect's, if steps can lock it.
+    /// Its label in the grid, with its slot's digit before an effect's and its LFO's number after
+    /// an LFO's, if steps can lock it.
     pub fn label(self) -> Option<String> {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } => format!("{}{label}", slot + 1),
+            Owner::Lfo(lfo) => format!("{label}{}", lfo + 1),
             _ => label.to_owned(),
         })
     }
@@ -663,6 +700,10 @@ mod tests {
                     assert!(label.starts_with(&(slot + 1).to_string()), "{label}");
                     &label[1..]
                 }
+                Owner::Lfo(lfo) => {
+                    assert!(label.ends_with(&(lfo + 1).to_string()), "{label}");
+                    &label[..label.len() - 1]
+                }
                 _ => &label[..],
             };
             assert!(
@@ -688,6 +729,9 @@ mod tests {
         let track_and_events = || {
             labels((0..TRACK.len()).filter_map(SettingId::track))
                 .into_iter()
+                .chain(labels((0..LFOS_PER_TRACK).flat_map(|lfo| {
+                    (0..2).filter_map(move |at| SettingId::lfo(lfo, at))
+                })))
                 .chain(EVENTS.map(|event| event.name().to_owned()))
         };
         for voice in SynthVoice::ALL {
@@ -746,6 +790,22 @@ mod tests {
         assert_eq!(shown(detune, 0x8000), "+0 %");
         let gain = SettingId::slot(0, Effect::Reverb, 6).unwrap();
         assert_eq!(shown(gain, 0xE000), "+0.0 dB");
+        let (depth, phase) = (SettingId::lfo(0, 0).unwrap(), SettingId::lfo(1, 1).unwrap());
+        assert_eq!(shown(depth, crate::lfo::depth_value(0x40)), "+40");
+        assert_eq!(shown(depth, 0x8000), "00");
+        assert_eq!(shown(phase, crate::lfo::phase_value(90)), "90°");
+        assert_eq!(shown(SettingId::PITCH, 0x8700), "+7 st");
+        assert_eq!(shown(SettingId::PITCH, 0x8780), "+7 st +50 ct");
+        assert_eq!(shown(SettingId::PITCH, 0x7F80), "+0 st -50 ct");
+        assert_eq!(
+            (depth.label(), phase.label(), SettingId::PITCH.label()),
+            (
+                Some("DEP1".into()),
+                Some("PHS2".into()),
+                Some("PTCH".into())
+            )
+        );
+        assert!(phase.entry().kind.wraps() && !depth.entry().kind.wraps());
     }
 
     #[test]

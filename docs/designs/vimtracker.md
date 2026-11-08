@@ -1947,6 +1947,8 @@ Kind::Stepped {
 
 **Issue 2 is built in two parts.** The first, on 2026-11-07, is the grid: the fine field and its editing rules, fine nudges that carry, `x`, `r`, `s` and typing on the fine digits, ramps and waves from the shape panel filling the fine part, and lists that hold but don't glide. On a row where the cell has no fine part, the cursor can still sit on the fine column, coming from above or below, and typing there says so. The second part is the pages: the track's own values, its machine's settings and its effects' settings become 16 bits, and the pages get a key for the fine part.
 
+**Issue 3 built** on 2026-11-07. The engine reads an LFO's depth and phase, and the held pitch, from their values as it does every setting's, so locks, holds, glides and the Mod page all reach them the same way, and the Mod page's depth and phase are those values' base. The status line shows their units on the grid and on the Mod page. `K` lists both LFOs' settings after the track's own. Phase goes round when nudged past either end.
+
 **Done when** each issue's tests pass, and the author has dialled in values with the fine part, locked LFOs and Pitch in a jam, and the grid and its colours stay readable to them.
 
 ### Known Gaps From Review

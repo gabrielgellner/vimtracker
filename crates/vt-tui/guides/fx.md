@@ -39,6 +39,9 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `SNB` | Send to return `B` |
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
+| `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
+| `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
+| `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't

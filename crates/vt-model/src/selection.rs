@@ -369,7 +369,14 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
         return ((fade << 4 | rate) as u16) << 8;
     }
     let by = if large { by * LARGE_HEX } else { by };
-    let coarse = (i32::from(coarse) + by).clamp(0, i32::from(command.highest())) as u16;
+    let moved = i32::from(coarse) + by;
+    // A phase goes round, so past either end it comes back from the other.
+    let wraps = command.setting().is_some_and(|id| id.entry().kind.wraps());
+    let coarse = if wraps {
+        moved.rem_euclid(i32::from(command.highest()) + 1)
+    } else {
+        moved.clamp(0, i32::from(command.highest()))
+    } as u16;
     (coarse << 8 | u16::from(slot.fine())).min(command.highest_value())
 }
 
@@ -628,6 +635,15 @@ mod tests {
             "--- -- cut:FF"
         );
         assert_eq!(shifted("--- -- cut:00", -1, Shift::Fine), "--- -- cut:00");
+        // A phase goes round.
+        assert_eq!(
+            shifted("--- -- lfo1.phase:FF", 1, Shift::Increment),
+            "--- -- lfo1.phase:00"
+        );
+        assert_eq!(
+            shifted("--- -- lfo1.phase:00", -1, Shift::Increment),
+            "--- -- lfo1.phase:FF"
+        );
         // An event or a list has no fine part, so a fine nudge leaves it.
         assert_eq!(shifted("--- -- del:10", 1, Shift::Fine), "--- -- del:10");
     }

@@ -361,6 +361,32 @@ impl Lfo {
     }
 }
 
+/// A depth as a setting's value, with a coarse byte and a fine one: `8000` is none, and `00` and
+/// `FF` are the furthest either way. The sides have their own scales, as there are 128 coarse
+/// values below the middle and 127 above.
+pub fn depth_value(depth: i16) -> u16 {
+    let depth = f64::from(depth.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH));
+    let side = if depth < 0.0 { 128.0 } else { 127.0 };
+    (32768.0 + depth / f64::from(MAX_LFO_DEPTH) * side * 256.0).round() as u16
+}
+
+/// A depth from a value on the `00` to `FF` scale, the inverse of [`depth_value`].
+pub fn depth_of(value: f32) -> f32 {
+    let from_middle = value - 128.0;
+    let side = if from_middle < 0.0 { 128.0 } else { 127.0 };
+    from_middle / side * f32::from(MAX_LFO_DEPTH)
+}
+
+/// A phase in degrees as a setting's value, where `FF00` is a whole turn.
+pub fn phase_value(degrees: u16) -> u16 {
+    (f64::from(degrees % 360) * f64::from(0xFF00_u16) / 360.0).round() as u16
+}
+
+/// How far round a cycle a value on the `00` to `FF` scale is, from 0 to 1.
+pub fn phase_of(value: f32) -> f32 {
+    value / 255.0
+}
+
 /// A depth as text, with its sign, in hex like the values it moves.
 pub fn depth_text(depth: i16) -> String {
     match depth {
@@ -373,6 +399,23 @@ pub fn depth_text(depth: i16) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn depth_and_phase_go_there_and_back_as_values() {
+        assert_eq!(depth_value(0), 0x8000);
+        assert_eq!(depth_value(MAX_LFO_DEPTH), 0xFF00);
+        assert_eq!(depth_value(-MAX_LFO_DEPTH), 0x0000);
+        for depth in [-255, -40, -1, 0, 1, 0x40, 255] {
+            let back = depth_of(f32::from(depth_value(depth)) / 256.0);
+            assert!(
+                (back - f32::from(depth)).abs() < 0.01,
+                "{depth} came back as {back}"
+            );
+        }
+        assert_eq!(phase_value(0), 0);
+        assert_eq!(phase_value(180), 0x7F80);
+        assert!((phase_of(f32::from(phase_value(90)) / 256.0) - 0.25).abs() < 1e-6);
+    }
 
     fn rate(text: &str) -> Rate {
         text.parse().unwrap()
