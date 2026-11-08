@@ -18,6 +18,7 @@ pub mod fm;
 pub mod grain;
 pub mod granular;
 pub mod kick;
+pub mod korg35;
 pub mod limiter;
 pub mod lpg;
 pub mod memory;
