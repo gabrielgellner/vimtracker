@@ -31,6 +31,10 @@ const LFO_SHAPE_NAME: usize = 7;
 /// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
 pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
+/// The size of a sample's waveform, in characters. It sits beside the filter's curve, under the
+/// output's column, and is as big, so the two boxes line up.
+pub(crate) const WAVEFORM_WIDTH: usize = FILTER_CURVE_WIDTH;
+pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
 
 /// Room for a slot's number on the FX page, and for its effect's name.
 const FX_INDENT: usize = 3;
@@ -616,20 +620,37 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
     Line::from(spans)
 }
 
-/// The filter's curve in a box, under its rows.
-fn filter_curve(id: u32) -> Vec<Line<'static>> {
-    let rule = "─".repeat(FILTER_CURVE_WIDTH);
+/// An image in a box, a line of spans for each row.
+fn boxed(id: u32, width: usize, height: usize) -> Vec<Vec<Span<'static>>> {
+    let rule = "─".repeat(width);
     let edge = theme::faint();
-    let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
-    for row in kitty::placeholder_lines(FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT) {
-        lines.push(Line::from(vec![
+    let mut lines = vec![vec![Span::styled(format!("┌{rule}┐"), edge)]];
+    for row in kitty::placeholder_lines(width, height) {
+        lines.push(vec![
             Span::styled("│", edge),
             Span::styled(row, Style::new().fg(kitty::id_color(id))),
             Span::styled("│", edge),
-        ]));
+        ]);
     }
-    lines.push(Line::styled(format!("└{rule}┘"), edge));
+    lines.push(vec![Span::styled(format!("└{rule}┘"), edge)]);
     lines
+}
+
+/// The filter's curve in a box, under its rows, and beside it under the output's column, the
+/// waveform of the sample the track plays, if it has one.
+fn curves(filter: u32, waveform: Option<u32>) -> Vec<Line<'static>> {
+    let mut lines = boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
+    if let Some(waveform) = waveform {
+        let gap = " ".repeat(SOUND_COLUMN - FILTER_CURVE_WIDTH - 2);
+        for (line, beside) in lines
+            .iter_mut()
+            .zip(boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
+        {
+            line.push(Span::raw(gap.clone()));
+            line.extend(beside);
+        }
+    }
+    lines.into_iter().map(Line::from).collect()
 }
 
 /// Draw the view.
@@ -677,7 +698,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 lines.push(sound_row(app, track, controls));
             }
             if track.is_sound() {
-                lines.extend(app.filter_image.map_or_else(Vec::new, filter_curve));
+                let waveform = app
+                    .waveform_image
+                    .filter(|_| track.machine == vt_model::song::Machine::Sample);
+                lines.extend(
+                    app.filter_image
+                        .map_or_else(Vec::new, |filter| curves(filter, waveform)),
+                );
             }
         }
         Page::Fx => {

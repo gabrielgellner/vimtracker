@@ -4,7 +4,7 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 use base64::Engine;
@@ -15,18 +15,20 @@ use vt_engine::dsp::filter::track_response_db;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
-use vt_model::song::{FilterType, Track};
+use vt_model::sample::SampleData;
+use vt_model::song::{FilterType, Machine, Track};
 
 use crate::app::App;
 use crate::input::mode::View;
 use crate::theme;
-use crate::track_page::Page;
+use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
-    envelope_being_edited, filter_being_edited, lfo_being_edited,
+    WAVEFORM_HEIGHT, WAVEFORM_WIDTH, envelope_being_edited, filter_being_edited, lfo_being_edited,
 };
+use crate::waveform;
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
@@ -207,6 +209,12 @@ pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
     line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
 }
 
+/// A sample's waveform as a PNG, at its real level.
+pub fn waveform_png(frames: &[[f32; 2]], color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&waveform::spans(frames, &[], across, down), down, color)
+}
+
 /// Write one command.
 fn command(out: &mut impl Write, controls: &str, data: &[u8]) -> io::Result<()> {
     out.write_all(b"\x1b_G")?;
@@ -323,6 +331,9 @@ pub struct Graphics {
     images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
     shapes: [[Option<u32>; 2]; Shape::ALL.len()],
     filter: [Option<(FilterSettings, u32)>; 2],
+    /// The waveform of the sample the cursor's track plays. It's drawn once for each sample, which
+    /// is held so another loaded later can't be mistaken for it.
+    waveform: [Option<(Arc<SampleData>, u32)>; 2],
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// How many times the screen has been brought up to date, for how often the scope is.
@@ -340,6 +351,7 @@ impl Graphics {
             images: [[None; 2]; TRACK_ENVELOPES],
             shapes: [[None; 2]; Shape::ALL.len()],
             filter: [None; 2],
+            waveform: [None, None],
             scope: None,
             frames: 0,
             retired: Vec::new(),
@@ -364,6 +376,7 @@ impl Graphics {
                     .flatten()
                     .any(|image| image.1 == id)
                 || self.filter.iter().flatten().any(|image| image.1 == id)
+                || self.waveform.iter().flatten().any(|image| image.1 == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
                 || self.retired.contains(&id);
             if !in_use {
@@ -432,6 +445,50 @@ impl Graphics {
             }
         };
         app.filter_image = Some(id);
+        app.waveform_image = None;
+        if track.machine == Machine::Sample {
+            self.sync_waveform(app, track, out)?;
+        }
+        Ok(())
+    }
+
+    /// Send the waveform of the sample a track plays, if the terminal lacks it. A track with no
+    /// sample, or one that didn't load, has none.
+    fn sync_waveform(
+        &mut self,
+        app: &mut App,
+        track: &Track,
+        out: &mut impl Write,
+    ) -> io::Result<()> {
+        let samples = Arc::clone(&app.samples);
+        let Some(sample) = track
+            .sample
+            .as_deref()
+            .and_then(|path| samples.shared(samples.id_of(path)?))
+        else {
+            return Ok(());
+        };
+        let active = app.track_control() == Control::Sample;
+        let id = match self.waveform[usize::from(active)].take() {
+            Some((drawn, id)) if Arc::ptr_eq(&drawn, sample) => {
+                self.waveform[usize::from(active)] = Some((drawn, id));
+                id
+            }
+            held => {
+                self.retired.extend(held.map(|(_, old)| old));
+                let id = self.new_id();
+                let png = waveform_png(
+                    &sample.frames,
+                    color(active),
+                    WAVEFORM_WIDTH,
+                    WAVEFORM_HEIGHT,
+                );
+                self.send(out, id, &png, WAVEFORM_WIDTH, WAVEFORM_HEIGHT)?;
+                self.waveform[usize::from(active)] = Some((Arc::clone(sample), id));
+                id
+            }
+        };
+        app.waveform_image = Some(id);
         Ok(())
     }
 
@@ -528,10 +585,12 @@ impl Graphics {
         let held = self.images.iter().flatten().flatten().map(|image| &image.1);
         let shapes = self.shapes.iter().flatten().flatten();
         let filter = self.filter.iter().flatten().map(|image| &image.1);
+        let waveform = self.waveform.iter().flatten().map(|image| &image.1);
         let scope = self.scope.iter().map(|image| &image.1);
         for id in held
             .chain(shapes)
             .chain(filter)
+            .chain(waveform)
             .chain(scope)
             .chain(&self.retired)
         {

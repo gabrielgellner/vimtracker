@@ -7368,3 +7368,87 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     let sent = sync(&mut app, &mut graphics) + sync(&mut app, &mut graphics);
     assert_eq!(sent, 0);
 }
+
+/// An app whose first track plays one sample and whose second plays another, and a third with none.
+fn app_with_samples() -> (App, Realtime) {
+    use vt_model::sample::SampleData;
+    let mut song = Song::new(3);
+    let mut pool = SamplePool::default();
+    for (track, (path, level)) in [("a.wav", 0.5), ("b.wav", -0.25)].iter().enumerate() {
+        pool.insert(
+            path,
+            SampleData {
+                frames: vec![[*level; 2]; 100],
+            },
+        );
+        song.tracks[track].sample = Some((*path).to_owned());
+    }
+    let samples = Arc::new(pool);
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+#[test]
+fn a_samples_waveform_is_sent_once_and_follows_the_cursor_and_the_track() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app_with_samples();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=24,r=3,")
+            .count()
+    };
+    press(&mut app, " 4");
+    // The filter's curve and the waveform.
+    assert_eq!(sync(&mut app, &mut graphics), 2);
+    let plain = app.waveform_image.unwrap();
+    assert_ne!(Some(plain), app.filter_image);
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+
+    // On the file's row it's picked out, once.
+    press(&mut app, "j");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.waveform_image.unwrap();
+    assert_ne!(picked, plain);
+    press(&mut app, "k");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.waveform_image, Some(plain));
+
+    // Another track's sample is drawn for it, and one with no sample has none.
+    app.cursor.track = 1;
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.waveform_image, Some(plain));
+    app.cursor.track = 2;
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.waveform_image, None);
+    // A synth has none either, whatever file it still names.
+    app.cursor.track = 0;
+    press(&mut app, "=");
+    assert_ne!(app.song().tracks[0].machine, Machine::Sample);
+    sync(&mut app, &mut graphics);
+    assert_eq!(app.waveform_image, None);
+}
+
+#[test]
+fn a_samples_waveform_sits_beside_the_filters_curve_under_the_output() {
+    let (mut app, _realtime) = app_with_samples();
+    press(&mut app, " 4");
+    app.filter_image = Some(0x01_02_03);
+    app.waveform_image = Some(0x04_05_06);
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let top = (0..24).find(|y| buffer[(0, *y)].symbol() == "┌").unwrap();
+    assert_eq!(buffer[(36, top)].symbol(), "┌");
+    assert_eq!(buffer[(37, top + 1)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(37, top + 1)].fg, Color::Rgb(4, 5, 6));
+    assert_eq!(buffer[(1, top + 1)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(61, top + 4)].symbol(), "┘");
+}

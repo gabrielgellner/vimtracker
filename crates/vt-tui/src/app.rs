@@ -205,6 +205,8 @@ pub struct App {
     pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
     /// The id of the image of the filter's curve, likewise.
     pub filter_image: Option<u32>,
+    /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
+    pub waveform_image: Option<u32>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
     watched: usize,
@@ -345,6 +347,7 @@ impl App {
             envelope_images: None,
             lfo_images: None,
             filter_image: None,
+            waveform_image: None,
             live: None,
             watched: 0,
             track_row: 0,

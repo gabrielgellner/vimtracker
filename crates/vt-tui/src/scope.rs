@@ -41,13 +41,7 @@ impl Scope {
     /// The rows the picture covers in each of `columns` columns, as the track page's curves are
     /// given, with full level at the top row and silence half way down.
     pub fn spans(&self, columns: usize, rows: usize) -> Vec<(usize, usize)> {
-        let bottom = (rows - 1) as f32;
-        let row_of =
-            |sample: f32| ((1.0 - sample.clamp(-1.0, 1.0)) * 0.5 * bottom).round() as usize;
-        fold(self.shown(), columns)
-            .into_iter()
-            .map(|(lowest, highest)| (row_of(highest), row_of(lowest)))
-            .collect()
+        rows_of(&fold(self.shown(), columns), rows)
     }
 }
 
@@ -82,6 +76,17 @@ pub(crate) fn trigger(samples: &[f32], window: usize) -> Option<usize> {
         }
     }
     found
+}
+
+/// The rows each column's lowest and highest sample cover, top first, with full level at the top
+/// row and silence half way down.
+pub(crate) fn rows_of(folded: &[(f32, f32)], rows: usize) -> Vec<(usize, usize)> {
+    let bottom = (rows - 1) as f32;
+    let row_of = |sample: f32| ((1.0 - sample.clamp(-1.0, 1.0)) * 0.5 * bottom).round() as usize;
+    folded
+        .iter()
+        .map(|(lowest, highest)| (row_of(*highest), row_of(*lowest)))
+        .collect()
 }
 
 /// The lowest and highest sample in each of `columns` columns. Each column also takes in the first

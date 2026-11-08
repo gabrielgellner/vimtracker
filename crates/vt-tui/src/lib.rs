@@ -22,3 +22,4 @@ pub mod theme;
 pub mod track_page;
 pub mod tree;
 pub mod views;
+pub mod waveform;

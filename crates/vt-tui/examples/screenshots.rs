@@ -13,6 +13,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Song, SynthVoice};
 use vt_tui::app::App;
@@ -39,6 +40,8 @@ struct Shot {
     play: usize,
     /// The synth the first track plays, so the meter and the scope show its sound, or its sample.
     voice: Option<SynthVoice>,
+    /// Whether the first track plays a kick drum, so its Sound page shows a waveform.
+    kick: bool,
 }
 
 const GATES: &[&str] = &[
@@ -69,6 +72,7 @@ const SHOTS: &[Shot] = &[
         keys: "ll",
         play: 0,
         voice: None,
+        kick: false,
     },
     Shot {
         name: "gate-list",
@@ -76,6 +80,7 @@ const SHOTS: &[Shot] = &[
         keys: "llK",
         play: 0,
         voice: None,
+        kick: false,
     },
     Shot {
         name: "lane",
@@ -83,6 +88,7 @@ const SHOTS: &[Shot] = &[
         keys: "lll:lane 3<Enter><Tab>",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
+        kick: false,
     },
     Shot {
         name: "track-sound",
@@ -90,6 +96,7 @@ const SHOTS: &[Shot] = &[
         keys: " 4jjji60<Enter>ji90<Enter>k",
         play: 0,
         voice: None,
+        kick: true,
     },
     Shot {
         name: "track-mod",
@@ -97,8 +104,27 @@ const SHOTS: &[Shot] = &[
         keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
         play: 0,
         voice: None,
+        kick: false,
     },
 ];
+
+/// The name the kick is played by.
+const KICK: &str = "kick.wav";
+
+/// Half a second of a kick drum, made here so the screenshots need no file: a sine falling from
+/// 150 Hz to 50 Hz as it dies away.
+fn kick() -> SampleData {
+    let frames = (0..RATE / 2)
+        .scan(0.0_f32, |phase, at| {
+            let time = at as f32 / RATE as f32;
+            let frequency = 50.0 + 100.0 * (-time * 30.0).exp();
+            *phase += std::f32::consts::TAU * frequency / RATE as f32;
+            let sample = phase.sin() * 0.9 * (-time * 8.0).exp();
+            Some([sample, sample])
+        })
+        .collect();
+    SampleData { frames }
+}
 
 /// A song whose first track plays these rows in a phrase of 16, with this synth if it's given.
 fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
@@ -154,8 +180,13 @@ fn play(app: &mut App, realtime: &mut Realtime, steps: usize) {
 }
 
 fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
-    let song = song(shot.rows, shot.voice);
-    let samples = Arc::new(SamplePool::default());
+    let mut song = song(shot.rows, shot.voice);
+    let mut pool = SamplePool::default();
+    if shot.kick {
+        pool.insert(KICK, kick());
+        song.tracks[0].sample = Some(KICK.to_owned());
+    }
+    let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
