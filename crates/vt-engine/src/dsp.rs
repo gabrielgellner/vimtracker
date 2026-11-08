@@ -18,6 +18,7 @@ mod sine_table;
 pub mod six_op;
 pub mod smoother;
 pub mod string_model;
+pub mod swarm;
 pub mod virtual_analog;
 pub mod waveshaping;
 mod waveshaping_tables;
