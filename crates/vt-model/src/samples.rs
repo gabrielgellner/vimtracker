@@ -40,6 +40,11 @@ impl SamplePool {
         self.samples.get(id as usize).map(Arc::as_ref)
     }
 
+    /// A sample by ID, shared, so whoever holds it can tell it from another later given the same ID.
+    pub fn shared(&self, id: SampleId) -> Option<&Arc<SampleData>> {
+        self.samples.get(id as usize)
+    }
+
     /// The number of samples loaded.
     pub fn len(&self) -> usize {
         self.samples.len()
