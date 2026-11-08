@@ -24,6 +24,7 @@ pub enum Insert {
     Flanger(Flanger),
     Tape(Tape),
     Plate(Plate),
+    Pitch(Pitch),
 }
 
 /// What a distortion does to the sound.
@@ -123,6 +124,11 @@ pub enum Setting {
     /// wobble.
     Size,
     Excursion,
+    /// A pitch shifter's: how far it shifts, in whole semitones and then in cents, and how long
+    /// each of its grains is.
+    Shift,
+    Fine,
+    Grain,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -152,6 +158,7 @@ impl Setting {
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
             Self::PingPong => 1,
+            Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -168,6 +175,7 @@ impl Setting {
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
             Self::PingPong => 1.0,
+            Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -760,6 +768,68 @@ pub(crate) const PLATE_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// How far a pitch shifter goes either way, in semitones.
+pub const MOST_SHIFT: u8 = 24;
+/// The shifts it chooses between, from two octaves down to two up, written as the track's `Pitch`
+/// shows semitones.
+const SHIFT_NAMES: [&str; (MOST_SHIFT * 2 + 1) as usize] = [
+    "-24 st", "-23 st", "-22 st", "-21 st", "-20 st", "-19 st", "-18 st", "-17 st", "-16 st",
+    "-15 st", "-14 st", "-13 st", "-12 st", "-11 st", "-10 st", "-9 st", "-8 st", "-7 st", "-6 st",
+    "-5 st", "-4 st", "-3 st", "-2 st", "-1 st", "+0 st", "+1 st", "+2 st", "+3 st", "+4 st",
+    "+5 st", "+6 st", "+7 st", "+8 st", "+9 st", "+10 st", "+11 st", "+12 st", "+13 st", "+14 st",
+    "+15 st", "+16 st", "+17 st", "+18 st", "+19 st", "+20 st", "+21 st", "+22 st", "+23 st",
+    "+24 st",
+];
+/// How far a pitch shifter's `Fine` goes either way, in cents.
+pub const MOST_FINE_CENTS: f32 = 50.0;
+/// A pitch shifter's shortest and longest grain, in ms.
+pub const SHORTEST_GRAIN_MS: f32 = 10.0;
+pub const LONGEST_GRAIN_MS: f32 = 100.0;
+
+/// How many semitones a pitch shifter's `Pitch` shifts by, for a place in its list.
+pub fn shift_semitones(value: f32) -> f32 {
+    value - f32::from(MOST_SHIFT)
+}
+
+/// A pitch shifter's fine shift in cents, for a value on the `00` to `FF` scale: from -50, through
+/// none at `80`, to +50.
+pub fn fine_cents(value: f32) -> f32 {
+    from_middle(value) * MOST_FINE_CENTS
+}
+
+/// How long a pitch shifter's grains are in ms, for a value on the `00` to `FF` scale: from 10 ms
+/// to 100 ms, evenly in ratio.
+pub fn grain_ms(value: f32) -> f32 {
+    SHORTEST_GRAIN_MS * (LONGEST_GRAIN_MS / SHORTEST_GRAIN_MS).powf(value / 255.0)
+}
+
+/// A pitch shifter's, in the order the page shows them.
+pub(crate) const PITCH_PARAMS: [Param; 6] = [
+    Param {
+        name: "Pitch",
+        key: "pitch",
+        label: Some("PTCH"),
+        setting: Setting::Shift,
+        choices: &SHIFT_NAMES,
+        wraps: false,
+        default: Pitch::DEFAULT.shift,
+    },
+    hex_param("Fine", "fine", "FINE", Setting::Fine, Pitch::DEFAULT.fine),
+    hex_param("Size", "size", "SIZE", Setting::Grain, Pitch::DEFAULT.size),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        Pitch::DEFAULT.feedback,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -768,7 +838,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -781,6 +851,7 @@ impl Insert {
         Self::Flanger(Flanger::DEFAULT),
         Self::Tape(Tape::DEFAULT),
         Self::Plate(Plate::DEFAULT),
+        Self::Pitch(Pitch::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -810,6 +881,7 @@ impl Insert {
             Self::Flanger(_) => "Flanger",
             Self::Tape(_) => "Tape",
             Self::Plate(_) => "Plate",
+            Self::Pitch(_) => "Pitch",
         }
     }
 
@@ -828,6 +900,7 @@ impl Insert {
             Self::Flanger(_) => "Sweeps a comb through it with a short delay",
             Self::Tape(_) => "Saturates, warms and wobbles it as tape does",
             Self::Plate(_) => "Puts the sound on a bright, dense plate",
+            Self::Pitch(_) => "Shifts its pitch up or down, keeping its time",
         }
     }
 
@@ -850,6 +923,7 @@ impl Insert {
             Self::Flanger(_) => &FLANGER_PARAMS,
             Self::Tape(_) => &TAPE_PARAMS,
             Self::Plate(_) => &PLATE_PARAMS,
+            Self::Pitch(_) => &PITCH_PARAMS,
         }
     }
 
@@ -935,6 +1009,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| plate.read(setting));
             }
+            Self::Pitch(pitch) => {
+                return PITCH_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| pitch.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -967,6 +1047,7 @@ impl Insert {
             Self::Flanger(flanger) => return Self::Flanger(flanger.written(setting, whole)),
             Self::Tape(tape) => return Self::Tape(tape.written(setting, whole)),
             Self::Plate(plate) => return Self::Plate(plate.written(setting, whole)),
+            Self::Pitch(pitch) => return Self::Pitch(pitch.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1731,6 +1812,71 @@ pub fn plate_size(value: f32) -> f32 {
     from_middle(value).exp2()
 }
 
+/// A pitch shifter's settings, after Clouds'. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Pitch {
+    /// How far it shifts, as a place in the list from two octaves down to two up, none in the
+    /// middle.
+    pub shift: u8,
+    /// How far it shifts besides, from 50 cents down to 50 up, none at `80`.
+    pub fine: u8,
+    /// How long each of its two grains is, from 10 ms to 100 ms.
+    pub size: u8,
+    /// How much of what comes out goes back in to be shifted again.
+    pub feedback: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Pitch {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Pitch {
+    /// As it starts: no shift, Clouds' grain of about 64 ms, no feedback, and all wet.
+    pub const DEFAULT: Self = Self {
+        shift: MOST_SHIFT,
+        fine: 0x80,
+        size: 0xCE,
+        feedback: 0,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Shift => self.shift,
+            Setting::Fine => self.fine,
+            Setting::Grain => self.size,
+            Setting::Feedback => self.feedback,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut pitch = self;
+        match setting {
+            Setting::Shift => pitch.shift = value,
+            Setting::Fine => pitch.fine = value,
+            Setting::Grain => pitch.size = value,
+            Setting::Feedback => pitch.feedback = value,
+            Setting::Mix => pitch.mix = value,
+            Setting::Gain => pitch.gain = value,
+            _ => {}
+        }
+        pitch
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -2045,6 +2191,31 @@ mod tests {
         assert_eq!(plate_size(0.0), 0.5);
         assert_eq!(plate_size(128.0), 1.0);
         assert_eq!(plate_size(255.0), 2.0);
+    }
+
+    #[test]
+    fn a_pitch_shifters_settings_read_back_and_save() {
+        let pitch = Insert::Pitch(Pitch::DEFAULT);
+        let names: Vec<&str> = pitch.params().iter().map(|param| param.name).collect();
+        assert_eq!(names, ["Pitch", "Fine", "Size", "Feedback", "Mix", "Gain"]);
+        assert_eq!(pitch.read(Setting::Shift), Some(MOST_SHIFT));
+        assert_eq!(PITCH_PARAMS[0].choices[usize::from(MOST_SHIFT)], "+0 st");
+        let up = pitch.with_value(0, 36);
+        assert_eq!(up.read(Setting::Shift), Some(36));
+        assert_eq!(shift_semitones(36.0), 12.0);
+        // It stops at two octaves.
+        assert_eq!(pitch.with_value(0, 0xFF).read(Setting::Shift), Some(48));
+        assert_eq!(pitch.read(Setting::Decay), None);
+        let text = ron::to_string(&up).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&text).unwrap(), up);
+        assert_eq!(fine_cents(0.0), -50.0);
+        assert_eq!(fine_cents(128.0), 0.0);
+        assert_eq!(fine_cents(255.0), 50.0);
+        assert_eq!(grain_ms(0.0), 10.0);
+        assert!((grain_ms(255.0) - 100.0).abs() < 1e-3);
+        // Clouds' own grain, 2047 frames at 32 kHz.
+        let clouds = 2047.0 / 32.0;
+        assert!((grain_ms(f32::from(Pitch::DEFAULT.size)) - clouds).abs() < 0.5);
     }
 
     #[test]

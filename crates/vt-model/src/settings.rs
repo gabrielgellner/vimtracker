@@ -6,9 +6,9 @@
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
     CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, FLANGER_PARAMS,
-    INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PLATE_PARAMS, Param, REVERB_PARAMS, Setting,
-    TAPE_PARAMS, attack_ms, ceiling_db, flanger_delay_ms, input_db, limit_release_ms, plate_size,
-    ratio, release_ms, tape_drive_db, threshold_db,
+    INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, REVERB_PARAMS,
+    Setting, TAPE_PARAMS, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_ms, input_db,
+    limit_release_ms, plate_size, ratio, release_ms, tape_drive_db, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -67,6 +67,9 @@ pub enum Units {
     TapeDrive,
     /// A plate's size, as so many times Dattorro's.
     PlateSize,
+    /// A pitch shifter's fine shift in cents, and its grains' length in ms.
+    Cents,
+    Grain,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -146,6 +149,8 @@ impl Kind {
                 Units::FlangerDelay => format!("{:.1} ms", flanger_delay_ms(coarse as f32)),
                 Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
                 Units::PlateSize => format!("{:.2}x", plate_size(coarse as f32)),
+                Units::Cents => format!("{:+.0} ct", fine_cents(coarse as f32)),
+                Units::Grain => milliseconds(grain_ms(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -482,10 +487,11 @@ pub enum Effect {
     Flanger,
     Tape,
     Plate,
+    Pitch,
 }
 
 impl Effect {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -497,6 +503,7 @@ impl Effect {
         Self::Flanger,
         Self::Tape,
         Self::Plate,
+        Self::Pitch,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -514,6 +521,7 @@ impl Effect {
             Self::Flanger => &FLANGER_PARAMS,
             Self::Tape => &TAPE_PARAMS,
             Self::Plate => &PLATE_PARAMS,
+            Self::Pitch => &PITCH_PARAMS,
         }
     }
 
@@ -530,6 +538,7 @@ impl Effect {
             Self::Flanger => "flanger",
             Self::Tape => "tape",
             Self::Plate => "plate",
+            Self::Pitch => "pitch",
         }
     }
 
@@ -546,6 +555,7 @@ impl Effect {
             Self::Flanger => "Flanger",
             Self::Tape => "Tape",
             Self::Plate => "Plate",
+            Self::Pitch => "Pitch",
         }
     }
 
@@ -564,6 +574,7 @@ impl Effect {
             Insert::Flanger(_) => Some(Self::Flanger),
             Insert::Tape(_) => Some(Self::Tape),
             Insert::Plate(_) => Some(Self::Plate),
+            Insert::Pitch(_) => Some(Self::Pitch),
         }
     }
 }
@@ -594,6 +605,8 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::FlangerFeedback | Setting::Tone | Setting::Bias => (true, Units::Percent),
                 Setting::TapeDrive => (true, Units::TapeDrive),
                 Setting::Size => (false, Units::PlateSize),
+                Setting::Fine => (true, Units::Cents),
+                Setting::Grain => (false, Units::Grain),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -727,6 +740,19 @@ const fn effect_start(effect: Effect) -> usize {
                 + FLANGER_PARAMS.len()
                 + TAPE_PARAMS.len()
         }
+        Effect::Pitch => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+        }
     }
 }
 
@@ -743,7 +769,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + PHASER_PARAMS.len()
     + FLANGER_PARAMS.len()
     + TAPE_PARAMS.len()
-    + PLATE_PARAMS.len();
+    + PLATE_PARAMS.len()
+    + PITCH_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.

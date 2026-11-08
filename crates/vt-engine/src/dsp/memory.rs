@@ -11,6 +11,7 @@ use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
 use crate::dsp::flanger::Flanger;
 use crate::dsp::limiter::Limiter;
+use crate::dsp::pitch_shifter::PitchShifter;
 use crate::dsp::plate::Plate;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::tape::Tape;
@@ -32,6 +33,7 @@ pub enum Memory {
     Flanger(Box<Flanger>),
     Tape(Box<Tape>),
     Plate(Box<Plate>),
+    Pitch(Box<PitchShifter>),
 }
 
 impl Memory {
@@ -72,6 +74,11 @@ impl Memory {
         Self::Plate(Box::new(Plate::new(rate)))
     }
 
+    /// A pitch shifter's, long enough for its longest window.
+    pub fn pitch(rate: u32) -> Self {
+        Self::Pitch(Box::new(PitchShifter::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -83,6 +90,7 @@ impl Memory {
             Self::Flanger(flanger) => flanger.process(input),
             Self::Tape(tape) => tape.process(input),
             Self::Plate(plate) => plate.process(input),
+            Self::Pitch(shifter) => shifter.process(input),
         }
     }
 
@@ -95,6 +103,7 @@ impl Memory {
             Self::Limit(limiter) => limiter.frames() as u32,
             Self::Flanger(flanger) => flanger.frames() as u32,
             Self::Tape(tape) => tape.quiet_frames(),
+            Self::Pitch(shifter) => shifter.frames() as u32,
         }
     }
 
@@ -113,6 +122,7 @@ impl Memory {
             }
             (Self::Tape(tape), Insert::Tape(settings)) => tape.follow(settings),
             (Self::Plate(plate), Insert::Plate(settings)) => plate.follow(settings, frames),
+            (Self::Pitch(shifter), Insert::Pitch(settings)) => shifter.follow(settings),
             _ => {}
         }
     }
@@ -127,6 +137,7 @@ impl Memory {
             Self::Flanger(flanger) => flanger.settle(),
             Self::Tape(tape) => tape.settle(),
             Self::Plate(plate) => plate.settle(),
+            Self::Pitch(shifter) => shifter.settle(),
         }
     }
 
@@ -139,6 +150,7 @@ impl Memory {
             Self::Flanger(flanger) => flanger.clear(),
             Self::Tape(tape) => tape.clear(),
             Self::Plate(plate) => plate.clear(),
+            Self::Pitch(shifter) => shifter.clear(),
         }
     }
 }
@@ -153,6 +165,7 @@ pub struct MemoryCount {
     pub flanger: u16,
     pub tape: u16,
     pub plate: u16,
+    pub pitch: u16,
 }
 
 impl MemoryCount {
@@ -168,6 +181,7 @@ impl MemoryCount {
                 Insert::Flanger(_) => count.flanger += 1,
                 Insert::Tape(_) => count.tape += 1,
                 Insert::Plate(_) => count.plate += 1,
+                Insert::Pitch(_) => count.pitch += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -189,6 +203,7 @@ pub struct MemoryPool {
     flangers: Vec<Memory>,
     tapes: Vec<Memory>,
     plates: Vec<Memory>,
+    pitches: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -207,6 +222,7 @@ impl MemoryPool {
             flangers: Vec::with_capacity(POOL_CAPACITY),
             tapes: Vec::with_capacity(POOL_CAPACITY),
             plates: Vec::with_capacity(POOL_CAPACITY),
+            pitches: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -231,6 +247,9 @@ impl MemoryPool {
         for _ in 0..needed.plate {
             pool.put(Memory::plate(rate));
         }
+        for _ in 0..needed.pitch {
+            pool.put(Memory::pitch(rate));
+        }
         pool
     }
 
@@ -244,6 +263,7 @@ impl MemoryPool {
             Memory::Flanger(_) => &mut self.flangers,
             Memory::Tape(_) => &mut self.tapes,
             Memory::Plate(_) => &mut self.plates,
+            Memory::Pitch(_) => &mut self.pitches,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -264,6 +284,7 @@ impl MemoryPool {
             Insert::Flanger(_) => &mut self.flangers,
             Insert::Tape(_) => &mut self.tapes,
             Insert::Plate(_) => &mut self.plates,
+            Insert::Pitch(_) => &mut self.pitches,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -286,6 +307,7 @@ impl MemoryPool {
         self.owed.flanger += count.flanger;
         self.owed.tape += count.tape;
         self.owed.plate += count.plate;
+        self.owed.pitch += count.pitch;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -332,6 +354,12 @@ impl MemoryPool {
             self.owed.plate -= 1;
             return Some(memory);
         }
+        if self.owed.pitch > 0
+            && let Some(memory) = self.pitches.pop()
+        {
+            self.owed.pitch -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -344,6 +372,7 @@ impl MemoryPool {
             + self.flangers.len()
             + self.tapes.len()
             + self.plates.len()
+            + self.pitches.len()
     }
 }
 

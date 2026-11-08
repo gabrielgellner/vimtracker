@@ -250,6 +250,26 @@ carries on after a note ends. `Pre`, `Decay`, `Damp` and `High cut` work as
 A change to `Size` bends the pitch of the tail a little as it glides, taking
 about a second end to end.
 
+`Pitch` shifts the sound up or down without changing its length, after the
+pitch shifter in Mutable Instruments' Clouds. Two grains read the sound back
+faster or slower than it plays, each fading in as the other fades out. It
+starts all wet with no shift, so it only delays the sound by half a grain.
+
+| Setting | Does |
+|---|---|
+| `Pitch` | How far it shifts, in semitones, two octaves either way |
+| `Fine` | How far besides, up to 50 cents either way, none at `80` |
+| `Size` | How long each grain is, from 10 to 100 ms, about 64 ms to start |
+| `Feedback` | How much goes round again, so each trip shifts once more |
+
+Short grains suit drums and fast notes, and long ones suit pads and chords,
+which come out smoother. Every change glides. A change to `Size` bends the
+pitch a little as it moves, taking about a second end to end. With some
+`Fine` and `Mix` near `80`, it thickens the sound like a chorus.
+
+For a shimmer, put `Pitch` at `+12 st` in a slot before `Reverb` or `Plate`,
+and turn up `Feedback` to stack the octaves.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
