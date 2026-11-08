@@ -126,12 +126,13 @@ fn lfo_settings() -> impl Iterator<Item = SettingId> {
 }
 
 impl FxCommand {
-    /// The commands a step on this track can hold: what it can lock, then the events. A track
-    /// with no sound has no note for an event to act on.
+    /// The commands a step on this track can hold: what it can lock, its LFOs' settings, then
+    /// the events. A track with no sound has no note for an event to act on.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let events = Self::EVENTS.into_iter().filter(|_| track.is_sound());
         SettingId::on_track(track)
             .into_iter()
+            .chain(lfo_settings())
             .filter(|id| id.lockable())
             .map(Self::Set)
             .chain(events)
@@ -252,8 +253,13 @@ mod tests {
         let track = Track::default();
         let commands = FxCommand::on_track(&track);
         assert!(commands.contains(&FxCommand::CUT));
-        assert!(!commands.contains(&FxCommand::Set(SettingId::PITCH)));
+        assert!(commands.contains(&FxCommand::Set(SettingId::PITCH)));
+        assert!(commands.contains(&FxCommand::Set(SettingId::lfo(1, 0).unwrap())));
         assert!(commands.contains(&FxCommand::Del));
+        assert_eq!(
+            FxCommand::typed("dep2", &track),
+            Some(FxCommand::Set(SettingId::lfo(1, 0).unwrap()))
+        );
     }
 
     #[test]

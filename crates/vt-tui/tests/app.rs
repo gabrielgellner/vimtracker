@@ -6155,3 +6155,32 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
     assert_ne!(number_colour(4), beat, "row 04 starts at step 6");
     assert_eq!(number_colour(6), beat, "row 06 starts at step 8");
 }
+
+#[test]
+fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, "llli");
+    press(&mut app, "dep1");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "9F");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("lfo1.depth:9F"), "{step}");
+    assert_eq!(column_name(&app), "LFO 1: Depth");
+    // Fine-tuned to a depth of exactly +40.
+    press(&mut app, "l");
+    for _ in 0..0xE0 {
+        press(&mut app, "=");
+    }
+    assert_eq!(value_shown(&app).as_deref(), Some("+40"));
+    press(&mut app, "l");
+    press(&mut app, "i");
+    press(&mut app, "ptch");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "87");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    assert_eq!(value_shown(&app).as_deref(), Some("+7 st"));
+}

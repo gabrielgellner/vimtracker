@@ -3,7 +3,9 @@
 use vt_model::constants::{FX_SLOTS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
-use vt_model::lfo::{LFOS_PER_TRACK, MAX_LFO_DEPTH, wave};
+use vt_model::lfo::{
+    LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
+};
 use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId};
 use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
@@ -102,10 +104,9 @@ struct ValueLayers {
 }
 
 impl ValueLayers {
-    /// A base from the track, which has no fine part.
-    fn at(base: u8) -> Self {
+    fn at(base: u16) -> Self {
         Self {
-            base: u16::from(base) << 8,
+            base,
             lock: None,
             glide: None,
         }
@@ -217,6 +218,10 @@ pub struct TrackState {
     envelopes: [EnvelopeRun; TRACK_ENVELOPES],
     /// What modulation multiplies a note's speed by.
     pitch: f64,
+    /// Each LFO's held depth and phase, and the held pitch, on the `00` to `FF` scale, as steps
+    /// and the page set them.
+    lfo_values: [[f32; 2]; LFOS_PER_TRACK],
+    held_pitch: f32,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -242,10 +247,16 @@ fn pan_position(value: f32) -> f32 {
     }
 }
 
-/// Where a setting starts on this track, before any step sets it. A voice keeps its own, and
-/// an effect's setting is what's in its slot, or its default while another effect is there.
-pub fn base_of(id: SettingId, track: &Track) -> u8 {
-    match id.owner() {
+/// Where a setting starts on this track, before any step sets it, with a coarse byte and a fine
+/// one. A voice keeps its own, an effect's setting is what's in its slot, or its default while
+/// another effect is there, and an LFO's depth and phase are what its page has.
+pub fn base_of(id: SettingId, track: &Track) -> u16 {
+    let lfo = |lfo: usize, at: usize| match at {
+        0 => depth_value(track.lfos[lfo].depth),
+        _ => phase_value(track.lfos[lfo].phase),
+    };
+    let whole = match id.owner() {
+        (Owner::Lfo(n), at) => return lfo(n, at),
         (Owner::Track, _) => match id {
             SettingId::VOL => UNITY_LEVEL,
             SettingId::PAN => track.pan,
@@ -265,8 +276,8 @@ pub fn base_of(id: SettingId, track: &Track) -> u8 {
                 id.entry().default
             }
         }
-        (Owner::Lfo(_), _) => 0,
-    }
+    };
+    u16::from(whole) << 8
 }
 
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
@@ -306,7 +317,7 @@ impl TrackState {
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
                 for id in SettingId::all() {
-                    values[id.index()] = ValueLayers::at(id.entry().default);
+                    values[id.index()] = ValueLayers::at(u16::from(id.entry().default) << 8);
                 }
                 values
             },
@@ -349,6 +360,8 @@ impl TrackState {
             pan_envelope: Smoothed::at(0.0),
             envelopes: [EnvelopeRun::Idle; TRACK_ENVELOPES],
             pitch: 1.0,
+            lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
+            held_pitch: 128.0,
             filter_moving: false,
         }
     }
@@ -375,7 +388,7 @@ impl TrackState {
         for id in SettingId::all() {
             let base = base_of(id, track);
             self.values[id.index()] = ValueLayers::at(base);
-            self.write_value(id, f32::from(base));
+            self.write_value(id, scaled(base));
         }
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
     }
@@ -455,7 +468,8 @@ impl TrackState {
                 SettingId::lfo(slot, setting)
                     .map_or(0.0, |id| offsets[id.index()] + moved[id.index()])
             };
-            let depth = f32::from(lfo.depth) + moved_by(0) * 255.0;
+            let [depth, phase] = self.lfo_values[slot];
+            let depth = depth_of(depth) + moved_by(0) * 255.0;
             // A target that isn't on this track does no work.
             if depth == 0.0 || !destination.exists_on(track) {
                 continue;
@@ -467,7 +481,7 @@ impl TrackState {
             let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
             let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
             let key = now.seed ^ ((index as u64) << 8 | slot as u64);
-            let phase = f64::from(lfo.phase) / 360.0 + f64::from(moved_by(1));
+            let phase = f64::from(phase_of(phase) + moved_by(1));
             let value = wave(lfo.shape, cycles + phase, key);
             let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
             offsets[destination.index()] += value * depth / 255.0;
@@ -516,7 +530,7 @@ impl TrackState {
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
         }
         self.offsets = offsets;
-        let semitones = offsets[SettingId::PITCH.index()] * 255.0;
+        let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
@@ -704,11 +718,11 @@ impl TrackState {
     }
 
     /// The track page changed a value. A lock or glide on top stays until it ends.
-    pub fn set_base(&mut self, id: SettingId, value: u8) {
+    pub fn set_base(&mut self, id: SettingId, value: u16) {
         let layers = &mut self.values[id.index()];
-        layers.base = u16::from(value) << 8;
+        layers.base = value;
         if layers.lock.is_none() && layers.glide.is_none() {
-            self.write_value(id, f32::from(value));
+            self.write_value(id, scaled(value));
         }
     }
 
@@ -739,7 +753,15 @@ impl TrackState {
     /// isn't heard.
     fn write_value(&mut self, id: SettingId, value: f32) {
         match id.owner() {
+            (Owner::Lfo(lfo), at) => {
+                self.lfo_values[lfo][at] = value;
+                return;
+            }
             (Owner::Track, _) => match id {
+                SettingId::PITCH => {
+                    self.held_pitch = value;
+                    return;
+                }
                 SettingId::VOL => self.vol = value,
                 SettingId::PAN => self.pan.target = pan_position(value),
                 SettingId::CUT => self.cutoff.target = value / 255.0,

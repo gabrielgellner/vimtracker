@@ -830,3 +830,81 @@ fn an_lfo_moving_another_renders_the_same_each_time() {
     };
     assert_eq!(render(), render());
 }
+
+/// LFO 1 swinging the cutoff by a square a quarter long, with no depth of its own.
+fn waiting_lfo(texts: &[&str]) -> Song {
+    let mut song = song(texts);
+    song.tracks[0].cutoff = 0x80;
+    song.tracks[0].lfos[0] = Lfo {
+        destination: Some(SettingId::CUT),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER),
+        depth: 0,
+        ..Lfo::default()
+    };
+    song
+}
+
+#[test]
+fn a_step_locks_an_lfos_depth_until_the_next_note() {
+    // `9FE0` is a depth of +40.
+    let locked = waiting_lfo(&[
+        "C-4 -- lfo1.depth:9FE0 --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
+    ]);
+    assert_eq!(live_after(locked.clone(), 1).cutoff, 0xC0);
+    assert_eq!(
+        live_after(locked.clone(), 3).cutoff,
+        0x40,
+        "the square's down half"
+    );
+    assert_eq!(live_after(locked, 5).cutoff, 0x80, "the next note ends it");
+}
+
+#[test]
+fn a_step_locks_an_lfos_phase() {
+    let mut turned = waiting_lfo(&["C-4 -- lfo1.phase:7F80 --- ---"]);
+    turned.tracks[0].lfos[0].depth = 0x40;
+    let mut plain = turned.clone();
+    plain.tracks[0]
+        .phrases
+        .get_mut(&0)
+        .map(Arc::make_mut)
+        .unwrap()
+        .step_mut(0)
+        .unwrap()
+        .fx[0] = Default::default();
+    // Half a turn flips the square.
+    assert_eq!(live_after(plain, 1).cutoff, 0xC0);
+    assert_eq!(live_after(turned, 1).cutoff, 0x40);
+}
+
+#[test]
+fn an_lfo_on_a_locked_depth_adds_to_it() {
+    let mut moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
+    // LFO 2 alone has a depth of +20 from LFO 1. A lock of +20 more makes +40.
+    let phrase = moved.tracks[0]
+        .phrases
+        .get_mut(&0)
+        .map(Arc::make_mut)
+        .unwrap();
+    *phrase.step_mut(0).unwrap() = "C-4 -- lfo2.depth:8FF0 --- ---".parse().unwrap();
+    assert_eq!(live_after(moved, 1).cutoff, 0xC0);
+}
+
+#[test]
+fn a_pitch_lock_plays_its_semitones_up() {
+    let octave = render(song(&["C-4 -- pitch:8C --- ---"]), slow_sine(), STEP);
+    let higher = render(song(&["C-5 -- --- --- ---"]), slow_sine(), STEP);
+    let apart = |from: usize| {
+        (from..STEP)
+            .map(|frame| (left(&octave, frame) - left(&higher, frame)).abs())
+            .fold(0.0, f32::max)
+    };
+    assert!(apart(STEP / 2) < 1e-3, "{}", apart(STEP / 2));
+    let plain = render(song(&["C-4 -- pitch:8C80 --- ---"]), slow_sine(), STEP);
+    assert_ne!(plain, octave, "the fine part bends it");
+}

@@ -116,10 +116,7 @@ pub fn value_shown(app: &App) -> Option<String> {
             }
             _ => return None,
         },
-        View::Track | View::Mixer => {
-            let (id, value) = app.track_control().value_on(track)?;
-            (id, u16::from(value) << 8)
-        }
+        View::Track | View::Mixer => app.track_control().value_on(track)?,
         _ => return None,
     };
     id.exists_on(track).then(|| shown(id, value))

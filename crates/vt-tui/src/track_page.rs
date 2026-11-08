@@ -7,7 +7,9 @@ use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
-use vt_model::lfo::{LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
+use vt_model::lfo::{
+    LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, depth_value, note_rates, phase_value,
+};
 use vt_model::selection::Motion;
 use vt_model::settings::{Effect, Kind, SettingId, voice_entries};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
@@ -322,10 +324,18 @@ impl Control {
 
     /// The setting this is on this track, and its value there, for the status line to show in
     /// its units. The filters' drive and cuts aren't settings yet.
-    pub fn value_on(self, track: &Track) -> Option<(SettingId, u8)> {
-        let base = |id: SettingId, value: u8| Some((id, value));
+    pub fn value_on(self, track: &Track) -> Option<(SettingId, u16)> {
+        let base = |id: SettingId, value: u8| Some((id, u16::from(value) << 8));
         match self {
-            Self::Setting(_) => self.setting_on(track).map(|id| (id, track.setting(id))),
+            Self::Setting(_) => self
+                .setting_on(track)
+                .and_then(|id| base(id, track.setting(id))),
+            Self::Lfo(lfo, LfoField::Depth) => {
+                Some((SettingId::lfo(lfo, 0)?, depth_value(track.lfos[lfo].depth)))
+            }
+            Self::Lfo(lfo, LfoField::Phase) => {
+                Some((SettingId::lfo(lfo, 1)?, phase_value(track.lfos[lfo].phase)))
+            }
             Self::Level => base(SettingId::VOL, track.level),
             Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
             Self::Base(TrackControl::Resonance) => base(SettingId::RES, track.resonance),
@@ -340,7 +350,7 @@ impl Control {
                     .params()
                     .iter()
                     .position(|found| found.setting == setting)?;
-                Some((SettingId::slot(slot, effect, at)?, insert.value(param)))
+                base(SettingId::slot(slot, effect, at)?, insert.value(param))
             }
             _ => None,
         }
