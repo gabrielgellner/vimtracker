@@ -22,7 +22,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::plaits_parts::interpolate;
+use super::plaits_parts::{DcBlocker, interpolate};
 use super::sine_table::SINE;
 use super::virtual_analog::{BLOCK, Moving, Settings};
 use super::wavetable::{PER_BANK, WAVE, stored};
@@ -38,6 +38,8 @@ const TERRAINS: usize = 8;
 /// Morph halfway on the first surface it measures 0.21 against the virtual analog voice's 0.24,
 /// about a decibel quieter.
 const LEVEL: f32 = 0.45;
+/// The DC blocker's pole: a corner of about 3 Hz at 48 kHz, below anything played.
+const DC_POLE: f32 = 1.0 - 20.0 / 48_000.0;
 
 /// A sine of a phase in turns. The phase must not be negative, which is why every surface adds a
 /// few turns to its sines' arguments.
@@ -191,6 +193,9 @@ pub struct WaveTerrain {
     output: [f32; BLOCK],
     at: usize,
     fresh: bool,
+    /// Plaits' engine leaves a large offset on some paths, which its output's coupling takes away
+    /// in hardware. Here it would thump as the track's envelope opens and closes.
+    dc_blocker: DcBlocker,
 }
 
 impl Default for WaveTerrain {
@@ -208,6 +213,7 @@ impl WaveTerrain {
             output: [0.0; BLOCK],
             at: BLOCK,
             fresh: true,
+            dc_blocker: DcBlocker::new(DC_POLE),
         }
     }
 
@@ -218,7 +224,7 @@ impl WaveTerrain {
             self.render(frequency.clamp(1e-5, 0.49), settings);
             self.at = 0;
         }
-        let sample = self.output[self.at];
+        let sample = self.dc_blocker.process(self.output[self.at]);
         self.at += 1;
         sample * LEVEL
     }
@@ -302,6 +308,24 @@ mod tests {
     /// The harmonics setting that lands on a surface.
     fn on_terrain(index: usize) -> f32 {
         index as f32 / ((TERRAINS as f32 - 1.0001) * 1.05)
+    }
+
+    #[test]
+    fn it_has_no_offset_once_it_settles() {
+        for (harmonics, timbre, morph) in [(0.0, 0.5, 0.0), (0.0, 0.5, 1.0), (0.55, 0.1, 0.5)] {
+            let settings = Settings {
+                harmonics,
+                timbre,
+                morph,
+                ..Settings::default()
+            };
+            let mut voice = WaveTerrain::new();
+            let out: Vec<f32> = (0..96_000)
+                .map(|_| voice.next(220.0 / 48_000.0, settings))
+                .collect();
+            let mean = out[48_000..].iter().sum::<f32>() / 48_000.0;
+            assert!(mean.abs() < 0.01, "{mean} at {settings:?}");
+        }
     }
 
     #[test]
