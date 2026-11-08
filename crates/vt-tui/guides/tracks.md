@@ -237,6 +237,19 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
 
+`Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
+than `Reverb`, and wide from a single sound. It starts half wet, and its tail
+carries on after a note ends. `Pre`, `Decay`, `Damp` and `High cut` work as
+`Reverb`'s do. `FF` rings for about a minute, but always dies away.
+
+| Setting | Does |
+|---|---|
+| `Size` | How big the plate is, from half to twice Dattorro's, his at `80` |
+| `Mod` | How much its tail wobbles, which keeps it from ringing metallic |
+
+A change to `Size` bends the pitch of the tail a little as it glides, taking
+about a second end to end.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

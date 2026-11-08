@@ -23,6 +23,7 @@ pub enum Insert {
     Phaser(Phaser),
     Flanger(Flanger),
     Tape(Tape),
+    Plate(Plate),
 }
 
 /// What a distortion does to the sound.
@@ -118,6 +119,10 @@ pub enum Setting {
     Bump,
     Wow,
     Flutter,
+    /// A plate's: how big it is, scaling its tank's delays, and how far its tank's all-passes
+    /// wobble.
+    Size,
+    Excursion,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -725,6 +730,36 @@ pub(crate) const TAPE_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// A plate's, in the order the page shows them. Those it shares with the reverb are named as its.
+pub(crate) const PLATE_PARAMS: [Param; 8] = [
+    hex_param("Pre", "pre", "PRE", Setting::Pre, Plate::DEFAULT.pre),
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::Decay,
+        Plate::DEFAULT.decay,
+    ),
+    hex_param("Damp", "damp", "DAMP", Setting::Damp, Plate::DEFAULT.damp),
+    hex_param(
+        "High cut",
+        "highcut",
+        "HCUT",
+        Setting::HighCut,
+        Plate::DEFAULT.high_cut,
+    ),
+    hex_param("Size", "size", "SIZE", Setting::Size, Plate::DEFAULT.size),
+    hex_param(
+        "Mod",
+        "mod",
+        "MOD",
+        Setting::Excursion,
+        Plate::DEFAULT.excursion,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -733,7 +768,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -745,6 +780,7 @@ impl Insert {
         Self::Phaser(Phaser::DEFAULT),
         Self::Flanger(Flanger::DEFAULT),
         Self::Tape(Tape::DEFAULT),
+        Self::Plate(Plate::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -773,6 +809,7 @@ impl Insert {
             Self::Phaser(_) => "Phaser",
             Self::Flanger(_) => "Flanger",
             Self::Tape(_) => "Tape",
+            Self::Plate(_) => "Plate",
         }
     }
 
@@ -790,6 +827,7 @@ impl Insert {
             Self::Phaser(_) => "Sweeps notches through it with all-passes",
             Self::Flanger(_) => "Sweeps a comb through it with a short delay",
             Self::Tape(_) => "Saturates, warms and wobbles it as tape does",
+            Self::Plate(_) => "Puts the sound on a bright, dense plate",
         }
     }
 
@@ -811,6 +849,7 @@ impl Insert {
             Self::Phaser(_) => &PHASER_PARAMS,
             Self::Flanger(_) => &FLANGER_PARAMS,
             Self::Tape(_) => &TAPE_PARAMS,
+            Self::Plate(_) => &PLATE_PARAMS,
         }
     }
 
@@ -890,6 +929,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| tape.read(setting));
             }
+            Self::Plate(plate) => {
+                return PLATE_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| plate.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -921,6 +966,7 @@ impl Insert {
             Self::Phaser(phaser) => return Self::Phaser(phaser.written(setting, whole)),
             Self::Flanger(flanger) => return Self::Flanger(flanger.written(setting, whole)),
             Self::Tape(tape) => return Self::Tape(tape.written(setting, whole)),
+            Self::Plate(plate) => return Self::Plate(plate.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1604,6 +1650,87 @@ impl Tape {
     }
 }
 
+/// A plate's settings, after Dattorro's. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Plate {
+    /// How long before anything comes out, up to a quarter of a second.
+    pub pre: u8,
+    /// How long it rings: from barely at all to about a minute, never for ever.
+    pub decay: u8,
+    /// How quickly its highs fall away as it rings.
+    pub damp: u8,
+    /// A low-pass on what goes in, which `FF` turns off.
+    pub high_cut: u8,
+    /// How big the plate is, from half to twice Dattorro's, evenly in ratio, with his at `80`.
+    pub size: u8,
+    /// How far its tank's all-passes wobble, which keeps the tail from ringing metallic. Dattorro's
+    /// is at `80`.
+    pub excursion: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Plate {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Plate {
+    /// As it starts: Dattorro's decay, size and wobble, a little damping, and half wet.
+    pub const DEFAULT: Self = Self {
+        pre: 0,
+        decay: 0x80,
+        damp: 0x20,
+        high_cut: 0xFF,
+        size: 0x80,
+        excursion: 0x80,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Pre => self.pre,
+            Setting::Decay => self.decay,
+            Setting::Damp => self.damp,
+            Setting::HighCut => self.high_cut,
+            Setting::Size => self.size,
+            Setting::Excursion => self.excursion,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut plate = self;
+        match setting {
+            Setting::Pre => plate.pre = value,
+            Setting::Decay => plate.decay = value,
+            Setting::Damp => plate.damp = value,
+            Setting::HighCut => plate.high_cut = value,
+            Setting::Size => plate.size = value,
+            Setting::Excursion => plate.excursion = value,
+            Setting::Mix => plate.mix = value,
+            Setting::Gain => plate.gain = value,
+            _ => {}
+        }
+        plate
+    }
+}
+
+/// How many times Dattorro's a plate's size is, for a value on the `00` to `FF` scale: from half
+/// at `00`, through his own at `80`, to twice at `FF`, evenly in ratio.
+pub fn plate_size(value: f32) -> f32 {
+    from_middle(value).exp2()
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -1893,6 +2020,31 @@ mod tests {
         assert_eq!(tape.read(Setting::Drive), None);
         assert_eq!(tape.read(Setting::TapeDrive), Some(0x80));
         assert_eq!(tape.read(Setting::Mix), Some(0xFF));
+    }
+
+    #[test]
+    fn a_plates_settings_share_the_reverbs_names_and_read_back() {
+        let plate = Insert::Plate(Plate::DEFAULT);
+        let names: Vec<&str> = plate.params().iter().map(|param| param.name).collect();
+        assert_eq!(
+            names,
+            [
+                "Pre", "Decay", "Damp", "High cut", "Size", "Mod", "Mix", "Gain"
+            ]
+        );
+        let reverb_labels: Vec<_> = REVERB_PARAMS.iter().map(|param| param.label).collect();
+        for shared in ["Pre", "Decay", "Damp", "High cut", "Mix", "Gain"] {
+            let label = PLATE_PARAMS.iter().find(|param| param.name == shared);
+            assert!(reverb_labels.contains(&label.unwrap().label), "{shared}");
+        }
+        let bigger = plate.with_value(4, 0xFF);
+        assert_eq!(bigger.read(Setting::Size), Some(0xFF));
+        assert_eq!(bigger.read(Setting::LowCut), None);
+        let text = ron::to_string(&bigger).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&text).unwrap(), bigger);
+        assert_eq!(plate_size(0.0), 0.5);
+        assert_eq!(plate_size(128.0), 1.0);
+        assert_eq!(plate_size(255.0), 2.0);
     }
 
     #[test]

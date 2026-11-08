@@ -883,3 +883,29 @@ fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
     assert!(peak(&driven) <= most * 1.001, "{} {most}", peak(&driven));
     assert!(peak(&driven) > peak(&plain) * 1.5, "{}", peak(&driven));
 }
+
+#[test]
+fn a_plate_rings_on_after_a_short_hit_wide_and_dying_away() {
+    use vt_model::insert::Plate;
+    let hit = |inserts: [Insert; 3]| {
+        let mut song = song(&["C-4 -- --- --- ---"]);
+        song.tracks[0].inserts = inserts;
+        render(song, pool(vec![[0.8, 0.8]; 400]), STEP * 8)
+    };
+    let loudest = |out: &[[f32; 2]]| out.iter().flatten().fold(0.0_f32, |a, b| a.max(b.abs()));
+    let dry = hit([Insert::Empty; 3]);
+    assert_eq!(loudest(&dry[2000..]), 0.0);
+    let plate = Insert::Plate(Plate {
+        mix: 0xFF,
+        ..Plate::DEFAULT
+    });
+    let wet = hit([plate, Insert::Empty, Insert::Empty]);
+    assert!(wet.iter().flatten().all(|s| s.is_finite()));
+    let (early, late) = (loudest(&wet[2000..STEP]), loudest(&wet[STEP * 7..]));
+    assert!(early > 0.01, "{early}");
+    assert!(late < early * 0.1, "{early} {late}");
+    assert!(
+        wet[2000..].iter().any(|[l, r]| (l - r).abs() > 0.01),
+        "it spreads"
+    );
+}

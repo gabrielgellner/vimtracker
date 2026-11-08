@@ -24,6 +24,7 @@ pub mod particle;
 pub mod phase_distortion;
 pub mod phaser;
 mod plaits_parts;
+pub mod plate;
 pub mod reverb;
 mod sine_table;
 pub mod six_op;
