@@ -85,6 +85,16 @@ vocal, then the harsher waves of older digital synths, then all of them shuffled
 | `Wave` | Which wave along a row of the grid |
 | `Row` | Which row of the grid |
 
+`Terrain` traces a circle over a surface and plays the height it passes, for tones that
+shift and evolve. The first five surfaces are worked out from formulas, and the last
+three are made of the waves `Waves` uses.
+
+| Setting | Does |
+|---|---|
+| `Terrain` | Which surface, blending from one to the next |
+| `Size` | How wide the circle is: small and pure at `00`, rich at `FF` |
+| `Offset` | Where the circle sits on the surface |
+
 `6-op` is six-operator FM playing 96 DX7 patches, from basses and electric pianos to
 bells, organs, pads and brass. Each patch has envelopes of its own, which the track's
 first envelope shapes again, so give it a long Release to hear a patch's tail. It starts
@@ -96,6 +106,25 @@ takes over on the next note.
 | `Patch` | Which patch, `00` to `5F`, named beside it. `K` lists them by name |
 | `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
 | `Time` | Attack and decay: as patched at `80`, faster below, slower above |
+
+`Chord` plays a chord from one note, on an organ or a string machine below `80` on
+`Wave`, and on waves above it. `Chord` is a list: `=` steps through it, and `K` lists
+them by name.
+
+| Setting | Does |
+|---|---|
+| `Chord` | Octave, 5, sus4, m, m7, m9, m11, 6/9, M9, M7, then M at `0A` |
+| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
+| `Wave` | Organ and string registrations below `80`, then waves above it |
+
+`Chip` is a chord of square waves, as on old game consoles. It plays the chord's notes
+together, as the rows do the arpeggio.
+
+| Setting | Does |
+|---|---|
+| `Chord` | The same chords as `Chord` |
+| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
+| `Shape` | A thin pulse below `80`, a square at `80`, and hard sync above |
 
 `Swarm` is eight saws, each in grains that start and stop, for pads, drones and clouds.
 Each note starts a fresh burst of grains.

@@ -482,6 +482,12 @@ pub enum SynthVoice {
     Additive,
     /// A grid of waves in four banks.
     Wavetable,
+    /// A path traced over a surface of waves.
+    WaveTerrain,
+    /// A chord from one note, on organ, strings or waves.
+    Chord,
+    /// A chord of square waves, as on old game consoles.
+    Chiptune,
     /// Six-operator FM, playing DX7 patches.
     SixOp,
     /// A cloud of eight saws in grains.
@@ -504,7 +510,7 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 20] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Fm,
@@ -513,7 +519,10 @@ impl SynthVoice {
         Self::Formant,
         Self::Additive,
         Self::Wavetable,
+        Self::WaveTerrain,
         Self::SixOp,
+        Self::Chord,
+        Self::Chiptune,
         Self::Swarm,
         Self::String,
         Self::Modal,
@@ -535,6 +544,9 @@ impl SynthVoice {
             Self::Formant => "Formant",
             Self::Additive => "Additive",
             Self::Swarm => "Swarm",
+            Self::WaveTerrain => "Terrain",
+            Self::Chord => "Chord",
+            Self::Chiptune => "Chip",
             Self::Wavetable => "Waves",
             Self::SixOp => "6-op",
             Self::String => "String",
@@ -556,6 +568,9 @@ impl SynthVoice {
             Self::Formant => "Two formants of grains, for vowels and leads",
             Self::Additive => "24 harmonics in bumps, for organs and glass",
             Self::Swarm => "Eight saws in grains, for pads and drones",
+            Self::WaveTerrain => "A path over a surface of waves, for evolving tones",
+            Self::Chord => "A chord from one note, on organ, strings or waves",
+            Self::Chiptune => "A chord of squares, as on old game consoles",
             Self::Fm => "Two-operator FM, for bass, bells and keys",
             Self::Waveshaping => "A wave folded into harmonics, for bass and leads",
             Self::Wavetable => "Waves in four banks to sweep, for pads and leads",
@@ -582,7 +597,10 @@ impl SynthVoice {
                 | Self::Formant
                 | Self::Additive
                 | Self::Wavetable
+                | Self::WaveTerrain
                 | Self::SixOp
+                | Self::Chord
+                | Self::Chiptune
                 | Self::Swarm
                 | Self::Dust
                 | Self::Noise

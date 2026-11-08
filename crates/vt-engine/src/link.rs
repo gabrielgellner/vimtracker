@@ -698,9 +698,17 @@ mod tests {
                     .key()
             };
             *phrase.step_mut(0).unwrap() = format!("C-2 7F {}:40 --- ---", key(1)).parse().unwrap();
-            *phrase.step_mut(4).unwrap() = format!("G-2 7F {}:20 {}:50 ---", key(2), key(0))
-                .parse()
-                .unwrap();
+            // Half way up the first setting, which may be a list as short as the chords.
+            let first = vt_model::settings::SettingId::voice(voice, 0)
+                .unwrap()
+                .entry()
+                .kind
+                .top()
+                / 2;
+            *phrase.step_mut(4).unwrap() =
+                format!("G-2 7F {}:20 {}:{first:02X} ---", key(2), key(0))
+                    .parse()
+                    .unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);

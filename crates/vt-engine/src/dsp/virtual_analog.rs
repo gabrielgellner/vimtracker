@@ -134,9 +134,10 @@ fn detuning(harmonics: f32) -> f32 {
     (a + (b - a) * squash(squash(fraction))) * sign
 }
 
-/// A square whose phase a master frequency resets, for hard sync.
+/// A square whose phase a master frequency resets, for hard sync. At a width of a half it is
+/// Plaits' `SuperSquareOscillator` too.
 #[derive(Debug, Clone, Copy)]
-struct SyncedSquare {
+pub(super) struct SyncedSquare {
     master_phase: f32,
     slave_phase: f32,
     next_sample: f32,
@@ -149,7 +150,7 @@ struct SyncedSquare {
 }
 
 impl SyncedSquare {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             master_phase: 0.0,
             slave_phase: 0.0,
@@ -168,7 +169,7 @@ impl SyncedSquare {
         if phase < pw { 0.0 } else { 1.0 }
     }
 
-    fn render(&mut self, master: f32, slave: f32, pw: f32, out: &mut [f32; BLOCK]) {
+    pub(super) fn render(&mut self, master: f32, slave: f32, pw: f32, out: &mut [f32; BLOCK]) {
         let master = master.min(MAX_FREQUENCY);
         let slave = slave.min(MAX_FREQUENCY);
         let pw = if slave >= 0.25 {

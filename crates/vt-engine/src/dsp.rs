@@ -1,6 +1,9 @@
 //! Effects, one per file so each can be tested alone.
 
 pub mod additive;
+pub mod chiptune;
+pub mod chord;
+mod chord_bank;
 pub mod delay;
 pub mod distort;
 pub mod drums;
@@ -24,6 +27,7 @@ pub mod swarm;
 mod variable_shape;
 pub mod virtual_analog;
 pub mod virtual_analog_vcf;
+pub mod wave_terrain;
 pub mod waveshaping;
 mod waveshaping_tables;
 pub mod wavetable;

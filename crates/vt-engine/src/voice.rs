@@ -1,6 +1,8 @@
 //! Sample playback and its envelope.
 
 use crate::dsp::additive::Additive;
+use crate::dsp::chiptune::Chiptune;
+use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
 use crate::dsp::grain::Grain;
@@ -14,6 +16,7 @@ use crate::dsp::string_model::StringModel;
 use crate::dsp::swarm::Swarm;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use crate::dsp::virtual_analog_vcf::VirtualAnalogVcf;
+use crate::dsp::wave_terrain::WaveTerrain;
 use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
@@ -56,6 +59,9 @@ enum Synth {
     Formant(Grain),
     Additive(Additive),
     Swarm(Swarm),
+    WaveTerrain(WaveTerrain),
+    Chord(Chord),
+    Chiptune(Chiptune),
     Kick(Kick),
     Snare(Snare),
     Hat(Hat),
@@ -78,6 +84,9 @@ impl Synth {
             SynthVoice::Formant => Self::Formant(Grain::new()),
             SynthVoice::Additive => Self::Additive(Additive::new()),
             SynthVoice::Swarm => Self::Swarm(Swarm::new()),
+            SynthVoice::WaveTerrain => Self::WaveTerrain(WaveTerrain::new()),
+            SynthVoice::Chord => Self::Chord(Chord::new()),
+            SynthVoice::Chiptune => Self::Chiptune(Chiptune::new()),
             SynthVoice::Fm => Self::Fm(Fm::new(rate)),
             SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
             SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
@@ -101,6 +110,9 @@ impl Synth {
             Self::Formant(synth) => synth.next(frequency, settings),
             Self::Additive(synth) => synth.next(frequency, settings),
             Self::Swarm(synth) => synth.next(frequency, settings),
+            Self::WaveTerrain(synth) => synth.next(frequency, settings),
+            Self::Chord(synth) => synth.next(frequency, settings),
+            Self::Chiptune(synth) => synth.next(frequency, settings),
             Self::Fm(synth) => synth.next(frequency, settings),
             Self::Kick(synth) => synth.next(frequency, settings),
             Self::Snare(synth) => synth.next(frequency, settings),
