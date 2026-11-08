@@ -42,6 +42,7 @@ use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::picking::kit_path;
+use crate::recording::Recording;
 use crate::shaping::ShapePanel;
 use crate::track_page::{Page, TakenInsert};
 use crate::tree::{ChainColumn, Place};
@@ -234,6 +235,11 @@ pub struct App {
     pub status: String,
     pub transport: Transport,
     pub playhead: usize,
+    /// How far through the playhead's step the engine last said it was, and when that was read.
+    pub progress: f32,
+    pub(crate) report_at: Instant,
+    /// Live recording, while it's armed.
+    pub(crate) recording: Option<Recording>,
     /// The main output's level.
     pub meter: Meter,
     /// Each track's level, for the mixer.
@@ -365,6 +371,9 @@ impl App {
             status: String::new(),
             transport: Transport::Stopped,
             playhead: 0,
+            progress: 0.0,
+            report_at: Instant::now(),
+            recording: None,
             meter: Meter::default(),
             track_meters: vec![Meter::default(); MAX_TRACKS],
             cpu: LoadReadout::default(),
@@ -615,6 +624,8 @@ impl App {
         }
         if let Some(report) = report {
             self.playhead = report.position;
+            self.progress = report.progress;
+            self.report_at = now;
             self.playing_section = report.section;
             self.transport = report.transport;
             self.live = (report.watched == track).then_some(report.live);
@@ -622,6 +633,7 @@ impl App {
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;
         }
+        self.follow_recording();
     }
 
     /// A key from the terminal, which the kitty keyboard protocol says is a press, a repeat or a
@@ -736,6 +748,7 @@ impl App {
     /// End a held key's note, unless another key still down is holding the same one, as a key an
     /// octave up and one an octave down can.
     fn let_go_of(&mut self, held: HeldNote) {
+        self.end_take(held.key);
         let shared = self
             .held_notes
             .iter()
@@ -898,6 +911,9 @@ impl App {
         self.view = view;
         self.note_view(view);
         self.clamp_cursor();
+        if view != View::Phrase {
+            self.stop_recording();
+        }
     }
 
     /// Show a view, as a jump that `Ctrl-O` can undo.
@@ -1098,6 +1114,7 @@ impl App {
                 }
                 self.clear_live();
             }
+            Cmd::ToggleRecord => self.toggle_recording(),
             Cmd::Undo => {
                 let before = self.loop_place();
                 if self.history.undo().is_some() {
@@ -1634,7 +1651,15 @@ impl App {
                 self.advance();
             }
             KeyCode::Char(c) if !key.ctrl => {
-                if let Some(midi) = self.played_key(c) {
+                // While recording, a note goes in where the track is playing, and the cursor
+                // stays.
+                if let Some(midi) = self.played_key(c)
+                    && self.recording.is_some()
+                    && self.mode == Mode::Insert
+                {
+                    self.record_note(key, midi);
+                    self.hold_note(key, midi, self.note_velocity);
+                } else if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()
                         .cloned()

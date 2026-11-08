@@ -12,6 +12,7 @@ pub mod kitty;
 pub mod meter;
 pub mod picking;
 pub mod probe;
+pub mod recording;
 pub mod run;
 pub mod screenshot;
 pub mod shaping;

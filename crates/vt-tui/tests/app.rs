@@ -7066,3 +7066,223 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "Ggg");
     assert_eq!(app.track_control(), Control::Level, "G and gg keep it too");
 }
+
+/// Two tracks: 16 empty rows on the first, and 4 on the second, where the cursor is.
+fn recording_app(rows: Vec<Step>) -> (App, Realtime) {
+    let mut song = Song::new(2);
+    song.tracks[0].phrases.insert(0, Arc::new(Phrase::new(16)));
+    song.tracks[1]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(rows)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, 1);
+    (app, realtime)
+}
+
+/// Frames to a step at the default 120 BPM.
+const FRAMES_PER_STEP: f64 = 6_000.0;
+
+/// Play from the start, as `Shift-Tab` does, and come back with the clock at 0.
+fn play_from_the_top(app: &mut App, realtime: &mut Realtime) -> f64 {
+    special(app, KeyCode::BackTab);
+    let mut out = vec![0.0; 2];
+    realtime.process(&mut out);
+    app.tick();
+    1.0 / FRAMES_PER_STEP
+}
+
+/// Run the audio side on to this many steps from the start.
+fn play_to(app: &mut App, realtime: &mut Realtime, at: &mut f64, to: f64) {
+    let frames = ((to - *at) * FRAMES_PER_STEP).round() as usize;
+    let mut out = vec![0.0; frames * 2];
+    realtime.process(&mut out);
+    app.tick();
+    *at += frames as f64 / FRAMES_PER_STEP;
+}
+
+fn rows_of(app: &App, track: usize) -> Vec<Step> {
+    app.song().tracks[track].phrases[&0].steps().to_vec()
+}
+
+/// The `OFF` a recorded note's length is in, in units of a sixth of a step.
+fn length_of(step: &Step) -> Option<u8> {
+    step.fx
+        .iter()
+        .find(|slot| slot.command == Some(vt_model::step::FxCommand::Off))
+        .map(|slot| slot.coarse())
+}
+
+fn status_line(app: &App) -> String {
+    let backend = ratatui::backend::TestBackend::new(160, 2);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
+}
+
+#[test]
+fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    press(&mut app, " r");
+    assert!(!app.recording());
+    assert_eq!(app.status, "Recording arms while playing");
+
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    assert!(app.recording());
+    assert!(
+        status_line(&app).contains("playing REC"),
+        "{}",
+        status_line(&app)
+    );
+    press(&mut app, " r");
+    assert!(!app.recording(), "it toggles");
+    assert!(!status_line(&app).contains("REC"));
+
+    // Pausing stops it.
+    let tab = Key::new(KeyCode::Tab);
+    press(&mut app, " r");
+    app.key(tab, Instant::now());
+    app.key_released(tab, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 1.0);
+    assert_eq!(app.transport, Transport::Paused);
+    assert!(!app.recording());
+
+    // So does leaving the phrase view.
+    app.key(tab, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 2.0);
+    press(&mut app, " r");
+    assert!(app.recording());
+    press(&mut app, " 2");
+    assert!(!app.recording());
+}
+
+#[test]
+fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    // Step 9 of the song is row 1 of the 4-row phrase. A quarter into it goes back to its start.
+    play_to(&mut app, &mut rt, &mut at, 9.25);
+    let a = Key::char('a');
+    app.key(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
+    assert_eq!(rows[1].velocity, Some(app.note_velocity));
+    assert_eq!(app.cursor.step, 0, "the cursor stays");
+    // Until it's let go, it's as long as it can be: until its row comes round again.
+    assert_eq!(length_of(&rows[1]), Some(24));
+
+    // Held for two steps.
+    play_to(&mut app, &mut rt, &mut at, 11.25);
+    app.key_released(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(length_of(&rows[1]), Some(12), "{rows:?}");
+    assert_eq!(
+        rows.iter().filter(|step| step.note != Note::Empty).count(),
+        1
+    );
+    assert!(
+        rows_of(&app, 0).iter().all(|step| *step == Step::default()),
+        "the longer track is left alone"
+    );
+}
+
+#[test]
+fn a_note_played_late_in_a_step_waits_for_the_next_row() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    play_to(&mut app, &mut rt, &mut at, 9.75);
+    let s = Key::char('s');
+    app.key(s, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 9.9);
+    app.key_released(s, Instant::now());
+    assert!(
+        rows_of(&app, 1).iter().all(|step| step.note == Note::Empty),
+        "not written before its row, which would play it twice"
+    );
+    play_to(&mut app, &mut rt, &mut at, 10.1);
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[2].note, Note::On(62), "{rows:?}");
+    assert_eq!(length_of(&rows[2]), Some(1), "the shortest a length can be");
+}
+
+#[test]
+fn a_note_held_until_its_row_comes_round_ends_there() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    play_to(&mut app, &mut rt, &mut at, 9.0);
+    let a = Key::char('a');
+    app.key(a, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 13.5);
+    // Letting go later changes nothing.
+    play_to(&mut app, &mut rt, &mut at, 14.5);
+    app.key_released(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[1].note, Note::On(60));
+    assert_eq!(length_of(&rows[1]), Some(24), "4 steps, the whole loop");
+}
+
+#[test]
+fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo() {
+    let rows: Vec<Step> = ["E-4 7F", "C-3 10 RST1 cut:40", "--- --", "--- --"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    let (mut app, mut rt) = recording_app(rows.clone());
+    let depth = app.history.undo_depth();
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    for (from, key) in [(9.0, 'a'), (11.0, 'd')] {
+        play_to(&mut app, &mut rt, &mut at, from);
+        app.key(Key::char(key), Instant::now());
+        play_to(&mut app, &mut rt, &mut at, from + 0.5);
+        app.key_released(Key::char(key), Instant::now());
+    }
+    let written = rows_of(&app, 1);
+    assert_eq!(written[0], rows[0], "a row not played into stays");
+    assert_eq!(written[1].note, Note::On(60));
+    assert_eq!(written[1].velocity, Some(app.note_velocity));
+    assert_eq!(
+        written[1].gate_kind(),
+        vt_model::step::GateKind::Single,
+        "a rest would silence it"
+    );
+    assert_eq!(written[1].pulses(), 1, "the row lasts as long as it did");
+    assert_eq!(written[1].fx[0], rows[1].fx[0], "its FX stay");
+    assert_eq!(length_of(&written[1]), Some(3));
+    assert_eq!(written[3].note, Note::On(64));
+    assert_eq!(app.history.undo_depth(), depth + 1, "one step for the pass");
+
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " r");
+    press(&mut app, "u");
+    assert_eq!(rows_of(&app, 1), rows);
+}
+
+#[test]
+fn a_held_note_when_recording_stops_keeps_its_length_so_far() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    play_to(&mut app, &mut rt, &mut at, 8.0);
+    app.key(Key::char('a'), Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 10.0);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " r");
+    assert!(!app.recording());
+    assert_eq!(length_of(&rows_of(&app, 1)[0]), Some(12));
+}

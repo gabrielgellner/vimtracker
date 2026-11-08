@@ -142,6 +142,7 @@ fn grid_name(skip: u32) -> String {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let transport = match app.transport {
         Transport::Stopped => "stopped",
+        Transport::Playing if app.recording() => "playing REC",
         Transport::Playing => "playing",
         Transport::Paused => "paused",
     };
