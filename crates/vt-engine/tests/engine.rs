@@ -80,6 +80,22 @@ fn sample_positions_are_exact_and_never_accumulate() {
 }
 
 #[test]
+fn the_engine_says_how_far_through_a_step_it_is() {
+    let song = song_with_notes(1, &[]);
+    let mut engine = Engine::new(48_000, version(song, Arc::new(SamplePool::default())));
+    assert_eq!(engine.step_progress(), 0.0, "stopped");
+    engine.play_from(0);
+    let mut out = vec![0.0; 2 * 1500];
+    engine.process(&mut out);
+    assert_eq!(engine.position(), 0);
+    assert!((engine.step_progress() - 0.25).abs() < 1e-3);
+    let mut out = vec![0.0; 2 * 6000];
+    engine.process(&mut out);
+    assert_eq!(engine.position(), 1);
+    assert!((engine.step_progress() - 0.25).abs() < 1e-3);
+}
+
+#[test]
 fn a_note_starts_on_its_exact_sample() {
     for (rate, millibpm, expected) in [
         (44_100, 120_000, 5512),

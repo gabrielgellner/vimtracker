@@ -60,6 +60,8 @@ pub enum Cmd {
     ToggleMute,
     ToggleSolo,
     ClearMutes,
+    /// Arm or disarm live recording.
+    ToggleRecord,
     Double,
     /// Move the loop by this many steps, times the count.
     SlideLoop(isize),
@@ -311,6 +313,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
     ("M-s", Cmd::ToggleScale, "Scale on or off"),
     ("Space p d", Cmd::Double, "Double this phrase"),
+    (
+        "Space r",
+        Cmd::ToggleRecord,
+        "Record notes played in Insert, while playing",
+    ),
     ("K", Cmd::PickValue, "Choose this field from a list"),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
     ("g c", Cmd::ClonePhrase, "Copy this phrase here"),

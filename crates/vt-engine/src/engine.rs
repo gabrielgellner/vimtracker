@@ -204,6 +204,18 @@ impl Engine {
         }
     }
 
+    /// How far the transport is from the place last fired to the next, from 0 to 1, so the edit
+    /// thread can tell where in a step a key went down. It's 0 until a step has fired.
+    pub fn step_progress(&self) -> f32 {
+        let fired = self.transport == Transport::Playing && self.frames_since_origin > 0;
+        if !self.has_steps() || !fired || self.next_step == 0 {
+            return 0.0;
+        }
+        let last = ((self.next_step - 1) * TICKS_PER_STEP) as f64;
+        let progress = (self.song_time().tick - last) / TICKS_PER_STEP as f64;
+        progress.clamp(0.0, 1.0) as f32
+    }
+
     /// Whether a place is one the section's reset would already have sent back to the start.
     fn past_reset(&self, place: u64) -> bool {
         let reset = self.playing_section().and_then(|s| s.reset);

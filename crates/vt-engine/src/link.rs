@@ -89,6 +89,8 @@ pub struct JamState {
 pub struct Telemetry {
     pub section: usize,
     pub position: usize,
+    /// How far through that place the transport is, from 0 to 1.
+    pub progress: f32,
     pub transport: Transport,
     pub reading: Reading,
     /// Each track's levels.
@@ -351,6 +353,7 @@ impl Realtime {
         let _ = self.telemetry.push(Telemetry {
             section: self.engine.section(),
             position: self.engine.position(),
+            progress: self.engine.step_progress(),
             transport: self.engine.transport(),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),

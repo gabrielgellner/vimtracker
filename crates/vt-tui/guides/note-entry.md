@@ -15,7 +15,7 @@ stays on it**, so you can play another in over it, even while the song plays.
 
 Holding a note key writes the note once and keeps it sounding until you let
 go, or leave Insert. The note written is still as long as its gate, not as
-long as you held it. `1` is written once too, however long it's held. Other
+long as you held it, unless you're recording: see **Recording while it plays**. `1` is written once too, however long it's held. Other
 keys, such as `Backspace`, the arrows and the digits in other columns, repeat
 while held. If the window loses focus while a note is held, it stops.
 
@@ -57,6 +57,33 @@ The distance is the grid, shown as `Grid` on the status line. As in Ableton,
 `Option-1` makes it narrower and `Option-2` wider, halving or doubling it from
 `1/16` up to a bar, in Insert and Normal. `:set skip=8` sets it to any number of
 steps. Anything half typed in another column is dropped when you move.
+
+## Recording while it plays
+
+While the song plays, `Space r` in Normal mode arms recording, and the status
+line shows `playing REC`. Then press `i`, and each note you play on the Note
+column goes in where the track is playing, not at the cursor, which stays put.
+Notes sound as you play them, chords too.
+
+| Keys | Does |
+|---|---|
+| `Space r` | Arm or disarm recording, while playing in the phrase view |
+| `Tab` | Pausing disarms it, and so does leaving the phrase view |
+
+- **Where.** The note goes on the cursor's track, on the row that track is
+  playing. Each track loops at its own length, so a 4-row phrase against a
+  16-row one gets its own row. A key pressed past halfway through a row goes on
+  the next one. How early or late it was is dropped, as there's no micro-timing
+  yet.
+- **How long.** The note is as long as you held its key, to a sixth of a step,
+  written as an `OFF` in a free FX column of its row, so `OFF0C` is two steps.
+  Rows don't move: the gate's pulses still say how long the row lasts. A note
+  still held when its row comes round again ends there. With no FX column free,
+  the note goes in with no length.
+- **What's replaced.** Only the note, its velocity and its gate, which becomes
+  `SGL` with the pulses it had. Other columns and rows stay. The velocity is
+  `Vel`, and auto-jump doesn't move the cursor.
+- **Undo.** `u` takes back everything recorded since it was armed, at once.
 
 ## Auto-jump
 
