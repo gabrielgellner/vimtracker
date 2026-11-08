@@ -1885,7 +1885,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC],
+        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
@@ -4552,7 +4552,7 @@ fn the_filter_curve_moves_with_what_plays() {
         resonance,
         send_a: track.send_a,
         send_b: track.send_b,
-        machine: [0, 1, 2, 3].map(|setting| track.machine_value(setting)),
+        machine: std::array::from_fn(|setting| track.machine_value(setting)),
         inserts: Default::default(),
     };
 
@@ -5694,7 +5694,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC],
+        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);

@@ -14,6 +14,10 @@ pub const MIN_NOTE: u8 = 12;
 pub const MAX_NOTE: u8 = 127;
 /// The highest velocity, full level, which is also MIDI's.
 pub const MAX_VELOCITY: u8 = 0x7F;
+/// The lowest velocity that accents a note on a voice with an accent of its own, like `Acid`.
+/// It's above the velocity notes are written with, `64`, so one step up the ladder, to `74`,
+/// accents a note, and so does `7F` or none.
+pub const ACCENT_VELOCITY: u8 = 0x70;
 
 /// A note field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

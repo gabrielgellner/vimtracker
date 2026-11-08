@@ -18,7 +18,7 @@ use crate::song::{DEFAULT_ACCENT, SynthVoice};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
-pub const MAX_MACHINE_SETTINGS: usize = 4;
+pub const MAX_MACHINE_SETTINGS: usize = 8;
 
 /// What values a setting takes, and what they mean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +79,38 @@ pub enum Units {
     Density,
     /// Where Warps' algorithm knob is, by the algorithms it's between.
     Algorithm,
+    /// The acid voice's cutoff, its filter envelope's decay, how long it slides and how hard it
+    /// drives its filter.
+    AcidCutoff,
+    AcidDecay,
+    Slide,
+    AcidDrive,
+}
+
+/// The acid voice's cutoff at either end of its range, in Hz, as Open303 measured a TB-303's.
+pub const ACID_LOWEST_CUTOFF: f32 = 313.8;
+pub const ACID_HIGHEST_CUTOFF: f32 = 2394.4;
+
+/// The acid voice's cutoff in Hz for a value on the `00` to `FF` scale, evenly in pitch.
+pub fn acid_cutoff_hz(value: f32) -> f32 {
+    ACID_LOWEST_CUTOFF * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).powf(value / 255.0)
+}
+
+/// The acid voice's filter envelope decay in ms, as a time constant: a TB-303's Decay knob, from
+/// 200 ms to 2 s, evenly in ratio.
+pub fn acid_decay_ms(value: f32) -> f32 {
+    200.0 * 10_f32.powf(value / 255.0)
+}
+
+/// How long the acid voice takes to slide to a note, in ms: a TB-303's 60 ms at `00`, up to the
+/// Devil Fish's longest, 360 ms.
+pub fn slide_ms(value: f32) -> f32 {
+    60.0 + 300.0 * value / 255.0
+}
+
+/// How much the acid voice drives its filter, in dB over a TB-303's level.
+pub fn acid_drive_db(value: f32) -> f32 {
+    24.0 * value / 255.0
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -171,6 +203,10 @@ impl Kind {
                     Triggering::Random(hertz) => format!("{} rnd", rate(hertz)),
                 },
                 Units::Algorithm => algorithm_text(coarse as f32),
+                Units::AcidCutoff => hertz(f64::from(acid_cutoff_hz(coarse as f32))),
+                Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
+                Units::Slide => milliseconds(slide_ms(coarse as f32)),
+                Units::AcidDrive => format!("+{:.1} dB", acid_drive_db(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -371,6 +407,45 @@ const SWARM: [Entry; 3] = [
     level("density", "Density", "DENS", 0x80),
     level("overlap", "Overlap", "OVLP", 0x99),
 ];
+/// A continuous setting from `00` to `FF` that reads in these units.
+const fn in_units(
+    key: &'static str,
+    name: &'static str,
+    label: &'static str,
+    default: u8,
+    units: Units,
+) -> Entry {
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units,
+        },
+        ..level(key, name, label, default)
+    }
+}
+/// The acid voice's waves: the saw, and the square a TB-303 shapes from it.
+const ACID_WAVES: [&str; 2] = ["Saw", "Square"];
+/// The acid voice's, in the order of a TB-303's knobs, then two of the Devil Fish's.
+const ACID: [Entry; 8] = [
+    Entry {
+        key: "wave",
+        name: "Wave",
+        label: Some("WAVE"),
+        kind: Kind::Stepped {
+            choices: &ACID_WAVES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    in_units("cutoff", "Cutoff", "FREQ", 0x80, Units::AcidCutoff),
+    level("resonance", "Resonance", "RESO", 0x80),
+    level("envmod", "Env mod", "EMOD", 0x80),
+    in_units("decay", "Decay", "DCAY", 0x80, Units::AcidDecay),
+    level("accent", "Accent", "ACC", 0x80),
+    in_units("slide", "Slide", "SLID", 0x00, Units::Slide),
+    in_units("drive", "Drive", "DRIV", 0x00, Units::AcidDrive),
+];
 /// The chords Chord and Chiptune play, in the order Plaits lists them.
 const CHORD_NAMES: [&str; 11] = [
     "Octave", "5", "sus4", "m", "m7", "m9", "m11", "6/9", "M9", "M7", "M",
@@ -468,6 +543,7 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     match voice {
         SynthVoice::VirtualAnalog => &VA,
         SynthVoice::VirtualAnalogVcf => &VCF,
+        SynthVoice::Acid => &ACID,
         SynthVoice::Fm => &FM,
         SynthVoice::PhaseDistortion => &PD,
         SynthVoice::Waveshaping => &FOLD,
@@ -493,6 +569,7 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
     match voice {
         SynthVoice::VirtualAnalog => "va",
         SynthVoice::VirtualAnalogVcf => "vcf",
+        SynthVoice::Acid => "acid",
         SynthVoice::Fm => "fm",
         SynthVoice::PhaseDistortion => "pd",
         SynthVoice::Waveshaping => "fold",

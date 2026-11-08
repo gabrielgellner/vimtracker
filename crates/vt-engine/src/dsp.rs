@@ -1,5 +1,6 @@
 //! Effects, one per file so each can be tested alone.
 
+pub mod acid;
 pub mod additive;
 pub mod chiptune;
 pub mod chord;
@@ -7,6 +8,7 @@ mod chord_bank;
 pub mod chorus;
 pub mod compressor;
 pub mod delay;
+pub mod diode_filter;
 pub mod distort;
 pub mod drums;
 pub mod eq;

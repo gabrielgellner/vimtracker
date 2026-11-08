@@ -801,6 +801,9 @@ mod tests {
                 format!("G-2 7F {}:20 {}:{first:02X} ---", key(2), key(0))
                     .parse()
                     .unwrap();
+            // A plain note held into the next, which `Acid` slides to.
+            *phrase.step_mut(2).unwrap() = "D-2 64 HLD1".parse().unwrap();
+            *phrase.step_mut(3).unwrap() = "E-2 64".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);

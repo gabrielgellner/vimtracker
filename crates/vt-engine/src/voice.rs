@@ -1,5 +1,6 @@
 //! Sample playback and its envelope.
 
+use crate::dsp::acid::Acid;
 use crate::dsp::additive::Additive;
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
@@ -54,6 +55,7 @@ const MIDDLE_C: f64 = 261.625_565_3;
 enum Synth {
     VirtualAnalog(VirtualAnalog),
     VirtualAnalogVcf(VirtualAnalogVcf),
+    Acid(Acid),
     Fm(Fm),
     PhaseDistortion(PhaseDistortion),
     Formant(Grain),
@@ -80,6 +82,7 @@ impl Synth {
         match voice {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
             SynthVoice::VirtualAnalogVcf => Self::VirtualAnalogVcf(VirtualAnalogVcf::new()),
+            SynthVoice::Acid => Self::Acid(Acid::new(rate)),
             SynthVoice::PhaseDistortion => Self::PhaseDistortion(PhaseDistortion::new()),
             SynthVoice::Formant => Self::Formant(Grain::new()),
             SynthVoice::Additive => Self::Additive(Additive::new()),
@@ -106,6 +109,7 @@ impl Synth {
         match self {
             Self::VirtualAnalog(synth) => synth.next(frequency, settings),
             Self::VirtualAnalogVcf(synth) => synth.next(frequency, settings),
+            Self::Acid(synth) => synth.next(frequency, settings),
             Self::PhaseDistortion(synth) => synth.next(frequency, settings),
             Self::Formant(synth) => synth.next(frequency, settings),
             Self::Additive(synth) => synth.next(frequency, settings),
@@ -129,8 +133,17 @@ impl Synth {
 
     /// Let go of the note, for a synth with envelopes of its own.
     fn release(&mut self) {
-        if let Self::SixOp(synth) = self {
-            synth.release();
+        match self {
+            Self::SixOp(synth) => synth.release(),
+            Self::Acid(synth) => synth.release(),
+            _ => {}
+        }
+    }
+
+    /// Start a note, for a synth with envelopes of its own that an accent changes.
+    fn trigger(&mut self, accent: bool) {
+        if let Self::Acid(synth) = self {
+            synth.trigger(accent);
         }
     }
 }
@@ -194,6 +207,8 @@ pub struct NoteOn {
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
+    /// Whether its velocity accents it, for a voice with an accent of its own.
+    pub accent: bool,
     /// The shape of its level.
     pub shape: Envelope,
     pub release_after: Option<u32>,
@@ -202,6 +217,10 @@ pub struct NoteOn {
 impl Voice {
     /// Start a note, from a level if the last note's should carry on.
     pub fn start(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+        let mut synth = note.synth.map(|voice| Synth::new(voice, rate));
+        if let Some(synth) = &mut synth {
+            synth.trigger(note.accent);
+        }
         Self {
             stage: Stage::Held { from },
             sample: note.sample,
@@ -216,7 +235,7 @@ impl Voice {
             rate,
             elapsed: 0,
             release_after: note.release_after,
-            synth: note.synth.map(|voice| Synth::new(voice, rate)),
+            synth,
             holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
         }
@@ -272,10 +291,33 @@ impl Voice {
     }
 
     /// Carry on as another note, with no new attack: a sample keeps playing at the new note's
-    /// speed, and a synth changes pitch without starting its envelope again.
-    pub fn tie(&mut self, note: u8, gain: f32) {
-        self.increment = 2_f64.powf((f64::from(note) - 60.0) / 12.0);
-        self.gain = gain;
+    /// speed, and a synth changes pitch without starting its envelope again. `Acid` slides there.
+    pub fn tie(&mut self, note: NoteOn) {
+        self.increment = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
+        self.gain = note.gain;
+        if let Some(Synth::Acid(synth)) = &mut self.synth {
+            synth.slide(note.accent);
+        }
+    }
+
+    /// Whether it's sounding an `Acid` note, which a new one carries on from.
+    pub fn plays_acid(&self) -> bool {
+        self.active() && matches!(self.synth, Some(Synth::Acid(_)))
+    }
+
+    /// Start a new note on the synth already playing, from where it is, for a voice that plays
+    /// one note at a time and carries its filter and accent from note to note, as `Acid` does.
+    /// Its level starts from where it is too, as the synth's own envelope gives its attack.
+    pub fn retrigger(&mut self, note: NoteOn) {
+        self.stage = Stage::Held { from: self.level };
+        self.elapsed = 0;
+        self.increment = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
+        self.gain = note.gain;
+        self.shape = note.shape;
+        self.release_after = note.release_after;
+        if let Some(synth) = &mut self.synth {
+            synth.trigger(note.accent);
+        }
     }
 
     /// Where modulation wants its speed.

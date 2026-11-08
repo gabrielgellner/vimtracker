@@ -107,6 +107,7 @@ impl Snare {
             timbre: tone,
             morph: decay,
             accent,
+            ..
         } = settings;
         if !self.struck {
             self.pulse_height = 3.0 + 7.0 * accent;
@@ -239,6 +240,7 @@ impl Hat {
             timbre: tone,
             morph: decay,
             accent,
+            ..
         } = settings;
         let envelope_decay = 1.0 - 0.003 * semitones(-decay * 84.0);
         if self.fresh {

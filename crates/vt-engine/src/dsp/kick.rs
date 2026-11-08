@@ -108,6 +108,7 @@ impl Kick {
             timbre: tone,
             morph: decay,
             accent,
+            ..
         } = settings;
         let attack_fm_amount = (harmonics * 4.0).min(1.0);
         let self_fm_amount = (harmonics * 4.0 - 1.0).clamp(0.0, 1.0);

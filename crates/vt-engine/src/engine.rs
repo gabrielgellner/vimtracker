@@ -11,7 +11,8 @@ use vt_model::insert::Insert;
 use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{
-    FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
+    ACCENT_VELOCITY, FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note,
+    Step,
 };
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
@@ -884,9 +885,8 @@ impl Engine {
 
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
     pub fn preview(&mut self, track: usize, note: u8, velocity: u8) {
-        let gain = velocity_gain(velocity);
         let shape = self.note_shape(track);
-        let Some(on) = self.note_on(track, note, gain, shape) else {
+        let Some(on) = self.note_on(track, note, velocity, shape) else {
             return;
         };
         let frames = PREVIEW_MS * self.rate / 1000;
@@ -910,7 +910,8 @@ impl Engine {
         }
     }
 
-    fn note_on(&self, track: usize, note: u8, step_gain: f32, shape: Envelope) -> Option<NoteOn> {
+    /// A note at a velocity, which sets its level and whether it's accented.
+    fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;
@@ -923,7 +924,8 @@ impl Engine {
             sample,
             synth,
             note,
-            gain: step_gain,
+            gain: velocity_gain(velocity),
+            accent: velocity >= ACCENT_VELOCITY,
             shape,
             release_after: None,
         })
@@ -1257,8 +1259,8 @@ impl Engine {
                 let note = (i16::from(midi) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
-                let gain = step.velocity.map_or(1.0, velocity_gain);
-                let on = self.note_on(index, note, gain, self.note_shape(index));
+                let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
+                let on = self.note_on(index, note, velocity, self.note_shape(index));
                 match on {
                     // A `Hold` before it ties into this note, with no new attack.
                     Some(on) if tie => self.tracks[index].tie(on),
@@ -1334,9 +1336,9 @@ impl Engine {
             };
             let note = (i16::from(midi) + i16::from(position.transpose))
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-            let gain = step.velocity.map_or(1.0, velocity_gain);
+            let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
             let shape = self.note_shape(index);
-            let Some(on) = self.note_on(index, note, gain, shape) else {
+            let Some(on) = self.note_on(index, note, velocity, shape) else {
                 continue;
             };
             let track = &mut self.tracks[index];

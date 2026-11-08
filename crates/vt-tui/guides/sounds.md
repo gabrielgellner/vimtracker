@@ -30,6 +30,34 @@ acid lines and fat bass. Try a note around `C-2`.
 | `Frequency` | The cutoff, from two octaves under the note to far above |
 | `Wave` | Saw and sub, saw, square, pulse, then square and sub at `FF` |
 
+`Acid` is our own take on Roland's TB-303, rather than one of Plaits': a saw or a square
+through a diode ladder filter, with the 303's accent and slide, for acid lines. It plays one
+note at a time, and each note carries on from the last one's filter, as a 303 does. Try
+notes around `C-2`, with `Resonance` well up.
+
+- **Accent** comes from velocity. A note at `70` or above is accented: louder, with more
+  filter envelope and a shorter decay. Notes are written at `64`, so one step up the
+  velocity ladder, to `74`, accents a note, and so does `7F`. Accents close together build
+  up, swelling higher each time, the more so with `Resonance` up.
+- **Slide** is the `HLD` gate. A note held into the next row's glides to its pitch, with
+  neither envelope starting again. `Slide` sets how long it takes.
+- A note holds until the next one, or an `OFF`. For the 303's short, bouncing notes, end
+  some early with `OFF`.
+
+| Setting | Does |
+|---|---|
+| `Wave` | The saw, or the square a 303 makes from it |
+| `Cutoff` | Where the filter sits, from 314 Hz to 2.4 kHz, as on a 303 |
+| `Resonance` | How much the filter rings. It thins the bass as it rises |
+| `Env mod` | How far each note's envelope sweeps the cutoff |
+| `Decay` | How long that sweep takes to fall, from 200 ms to 2 s |
+| `Accent` | How much louder and brighter an accented note is |
+| `Slide` | How long a slide takes: 60 ms at `00`, as on a 303, to 360 ms |
+| `Drive` | How hard the saw drives the filter, up to 24 dB, for grit |
+
+The track's own filter comes after it, as for any voice. It's best left open, with `Cut`
+at `FF`, so the diode ladder does the work.
+
 `FM` is two sine waves, one bending the other, for bass, bells and keys.
 
 | Setting | Does |

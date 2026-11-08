@@ -375,7 +375,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         resonance: 0x20,
         send_a: 0x11,
         send_b: 0x22,
-        machine: [0x33, 0x44, 0x55, 0x66],
+        machine: [0x33, 0x44, 0x55, 0x66, 0, 0, 0, 0],
         inserts: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
