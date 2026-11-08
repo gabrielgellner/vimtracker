@@ -51,10 +51,8 @@ fn keys(app: &mut App, text: &str) {
             let c = tail.chars().next().unwrap();
             app.key(
                 Key {
-                    code: KeyCode::Char(c),
                     ctrl: true,
-                    alt: false,
-                    shift: false,
+                    ..Key::char(c)
                 },
                 now,
             );

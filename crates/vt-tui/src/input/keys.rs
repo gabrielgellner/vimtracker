@@ -23,8 +23,12 @@ pub struct Key {
     pub code: KeyCode,
     pub ctrl: bool,
     pub alt: bool,
+    /// Cmd on a Mac, the super or Windows key elsewhere. Nothing is bound to it, so a key held with
+    /// it is dropped rather than read as the key alone.
+    pub command: bool,
     /// Only ever set on an arrow, so nothing else has to care about it. Elsewhere Shift is in the
-    /// character, as `G` or `:`.
+    /// character, as `G` or `:`, and away from `Enter`, `Space` and the like, so a Shift held a
+    /// moment early still types them.
     pub shift: bool,
 }
 
@@ -33,6 +37,7 @@ pub const LEADER: Key = Key {
     code: KeyCode::Char(' '),
     ctrl: false,
     alt: false,
+    command: false,
     shift: false,
 };
 
@@ -43,6 +48,7 @@ impl Key {
             code,
             ctrl: false,
             alt: false,
+            command: false,
             shift: false,
         }
     }
@@ -59,13 +65,14 @@ impl Key {
     /// then takes Shift off. Where it doesn't, as from kitty's remote control, Shift is still set
     /// on the plain key, `;` rather than `:`, and a US layout says what Shift makes of it.
     pub fn from_event(event: KeyEvent) -> Self {
-        let (ctrl, alt) = (
+        let (ctrl, alt, command) = (
             event.modifiers.contains(KeyModifiers::CONTROL),
             event.modifiers.contains(KeyModifiers::ALT),
+            event.modifiers.contains(KeyModifiers::SUPER),
         );
         let shifted = event.modifiers.contains(KeyModifiers::SHIFT);
         // Caps Lock types capitals, as it does without the protocol, but leaves `Ctrl-D` alone.
-        let capitals = event.state.contains(KeyEventState::CAPS_LOCK) && !ctrl && !alt;
+        let capitals = event.state.contains(KeyEventState::CAPS_LOCK) && !ctrl && !alt && !command;
         let code = match event.code {
             KeyCode::Char(c) if shifted => KeyCode::Char(shift_of(c).unwrap_or(c)),
             KeyCode::Char(c) if capitals => KeyCode::Char(c.to_ascii_uppercase()),
@@ -75,6 +82,7 @@ impl Key {
             code,
             ctrl,
             alt,
+            command,
             shift: shifted
                 && matches!(
                     code,
@@ -163,6 +171,9 @@ impl std::fmt::Display for Key {
         if self.ctrl {
             f.write_str("C-")?;
         }
+        if self.command {
+            f.write_str("D-")?;
+        }
         if self.shift {
             f.write_str("S-")?;
         }
@@ -188,18 +199,31 @@ impl std::fmt::Display for Key {
 #[error("not a key name: {0:?}")]
 pub struct KeyParseError(pub String);
 
-/// Parse one key, such as `x`, `C-r`, `M-1` or `Enter`.
+/// Parse one key, such as `x`, `C-r`, `M-1`, `C-i`, `S-Up` or `Enter`. `D-` is Cmd, as in Vim.
+/// The modifiers can come in any order, and `S-` is only for an arrow, as Shift is in the
+/// character elsewhere: `G`, not `S-g`. `S-Tab` is the key `Shift-Tab` makes.
 pub fn parse(text: &str) -> Result<Key, KeyParseError> {
-    let (alt, text) = match text.strip_prefix("M-") {
-        Some(rest) => (true, rest),
-        None => (false, text),
-    };
-    let (ctrl, name) = match text.strip_prefix("C-") {
-        Some(rest) => (true, rest),
-        None => (false, text),
-    };
+    let mut key = Key::char(' ');
+    let mut name = text;
+    loop {
+        if name == "S-Tab" {
+            break;
+        }
+        let flag = match name.get(..2) {
+            Some("M-") => &mut key.alt,
+            Some("C-") => &mut key.ctrl,
+            Some("D-") => &mut key.command,
+            Some("S-") => &mut key.shift,
+            _ => break,
+        };
+        if *flag || name.len() == 2 {
+            return Err(KeyParseError(text.to_owned()));
+        }
+        *flag = true;
+        name = &name[2..];
+    }
     let mut chars = name.chars();
-    let code = match (chars.next(), chars.next()) {
+    key.code = match (chars.next(), chars.next()) {
         (Some(c), None) => KeyCode::Char(c),
         _ => match name {
             "Space" => KeyCode::Char(' '),
@@ -215,12 +239,14 @@ pub fn parse(text: &str) -> Result<Key, KeyParseError> {
             _ => return Err(KeyParseError(text.to_owned())),
         },
     };
-    Ok(Key {
-        code,
-        ctrl,
-        alt,
-        shift: false,
-    })
+    let arrow = matches!(
+        key.code,
+        KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+    );
+    if key.shift && !arrow {
+        return Err(KeyParseError(text.to_owned()));
+    }
+    Ok(key)
 }
 
 /// Parse a whitespace-separated key sequence.
@@ -252,6 +278,17 @@ mod tests {
             "S-Tab",
             "Backspace",
             "M-1",
+            "C-i",
+            "C-j",
+            "C-m",
+            "C-1",
+            "C-0",
+            "C-A",
+            "D-1",
+            "M-C-x",
+            "S-Up",
+            "C-S-Left",
+            "M--",
         ] {
             assert_eq!(parse(name).unwrap().to_string(), name);
         }
@@ -308,8 +345,45 @@ mod tests {
     }
 
     #[test]
+    fn keys_the_kitty_protocol_tells_apart_stay_apart() {
+        let ctrl = |code| Key::from_event(KeyEvent::new(code, KeyModifiers::CONTROL));
+        let plain = |code| Key::from_event(KeyEvent::new(code, KeyModifiers::NONE));
+        assert_eq!(ctrl(KeyCode::Char('i')), parse("C-i").unwrap());
+        assert_ne!(ctrl(KeyCode::Char('i')), plain(KeyCode::Tab));
+        assert_ne!(ctrl(KeyCode::Char('j')), plain(KeyCode::Enter));
+        assert_ne!(ctrl(KeyCode::Char('m')), plain(KeyCode::Enter));
+        for digit in '0'..='9' {
+            let key = ctrl(KeyCode::Char(digit));
+            assert_eq!(key, parse(&format!("C-{digit}")).unwrap());
+            assert_ne!(key, Key::char(digit));
+        }
+    }
+
+    #[test]
+    fn cmd_is_carried_and_named_as_in_vim() {
+        let event = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::SUPER);
+        let key = Key::from_event(event);
+        assert!(key.command);
+        assert_ne!(key, Key::char('1'));
+        assert_eq!(key.to_string(), "D-1");
+    }
+
+    #[test]
+    fn shift_is_dropped_from_enter_and_space() {
+        for (code, name) in [(KeyCode::Enter, "Enter"), (KeyCode::Char(' '), "Space")] {
+            let event = KeyEvent::new(code, KeyModifiers::SHIFT);
+            assert_eq!(Key::from_event(event), parse(name).unwrap());
+        }
+    }
+
+    #[test]
     fn unknown_names_are_errors() {
         assert!(parse("Nope").is_err());
         assert!(parse_sequence("  ").is_err());
+        // Shift is in the character, so these can never arrive.
+        assert!(parse("S-g").is_err());
+        assert!(parse("S-Enter").is_err());
+        assert!(parse("C-C-a").is_err());
+        assert!(parse("C-").is_err());
     }
 }

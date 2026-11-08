@@ -158,10 +158,8 @@ fn undo_and_redo_keys_restore_notes() {
     assert_eq!(notes(&app)[0], Note::Empty);
     app.key(
         Key {
-            code: KeyCode::Char('r'),
             ctrl: true,
-            alt: false,
-            shift: false,
+            ..Key::char('r')
         },
         Instant::now(),
     );
@@ -221,6 +219,20 @@ fn the_transport_keys_play_pause_and_restart() {
     hit(&mut app, &mut rt, Key::new(KeyCode::Enter));
     assert_eq!(app.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Normal);
+}
+
+#[test]
+fn ctrl_i_jumps_forward_and_tab_still_plays() {
+    let (mut app, mut rt) = app();
+    let now = Instant::now();
+    // The kitty protocol tells `Ctrl-I` from `Tab`, so jumping forward with nowhere to go plays
+    // nothing.
+    app.key(parse_sequence("C-i").unwrap()[0], now);
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Stopped);
+    app.key(Key::new(KeyCode::Tab), now + Duration::from_millis(1000));
+    block(&mut rt, &mut app);
+    assert_eq!(app.transport, Transport::Playing);
 }
 
 #[test]
@@ -796,12 +808,12 @@ fn cuj_5_reuse_and_vary_a_phrase() {
         Note::On(60)
     );
     assert_eq!(app.chain_entries()[0].phrase, 0);
-    // Ctrl-O returns to where the jump started, and Ctrl-N goes forward again.
+    // Ctrl-O returns to where the jump started, and Ctrl-I goes forward again.
     let back = parse_sequence("C-o").unwrap()[0];
     app.key(back, Instant::now());
     assert_eq!(app.view, View::Chain);
     assert_eq!(app.cursor.slot, 1);
-    app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
+    app.key(parse_sequence("C-i").unwrap()[0], Instant::now());
     assert_eq!(app.view, View::Phrase);
     // Undo removes the clone's use again.
     press(&mut app, "uu");
@@ -6386,6 +6398,29 @@ fn a_held_key_on_the_keyboard_holds_its_note() {
     assert_eq!(app.mode, Mode::Normal);
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3);
+}
+
+#[test]
+fn a_key_with_cmd_does_nothing_but_its_release_lets_go() {
+    use ratatui::crossterm::event::KeyEventKind;
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    let command_a = parse_sequence("D-a").unwrap()[0];
+    let now = Instant::now();
+    // Nothing is bound to Cmd, so `Cmd-a` isn't read as `a` and writes no note.
+    press(&mut app, " 3i");
+    app.key_event(command_a, KeyEventKind::Press, now);
+    app.key_event(command_a, KeyEventKind::Release, now);
+    assert_eq!(written_notes(&app), []);
+    special(&mut app, KeyCode::Esc);
+
+    // A note held on the keyboard ends when its key is let go after Cmd goes down.
+    press(&mut app, " 4;a");
+    let _ = loudest(&mut realtime, 4800);
+    assert!(loudest(&mut realtime, 4800) > 0.01);
+    app.key_event(command_a, KeyEventKind::Release, now);
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3, "letting go ends it");
 }
 
 #[test]

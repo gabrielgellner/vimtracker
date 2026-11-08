@@ -57,6 +57,9 @@ pub fn run() -> io::Result<()> {
             let read = Key::from_event(key);
             let read = if read.ignored() {
                 "ignored".to_owned()
+            } else if read.command {
+                // Nothing is bound to Cmd yet, so the program drops these.
+                format!("{read}, ignored")
             } else {
                 read.to_string()
             };
