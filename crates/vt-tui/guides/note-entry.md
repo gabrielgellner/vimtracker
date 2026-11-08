@@ -13,6 +13,12 @@ So in Insert, `j` is a note. **Each note plays and is written, and the cursor
 stays on it**, so you can play another in over it, even while the song plays.
 `;` turns on auto-jump: then each note moves on by the grid.
 
+Holding a note key writes the note once and keeps it sounding until you let
+go, or leave Insert. The note written is still as long as its gate, not as
+long as you held it. `1` is written once too, however long it's held. Other
+keys, such as `Backspace`, the arrows and the digits in other columns, repeat
+while held. If the window loses focus while a note is held, it stops.
+
 | Keys | Does |
 |---|---|
 | `z` `x` | Octave down or up. The status line shows it as `Oct` |
