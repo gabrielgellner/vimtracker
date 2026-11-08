@@ -86,17 +86,13 @@ fn kit_name(path: &Path) -> String {
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
-/// A row for a kit's sound: its name and its file.
+/// A row for a kit's sound: its label and its name.
 fn kit_item(entry: &KitEntry) -> Item {
-    let file = entry
-        .path
-        .file_name()
-        .map_or_else(String::new, |file| file.to_string_lossy().into_owned());
     Item {
-        label: format!("{:<4}{file}", entry.name),
+        label: format!("{:<4}{}", entry.label, entry.name),
         pick: Pick::KitSound {
             path: entry.path.clone(),
-            name: entry.name.clone(),
+            label: entry.label.clone(),
         },
     }
 }
@@ -238,16 +234,16 @@ impl App {
     /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
     pub(crate) fn use_kit(&mut self, path: &Path) {
         match load_kit(path) {
-            Ok(entries) if entries.is_empty() => {
+            Ok(kit) if kit.sounds.is_empty() => {
                 self.status = format!("{} has no sounds", path.display());
             }
-            Ok(entries) => {
+            Ok(kit) => {
                 self.status = format!(
                     "Kit {}: {} sounds. Space 5 chooses one for this track",
-                    kit_name(path),
-                    entries.len()
+                    kit.name,
+                    kit.sounds.len()
                 );
-                self.kit = entries;
+                self.kit = kit.sounds;
             }
             Err(error) => self.status = error.to_string(),
         }
@@ -257,20 +253,20 @@ impl App {
     /// tracks if needed. It is one undo step, and if any sound won't load, nothing changes.
     /// Replacing a different sample is reported.
     pub fn load_kit(&mut self, path: &Path) {
-        let entries = match load_kit(path) {
-            Ok(entries) if entries.is_empty() => {
+        let kit = match load_kit(path) {
+            Ok(kit) if kit.sounds.is_empty() => {
                 self.status = format!("{} has no sounds", path.display());
                 return;
             }
-            Ok(entries) => entries,
+            Ok(kit) => kit,
             Err(error) => {
                 self.status = error.to_string();
                 return;
             }
         };
         let mut pool = SamplePool::clone(&self.samples);
-        let mut sounds = Vec::with_capacity(entries.len());
-        for entry in &entries {
+        let mut sounds = Vec::with_capacity(kit.sounds.len());
+        for entry in &kit.sounds {
             let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
             let loaded = stored.and_then(|stored| {
                 let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
@@ -287,7 +283,7 @@ impl App {
             pool.insert(&stored, data);
             sounds.push(KitSound {
                 sample: stored,
-                name: entry.name.clone(),
+                name: entry.label.clone(),
             });
         }
         let replaced: Vec<String> = sounds
@@ -304,7 +300,7 @@ impl App {
         self.samples = Arc::new(pool);
         self.apply(&Action::LoadKit(sounds));
         self.fit_levels();
-        self.status = format!("Kit {}: {count} tracks", kit_name(path));
+        self.status = format!("Kit {}: {count} tracks", kit.name);
         if !replaced.is_empty() {
             self.status = format!(
                 "{}. Replaced {}: u to undo",
@@ -544,9 +540,9 @@ impl App {
                     }) => self.open_use(section, track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.use_kit(&path),
-                    Some(Pick::KitSound { path, name }) => {
-                        let name = (!name.is_empty()).then_some(name.as_str());
-                        self.sample_named(&path, name);
+                    Some(Pick::KitSound { path, label }) => {
+                        let label = (!label.is_empty()).then_some(label.as_str());
+                        self.sample_named(&path, label);
                     }
                     Some(Pick::Track(track)) => self.go_to_track(track),
                     Some(Pick::Audio(choice)) => self.pick_audio(choice),

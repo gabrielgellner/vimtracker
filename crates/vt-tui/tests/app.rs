@@ -1644,7 +1644,10 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     let named = kit.parent().unwrap().join("named.ron");
     std::fs::write(
         &named,
-        r#"(sounds: [(label: "SD", path: "drums/snare.wav"), (path: "drums/hat.wav")])"#,
+        r#"(sounds: [
+            (label: "SD", name: "Snare 909", path: "drums/snare.wav"),
+            (path: "drums/hat.wav"),
+        ])"#,
     )
     .unwrap();
     let tracks = app.song().tracks.len();
@@ -1666,8 +1669,8 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
         .collect();
     assert_eq!(
         labels[..2],
-        ["SD  snare.wav", "    hat.wav"],
-        "the kit first"
+        ["SD  Snare 909", "    hat"],
+        "the kit first, by name or the file's"
     );
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 2).unwrap().ends_with("snare.wav"));
