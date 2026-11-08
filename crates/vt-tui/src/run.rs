@@ -6,7 +6,8 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{
-    self, Event, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, DisableFocusChange, EnableFocusChange, Event, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::{execute, terminal};
 use ratatui::layout::{Constraint, Layout, Margin};
@@ -218,15 +219,21 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
-    // Every key comes as a press, a repeat or a release from here to quitting. ratatui's own hook
+    // Every key comes as a press, a repeat or a release from here to quitting. The terminal also
+    // says when its window loses focus, as a key let go then is never reported. ratatui's own hook
     // puts the terminal back after a panic, and this lets go of the flags first.
     execute!(
         std::io::stdout(),
-        PushKeyboardEnhancementFlags(KEYBOARD_FLAGS)
+        PushKeyboardEnhancementFlags(KEYBOARD_FLAGS),
+        EnableFocusChange
     )?;
     let restore = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+        let _ = execute!(
+            std::io::stdout(),
+            PopKeyboardEnhancementFlags,
+            DisableFocusChange
+        );
         restore(info);
     }));
     let result = main_loop(
@@ -236,7 +243,11 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
         graphics.as_mut(),
         &mut stream,
     );
-    execute!(std::io::stdout(), PopKeyboardEnhancementFlags)?;
+    execute!(
+        std::io::stdout(),
+        PopKeyboardEnhancementFlags,
+        DisableFocusChange
+    )?;
     if let Some(graphics) = &graphics {
         graphics.forget(&mut std::io::stdout())?;
     }
@@ -289,8 +300,12 @@ fn main_loop(
         terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
-                if let Event::Key(key) = event::read()? {
-                    app.key_event(Key::from_event(key), key.kind, Instant::now());
+                match event::read()? {
+                    Event::Key(key) => {
+                        app.key_event(Key::from_event(key), key.kind, Instant::now())
+                    }
+                    Event::FocusLost => app.focus_lost(),
+                    _ => {}
                 }
             }
         }

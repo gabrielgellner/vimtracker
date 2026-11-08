@@ -35,6 +35,15 @@ fn press(app: &mut App, keys: &str) {
     }
 }
 
+/// Press and let go of each key in turn, as typing does, so a key typed twice isn't taken as held.
+fn tap(app: &mut App, keys: &str) {
+    let now = Instant::now();
+    for c in keys.chars() {
+        app.key(Key::char(c), now);
+        app.key_released(Key::char(c));
+    }
+}
+
 fn special(app: &mut App, code: KeyCode) {
     app.key(Key::new(code), Instant::now());
 }
@@ -426,15 +435,13 @@ fn a_sample_can_be_loaded_and_played() {
     let (mut app, mut rt) = app();
     command(&mut app, &format!("sample {}", wav.display()));
     assert!(app.status.contains("loaded"), "{}", app.status);
+    // Writing a note plays it while its key is held.
     press(&mut app, "ia");
-    special(&mut app, KeyCode::Esc);
-    app.tick();
-    press(&mut app, "k");
     let mut out = vec![0.0; 512];
     rt.process(&mut out);
-    app.key(Key::new(KeyCode::Enter), Instant::now());
     rt.process(&mut out);
     assert!(out.iter().any(|s| *s != 0.0), "the note should sound");
+    assert_eq!(notes(&app)[0], Note::On(60));
 }
 
 #[test]
@@ -1163,7 +1170,7 @@ fn the_guides_moves_do_what_they_say() {
 
     press(&mut app, "gg");
     press(&mut app, "i;");
-    press(&mut app, "aaaa");
+    tap(&mut app, "aaaa");
     special(&mut app, KeyCode::Esc);
     let written: Vec<usize> = notes(&app)
         .iter()
@@ -5166,6 +5173,7 @@ fn option_s_turns_the_scale_off_and_on_and_remembers_it() {
     assert_eq!(app.mode, Mode::Insert, "in Insert, it stays");
     press(&mut app, "s");
     assert_eq!(written_notes(&app), [Note::On(62)], "the piano again");
+    app.key_released(Key::char('s'));
     alt(&mut app, "M-s");
     assert_eq!(app.scale.root_name(), "D");
     assert_eq!(app.scale.kind.name(), "Dorian");
@@ -6414,6 +6422,125 @@ fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 2400) > held * 1.5);
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_held_note_key_in_insert_writes_once_and_holds_its_note() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    press(&mut app, " 3");
+    entering_steps_down(&mut app);
+    press(&mut app, "ia");
+    assert_eq!(written_notes(&app), [Note::On(60)]);
+    assert_eq!(app.cursor.step, 1);
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(
+        loudest(&mut realtime, 4800) > 0.01,
+        "still sounding after a second"
+    );
+    // Its repeats, and presses of it while it's down, write nothing more, and auto-jump moved on
+    // once.
+    app.key_repeated(Key::char('a'), Instant::now());
+    press(&mut app, "a");
+    app.key_released(Key::char('s'));
+    assert_eq!(written_notes(&app), [Note::On(60)]);
+    assert_eq!(app.cursor.step, 1);
+    let _ = loudest(&mut realtime, 4800);
+    assert!(loudest(&mut realtime, 4800) > 0.01);
+    app.key_released(Key::char('a'));
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3, "letting go ends it");
+
+    // After a release it writes again, and leaving Insert lets go too.
+    press(&mut app, "a");
+    assert_eq!(written_notes(&app), [Note::On(60), Note::On(60)]);
+    let _ = loudest(&mut realtime, 4800);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal);
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3);
+}
+
+#[test]
+fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
+    let (mut app, _realtime) = app();
+    entering_steps_down(&mut app);
+    press(&mut app, "i1");
+    app.key_repeated(Key::char('1'), Instant::now());
+    press(&mut app, "1");
+    assert_eq!(written_notes(&app), [Note::Off], "OFF is written once");
+    assert_eq!(app.cursor.step, 1);
+    app.key_released(Key::char('1'));
+    special(&mut app, KeyCode::Esc);
+
+    // With the scale on, `j` is a degree, and is held as a note is.
+    command(&mut app, "set scale=on");
+    press(&mut app, "i");
+    press(&mut app, "j");
+    app.key_repeated(Key::char('j'), Instant::now());
+    assert_eq!(written_notes(&app).len(), 2);
+    assert_eq!(app.cursor.step, 2);
+    app.key_released(Key::char('j'));
+
+    // The arrows and Backspace repeat.
+    let down = Key::new(KeyCode::Down);
+    special(&mut app, KeyCode::Down);
+    app.key_repeated(down, Instant::now());
+    assert_eq!(app.cursor.step, 4);
+    app.key_released(down);
+    let backspace = Key::new(KeyCode::Backspace);
+    special(&mut app, KeyCode::Backspace);
+    app.key_repeated(backspace, Instant::now());
+    app.key_repeated(backspace, Instant::now());
+    assert_eq!(app.cursor.step, 1);
+    assert_eq!(
+        written_notes(&app),
+        [Note::Off],
+        "Backspace cleared on the way"
+    );
+
+    // So do hex digits, typed into the velocity.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "li");
+    press(&mut app, "4");
+    app.key_repeated(Key::char('4'), Instant::now());
+    let id = app.phrase_id().unwrap();
+    let velocity = app.song().tracks[0].phrases[&id].steps()[app.cursor.step - 1].velocity;
+    assert_eq!(velocity, Some(0x44), "the repeat typed the second digit");
+}
+
+#[test]
+fn losing_focus_lets_go_of_a_held_note() {
+    let (mut app, mut realtime) = app();
+    choose_machine(&mut app, "VA");
+    // On the keyboard.
+    press(&mut app, ";a");
+    let _ = loudest(&mut realtime, 4800);
+    app.focus_lost();
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(
+        loudest(&mut realtime, 4800) < 1e-3,
+        "the keyboard's note ends"
+    );
+    // The release never came, but the next press of the key is a press.
+    press(&mut app, "a");
+    assert!(loudest(&mut realtime, 4800) > 0.01);
+    app.key_released(Key::char('a'));
+    press(&mut app, ";");
+
+    // In Insert.
+    press(&mut app, " 3ia");
+    let _ = loudest(&mut realtime, 4800);
+    app.focus_lost();
+    assert_eq!(app.mode, Mode::Insert, "it stays in Insert");
+    let _ = loudest(&mut realtime, 48_000);
+    assert!(loudest(&mut realtime, 4800) < 1e-3, "Insert's note ends");
+    press(&mut app, "s");
+    assert_eq!(
+        written_notes(&app),
+        [Note::On(62)],
+        "the next note is written"
+    );
 }
 
 #[test]

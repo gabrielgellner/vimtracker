@@ -208,10 +208,9 @@ pub struct App {
     pub auto_jump: bool,
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
-    /// Whether the key that's down ignores its repeats, as a transport key and a note on the
-    /// keyboard do.
+    /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
     repeats_ignored: bool,
-    /// The key the keyboard is holding a note for, and that note.
+    /// The key holding a note, on the keyboard or in Insert, and that note.
     held_key: Option<(KeyCode, u8)>,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
@@ -595,7 +594,7 @@ impl App {
         self.press(key, now);
     }
 
-    /// A key let go: the keyboard's note ends if it was this key's.
+    /// A key let go: the held note ends if it was this key's.
     pub fn key_released(&mut self, key: Key) {
         if self.key_down == Some(key.physical()) {
             self.key_down = None;
@@ -615,12 +614,31 @@ impl App {
         }
     }
 
+    /// The terminal window lost focus, so a key that's down may never be reported let go. Its
+    /// note ends now, and the next press of it is a press.
+    pub fn focus_lost(&mut self) {
+        self.key_down = None;
+        self.repeats_ignored = false;
+        self.let_go_of_held_key();
+    }
+
+    /// Sound a note for as long as this key is down, ignoring the key's repeats.
+    fn hold_note(&mut self, key: Key, note: u8, velocity: u8) {
+        self.held_key = Some((key.physical(), note));
+        self.repeats_ignored = true;
+        self.handle.send(Command::HoldPreview {
+            track: self.cursor.track,
+            note,
+            velocity,
+        });
+    }
+
     /// Act on a press, or a repeat that acts as one.
     fn press(&mut self, key: Key, now: Instant) {
         let was = self.mode;
         self.handle_key(key, now);
-        // Leaving the keyboard lets go of what it's holding.
-        if was == Mode::Keys && self.mode != Mode::Keys {
+        // Leaving the keyboard, or Insert, lets go of what it's holding.
+        if matches!(was, Mode::Keys | Mode::Insert) && self.mode != was {
             self.let_go_of_held_key();
         }
     }
@@ -665,14 +683,7 @@ impl App {
             KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(9),
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
-                    let (track, velocity) = (self.cursor.track, self.note_velocity);
-                    self.held_key = Some((key.physical(), note));
-                    self.repeats_ignored = true;
-                    self.handle.send(Command::HoldPreview {
-                        track,
-                        note,
-                        velocity,
-                    });
+                    self.hold_note(key, note, self.note_velocity);
                 }
             }
             _ => {
@@ -1420,7 +1431,9 @@ impl App {
                 self.note_velocity = next_note_velocity(self.note_velocity, false)
             }
             KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
+            // A note, and an OFF, is written once however long its key is held.
             KeyCode::Char('1') => {
+                self.repeats_ignored = true;
                 self.write_note(Note::Off);
                 self.advance();
             }
@@ -1434,11 +1447,7 @@ impl App {
                         .as_ref()
                         .map_or(self.note_velocity, |step| self.played_with(step));
                     self.write_played_note(midi);
-                    self.handle.send(Command::Preview {
-                        track: self.cursor.track,
-                        note: midi,
-                        velocity,
-                    });
+                    self.hold_note(key, midi, velocity);
                     self.advance();
                 }
             }
