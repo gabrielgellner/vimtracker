@@ -7289,3 +7289,82 @@ fn a_held_note_when_recording_stops_keeps_its_length_so_far() {
     assert!(!app.recording());
     assert_eq!(length_of(&rows_of(&app, 1)[0]), Some(12));
 }
+
+#[test]
+fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
+    use vt_tui::kitty::Graphics;
+    let mut song = Song::new(2);
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    *phrase.step_mut(0).unwrap() = "C-3 64 --- --- ---".parse().unwrap();
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, mut realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=12,r=3,")
+            .count()
+    };
+    // Silence is a flat line, sent once.
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let flat = app.scope_image.unwrap();
+    block(&mut realtime, &mut app);
+    assert_eq!(sync(&mut app, &mut graphics), 0, "still silent");
+    assert_eq!(app.scope_image, Some(flat));
+
+    special(&mut app, KeyCode::Tab);
+    for _ in 0..8 {
+        block(&mut realtime, &mut app);
+    }
+    // It's brought up to date every other frame, so one of the next two sends it.
+    let sent = sync(&mut app, &mut graphics) + sync(&mut app, &mut graphics);
+    assert_eq!(sent, 1, "the note is heard");
+    assert_ne!(app.scope_image, Some(flat));
+
+    // A picture after every frame, for longer than there are ids, never takes the one on screen.
+    let mut ids = std::collections::HashSet::new();
+    for _ in 0..600 {
+        block(&mut realtime, &mut app);
+        let before = app.scope_image;
+        let mut out = Vec::new();
+        graphics.sync(&mut app, &mut out).unwrap();
+        let out = String::from_utf8(out).unwrap();
+        let shown = app.scope_image.unwrap();
+        assert!(
+            !out.contains(&format!("a=d,d=I,i={shown},")),
+            "the shown picture is kept"
+        );
+        if app.scope_image != before {
+            ids.insert(shown);
+        }
+    }
+    assert!(ids.len() > 100, "{}", ids.len());
+
+    // Drawn at the top of the meter's column, after its gap.
+    let backend = ratatui::backend::TestBackend::new(120, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let corner = &buffer[(108, 0)];
+    assert_eq!(corner.symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(corner.fg, vt_tui::kitty::id_color(app.scope_image.unwrap()));
+    assert!(app.scope_shown);
+
+    // On a screen too short for it, it isn't drawn, and nothing more is sent.
+    let backend = ratatui::backend::TestBackend::new(120, 10);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    assert!(!app.scope_shown);
+    block(&mut realtime, &mut app);
+    let sent = sync(&mut app, &mut graphics) + sync(&mut app, &mut graphics);
+    assert_eq!(sent, 0);
+}

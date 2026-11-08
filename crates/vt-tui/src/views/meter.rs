@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
+use crate::kitty;
 use crate::meter::{FLOOR_DB, Meter, db_at, height_of};
 use crate::theme;
 
@@ -21,6 +22,11 @@ const ROWS_AROUND_BARS: u16 = 3;
 const MARKS: [i32; 9] = [0, 6, -12, -24, -6, -48, -18, -36, -60];
 /// The most gain reduction the G bar can show, in dB.
 const MOST_REDUCTION: f32 = 12.0;
+/// The scope's size in characters. It sits above the meter, after the meter's gap on the left.
+pub const SCOPE_WIDTH: usize = 12;
+pub const SCOPE_HEIGHT: usize = 3;
+/// The rows the scope takes from the meter's column: itself, and a gap below it.
+const SCOPE_ROWS: u16 = SCOPE_HEIGHT as u16 + 1;
 /// Partial blocks, from one eighth of a cell up to a whole one.
 pub(crate) const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -32,6 +38,35 @@ pub fn split(body: Rect) -> (Rect, Option<Rect>) {
     let [view, meter] =
         Layout::horizontal([Constraint::Min(1), Constraint::Length(WIDTH)]).areas(body);
     (view, Some(meter))
+}
+
+/// Split the meter's column into the scope at the top, if there's room for it, and the meter.
+pub fn split_scope(column: Rect) -> (Option<Rect>, Rect) {
+    if column.height < LOWEST_METER + SCOPE_ROWS {
+        return (None, column);
+    }
+    let scope = Rect::new(
+        column.x + 1,
+        column.y,
+        SCOPE_WIDTH as u16,
+        SCOPE_HEIGHT as u16,
+    );
+    let meter = Rect {
+        y: column.y + SCOPE_ROWS,
+        height: column.height - SCOPE_ROWS,
+        ..column
+    };
+    (Some(scope), meter)
+}
+
+/// Draw the scope: the placeholders for its image.
+pub fn draw_scope(frame: &mut Frame, area: Rect, id: u32) {
+    let style = Style::new().fg(kitty::id_color(id));
+    let lines: Vec<Line> = kitty::placeholder_lines(SCOPE_WIDTH, SCOPE_HEIGHT)
+        .into_iter()
+        .map(|line| Line::styled(line, style))
+        .collect();
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 /// A bar of one channel for one row, counting rows up from the bottom, some cells wide.
@@ -261,6 +296,16 @@ mod tests {
         assert!(split(Rect::new(0, 0, 100, 24)).1.is_some());
         let small = Rect::new(0, 0, 50, 24);
         assert_eq!(split(small), (small, None));
+    }
+
+    #[test]
+    fn the_scope_sits_above_the_meter_when_theres_room() {
+        let column = Rect::new(107, 0, WIDTH, 22);
+        let (scope, meter) = split_scope(column);
+        assert_eq!(scope, Some(Rect::new(108, 0, 12, 3)));
+        assert_eq!(meter, Rect::new(107, 4, WIDTH, 18));
+        let short = Rect::new(107, 0, WIDTH, 9);
+        assert_eq!(split_scope(short), (None, short));
     }
 
     #[test]

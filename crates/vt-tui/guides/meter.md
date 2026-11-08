@@ -4,10 +4,24 @@ The column on the right of the screen shows the main output, going into the
 limiter. It hides on a very narrow terminal.
 
 ```
+/\/\/\          the scope
 Main            the title
   +3  2         highest recent peak in dB, and the most recently limited
 L  R  G         left, right, and how much the limiter is taking off
 ```
+
+## The scope
+
+The small picture at the top of the column is the main output's waveform,
+the last 20 ms of it, with left and right mixed. Its height is full level,
+`0` on the meter, so a quiet sound draws small, and silence is a flat line
+across the middle.
+
+It starts each picture where the sound last rose through zero, as a
+hardware scope does, so a steady note stands still rather than scrolling.
+A chord or a noisy sound has more than one such place in each cycle, so it
+may jump between them. It draws what comes out, after the limiter, and it
+hides on a screen too short for it and the meter both.
 
 ## The L and R bars
 

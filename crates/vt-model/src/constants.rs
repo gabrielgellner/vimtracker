@@ -54,6 +54,9 @@ pub const RETURN_QUEUE: usize = 16;
 pub const COMMAND_QUEUE: usize = 64;
 /// Playhead and load messages. New ones are dropped when it is full.
 pub const TELEMETRY_QUEUE: usize = 64;
+/// Samples of the main output on their way to the scope, about a third of a second at 48 kHz. New
+/// ones are dropped when it is full.
+pub const SCOPE_QUEUE: usize = 16_384;
 
 /// Tuning: smoother time for filter, volume and pan changes.
 pub const SMOOTHING_MS: u32 = 10;

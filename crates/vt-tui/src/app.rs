@@ -242,6 +242,11 @@ pub struct App {
     pub(crate) recording: Option<Recording>,
     /// The main output's level.
     pub meter: Meter,
+    /// The main output's recent sound, for the scope above the meter.
+    pub scope: crate::scope::Scope,
+    /// The id of the scope's image, and whether the last screen drawn had room for it.
+    pub scope_image: Option<u32>,
+    pub scope_shown: bool,
     /// Each track's level, for the mixer.
     pub track_meters: Vec<Meter>,
     /// The CPU figure on the status line.
@@ -375,6 +380,9 @@ impl App {
             report_at: Instant::now(),
             recording: None,
             meter: Meter::default(),
+            scope: crate::scope::Scope::new(rate),
+            scope_image: None,
+            scope_shown: true,
             track_meters: vec![Meter::default(); MAX_TRACKS],
             cpu: LoadReadout::default(),
             last_tick: Instant::now(),
@@ -426,6 +434,7 @@ impl App {
         self.handle = handle;
         self.samples = samples;
         self.rate = rate;
+        self.scope = crate::scope::Scope::new(rate);
         self.transport = Transport::Stopped;
         self.playhead = 0;
         self.live = None;
@@ -616,6 +625,7 @@ impl App {
             self.watched = track;
         }
         let report = self.handle.latest();
+        self.handle.read_scope(&mut self.scope);
         self.meter
             .update(report.map(|report| report.reading), seconds);
         let tracks = self.song().tracks.len();

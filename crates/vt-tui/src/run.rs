@@ -368,7 +368,13 @@ pub fn draw_screen(
         view
     };
     views::system::draw(frame, free, app, stats);
-    if let Some(meter) = meter {
+    app.scope_shown = false;
+    if let Some(column) = meter {
+        let (scope, meter) = views::meter::split_scope(column);
+        app.scope_shown = scope.is_some();
+        if let (Some(area), Some(id)) = (scope, app.scope_image) {
+            views::meter::draw_scope(frame, area, id);
+        }
         views::meter::draw(frame, meter, &app.meter, app.song().limiter);
     }
     views::status::draw(frame, status, app);
