@@ -245,7 +245,7 @@ impl InsertState {
                 let key = settings
                     .source_track(keys.sounds)
                     .map_or(input, |track| keys.of(track));
-                let wet = self.dynamics.process(input, key, settings, rate);
+                let wet = self.dynamics.process(input, key, settings, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [
