@@ -20,7 +20,27 @@ just run my-song      # a release build: a debug build uses far more CPU, even w
 just test             # every test
 just screenshots      # remake the manual's screenshots
 just docs-serve       # the manual in a browser, rebuilt as it changes
+just live start       # the program in a kitty window of its own, to check a change by hand
 ```
+
+### Checking the real program
+
+`just live` (`scripts/live.sh`) runs the release build in a minimised kitty window of its own, in a
+fresh folder, and drives it through kitty's remote control, so a change can be checked in the real
+program from a script or an agent. It needs kitty, as the program does.
+
+```sh
+cargo build --release
+just live start                 # or: just live start my-song
+just live keys enter            # kitty's key names, each pressed and let go
+just live text ' 4'             # text as it is: here the leader, then 4, the track page
+just live screen                # print what's on screen
+just live stop
+```
+
+`screen` prints text only, so images such as the filter's curve don't show. A key can't be held
+from here, so what a held key does is tested in `crates/vt-tui/tests/app.rs`, which can say when a
+key is let go.
 
 ## Pull requests and CI
 

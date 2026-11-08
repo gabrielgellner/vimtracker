@@ -6,6 +6,10 @@ default:
 run *args:
     cargo run --release -p vt-tui --bin vimtracker -- {{args}}
 
+# Drive the release build in a kitty window of its own: just live start, keys, text, screen, stop
+live *args:
+    scripts/live.sh {{args}}
+
 # Make the manual's screenshots of the interface, as SVGs in docs/manual/src/images
 screenshots:
     cargo run --release -q -p vt-tui --example screenshots
