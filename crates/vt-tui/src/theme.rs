@@ -21,6 +21,8 @@ pub const SURFACE1: Color = Color::Rgb(0x51, 0x57, 0x6d);
 pub const SURFACE0: Color = Color::Rgb(0x41, 0x45, 0x59);
 pub const BASE: Color = Color::Rgb(0x30, 0x34, 0x46);
 pub const MANTLE: Color = Color::Rgb(0x29, 0x2c, 0x3c);
+/// Under a step's FX, a shade darker than the screen, so they sit back from the notes.
+pub const FX_BAND: Color = MANTLE;
 
 /// The whole screen.
 pub fn screen() -> Style {
@@ -99,7 +101,7 @@ pub fn dimmed(color: Color) -> Color {
 /// A value's fine digits: its colour set back toward the FX band, but still brighter than
 /// what's faint.
 pub fn fine(color: Color) -> Color {
-    mix(color, SURFACE0, 0.3)
+    mix(color, FX_BAND, 0.3)
 }
 
 /// A colour some share of the way from one to another.

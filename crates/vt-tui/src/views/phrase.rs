@@ -568,11 +568,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 }
             }
         }
-        // The FX sit on a band a shade lighter than the screen, so the two parts read apart.
+        // The FX sit on a band a shade darker than the screen, so the two parts read apart.
         // A selection's or the cursor's colour goes over it.
         for style in styles.iter_mut().skip(FX_START) {
             if style.bg.is_none() {
-                *style = style.bg(theme::SURFACE0);
+                *style = style.bg(theme::FX_BAND);
             }
         }
         for (slot, fx) in step.fx.iter().enumerate() {
