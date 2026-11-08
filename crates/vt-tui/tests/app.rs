@@ -1200,10 +1200,10 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     assert_eq!(headings.trim_end(), "         Note        FX");
     assert_eq!(
         buffer[(21, 2)].bg,
-        vt_tui::theme::SURFACE0,
+        vt_tui::theme::FX_BAND,
         "the FX sit on a band"
     );
-    assert_ne!(buffer[(9, 2)].bg, vt_tui::theme::SURFACE0);
+    assert_ne!(buffer[(9, 2)].bg, vt_tui::theme::FX_BAND);
 }
 
 #[test]
