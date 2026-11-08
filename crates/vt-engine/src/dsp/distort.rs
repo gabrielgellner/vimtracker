@@ -41,6 +41,8 @@ pub struct InsertState {
     eq: ThreeBands,
     /// A compressor's detector, small enough as well.
     dynamics: Dynamics,
+    /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
+    on: Smoothed,
 }
 
 impl Default for InsertState {
@@ -57,6 +59,7 @@ impl Default for InsertState {
             since: 0.0,
             eq: ThreeBands::default(),
             dynamics: Dynamics::default(),
+            on: Smoothed::at(1.0),
         }
     }
 }
@@ -182,7 +185,9 @@ impl InsertState {
             level_gain(f32::from(gain)),
         );
         if !same_effect(self.insert, insert) {
+            let on = self.on;
             *self = Self::default();
+            self.on = on;
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
@@ -228,16 +233,40 @@ impl InsertState {
         wet
     }
 
+    /// Switch the slot out, or back in. It keeps running underneath, so a tail or a compressor's
+    /// state carries on as if it had never gone.
+    pub fn bypass(&mut self, bypassed: bool) {
+        self.on.target = if bypassed { 0.0 } else { 1.0 };
+    }
+
     /// Jump to the settings, for playing from the start.
     pub fn settle(&mut self) {
+        self.on.settle();
         self.amount.settle();
         self.mix.settle();
         self.gain.settle();
     }
 
-    /// One frame through the slot. An empty one does nothing else.
+    /// One frame through the slot, faded toward what came in as it's bypassed.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {
+        let wet = self.effect(input, smoothing, rate, keys);
+        if self.on.value == self.on.target {
+            return if self.on.target > 0.0 { wet } else { input };
+        }
+        let on = self.on.next(smoothing);
+        if (on - self.on.target).abs() < 1e-4 {
+            self.on.settle();
+        }
+        [
+            input[0] + (wet[0] - input[0]) * on,
+            input[1] + (wet[1] - input[1]) * on,
+        ]
+    }
+
+    /// One frame through the effect. An empty slot does nothing else.
+    #[inline]
+    fn effect(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {
         let (kind, set) = match self.insert {
             Insert::Empty => return input,
             Insert::Compressor(settings) => {
@@ -609,5 +638,24 @@ mod tests {
                 assert!(db < -30.0, "{kind:?} at {alias} is at {db} dB");
             }
         }
+    }
+
+    #[test]
+    fn bypassing_fades_rather_than_jumps_and_lands_on_the_input() {
+        let mut state = InsertState::default();
+        state.set(Insert::Distort(Distort {
+            gain: 0x80,
+            ..Distort::DEFAULT
+        }));
+        state.settle();
+        let smoothing = crate::dsp::smoother::coefficient(RATE);
+        let mut last = state.process([0.5; 2], smoothing, RATE, &Keys::default())[0];
+        state.bypass(true);
+        for _ in 0..RATE / 10 {
+            let out = state.process([0.5; 2], smoothing, RATE, &Keys::default())[0];
+            assert!((out - last).abs() < 0.03, "{last} to {out}");
+            last = out;
+        }
+        assert_eq!(last, 0.5);
     }
 }

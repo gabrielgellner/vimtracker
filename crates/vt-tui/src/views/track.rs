@@ -536,6 +536,26 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
 
 /// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
 /// effect is only drawn in its first row.
+/// A bypassed slot's row, faint but for the cursor.
+fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
+    if !bypassed {
+        return line;
+    }
+    let cursor = theme::cursor(app.mode);
+    Line::from(
+        line.spans
+            .into_iter()
+            .map(|span| {
+                if span.style == cursor {
+                    span
+                } else {
+                    span.style(theme::faint())
+                }
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
 fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
@@ -663,10 +683,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         Page::Fx => {
             for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
-                lines.push(fx_row(app, track, rows[0], true));
+                let bypassed = track.bypassed[slot];
+                lines.push(faded(fx_row(app, track, rows[0], true), app, bypassed));
                 // An empty slot has nothing for its second row, and the slots stay apart.
                 if track.inserts[slot] != Insert::Empty {
-                    lines.push(fx_row(app, track, rows[1], false));
+                    lines.push(faded(fx_row(app, track, rows[1], false), app, bypassed));
                 }
                 lines.push(Line::raw(""));
             }

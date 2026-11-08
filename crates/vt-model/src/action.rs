@@ -186,6 +186,12 @@ pub enum Action {
         slot: usize,
         insert: Insert,
     },
+    /// Switch one of a track's slots out, or back in.
+    SetBypass {
+        track: usize,
+        slot: usize,
+        bypassed: bool,
+    },
     /// Send every track back to its start after this many steps, or `None` to let them run.
     SetReset {
         section: usize,
@@ -685,6 +691,27 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*slot)
             {
                 *held = *insert;
+            }
+            // An empty slot has nothing to switch out, so what goes in next starts in.
+            if *insert == Insert::Empty
+                && let Some(bypassed) = next.tracks[*track].bypassed.get_mut(*slot)
+            {
+                *bypassed = false;
+            }
+        }
+        Action::SetBypass {
+            track,
+            slot,
+            bypassed,
+        } => {
+            if let Some(held) = next
+                .tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .bypassed
+                .get_mut(*slot)
+            {
+                *held = *bypassed;
             }
         }
         Action::SetLfo { track, slot, lfo } => {

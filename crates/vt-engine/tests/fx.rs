@@ -754,3 +754,26 @@ fn a_compressor_hearing_a_muted_track_ducks_under_it() {
     let silent = ducked(hard(64));
     assert_eq!(silent, plain);
 }
+
+#[test]
+fn a_bypassed_slot_lets_the_sound_through_as_it_was() {
+    let quieter = |bypassed: bool| {
+        let mut song = song(&["C-4 -- --- --- ---"]);
+        song.tracks[0].inserts[0] = Insert::Distort(Distort {
+            gain: 0x80,
+            ..Distort::DEFAULT
+        });
+        song.tracks[0].bypassed[0] = bypassed;
+        level_at(&render(song, flat(0.25), STEP), STEP - 1)
+    };
+    let plain = level_at(
+        &render(song(&["C-4 -- --- --- ---"]), flat(0.25), STEP),
+        STEP - 1,
+    );
+    assert!(quieter(false) < plain * 0.2, "{} {plain}", quieter(false));
+    assert!(
+        (quieter(true) - plain).abs() < 1e-4,
+        "{} {plain}",
+        quieter(true)
+    );
+}
