@@ -204,6 +204,46 @@ fn soft_limit(x: f32) -> f32 {
     x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
 }
 
+/// Picks one of a number of steps from a value on `0..=1`, leaving a step only once the value is
+/// a margin past its edge, so a setting near an edge doesn't flicker between two. stmlib's
+/// `HysteresisQuantizer2`.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct HysteresisQuantizer {
+    steps: i32,
+    hysteresis: f32,
+    scale: f32,
+    offset: f32,
+    value: i32,
+}
+
+impl HysteresisQuantizer {
+    /// A symmetric one puts the first and last steps' middles at 0 and 1; otherwise each step
+    /// gets an equal share of the range.
+    pub(super) fn new(steps: usize, hysteresis: f32, symmetric: bool) -> Self {
+        Self {
+            steps: steps as i32,
+            hysteresis,
+            scale: if symmetric { steps - 1 } else { steps } as f32,
+            offset: if symmetric { 0.0 } else { -0.5 },
+            value: 0,
+        }
+    }
+
+    #[inline]
+    pub(super) fn process(&mut self, value: f32) -> usize {
+        let value = value * self.scale + self.offset;
+        let sign = if value > self.value as f32 { -1.0 } else { 1.0 };
+        // Truncating towards zero, as C++ does.
+        self.value = ((value + sign * self.hysteresis + 0.5) as i32).clamp(0, self.steps - 1);
+        self.value as usize
+    }
+
+    #[inline]
+    pub(super) fn value(&self) -> usize {
+        self.value as usize
+    }
+}
+
 /// A cosine on `0..1` worked out by a recurrence, from a quick approximation of its start, as
 /// stmlib's `COSINE_OSCILLATOR_APPROXIMATE`. It starts at its peak.
 #[derive(Debug, Clone, Copy)]
