@@ -57,6 +57,8 @@ pub struct Engine {
     preview: Voice,
     /// The track the preview voice goes through.
     preview_track: usize,
+    /// The note the preview voice is playing, for letting go of a held key.
+    preview_note: Option<u8>,
     /// Each track's sound after its slots, for compressors and Warps that hear another track.
     keys: Keys,
     /// Which tracks a compressor or Warps somewhere hears, which keep playing while muted so it
@@ -138,6 +140,7 @@ impl Engine {
                 .unwrap_or_else(|_| unreachable!("one state for each track")),
             preview: Voice::default(),
             preview_track: 0,
+            preview_note: None,
             keys: Keys::default(),
             listened: [false; MAX_TRACKS],
             transport: Transport::Stopped,
@@ -885,20 +888,39 @@ impl Engine {
 
     /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
     pub fn preview(&mut self, track: usize, note: u8, velocity: u8) {
+        let frames = PREVIEW_MS * self.rate / 1000;
+        self.start_preview(track, note, velocity, Some(frames));
+    }
+
+    /// Play a note on the preview voice until [`Engine::release_preview`] lets it go, for a key
+    /// held down where the terminal reports when it's let go.
+    pub fn hold_preview(&mut self, track: usize, note: u8, velocity: u8) {
+        self.start_preview(track, note, velocity, None);
+    }
+
+    /// Let go of the preview voice's note, if it's still this one.
+    pub fn release_preview(&mut self, note: u8) {
+        if self.preview_note == Some(note) {
+            self.preview.release();
+            self.preview_note = None;
+        }
+    }
+
+    fn start_preview(&mut self, track: usize, note: u8, velocity: u8, release_after: Option<u32>) {
         let shape = self.note_shape(track);
         let Some(on) = self.note_on(track, note, velocity, shape) else {
             return;
         };
-        let frames = PREVIEW_MS * self.rate / 1000;
         if let Some(state) = self.tracks.get_mut(track)
             && !state.sounding()
         {
             state.settle();
         }
         self.preview_track = track;
+        self.preview_note = Some(note);
         self.preview = Voice::start(
             NoteOn {
-                release_after: Some(frames),
+                release_after,
                 ..on
             },
             self.rate,

@@ -24,6 +24,10 @@ hat pattern.
 | `x` | Back to its default: centre pan, 0 dB and so on |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
+Where the terminal reports a key being let go, as kitty, Ghostty and WezTerm
+do through the kitty keyboard protocol, a note holds for as long as its key is
+down. Elsewhere, including inside tmux, each key plays a short note.
+
 Cut, Res, Pan, the sends and the machine's settings that sweep have a fine part,
 the dim pair of digits after the value, as FX values do in a phrase. `l` stops on
 it before the next setting, and there `=` `-` `+` `_`, `i` and `x` work on the

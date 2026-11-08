@@ -1,7 +1,15 @@
 //! Key names, adapted from gmuse's `src/cmd/keys.rs`.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, KeyboardEnhancementFlags};
 use thiserror::Error;
+
+/// What the kitty keyboard protocol is asked for so a key's release is reported: every key as an
+/// escape code, with its kind, and the shifted character, so `>` still reads as `>`.
+pub const RELEASE_REPORTING: KeyboardEnhancementFlags =
+    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        .union(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
+        .union(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS)
+        .union(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES);
 
 /// A bindable key: a code plus the modifiers that matter.
 ///

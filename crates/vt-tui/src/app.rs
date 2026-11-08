@@ -206,6 +206,11 @@ pub struct App {
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid, likewise.
     pub auto_jump: bool,
+    /// Whether the terminal says when a key is let go, through the kitty keyboard protocol. Then
+    /// the keyboard on the track page holds a note for as long as its key is down.
+    pub key_releases: bool,
+    /// The key the keyboard is holding a note for, and that note.
+    held_key: Option<(KeyCode, u8)>,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
     pub top: usize,
@@ -321,6 +326,8 @@ impl App {
             levels,
             scale,
             auto_jump,
+            key_releases: false,
+            held_key: None,
             entry: Entry::default(),
             top: 0,
             view_height: 16,
@@ -551,8 +558,40 @@ impl App {
         }
     }
 
+    /// A key the terminal repeats while it's held. A note on the keyboard is already held, so
+    /// it's ignored; anything else repeats as a press.
+    pub fn key_repeated(&mut self, key: Key, now: Instant) {
+        let note = matches!(key.code, KeyCode::Char(c) if KEYS_NOTES.contains(c));
+        if self.mode == Mode::Keys && self.key_releases && note {
+            return;
+        }
+        self.key(key, now);
+    }
+
+    /// A key let go: the keyboard's note ends if it was this key's.
+    pub fn key_released(&mut self, key: Key) {
+        if self.held_key.is_some_and(|(code, _)| code == key.code) {
+            self.let_go_of_held_key();
+        }
+    }
+
+    fn let_go_of_held_key(&mut self) {
+        if let Some((_, note)) = self.held_key.take() {
+            self.handle.send(Command::ReleasePreview { note });
+        }
+    }
+
     /// Handle one key.
     pub fn key(&mut self, key: Key, now: Instant) {
+        let was = self.mode;
+        self.handle_key(key, now);
+        // Leaving the keyboard lets go of what it's holding.
+        if was == Mode::Keys && self.mode != Mode::Keys {
+            self.let_go_of_held_key();
+        }
+    }
+
+    fn handle_key(&mut self, key: Key, now: Instant) {
         if let Some((guarded, seen)) = self.guard {
             let window = Duration::from_millis(TRANSPORT_GUARD_MS);
             if guarded == key && now.saturating_duration_since(seen) < window {
@@ -601,11 +640,21 @@ impl App {
             KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(9),
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
-                    self.handle.send(Command::Preview {
-                        track: self.cursor.track,
-                        note,
-                        velocity: self.note_velocity,
-                    });
+                    let (track, velocity) = (self.cursor.track, self.note_velocity);
+                    if self.key_releases {
+                        self.held_key = Some((key.code, note));
+                        self.handle.send(Command::HoldPreview {
+                            track,
+                            note,
+                            velocity,
+                        });
+                    } else {
+                        self.handle.send(Command::Preview {
+                            track,
+                            note,
+                            velocity,
+                        });
+                    }
                 }
             }
             _ => {

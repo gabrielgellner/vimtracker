@@ -5,7 +5,10 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use ratatui::crossterm::event::{self, Event, KeyEventKind};
+use ratatui::crossterm::event::{
+    self, Event, KeyCode, KeyEventKind, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
+use ratatui::crossterm::{execute, terminal};
 use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::widgets::Block;
 use thiserror::Error;
@@ -20,7 +23,7 @@ use vt_model::song::Song;
 
 use crate::app::App;
 use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
-use crate::input::keys::Key;
+use crate::input::keys::{Key, RELEASE_REPORTING};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics, Support};
 use crate::theme;
@@ -205,6 +208,8 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
+    // Inside tmux and in most terminals this is false, and the keyboard plays short notes.
+    app.key_releases = terminal::supports_keyboard_enhancement().unwrap_or(false);
     let result = main_loop(
         &mut terminal,
         &mut app,
@@ -227,6 +232,7 @@ fn main_loop(
     stream: &mut Option<cpal::Stream>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
+    let mut reporting = false;
     while !app.should_quit {
         // A device that changes or goes away stops audio, and the audio page chooses again.
         if stream.is_some() && stats.lost.load(Ordering::Acquire) {
@@ -265,12 +271,37 @@ fn main_loop(
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
                 if let Event::Key(key) = event::read()?
-                    && key.kind != KeyEventKind::Release
+                    && !matches!(key.code, KeyCode::Modifier(_))
                 {
-                    app.key(Key::from_event(key), Instant::now());
+                    let (event, now) = (Key::from_event(key), Instant::now());
+                    match key.kind {
+                        KeyEventKind::Press => app.key(event, now),
+                        KeyEventKind::Repeat => app.key_repeated(event, now),
+                        KeyEventKind::Release => app.key_released(event),
+                    }
+                    report_key_releases(app, &mut reporting)?;
                 }
             }
         }
+    }
+    if reporting {
+        execute!(std::io::stdout(), PopKeyboardEnhancementFlags)?;
+    }
+    Ok(())
+}
+
+/// Ask the terminal to say when keys are let go only while the keyboard on the track page plays,
+/// so everything else reads keys as it always has.
+fn report_key_releases(app: &App, reporting: &mut bool) -> std::io::Result<()> {
+    let wanted = app.key_releases && app.mode == Mode::Keys;
+    if wanted != *reporting {
+        let mut out = std::io::stdout();
+        if wanted {
+            execute!(out, PushKeyboardEnhancementFlags(RELEASE_REPORTING))?;
+        } else {
+            execute!(out, PopKeyboardEnhancementFlags)?;
+        }
+        *reporting = wanted;
     }
     Ok(())
 }
