@@ -1362,26 +1362,30 @@ impl Engine {
         // A note or a preview only starts between runs, and a skipped track doesn't change, so a
         // track that's silent at the start of this one stays silent through it and is only asked
         // once. The others are asked each frame, as one can fall silent part way.
-        let mut resting = [false; MAX_TRACKS];
+        // The fixed tracks have their turn after the rest, with what's sent to them.
+        let mut playing = [0_usize; MAX_TRACKS];
+        let mut count = 0;
         for (index, track) in self.tracks.iter().enumerate() {
+            if (return_a..=master_track).contains(&index) {
+                continue;
+            }
             let previewing = index == self.preview_track && self.preview.active();
-            resting[index] = !track.sounding() && !previewing && !track.ringing(self.rate);
+            if !track.sounding() && !previewing && !track.ringing(self.rate) {
+                self.keys.frames[index] = [0.0; 2];
+            } else {
+                playing[count] = index;
+                count += 1;
+            }
         }
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
             let mut send_a = [0.0_f32; 2];
             let mut send_b = [0.0_f32; 2];
-            for (index, track) in self.tracks.iter_mut().enumerate() {
+            for &index in &playing[..count] {
+                let track = &mut self.tracks[index];
                 let previewing = index == self.preview_track && self.preview.active();
-                // The fixed tracks have their turn after this, with what's sent to them.
-                let fixed = (return_a..=master_track).contains(&index);
-                if fixed
-                    || resting[index]
-                    || (!track.sounding() && !previewing && !track.ringing(self.rate))
-                {
-                    if !fixed {
-                        self.keys.frames[index] = [0.0; 2];
-                    }
+                if !track.sounding() && !previewing && !track.ringing(self.rate) {
+                    self.keys.frames[index] = [0.0; 2];
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));

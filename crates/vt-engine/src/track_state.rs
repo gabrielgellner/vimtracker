@@ -259,6 +259,8 @@ pub struct TrackState {
     cut_envelope: Smoothed,
     res_envelope: Smoothed,
     pan_envelope: Smoothed,
+    /// The last pan position and its gains, as a settled pan stays put and `cos` and `sin` cost.
+    panned: (f32, (f32, f32)),
     envelopes: [EnvelopeRun; TRACK_ENVELOPES],
     /// What modulation multiplies a note's speed by.
     pitch: f64,
@@ -410,6 +412,7 @@ impl TrackState {
             cut_envelope: Smoothed::at(0.0),
             res_envelope: Smoothed::at(0.0),
             pan_envelope: Smoothed::at(0.0),
+            panned: (0.5, pan_gains(0.5)),
             envelopes: [EnvelopeRun::Idle; TRACK_ENVELOPES],
             pitch: 1.0,
             lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
@@ -614,6 +617,15 @@ impl TrackState {
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
         self.tell_slots_the_note();
+    }
+
+    /// The pan gains for a position, worked out again only when it moves.
+    #[inline]
+    fn pan_gains(&mut self, position: f32) -> (f32, f32) {
+        if position.to_bits() != self.panned.0.to_bits() {
+            self.panned = (position, pan_gains(position));
+        }
+        self.panned.1
     }
 
     /// What this track is playing with right now. `VOL` and its modulation are shown on the track's
@@ -1048,7 +1060,7 @@ impl TrackState {
             keeping_up(SettingId::SEND_B),
         );
         let gain = self.gain.next(vol) * self.level.next(smoothing);
-        let (left, right) = pan_gains(position);
+        let (left, right) = self.pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
         let send_a = self.send_a_gain.next(to_a);
         let send_b = self.send_b_gain.next(to_b);
@@ -1112,7 +1124,7 @@ impl TrackState {
         let (left, right) = if position == 0.5 {
             (1.0, 1.0)
         } else {
-            pan_gains(position)
+            self.pan_gains(position)
         };
         let heard = self.heard.next(smoothing);
         let out = [frame[0] * left * heard, frame[1] * right * heard];
