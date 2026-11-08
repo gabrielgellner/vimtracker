@@ -22,6 +22,7 @@ use crate::input::mode::View;
 use crate::theme;
 use crate::track_page::Page;
 use crate::views::curve::{envelope_columns, line_columns};
+use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
     envelope_being_edited, filter_being_edited, lfo_being_edited,
@@ -36,6 +37,10 @@ pub(crate) const POSITIONS: [char; 28] = [
     '\u{35B}', '\u{363}', '\u{364}', '\u{365}', '\u{366}', '\u{367}', '\u{368}', '\u{369}',
     '\u{36A}', '\u{36B}', '\u{36C}', '\u{36D}',
 ];
+/// The scope is brought up to date once in this many frames, about 15 times a second. Each new
+/// picture is a new image, which costs the terminal more than the program: at every frame, kitty
+/// took 4.5% of a core to show it, and at every other frame, under 3%.
+const SCOPE_FRAMES: usize = 2;
 /// The most base64 the protocol takes in one command.
 const CHUNK: usize = 4096;
 /// The grid of dots an envelope is drawn on, for each character.
@@ -197,6 +202,11 @@ pub fn filter_png(
     line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
+/// The scope's picture as a PNG, from the rows it covers in each column of dots.
+pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
+    line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
+}
+
 /// Write one command.
 fn command(out: &mut impl Write, controls: &str, data: &[u8]) -> io::Result<()> {
     out.write_all(b"\x1b_G")?;
@@ -313,6 +323,10 @@ pub struct Graphics {
     images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
     shapes: [[Option<u32>; 2]; Shape::ALL.len()],
     filter: [Option<(FilterSettings, u32)>; 2],
+    /// The scope's picture, as the rows it covers in each column, and its image.
+    scope: Option<(Vec<(usize, usize)>, u32)>,
+    /// How many times the screen has been brought up to date, for how often the scope is.
+    frames: usize,
     /// Images to forget once the screen has moved on from them.
     retired: Vec<u32>,
 }
@@ -326,6 +340,8 @@ impl Graphics {
             images: [[None; 2]; TRACK_ENVELOPES],
             shapes: [[None; 2]; Shape::ALL.len()],
             filter: [None; 2],
+            scope: None,
+            frames: 0,
             retired: Vec::new(),
         }
     }
@@ -348,6 +364,7 @@ impl Graphics {
                     .flatten()
                     .any(|image| image.1 == id)
                 || self.filter.iter().flatten().any(|image| image.1 == id)
+                || self.scope.as_ref().is_some_and(|image| image.1 == id)
                 || self.retired.contains(&id);
             if !in_use {
                 return id;
@@ -370,6 +387,10 @@ impl Graphics {
                 Page::Fx => {}
             }
         }
+        if app.scope_shown && self.frames.is_multiple_of(SCOPE_FRAMES) {
+            self.sync_scope(app, out)?;
+        }
+        self.frames = self.frames.wrapping_add(1);
         out.flush()
     }
 
@@ -411,6 +432,32 @@ impl Graphics {
             }
         };
         app.filter_image = Some(id);
+        Ok(())
+    }
+
+    /// Send the scope's picture, if it has changed since the last one sent. A steady note, or
+    /// silence, sends nothing.
+    fn sync_scope(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
+        let spans = app.scope.spans(
+            SCOPE_WIDTH * CELL_DOTS_ACROSS,
+            SCOPE_HEIGHT * CELL_DOTS_DOWN,
+        );
+        let id = match self.scope.take() {
+            Some((drawn, id)) if drawn == spans => {
+                self.scope = Some((drawn, id));
+                id
+            }
+            held => {
+                // Retired first, so the new one can't be given its id.
+                self.retired.extend(held.map(|(_, old)| old));
+                let id = self.new_id();
+                let png = scope_png(&spans, color(false));
+                self.send(out, id, &png, SCOPE_WIDTH, SCOPE_HEIGHT)?;
+                self.scope = Some((spans, id));
+                id
+            }
+        };
+        app.scope_image = Some(id);
         Ok(())
     }
 
@@ -481,7 +528,13 @@ impl Graphics {
         let held = self.images.iter().flatten().flatten().map(|image| &image.1);
         let shapes = self.shapes.iter().flatten().flatten();
         let filter = self.filter.iter().flatten().map(|image| &image.1);
-        for id in held.chain(shapes).chain(filter).chain(&self.retired) {
+        let scope = self.scope.iter().map(|image| &image.1);
+        for id in held
+            .chain(shapes)
+            .chain(filter)
+            .chain(scope)
+            .chain(&self.retired)
+        {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
         }
         out.flush()
@@ -682,6 +735,30 @@ mod tests {
         track.resonance = 0xC0;
         let peak = curve(&track).into_iter().fold(0.0, f32::max);
         assert!(peak > low.into_iter().fold(0.0, f32::max) + 0.1);
+    }
+
+    #[test]
+    fn the_scope_is_a_small_png_of_its_line() {
+        let (across, down) = (
+            SCOPE_WIDTH * CELL_DOTS_ACROSS,
+            SCOPE_HEIGHT * CELL_DOTS_DOWN,
+        );
+        let spans: Vec<(usize, usize)> = (0..across)
+            .map(|column| (column % down, down - 1))
+            .collect();
+        let png = scope_png(&spans, [255; 3]);
+        assert!(png.len() < 4000, "{}", png.len());
+        let (_, pixels) = decode(&png);
+        assert_eq!(
+            (pixels[0].len(), pixels.len()),
+            (across * DOT_PIXELS, down * DOT_PIXELS)
+        );
+        for (column, (high, low)) in spans.iter().enumerate() {
+            for row in 0..down {
+                let pixel = pixels[row * DOT_PIXELS][column * DOT_PIXELS];
+                assert_eq!(pixel, (*high..=*low).contains(&row), "dot {column}, {row}");
+            }
+        }
     }
 
     #[test]

@@ -14,7 +14,7 @@ use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
-use vt_model::song::Song;
+use vt_model::song::{Machine, Song, SynthVoice};
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 use vt_tui::kitty::Graphics;
@@ -37,6 +37,8 @@ struct Shot {
     keys: &'static str,
     /// Steps to play after the keys, to show the playhead.
     play: usize,
+    /// The synth the first track plays, so the meter and the scope show its sound, or its sample.
+    voice: Option<SynthVoice>,
 }
 
 const GATES: &[&str] = &[
@@ -66,36 +68,44 @@ const SHOTS: &[Shot] = &[
         rows: GATES,
         keys: "ll",
         play: 0,
+        voice: None,
     },
     Shot {
         name: "gate-list",
         rows: GATES,
         keys: "llK",
         play: 0,
+        voice: None,
     },
     Shot {
         name: "lane",
         rows: LANE,
         keys: "lll:lane 3<Enter><Tab>",
         play: 21,
+        voice: Some(SynthVoice::VirtualAnalog),
     },
     Shot {
         name: "track-sound",
         rows: GATES,
         keys: " 4jjji60<Enter>ji90<Enter>k",
         play: 0,
+        voice: None,
     },
     Shot {
         name: "track-mod",
         rows: GATES,
         keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
         play: 0,
+        voice: None,
     },
 ];
 
-/// A song whose first track plays these rows in a phrase of 16.
-fn song(rows: &[&str]) -> Song {
+/// A song whose first track plays these rows in a phrase of 16, with this synth if it's given.
+fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
     let mut song = Song::new(4);
+    if let Some(voice) = voice {
+        song.tracks[0].machine = Machine::Plaits(voice);
+    }
     let phrase = Arc::make_mut(
         song.tracks[0]
             .phrases
@@ -144,7 +154,7 @@ fn play(app: &mut App, realtime: &mut Realtime, steps: usize) {
 }
 
 fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
-    let song = song(shot.rows);
+    let song = song(shot.rows, shot.voice);
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(RATE, version));

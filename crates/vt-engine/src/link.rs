@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, SCOPE_QUEUE,
+    TELEMETRY_QUEUE,
 };
 
 use crate::dsp::memory::{Memory, MemoryCount};
@@ -106,6 +107,8 @@ pub struct Handle {
     returned: Consumer<Arc<Published>>,
     commands: Producer<Command>,
     telemetry: Consumer<Telemetry>,
+    /// The main output, mixed to one channel, for the scope.
+    scope: Consumer<f32>,
     jam: Consumer<(usize, JamState)>,
     pending: Option<Arc<Published>>,
     memories: Producer<Memory>,
@@ -124,6 +127,7 @@ pub struct Realtime {
     returned: Producer<Arc<Published>>,
     commands: Consumer<Command>,
     telemetry: Producer<Telemetry>,
+    scope: Producer<f32>,
     jam: Producer<(usize, JamState)>,
     memories: Consumer<Memory>,
     freed: Producer<Memory>,
@@ -139,6 +143,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (return_tx, return_rx) = RingBuffer::new(RETURN_QUEUE);
     let (command_tx, command_rx) = RingBuffer::new(COMMAND_QUEUE);
     let (telemetry_tx, telemetry_rx) = RingBuffer::new(TELEMETRY_QUEUE);
+    let (scope_tx, scope_rx) = RingBuffer::new(SCOPE_QUEUE);
     let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
     let (memory_tx, memory_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (freed_tx, freed_rx) = RingBuffer::new(MEMORY_QUEUE);
@@ -150,6 +155,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             returned: return_rx,
             commands: command_tx,
             telemetry: telemetry_rx,
+            scope: scope_rx,
             jam: jam_rx,
             pending: None,
             memories: memory_tx,
@@ -164,6 +170,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             returned: return_tx,
             commands: command_rx,
             telemetry: telemetry_tx,
+            scope: scope_tx,
             jam: jam_tx,
             memories: memory_rx,
             freed: freed_tx,
@@ -271,6 +278,13 @@ impl Handle {
         latest
     }
 
+    /// The main output's samples since the last call, mixed to one channel and oldest first.
+    pub fn read_scope(&mut self, into: &mut impl Extend<f32>) {
+        if let Ok(samples) = self.scope.read_chunk(self.scope.slots()) {
+            into.extend(samples);
+        }
+    }
+
     /// The next change in what a track is doing while jamming.
     pub fn jam_change(&mut self) -> Option<(usize, JamState)> {
         self.jam.pop().ok()
@@ -349,6 +363,15 @@ impl Realtime {
             let _ = self.freed.push(memory);
         }
         self.engine.process(out);
+        // The scope's tap. The callback can't wait for room, so what doesn't fit is dropped.
+        let frames = out.len() / 2;
+        if let Ok(room) = self
+            .scope
+            .write_chunk_uninit(self.scope.slots().min(frames))
+        {
+            let mono = out.as_chunks::<2>().0.iter();
+            room.fill_from_iter(mono.map(|[left, right]| (left + right) * 0.5));
+        }
         let reading = self.engine.take_reading();
         let _ = self.telemetry.push(Telemetry {
             section: self.engine.section(),
@@ -962,6 +985,37 @@ mod tests {
         handle.send(Command::PauseOrResume);
         blocks(&mut rt, 1);
         assert_eq!(rt.engine().transport(), Transport::Paused);
+    }
+
+    #[test]
+    fn the_scope_tap_never_allocates_and_drops_what_doesnt_fit() {
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(1, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        // Nothing reads it, so it fills, and the callback carries on regardless.
+        let blocks_to_fill = SCOPE_QUEUE / BLOCK + 4;
+        assert_eq!(blocks(&mut rt, blocks_to_fill), 0);
+        let mut taken = Vec::new();
+        handle.read_scope(&mut taken);
+        assert_eq!(taken.len(), SCOPE_QUEUE, "the newest are dropped");
+        assert!(taken.iter().any(|sample| *sample != 0.0));
+        handle.read_scope(&mut taken);
+        assert_eq!(taken.len(), SCOPE_QUEUE, "nothing is read twice");
+
+        // With room again, a block arrives whole, as the two channels mixed.
+        let mut out = vec![0.0; BLOCK * 2];
+        let ((), violations) = forbidden(|| rt.process(&mut out));
+        assert_eq!(violations, 0);
+        let mut next = Vec::new();
+        handle.read_scope(&mut next);
+        let mixed: Vec<f32> = out
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[l, r]| (l + r) * 0.5)
+            .collect();
+        assert_eq!(next, mixed);
     }
 
     #[test]

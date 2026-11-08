@@ -14,6 +14,7 @@ pub mod picking;
 pub mod probe;
 pub mod recording;
 pub mod run;
+pub mod scope;
 pub mod screenshot;
 pub mod shaping;
 pub mod song_view;
