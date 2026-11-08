@@ -2606,7 +2606,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 6);
     press(&mut app, "ladder");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Ladder);
