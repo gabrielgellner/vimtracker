@@ -564,6 +564,11 @@ impl App {
         if key.ignored() {
             return;
         }
+        // Nothing is bound to Cmd, so `Cmd-a` isn't read as `a`. Its release still counts, as `a`
+        // can be held before Cmd goes down.
+        if key.command && kind != KeyEventKind::Release {
+            return;
+        }
         match kind {
             KeyEventKind::Press => self.key(key, now),
             KeyEventKind::Repeat => self.key_repeated(key, now),

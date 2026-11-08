@@ -203,7 +203,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space ?", Cmd::Guides, "Open a guide"),
     ("Space k", Cmd::Help, "Show every key"),
     ("C-o", Cmd::JumpBack, "Jump back"),
-    ("C-n", Cmd::JumpForward, "Jump forward"),
+    ("C-i", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
     ("B", Cmd::PreviousTrack, "Previous track"),
     ("] b", Cmd::NextTrack, "Next track"),
