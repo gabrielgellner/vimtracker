@@ -9,6 +9,7 @@ use vt_model::song::Song;
 
 use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
+use crate::dsp::limiter::Limiter;
 use crate::dsp::reverb::Reverb;
 use crate::engine::sample_of_tick;
 
@@ -24,6 +25,7 @@ pub enum Memory {
     Delay(Box<Delay>),
     Reverb(Box<Reverb>),
     Chorus(Box<Chorus>),
+    Limit(Box<Limiter>),
 }
 
 impl Memory {
@@ -44,6 +46,11 @@ impl Memory {
         Self::Chorus(Box::new(Chorus::new(rate)))
     }
 
+    /// A limiter's, which looks as far ahead at any rate.
+    pub fn limit(rate: u32) -> Self {
+        Self::Limit(Box::new(Limiter::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -51,6 +58,7 @@ impl Memory {
             Self::Delay(delay) => delay.process(input),
             Self::Reverb(reverb) => reverb.process(input),
             Self::Chorus(chorus) => chorus.process(input),
+            Self::Limit(limiter) => limiter.process_alone(input),
         }
     }
 
@@ -60,6 +68,7 @@ impl Memory {
             Self::Delay(delay) => delay.frames() as u32,
             Self::Reverb(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
             Self::Chorus(chorus) => chorus.frames() as u32,
+            Self::Limit(limiter) => limiter.frames() as u32,
         }
     }
 
@@ -72,6 +81,7 @@ impl Memory {
             }
             (Self::Reverb(reverb), Insert::Reverb(settings)) => reverb.follow(settings, frames),
             (Self::Chorus(chorus), Insert::Chorus(settings)) => chorus.follow(settings),
+            (Self::Limit(limiter), Insert::Limit(settings)) => limiter.follow(settings),
             _ => {}
         }
     }
@@ -82,6 +92,7 @@ impl Memory {
             Self::Delay(delay) => delay.settle(),
             Self::Reverb(reverb) => reverb.settle(),
             Self::Chorus(chorus) => chorus.settle(),
+            Self::Limit(limiter) => limiter.settle(),
         }
     }
 
@@ -90,6 +101,7 @@ impl Memory {
             Self::Delay(delay) => delay.clear(),
             Self::Reverb(reverb) => reverb.clear(),
             Self::Chorus(chorus) => chorus.clear(),
+            Self::Limit(limiter) => limiter.clear(),
         }
     }
 }
@@ -100,6 +112,7 @@ pub struct MemoryCount {
     pub delay: u16,
     pub reverb: u16,
     pub chorus: u16,
+    pub limit: u16,
 }
 
 impl MemoryCount {
@@ -111,6 +124,7 @@ impl MemoryCount {
                 Insert::Delay(_) => count.delay += 1,
                 Insert::Reverb(_) => count.reverb += 1,
                 Insert::Chorus(_) => count.chorus += 1,
+                Insert::Limit(_) => count.limit += 1,
                 Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {}
             }
         }
@@ -124,6 +138,7 @@ pub struct MemoryPool {
     delays: Vec<Memory>,
     reverbs: Vec<Memory>,
     choruses: Vec<Memory>,
+    limiters: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -138,6 +153,7 @@ impl MemoryPool {
             delays: Vec::with_capacity(POOL_CAPACITY),
             reverbs: Vec::with_capacity(POOL_CAPACITY),
             choruses: Vec::with_capacity(POOL_CAPACITY),
+            limiters: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -150,6 +166,9 @@ impl MemoryPool {
         for _ in 0..needed.chorus {
             pool.put(Memory::chorus(rate));
         }
+        for _ in 0..needed.limit {
+            pool.put(Memory::limit(rate));
+        }
         pool
     }
 
@@ -159,6 +178,7 @@ impl MemoryPool {
             Memory::Delay(_) => &mut self.delays,
             Memory::Reverb(_) => &mut self.reverbs,
             Memory::Chorus(_) => &mut self.choruses,
+            Memory::Limit(_) => &mut self.limiters,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -175,6 +195,7 @@ impl MemoryPool {
             Insert::Delay(_) => &mut self.delays,
             Insert::Reverb(_) => &mut self.reverbs,
             Insert::Chorus(_) => &mut self.choruses,
+            Insert::Limit(_) => &mut self.limiters,
             Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {
                 return None;
             }
@@ -189,6 +210,7 @@ impl MemoryPool {
         self.owed.delay += count.delay;
         self.owed.reverb += count.reverb;
         self.owed.chorus += count.chorus;
+        self.owed.limit += count.limit;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -211,12 +233,18 @@ impl MemoryPool {
             self.owed.chorus -= 1;
             return Some(memory);
         }
+        if self.owed.limit > 0
+            && let Some(memory) = self.limiters.pop()
+        {
+            self.owed.limit -= 1;
+            return Some(memory);
+        }
         None
     }
 
     /// How many are free.
     pub fn spare(&self) -> usize {
-        self.delays.len() + self.reverbs.len() + self.choruses.len()
+        self.delays.len() + self.reverbs.len() + self.choruses.len() + self.limiters.len()
     }
 }
 

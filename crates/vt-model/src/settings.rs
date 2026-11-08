@@ -6,7 +6,8 @@
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
     CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, INSERTS, Insert,
-    Param, REVERB_PARAMS, Setting, attack_ms, ratio, release_ms, threshold_db,
+    LIMIT_PARAMS, Param, REVERB_PARAMS, Setting, attack_ms, ceiling_db, input_db, limit_release_ms,
+    ratio, release_ms, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -55,6 +56,10 @@ pub enum Units {
     Ratio,
     Attack,
     Release,
+    /// A limiter's drive and ceiling in dB, and its release in ms.
+    Input,
+    Ceiling,
+    LimitRelease,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -128,6 +133,9 @@ impl Kind {
                 },
                 Units::Attack => milliseconds(attack_ms(coarse as f32)),
                 Units::Release => milliseconds(release_ms(coarse as f32)),
+                Units::Input => format!("{:+.1} dB", input_db(coarse as f32)),
+                Units::Ceiling => format!("{:.1} dB", ceiling_db(coarse as f32)),
+                Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -459,16 +467,18 @@ pub enum Effect {
     Chorus,
     Eq,
     Compressor,
+    Limit,
 }
 
 impl Effect {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
         Self::Chorus,
         Self::Eq,
         Self::Compressor,
+        Self::Limit,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -481,6 +491,7 @@ impl Effect {
             Self::Chorus => &CHORUS_PARAMS,
             Self::Eq => &EQ_PARAMS,
             Self::Compressor => &COMPRESSOR_PARAMS,
+            Self::Limit => &LIMIT_PARAMS,
         }
     }
 
@@ -492,6 +503,7 @@ impl Effect {
             Self::Chorus => "chorus",
             Self::Eq => "eq3",
             Self::Compressor => "comp",
+            Self::Limit => "limit",
         }
     }
 
@@ -503,6 +515,7 @@ impl Effect {
             Self::Chorus => "Chorus",
             Self::Eq => "EQ3",
             Self::Compressor => "Comp",
+            Self::Limit => "Limit",
         }
     }
 
@@ -516,6 +529,7 @@ impl Effect {
             Insert::Chorus(_) => Some(Self::Chorus),
             Insert::Eq(_) => Some(Self::Eq),
             Insert::Compressor(_) => Some(Self::Compressor),
+            Insert::Limit(_) => Some(Self::Limit),
         }
     }
 }
@@ -538,6 +552,9 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Ratio => (false, Units::Ratio),
                 Setting::Attack => (false, Units::Attack),
                 Setting::Release => (false, Units::Release),
+                Setting::Input => (false, Units::Input),
+                Setting::Ceiling => (false, Units::Ceiling),
+                Setting::LimitRelease => (false, Units::LimitRelease),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -621,6 +638,14 @@ const fn effect_start(effect: Effect) -> usize {
                 + CHORUS_PARAMS.len()
                 + EQ_PARAMS.len()
         }
+        Effect::Limit => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+        }
     }
 }
 
@@ -632,7 +657,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + REVERB_PARAMS.len()
     + CHORUS_PARAMS.len()
     + EQ_PARAMS.len()
-    + COMPRESSOR_PARAMS.len();
+    + COMPRESSOR_PARAMS.len()
+    + LIMIT_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.

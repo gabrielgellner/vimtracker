@@ -19,6 +19,7 @@ pub enum Insert {
     Chorus(Chorus),
     Eq(Equaliser),
     Compressor(Compressor),
+    Limit(Limiter),
 }
 
 /// What a distortion does to the sound.
@@ -94,6 +95,10 @@ pub enum Setting {
     Source,
     /// Whether a compressor makes up what it takes by itself.
     AutoGain,
+    /// A limiter's: how hard it's driven, the most that comes out, and how fast it lets go.
+    Input,
+    Ceiling,
+    LimitRelease,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -505,6 +510,57 @@ pub(crate) const COMPRESSOR_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// How much a limiter's `Input` turns up what goes in at most, in dB.
+pub const MOST_INPUT_DB: f32 = 24.0;
+/// How far below 0 dB a limiter's `Ceiling` goes.
+pub const LOWEST_CEILING_DB: f32 = -24.0;
+
+/// A limiter's drive in dB, for a value on the `00` to `FF` scale: from 0 dB to +24 dB.
+pub fn input_db(value: f32) -> f32 {
+    value / 255.0 * MOST_INPUT_DB
+}
+
+/// A limiter's ceiling in dB, for a value on the `00` to `FF` scale: from -24 dB to 0 dB.
+pub fn ceiling_db(value: f32) -> f32 {
+    LOWEST_CEILING_DB * (1.0 - value / 255.0)
+}
+
+/// A limiter's release in ms: from 1 ms at `00` to a second at `FF`, evenly in ratio, so `AA` is
+/// 100 ms.
+pub fn limit_release_ms(value: f32) -> f32 {
+    1000_f32.powf(value / 255.0)
+}
+
+/// A limiter's, in the order the page shows them.
+pub(crate) const LIMIT_PARAMS: [Param; 5] = [
+    hex_param(
+        "Input",
+        "input",
+        "INPT",
+        Setting::Input,
+        Limiter::DEFAULT.input,
+    ),
+    hex_param(
+        "Ceiling",
+        "ceiling",
+        "CEIL",
+        Setting::Ceiling,
+        Limiter::DEFAULT.ceiling,
+    ),
+    hex_param(
+        "Release",
+        "release",
+        "REL",
+        Setting::LimitRelease,
+        Limiter::DEFAULT.release,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -513,7 +569,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -521,6 +577,7 @@ impl Insert {
         Self::Chorus(Chorus::DEFAULT),
         Self::Eq(Equaliser::DEFAULT),
         Self::Compressor(Compressor::DEFAULT),
+        Self::Limit(Limiter::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -545,6 +602,7 @@ impl Insert {
             Self::Chorus(_) => "Chorus",
             Self::Eq(_) => "EQ3",
             Self::Compressor(_) => "Comp",
+            Self::Limit(_) => "Limit",
         }
     }
 
@@ -558,6 +616,7 @@ impl Insert {
             Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
             Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
             Self::Compressor(_) => "Evens out its level, or ducks it under another track",
+            Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
         }
     }
 
@@ -575,6 +634,7 @@ impl Insert {
             Self::Chorus(_) => &CHORUS_PARAMS,
             Self::Eq(_) => &EQ_PARAMS,
             Self::Compressor(_) => &COMPRESSOR_PARAMS,
+            Self::Limit(_) => &LIMIT_PARAMS,
         }
     }
 
@@ -630,6 +690,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| compressor.read(setting));
             }
+            Self::Limit(limiter) => {
+                return LIMIT_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| limiter.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -657,6 +723,7 @@ impl Insert {
             Self::Compressor(compressor) => {
                 return Self::Compressor(compressor.written(setting, whole));
             }
+            Self::Limit(limiter) => return Self::Limit(limiter.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1065,6 +1132,67 @@ impl Compressor {
             _ => {}
         }
         compressor
+    }
+}
+
+/// A look-ahead limiter's settings. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Limiter {
+    /// How much it turns up what goes in, from 0 dB at `00` to +24 dB at `FF`, to push it harder.
+    pub input: u8,
+    /// The most that comes out, from -24 dB at `00` to 0 dB at `FF`.
+    pub ceiling: u8,
+    /// How fast it lets go once a peak has passed.
+    pub release: u8,
+    /// From `00`, all dry, to `FF`, all limited. The dry sound is as late as the limited one.
+    pub mix: u8,
+    /// What comes out, on the level scale.
+    pub gain: u8,
+}
+
+impl Default for Limiter {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Limiter {
+    /// As it starts: nothing added going in, a ceiling just under 0 dB at about -0.3 dB, and a
+    /// 100 ms release.
+    pub const DEFAULT: Self = Self {
+        input: 0x00,
+        ceiling: 0xFC,
+        release: 0xAA,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Input => self.input,
+            Setting::Ceiling => self.ceiling,
+            Setting::LimitRelease => self.release,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut limiter = self;
+        match setting {
+            Setting::Input => limiter.input = value,
+            Setting::Ceiling => limiter.ceiling = value,
+            Setting::LimitRelease => limiter.release = value,
+            Setting::Mix => limiter.mix = value,
+            Setting::Gain => limiter.gain = value,
+            _ => {}
+        }
+        limiter
     }
 }
 
