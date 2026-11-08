@@ -326,6 +326,32 @@ modulator, the ring modulators and the vocoder are silent too; the
 crossfade, fold, XOR and comparator still shape the carrier on its own.
 The diode ring modulator wants loud sounds, as Warps' does. It's mono.
 
+`LPG` is a low-pass gate, after Mutable Instruments' Streams. A follower
+listens to the track's own sound, or to another track's with `Source` as
+`Comp`'s, and the louder that is, the further it opens. It starts as a
+gate on its own sound, for plucked, woody notes.
+
+| Setting | Does |
+|---|---|
+| `Mode` | `Gate`, `Filter` or `VCA`: what the follower opens |
+| `Amount` | How far it opens, from `Base` to all the way |
+| `Base` | Where it rests when closed: its cutoff, or its level as `VCA` |
+| `Res` | The filter's resonance, in `Gate` and `Filter` |
+| `Response` | How slowly it opens and closes |
+| `Source` | `Self`, a track by its number, or return `A` or `B` |
+
+`Gate` is Streams' vactrol, which opens the level and the cutoff
+together: quickly as the sound comes in, and slowly as it goes, its
+cutoff falling first and its level after. `Response` lengthens its decay
+up to about four seconds at `80`, then slows its attack as well. `Filter`
+moves the cutoff alone, for an envelope filter or auto-wah: set `Base`
+where it should rest, and the louder it plays the brighter it gets.
+`VCA` moves the level alone. In those two, `Response` lengthens both the
+follower's rise and fall. A Streams vactrol can be pinged by a trigger;
+a slot has none, so the follower's rise stands in. To gate a pad with a
+drum, put `LPG` on the pad with `Source` on the drum's track. With a
+silent source, `Gate` and `VCA` stay shut.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

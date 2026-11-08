@@ -1085,3 +1085,40 @@ fn warps_ring_modulates_one_track_by_another_thats_muted() {
         .fold(0.0_f32, |most, s| most.max(s.abs()));
     assert!(loudest < 1e-3, "{loudest}");
 }
+
+#[test]
+fn a_low_pass_gate_opens_for_another_track_thats_muted() {
+    use vt_model::insert::LowPassGate;
+    // A pad holding a note on the second track, gated by the first, which hits once and is muted.
+    let played = |source| {
+        let mut song = Song::new(2);
+        for (track, text) in [(0, "C-4 -- kil:02 --- ---"), (1, "C-4 -- --- --- ---")] {
+            song.tracks[track].sample = Some("s".to_owned());
+            song.tracks[track].envelopes[0].attack_ms = 0;
+            song.tracks[track].envelopes[0].release_ms = 0;
+            let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
+            *phrase.step_mut(0).unwrap() = text.parse().unwrap();
+        }
+        song.tracks[1].inserts[0] = Insert::Lpg(LowPassGate {
+            source,
+            ..LowPassGate::DEFAULT
+        });
+        let mut engine = Engine::new(RATE, Arc::new(Published::new(Arc::new(song), flat(0.5))));
+        engine.set_mute(0, true);
+        engine.play_from(0);
+        let mut out = vec![0.0; STEP * 8 * 2];
+        engine.process(&mut out);
+        out.as_chunks::<2>().0.to_vec()
+    };
+    let gated = played(1);
+    assert!(gated.iter().flatten().all(|s| s.is_finite()));
+    // Track 01 is muted, but it's heard after its slots: the pad opens as it hits, then closes
+    // slowly once it's cut, as a vactrol does.
+    let hit = level_at(&gated, UNIT);
+    assert!(hit > 0.1, "{hit}");
+    let after = level_at(&gated, STEP * 8 - 1);
+    assert!(after < hit * 0.1, "{hit} {after}");
+    // A source that's silent keeps it closed: track 64 has nothing on it.
+    let silent = played(64);
+    assert!(silent.iter().flatten().all(|s| *s == 0.0));
+}

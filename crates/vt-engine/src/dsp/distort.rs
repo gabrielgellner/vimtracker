@@ -6,13 +6,14 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Grains, Insert, Limiter,
-    Phaser, Pitch, Plate, Reverb, Tape, Warps,
+    LowPassGate, Phaser, Pitch, Plate, Reverb, Tape, Warps,
 };
 use vt_model::song::level_gain;
 
 use crate::dsp::compressor::Compressor as Dynamics;
 use crate::dsp::drums::soft_clip;
 use crate::dsp::eq::ThreeBands;
+use crate::dsp::lpg::LowPassGate as Gate;
 use crate::dsp::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::phaser::Phaser as AllPasses;
@@ -47,6 +48,8 @@ pub struct InsertState {
     dynamics: Dynamics,
     /// A phaser's all-passes, small enough as well.
     phaser: AllPasses,
+    /// A low-pass gate's follower, vactrol and filters, small enough as well.
+    gate: Gate,
     /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
     on: Smoothed,
     /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator to follow.
@@ -68,6 +71,7 @@ impl Default for InsertState {
             eq: ThreeBands::default(),
             dynamics: Dynamics::default(),
             phaser: AllPasses::default(),
+            gate: Gate::default(),
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
         }
@@ -90,7 +94,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Plate(_), Insert::Plate(_))
         | (Insert::Pitch(_), Insert::Pitch(_))
         | (Insert::Grains(_), Insert::Grains(_))
-        | (Insert::Warps(_), Insert::Warps(_)) => true,
+        | (Insert::Warps(_), Insert::Warps(_))
+        | (Insert::Lpg(_), Insert::Lpg(_)) => true,
         _ => false,
     }
 }
@@ -216,7 +221,8 @@ impl InsertState {
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
-            | Insert::Warps(Warps { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Warps(Warps { mix, gain, .. })
+            | Insert::Lpg(LowPassGate { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -374,6 +380,19 @@ impl InsertState {
                     .source_track(keys.sounds)
                     .map_or(input, |track| keys.of(track));
                 let wet = self.dynamics.process(input, key, settings, smoothing, rate);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            Insert::Lpg(settings) => {
+                // It's opened by its own input, or another track's as it was after its slots.
+                let key = settings
+                    .source_track(keys.sounds)
+                    .map_or(input, |track| keys.of(track));
+                let wet = self.gate.process(input, key, settings, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [
