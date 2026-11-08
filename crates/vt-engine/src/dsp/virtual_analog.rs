@@ -106,6 +106,12 @@ impl Moving {
         self.value += self.step;
         self.value
     }
+
+    /// Where it is a fraction `t` of the way to its next frame, without moving it.
+    #[inline]
+    pub(super) fn subsample(&self, t: f32) -> f32 {
+        self.value + self.step * t
+    }
 }
 
 /// How `Harm` detunes the saw, in semitones.

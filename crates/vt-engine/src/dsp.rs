@@ -5,6 +5,7 @@ pub mod distort;
 pub mod drums;
 pub mod filter;
 pub mod fm;
+pub mod grain;
 pub mod kick;
 pub mod memory;
 pub mod modal;
