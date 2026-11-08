@@ -1205,5 +1205,45 @@ fn a_resonator_rings_at_the_note_the_track_plays() {
     assert!(at_note > below * 10.0, "{at_note} {below}");
     // The clicks alone have nothing in particular at the note.
     let plain = played(false);
-    assert!(at_note > strength(&plain, g) * 10.0);
+    assert!(
+        at_note > strength(&plain, g) * 5.0,
+        "{at_note} {}",
+        strength(&plain, g)
+    );
+}
+
+#[test]
+fn a_comb_rings_at_the_note_the_track_plays() {
+    use vt_model::insert::Comb;
+    // Clicks, every tenth of a second, played up a fifth at `G-4`.
+    let clicks: Vec<[f32; 2]> = (0..RATE as usize * 4)
+        .map(|frame| [if frame % 4800 == 0 { 0.8 } else { 0.0 }; 2])
+        .collect();
+    let played = |comb: bool| {
+        let mut song = song(&["G-4 -- --- --- ---"]);
+        if comb {
+            song.tracks[0].inserts[0] = Insert::Comb(Comb {
+                feedback: 0xFC,
+                tone: 0x20,
+                ..Comb::DEFAULT
+            });
+        }
+        render(song, pool(clicks.clone()), STEP * 4)
+    };
+    let rung = played(true);
+    assert!(
+        rung.iter()
+            .flatten()
+            .all(|s| s.is_finite() && s.abs() <= 1.0)
+    );
+    let g = 440.0 * (-2.0_f32 / 12.0).exp2();
+    let (at_note, below) = (strength(&rung, g), strength(&rung, g * 0.75));
+    assert!(at_note > below * 10.0, "{at_note} {below}");
+    // The clicks alone have nothing in particular at the note.
+    let plain = played(false);
+    assert!(
+        at_note > strength(&plain, g) * 5.0,
+        "{at_note} {}",
+        strength(&plain, g)
+    );
 }

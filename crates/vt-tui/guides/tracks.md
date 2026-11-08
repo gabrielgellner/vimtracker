@@ -395,6 +395,46 @@ notes, and a longer `Decay` rings on and builds up. A tone held at its note
 can ring very loud, so Rings' limiter holds what comes out under full
 scale, turning down at once and letting go over a second or so.
 
+`Comb` is a comb filter tuned to the track's note, after Vital's: the sound
+goes into a delay a cycle of the note long, and what comes back out is fed
+in again through a filter of its own, so it rings at the note and its
+harmonics, like a plucked string or a metal tube. A drum loop through it
+plays as a pitch. It starts as a comb in tune with the note, ringing for
+under half a second at middle C, all wet.
+
+| Setting | Does |
+|---|---|
+| `Mode` | `Comb` rings; `Flange` adds the sound, notched between harmonics |
+| `Tune` | Its pitch, in semitones from the track's note |
+| `Feedback` | How long it rings: none at `80`; odd harmonics alone below |
+| `Tone` | How bright it rings: the note alone at `00`, everything at `FF` |
+| `Spread` | How far under `Tone` it reaches: a narrow band at `00`, all at `FF` |
+
+Like `Reso`, it follows the track's note and `Pitch`, glides to a new one,
+and to keep a sample loop at its own speed, play it at `C-4` and set `Tune`
+from steps. Below `80`, `Feedback` rings on the note's odd harmonics alone,
+hollower, like a clarinet, but at the same pitch. At `FF` with `Tone` up
+it rings for many seconds. As a `Comb`, `Feedback` `80` is only the sound;
+as a `Flange`, it's a flanger standing still, its notches between the
+note's harmonics, and feedback sharpens it into a ring.
+
+`Tone` is a low-pass inside the loop: turned down, the high harmonics die
+away first, as a string's do. `Spread` brings a high-pass up under it: at
+about `80` with `Tone` at `FF` the note's own harmonic goes, for a thin,
+metallic ring, and towards `00` only a band of harmonics around `Tone`
+rings, for a vowel-like one. However they're set, the harmonics that ring
+longest stay on the note.
+
+It sounds unlike `Reso`. `Reso`'s modes ring by themselves once struck,
+each fading at its own rate, so a drum becomes a bell or a bar. A comb is
+one delay going round, so every repeat is the drum again, a cycle of the
+note later and filtered a little more: it buzzes, and the drum's own grain
+comes through as the pitch builds.
+
+At most settings a drum comes out about as loud as it went in, and a long
+`Feedback` rings on and builds up. Rings' limiter, as `Reso` has, holds
+what comes out under full scale.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

@@ -6,6 +6,7 @@ pub mod chiptune;
 pub mod chord;
 mod chord_bank;
 pub mod chorus;
+pub mod comb;
 pub mod compressor;
 pub mod delay;
 pub mod diode_filter;

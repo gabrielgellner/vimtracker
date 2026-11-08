@@ -178,14 +178,14 @@ fn at_rate(coefficient: f32, rate: u32) -> f32 {
 /// and falling over about a second, turns both down together to keep that under full scale, and
 /// clips softly what gets past it first.
 #[derive(Debug, Clone, Copy)]
-struct Limiter {
+pub(super) struct Limiter {
     peak: f32,
     attack: f32,
     release: f32,
 }
 
 impl Limiter {
-    fn new(rate: u32) -> Self {
+    pub(super) fn new(rate: u32) -> Self {
         Self {
             peak: 0.5,
             attack: at_rate(0.05, rate),
@@ -194,7 +194,7 @@ impl Limiter {
     }
 
     /// How far it's turning down now, as a gain.
-    fn gain(&self) -> f32 {
+    pub(super) fn gain(&self) -> f32 {
         if self.peak <= 1.0 {
             1.0
         } else {
@@ -203,7 +203,7 @@ impl Limiter {
     }
 
     #[inline]
-    fn process(&mut self, [left, right]: [f32; 2]) -> [f32; 2] {
+    pub(super) fn process(&mut self, [left, right]: [f32; 2]) -> [f32; 2] {
         let peak = left.abs().max(right.abs()).max((right - left).abs());
         let slope = if peak > self.peak {
             self.attack
