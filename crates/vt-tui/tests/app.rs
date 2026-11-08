@@ -6238,19 +6238,24 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
 
 #[test]
 fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
+    use vt_tui::views::status::column_name;
     let (mut app, mut realtime) = app();
     choose_machine(&mut app, "VA");
     let before = app.song().clone();
-    let row = app.track_row;
     press(&mut app, ";");
     assert_eq!(app.mode, Mode::Keys);
     assert_eq!(loudest(&mut realtime, 480), 0.0, "nothing until a key");
-    press(&mut app, "j");
-    assert!(loudest(&mut realtime, 4800) > 0.01, "j plays a note");
-    assert_eq!(app.track_row, row, "and doesn't move");
-    press(&mut app, "x");
-    assert_eq!(app.octave, 5, "x goes up an octave");
+    press(&mut app, "a");
+    assert!(loudest(&mut realtime, 4800) > 0.01, "a plays a note");
+    press(&mut app, ">");
+    assert_eq!(app.octave, 5, "> goes up an octave");
     assert!(Arc::ptr_eq(&before, app.song()), "nothing is written");
+    // The page's own keys still work, so a setting changes while it plays.
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Detune");
+    press(&mut app, "=");
+    assert_eq!(machine_value(&app, 0), 0x81);
+    assert_eq!(app.mode, Mode::Keys);
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -6260,4 +6265,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     assert_eq!((corner.symbol(), corner.fg), ("┌", vt_tui::theme::YELLOW));
     press(&mut app, ";");
     assert_eq!(app.mode, Mode::Normal);
+    // Leaving the track page leaves the keyboard too.
+    press(&mut app, "; 3");
+    assert_eq!((app.view, app.mode), (View::Phrase, Mode::Normal));
 }

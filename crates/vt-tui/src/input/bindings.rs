@@ -397,7 +397,7 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     (
         ";",
         Cmd::Audition,
-        "Play the sound from the keyboard, until ; again",
+        "Play the sound on a w s e d f, until ; again",
     ),
 ];
 

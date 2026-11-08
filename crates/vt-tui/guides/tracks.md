@@ -22,7 +22,7 @@ hat pattern.
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
-| `;` | Play the sound from the keyboard, as in Insert, until `;` or `Esc` |
+| `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
 Cut, Res, Pan, the sends and the machine's settings that sweep have a fine part,
 the dim pair of digits after the value, as FX values do in a phrase. `l` stops on

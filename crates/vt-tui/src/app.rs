@@ -216,6 +216,10 @@ pub struct App {
     guard: Option<(Key, Instant)>,
 }
 
+/// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
+/// page's own.
+const KEYS_NOTES: &str = "awsedf";
+
 /// The longest a typed label is: a slot's digit and 4 letters.
 const LONGEST_LABEL: usize = 5;
 impl App {
@@ -531,23 +535,19 @@ impl App {
         }
     }
 
-    /// Play the track's sound from the keyboard, as Insert does, without writing anything. Each
+    /// Play the track's sound from a few keys, `a` `w` `s` `e` `d` `f`, without writing anything,
+    /// while every other key works on the page as it does, so settings change as it plays. Each
     /// key plays a short note, as a terminal can't tell when a key is let go.
     fn keys_key(&mut self, key: Key, now: Instant) {
+        let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
         match key.code {
-            KeyCode::Esc | KeyCode::Char(';') => {
+            KeyCode::Esc | KeyCode::Char(';') if self.pending.is_empty() => {
                 self.mode = Mode::Normal;
                 self.status.clear();
             }
-            KeyCode::Tab => self.run(Cmd::PauseOrResume, key, now),
-            KeyCode::BackTab => self.run(Cmd::PlayFromStart, key, now),
-            KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
-            KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
-            KeyCode::Char('c') => {
-                self.note_velocity = next_note_velocity(self.note_velocity, false);
-            }
-            KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
-            KeyCode::Char(c) if !key.ctrl && !key.alt => {
+            KeyCode::Char('<') if plain => self.octave = self.octave.saturating_sub(1),
+            KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
                     self.handle.send(Command::Preview {
                         track: self.cursor.track,
@@ -556,7 +556,13 @@ impl App {
                     });
                 }
             }
-            _ => {}
+            _ => {
+                self.command_key_normal(key, now);
+                // The keys only play on the track page.
+                if self.mode == Mode::Keys && self.view != View::Track {
+                    self.mode = Mode::Normal;
+                }
+            }
         }
     }
 
@@ -584,6 +590,7 @@ impl App {
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
     pub fn key_scope(&self) -> Mode {
         match (self.mode, self.view) {
+            (Mode::Keys, View::Track) => Mode::Track,
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
