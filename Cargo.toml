@@ -22,3 +22,8 @@ ratatui = "=0.30.2"
 cpal = "=0.18.2"
 clap = { version = "=4.6.7", features = ["derive"] }
 nucleo-matcher = "=0.3.1"
+
+# A release build with symbols, for a profiler.
+[profile.profiling]
+inherits = "release"
+debug = true

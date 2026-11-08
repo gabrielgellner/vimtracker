@@ -1359,6 +1359,14 @@ impl Engine {
         let (return_b, master_track) = (return_a + 1, return_a + 2);
         let wet_only = self.return_soloed();
         self.keys.sounds = return_a;
+        // A note or a preview only starts between runs, and a skipped track doesn't change, so a
+        // track that's silent at the start of this one stays silent through it and is only asked
+        // once. The others are asked each frame, as one can fall silent part way.
+        let mut resting = [false; MAX_TRACKS];
+        for (index, track) in self.tracks.iter().enumerate() {
+            let previewing = index == self.preview_track && self.preview.active();
+            resting[index] = !track.sounding() && !previewing && !track.ringing(self.rate);
+        }
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
             let mut send_a = [0.0_f32; 2];
@@ -1367,7 +1375,10 @@ impl Engine {
                 let previewing = index == self.preview_track && self.preview.active();
                 // The fixed tracks have their turn after this, with what's sent to them.
                 let fixed = (return_a..=master_track).contains(&index);
-                if fixed || (!track.sounding() && !previewing && !track.ringing(self.rate)) {
+                if fixed
+                    || resting[index]
+                    || (!track.sounding() && !previewing && !track.ringing(self.rate))
+                {
                     if !fixed {
                         self.keys.frames[index] = [0.0; 2];
                     }
