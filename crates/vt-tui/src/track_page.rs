@@ -133,19 +133,20 @@ const fn insert_top(slot: usize) -> [Control; FX_COLUMNS + 1] {
     ]
 }
 
-const fn insert_bottom(slot: usize) -> [Control; FX_COLUMNS] {
+const fn insert_bottom(slot: usize) -> [Control; FX_COLUMNS + 1] {
     [
         Control::Insert(slot),
         Control::InsertParam(slot, 1),
         Control::InsertParam(slot, 3),
         Control::InsertParam(slot, 5),
         Control::InsertParam(slot, 7),
+        Control::InsertParam(slot, 9),
     ]
 }
 
 const INSERT_TOPS: [[Control; FX_COLUMNS + 1]; INSERTS] =
     [insert_top(0), insert_top(1), insert_top(2)];
-const INSERT_BOTTOMS: [[Control; FX_COLUMNS]; INSERTS] =
+const INSERT_BOTTOMS: [[Control; FX_COLUMNS + 1]; INSERTS] =
     [insert_bottom(0), insert_bottom(1), insert_bottom(2)];
 /// How many columns of settings a slot has.
 pub const FX_COLUMNS: usize = MAX_PARAMS.div_ceil(2);
