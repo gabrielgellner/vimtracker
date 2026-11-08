@@ -163,6 +163,9 @@ pub struct Track {
     /// The effects after the filters, in order.
     #[serde(default)]
     pub inserts: [Insert; INSERTS],
+    /// The slots switched out, to hear the track without them. They keep running underneath.
+    #[serde(default, skip_serializing_if = "none_bypassed")]
+    pub bypassed: [bool; INSERTS],
     /// Where held `PAN` starts.
     #[serde(default = "centre")]
     pub pan: u8,
@@ -182,6 +185,10 @@ pub struct Track {
     /// The phrases its chains can play, numbered within it.
     #[serde(default)]
     pub phrases: BTreeMap<u32, Arc<Phrase>>,
+}
+
+fn none_bypassed(bypassed: &[bool; INSERTS]) -> bool {
+    !bypassed.contains(&true)
 }
 
 impl Track {
@@ -383,6 +390,7 @@ impl Default for Track {
             low_cut: 0,
             high_cut: open_cutoff(),
             inserts: Default::default(),
+            bypassed: [false; INSERTS],
             pan: centre(),
             send_a: 0,
             send_b: 0,

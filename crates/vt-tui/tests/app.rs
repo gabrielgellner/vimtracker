@@ -6405,3 +6405,23 @@ fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
         "and undo still reaches before it"
     );
 }
+
+#[test]
+fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
+    let (mut app, _realtime) = on_fx_page();
+    let bypassed = |app: &App| app.song().tracks[0].bypassed;
+    press(&mut app, "b");
+    assert!(app.status.contains("nothing"), "{}", app.status);
+    assert_eq!(bypassed(&app), [false; 3]);
+    press(&mut app, "=b");
+    assert_eq!(bypassed(&app), [true, false, false]);
+    assert!(app.status.contains("Bypassed"), "{}", app.status);
+    press(&mut app, "b");
+    assert_eq!(bypassed(&app), [false; 3]);
+    press(&mut app, "bu");
+    assert_eq!(bypassed(&app), [false; 3]);
+    press(&mut app, "b");
+    // Emptying the slot brings it back in, for whatever goes there next.
+    press(&mut app, "x");
+    assert_eq!(bypassed(&app), [false; 3]);
+}

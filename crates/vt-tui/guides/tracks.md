@@ -79,12 +79,17 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 | `{` `}` | Previous or next slot, staying on the same setting |
 | `dd` | Take the effect out of this slot |
 | `p` | Put it in this slot, swapping with what's there |
+| `b` | Bypass this slot, to hear without it, or bring it back |
 
 A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
 next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
 
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.
+
+A bypassed slot goes faint and fades out over a moment, so it doesn't click. It keeps running
+underneath, so a reverb's tail or a compressor carries on as if it had never gone, and it's
+saved with the song. Emptying the slot brings it back in.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. Each mode has its

@@ -684,6 +684,28 @@ impl App {
         self.track_row / SLOT_ROWS
     }
 
+    /// `b`: switch this slot out to hear the track without it, or back in.
+    fn toggle_bypass(&mut self) {
+        let slot = self.fx_slot();
+        let track = self.page_track();
+        let insert = track.inserts[slot];
+        if insert == Insert::Empty {
+            self.status = "There's nothing in this slot to bypass".to_owned();
+            return;
+        }
+        let bypassed = !track.bypassed[slot];
+        self.apply(&Action::SetBypass {
+            track: self.cursor.track,
+            slot,
+            bypassed,
+        });
+        self.status = if bypassed {
+            format!("Bypassed {}: b brings it back", insert.name())
+        } else {
+            format!("{} is back in", insert.name())
+        };
+    }
+
     /// `dd`: take the effect out of this slot, for `p` to put somewhere.
     fn take_insert(&mut self) {
         let slot = self.fx_slot();
@@ -928,6 +950,10 @@ impl App {
             Cmd::RemoveRow | Cmd::Paste if self.track_page != Page::Fx => {
                 self.status = "dd and p move effects, on the FX page".to_owned();
             }
+            Cmd::Bypass if self.track_page != Page::Fx => {
+                self.status = "b bypasses an effect, on the FX page".to_owned();
+            }
+            Cmd::Bypass => self.toggle_bypass(),
             Cmd::RemoveRow => self.take_insert(),
             Cmd::Paste => self.put_insert(),
             Cmd::Increase if self.track_fine => self.adjust_fine(true, times, false),

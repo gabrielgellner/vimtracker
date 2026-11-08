@@ -531,6 +531,7 @@ impl TrackState {
             }
             self.resolved[slot] = resolved;
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
+            self.inserts[slot].bypass(track.bypassed[slot]);
         }
         self.offsets = offsets;
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
