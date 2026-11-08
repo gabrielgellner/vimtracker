@@ -47,10 +47,10 @@ pub enum Pick {
         slot: usize,
         envelope: Envelope,
     },
-    /// A sound from the current kit, for this track, and the name the track takes.
+    /// A sound from the current kit, for this track, and the label the track takes as its name.
     KitSound {
         path: PathBuf,
-        name: String,
+        label: String,
     },
     /// Go to this track.
     Track(usize),

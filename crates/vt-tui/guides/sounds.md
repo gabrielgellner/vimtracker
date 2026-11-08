@@ -278,18 +278,41 @@ A kit fills tracks in one go. It is a file in a kit folder, such as
 
 ```
 (
+    name: "909",
+    source: "Ableton Core Library",
+    category: "Drum Machines",
     sounds: [
-        (label: "BD", path: "../drums/kick.wav"),
-        (label: "CH", path: "../drums/hat.wav"),
-        (path: "../drums/fx.wav"),
+        (label: "BD", name: "Kick 909", path: "../drums/kick.wav",
+         variants: ["../drums/kick 2.wav"]),
+        (label: "CH", name: "Closed Hat", path: "../drums/hat.wav",
+         choke: Some(1)),
+        (label: "OH", name: "Open Hat", path: "../drums/open.wav",
+         choke: Some(1)),
+        (path: "../drums/fx.wav", gain: -3.0, tune: 12),
     ],
 )
 ```
 
 A kit is a list of sounds to choose from, so it adds no tracks of its own. Use one
-with `:kit 909`, then `Space 5` on a track lists its sounds first. Choosing one puts
-it on this track, and its label becomes the track's name. Paths are relative to the
-kit file, or absolute, or start with `~/`.
+with `:kit 909`, then `Space 5` on a track lists its sounds first, by label and
+name. Choosing one puts it on this track, and its label becomes the track's name.
+Paths are relative to the kit file, or absolute, or start with `~/`.
+
+Only `sounds`, and each sound's `path`, are needed. A kit's `name` is its file's
+name if it doesn't say, and a sound's is its file's. `source` and `category` say
+where it came from and what kind it is. For each sound:
+
+| Field | Is |
+|---|---|
+| `label` | The track's name, two characters, such as `BD` |
+| `variants` | Other tones of the sound |
+| `layers` | Velocity layers, soft to hard |
+| `choke` | A choke group, `Some(1)` to `Some(16)`, as open and closed hats share |
+| `gain` | In dB |
+| `tune` | In semitones, up to 48 either way |
+
+Variants, layers, choke groups, gain and tune are kept for now, and don't yet
+change what you hear.
 
 | Command | Does |
 |---|---|
