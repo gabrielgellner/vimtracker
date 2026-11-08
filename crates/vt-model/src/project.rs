@@ -8,7 +8,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::constants::FORMAT_VERSION;
-use crate::sample::{SampleError, load_wav};
+use crate::sample::{SampleError, load_sample};
 use crate::samples::SamplePool;
 use crate::song::Song;
 
@@ -203,7 +203,7 @@ pub fn load_samples(
         if pool.id_of(sample).is_some() {
             continue;
         }
-        match load_wav(&resolve_sample(folder, sample), rate) {
+        match load_sample(&resolve_sample(folder, sample), rate) {
             Ok(data) => {
                 pool.insert(sample, data);
             }

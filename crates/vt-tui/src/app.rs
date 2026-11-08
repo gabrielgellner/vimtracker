@@ -22,7 +22,7 @@ use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::project::{self, ProjectError};
-use vt_model::sample::load_wav;
+use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
@@ -2358,7 +2358,7 @@ impl App {
             }
         };
         let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-        match load_wav(&resolved, self.rate) {
+        match load_sample(&resolved, self.rate) {
             Ok(data) => {
                 let mut pool = SamplePool::clone(&self.samples);
                 pool.insert(&stored, data);

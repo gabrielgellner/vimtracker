@@ -10,5 +10,6 @@ repository.workspace = true
 serde.workspace = true
 ron.workspace = true
 hound.workspace = true
+symphonia.workspace = true
 rubato.workspace = true
 thiserror.workspace = true

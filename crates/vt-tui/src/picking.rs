@@ -7,7 +7,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
-use vt_model::sample::load_wav;
+use vt_model::sample::{is_sample_file, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
@@ -24,8 +24,8 @@ use crate::song_view::COLUMNS_BEFORE_TRACKS;
 const MAX_SAMPLES: usize = 2000;
 const MAX_DEPTH: usize = 4;
 
-/// Find WAV files under a folder, skipping hidden ones, in a stable order.
-pub fn find_wavs(folder: &Path) -> Vec<PathBuf> {
+/// Find WAV, AIFF and FLAC files under a folder, skipping hidden ones, in a stable order.
+pub fn find_samples(folder: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     walk(folder, 0, &mut found);
     found
@@ -49,7 +49,7 @@ fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
             if depth < MAX_DEPTH && !path.ends_with("target") {
                 walk(&path, depth + 1, found);
             }
-        } else if is_wav(&path) {
+        } else if is_sample_file(&path) {
             found.push(path);
         }
     }
@@ -78,11 +78,6 @@ pub fn kits_in(root: &Path) -> Vec<PathBuf> {
 fn is_visible(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
-}
-
-fn is_wav(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("wav"))
 }
 
 /// A kit's name: its file name without the extension.
@@ -265,7 +260,7 @@ impl App {
             let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
             let loaded = stored.and_then(|stored| {
                 let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-                let data = load_wav(&resolved, self.rate).map_err(|e| e.to_string())?;
+                let data = load_sample(&resolved, self.rate).map_err(|e| e.to_string())?;
                 Ok((stored, data))
             });
             let (stored, data) = match loaded {
@@ -444,7 +439,7 @@ impl App {
     fn open_samples(&mut self, roots: &[PathBuf], with_kit: bool) {
         let kit = self.kit.iter().filter(|_| with_kit).map(kit_item);
         let files = roots.iter().flat_map(|root| {
-            find_wavs(root).into_iter().map(move |path| Item {
+            find_samples(root).into_iter().map(move |path| Item {
                 label: path
                     .strip_prefix(root)
                     .unwrap_or(&path)
@@ -455,7 +450,7 @@ impl App {
         });
         let items: Vec<Item> = kit.chain(files).collect();
         if items.is_empty() {
-            self.status = "No WAV files found here: type a path, or a folder of them".to_owned();
+            self.status = "No samples found here: type a path, or a folder of them".to_owned();
             self.command_line = "sample ".to_owned();
             self.mode = Mode::Command;
             return;
