@@ -39,6 +39,6 @@ and its envelopes and LFO shapes on its Mod page:
 ![A track's Mod page, with its envelopes and LFO shapes](images/track-mod.svg)
 
 and on its FX page, a compressor's curve, with a meter beside it of how far it's turning
-down, and the same meter for a limiter:
+down, an EQ's curve, and a limiter's meter:
 
-![A track's FX page, with a compressor's curve and gain reduction](images/track-fx.svg)
+![A track's FX page, with a compressor's curve and gain reduction, an EQ's curve and a limiter's gain reduction](images/track-fx.svg)

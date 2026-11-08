@@ -101,7 +101,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-fx",
         rows: LANE,
-        keys: " 4LLjjjKLimit<Enter>kkkKComp<Enter>li40<Tab>",
+        keys: " 4LLKComp<Enter>li40hjKEQ3<Enter>ljiD0li50jhhKLimit<Enter><Tab>",
         play: 6,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,

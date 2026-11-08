@@ -12,10 +12,11 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::dsp::compressor::curve_db;
+use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
-use vt_model::insert::{Compressor, INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
 use vt_model::sample::SampleData;
 use vt_model::song::{FilterType, Machine, Track};
@@ -27,9 +28,9 @@ use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::track::{
-    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
-    LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH, envelope_being_edited,
-    filter_being_edited, lfo_being_edited, slot_being_edited,
+    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
+    FILTER_CURVE_WIDTH, LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
+    envelope_being_edited, filter_being_edited, lfo_being_edited, slot_being_edited,
 };
 use crate::waveform;
 
@@ -69,6 +70,9 @@ const CURVE_TOP_DB: f32 = 24.0;
 /// How far down a compressor's curve goes, in dB, both in and out, from `0` at the top and right.
 /// It's as far down as the threshold goes.
 const DYNAMICS_RANGE_DB: f32 = 60.0;
+
+/// How far up and down an EQ's curve goes, in dB.
+const EQ_RANGE_DB: f32 = 18.0;
 
 /// Lines of placeholders for an image of this size.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -227,6 +231,22 @@ pub fn compressor_png(
     line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
+/// An EQ's curve as a PNG: what it does at each frequency, from 20 Hz to 20 kHz across it, as the
+/// filter's curve is drawn, and from -18 dB to +18 dB up it, a little more than a band can do.
+pub fn eq_png(
+    settings: Equaliser,
+    rate: u32,
+    color: [u8; 3],
+    columns: usize,
+    rows: usize,
+) -> Vec<u8> {
+    let level = |x: f32| {
+        eq_response_db(settings, rate, 20.0 * 1000_f32.powf(x)) / (2.0 * EQ_RANGE_DB) + 0.5
+    };
+    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+    line_png(&line_columns(level, level(0.0), across, down), down, color)
+}
+
 /// The scope's picture as a PNG, from the rows it covers in each column of dots.
 pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
     line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
@@ -334,16 +354,24 @@ type FilterSettings = (FilterType, u8, u8, u8, u8, u8);
 enum SlotDrawing {
     /// A compressor's curve, from its threshold and ratio.
     Compressor { threshold: u8, ratio: u8 },
+    /// An EQ's curve, from all of its settings.
+    Eq(Equaliser),
 }
 
 impl SlotDrawing {
     /// The drawing for an effect playing with these values, if it has one.
     fn of(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
-        match insert {
+        let playing = live.map_or(insert, |values| {
+            (0..insert.params().len()).fold(insert, |playing, param| {
+                playing.with_value(param, values[param])
+            })
+        });
+        match playing {
             Insert::Compressor(settings) => Some(Self::Compressor {
-                threshold: live.map_or(settings.threshold, |values| values[0]),
-                ratio: live.map_or(settings.ratio, |values| values[1]),
+                threshold: settings.threshold,
+                ratio: settings.ratio,
             }),
+            Insert::Eq(settings) => Some(Self::Eq(settings)),
             _ => None,
         }
     }
@@ -352,11 +380,13 @@ impl SlotDrawing {
     fn width(self) -> usize {
         match self {
             Self::Compressor { .. } => DYNAMICS_CURVE_WIDTH,
+            Self::Eq(_) => EQ_CURVE_WIDTH,
         }
     }
 
-    fn png(self, color: [u8; 3]) -> Vec<u8> {
+    fn png(self, color: [u8; 3], rate: u32) -> Vec<u8> {
         match self {
+            Self::Eq(settings) => eq_png(settings, rate, color, self.width(), SLOT_DRAWING_HEIGHT),
             Self::Compressor { threshold, ratio } => compressor_png(
                 Compressor {
                     threshold,
@@ -566,7 +596,8 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the drawings of the FX page's slots, if the terminal lacks them: a compressor's curve.
+    /// Send the drawings of the FX page's slots, if the terminal lacks them: a compressor's or an
+    /// EQ's curve.
     /// Each is drawn from the settings it shows, so it's sent again only when they change.
     fn sync_fx(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let edited = slot_being_edited(app);
@@ -584,7 +615,7 @@ impl Graphics {
                 _ => {
                     self.retired.extend(held.map(|(_, old)| old));
                     let id = self.new_id();
-                    let png = shown.png(color(active));
+                    let png = shown.png(color(active), app.rate);
                     self.send(out, id, &png, shown.width(), SLOT_DRAWING_HEIGHT)?;
                     self.slots[slot][usize::from(active)] = Some((shown, id));
                     id
@@ -940,6 +971,47 @@ mod tests {
             })
             .collect();
         assert!(top[across - 1] > 0, "a ratio over 1 keeps it off the top");
+    }
+
+    #[test]
+    fn an_eqs_curve_is_the_eqs_own_sum_and_flat_when_its_flat() {
+        let (columns, rows) = (10, 2);
+        let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
+        let rows_lit = |settings: Equaliser| {
+            let (_, pixels) = decode(&eq_png(settings, 48_000, [255; 3], columns, rows));
+            assert_eq!(
+                (pixels[0].len(), pixels.len()),
+                (across * DOT_PIXELS, down * DOT_PIXELS)
+            );
+            (0..across)
+                .map(|column| {
+                    (0..down)
+                        .filter(|row| pixels[row * DOT_PIXELS][column * DOT_PIXELS])
+                        .collect::<Vec<usize>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        let middle = ((down - 1) as f32 * 0.5).round() as usize;
+        assert!(
+            rows_lit(Equaliser::DEFAULT)
+                .iter()
+                .all(|lit| *lit == [middle])
+        );
+        // A boosted low end and a cut middle: each column covers where the EQ's sum puts it.
+        let settings = Equaliser {
+            low: 0xD0,
+            mid: 0x50,
+            ..Equaliser::DEFAULT
+        };
+        for (column, lit) in rows_lit(settings).iter().enumerate() {
+            let x = (column as f32 + 0.5) / across as f32;
+            let db = eq_response_db(settings, 48_000, 20.0 * 1000_f32.powf(x));
+            let row = ((0.5 - db / (2.0 * EQ_RANGE_DB)) * (down - 1) as f32).round() as usize;
+            assert!(
+                lit.iter().any(|lit| lit.abs_diff(row) <= 1),
+                "column {column}: {lit:?} against {row}"
+            );
+        }
     }
 
     #[test]

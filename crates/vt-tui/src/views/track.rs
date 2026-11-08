@@ -41,6 +41,8 @@ pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
 /// slot's drawing takes, which are its two rows of settings.
 pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 4;
 pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
+/// The size of an EQ's curve on the FX page, in characters: all the room left before the meters.
+pub(crate) const EQ_CURVE_WIDTH: usize = 10;
 /// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom.
 const REDUCTION_METER_DB: f32 = 24.0;
 
@@ -658,7 +660,7 @@ fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
 }
 
 /// What follows a row of a slot on the FX page: a compressor's curve and how far it's turning
-/// down, or a limiter's meter alone.
+/// down, a limiter's meter alone, or an EQ's curve.
 fn slot_drawing(app: &App, track: &Track, slot: usize, row: usize) -> Vec<Span<'static>> {
     let style = if slot_being_edited(app) == Some(slot) {
         theme::active()
@@ -680,6 +682,10 @@ fn slot_drawing(app: &App, track: &Track, slot: usize, row: usize) -> Vec<Span<'
             reduction_cell(reduction, row, color),
         ],
         (Insert::Limit(_), _) => vec![reduction_cell(reduction, row, color)],
+        (Insert::Eq(_), Some(id)) => vec![Span::styled(
+            kitty::placeholder_lines(EQ_CURVE_WIDTH, SLOT_DRAWING_HEIGHT)[row].clone(),
+            Style::new().fg(kitty::id_color(id)),
+        )],
         _ => Vec::new(),
     }
 }

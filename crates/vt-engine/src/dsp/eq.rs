@@ -18,6 +18,9 @@ const HIGHEST: f32 = 0.49;
 /// What each band's filter mixes from its outputs, and its coefficients.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Coefficients {
+    /// The filter's tuning and damping, kept for working out its response.
+    g: f32,
+    k: f32,
     a1: f32,
     a2: f32,
     a3: f32,
@@ -56,6 +59,8 @@ impl Coefficients {
         let a1 = 1.0 / (1.0 + g * (g + k));
         let a2 = g * a1;
         Self {
+            g,
+            k,
             a1,
             a2,
             a3: g * a2,
@@ -64,6 +69,72 @@ impl Coefficients {
             m2,
         }
     }
+}
+
+impl Coefficients {
+    /// How loud the band leaves a frequency, as a share of the rate, in power. The filter is the
+    /// analog one through the bilinear transform, so at a frequency it's the analog one at
+    /// `tan(pi f) / g`, mixing its input, band-pass and low-pass: `m0 + (m1 s + m2) / (s^2 + k s + 1)`.
+    fn power(&self, frequency: f32) -> f32 {
+        let w = (PI * frequency.min(HIGHEST)).tan() / self.g;
+        let below = [1.0 - w * w, self.k * w];
+        let above = [
+            self.m0 * below[0] + self.m2,
+            self.m0 * below[1] + self.m1 * w,
+        ];
+        (above[0] * above[0] + above[1] * above[1]) / (below[0] * below[0] + below[1] * below[1])
+    }
+}
+
+/// The bands' coefficients, from each band's frequency and boost and the middle's Q, on the `00`
+/// to `FF` scale.
+fn bands(settings: [f32; 7], rate: u32) -> [Coefficients; 3] {
+    // From 20 Hz to 20 kHz, evenly in pitch, as the cutoff is.
+    let share = |value: f32| 20.0 * 1000_f32.powf(value / 255.0) / rate as f32;
+    let [
+        low_frequency,
+        low,
+        mid_frequency,
+        mid,
+        q,
+        high_frequency,
+        high,
+    ] = settings;
+    [
+        Coefficients::new(Shape::LowShelf, share(low_frequency), band_db(low), SHELF_Q),
+        Coefficients::new(Shape::Bell, share(mid_frequency), band_db(mid), band_q(q)),
+        Coefficients::new(
+            Shape::HighShelf,
+            share(high_frequency),
+            band_db(high),
+            SHELF_Q,
+        ),
+    ]
+}
+
+/// The settings as the bands take them, in their order.
+fn values(settings: Settings) -> [f32; 7] {
+    [
+        settings.low_frequency,
+        settings.low,
+        settings.mid_frequency,
+        settings.mid,
+        settings.mid_q,
+        settings.high_frequency,
+        settings.high,
+    ]
+    .map(f32::from)
+}
+
+/// How loud the EQ leaves a frequency, in dB, once it's settled on its settings: worked out from the
+/// bands' own coefficients, for drawing its curve.
+pub fn response_db(settings: Settings, rate: u32, hertz: f32) -> f32 {
+    let frequency = hertz / rate as f32;
+    let power: f32 = bands(values(settings), rate)
+        .iter()
+        .map(|band| band.power(frequency))
+        .product();
+    10.0 * power.max(1e-12).log10()
 }
 
 /// One band's state, on one side.
@@ -113,17 +184,8 @@ impl Default for ThreeBands {
 impl ThreeBands {
     /// Take what's set now.
     pub fn follow(&mut self, settings: Settings) {
-        let set = [
-            settings.low_frequency,
-            settings.low,
-            settings.mid_frequency,
-            settings.mid,
-            settings.mid_q,
-            settings.high_frequency,
-            settings.high,
-        ];
-        for (smoothed, value) in self.settings.iter_mut().zip(set) {
-            smoothed.target = f32::from(value);
+        for (smoothed, value) in self.settings.iter_mut().zip(values(settings)) {
+            smoothed.target = value;
         }
     }
 
@@ -148,27 +210,7 @@ impl ThreeBands {
             .map(|smoothed| smoothed.next(smoothing));
         if now != self.worked_out {
             self.worked_out = now;
-            // From 20 Hz to 20 kHz, evenly in pitch, as the cutoff is.
-            let share = |value: f32| 20.0 * 1000_f32.powf(value / 255.0) / rate as f32;
-            let [
-                low_frequency,
-                low,
-                mid_frequency,
-                mid,
-                q,
-                high_frequency,
-                high,
-            ] = now;
-            self.coefficients = [
-                Coefficients::new(Shape::LowShelf, share(low_frequency), band_db(low), SHELF_Q),
-                Coefficients::new(Shape::Bell, share(mid_frequency), band_db(mid), band_q(q)),
-                Coefficients::new(
-                    Shape::HighShelf,
-                    share(high_frequency),
-                    band_db(high),
-                    SHELF_Q,
-                ),
-            ];
+            self.coefficients = bands(now, rate);
         }
         let mut out = input;
         for (side, sample) in out.iter_mut().enumerate() {
@@ -241,6 +283,42 @@ mod tests {
             response(high, 15_000.0)
         );
         assert!(response(high, 100.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn the_worked_out_response_is_what_a_sine_through_it_comes_out_at() {
+        let settings = [
+            Settings::DEFAULT,
+            Settings {
+                low: 0xFF,
+                mid: 0x20,
+                mid_q: 0xC0,
+                high: 0x30,
+                ..Settings::DEFAULT
+            },
+            Settings {
+                low_frequency: 0xA0,
+                low: 0x00,
+                mid_frequency: 0x40,
+                mid: 0xE0,
+                mid_q: 0x10,
+                high_frequency: 0x60,
+                high: 0xFF,
+                ..Settings::DEFAULT
+            },
+        ];
+        for settings in settings {
+            for hertz in [30.0, 120.0, 500.0, 1_000.0, 3_000.0, 9_000.0, 18_000.0] {
+                let (worked_out, heard) = (
+                    response_db(settings, RATE, hertz),
+                    response(settings, hertz),
+                );
+                assert!(
+                    (worked_out - heard).abs() < 0.1,
+                    "{settings:?} at {hertz} Hz: {worked_out} against {heard}"
+                );
+            }
+        }
     }
 
     /// The most a band boosts.

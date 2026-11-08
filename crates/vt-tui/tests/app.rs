@@ -7550,3 +7550,57 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     assert_eq!(app.song().tracks[0].bypassed, [false, false, true]);
     assert_eq!(draw(&app)[(98, limit)].symbol(), "▔");
 }
+
+#[test]
+fn an_eqs_curve_follows_its_settings_and_the_cursor() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=10,r=2,")
+            .count()
+    };
+    press(&mut app, " 4LLK");
+    press(&mut app, "EQ3");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let picked = app.slot_images[0].unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+
+    // Away from the slot it's dim, once, and coming back sends nothing.
+    press(&mut app, "jj");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let plain = app.slot_images[0].unwrap();
+    assert_ne!(plain, picked);
+    press(&mut app, "kk");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.slot_images[0], Some(picked));
+
+    // Any of its settings draws it again.
+    press(&mut app, "l=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.slot_images[0], Some(picked));
+
+    let buffer = {
+        let backend = ratatui::backend::TestBackend::new(120, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let row = (0..24)
+        .find(|y| {
+            (0..120)
+                .map(|x| buffer[(x, *y)].symbol())
+                .collect::<String>()
+                .contains("EQ3")
+        })
+        .unwrap();
+    assert_eq!(buffer[(98, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(107, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+}
