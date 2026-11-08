@@ -8,9 +8,6 @@ use clap::{Parser, Subcommand};
 struct Cli {
     /// A project folder to open. It is created on the first save if it doesn't exist.
     project: Option<PathBuf>,
-    /// Draw in Braille, instead of with images where the terminal can show them.
-    #[arg(long)]
-    no_graphics: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -18,7 +15,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Print the key events your terminal delivers, with the kitty keyboard protocol on as the
-    /// program has it, and whether the terminal offers it.
+    /// program has it, and whether the terminal offers it and the kitty graphics protocol.
     ProbeKeys,
     /// Render a saved project to a WAV file.
     Render {
@@ -83,7 +80,7 @@ fn main() -> std::process::ExitCode {
             stems,
         })
         .map_err(|e| e.to_string()),
-        None => vt_tui::run::run(cli.project, cli.no_graphics).map_err(|e| e.to_string()),
+        None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),
     };
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,

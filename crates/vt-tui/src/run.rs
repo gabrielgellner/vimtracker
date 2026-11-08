@@ -26,7 +26,7 @@ use crate::app::App;
 use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
-use crate::kitty::{self, Graphics, Support};
+use crate::kitty::{self, Graphics};
 use crate::theme;
 use crate::views;
 
@@ -49,6 +49,12 @@ pub enum RunError {
          and `probe-keys` run anywhere"
     )]
     NoKeyboardProtocol,
+    #[error(
+        "this terminal doesn't draw images with the kitty graphics protocol, which shows the \
+         envelopes and the filter's curve. vimtracker runs in kitty and Ghostty, and not inside \
+         tmux. `render`, `bench` and `probe-keys` run anywhere"
+    )]
+    NoGraphicsProtocol,
 }
 
 /// What `vimtracker render` was asked for.
@@ -167,10 +173,13 @@ pub fn bench(folder: &Path, rate: u32, block: usize, seconds: u32) -> Result<(),
 }
 
 /// Open a project, or start an unsaved one, and run until the user quits.
-pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
+pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     // Before anything opens, so a terminal that can't run it is told so straight away.
     if !terminal::supports_keyboard_enhancement().unwrap_or(false) {
         return Err(RunError::NoKeyboardProtocol);
+    }
+    if !kitty::supports_graphics()? {
+        return Err(RunError::NoGraphicsProtocol);
     }
     // What this machine played through last, or the system's own choice if that won't open.
     let choice = AudioChoice::load();
@@ -208,15 +217,7 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     };
     app.status = status;
     app.offer_restore();
-    let support = if no_graphics {
-        Support::NoTerminal
-    } else {
-        kitty::support()
-    };
-    if support == Support::NoPassthrough && app.status.is_empty() {
-        app.status = kitty::PASSTHROUGH_HINT.to_owned();
-    }
-    let mut graphics = (support == Support::Images).then(Graphics::new);
+    let mut graphics = Graphics::new();
 
     let mut terminal = ratatui::init();
     // Every key comes as a press, a repeat or a release from here to quitting. The terminal also
@@ -236,21 +237,13 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
         );
         restore(info);
     }));
-    let result = main_loop(
-        &mut terminal,
-        &mut app,
-        &stats,
-        graphics.as_mut(),
-        &mut stream,
-    );
+    let result = main_loop(&mut terminal, &mut app, &stats, &mut graphics, &mut stream);
     execute!(
         std::io::stdout(),
         PopKeyboardEnhancementFlags,
         DisableFocusChange
     )?;
-    if let Some(graphics) = &graphics {
-        graphics.forget(&mut std::io::stdout())?;
-    }
+    graphics.forget(&mut std::io::stdout())?;
     ratatui::restore();
     result
 }
@@ -259,7 +252,7 @@ fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
     stats: &Arc<AudioStats>,
-    mut graphics: Option<&mut Graphics>,
+    graphics: &mut Graphics,
     stream: &mut Option<cpal::Stream>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
@@ -294,9 +287,7 @@ fn main_loop(
         app.cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
         app.autosave_if_due(Instant::now());
-        if let Some(graphics) = graphics.as_deref_mut() {
-            graphics.sync(app, &mut std::io::stdout())?;
-        }
+        graphics.sync(app, &mut std::io::stdout())?;
         terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {

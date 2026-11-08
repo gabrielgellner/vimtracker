@@ -1,7 +1,7 @@
 //! Make the manual's screenshots: `just screenshots`, or with a folder to write them to.
 //!
 //! Each shot builds a song, presses keys as a player would, plays a few steps if it needs the
-//! playhead, and writes the screen as an SVG.
+//! playhead, and writes the screen as an SVG, with the images the terminal would be sent in it.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,8 +17,9 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
+use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
-use vt_tui::screenshot::to_svg;
+use vt_tui::screenshot::{sent_images, to_svg};
 
 const RATE: u32 = 48_000;
 /// Frames in one step at 120 BPM.
@@ -77,6 +78,18 @@ const SHOTS: &[Shot] = &[
         rows: LANE,
         keys: "lll:lane 3<Enter><Tab>",
         play: 21,
+    },
+    Shot {
+        name: "track-sound",
+        rows: GATES,
+        keys: " 4jjji60<Enter>ji90<Enter>k",
+        play: 0,
+    },
+    Shot {
+        name: "track-mod",
+        rows: GATES,
+        keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
+        play: 0,
     },
 ];
 
@@ -138,10 +151,15 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let mut app = App::new(song, None, samples, handle, RATE);
     press(&mut app, shot.keys);
     play(&mut app, &mut realtime, shot.play);
+    let mut sent = Vec::new();
+    Graphics::new().sync(&mut app, &mut sent)?;
     let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, HEIGHT));
     let Ok(_) = terminal.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()));
     let path = folder.join(format!("{}.svg", shot.name));
-    std::fs::write(&path, to_svg(terminal.backend().buffer()))?;
+    std::fs::write(
+        &path,
+        to_svg(terminal.backend().buffer(), &sent_images(&sent)),
+    )?;
     Ok(path)
 }
 

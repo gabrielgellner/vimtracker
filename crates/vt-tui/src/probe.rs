@@ -1,9 +1,9 @@
 //! `vimtracker probe-keys`: print the key events the terminal really delivers.
 //!
 //! It asks for the kitty keyboard protocol as the program does, so presses, repeats and releases
-//! show, and says whether the terminal offers it. It runs in any terminal, so it can show why the
-//! program won't start in one. Times show how a held key repeats, and each event shows the key the
-//! program reads it as.
+//! show, and says whether the terminal offers it and the kitty graphics protocol. It runs in any
+//! terminal, so it can show why the program won't start in one. Times show how a held key repeats,
+//! and each event shows the key the program reads it as.
 
 use std::io::{self, Write};
 use std::time::Instant;
@@ -35,17 +35,27 @@ impl Drop for RawMode {
 
 /// Print each key event until `Ctrl-C`.
 pub fn run() -> io::Result<()> {
+    // Asked first, as it sets the terminal's mode itself and puts it back.
+    let graphics = crate::kitty::supports_graphics().unwrap_or(false);
     let _raw = RawMode::enter()?;
     let mut out = io::stdout();
     let supported = terminal::supports_keyboard_enhancement().unwrap_or(false);
-    write!(
-        out,
-        "The kitty keyboard protocol is {}.\r\n",
+    let said = |supported: bool| {
         if supported {
             "supported"
         } else {
             "not supported here, so vimtracker won't start"
         }
+    };
+    write!(
+        out,
+        "The kitty keyboard protocol is {}.\r\n",
+        said(supported)
+    )?;
+    write!(
+        out,
+        "The kitty graphics protocol is {}.\r\n",
+        said(graphics)
     )?;
     write!(out, "Press keys to see their events. Ctrl-C exits.\r\n")?;
     let mut last = Instant::now();

@@ -35,8 +35,9 @@ and won't start in other terminals or inside tmux. It needs the kitty keyboard p
 says when a key is held and let go. The Option keys, such as `Option-1`, need kitty's
 `macos_option_as_alt yes` or Ghostty's `macos-option-as-alt = true` in your config.
 
-In kitty, small drawings such as envelopes are images. Elsewhere they're Braille, as with
-`--no-graphics`.
+It also needs the kitty graphics protocol, as small drawings such as envelopes and the filter's
+curve are images. `vimtracker probe-keys` says whether a terminal has both, and `render`, `bench`
+and `probe-keys` run in any terminal.
 
 ## Quick start
 
