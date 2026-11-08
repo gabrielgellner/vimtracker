@@ -6,7 +6,7 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Insert, Limiter, Phaser,
-    Plate, Reverb, Tape,
+    Pitch, Plate, Reverb, Tape,
 };
 use vt_model::song::level_gain;
 
@@ -82,7 +82,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Phaser(_), Insert::Phaser(_))
         | (Insert::Flanger(_), Insert::Flanger(_))
         | (Insert::Tape(_), Insert::Tape(_))
-        | (Insert::Plate(_), Insert::Plate(_)) => true,
+        | (Insert::Plate(_), Insert::Plate(_))
+        | (Insert::Pitch(_), Insert::Pitch(_)) => true,
         _ => false,
     }
 }
@@ -198,7 +199,8 @@ impl InsertState {
             | Insert::Phaser(Phaser { mix, gain, .. })
             | Insert::Flanger(Flanger { mix, gain, .. })
             | Insert::Tape(Tape { mix, gain, .. })
-            | Insert::Plate(Plate { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Pitch(Pitch { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -363,7 +365,8 @@ impl InsertState {
             | Insert::Chorus(_)
             | Insert::Flanger(_)
             | Insert::Tape(_)
-            | Insert::Plate(_) => (None, 0),
+            | Insert::Plate(_)
+            | Insert::Pitch(_) => (None, 0),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);

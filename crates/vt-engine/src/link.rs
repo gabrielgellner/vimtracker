@@ -189,6 +189,9 @@ impl Handle {
         for _ in self.held.plate..needed.plate {
             self.unsent.push(Memory::plate(self.rate));
         }
+        for _ in self.held.pitch..needed.pitch {
+            self.unsent.push(Memory::pitch(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -197,6 +200,7 @@ impl Handle {
             flanger: self.held.flanger.saturating_sub(needed.flanger),
             tape: self.held.tape.saturating_sub(needed.tape),
             plate: self.held.plate.saturating_sub(needed.plate),
+            pitch: self.held.pitch.saturating_sub(needed.pitch),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -358,6 +362,8 @@ mod tests {
     const TAPE: Insert = Insert::Tape(vt_model::insert::Tape::DEFAULT);
     /// A plate, which takes its tank's lines from the pool.
     const PLATE: Insert = Insert::Plate(vt_model::insert::Plate::DEFAULT);
+    /// A pitch shifter, which takes its short lines from the pool.
+    const PITCH: Insert = Insert::Pitch(vt_model::insert::Pitch::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -483,8 +489,10 @@ mod tests {
                 next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER];
             } else if round % 8 == 3 {
                 next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE];
-            } else {
+            } else if round % 16 == 7 {
                 next.tracks[round % 8].inserts = [PLATE, TAPE, PLATE];
+            } else {
+                next.tracks[round % 8].inserts = [PITCH, PLATE, PITCH];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -497,7 +505,7 @@ mod tests {
     #[test]
     fn long_buffers_go_ahead_of_their_version_and_come_back_to_be_freed() {
         let pool = samples();
-        let plain = song(3, 16);
+        let plain = song(4, 16);
         let needed = MemoryCount::of(&plain);
         let engine = Engine::new(48_000, published(plain.clone(), &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -508,6 +516,7 @@ mod tests {
         more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE];
         more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty];
+        more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -519,6 +528,7 @@ mod tests {
                 flanger: needed.flanger + 1,
                 tape: needed.tape + 1,
                 plate: needed.plate + 1,
+                pitch: needed.pitch + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -533,7 +543,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 7);
+        assert_eq!(freed, 8);
     }
 
     #[test]

@@ -23,6 +23,7 @@ pub mod oversampler;
 pub mod particle;
 pub mod phase_distortion;
 pub mod phaser;
+pub mod pitch_shifter;
 mod plaits_parts;
 pub mod plate;
 pub mod reverb;

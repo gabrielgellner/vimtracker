@@ -909,3 +909,49 @@ fn a_plate_rings_on_after_a_short_hit_wide_and_dying_away() {
         "it spreads"
     );
 }
+
+#[test]
+fn a_pitch_shifter_up_twelve_plays_an_octave_up_and_down_twelve_an_octave_down() {
+    use vt_model::insert::{MOST_SHIFT, Pitch, grain_ms};
+    // A tone that fits its window a whole number of times, so the grains jump back by whole cycles
+    // and its frequency can be counted.
+    let window = grain_ms(f32::from(Pitch::DEFAULT.size)) / 1000.0;
+    let tone = 22.0 / window;
+    let played = |shift: Option<i8>| {
+        let mut song = song(&["C-4 -- --- --- ---"]);
+        if let Some(semitones) = shift {
+            song.tracks[0].inserts[0] = Insert::Pitch(Pitch {
+                shift: (MOST_SHIFT as i8 + semitones) as u8,
+                ..Pitch::DEFAULT
+            });
+        }
+        let sine = (0..RATE as usize * 2).map(|frame| {
+            let t = frame as f32 / RATE as f32;
+            [(t * tone * std::f32::consts::TAU).sin() * 0.5; 2]
+        });
+        render(song, pool(sine.collect()), STEP * 8)
+    };
+    // How often it goes from a little below zero to a little above, in hertz, once it's going.
+    let hertz = |out: &[[f32; 2]]| {
+        let (mut below, mut ups) = (false, 0);
+        for frame in &out[STEP..] {
+            if frame[0] < -0.05 {
+                below = true;
+            } else if frame[0] > 0.05 && below {
+                below = false;
+                ups += 1;
+            }
+        }
+        ups as f32 * RATE as f32 / (out.len() - STEP) as f32
+    };
+    let dry = hertz(&played(None));
+    let (unshifted, up, down) = (
+        hertz(&played(Some(0))),
+        hertz(&played(Some(12))),
+        hertz(&played(Some(-12))),
+    );
+    assert!((unshifted / dry - 1.0).abs() < 0.01, "{dry} {unshifted}");
+    assert!((up / dry - 2.0).abs() < 0.02, "{dry} {up}");
+    assert!((down / dry - 0.5).abs() < 0.005, "{dry} {down}");
+    assert!(played(Some(12)).iter().flatten().all(|s| s.is_finite()));
+}
