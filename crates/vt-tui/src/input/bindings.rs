@@ -223,19 +223,19 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
 /// One beat, as a slide.
 const BEAT: isize = BEAT_STEPS as isize;
 
-/// Option with the movement keys changes the value instead, like holding Edit on the M8, so the
+/// Cmd with the movement keys changes the value instead, like holding Edit on the M8, so the
 /// hand that moves can nudge without leaving the home row. Left and right are a small step, up
 /// and down a large one.
 const ADJUST: &[(&str, Cmd, &str)] = &[
-    ("M-l", Cmd::Increase, "Increase the value, as ="),
-    ("M-h", Cmd::Decrease, "Decrease the value, as -"),
+    ("D-l", Cmd::Increase, "Increase the value, as ="),
+    ("D-h", Cmd::Decrease, "Decrease the value, as -"),
     (
-        "M-k",
+        "D-k",
         Cmd::IncreaseLarge,
         "Increase the value, a large step, as +",
     ),
     (
-        "M-j",
+        "D-j",
         Cmd::DecreaseLarge,
         "Decrease the value, a large step, as _",
     ),
@@ -244,22 +244,22 @@ const ADJUST: &[(&str, Cmd, &str)] = &[
 /// [`ADJUST`] for a selection.
 const ADJUST_SELECTION: &[(&str, Cmd, &str)] = &[
     (
-        "M-l",
+        "D-l",
         Cmd::Increase,
         "Increase the selection's values, as =",
     ),
     (
-        "M-h",
+        "D-h",
         Cmd::Decrease,
         "Decrease the selection's values, as -",
     ),
     (
-        "M-k",
+        "D-k",
         Cmd::IncreaseLarge,
         "Increase the selection's values, a large step, as +",
     ),
     (
-        "M-j",
+        "D-j",
         Cmd::DecreaseLarge,
         "Decrease the selection's values, a large step, as _",
     ),
