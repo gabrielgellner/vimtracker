@@ -502,7 +502,7 @@ impl Engine {
         old
     }
 
-    /// Note which tracks a compressor or Warps hears. One that's muted keeps playing, silently, so
+    /// Note which tracks a compressor, Warps or a low-pass gate hears. One that's muted keeps playing, silently, so
     /// a muted kick can still duck a bass, and one that no longer is heard stops.
     fn find_listened(&mut self) {
         let song = &self.current.song;
@@ -512,6 +512,7 @@ impl Engine {
             let heard = match insert {
                 Insert::Compressor(compressor) => compressor.source_track(sounds),
                 Insert::Warps(warps) => warps.source_track(sounds),
+                Insert::Lpg(gate) => gate.source_track(sounds),
                 _ => None,
             };
             if let Some(track) = heard

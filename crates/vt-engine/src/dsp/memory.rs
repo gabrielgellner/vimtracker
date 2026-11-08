@@ -214,6 +214,7 @@ impl MemoryCount {
                 | Insert::Distort(_)
                 | Insert::Eq(_)
                 | Insert::Compressor(_)
+                | Insert::Lpg(_)
                 | Insert::Phaser(_) => {}
             }
         }
@@ -331,6 +332,7 @@ impl MemoryPool {
             | Insert::Distort(_)
             | Insert::Eq(_)
             | Insert::Compressor(_)
+            | Insert::Lpg(_)
             | Insert::Phaser(_) => {
                 return None;
             }

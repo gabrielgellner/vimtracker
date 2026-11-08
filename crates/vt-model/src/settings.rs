@@ -6,11 +6,11 @@
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS,
-    FLANGER_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS,
-    PLATE_PARAMS, Param, REVERB_PARAMS, Setting, TAPE_PARAMS, Triggering, WARPS_PARAMS,
-    algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density,
-    grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms, plate_size, ratio,
-    release_ms, tape_drive_db, threshold_db,
+    FLANGER_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS,
+    PITCH_PARAMS, PLATE_PARAMS, Param, REVERB_PARAMS, Setting, TAPE_PARAMS, Triggering,
+    WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms,
+    grain_density, grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms,
+    plate_size, ratio, release_ms, tape_drive_db, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -531,10 +531,11 @@ pub enum Effect {
     Pitch,
     Grains,
     Warps,
+    Lpg,
 }
 
 impl Effect {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -549,6 +550,7 @@ impl Effect {
         Self::Pitch,
         Self::Grains,
         Self::Warps,
+        Self::Lpg,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -569,6 +571,7 @@ impl Effect {
             Self::Pitch => &PITCH_PARAMS,
             Self::Grains => &GRAINS_PARAMS,
             Self::Warps => &WARPS_PARAMS,
+            Self::Lpg => &LPG_PARAMS,
         }
     }
 
@@ -588,6 +591,7 @@ impl Effect {
             Self::Pitch => "pitch",
             Self::Grains => "grains",
             Self::Warps => "warps",
+            Self::Lpg => "lpg",
         }
     }
 
@@ -607,6 +611,7 @@ impl Effect {
             Self::Pitch => "Pitch",
             Self::Grains => "Grains",
             Self::Warps => "Warps",
+            Self::Lpg => "LPG",
         }
     }
 
@@ -628,6 +633,7 @@ impl Effect {
             Insert::Pitch(_) => Some(Self::Pitch),
             Insert::Grains(_) => Some(Self::Grains),
             Insert::Warps(_) => Some(Self::Warps),
+            Insert::Lpg(_) => Some(Self::Lpg),
         }
     }
 }
@@ -839,6 +845,22 @@ const fn effect_start(effect: Effect) -> usize {
                 + PITCH_PARAMS.len()
                 + GRAINS_PARAMS.len()
         }
+        Effect::Lpg => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+        }
     }
 }
 
@@ -858,7 +880,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + PLATE_PARAMS.len()
     + PITCH_PARAMS.len()
     + GRAINS_PARAMS.len()
-    + WARPS_PARAMS.len();
+    + WARPS_PARAMS.len()
+    + LPG_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.
