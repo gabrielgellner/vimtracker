@@ -59,7 +59,6 @@ const DUBLY_EASE: f32 = 2.408_24;
 
 /// How many slew limits the bias has in a row, each looser than the next by the golden ratio.
 const BIAS_STAGES: usize = 9;
-const GOLDEN_RATIO: f32 = 1.618_034;
 /// How much each slew limit lets the last sample fall back toward nothing.
 const BIAS_LEAK: f32 = 0.975;
 /// The most `Bias` overbiases at `FF`. At ToTape's full overbias the slews close and it falls
@@ -582,11 +581,12 @@ impl Tape {
         } else {
             1.0 / scale
         };
+        let golden_ratio = (1.0 + 5_f32.sqrt()) * 0.5;
         let mut limits = [0.0; BIAS_STAGES];
         // The last stage is the tightest.
         for stage in limits.iter_mut().rev() {
             *stage = limit;
-            limit *= GOLDEN_RATIO;
+            limit *= golden_ratio;
         }
         Frame {
             encode: tilt * 2.0,
