@@ -11,11 +11,12 @@ use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
 use crate::dsp::flanger::Flanger;
 use crate::dsp::limiter::Limiter;
+use crate::dsp::plate::Plate;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::tape::Tape;
 use crate::engine::sample_of_tick;
 
-/// How long a reverb has to stay below `SILENT` to be done, in seconds. It's longer than the way
+/// How long a reverb or plate has to stay below `SILENT` to be done, in seconds. It's longer than the way
 /// round its loops and its longest pre-delay, so nothing louder is still on its way.
 const REVERB_QUIET_SECONDS: f32 = 1.0;
 /// How quiet an effect has to be to be done, about -100 dB.
@@ -30,6 +31,7 @@ pub enum Memory {
     Limit(Box<Limiter>),
     Flanger(Box<Flanger>),
     Tape(Box<Tape>),
+    Plate(Box<Plate>),
 }
 
 impl Memory {
@@ -65,6 +67,11 @@ impl Memory {
         Self::Tape(Box::new(Tape::new(rate)))
     }
 
+    /// A plate's, long enough for the biggest.
+    pub fn plate(rate: u32) -> Self {
+        Self::Plate(Box::new(Plate::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -75,6 +82,7 @@ impl Memory {
             Self::Limit(limiter) => limiter.process_alone(input),
             Self::Flanger(flanger) => flanger.process(input),
             Self::Tape(tape) => tape.process(input),
+            Self::Plate(plate) => plate.process(input),
         }
     }
 
@@ -82,7 +90,7 @@ impl Memory {
     pub fn quiet_frames(&self, rate: u32) -> u32 {
         match self {
             Self::Delay(delay) => delay.frames() as u32,
-            Self::Reverb(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
+            Self::Reverb(_) | Self::Plate(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,
             Self::Flanger(flanger) => flanger.frames() as u32,
@@ -104,6 +112,7 @@ impl Memory {
                 flanger.follow(settings, frames_per_tick);
             }
             (Self::Tape(tape), Insert::Tape(settings)) => tape.follow(settings),
+            (Self::Plate(plate), Insert::Plate(settings)) => plate.follow(settings, frames),
             _ => {}
         }
     }
@@ -117,6 +126,7 @@ impl Memory {
             Self::Limit(limiter) => limiter.settle(),
             Self::Flanger(flanger) => flanger.settle(),
             Self::Tape(tape) => tape.settle(),
+            Self::Plate(plate) => plate.settle(),
         }
     }
 
@@ -128,6 +138,7 @@ impl Memory {
             Self::Limit(limiter) => limiter.clear(),
             Self::Flanger(flanger) => flanger.clear(),
             Self::Tape(tape) => tape.clear(),
+            Self::Plate(plate) => plate.clear(),
         }
     }
 }
@@ -141,6 +152,7 @@ pub struct MemoryCount {
     pub limit: u16,
     pub flanger: u16,
     pub tape: u16,
+    pub plate: u16,
 }
 
 impl MemoryCount {
@@ -155,6 +167,7 @@ impl MemoryCount {
                 Insert::Limit(_) => count.limit += 1,
                 Insert::Flanger(_) => count.flanger += 1,
                 Insert::Tape(_) => count.tape += 1,
+                Insert::Plate(_) => count.plate += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -175,6 +188,7 @@ pub struct MemoryPool {
     limiters: Vec<Memory>,
     flangers: Vec<Memory>,
     tapes: Vec<Memory>,
+    plates: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -192,6 +206,7 @@ impl MemoryPool {
             limiters: Vec::with_capacity(POOL_CAPACITY),
             flangers: Vec::with_capacity(POOL_CAPACITY),
             tapes: Vec::with_capacity(POOL_CAPACITY),
+            plates: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -213,6 +228,9 @@ impl MemoryPool {
         for _ in 0..needed.tape {
             pool.put(Memory::tape(rate));
         }
+        for _ in 0..needed.plate {
+            pool.put(Memory::plate(rate));
+        }
         pool
     }
 
@@ -225,6 +243,7 @@ impl MemoryPool {
             Memory::Limit(_) => &mut self.limiters,
             Memory::Flanger(_) => &mut self.flangers,
             Memory::Tape(_) => &mut self.tapes,
+            Memory::Plate(_) => &mut self.plates,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -244,6 +263,7 @@ impl MemoryPool {
             Insert::Limit(_) => &mut self.limiters,
             Insert::Flanger(_) => &mut self.flangers,
             Insert::Tape(_) => &mut self.tapes,
+            Insert::Plate(_) => &mut self.plates,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -265,6 +285,7 @@ impl MemoryPool {
         self.owed.limit += count.limit;
         self.owed.flanger += count.flanger;
         self.owed.tape += count.tape;
+        self.owed.plate += count.plate;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -305,6 +326,12 @@ impl MemoryPool {
             self.owed.tape -= 1;
             return Some(memory);
         }
+        if self.owed.plate > 0
+            && let Some(memory) = self.plates.pop()
+        {
+            self.owed.plate -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -316,6 +343,7 @@ impl MemoryPool {
             + self.limiters.len()
             + self.flangers.len()
             + self.tapes.len()
+            + self.plates.len()
     }
 }
 
