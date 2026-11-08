@@ -9,7 +9,7 @@ use vt_model::selection::{
     Block, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
 };
 use vt_model::shape::{Shape, ShapeColumn};
-use vt_model::step::{Note, Step};
+use vt_model::step::{FxCommand, Note, Step};
 
 use crate::app::{App, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
@@ -481,6 +481,12 @@ impl App {
     }
 
     fn increment(&mut self, sign: i32, kind: Shift) {
+        // On a value's fine digits, the same keys move its fine part.
+        let kind = match (self.cursor.field, kind) {
+            (Field::FxFine(_), Shift::Large) => Shift::FineLarge,
+            (Field::FxFine(_), Shift::Increment | Shift::Chromatic) => Shift::Fine,
+            _ => kind,
+        };
         let amount = self.count.take().unwrap_or(1) as i32;
         let by = sign.saturating_mul(amount);
         if self.mode.is_visual() {
@@ -521,6 +527,15 @@ impl App {
             self.status = "Type an FX command first".to_owned();
             return;
         }
+        if let Field::FxFine(slot) = self.cursor.field
+            && !self
+                .current_slot(slot)
+                .and_then(|s| s.command)
+                .is_some_and(FxCommand::has_fine)
+        {
+            self.status = "Only a setting that sweeps has a fine part".to_owned();
+            return;
+        }
         self.entry = Entry::default();
         self.replacing = Some(self.cursor.field);
         self.mode = Mode::Replace;
@@ -541,12 +556,17 @@ impl App {
             match field {
                 Field::Velocity => matches!(step.note, Note::On(_)),
                 Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
+                Field::FxFine(slot) => step
+                    .fx
+                    .get(slot)
+                    .is_some_and(|s| s.command.is_some_and(FxCommand::has_fine)),
                 Field::Note | Field::Gate | Field::FxCommand(_) => true,
             }
         };
         let Some(first) = (selection.range.first..=selection.range.last).find(takes) else {
             self.status = match field {
                 Field::FxValue(_) => "Type an FX command first",
+                Field::FxFine(_) => "Only a setting that sweeps has a fine part",
                 _ => "There are no notes in the selection",
             }
             .to_owned();
@@ -568,6 +588,14 @@ impl App {
         self.count = None;
         let command = match self.cursor.field {
             Field::FxValue(slot) => self.current_slot(slot).and_then(|s| s.command),
+            // The fine part goes back to 00 and is typed again.
+            Field::FxFine(_) => {
+                self.do_change(&Change::ClearField);
+                self.entry = Entry::default();
+                self.last_entry = None;
+                self.mode = Mode::Insert;
+                return;
+            }
             _ => None,
         };
         self.do_change(&Change::ClearField);
@@ -618,6 +646,7 @@ impl App {
             Field::Gate => Fill::Gate(value.gate),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].coarse()),
+            Field::FxFine(slot) => Fill::SlotFine(slot, value.fx[slot].fine()),
         };
         self.edit_across(range, tracks, |track, phrase, range| Action::Fill {
             track,
@@ -661,6 +690,14 @@ impl App {
             Change::CycleMark { cover } => {
                 let (range, scope) = self.resolve_cover(*cover);
                 self.cycle_mark(range, scope, self.span_of(*cover));
+            }
+            // `x` on a value's fine digits sets them back to 00, and keeps the value.
+            Change::ClearField
+                if !self.mode.is_visual() && matches!(self.cursor.field, Field::FxFine(_)) =>
+            {
+                if let Field::FxFine(slot) = self.cursor.field {
+                    self.set_fine(slot, 0);
+                }
             }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
@@ -721,12 +758,14 @@ impl App {
                         step,
                         value: FieldValue::Gate(value.gate),
                     },
-                    Field::FxCommand(slot) | Field::FxValue(slot) => Action::SetField {
-                        track: self.cursor.track,
-                        phrase,
-                        step,
-                        value: FieldValue::Slot(*slot, value.fx[*slot]),
-                    },
+                    Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                        Action::SetField {
+                            track: self.cursor.track,
+                            phrase,
+                            step,
+                            value: FieldValue::Slot(*slot, value.fx[*slot]),
+                        }
+                    }
                 };
                 self.apply(&action);
             }
@@ -929,18 +968,42 @@ impl App {
     /// then each FX slot, as the headings over the grid name them.
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
-        let last = 2 + slots * 2;
+        let last = 2 + slots * 3;
         let order = self.cursor.field.order();
         let group = self.cursor.field.group();
+        // A value with no fine part has no fine digits to land on, so they're passed over.
+        let landable = |field: Field| match field {
+            Field::FxFine(slot) => self
+                .current_slot(slot)
+                .and_then(|cell| cell.command)
+                .is_some_and(FxCommand::has_fine),
+            _ => true,
+        };
+        let step = |from: usize, forward: bool| {
+            let next = if forward {
+                (from + 1).min(last)
+            } else {
+                from.saturating_sub(1)
+            };
+            let field = Field::from_order(next);
+            if landable(field) {
+                field
+            } else if forward && next < last {
+                Field::from_order(next + 1)
+            } else {
+                Field::from_order(next.saturating_sub(1))
+            }
+        };
         self.cursor.field = match motion {
-            Motion::Right => Field::from_order((order + 1).min(last)),
-            Motion::Left => Field::from_order(order.saturating_sub(1)),
+            Motion::Right => step(order, true),
+            Motion::Left => step(order, false),
             Motion::NextGroup if slots == 0 => self.cursor.field,
             Motion::NextGroup => {
                 Field::of_group(group.max(FX_GROUP - 1).saturating_add(1).min(2 + slots))
             }
             Motion::RowStart => Field::Note,
-            Motion::RowEnd => Field::from_order(last),
+            Motion::RowEnd if landable(Field::from_order(last)) => Field::from_order(last),
+            Motion::RowEnd => Field::from_order(last - 1),
             _ if group > FX_GROUP => Field::of_group(group - 1),
             _ => Field::Note,
         };

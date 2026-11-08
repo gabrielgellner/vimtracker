@@ -3266,8 +3266,10 @@ fn the_status_line_names_the_setting_a_cell_locks() {
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Filter: Cut", "on its value too");
     press(&mut app, "l");
+    assert_eq!(column_name(&app), "Filter: Cut", "and its fine digits");
+    press(&mut app, "l");
     assert_eq!(column_name(&app), "String: Decay, not on this track");
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     assert_eq!(column_name(&app), vt_model::step::FxCommand::Del.meaning());
 }
 
@@ -3278,9 +3280,9 @@ fn the_status_line_shows_a_value_in_its_units() {
     press(&mut app, "lll");
     // `cut:40` is a quarter of the way up ten octaves from 20 Hz.
     assert_eq!(value_shown(&app).as_deref(), Some("113 Hz"));
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     assert_eq!(value_shown(&app), None, "not on this track");
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     assert_eq!(value_shown(&app), None, "an event has no units");
     press(&mut app, " 4");
     let mut rows = Vec::new();

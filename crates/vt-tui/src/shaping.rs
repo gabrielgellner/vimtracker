@@ -152,7 +152,7 @@ impl App {
                     Err("There are no notes in the selection")
                 }
             }
-            Field::FxCommand(slot) | Field::FxValue(slot) => rows()
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => rows()
                 .find_map(|step| step.fx.get(slot).and_then(|fx| fx.command))
                 .map(|command| ShapeColumn::Fx { slot, command })
                 .ok_or("Type an FX command on a row of the selection first"),

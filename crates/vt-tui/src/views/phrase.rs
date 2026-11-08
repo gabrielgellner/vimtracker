@@ -114,6 +114,10 @@ fn field_range(field: Field) -> (usize, usize) {
             fx_start(slot) + COMMAND_WIDTH,
             fx_start(slot) + COMMAND_WIDTH + 2,
         ),
+        Field::FxFine(slot) => (
+            fx_start(slot) + COMMAND_WIDTH + 2,
+            fx_start(slot) + COMMAND_WIDTH + 2 + FINE_WIDTH,
+        ),
     }
 }
 
@@ -434,7 +438,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         // The first digit of a value being typed shows in its place.
         if typing
-            && matches!(app.cursor.field, Field::FxValue(_) | Field::Velocity)
+            && matches!(
+                app.cursor.field,
+                Field::FxValue(_) | Field::FxFine(_) | Field::Velocity
+            )
             && app.entry.text.len() == 1
         {
             let (start, end) = field_range(app.cursor.field);

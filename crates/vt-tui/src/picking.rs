@@ -308,7 +308,9 @@ impl App {
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
-            Field::FxCommand(slot) | Field::FxValue(slot) => self.open_fx_picker(slot, ""),
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                self.open_fx_picker(slot, "");
+            }
             Field::Gate => self.open_gate_picker(),
             Field::Note | Field::Velocity => {
                 self.status = "K chooses on the gate and FX columns".to_owned();

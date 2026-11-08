@@ -16,7 +16,7 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::settings::SettingId;
-use crate::shape::{Shape, ShapeColumn, values};
+use crate::shape::{Shape, ShapeColumn, exact_values};
 use crate::song::{
     Chain, ChainEntry, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section, SectionStart,
     Song, Track, lowest_unused,
@@ -44,7 +44,10 @@ pub enum Fill {
     /// A gate cell, which goes on every row, as a row without a note still takes its time.
     Gate(Option<Gate>),
     Slot(usize, FxSlot),
+    /// An FX value's coarse digits, keeping its fine part.
     SlotValue(usize, u8),
+    /// An FX value's fine digits, where it has a fine part.
+    SlotFine(usize, u8),
 }
 
 /// A sound from a kit going on a track.
@@ -464,8 +467,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get(phrase)
                 .cloned()
                 .ok_or(EditError::NoPhrase(*phrase))?;
-            for (row, value) in values(found.steps(), *range, *column, shape) {
-                column.write(step_mut(&mut next, *track, *phrase, row)?, value);
+            for (row, value) in exact_values(found.steps(), *range, *column, shape) {
+                column.write_exact(step_mut(&mut next, *track, *phrase, row)?, value);
             }
         }
         Action::Fill {
@@ -490,6 +493,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     Fill::Slot(slot, value) => {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);
+                    }
+                    Fill::SlotFine(slot, fine) => {
+                        let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
+                        if slot.command.is_some_and(FxCommand::has_fine) {
+                            *slot = snapped(FxSlot {
+                                value: slot.value & 0xFF00 | u16::from(*fine),
+                                ..*slot
+                            });
+                        }
                     }
                     // Typing coarse digits keeps the fine part.
                     Fill::SlotValue(slot, value) => {

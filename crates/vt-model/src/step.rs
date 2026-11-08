@@ -120,6 +120,11 @@ impl FxCommand {
         u16::from(self.highest()) << 8
     }
 
+    /// Whether its value can glide to the next: a continuous setting's can, and a list's jumps.
+    pub fn glides(self) -> bool {
+        self.has_fine()
+    }
+
     /// Whether the value stays in force after this step: a setting's does, an event's doesn't.
     pub fn holds(self) -> bool {
         matches!(self, Self::Set(_))
@@ -184,16 +189,15 @@ impl FxSlot {
         self.command.is_some_and(FxCommand::holds)
     }
 
-    /// This slot, with the default mark unless it's a value.
+    /// This slot, with the default mark unless it's a value, and no glide on a list.
     pub fn with_valid_mark(self) -> Self {
-        Self {
-            mark: if self.is_value() {
-                self.mark
-            } else {
-                Mark::default()
-            },
-            ..self
-        }
+        let mark = match self.command {
+            Some(command) if !command.holds() => Mark::default(),
+            Some(command) if self.mark == Mark::Glide && !command.glides() => Mark::Lock,
+            Some(_) => self.mark,
+            None => Mark::default(),
+        };
+        Self { mark, ..self }
     }
 }
 
