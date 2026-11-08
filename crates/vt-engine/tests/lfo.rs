@@ -113,7 +113,7 @@ fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
     let out = render(song(&["C-4 -- vol:E0 --- ---"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
-    let mut limitless = song(&["C-4 -- vol:FF --- ---"]);
+    let mut limitless = song(&["C-4 -- vol:F8 --- ---"]);
     limitless.limiter = false;
     let out = render(limitless, flat(), STEP);
     let top = left(&out, STEP - 1);

@@ -698,7 +698,7 @@ mod tests {
                     .key()
             };
             *phrase.step_mut(0).unwrap() = format!("C-2 7F {}:40 --- ---", key(1)).parse().unwrap();
-            *phrase.step_mut(4).unwrap() = format!("G-2 7F {}:20 {}:90 ---", key(2), key(0))
+            *phrase.step_mut(4).unwrap() = format!("G-2 7F {}:20 {}:50 ---", key(2), key(0))
                 .parse()
                 .unwrap();
         }

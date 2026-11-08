@@ -121,7 +121,7 @@ impl ShapeColumn {
         }
     }
 
-    /// This column's value on a step, if it has one.
+    /// This column's value on a step, if it has one: an FX value's coarse digits.
     fn value(self, step: &Step) -> Option<u8> {
         match self {
             Self::Velocity => {
@@ -131,7 +131,7 @@ impl ShapeColumn {
                 .fx
                 .get(slot)
                 .filter(|fx| fx.command == Some(command))
-                .map(|fx| fx.value),
+                .map(|fx| fx.coarse()),
         }
     }
 
@@ -146,7 +146,7 @@ impl ShapeColumn {
         }
     }
 
-    /// Write a value to a step.
+    /// Write a value to a step, with no fine part.
     pub fn write(self, step: &mut Step, value: u8) {
         match self {
             Self::Velocity => step.velocity = Some(value),
@@ -154,7 +154,7 @@ impl ShapeColumn {
                 if let Some(fx) = step.fx.get_mut(slot) {
                     *fx = FxSlot {
                         command: Some(command),
-                        value,
+                        value: u16::from(value) << 8,
                         mark: if fx.is_value() { fx.mark } else { Mark::Lock },
                     }
                     .with_valid_mark();

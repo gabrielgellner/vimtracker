@@ -1,7 +1,11 @@
 # FX commands
 
 Each step has FX slots to the right of the Velocity column. A slot is a
-command and a two-digit hex value.
+command and a hex value. A setting that sweeps, like `CUT`, shows four digits,
+`CUT   4080`: the bold pair is the value you type, and the dim pair after it is a
+fine part, for dialling in between two values. A list's value, like `1BITS`,
+and an event's, like `DEL`, are only two digits. Events are in their own colour,
+a lock the track doesn't have is grey, and empty cells are faint.
 
 `K` on a slot lists the commands this track has, grouped as an LFO's `Dest` is:
 the filter, the output, the voice, each slot's effect, then the events. It opens
@@ -11,8 +15,9 @@ the value next.
 To type one instead, press `i` on the slot, type its label, such as `CUT` or
 `2FDBK`, and press `Enter`, then type the value, such as `40`. A label that isn't
 on the track opens `K`, searching for what you typed. A slot only takes effect
-once its value is typed. The status line names what the cursor is on, such as
-`Filter: Cut`.
+once its value is typed. The status line names what the cursor is on and its
+value in real units, such as `Filter: Cut, 1.21 kHz`. Typing over a value of the
+same setting keeps its fine part.
 
 ## Values and their marks
 

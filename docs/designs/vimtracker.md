@@ -1943,6 +1943,8 @@ Kind::Stepped {
     *   An LFO 1 aimed at LFO 2's depth adds to a `DEP2` lock.
     *   No allocation in the callback.
 
+**Issue 1 built** on 2026-11-07. Steps' values and the engine's layers are 16 bits, and the engine hears a fine part as the fraction on its `00` to `FF` scale. The track's own settings and a track's machine settings stay 8 bits until issue 2 gives the pages a way to set a fine part, and are read as coarse only. An effect's settings are also 8 bits, so a fine part rounds off when it reaches an effect; voices and the track's filter, pan and levels hear all of it. Typing over a value of the same setting already keeps its fine part, as issue 2 has it. The status line shows units for a setting the track has, and only names one it doesn't.
+
 **Done when** each issue's tests pass, and the author has dialled in values with the fine part, locked LFOs and Pitch in a jam, and the grid and its colours stay readable to them.
 
 ### Known Gaps From Review

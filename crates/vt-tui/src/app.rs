@@ -1417,16 +1417,22 @@ impl App {
                 self.set_field(FieldValue::Velocity(Some(value.min(MAX_VELOCITY))));
             }
             Field::FxValue(slot) => {
-                let existing = self.current_slot(slot).and_then(|s| s.command);
-                let Some(command) = self.entry.command.take().or(existing) else {
+                let current = self.current_slot(slot).unwrap_or_default();
+                let Some(command) = self.entry.command.take().or(current.command) else {
                     self.status = "Type an FX command first".to_owned();
                     return;
+                };
+                // Typed over the same setting, the coarse digits change and the fine part stays.
+                let fine = if current.command == Some(command) {
+                    current.fine()
+                } else {
+                    0
                 };
                 self.set_field(FieldValue::Slot(
                     slot,
                     FxSlot {
                         command: Some(command),
-                        value,
+                        value: u16::from(value) << 8 | u16::from(fine),
                         mark: self.mark_for_typed_value(slot),
                     },
                 ));

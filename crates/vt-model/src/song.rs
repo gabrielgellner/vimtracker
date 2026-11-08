@@ -1225,7 +1225,7 @@ mod tests {
         let next = |step| {
             phrase
                 .next_in_lane(0, step, FxCommand::CUT)
-                .map(|(distance, fx)| (distance, fx.value))
+                .map(|(distance, fx)| (distance, fx.coarse()))
         };
         assert_eq!(
             next(4),
@@ -1249,7 +1249,7 @@ mod tests {
         let found = |step, slot, command| {
             phrase
                 .next_value(step, slot, command)
-                .map(|(distance, fx)| (distance, fx.value))
+                .map(|(distance, fx)| (distance, fx.coarse()))
         };
         assert_eq!(found(0, 0, FxCommand::CUT), Some((2, 0x30)));
         assert_eq!(found(2, 0, FxCommand::CUT), Some((2, 0x10)));

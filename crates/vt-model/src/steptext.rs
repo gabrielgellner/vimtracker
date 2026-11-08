@@ -106,17 +106,21 @@ impl FromStr for Note {
 impl FromStr for FxSlot {
     type Err = StepTextError;
 
-    /// A command's key, a colon, its value in two hex digits and a value's mark, like `cut:40`,
-    /// `string.decay:80g` or `del:03`, or `---` for an empty slot. The colon is there because a key
-    /// can end in letters that read as hex.
+    /// A command's key, a colon, its value in hex and a value's mark, like `cut:40`,
+    /// `string.decay:80g` or `del:03`, or `---` for an empty slot. A continuous setting's value
+    /// can have a fine part, as in `cut:4080h`, and is written without it when it's `00`. The
+    /// colon is there because a key can end in letters that read as hex.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bad = || StepTextError::Slot(text.to_owned());
         if text == "---" {
             return Ok(Self::default());
         }
         let (key, rest) = text.split_once(':').ok_or_else(bad)?;
-        let (value, mark) = rest.split_at_checked(2).ok_or_else(bad)?;
-        let value = hex_byte(value).ok_or_else(bad)?;
+        let (digits, mark) = match rest.len() {
+            2 | 4 => (rest, ""),
+            3 | 5 => rest.split_at(rest.len() - 1),
+            _ => return Err(bad()),
+        };
         let mark = match mark {
             "" => Mark::Lock,
             "h" => Mark::Hold,
@@ -125,7 +129,14 @@ impl FromStr for FxSlot {
         };
         let command =
             FxCommand::from_key(key).ok_or_else(|| StepTextError::Command(key.to_owned()))?;
-        if mark != Mark::Lock && !command.holds() {
+        let coarse = digits.get(..2).and_then(hex_byte).ok_or_else(bad)?;
+        let fine = match digits.get(2..) {
+            Some("") => 0,
+            Some(fine) if command.has_fine() => hex_byte(fine).ok_or_else(bad)?,
+            _ => return Err(bad()),
+        };
+        let value = u16::from(coarse) << 8 | u16::from(fine);
+        if (mark != Mark::Lock && !command.holds()) || value > command.highest_value() {
             return Err(bad());
         }
         Ok(Self {
@@ -139,8 +150,11 @@ impl FromStr for FxSlot {
 impl fmt::Display for FxSlot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.command {
-            Some(command) => write!(f, "{}:{:02X}", command.key(), self.value)?,
+            Some(command) => write!(f, "{}:{:02X}", command.key(), self.coarse())?,
             None => f.write_str("---")?,
+        }
+        if self.fine() != 0 {
+            write!(f, "{:02X}", self.fine())?;
         }
         match self.mark {
             Mark::Lock => Ok(()),
@@ -215,6 +229,7 @@ mod tests {
             "G-9 -- sna:20 snb:30",
             "C#3 --",
             "C-4 64 cut:40h sna:20g pan:80",
+            "C-4 64 cut:4080h 1.distort.bits:03 res:FF",
             "C-4 64 HLD3 cut:40 --- ---",
             "--- -- RST4 --- --- ---",
             "E-4 -- MLT0",
@@ -279,6 +294,18 @@ mod tests {
             ("C-4 -- ---01", StepTextError::Slot("---01".into())),
             ("C-4 -- xyz:00", StepTextError::Command("xyz".into())),
             ("C-4 -- del:00h", StepTextError::Slot("del:00h".into())),
+            ("C-4 -- cut:FF80", StepTextError::Slot("cut:FF80".into())),
+            ("C-4 -- vol:F900", StepTextError::Slot("vol:F900".into())),
+            ("C-4 -- del:1080", StepTextError::Slot("del:1080".into())),
+            (
+                "C-4 -- 1.distort.bits:0B",
+                StepTextError::Slot("1.distort.bits:0B".into()),
+            ),
+            (
+                "C-4 -- 1.distort.bits:0380",
+                StepTextError::Slot("1.distort.bits:0380".into()),
+            ),
+            ("C-4 -- cut:408", StepTextError::Slot("cut:408".into())),
             ("C-4", StepTextError::TooFewFields("C-4".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");

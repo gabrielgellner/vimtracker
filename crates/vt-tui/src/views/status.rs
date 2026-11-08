@@ -114,15 +114,18 @@ pub fn value_shown(app: &App) -> Option<String> {
             }
             _ => return None,
         },
-        View::Track | View::Mixer => app.track_control().value_on(track)?,
+        View::Track | View::Mixer => {
+            let (id, value) = app.track_control().value_on(track)?;
+            (id, u16::from(value) << 8)
+        }
         _ => return None,
     };
     id.exists_on(track).then(|| shown(id, value))
 }
 
 /// A value of a setting in its units.
-fn shown(id: SettingId, value: u8) -> String {
-    id.entry().kind.shown(u16::from(value) << 8)
+fn shown(id: SettingId, value: u16) -> String {
+    id.entry().kind.shown(value)
 }
 
 /// A grid size as a note division where it is one, or otherwise in steps.

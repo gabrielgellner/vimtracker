@@ -1184,18 +1184,18 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     let (mut app, _realtime) = app();
     press(&mut app, "W");
     let buffer = screen(&app);
-    let title: String = (55..80).map(|x| buffer[(x, 0)].symbol()).collect();
+    let title: String = (61..80).map(|x| buffer[(x, 0)].symbol()).collect();
     assert_eq!(
         title.trim_end(),
         " 01  02",
         "the returns and master are left out"
     );
     assert_eq!(
-        buffer[(60, 0)].bg,
+        buffer[(66, 0)].bg,
         vt_tui::theme::GREEN,
         "track 02 is marked"
     );
-    assert_ne!(buffer[(56, 0)].bg, vt_tui::theme::GREEN);
+    assert_ne!(buffer[(62, 0)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(headings.trim_end(), "         Note        FX");
     assert_eq!(
@@ -1221,7 +1221,7 @@ fn other_tracks_light_the_step_they_are_playing() {
             .unwrap();
         // The next track's column in the overview, on a step two rows below the title.
         let buffer = terminal.backend().buffer();
-        buffer[(59, row + 2)].fg
+        buffer[(65, row + 2)].fg
     };
     on_the_row_being_edited(&mut app);
     app.playhead = 2;
@@ -2179,7 +2179,11 @@ fn rows_count_from_the_loop_start_and_dim_outside_it() {
         vt_tui::theme::OVERLAY0,
         "the step's text"
     );
-    assert_eq!(buffer[(9, 6)].fg, Color::Reset, "a step that plays");
+    assert_eq!(
+        buffer[(9, 6)].fg,
+        vt_tui::theme::OVERLAY0,
+        "an empty cell is faint where it plays too"
+    );
 }
 
 #[test]
@@ -2193,7 +2197,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (60..63).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (66..69).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2281,7 +2285,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 /// Another track's column on one row of steps: its marker and note, and its colour.
 /// A column of the overview past the track being edited, which is the overview's first here.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 59 + column * 4;
+    let x = 65 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -3170,12 +3174,12 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).contains("CUT   40 . SNA   20 h RES   10 g"),
+        row(2).contains("CUT   4000 . SNA   2000 h RES   1000 g"),
         "{}",
         row(2)
     );
     assert!(
-        row(3).contains("DEL   10   ---   00   ---   00"),
+        row(3).contains("DEL   10     ---   00     ---   00"),
         "{}",
         row(3)
     );
@@ -3291,19 +3295,31 @@ fn the_status_line_shows_a_value_in_its_units() {
 }
 
 #[test]
-fn a_lock_the_track_doesnt_have_is_drawn_faint() {
+fn each_kind_of_cell_has_its_own_colours() {
+    use ratatui::style::Modifier;
+    use vt_tui::theme;
     let (app, _realtime) = app_with_a_lock_for_another_voice();
     let buffer = screen(&app);
     let row: String = (0..80).map(|x| buffer[(x, 2)].symbol()).collect();
-    let style_of = |label: &str| {
-        let at = row
-            .find(label)
-            .unwrap_or_else(|| panic!("no {label}: {row}"));
-        buffer[(at as u16, 2)].style()
+    let style_at = |text: &str, past: usize| {
+        let at = row.find(text).unwrap_or_else(|| panic!("no {text}: {row}"));
+        buffer[((at + past) as u16, 2)].style()
     };
-    assert_eq!(style_of("DCAY").fg, vt_tui::theme::faint().fg, "{row}");
-    assert_ne!(style_of("CUT").fg, vt_tui::theme::faint().fg);
-    assert_ne!(style_of("DEL").fg, vt_tui::theme::faint().fg);
+    // A lock: its coarse digits bold in the value colour, and its fine ones set back.
+    let coarse = style_at("CUT   4000", 6);
+    assert_eq!(coarse.fg, Some(theme::MAUVE), "{row}");
+    assert!(coarse.add_modifier.contains(Modifier::BOLD));
+    assert_eq!(
+        style_at("CUT   4000", 8).fg,
+        Some(theme::fine(theme::MAUVE))
+    );
+    // An event's value is in its own colour, with no fine digits.
+    assert_eq!(style_at("DEL   10", 6).fg, Some(theme::PEACH));
+    assert!(row.contains("DEL   10     "), "{row}");
+    // A lock the track doesn't have is grey all over, brighter than an empty cell.
+    assert_eq!(style_at("DCAY", 0).fg, theme::dim().fg);
+    assert_eq!(style_at("DCAY  2000", 6).fg, theme::dim().fg);
+    assert_eq!(theme::dim().fg, Some(theme::OVERLAY2));
 }
 
 #[test]
@@ -5604,7 +5620,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "80");
     assert_eq!(command(&app, 0), Some(setting(1)));
-    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x80);
+    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x8000);
     let text = app.phrase_here().unwrap().steps()[0].to_string();
     assert!(
         text.contains("1.distort.amount:80"),
