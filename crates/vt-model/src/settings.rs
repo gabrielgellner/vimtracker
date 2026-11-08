@@ -6,8 +6,9 @@
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
     CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, FLANGER_PARAMS,
-    INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, REVERB_PARAMS,
-    Setting, TAPE_PARAMS, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_ms, input_db,
+    GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param,
+    REVERB_PARAMS, Setting, TAPE_PARAMS, Triggering, attack_ms, ceiling_db, fine_cents,
+    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
     limit_release_ms, plate_size, ratio, release_ms, tape_drive_db, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
@@ -70,6 +71,11 @@ pub enum Units {
     /// A pitch shifter's fine shift in cents, and its grains' length in ms.
     Cents,
     Grain,
+    /// A granular effect's: how far back its grains read, how long they are and which way, and
+    /// how often they start and whether at random.
+    GrainTime,
+    GrainLength,
+    Density,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -151,6 +157,16 @@ impl Kind {
                 Units::PlateSize => format!("{:.2}x", plate_size(coarse as f32)),
                 Units::Cents => format!("{:+.0} ct", fine_cents(coarse as f32)),
                 Units::Grain => milliseconds(grain_ms(coarse as f32)),
+                Units::GrainTime => milliseconds(grain_time_seconds(coarse as f32) * 1000.0),
+                Units::GrainLength => match grain_length(coarse as f32) {
+                    (seconds, true) => format!("{} rev", milliseconds(seconds * 1000.0)),
+                    (seconds, false) => milliseconds(seconds * 1000.0),
+                },
+                Units::Density => match grain_density(coarse as f32) {
+                    Triggering::Regular(hertz) => rate(hertz),
+                    Triggering::Off => "Off".to_owned(),
+                    Triggering::Random(hertz) => format!("{} rnd", rate(hertz)),
+                },
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -179,6 +195,15 @@ fn milliseconds(ms: f32) -> String {
         ms if ms < 1.0 => format!("{ms:.2} ms"),
         ms if ms < 1000.0 => format!("{ms:.0} ms"),
         ms => format!("{:.2} s", ms / 1000.0),
+    }
+}
+
+/// How often something happens, as it reads best: `0.25 Hz`, `1.5 Hz` or `12 Hz`.
+fn rate(hertz: f32) -> String {
+    match hertz {
+        hertz if hertz < 1.0 => format!("{hertz:.2} Hz"),
+        hertz if hertz < 10.0 => format!("{hertz:.1} Hz"),
+        hertz => format!("{hertz:.0} Hz"),
     }
 }
 
@@ -488,10 +513,11 @@ pub enum Effect {
     Tape,
     Plate,
     Pitch,
+    Grains,
 }
 
 impl Effect {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -504,6 +530,7 @@ impl Effect {
         Self::Tape,
         Self::Plate,
         Self::Pitch,
+        Self::Grains,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -522,6 +549,7 @@ impl Effect {
             Self::Tape => &TAPE_PARAMS,
             Self::Plate => &PLATE_PARAMS,
             Self::Pitch => &PITCH_PARAMS,
+            Self::Grains => &GRAINS_PARAMS,
         }
     }
 
@@ -539,6 +567,7 @@ impl Effect {
             Self::Tape => "tape",
             Self::Plate => "plate",
             Self::Pitch => "pitch",
+            Self::Grains => "grains",
         }
     }
 
@@ -556,6 +585,7 @@ impl Effect {
             Self::Tape => "Tape",
             Self::Plate => "Plate",
             Self::Pitch => "Pitch",
+            Self::Grains => "Grains",
         }
     }
 
@@ -575,6 +605,7 @@ impl Effect {
             Insert::Tape(_) => Some(Self::Tape),
             Insert::Plate(_) => Some(Self::Plate),
             Insert::Pitch(_) => Some(Self::Pitch),
+            Insert::Grains(_) => Some(Self::Grains),
         }
     }
 }
@@ -607,6 +638,9 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Size => (false, Units::PlateSize),
                 Setting::Fine => (true, Units::Cents),
                 Setting::Grain => (false, Units::Grain),
+                Setting::Position => (false, Units::GrainTime),
+                Setting::Length => (false, Units::GrainLength),
+                Setting::Density => (false, Units::Density),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -753,6 +787,20 @@ const fn effect_start(effect: Effect) -> usize {
                 + TAPE_PARAMS.len()
                 + PLATE_PARAMS.len()
         }
+        Effect::Grains => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+        }
     }
 }
 
@@ -770,7 +818,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + FLANGER_PARAMS.len()
     + TAPE_PARAMS.len()
     + PLATE_PARAMS.len()
-    + PITCH_PARAMS.len();
+    + PITCH_PARAMS.len()
+    + GRAINS_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.

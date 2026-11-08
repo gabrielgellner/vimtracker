@@ -25,6 +25,7 @@ pub enum Insert {
     Tape(Tape),
     Plate(Plate),
     Pitch(Pitch),
+    Grains(Grains),
 }
 
 /// What a distortion does to the sound.
@@ -129,6 +130,16 @@ pub enum Setting {
     Shift,
     Fine,
     Grain,
+    /// A granular effect's: how far back its grains read, how long they are, their envelope, how
+    /// often they start, how wide they spread, whether recording stops, and how much each grain
+    /// strays from what's set.
+    Position,
+    Length,
+    Shape,
+    Density,
+    Spread,
+    Freeze,
+    Random,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -157,7 +168,7 @@ impl Setting {
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong => 1,
+            Self::PingPong | Self::Freeze => 1,
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             _ => 0xFF,
         }
@@ -174,7 +185,7 @@ impl Setting {
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong => 1.0,
+            Self::PingPong | Self::Freeze => 1.0,
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             _ => 255.0,
         }
@@ -202,7 +213,7 @@ pub struct Param {
 }
 
 /// The most settings any effect has.
-pub const MAX_PARAMS: usize = 9;
+pub const MAX_PARAMS: usize = 10;
 
 const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
 const TYPE_PARAM: Param = Param {
@@ -830,6 +841,121 @@ pub(crate) const PITCH_PARAMS: [Param; 6] = [
     GAIN_PARAM,
 ];
 
+/// A granular effect's, in the order the page shows them, as columns of two: where and how long,
+/// how often and how wide, freezing and straying, then pitch and envelope, whose short names fit
+/// the narrow fourth column.
+pub(crate) const GRAINS_PARAMS: [Param; 10] = [
+    hex_param(
+        "Time",
+        "time",
+        "TIME",
+        Setting::Position,
+        Grains::DEFAULT.time,
+    ),
+    hex_param(
+        "Size",
+        "size",
+        "SIZE",
+        Setting::Length,
+        Grains::DEFAULT.size,
+    ),
+    hex_param(
+        "Density",
+        "density",
+        "DENS",
+        Setting::Density,
+        Grains::DEFAULT.density,
+    ),
+    hex_param(
+        "Spread",
+        "spread",
+        "SPRD",
+        Setting::Spread,
+        Grains::DEFAULT.spread,
+    ),
+    Param {
+        name: "Freeze",
+        key: "freeze",
+        label: Some("FRZ"),
+        setting: Setting::Freeze,
+        choices: &["Off", "On"],
+        wraps: true,
+        default: Grains::DEFAULT.freeze,
+    },
+    hex_param(
+        "Random",
+        "random",
+        "RAND",
+        Setting::Random,
+        Grains::DEFAULT.random,
+    ),
+    Param {
+        default: Grains::DEFAULT.pitch,
+        ..PITCH_PARAMS[0]
+    },
+    hex_param(
+        "Shape",
+        "shape",
+        "SHAP",
+        Setting::Shape,
+        Grains::DEFAULT.shape,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// How much a granular effect records, in seconds, as Beads' does at its best quality.
+pub const GRAIN_BUFFER_SECONDS: f32 = 4.0;
+/// How often a granular effect's grains can start at most, in Hz, as Beads': the C an octave below
+/// middle C. At random they start half as often at most, on average.
+pub const MOST_GRAIN_HERTZ: f32 = 130.812_78;
+
+/// How far back a granular effect's grains read, in seconds, for a value on the `00` to `FF` scale:
+/// from just behind what's being recorded to the whole recording, evenly.
+pub fn grain_time_seconds(value: f32) -> f32 {
+    value / 255.0 * GRAIN_BUFFER_SECONDS
+}
+
+/// How long a granular effect's grains are, in seconds, and whether they play backwards, for a
+/// value on the `00` to `FF` scale, as Beads' `Size` knob: from the whole recording backwards at
+/// `00`, shortening to about 8 ms at a third, then lengthening forwards to the whole of it at `FF`.
+pub fn grain_length(value: f32) -> (f32, bool) {
+    let size = value / 255.0;
+    let reversed = size < 1.0 / 3.0;
+    let shortness = if reversed {
+        size * 3.0 * (2.0 - size * 3.0)
+    } else {
+        1.0 - 1.5 * (size - 1.0 / 3.0)
+    };
+    let shortness = (shortness * 1.025).min(1.0);
+    ((shortness * -9.0).exp2() * GRAIN_BUFFER_SECONDS, reversed)
+}
+
+/// How a granular effect's grains start, for a `Density`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Triggering {
+    /// Evenly, so many a second.
+    Regular(f32),
+    /// Not at all.
+    Off,
+    /// At random, about so many a second.
+    Random(f32),
+}
+
+/// How a granular effect's grains start, for a value on the `00` to `FF` scale, as Beads' `Density`
+/// knob: evenly and fastest at `00`, slowing to none in the middle, then at random, faster
+/// towards `FF`. Each side spans 16 octaves.
+pub fn grain_density(value: f32) -> Triggering {
+    let density = value / 255.0;
+    if density < 0.48 {
+        Triggering::Regular(MOST_GRAIN_HERTZ * (-density * 16.0).exp2())
+    } else if density > 0.52 {
+        Triggering::Random(0.5 * MOST_GRAIN_HERTZ * (-(1.0 - density) * 16.0).exp2())
+    } else {
+        Triggering::Off
+    }
+}
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -838,7 +964,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -852,6 +978,7 @@ impl Insert {
         Self::Tape(Tape::DEFAULT),
         Self::Plate(Plate::DEFAULT),
         Self::Pitch(Pitch::DEFAULT),
+        Self::Grains(Grains::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -882,6 +1009,7 @@ impl Insert {
             Self::Tape(_) => "Tape",
             Self::Plate(_) => "Plate",
             Self::Pitch(_) => "Pitch",
+            Self::Grains(_) => "Grains",
         }
     }
 
@@ -901,6 +1029,7 @@ impl Insert {
             Self::Tape(_) => "Saturates, warms and wobbles it as tape does",
             Self::Plate(_) => "Puts the sound on a bright, dense plate",
             Self::Pitch(_) => "Shifts its pitch up or down, keeping its time",
+            Self::Grains(_) => "Records it and plays it back as a cloud of grains",
         }
     }
 
@@ -924,6 +1053,7 @@ impl Insert {
             Self::Tape(_) => &TAPE_PARAMS,
             Self::Plate(_) => &PLATE_PARAMS,
             Self::Pitch(_) => &PITCH_PARAMS,
+            Self::Grains(_) => &GRAINS_PARAMS,
         }
     }
 
@@ -1015,6 +1145,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| pitch.read(setting));
             }
+            Self::Grains(grains) => {
+                return GRAINS_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| grains.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1048,6 +1184,7 @@ impl Insert {
             Self::Tape(tape) => return Self::Tape(tape.written(setting, whole)),
             Self::Plate(plate) => return Self::Plate(plate.written(setting, whole)),
             Self::Pitch(pitch) => return Self::Pitch(pitch.written(setting, whole)),
+            Self::Grains(grains) => return Self::Grains(grains.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1877,6 +2014,93 @@ impl Pitch {
     }
 }
 
+/// A granular effect's settings, after Beads'. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Grains {
+    /// How far back the grains start reading, from just behind what's being recorded to four
+    /// seconds back.
+    pub time: u8,
+    /// How long each grain is, and below a third whether it plays backwards, as Beads' `Size`.
+    pub size: u8,
+    /// How far each grain is shifted, as a place in the list from two octaves down to two up.
+    pub pitch: u8,
+    /// Each grain's envelope, as Beads' `Shape`: from a square, through a decay and a bell, to a
+    /// reversed decay.
+    pub shape: u8,
+    /// How often grains start, as Beads' `Density`: evenly below `80`, at random above it.
+    pub density: u8,
+    /// How far the grains spread across the sides.
+    pub spread: u8,
+    /// Whether it stops recording, `1`, so the grains keep playing what's held.
+    pub freeze: u8,
+    /// How far each grain's time, size and shape stray at random from what's set.
+    pub random: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Grains {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Grains {
+    /// As it starts: half a second back, grains of about 150 ms in a bell, no shift, about seven
+    /// a second at random, spread half way, recording, nothing straying, and half wet.
+    pub const DEFAULT: Self = Self {
+        time: 0x20,
+        size: 0xA8,
+        pitch: MOST_SHIFT,
+        shape: 0xAA,
+        density: 0xCC,
+        spread: 0x80,
+        freeze: 0,
+        random: 0,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Position => self.time,
+            Setting::Length => self.size,
+            Setting::Shift => self.pitch,
+            Setting::Shape => self.shape,
+            Setting::Density => self.density,
+            Setting::Spread => self.spread,
+            Setting::Freeze => self.freeze,
+            Setting::Random => self.random,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut grains = self;
+        match setting {
+            Setting::Position => grains.time = value,
+            Setting::Length => grains.size = value,
+            Setting::Shift => grains.pitch = value,
+            Setting::Shape => grains.shape = value,
+            Setting::Density => grains.density = value,
+            Setting::Spread => grains.spread = value,
+            Setting::Freeze => grains.freeze = value,
+            Setting::Random => grains.random = value,
+            Setting::Mix => grains.mix = value,
+            Setting::Gain => grains.gain = value,
+            _ => {}
+        }
+        grains
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -2216,6 +2440,48 @@ mod tests {
         // Clouds' own grain, 2047 frames at 32 kHz.
         let clouds = 2047.0 / 32.0;
         assert!((grain_ms(f32::from(Pitch::DEFAULT.size)) - clouds).abs() < 0.5);
+    }
+
+    #[test]
+    fn a_granular_effects_settings_read_back_and_save() {
+        let grains = Insert::Grains(Grains::DEFAULT);
+        let names: Vec<&str> = grains.params().iter().map(|param| param.name).collect();
+        assert_eq!(
+            names,
+            [
+                "Time", "Size", "Density", "Spread", "Freeze", "Random", "Pitch", "Shape", "Mix",
+                "Gain"
+            ]
+        );
+        assert_eq!(grains.read(Setting::Shift), Some(MOST_SHIFT));
+        assert_eq!(grains.read(Setting::Freeze), Some(0));
+        let frozen = grains.with_value(4, 1);
+        assert_eq!(frozen.read(Setting::Freeze), Some(1));
+        // It's a switch.
+        assert_eq!(grains.with_value(4, 0xFF).read(Setting::Freeze), Some(1));
+        assert_eq!(grains.with_value(6, 0xFF).read(Setting::Shift), Some(48));
+        assert_eq!(grains.read(Setting::Decay), None);
+        let text = ron::to_string(&frozen).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&text).unwrap(), frozen);
+        assert_eq!(grain_time_seconds(0.0), 0.0);
+        assert_eq!(grain_time_seconds(255.0), 4.0);
+        // Beads' `Size`: the whole recording backwards, the shortest at a third, and the whole of
+        // it forwards.
+        assert_eq!(grain_length(0.0), (4.0, true));
+        let (shortest, _) = grain_length(85.0);
+        assert!(shortest <= 0.008, "{shortest}");
+        assert!(grain_length(84.0).1);
+        assert!(!grain_length(86.0).1);
+        let (longest, reversed) = grain_length(255.0);
+        assert!((longest - 4.0).abs() < 1e-4 && !reversed, "{longest}");
+        let (default, _) = grain_length(f32::from(Grains::DEFAULT.size));
+        assert!((default - 0.15).abs() < 0.02, "{default}");
+        assert_eq!(grain_density(0.0), Triggering::Regular(MOST_GRAIN_HERTZ));
+        assert_eq!(grain_density(128.0), Triggering::Off);
+        assert_eq!(
+            grain_density(255.0),
+            Triggering::Random(MOST_GRAIN_HERTZ * 0.5)
+        );
     }
 
     #[test]

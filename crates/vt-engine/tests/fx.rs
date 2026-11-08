@@ -955,3 +955,64 @@ fn a_pitch_shifter_up_twelve_plays_an_octave_up_and_down_twelve_an_octave_down()
     assert!((down / dry - 0.5).abs() < 0.005, "{dry} {down}");
     assert!(played(Some(12)).iter().flatten().all(|s| s.is_finite()));
 }
+
+#[test]
+fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
+    use vt_model::insert::Grains;
+    use vt_model::settings::{Effect, SettingId};
+    use vt_model::step::{FxCommand, FxSlot, Mark};
+    // Half a second of a tone, then nothing.
+    let tone = (0..RATE as usize * 4).map(|frame| {
+        let t = frame as f32 / RATE as f32;
+        let level = if t < 0.5 {
+            (t * 330.0 * std::f32::consts::TAU).sin() * 0.5
+        } else {
+            0.0
+        };
+        [level; 2]
+    });
+    let samples = pool(tone.collect());
+    let played = |freeze: bool| {
+        let mut song = song(&["C-4 -- --- --- ---"]);
+        // Reading three quarters of a second back, so a second in it's in the middle of the tone.
+        song.tracks[0].inserts[0] = Insert::Grains(Grains {
+            time: 0x30,
+            ..Grains::DEFAULT
+        });
+        // Long enough not to come round and play the tone again.
+        Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).set_len(64);
+        if freeze {
+            // Frozen a second in, a while after the tone's stopped coming in.
+            let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+            phrase.step_mut(8).unwrap().fx = vec![FxSlot {
+                command: Some(FxCommand::Set(
+                    SettingId::slot(0, Effect::Grains, 4).unwrap(),
+                )),
+                value: 0x0100,
+                mark: Mark::Hold,
+            }];
+        }
+        render(song, Arc::clone(&samples), RATE as usize * 4)
+    };
+    let loudness = |out: &[[f32; 2]]| {
+        let energy: f32 = out.iter().flatten().map(|s| s * s).sum();
+        (energy / out.len() as f32 / 2.0).sqrt()
+    };
+    let (frozen, free) = (played(true), played(false));
+    assert!(frozen.iter().flatten().all(|s| s.is_finite()));
+    // In its last second, long after the tone, the frozen one still plays it and the other's
+    // silent.
+    let last = RATE as usize * 3..;
+    assert!(
+        loudness(&frozen[last.clone()]) > 0.05,
+        "{}",
+        loudness(&frozen[last.clone()])
+    );
+    assert!(
+        loudness(&free[last.clone()]) < 1e-4,
+        "{}",
+        loudness(&free[last])
+    );
+    // While the tone plays, both are the same.
+    assert_eq!(frozen[..RATE as usize / 2], free[..RATE as usize / 2]);
+}

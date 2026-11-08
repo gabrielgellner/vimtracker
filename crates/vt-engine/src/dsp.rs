@@ -14,6 +14,7 @@ pub mod filter;
 pub mod flanger;
 pub mod fm;
 pub mod grain;
+pub mod granular;
 pub mod kick;
 pub mod limiter;
 pub mod memory;

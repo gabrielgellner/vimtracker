@@ -270,6 +270,31 @@ pitch a little as it moves, taking about a second end to end. With some
 For a shimmer, put `Pitch` at `+12 st` in a slot before `Reverb` or `Plate`,
 and turn up `Feedback` to stack the octaves.
 
+`Grains` records the last four seconds of the sound all the time and plays
+it back as a cloud of short grains, after the granular mode of Mutable
+Instruments' Beads. It starts half wet, with about seven grains a second.
+
+| Setting | Does |
+|---|---|
+| `Time` | How far back the grains read, from just now to four seconds |
+| `Size` | How long each grain is. Below `55` they play backwards |
+| `Density` | How often grains start: evenly below `80`, at random above |
+| `Spread` | How far the grains spread across the sides |
+| `Freeze` | `On` stops recording, so the grains keep playing what's held |
+| `Random` | How far each grain's time, size and shape stray at random |
+| `Pitch` | How far each grain is shifted, in semitones, two octaves |
+| `Shape` | The envelope, from square through decay and bell to swell |
+
+`Size` runs as Beads' does: from four seconds backwards at `00`, down to
+about 8 ms at `55`, then up to four seconds forwards at `FF`. `Density` is
+none at `80`, faster towards either end: evenly up to about 130 a second at
+`00`, and at random up to about 65 a second at `FF`. `Shape` is a decay at
+`80` and a bell at `AA`, where it starts.
+
+Changes to `Time`, `Size`, `Pitch` and `Shape` reach the next grains, so
+moving them never clicks. For a held drone, turn `Freeze` on with a step's
+FX slot, then move `Time` to scan through what's held.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

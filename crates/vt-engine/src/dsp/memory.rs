@@ -10,6 +10,7 @@ use vt_model::song::Song;
 use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
 use crate::dsp::flanger::Flanger;
+use crate::dsp::granular::Granular;
 use crate::dsp::limiter::Limiter;
 use crate::dsp::pitch_shifter::PitchShifter;
 use crate::dsp::plate::Plate;
@@ -34,6 +35,7 @@ pub enum Memory {
     Tape(Box<Tape>),
     Plate(Box<Plate>),
     Pitch(Box<PitchShifter>),
+    Grains(Box<Granular>),
 }
 
 impl Memory {
@@ -79,6 +81,11 @@ impl Memory {
         Self::Pitch(Box::new(PitchShifter::new(rate)))
     }
 
+    /// A granular effect's, which records Beads' four seconds.
+    pub fn grains(rate: u32) -> Self {
+        Self::Grains(Box::new(Granular::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -91,6 +98,7 @@ impl Memory {
             Self::Tape(tape) => tape.process(input),
             Self::Plate(plate) => plate.process(input),
             Self::Pitch(shifter) => shifter.process(input),
+            Self::Grains(granular) => granular.process(input),
         }
     }
 
@@ -104,6 +112,7 @@ impl Memory {
             Self::Flanger(flanger) => flanger.frames() as u32,
             Self::Tape(tape) => tape.quiet_frames(),
             Self::Pitch(shifter) => shifter.frames() as u32,
+            Self::Grains(granular) => granular.quiet_frames(),
         }
     }
 
@@ -123,6 +132,7 @@ impl Memory {
             (Self::Tape(tape), Insert::Tape(settings)) => tape.follow(settings),
             (Self::Plate(plate), Insert::Plate(settings)) => plate.follow(settings, frames),
             (Self::Pitch(shifter), Insert::Pitch(settings)) => shifter.follow(settings),
+            (Self::Grains(granular), Insert::Grains(settings)) => granular.follow(settings),
             _ => {}
         }
     }
@@ -138,6 +148,7 @@ impl Memory {
             Self::Tape(tape) => tape.settle(),
             Self::Plate(plate) => plate.settle(),
             Self::Pitch(shifter) => shifter.settle(),
+            Self::Grains(granular) => granular.settle(),
         }
     }
 
@@ -151,6 +162,7 @@ impl Memory {
             Self::Tape(tape) => tape.clear(),
             Self::Plate(plate) => plate.clear(),
             Self::Pitch(shifter) => shifter.clear(),
+            Self::Grains(granular) => granular.clear(),
         }
     }
 }
@@ -166,6 +178,7 @@ pub struct MemoryCount {
     pub tape: u16,
     pub plate: u16,
     pub pitch: u16,
+    pub grains: u16,
 }
 
 impl MemoryCount {
@@ -182,6 +195,7 @@ impl MemoryCount {
                 Insert::Tape(_) => count.tape += 1,
                 Insert::Plate(_) => count.plate += 1,
                 Insert::Pitch(_) => count.pitch += 1,
+                Insert::Grains(_) => count.grains += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -204,6 +218,7 @@ pub struct MemoryPool {
     tapes: Vec<Memory>,
     plates: Vec<Memory>,
     pitches: Vec<Memory>,
+    grains: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -223,6 +238,7 @@ impl MemoryPool {
             tapes: Vec::with_capacity(POOL_CAPACITY),
             plates: Vec::with_capacity(POOL_CAPACITY),
             pitches: Vec::with_capacity(POOL_CAPACITY),
+            grains: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -250,6 +266,9 @@ impl MemoryPool {
         for _ in 0..needed.pitch {
             pool.put(Memory::pitch(rate));
         }
+        for _ in 0..needed.grains {
+            pool.put(Memory::grains(rate));
+        }
         pool
     }
 
@@ -264,6 +283,7 @@ impl MemoryPool {
             Memory::Tape(_) => &mut self.tapes,
             Memory::Plate(_) => &mut self.plates,
             Memory::Pitch(_) => &mut self.pitches,
+            Memory::Grains(_) => &mut self.grains,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -285,6 +305,7 @@ impl MemoryPool {
             Insert::Tape(_) => &mut self.tapes,
             Insert::Plate(_) => &mut self.plates,
             Insert::Pitch(_) => &mut self.pitches,
+            Insert::Grains(_) => &mut self.grains,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -308,6 +329,7 @@ impl MemoryPool {
         self.owed.tape += count.tape;
         self.owed.plate += count.plate;
         self.owed.pitch += count.pitch;
+        self.owed.grains += count.grains;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -360,6 +382,12 @@ impl MemoryPool {
             self.owed.pitch -= 1;
             return Some(memory);
         }
+        if self.owed.grains > 0
+            && let Some(memory) = self.grains.pop()
+        {
+            self.owed.grains -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -373,6 +401,7 @@ impl MemoryPool {
             + self.tapes.len()
             + self.plates.len()
             + self.pitches.len()
+            + self.grains.len()
     }
 }
 
