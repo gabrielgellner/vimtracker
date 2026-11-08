@@ -26,10 +26,10 @@ use super::virtual_analog::Settings;
 /// How many frames are worked out at once, as in Plaits, whose smoothing is set per block.
 const BLOCK: usize = 24;
 /// Samples in one wave, and the four more each is stored with so reads past its end need no wrap.
-const WAVE: usize = 128;
+pub(super) const WAVE: usize = 128;
 const STORED: usize = WAVE + 4;
 const WAVES: usize = 192;
-const PER_BANK: usize = 64;
+pub(super) const PER_BANK: usize = 64;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.5;
 
@@ -38,7 +38,7 @@ static DATA: &[u8; WAVES * STORED * 2] = include_bytes!("tables/plaits_waves.bin
 
 /// One stored sample of a wave.
 #[inline]
-fn stored(wave: usize, index: usize) -> f32 {
+pub(super) fn stored(wave: usize, index: usize) -> f32 {
     let at = (wave * STORED + index) * 2;
     f32::from(i16::from_le_bytes([DATA[at], DATA[at + 1]]))
 }

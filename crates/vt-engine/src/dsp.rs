@@ -24,6 +24,7 @@ pub mod swarm;
 mod variable_shape;
 pub mod virtual_analog;
 pub mod virtual_analog_vcf;
+pub mod wave_terrain;
 pub mod waveshaping;
 mod waveshaping_tables;
 pub mod wavetable;
