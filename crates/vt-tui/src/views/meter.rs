@@ -103,16 +103,31 @@ pub(crate) fn level_cell(
 
 /// The G bar for one row, hanging down from the top, counting rows down from the top.
 fn reduction_cell(row: usize, rows: usize, reduction: f32) -> Span<'static> {
-    let total = (reduction / MOST_REDUCTION).min(1.0) * (rows * 8) as f32;
-    let filled = (total.round() as usize).saturating_sub(row * 8).min(8);
+    let filled = hanging_eighths(reduction / MOST_REDUCTION, row, rows);
+    hanging_cell(filled, theme::RED, theme::MANTLE, 2)
+}
+
+/// How much of a row a bar hanging down from the top fills, in eighths, for a share of its whole
+/// height from 0 to 1, counting rows down from the top.
+pub(crate) fn hanging_eighths(share: f32, row: usize, rows: usize) -> usize {
+    let total = share.clamp(0.0, 1.0) * (rows * 8) as f32;
+    (total.round() as usize).saturating_sub(row * 8).min(8)
+}
+
+/// One row of a bar hanging down from the top, filled this many eighths, on a background.
+pub(crate) fn hanging_cell(
+    filled: usize,
+    color: Color,
+    behind: Color,
+    width: usize,
+) -> Span<'static> {
     // There are no blocks that hang from the top, so a partial one is drawn the other way around.
-    let color = theme::RED;
     let (symbol, fg, bg): (char, Color, Color) = match filled {
-        0 => (' ', color, theme::MANTLE),
-        8 => ('█', color, theme::MANTLE),
-        part => (EIGHTHS[8 - part], theme::MANTLE, color),
+        0 => (' ', color, behind),
+        8 => ('█', color, behind),
+        part => (EIGHTHS[8 - part], behind, color),
     };
-    Span::styled(symbol.to_string().repeat(2), Style::new().fg(fg).bg(bg))
+    Span::styled(symbol.to_string().repeat(width), Style::new().fg(fg).bg(bg))
 }
 
 /// The scale's mark for each row, counting rows up from the bottom.

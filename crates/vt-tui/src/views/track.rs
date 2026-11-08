@@ -20,6 +20,7 @@ use crate::theme;
 use crate::track_page::{
     Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
+use crate::views::meter::{hanging_cell, hanging_eighths};
 use crate::views::status::format_swing;
 
 /// The size of an envelope's diagram, in characters.
@@ -42,9 +43,6 @@ pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 4;
 pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
 /// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom.
 const REDUCTION_METER_DB: f32 = 24.0;
-/// The characters for the bottom of a cell partly full, from one eighth to seven. Drawn in the
-/// page's background over the meter's colour, they leave the top of the cell filled.
-const LOWER_EIGHTHS: [char; 7] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇'];
 
 /// Room for a slot's number on the FX page, and for its effect's name.
 const FX_INDENT: usize = 3;
@@ -649,20 +647,14 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
     Line::from(spans)
 }
 
-/// One row of a gain reduction meter, which fills down from the top of its two rows as it turns
-/// down more.
+/// One row of a gain reduction meter, which hangs down from the top of its two rows as it turns
+/// down more, as the main meter's does. An empty one shows a faint mark, so it's seen to be there.
 fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
-    let eighths = (db / REDUCTION_METER_DB * 16.0).round().clamp(0.0, 16.0) as usize;
-    let filled = eighths.saturating_sub(row * 8).min(8);
-    match filled {
-        0 if row == 0 => Span::styled("▔", theme::faint()),
-        0 => Span::raw(" "),
-        8 => Span::styled("█", Style::new().fg(color)),
-        _ => Span::styled(
-            LOWER_EIGHTHS[7 - filled].to_string(),
-            Style::new().fg(theme::BASE).bg(color),
-        ),
+    let filled = hanging_eighths(db / REDUCTION_METER_DB, row, SLOT_DRAWING_HEIGHT);
+    if filled == 0 && row == 0 {
+        return Span::styled("▔", theme::faint());
     }
+    hanging_cell(filled, color, theme::BASE, 1)
 }
 
 /// What follows a row of a slot on the FX page: a compressor's curve and how far it's turning
