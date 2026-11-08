@@ -56,9 +56,10 @@ pub struct Engine {
     preview: Voice,
     /// The track the preview voice goes through.
     preview_track: usize,
-    /// Each track's sound after its slots, for compressors that hear another track.
+    /// Each track's sound after its slots, for compressors and Warps that hear another track.
     keys: Keys,
-    /// Which tracks a compressor somewhere hears, which keep playing while muted so it still does.
+    /// Which tracks a compressor or Warps somewhere hears, which keep playing while muted so it
+    /// still does.
     listened: [bool; MAX_TRACKS],
     transport: Transport,
     /// The section playing, and how many steps of it have fired.
@@ -501,15 +502,19 @@ impl Engine {
         old
     }
 
-    /// Note which tracks a compressor hears. One that's muted keeps playing, silently, so a muted
-    /// kick can still duck a bass, and one that no longer is heard stops.
+    /// Note which tracks a compressor or Warps hears. One that's muted keeps playing, silently, so
+    /// a muted kick can still duck a bass, and one that no longer is heard stops.
     fn find_listened(&mut self) {
         let song = &self.current.song;
         let sounds = song.sound_tracks();
         let mut listened = [false; MAX_TRACKS];
         for insert in song.tracks.iter().flat_map(|track| track.inserts) {
-            if let Insert::Compressor(compressor) = insert
-                && let Some(track) = compressor.source_track(sounds)
+            let heard = match insert {
+                Insert::Compressor(compressor) => compressor.source_track(sounds),
+                Insert::Warps(warps) => warps.source_track(sounds),
+                _ => None,
+            };
+            if let Some(track) = heard
                 && let Some(listened) = listened.get_mut(track)
             {
                 *listened = true;
@@ -521,7 +526,7 @@ impl Engine {
         }
     }
 
-    /// Whether a track plays its notes: when it's heard, or when a compressor hears it.
+    /// Whether a track plays its notes: when it's heard, or when a compressor or Warps hears it.
     fn plays(&self, index: usize) -> bool {
         self.audible(index) || self.listened[index]
     }
@@ -864,7 +869,7 @@ impl Engine {
         let sounds = self.sounds();
         for (index, track) in self.tracks[..sounds].iter_mut().enumerate() {
             let heard = !track.mute && (!any_solo || track.solo);
-            // One a compressor hears keeps playing, faded out of the mix and the sends.
+            // One a compressor or Warps hears keeps playing, faded out of the mix and the sends.
             track.heard.target = if heard { 1.0 } else { 0.0 };
             if !heard && !self.listened[index] {
                 track.cut_to_tail();
@@ -1383,7 +1388,8 @@ impl Engine {
                     &self.keys,
                 );
                 self.keys.frames[index] = track.key;
-                // Muted but heard by a compressor, it plays on, faded out of the mix and sends.
+                // Muted but heard by a compressor or Warps, it plays on, faded out of the mix and
+                // sends.
                 let heard = track.heard.next(self.smoothing);
                 let dry = shaped.dry.map(|sample| sample * heard);
                 track.reading.add(dry, dry);
