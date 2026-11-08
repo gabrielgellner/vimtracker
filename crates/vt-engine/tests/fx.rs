@@ -777,3 +777,39 @@ fn a_bypassed_slot_lets_the_sound_through_as_it_was() {
         quieter(true)
     );
 }
+
+#[test]
+fn a_limiter_delays_a_quiet_sound_and_holds_a_loud_one_under_its_ceiling() {
+    use vt_model::insert::{Limiter, ceiling_db};
+    let peak = |out: &[[f32; 2]]| {
+        out.iter()
+            .flatten()
+            .fold(0.0_f32, |most, s| most.max(s.abs()))
+    };
+    let plain = distorted([Insert::Empty; 3]);
+    // At its defaults, a sound at half level comes through as it was, 2 ms late.
+    let quiet = distorted([
+        Insert::Limit(Limiter::DEFAULT),
+        Insert::Empty,
+        Insert::Empty,
+    ]);
+    let late = RATE as usize / 500;
+    assert!(quiet[..late].iter().flatten().all(|s| *s == 0.0));
+    for (frame, (got, was)) in quiet[late..].iter().zip(&plain).enumerate() {
+        for side in 0..2 {
+            assert!((got[side] - was[side]).abs() < 1e-5, "{frame}");
+        }
+    }
+    // Driven as hard as it goes into the lowest ceiling, it comes out no louder than that.
+    let hard = Limiter {
+        input: 0xFF,
+        ceiling: 0x00,
+        ..Limiter::DEFAULT
+    };
+    let loud = distorted([Insert::Limit(hard), Insert::Empty, Insert::Empty]);
+    // What the slot let out, as the track's level and pan scale both the same.
+    let ceiling = 10_f32.powf(ceiling_db(0.0) / 20.0);
+    let most = peak(&plain) / 0.5 * ceiling;
+    assert!(peak(&loud) <= most * 1.0001, "{} {most}", peak(&loud));
+    assert!(peak(&loud) > most * 0.9, "{} {most}", peak(&loud));
+}

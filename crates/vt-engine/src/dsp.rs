@@ -14,6 +14,7 @@ pub mod filter;
 pub mod fm;
 pub mod grain;
 pub mod kick;
+pub mod limiter;
 pub mod memory;
 pub mod modal;
 pub mod noise;

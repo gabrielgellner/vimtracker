@@ -179,6 +179,22 @@ change it. Leave `Auto` off for ducking, or the bass is louder between kicks.
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
 | `Gain` | Makes up what it took, or trims `Auto`, on the level scale |
 
+`Limit` keeps a sound's peaks under a ceiling. It looks 2 ms ahead, so it's already
+turned down when a peak arrives, and nothing gets over, however hard it's pushed. Its
+place is the master's first slot, after which the master's own limiter has nothing
+left to catch, but it works on any track. Looking ahead means the track it's on comes
+out 2 ms late, and nothing makes up for that, so on a single track it can sit a
+little behind the others. On the master everything is late together. Both sides are
+turned down together, so the stereo picture doesn't move.
+
+| Setting | Does |
+|---|---|
+| `Input` | Pushes it harder, from 0 dB to +24 dB, for a louder sound |
+| `Ceiling` | The most that comes out, from -24 dB to 0 dB. It starts at -0.3 |
+| `Release` | How fast it lets go, from 1 ms to a second. It starts at 100 ms |
+| `Mix` | Below `FF`, the dry sound blends in, as late as the limited one |
+| `Gain` | After the ceiling, on the level scale, so above `E0` it goes over |
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

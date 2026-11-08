@@ -5,7 +5,7 @@
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
-    Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Insert, Reverb,
+    Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Insert, Limiter, Reverb,
 };
 use vt_model::song::level_gain;
 
@@ -72,7 +72,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Reverb(_), Insert::Reverb(_))
         | (Insert::Chorus(_), Insert::Chorus(_))
         | (Insert::Eq(_), Insert::Eq(_))
-        | (Insert::Compressor(_), Insert::Compressor(_)) => true,
+        | (Insert::Compressor(_), Insert::Compressor(_))
+        | (Insert::Limit(_), Insert::Limit(_)) => true,
         _ => false,
     }
 }
@@ -175,7 +176,8 @@ impl InsertState {
             Insert::Delay(Delay { mix, gain, .. })
             | Insert::Reverb(Reverb { mix, gain, .. })
             | Insert::Chorus(Chorus { mix, gain, .. })
-            | Insert::Compressor(Compressor { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Compressor(Compressor { mix, gain, .. })
+            | Insert::Limit(Limiter { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -233,6 +235,31 @@ impl InsertState {
         wet
     }
 
+    /// One frame through a limiter, all wet, and the dry frame as late. Like `ring`, once it's quiet
+    /// with nothing going in it does no work, and it starts again as if it had let go.
+    #[inline]
+    fn limit(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [[f32; 2]; 2] {
+        let nothing_in = input == [0.0, 0.0];
+        let resting = !self.ringing(rate);
+        if nothing_in && resting {
+            return [[0.0; 2]; 2];
+        }
+        let Some(Memory::Limit(limiter)) = &mut self.memory else {
+            return [[0.0; 2]; 2];
+        };
+        if resting {
+            limiter.rest();
+        }
+        let [wet, dry] = limiter.process(input, smoothing);
+        let quiet = nothing_in && wet.iter().chain(&dry).all(|sample| sample.abs() < SILENT);
+        self.quiet = if quiet {
+            self.quiet.saturating_add(1)
+        } else {
+            0
+        };
+        [wet, dry]
+    }
+
     /// Switch the slot out, or back in. It keeps running underneath, so a tail or a compressor's
     /// state carries on as if it had never gone.
     pub fn bypass(&mut self, bypassed: bool) {
@@ -280,6 +307,16 @@ impl InsertState {
                 return [
                     (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
                     (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            Insert::Limit(_) => {
+                // The dry sound comes out as late as the limited one, so blending them doesn't comb.
+                let [wet, dry] = self.limit(input, smoothing, rate);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (wet[0] * mix + dry[0] * (1.0 - mix)) * gain,
+                    (wet[1] * mix + dry[1] * (1.0 - mix)) * gain,
                 ];
             }
             Insert::Eq(_) => {

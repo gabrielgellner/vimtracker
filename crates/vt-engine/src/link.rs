@@ -177,10 +177,14 @@ impl Handle {
         for _ in self.held.chorus..needed.chorus {
             self.unsent.push(Memory::chorus(self.rate));
         }
+        for _ in self.held.limit..needed.limit {
+            self.unsent.push(Memory::limit(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
             chorus: self.held.chorus.saturating_sub(needed.chorus),
+            limit: self.held.limit.saturating_sub(needed.limit),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -333,6 +337,9 @@ mod tests {
     use super::*;
     use crate::rt_guard::forbidden;
 
+    /// A limiter, which takes a short line from the pool.
+    const LIMIT: Insert = Insert::Limit(vt_model::insert::Limiter::DEFAULT);
+
     const BLOCK: usize = 256;
 
     fn samples() -> Arc<SamplePool> {
@@ -449,8 +456,10 @@ mod tests {
         let mut violations = blocks(&mut rt, 4);
         for round in 0..200 {
             let mut next = song(8, 16);
-            if round % 2 == 0 {
+            if round % 4 == 0 {
                 next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
+            } else if round % 2 == 0 {
+                next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -472,6 +481,7 @@ mod tests {
 
         let mut more = plain.clone();
         more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
+        more.tracks[1].inserts[0] = LIMIT;
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -479,6 +489,7 @@ mod tests {
                 delay: needed.delay + 1,
                 reverb: needed.reverb + 1,
                 chorus: needed.chorus + 1,
+                limit: needed.limit + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -493,7 +504,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 3);
+        assert_eq!(freed, 4);
     }
 
     #[test]
