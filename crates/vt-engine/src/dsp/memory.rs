@@ -9,6 +9,7 @@ use vt_model::song::Song;
 
 use crate::dsp::chorus::Chorus;
 use crate::dsp::delay::Delay;
+use crate::dsp::flanger::Flanger;
 use crate::dsp::limiter::Limiter;
 use crate::dsp::reverb::Reverb;
 use crate::engine::sample_of_tick;
@@ -26,6 +27,7 @@ pub enum Memory {
     Reverb(Box<Reverb>),
     Chorus(Box<Chorus>),
     Limit(Box<Limiter>),
+    Flanger(Box<Flanger>),
 }
 
 impl Memory {
@@ -51,6 +53,11 @@ impl Memory {
         Self::Limit(Box::new(Limiter::new(rate)))
     }
 
+    /// A flanger's.
+    pub fn flanger(rate: u32) -> Self {
+        Self::Flanger(Box::new(Flanger::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -59,6 +66,7 @@ impl Memory {
             Self::Reverb(reverb) => reverb.process(input),
             Self::Chorus(chorus) => chorus.process(input),
             Self::Limit(limiter) => limiter.process_alone(input),
+            Self::Flanger(flanger) => flanger.process(input),
         }
     }
 
@@ -69,6 +77,7 @@ impl Memory {
             Self::Reverb(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,
+            Self::Flanger(flanger) => flanger.frames() as u32,
         }
     }
 
@@ -82,6 +91,9 @@ impl Memory {
             (Self::Reverb(reverb), Insert::Reverb(settings)) => reverb.follow(settings, frames),
             (Self::Chorus(chorus), Insert::Chorus(settings)) => chorus.follow(settings),
             (Self::Limit(limiter), Insert::Limit(settings)) => limiter.follow(settings),
+            (Self::Flanger(flanger), Insert::Flanger(settings)) => {
+                flanger.follow(settings, frames_per_tick);
+            }
             _ => {}
         }
     }
@@ -93,6 +105,7 @@ impl Memory {
             Self::Reverb(reverb) => reverb.settle(),
             Self::Chorus(chorus) => chorus.settle(),
             Self::Limit(limiter) => limiter.settle(),
+            Self::Flanger(flanger) => flanger.settle(),
         }
     }
 
@@ -102,6 +115,7 @@ impl Memory {
             Self::Reverb(reverb) => reverb.clear(),
             Self::Chorus(chorus) => chorus.clear(),
             Self::Limit(limiter) => limiter.clear(),
+            Self::Flanger(flanger) => flanger.clear(),
         }
     }
 }
@@ -113,6 +127,7 @@ pub struct MemoryCount {
     pub reverb: u16,
     pub chorus: u16,
     pub limit: u16,
+    pub flanger: u16,
 }
 
 impl MemoryCount {
@@ -125,7 +140,12 @@ impl MemoryCount {
                 Insert::Reverb(_) => count.reverb += 1,
                 Insert::Chorus(_) => count.chorus += 1,
                 Insert::Limit(_) => count.limit += 1,
-                Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {}
+                Insert::Flanger(_) => count.flanger += 1,
+                Insert::Empty
+                | Insert::Distort(_)
+                | Insert::Eq(_)
+                | Insert::Compressor(_)
+                | Insert::Phaser(_) => {}
             }
         }
         count
@@ -139,6 +159,7 @@ pub struct MemoryPool {
     reverbs: Vec<Memory>,
     choruses: Vec<Memory>,
     limiters: Vec<Memory>,
+    flangers: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -154,6 +175,7 @@ impl MemoryPool {
             reverbs: Vec::with_capacity(POOL_CAPACITY),
             choruses: Vec::with_capacity(POOL_CAPACITY),
             limiters: Vec::with_capacity(POOL_CAPACITY),
+            flangers: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -169,6 +191,9 @@ impl MemoryPool {
         for _ in 0..needed.limit {
             pool.put(Memory::limit(rate));
         }
+        for _ in 0..needed.flanger {
+            pool.put(Memory::flanger(rate));
+        }
         pool
     }
 
@@ -179,6 +204,7 @@ impl MemoryPool {
             Memory::Reverb(_) => &mut self.reverbs,
             Memory::Chorus(_) => &mut self.choruses,
             Memory::Limit(_) => &mut self.limiters,
+            Memory::Flanger(_) => &mut self.flangers,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -196,7 +222,12 @@ impl MemoryPool {
             Insert::Reverb(_) => &mut self.reverbs,
             Insert::Chorus(_) => &mut self.choruses,
             Insert::Limit(_) => &mut self.limiters,
-            Insert::Empty | Insert::Distort(_) | Insert::Eq(_) | Insert::Compressor(_) => {
+            Insert::Flanger(_) => &mut self.flangers,
+            Insert::Empty
+            | Insert::Distort(_)
+            | Insert::Eq(_)
+            | Insert::Compressor(_)
+            | Insert::Phaser(_) => {
                 return None;
             }
         };
@@ -211,6 +242,7 @@ impl MemoryPool {
         self.owed.reverb += count.reverb;
         self.owed.chorus += count.chorus;
         self.owed.limit += count.limit;
+        self.owed.flanger += count.flanger;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -239,12 +271,22 @@ impl MemoryPool {
             self.owed.limit -= 1;
             return Some(memory);
         }
+        if self.owed.flanger > 0
+            && let Some(memory) = self.flangers.pop()
+        {
+            self.owed.flanger -= 1;
+            return Some(memory);
+        }
         None
     }
 
     /// How many are free.
     pub fn spare(&self) -> usize {
-        self.delays.len() + self.reverbs.len() + self.choruses.len() + self.limiters.len()
+        self.delays.len()
+            + self.reverbs.len()
+            + self.choruses.len()
+            + self.limiters.len()
+            + self.flangers.len()
     }
 }
 

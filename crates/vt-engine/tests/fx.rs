@@ -813,3 +813,44 @@ fn a_limiter_delays_a_quiet_sound_and_holds_a_loud_one_under_its_ceiling() {
     assert!(peak(&loud) <= most * 1.0001, "{} {most}", peak(&loud));
     assert!(peak(&loud) > most * 0.9, "{} {most}", peak(&loud));
 }
+
+/// The sound through one slot, which must change it, spread it, and keep it finite and bounded.
+fn changes_and_spreads(insert: Insert) -> Vec<[f32; 2]> {
+    let plain = distorted([Insert::Empty; 3]);
+    let out = distorted([insert, Insert::Empty, Insert::Empty]);
+    assert_ne!(out, plain);
+    // Each side sweeps its own way, so even a sound in the middle comes out wide.
+    assert!(out.iter().any(|[l, r]| (l - r).abs() > 0.01), "it spreads");
+    assert!(
+        out.iter()
+            .flatten()
+            .all(|s| s.is_finite() && s.abs() <= 1.0)
+    );
+    out
+}
+
+#[test]
+fn a_phaser_changes_the_sound_and_spreads_it_even_at_full_feedback() {
+    use vt_model::insert::Phaser;
+    let gentle = changes_and_spreads(Insert::Phaser(Phaser::DEFAULT));
+    let fed_back = changes_and_spreads(Insert::Phaser(Phaser {
+        feedback: 0xFF,
+        stages: 2,
+        ..Phaser::DEFAULT
+    }));
+    assert_ne!(gentle, fed_back);
+}
+
+#[test]
+fn a_flanger_changes_the_sound_and_spreads_it_with_feedback_either_way() {
+    use vt_model::insert::Flanger;
+    let up = changes_and_spreads(Insert::Flanger(Flanger {
+        feedback: 0xFF,
+        ..Flanger::DEFAULT
+    }));
+    let down = changes_and_spreads(Insert::Flanger(Flanger {
+        feedback: 0x00,
+        ..Flanger::DEFAULT
+    }));
+    assert_ne!(up, down);
+}

@@ -195,6 +195,32 @@ turned down together, so the stereo picture doesn't move.
 | `Mix` | Below `FF`, the dry sound blends in, as late as the limited one |
 | `Gain` | After the ceiling, on the level scale, so above `E0` it goes over |
 
+`Phaser` and `Flanger` sweep a sound slowly up and down, after Vital's. Both start
+half wet, which gives the deepest sweep, and each side sweeps a third of a turn
+from the other, so even a sound in the middle comes out wide. Their `Rate` is a
+note length, from `1/64` to `16 bars`, so the sweep keeps time with the song.
+
+`Phaser` runs the sound through a chain of all-passes, which make notches that
+sweep around a centre frequency. `Feedback` sharpens them into peaks.
+
+| Setting | Does |
+|---|---|
+| `Rate` | How long one sweep up and down takes. It starts at `2 bars` |
+| `Depth` | How far it sweeps either way, up to 4 octaves. It starts at 2 |
+| `Centre` | The frequency it sweeps around, from 20 Hz to 20 kHz |
+| `Feedback` | How much goes round again, for a sharper, ringing sound |
+| `Stages` | `4`, `8` or `12` all-passes: each 4 make two more notches |
+
+`Flanger` mixes in a copy that's a few milliseconds late, which makes a comb of
+notches, and sweeps how late it is, for the jet-plane sound.
+
+| Setting | Does |
+|---|---|
+| `Rate` | How long one sweep up and down takes. It starts at `1 bar` |
+| `Depth` | How far the delay sweeps, at `FF` from 0.5 ms to twice `Delay` |
+| `Delay` | How late the copy is at the middle, from 0.5 ms to 10 ms |
+| `Feedback` | None at `80`. Above, it rings brighter; below, hollower |
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

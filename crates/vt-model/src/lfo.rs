@@ -64,6 +64,46 @@ pub const DIVISION_TICKS: [u32; DIVISIONS.len()] = {
     ticks
 };
 
+/// The whole bars a sweep can take, after the divisions.
+const SWEEP_BARS: [(&str, u32); 4] = [
+    ("2 bars", 2 * BAR_TICKS),
+    ("4 bars", 4 * BAR_TICKS),
+    ("8 bars", 8 * BAR_TICKS),
+    ("16 bars", 16 * BAR_TICKS),
+];
+const SWEEPS: usize = DIVISIONS.len() + SWEEP_BARS.len();
+
+/// The lengths an effect's sweep chooses between, as a phaser's or flanger's `Rate`: the note
+/// divisions, then whole bars up to 16, as a slow sweep wants.
+pub const SWEEP_NAMES: [&str; SWEEPS] = {
+    let mut names = [""; SWEEPS];
+    let mut at = 0;
+    while at < SWEEPS {
+        names[at] = if at < DIVISIONS.len() {
+            DIVISIONS[at].0
+        } else {
+            SWEEP_BARS[at - DIVISIONS.len()].0
+        };
+        at += 1;
+    }
+    names
+};
+
+/// How many ticks each sweep takes.
+pub const SWEEP_TICKS: [u32; SWEEPS] = {
+    let mut ticks = [0; SWEEPS];
+    let mut at = 0;
+    while at < SWEEPS {
+        ticks[at] = if at < DIVISIONS.len() {
+            DIVISIONS[at].1
+        } else {
+            SWEEP_BARS[at - DIVISIONS.len()].1
+        };
+        at += 1;
+    }
+    ticks
+};
+
 /// How long one cycle takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Rate {
