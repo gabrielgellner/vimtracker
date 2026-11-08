@@ -188,8 +188,6 @@ pub struct App {
     pub note_velocity: u8,
     /// The field a replace started on, since typing an FX command moves on to its value.
     pub(crate) replacing: Option<Field>,
-    /// The step last written in Insert, and where that left the cursor.
-    pub(crate) last_entry: Option<(usize, usize)>,
     pub command_line: String,
     pub status: String,
     pub transport: Transport,
@@ -206,6 +204,8 @@ pub struct App {
     pub levels: Vec<TrackLive>,
     /// The scale, likewise, as it's for entering notes and isn't part of what's undone.
     pub scale: Scale,
+    /// Whether entering in Insert moves on by the grid, likewise.
+    pub auto_jump: bool,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
     pub top: usize,
@@ -263,6 +263,7 @@ impl App {
     ) -> Self {
         let levels = live_from(&song);
         let scale = song.scale;
+        let auto_jump = song.auto_jump;
         let mut app = Self {
             history: History::new(Arc::new(song)),
             folder,
@@ -308,7 +309,6 @@ impl App {
             octave: 4,
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
-            last_entry: None,
             command_line: String::new(),
             status: String::new(),
             transport: Transport::Stopped,
@@ -320,6 +320,7 @@ impl App {
             should_quit: false,
             levels,
             scale,
+            auto_jump,
             entry: Entry::default(),
             top: 0,
             view_height: 16,
@@ -387,6 +388,7 @@ impl App {
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
         song.scale = self.scale;
+        song.auto_jump = self.auto_jump;
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
@@ -784,7 +786,6 @@ impl App {
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
-                self.last_entry = None;
                 self.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
@@ -1257,8 +1258,8 @@ impl App {
             (KeyCode::Down, _) => Some(1),
             (KeyCode::Left, true) => Some(snap_by(self.current_row(), skip, false)),
             (KeyCode::Right, true) => Some(snap_by(self.current_row(), skip, true)),
-            (KeyCode::Left, false) => Some(self.skip_by(skip, false)),
-            (KeyCode::Right, false) => Some(self.skip_by(skip, true)),
+            (KeyCode::Left, false) => Some(-(skip as isize)),
+            (KeyCode::Right, false) => Some(skip as isize),
             _ => None,
         };
         if let Some(by) = arrow {
@@ -1275,6 +1276,10 @@ impl App {
                     _ => self.insert_track_page(key.code),
                 }
             }
+            return;
+        }
+        if key.code == KeyCode::Char(';') && !key.ctrl && !key.alt {
+            self.toggle_auto_jump();
             return;
         }
         match self.cursor.field {
@@ -1339,8 +1344,8 @@ impl App {
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
+                self.back_for_clearing();
                 self.clear_note();
-                self.move_step(-1);
             }
             KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
             KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
@@ -1378,24 +1383,8 @@ impl App {
         self.extent().row(self.cursor.step)
     }
 
-    /// How far a plain left or right arrow moves: one skip from the entry just written, so its
-    /// offset within the beat is kept, or else from the cursor.
-    fn skip_by(&self, skip: usize, forward: bool) -> isize {
-        if skip == 0 {
-            return 0;
-        }
-        let step = self.cursor.step as isize;
-        let from = match self.last_entry {
-            Some((written, landed)) if landed == self.cursor.step => written as isize,
-            _ => step,
-        };
-        let skip = skip as isize;
-        from + if forward { skip } else { -skip } - step
-    }
-
     /// Move without writing, staying in Insert. Anything half typed is dropped.
     fn insert_move(&mut self, by: isize) {
-        self.last_entry = None;
         if !self.entry.text.is_empty() || self.entry.command.is_some() {
             self.cancel_entry();
             self.mode = Mode::Insert;
@@ -1480,13 +1469,14 @@ impl App {
         });
     }
 
-    /// Two hex digits commit and move down by the step setting. A command typed just before
+    /// Two hex digits commit, and auto-jump moves on by the grid. A command typed just before
     /// takes effect here, so typing `CUT` during playback doesn't close the filter.
     fn insert_value(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
             KeyCode::Backspace => {
                 if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
                     match self.cursor.field {
                         Field::Velocity => self.set_field(FieldValue::Velocity(None)),
                         Field::FxValue(slot) if self.entry.command.is_none() => {
@@ -1494,7 +1484,6 @@ impl App {
                         }
                         _ => {}
                     }
-                    self.move_step(-1);
                 }
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
@@ -1542,15 +1531,15 @@ impl App {
         self.advance();
     }
 
-    /// Two hex digits set a value's fine part, keeping its coarse digits, and move down by the
-    /// step setting.
+    /// Two hex digits set a value's fine part, keeping its coarse digits, and auto-jump moves on
+    /// by the grid.
     fn insert_fine(&mut self, key: Key, slot: usize) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
             KeyCode::Backspace => {
                 if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
                     self.set_fine(slot, 0);
-                    self.move_step(-1);
                 }
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
@@ -1611,8 +1600,8 @@ impl App {
             KeyCode::Esc => self.cancel_entry(),
             KeyCode::Backspace => {
                 if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
                     self.set_field(FieldValue::Slot(slot, FxSlot::default()));
-                    self.move_step(-1);
                 }
             }
             // A label is 3 or 4 letters, after a slot's digit for an effect's setting.
@@ -1648,8 +1637,8 @@ impl App {
             KeyCode::Esc => self.cancel_entry(),
             KeyCode::Backspace => {
                 if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
                     self.set_field(FieldValue::Gate(None));
-                    self.move_step(-1);
                 }
             }
             KeyCode::Char(c @ '0'..='9') if !key.ctrl && self.entry.text.len() != 1 => {
@@ -1699,10 +1688,29 @@ impl App {
             self.finish_replace();
             return;
         }
-        let written = self.cursor.step;
-        let by = self.song().step as isize;
-        self.move_step(by);
-        self.last_entry = Some((written, self.cursor.step));
+        if self.auto_jump {
+            self.move_step(self.song().skip as isize);
+        }
+    }
+
+    /// Before `Backspace` clears: with auto-jump, back one grid cell to the last entry, and
+    /// without, it clears where it is.
+    fn back_for_clearing(&mut self) {
+        if self.auto_jump {
+            self.move_step(-(self.song().skip as isize));
+        }
+    }
+
+    /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
+    /// undo.
+    fn toggle_auto_jump(&mut self) {
+        self.auto_jump = !self.auto_jump;
+        self.dirty = true;
+        self.status = if self.auto_jump {
+            "Auto-jump on: each entry moves on by the grid".to_owned()
+        } else {
+            "Auto-jump off: entering stays put".to_owned()
+        };
     }
 
     fn write_note(&mut self, note: Note) {
@@ -1801,7 +1809,6 @@ impl App {
                 path, rows, tail, ..
             } => self.render(&path, rows, tail),
             Line::Double => self.double(),
-            Line::SetStep(size) => self.apply(&Action::SetStepSize(size)),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
             Line::SetScale(kind) => self.set_scale(Scale {
                 on: true,
@@ -1988,6 +1995,7 @@ impl App {
         self.samples = Arc::new(pool);
         self.levels = live_from(&song);
         self.scale = song.scale;
+        self.auto_jump = song.auto_jump;
         self.send_live();
         self.history = History::new(Arc::new(song));
         self.folder = folder;

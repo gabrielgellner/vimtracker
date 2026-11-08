@@ -4,20 +4,22 @@ Put the cursor on the Note column, as the status line shows, and press `i`.
 The keyboard is now a piano, laid out as in Ableton:
 
 ```
- w e   t y u   o p      black keys
-a s d f g h j k l ;     white keys, a is C
+ w e   t y u   o        black keys
+a s d f g h j k l       white keys, a is C
 z x c v                 octave and velocity
 ```
 
-So in Insert, `j` is a note. **Each note plays, is written and moves down**
-by the step setting.
+So in Insert, `j` is a note. **Each note plays and is written, and the cursor
+stays on it**, so you can play another in over it, even while the song plays.
+`;` turns on auto-jump: then each note moves on by the grid.
 
 | Keys | Does |
 |---|---|
 | `z` `x` | Octave down or up. The status line shows it as `Oct` |
 | `c` `v` | Lower or raise the velocity written. The status line shows `Vel` |
 | `1` | Note off |
-| `Backspace` | Clear this note and move up |
+| `;` | Auto-jump on or off. The status line shows `Jump` |
+| `Backspace` | Clear this note. With auto-jump, back a grid step first |
 | `Tab` | Play or pause, and stay in Insert |
 | `Shift-Tab` | Play from the start, and stay in Insert |
 | `Esc` | Back to Normal mode |
@@ -34,38 +36,33 @@ The arrows move and write nothing, and you stay in Insert.
 | Keys | Does |
 |---|---|
 | `Up` `Down` | One step |
-| `Left` `Right` | One beat from the note you just wrote |
+| `Left` `Right` | Back or on by the grid |
 | `Shift-Left` `Shift-Right` | To the previous or next beat on the grid |
 
 A plain arrow keeps a note's place in the beat. For hats on the "and", start
-on step 2 and press `a` then `Right` over and over: steps 2, 6, A and E. If
-you haven't just written a note, it counts from the cursor.
+on step 2 and press `a` then `Right` over and over: steps 2, 6, A and E.
 
 The distance is the grid, shown as `Grid` on the status line. As in Ableton,
 `Option-1` makes it narrower and `Option-2` wider, halving or doubling it from
 `1/16` up to a bar, in Insert and Normal. `:set skip=8` sets it to any number of
 steps. Anything half typed in another column is dropped when you move.
 
-## Writing every few steps
+## Auto-jump
 
-Set how far each note moves, which suits drums.
-
-| Command | Does |
-|---|---|
-| `:set step=4` | Each note moves 4 steps, so one on every beat |
-| `:set step=2` | Every eighth note |
-| `:set step=0` | Stay put, to audition notes on one step |
-| `:set step=1` | Back to the start setting |
+With auto-jump on, each note moves on by the grid by itself, which suits
+drums: with the grid at a beat, `a a a a` puts one on every beat. Narrow the
+grid to `1/16` with `Option-1` to write every step. It's kept with the song,
+and isn't undone.
 
 ## Scales
 
 Set a scale and the home row plays it, with `a` on the root, going up through
-the scale from `a` to `;`. The row above is silent, so every key is in key. The
+the scale from `a` to `l`. The row above is silent, so every key is in key. The
 grid still shows real note names.
 
 ```
- a s d f g h j k l ;
- 1 2 3 4 5 6 7 1 2 3     scale degrees, in a seven-note scale
+ a s d f g h j k l
+ 1 2 3 4 5 6 7 1 2       scale degrees, in a seven-note scale
 ```
 
 | Keys | Does |
@@ -112,7 +109,7 @@ Press `l` in Normal mode to move to another column, then `i`:
 
 | Column | In Insert |
 |---|---|
-| Velocity | Two hex digits up to `7F`, such as `40`, then it moves down |
+| Velocity | Two hex digits up to `7F`, such as `40`. Auto-jump moves on |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
 | FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
 

@@ -927,10 +927,11 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves by the top digit from `04` up to `74`, then `7F`. The note heard while typing uses it |
 | Insert | `Tab`, `Shift-Tab` | Play or pause, and play from the start |
 | Insert | `Up Down` | Move one step without writing |
-| Insert | `Left Right` | Move by the skip setting, which starts at 4, without writing. It counts from the entry just written, so the entry's offset in the beat is kept, or else from the cursor |
+| Insert | `Left Right` | Move by the grid (the skip setting), which starts at 4, without writing (decision 48) |
 | Insert | `Shift-Left Shift-Right` | Move to the previous or next multiple of the skip setting, without writing |
-| Insert (note) | `Backspace` | Clear the field and move up |
-| Insert (value) | `0-9 a-f` | Two digits commit and move down by the step setting |
+| Insert | `;` | Auto-jump on or off: whether entering moves on by the grid (decision 48) |
+| Insert (note) | `Backspace` | Clear the field. With auto-jump, move back a grid step first |
+| Insert (value) | `0-9 a-f` | Two digits commit, and auto-jump moves on by the grid |
 | Insert (instrument) | `0-9 a-z` | Two characters commit a number or label and move down. `Enter` commits one digit |
 | Insert (FX command) | Letters | Typed in uppercase. An invalid name is refused with a message and leaves the field unchanged |
 | Insert | `Esc` | Normal mode |
@@ -968,8 +969,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:reset n`, `:reset off` | Send every track to its start every `n` steps, or let them run. Off by default |
 | `:kit [name or path]` | Make a kit's sounds the ones `Space 5` lists first, or choose a kit. With `all` after it, put them on tracks from the first as one undo step. See Decision 14 |
 | `:seed n` | Project random seed |
-| `:set step=n` | Insert step |
-| `:set skip=n` | How far `Left` and `Right` move in Insert, the grid on the status line |
+| `:set skip=n` | The grid: how far `Left`, `Right` and auto-jump move in Insert, shown on the status line |
 | `:set scale=kind`, `:set root=note` | A scale's kind and root, either turning it on |
 | `:set scale=on`, `off` | Turn the scale on or off |
 | `:scale`, `:scale fit` | Choose a kind from a list, or move this phrase's notes into the scale |
@@ -2001,3 +2001,4 @@ The EGM review concluded on 2026-11-05 with its re-audit limit used, and these f
 
 *Drafted with EGM*
 47. **`Diode` is a track filter type too, the same diode ladder as `Acid`'s** (Vital's `DiodeFilter`, ported for #171). Its rate-dependent feedback coefficient is passed in rather than stored, so a track's filter channel can hold one. It runs at 2x, as `Ladder` does, and always saturates. Its cutoff is set so its resonance peaks at `Cut`, as `Ladder`'s does, which means with little resonance it falls well under `Cut`, the 303's soft, early slope. Its stages hear each other a sample late, which pulled its resonance up to 365 cents flat at 8 kHz, and its feedback high-pass pulled it sharp near 200 Hz, so the cutoff is corrected for both, and it now rings within 35 cents of `Cut` from 200 Hz to 8 kHz. It goes in at half level, as its last stage clips at 1, and comes out about as loud as it went in at no resonance. `Drive` is its own drive. The curve drawn for it is the four one-poles and the feedback high-pass worked out as an analog filter, which matches what it does to within 1 dB. Vital's other diode style, with a sweepable high-pass before it, is left out. Added on 2026-11-08.
+48. **Entering in Insert stays put, and `;` turns on auto-jump, which moves on by the grid** (#192). It used to move down by a step setting, 1 to start with, and the left and right arrows counted their jump from the entry just written so it kept its place in the beat. Now an entry stays where it's written, so another key plays and writes over it, even while the song plays, and the arrows jump by the grid from the cursor, with nothing to work out. Polyend's Tracker (read in tracker-ce's `fPatternEdit.cpp`) has one `Step` value, from 0 to 32 and 1 to start with, which every entry and delete moves by, with its arrows always one row; Renoise's Edit Step is the same. Here there's one number, the grid, which `Option-1` and `Option-2` already set, and auto-jump says whether entering uses it, so the step setting and `:set step` are gone. `;` toggles it, with `Jump` beside `Grid` on the status line while it's on, as `;` toggles audition on the track page; it's kept with the song and, like the scale, isn't undone. To free `;`, the keyboard ends at `l`, as Ableton's does, so `p` and `;` are no longer notes, and the scale's home row is `a` to `l`. `Backspace` clears the cell, and with auto-jump on goes back a grid step first, so it clears the last entry. An advance of one step as a separate case was left out: narrowing the grid does it. Added on 2026-11-08.

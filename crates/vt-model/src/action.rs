@@ -147,8 +147,6 @@ pub enum Action {
         track: usize,
         phrase: u32,
     },
-    /// Set how far Insert moves down after a note.
-    SetStepSize(u32),
     SetSkipSize(u32),
     SetLimiter(bool),
     /// Set the project's random seed.
@@ -623,7 +621,6 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         Action::Double { track, phrase } => {
             phrase_mut(&mut next, *track, *phrase)?.double();
         }
-        Action::SetStepSize(size) => next.step = *size,
         Action::SetSkipSize(size) => next.skip = *size,
         Action::SetLimiter(on) => next.limiter = *on,
         Action::SetSeed(seed) => next.seed = *seed,

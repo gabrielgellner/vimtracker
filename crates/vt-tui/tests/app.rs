@@ -72,26 +72,67 @@ fn block(realtime: &mut Realtime, app: &mut App) {
     app.tick();
 }
 
+/// Turn auto-jump on with a grid of one row, so entries go down the rows one by one.
+fn entering_steps_down(app: &mut App) {
+    command(app, "set skip=1");
+    app.auto_jump = true;
+}
+
 #[test]
-fn insert_mode_writes_notes_and_moves_down() {
+fn insert_mode_writes_notes_where_the_cursor_is() {
     let (mut app, _rt) = app();
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Insert);
-    press(&mut app, "ak1");
-    let written = notes(&app);
-    assert_eq!(written[0], Note::On(60));
-    assert_eq!(written[1], Note::On(72));
-    assert_eq!(written[2], Note::Off);
-    assert_eq!(app.cursor.step, 3);
+    press(&mut app, "a");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    assert_eq!(app.cursor.step, 0, "it stays, to play another in");
+    press(&mut app, "k");
+    assert_eq!(notes(&app)[0], Note::On(72));
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(notes(&app)[0], Note::Empty, "Backspace clears it there");
+    assert_eq!(app.cursor.step, 0);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
 }
 
 #[test]
+fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
+    let (mut app, _rt) = app();
+    let depth = app.history.undo_depth();
+    press(&mut app, "i;");
+    assert!(app.auto_jump);
+    assert_eq!(app.history.undo_depth(), depth, "it isn't an edit to undo");
+    assert!(app.dirty, "but it is saved");
+    press(&mut app, "ak1");
+    let written = notes(&app);
+    assert_eq!(written[0], Note::On(60));
+    assert_eq!(written[4], Note::On(72));
+    assert_eq!(written[8], Note::Off);
+    assert_eq!(app.cursor.step, 12);
+    // Back to the last entry, and clear it.
+    special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.cursor.step, 8);
+    assert_eq!(notes(&app)[8], Note::Empty);
+    press(&mut app, ";");
+    assert!(!app.auto_jump);
+    press(&mut app, "a");
+    assert_eq!(app.cursor.step, 8);
+
+    // It's kept with the song.
+    press(&mut app, ";");
+    special(&mut app, KeyCode::Esc);
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    let (mut other, _realtime) = self::app();
+    command(&mut other, &format!("e {}", path.display()));
+    assert!(other.auto_jump, "{}", other.status);
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
 fn octave_keys_change_entered_notes() {
     let (mut app, _rt) = app();
+    entering_steps_down(&mut app);
     press(&mut app, "izaxxa");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(48));
@@ -854,7 +895,7 @@ mod autosave {
         assert!(!path.join(AUTOSAVE).exists());
 
         // A real save clears it.
-        press(&mut app, "ia");
+        press(&mut app, "is");
         special(&mut app, KeyCode::Esc);
         app.autosave_if_due(later(start, 260));
         assert!(path.join(AUTOSAVE).exists());
@@ -1045,12 +1086,12 @@ fn the_guides_moves_do_what_they_say() {
     special(&mut app, KeyCode::Esc);
     press(&mut app, "ji");
     assert_eq!(app.mode, Mode::Insert);
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.cursor.step, 1, "the note stayed put, and j went on one");
     special(&mut app, KeyCode::Esc);
 
     press(&mut app, "gg");
-    command(&mut app, "set step=4");
-    press(&mut app, "iaaaa");
+    press(&mut app, "i;");
+    press(&mut app, "aaaa");
     special(&mut app, KeyCode::Esc);
     let written: Vec<usize> = notes(&app)
         .iter()
@@ -1060,7 +1101,9 @@ fn the_guides_moves_do_what_they_say() {
         .collect();
     assert_eq!(written, [0, 4, 8, 12]);
 
-    command(&mut app, "set step=0");
+    press(&mut app, "i;");
+    assert!(!app.auto_jump);
+    special(&mut app, KeyCode::Esc);
     press(&mut app, "gg");
     let before = app.cursor.step;
     press(&mut app, "ia");
@@ -1117,15 +1160,14 @@ fn an_arrow_drops_a_half_typed_value() {
 #[test]
 fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     let (mut app, _realtime) = app();
-    command(&mut app, "set step=0");
     press(&mut app, "ia");
     assert_eq!(notes(&app)[0], Note::On(60));
     press(&mut app, "w");
     assert_eq!(notes(&app)[0], Note::On(61));
     press(&mut app, "k");
     assert_eq!(notes(&app)[0], Note::On(72));
-    press(&mut app, "x;");
-    assert_eq!(notes(&app)[0], Note::On(88));
+    press(&mut app, "xl");
+    assert_eq!(notes(&app)[0], Note::On(86), "up to `l`, as in Ableton");
     press(&mut app, "zz");
     assert_eq!(app.octave, 3);
 
@@ -1296,43 +1338,27 @@ fn right_keeps_a_notes_offset_within_the_beat() {
 }
 
 #[test]
-fn right_counts_from_the_note_with_any_skip_or_step() {
+fn left_and_right_move_by_the_grid_from_the_cursor() {
     let (mut app, _realtime) = app();
     command(&mut app, "set skip=8");
     press(&mut app, "ia");
     special(&mut app, KeyCode::Right);
     press(&mut app, "a");
     assert_eq!(written_steps(&app), [0, 8]);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 0);
 
+    // With auto-jump the cursor is already on the next cell, and an arrow goes on from there.
     let (mut app, _realtime) = self::app();
-    command(&mut app, "set step=2");
-    press(&mut app, "ia");
-    assert_eq!(app.cursor.step, 2);
-    special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 4);
-}
-
-#[test]
-fn left_counts_from_the_note_too_and_any_other_move_forgets_it() {
-    let (mut app, _realtime) = app();
+    app.auto_jump = true;
     press(&mut app, "8Gi");
     press(&mut app, "a");
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.cursor.step, 11);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.cursor.step, 15);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 3);
-
-    press(&mut app, "a");
-    assert_eq!(app.cursor.step, 4);
-    special(&mut app, KeyCode::Up);
-    special(&mut app, KeyCode::Down);
-    special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 8);
-
-    press(&mut app, "a");
-    special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.cursor.step, 8);
-    special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 12);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.cursor.step, 7);
 }
 
 #[test]
@@ -1340,7 +1366,7 @@ fn shift_arrows_snap_to_the_grid() {
     let (mut app, _realtime) = app();
     press(&mut app, "jji");
     press(&mut app, "a");
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.cursor.step, 2);
     shifted(&mut app, KeyCode::Right);
     assert_eq!(app.cursor.step, 4);
     shifted(&mut app, KeyCode::Right);
@@ -2120,11 +2146,17 @@ fn backspace_clears_a_note_with_what_it_was_written_with_but_keeps_fx() {
     let (mut app, _realtime) = app();
     press(&mut app, "ia");
     special(&mut app, KeyCode::Backspace);
-    let step = &app.song().tracks[0].phrases[&0].steps()[1];
-    assert_eq!(step.note, Note::Empty);
     let first = &app.song().tracks[0].phrases[&0].steps()[0];
-    assert_eq!(first.note, Note::On(60), "it clears where the cursor was");
+    assert_eq!(first.note, Note::Empty);
+    assert_eq!(first.velocity, None);
+
+    // With auto-jump, it goes back to the note first.
+    let (mut app, _realtime) = self::app();
+    entering_steps_down(&mut app);
+    press(&mut app, "ia");
+    assert_eq!(app.cursor.step, 1);
     special(&mut app, KeyCode::Backspace);
+    assert_eq!(app.cursor.step, 0);
     let first = &app.song().tracks[0].phrases[&0].steps()[0];
     assert_eq!(first.note, Note::Empty);
     assert_eq!(first.velocity, None);
@@ -5012,10 +5044,11 @@ fn with_a_scale_the_home_row_goes_up_it_from_the_root() {
     command(&mut app, "set root=d");
     command(&mut app, "set scale=dorian");
     assert!(app.scale.on, "setting one turns it on");
-    press(&mut app, "iasdfghjkl;");
+    entering_steps_down(&mut app);
+    press(&mut app, "iasdfghjkl");
     assert_eq!(
         written_notes(&app),
-        [62, 64, 65, 67, 69, 71, 72, 74, 76, 77].map(Note::On)
+        [62, 64, 65, 67, 69, 71, 72, 74, 76].map(Note::On)
     );
 }
 
@@ -5023,6 +5056,7 @@ fn with_a_scale_the_home_row_goes_up_it_from_the_root() {
 fn with_a_scale_the_row_above_is_silent_and_note_off_and_octave_still_work() {
     let (mut app, _realtime) = app();
     command(&mut app, "set scale=major");
+    entering_steps_down(&mut app);
     let start = app.cursor.step;
     press(&mut app, "iwetyuop");
     assert!(written_notes(&app).is_empty());
@@ -5050,6 +5084,7 @@ fn replacing_a_note_folds_too() {
 #[test]
 fn option_s_turns_the_scale_off_and_on_and_remembers_it() {
     let (mut app, _realtime) = app();
+    entering_steps_down(&mut app);
     command(&mut app, "set root=d");
     command(&mut app, "set scale=dorian");
     press(&mut app, "i");
@@ -5134,6 +5169,7 @@ fn with_the_scale_off_notes_move_chromatically() {
 #[test]
 fn scale_fit_moves_a_phrases_notes_and_can_be_undone() {
     let (mut app, _realtime) = app();
+    entering_steps_down(&mut app);
     press(&mut app, "iawe");
     special(&mut app, KeyCode::Esc);
     let before = written_notes(&app);
@@ -5183,6 +5219,7 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
             .collect::<String>()
     };
     let (mut app, _realtime) = app();
+    entering_steps_down(&mut app);
     press(&mut app, "iaw");
     special(&mut app, KeyCode::Esc);
     // The cursor isn't on these.
