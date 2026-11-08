@@ -6,8 +6,9 @@
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
     CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, FLANGER_PARAMS,
-    INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, Param, REVERB_PARAMS, Setting, attack_ms,
-    ceiling_db, flanger_delay_ms, input_db, limit_release_ms, ratio, release_ms, threshold_db,
+    INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, Param, REVERB_PARAMS, Setting, TAPE_PARAMS,
+    attack_ms, ceiling_db, flanger_delay_ms, input_db, limit_release_ms, ratio, release_ms,
+    tape_drive_db, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -62,6 +63,8 @@ pub enum Units {
     LimitRelease,
     /// A flanger's delay at the middle of its sweep, in ms.
     FlangerDelay,
+    /// A tape's drive, in dB either way of none.
+    TapeDrive,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -139,6 +142,7 @@ impl Kind {
                 Units::Ceiling => format!("{:.1} dB", ceiling_db(coarse as f32)),
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
                 Units::FlangerDelay => format!("{:.1} ms", flanger_delay_ms(coarse as f32)),
+                Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -473,10 +477,11 @@ pub enum Effect {
     Limit,
     Phaser,
     Flanger,
+    Tape,
 }
 
 impl Effect {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -486,6 +491,7 @@ impl Effect {
         Self::Limit,
         Self::Phaser,
         Self::Flanger,
+        Self::Tape,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -501,6 +507,7 @@ impl Effect {
             Self::Limit => &LIMIT_PARAMS,
             Self::Phaser => &PHASER_PARAMS,
             Self::Flanger => &FLANGER_PARAMS,
+            Self::Tape => &TAPE_PARAMS,
         }
     }
 
@@ -515,6 +522,7 @@ impl Effect {
             Self::Limit => "limit",
             Self::Phaser => "phaser",
             Self::Flanger => "flanger",
+            Self::Tape => "tape",
         }
     }
 
@@ -529,6 +537,7 @@ impl Effect {
             Self::Limit => "Limit",
             Self::Phaser => "Phaser",
             Self::Flanger => "Flanger",
+            Self::Tape => "Tape",
         }
     }
 
@@ -545,6 +554,7 @@ impl Effect {
             Insert::Limit(_) => Some(Self::Limit),
             Insert::Phaser(_) => Some(Self::Phaser),
             Insert::Flanger(_) => Some(Self::Flanger),
+            Insert::Tape(_) => Some(Self::Tape),
         }
     }
 }
@@ -572,7 +582,8 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::LimitRelease => (false, Units::LimitRelease),
                 Setting::Centre => (false, Units::Hertz),
                 Setting::FlangerDelay => (false, Units::FlangerDelay),
-                Setting::FlangerFeedback => (true, Units::Percent),
+                Setting::FlangerFeedback | Setting::Tone | Setting::Bias => (true, Units::Percent),
+                Setting::TapeDrive => (true, Units::TapeDrive),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -683,6 +694,17 @@ const fn effect_start(effect: Effect) -> usize {
                 + LIMIT_PARAMS.len()
                 + PHASER_PARAMS.len()
         }
+        Effect::Tape => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+        }
     }
 }
 
@@ -697,7 +719,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + COMPRESSOR_PARAMS.len()
     + LIMIT_PARAMS.len()
     + PHASER_PARAMS.len()
-    + FLANGER_PARAMS.len();
+    + FLANGER_PARAMS.len()
+    + TAPE_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.

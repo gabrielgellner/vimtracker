@@ -22,6 +22,7 @@ pub enum Insert {
     Limit(Limiter),
     Phaser(Phaser),
     Flanger(Flanger),
+    Tape(Tape),
 }
 
 /// What a distortion does to the sound.
@@ -109,6 +110,14 @@ pub enum Setting {
     /// A flanger's delay at the middle of its sweep, and its feedback, negative below `80`.
     FlangerDelay,
     FlangerFeedback,
+    /// A tape's: how hard it's driven, its tilt, its bias, its head bump, and its slow and fast
+    /// wobble.
+    TapeDrive,
+    Tone,
+    Bias,
+    Bump,
+    Wow,
+    Flutter,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -587,11 +596,16 @@ pub fn flanger_delay_ms(value: f32) -> f32 {
     SHORTEST_FLANGE_MS * (LONGEST_FLANGE_MS / SHORTEST_FLANGE_MS).powf(value / 255.0)
 }
 
-/// A flanger's feedback from -1 to 1 for a value on the `00` to `FF` scale, with none at `80`.
-/// The sides have their own scales, as there are 128 values below the middle and 127 above.
-pub fn flanger_feedback(value: f32) -> f32 {
+/// How far a value on the `00` to `FF` scale is from `80`, from -1 to 1. The sides have their own
+/// scales, as there are 128 values below the middle and 127 above.
+pub fn from_middle(value: f32) -> f32 {
     let from_middle = value - 128.0;
     from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 }
+}
+
+/// A flanger's feedback from -1 to 1 for a value on the `00` to `FF` scale, with none at `80`.
+pub fn flanger_feedback(value: f32) -> f32 {
+    from_middle(value)
 }
 
 /// How many all-passes a phaser can have, as Vital's does: each four make two notches.
@@ -675,6 +689,42 @@ pub(crate) const FLANGER_PARAMS: [Param; 6] = [
     GAIN_PARAM,
 ];
 
+/// How far a tape's `Drive` turns what goes in up or down, at either end, in dB.
+pub const MOST_TAPE_DRIVE_DB: f32 = 18.0;
+
+/// A tape's drive in dB, for a value on the `00` to `FF` scale: from -18 dB, through 0 dB at `80`,
+/// to +18 dB.
+pub fn tape_drive_db(value: f32) -> f32 {
+    from_middle(value) * MOST_TAPE_DRIVE_DB
+}
+
+/// A tape's, in the order the page shows them.
+pub(crate) const TAPE_PARAMS: [Param; 8] = [
+    hex_param(
+        "Drive",
+        "drive",
+        "DRIV",
+        Setting::TapeDrive,
+        Tape::DEFAULT.drive,
+    ),
+    hex_param("Tone", "tone", "TONE", Setting::Tone, Tape::DEFAULT.tone),
+    hex_param("Bias", "bias", "BIAS", Setting::Bias, Tape::DEFAULT.bias),
+    hex_param("Bump", "bump", "BUMP", Setting::Bump, Tape::DEFAULT.bump),
+    hex_param("Wow", "wow", "WOW", Setting::Wow, Tape::DEFAULT.wow),
+    hex_param(
+        "Flutter",
+        "flutter",
+        "FLUT",
+        Setting::Flutter,
+        Tape::DEFAULT.flutter,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -683,7 +733,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -694,6 +744,7 @@ impl Insert {
         Self::Limit(Limiter::DEFAULT),
         Self::Phaser(Phaser::DEFAULT),
         Self::Flanger(Flanger::DEFAULT),
+        Self::Tape(Tape::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -721,6 +772,7 @@ impl Insert {
             Self::Limit(_) => "Limit",
             Self::Phaser(_) => "Phaser",
             Self::Flanger(_) => "Flanger",
+            Self::Tape(_) => "Tape",
         }
     }
 
@@ -737,6 +789,7 @@ impl Insert {
             Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
             Self::Phaser(_) => "Sweeps notches through it with all-passes",
             Self::Flanger(_) => "Sweeps a comb through it with a short delay",
+            Self::Tape(_) => "Saturates, warms and wobbles it as tape does",
         }
     }
 
@@ -757,6 +810,7 @@ impl Insert {
             Self::Limit(_) => &LIMIT_PARAMS,
             Self::Phaser(_) => &PHASER_PARAMS,
             Self::Flanger(_) => &FLANGER_PARAMS,
+            Self::Tape(_) => &TAPE_PARAMS,
         }
     }
 
@@ -830,6 +884,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| flanger.read(setting));
             }
+            Self::Tape(tape) => {
+                return TAPE_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| tape.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -860,6 +920,7 @@ impl Insert {
             Self::Limit(limiter) => return Self::Limit(limiter.written(setting, whole)),
             Self::Phaser(phaser) => return Self::Phaser(phaser.written(setting, whole)),
             Self::Flanger(flanger) => return Self::Flanger(flanger.written(setting, whole)),
+            Self::Tape(tape) => return Self::Tape(tape.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1468,6 +1529,81 @@ impl Flanger {
     }
 }
 
+/// A tape's settings, after Airwindows' ToTape. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Tape {
+    /// How hard it's driven into the tape, from -18 dB to +18 dB, with none at `80`.
+    pub drive: u8,
+    /// Its tilt: darker below `80` and brighter above.
+    pub tone: u8,
+    /// None at `80`. Above, it's overbiased, which softens what moves fast; below, underbiased,
+    /// which makes quiet detail stick and crackle.
+    pub bias: u8,
+    /// How much the heads boost the lows, around 69 Hz.
+    pub bump: u8,
+    /// The slow wobble in pitch, and the fast one.
+    pub wow: u8,
+    pub flutter: u8,
+    /// From `00`, all dry, to `FF`, all through the tape.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Tape {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Tape {
+    /// As it starts: driven at 0 dB with no tilt and no bias, and half the head bump, as ToTape's
+    /// controls all start half way, with a little wow and flutter, and all wet.
+    pub const DEFAULT: Self = Self {
+        drive: 0x80,
+        tone: 0x80,
+        bias: 0x80,
+        bump: 0x80,
+        wow: 0x40,
+        flutter: 0x40,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::TapeDrive => self.drive,
+            Setting::Tone => self.tone,
+            Setting::Bias => self.bias,
+            Setting::Bump => self.bump,
+            Setting::Wow => self.wow,
+            Setting::Flutter => self.flutter,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut tape = self;
+        match setting {
+            Setting::TapeDrive => tape.drive = value,
+            Setting::Tone => tape.tone = value,
+            Setting::Bias => tape.bias = value,
+            Setting::Bump => tape.bump = value,
+            Setting::Wow => tape.wow = value,
+            Setting::Flutter => tape.flutter = value,
+            Setting::Mix => tape.mix = value,
+            Setting::Gain => tape.gain = value,
+            _ => {}
+        }
+        tape
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -1745,6 +1881,18 @@ mod tests {
         let flanger = Insert::Flanger(Flanger::DEFAULT);
         assert_eq!(flanger.read(Setting::Feedback), None);
         assert_eq!(flanger.read(Setting::FlangerFeedback), Some(0xC0));
+    }
+
+    #[test]
+    fn a_tapes_drive_reads_in_db_around_the_middle() {
+        assert_eq!(tape_drive_db(128.0), 0.0);
+        assert_eq!(tape_drive_db(0.0), -MOST_TAPE_DRIVE_DB);
+        assert_eq!(tape_drive_db(255.0), MOST_TAPE_DRIVE_DB);
+        let tape = Insert::Tape(Tape::DEFAULT);
+        // It reads nothing for a setting it hasn't got, as a delay's drive.
+        assert_eq!(tape.read(Setting::Drive), None);
+        assert_eq!(tape.read(Setting::TapeDrive), Some(0x80));
+        assert_eq!(tape.read(Setting::Mix), Some(0xFF));
     }
 
     #[test]
