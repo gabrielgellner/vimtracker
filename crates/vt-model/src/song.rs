@@ -16,7 +16,7 @@ use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::scale::Scale;
 use crate::selection::Extent;
-use crate::settings::SettingId;
+use crate::settings::{Owner, SettingId};
 use crate::step::{FxCommand, FxSlot, Step};
 
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
@@ -131,6 +131,10 @@ pub struct Track {
     /// voice's, so switching voice and back finds the first as it was.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub settings: BTreeMap<SettingId, u8>,
+    /// The fine parts of its own settings and its machines', where they aren't `00`, so `Cut` at
+    /// `40` with `80` here is half a step above `40`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fine: BTreeMap<SettingId, u8>,
     pub mute: bool,
     pub solo: bool,
     /// This track's own swing, in tenths of a percent, instead of the project's.
@@ -247,6 +251,36 @@ impl Track {
         }
     }
 
+    /// A setting's fine part on this track, `00` unless it's been set.
+    pub fn fine(&self, id: SettingId) -> u8 {
+        self.fine.get(&id).copied().unwrap_or(0)
+    }
+
+    /// Set a setting's fine part. `00` isn't kept, and there's none at the setting's top.
+    pub fn set_fine(&mut self, id: SettingId, fine: u8) {
+        if fine == 0 || self.coarse(id) == Some(id.entry().kind.top()) {
+            self.fine.remove(&id);
+        } else {
+            self.fine.insert(id, fine);
+        }
+    }
+
+    /// The coarse value of one of its own settings or its machines', which a fine part goes with.
+    pub fn coarse(&self, id: SettingId) -> Option<u8> {
+        match id.owner().0 {
+            Owner::Voice(_) => Some(self.setting(id)),
+            Owner::Track => match id {
+                SettingId::CUT => Some(self.cutoff),
+                SettingId::RES => Some(self.resonance),
+                SettingId::PAN => Some(self.pan),
+                SettingId::SEND_A => Some(self.send_a),
+                SettingId::SEND_B => Some(self.send_b),
+                _ => None,
+            },
+            Owner::Slot { .. } | Owner::Lfo(_) => None,
+        }
+    }
+
     /// The total steps a chain lasts: the pulses of every row in its phrases' loops. A missing or
     /// empty chain has none, and so does one whose rows are all skipped.
     pub fn chain_steps(&self, chain: u32) -> usize {
@@ -337,6 +371,7 @@ impl Default for Track {
             machine: Machine::default(),
             sample: None,
             settings: BTreeMap::new(),
+            fine: BTreeMap::new(),
             mute: false,
             solo: false,
             swing: None,
@@ -1523,6 +1558,23 @@ mod tests {
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
         assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);
+    }
+
+    #[test]
+    fn a_tracks_fine_parts_save_by_key_and_go_at_the_top() {
+        let mut track = Track {
+            cutoff: 0x40,
+            ..Track::default()
+        };
+        track.set_fine(SettingId::CUT, 0x80);
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("fine:{\"cut\":128}"), "{text}");
+        let loaded: Track = ron::from_str(&text).unwrap();
+        assert_eq!(loaded.fine(SettingId::CUT), 0x80);
+        track.cutoff = 0xFF;
+        track.set_fine(SettingId::CUT, 0x80);
+        assert_eq!(track.fine(SettingId::CUT), 0);
+        assert!(!ron::to_string(&Track::default()).unwrap().contains("fine"));
     }
 
     #[test]

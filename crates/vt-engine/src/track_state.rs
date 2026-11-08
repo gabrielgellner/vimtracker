@@ -277,7 +277,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             }
         }
     };
-    u16::from(whole) << 8
+    u16::from(whole) << 8 | u16::from(track.fine(id))
 }
 
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
@@ -1055,6 +1055,19 @@ mod tests {
         );
         state.load(&on(SynthVoice::String));
         assert_eq!(state.synth_settings().morph, 0x10 as f32 / 255.0);
+    }
+
+    #[test]
+    fn a_tracks_own_fine_part_is_in_its_base() {
+        let mut track = Track {
+            cutoff: 0x40,
+            ..Track::default()
+        };
+        track.set_fine(SettingId::CUT, 0x80);
+        assert_eq!(base_of(SettingId::CUT, &track), 0x4080);
+        track.cutoff = 0xFF;
+        track.set_fine(SettingId::CUT, 0x80);
+        assert_eq!(base_of(SettingId::CUT, &track), 0xFF00, "none at the top");
     }
 
     #[test]

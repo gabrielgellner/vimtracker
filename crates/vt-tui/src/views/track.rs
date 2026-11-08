@@ -30,7 +30,7 @@ pub(crate) const DIAGRAM_HEIGHT: usize = 4;
 pub(crate) const LFO_ICON_WIDTH: usize = 4;
 const LFO_SHAPE_NAME: usize = 7;
 /// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
-pub(crate) const FILTER_CURVE_WIDTH: usize = 22;
+pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 
 /// Room for a slot's number on the FX page, and for its effect's name.
@@ -249,8 +249,10 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             SOUND_LABEL,
         ));
         used = SOUND_LABEL;
-        let typing = *control == current && app.mode == Mode::Insert;
-        let mut text = if typing {
+        let here = *control == current;
+        let on_fine = here && app.track_fine;
+        let typing = here && app.mode == Mode::Insert;
+        let mut text = if typing && !on_fine {
             format!("{}_", app.entry.text)
         } else {
             value(*control, track, app.song().swing)
@@ -258,7 +260,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         if *control == Control::Sample {
             text = text.chars().take(FILE_WIDTH).collect();
         }
-        let style = if *control == current {
+        let style = if here && !on_fine {
             theme::cursor(app.mode)
         } else if *control == Control::Swing && track.swing.is_none() {
             theme::dim()
@@ -267,6 +269,25 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         };
         used += text.chars().count();
         spans.extend(value_spans(app, *control, text, style));
+        // A setting that sweeps shows its fine part, set back, and any other with a bar keeps the
+        // room so the bars line up.
+        if let Some(id) = control.fine_on(track) {
+            let fine = if typing && on_fine {
+                format!("{:<2}", format!("{}_", app.entry.text))
+            } else {
+                format!("{:02X}", track.fine(id))
+            };
+            let style = if on_fine {
+                theme::cursor(app.mode)
+            } else {
+                theme::dim()
+            };
+            used += 2;
+            spans.push(Span::styled(fine, style));
+        } else if bar_value(*control, track).is_some() {
+            used += 2;
+            spans.push(Span::raw("  "));
+        }
         if let Some(name) = choice_name(*control, track) {
             // A patch number says nothing as a bar, so its name takes the bar's place.
             used += 1 + name.chars().count();

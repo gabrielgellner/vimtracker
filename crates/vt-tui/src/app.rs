@@ -141,6 +141,8 @@ pub struct App {
     watched: usize,
     pub track_row: usize,
     pub track_field: usize,
+    /// Whether the cursor is on the fine digits of the track page's setting.
+    pub track_fine: bool,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
@@ -249,6 +251,7 @@ impl App {
             watched: 0,
             track_row: 0,
             track_field: 0,
+            track_fine: false,
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_column: ChainColumn::Phrase,
