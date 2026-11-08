@@ -84,12 +84,7 @@ impl App {
                 self.apply(&Action::RemoveSection { at: section });
                 self.go_to_section(section);
             }
-            Cmd::Audition => {
-                self.handle.send(Command::Audition {
-                    section,
-                    section_step: 0,
-                });
-            }
+            Cmd::Audition => self.audition_section(section, 0),
             _ => {
                 self.count = count;
                 return false;

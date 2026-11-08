@@ -40,7 +40,7 @@ fn tap(app: &mut App, keys: &str) {
     let now = Instant::now();
     for c in keys.chars() {
         app.key(Key::char(c), now);
-        app.key_released(Key::char(c));
+        app.key_released(Key::char(c), Instant::now());
     }
 }
 
@@ -185,7 +185,7 @@ fn the_transport_keys_play_pause_and_restart() {
     let mut hit = |app: &mut App, rt: &mut Realtime, key: Key| {
         now += Duration::from_millis(1000);
         app.key(key, now);
-        app.key_released(key);
+        app.key_released(key, now);
         block(rt, app);
     };
     let space_c = |app: &mut App| press(app, " c");
@@ -263,7 +263,7 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
         "only the first press counts"
     );
     // In Insert too, where Tab plays without leaving it.
-    app.key_released(tab);
+    app.key_released(tab, Instant::now());
     press(&mut app, "i");
     app.key(tab, now);
     app.key_repeated(tab, now);
@@ -278,7 +278,7 @@ fn quick_taps_of_tab_all_count() {
     let mut expected = Transport::Playing;
     for _ in 0..6 {
         app.key(tab, now);
-        app.key_released(tab);
+        app.key_released(tab, Instant::now());
         block(&mut rt, &mut app);
         assert_eq!(app.transport, expected);
         expected = if expected == Transport::Playing {
@@ -295,7 +295,7 @@ fn shift_tab_let_go_after_shift_still_counts_as_let_go() {
     let now = Instant::now();
     // Shift-Tab, with Shift let go first, so the release is plain Tab's.
     app.key(Key::new(KeyCode::BackTab), now);
-    app.key_released(Key::new(KeyCode::Tab));
+    app.key_released(Key::new(KeyCode::Tab), Instant::now());
     for _ in 0..100 {
         block(&mut rt, &mut app);
     }
@@ -329,7 +329,7 @@ fn a_held_motion_repeats() {
     // A press of the key that's down is a repeat too, and still moves.
     app.key(j, now);
     assert_eq!(app.cursor.step, 4);
-    app.key_released(j);
+    app.key_released(j, Instant::now());
     app.key(j, now);
     assert_eq!(app.cursor.step, 5);
 }
@@ -653,7 +653,7 @@ fn track_count_is_limited_to_the_constant() {
 #[test]
 fn mute_isnt_in_undo_history_but_is_saved() {
     let (mut app, _rt) = app();
-    press(&mut app, " m");
+    tap(&mut app, " m");
     assert!(app.levels[0].mute);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
@@ -775,7 +775,7 @@ fn a_plain_write_keeps_live_mutes_and_solos() {
     let folder = std::env::temp_dir().join(format!("vt-mute-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
     command(&mut app, &format!("w {}", folder.display()));
-    press(&mut app, " m");
+    tap(&mut app, " m");
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&folder).unwrap();
     assert!(saved.tracks[0].mute);
@@ -1516,7 +1516,7 @@ fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     press(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     app.key(Key::new(KeyCode::Tab), start + Duration::from_millis(1000));
-    app.key_released(Key::new(KeyCode::Tab));
+    app.key_released(Key::new(KeyCode::Tab), Instant::now());
     block(&mut rt, &mut app);
     assert_eq!(app.transport, Transport::Paused);
     assert_eq!(app.mode, Mode::Insert);
@@ -2194,6 +2194,142 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
         loudest(&mut rt, 2000) > 0.01,
         "the chain view auditions its row"
     );
+}
+
+/// Press a key now, and let it go after this many milliseconds.
+fn hold_for(app: &mut App, c: char, milliseconds: u64) {
+    let now = Instant::now();
+    app.key(Key::char(c), now);
+    app.key_released(Key::char(c), now + Duration::from_millis(milliseconds));
+}
+
+#[test]
+fn a_held_audition_stops_when_let_go_and_a_tapped_one_plays_out() {
+    let (mut app, mut rt) = app();
+    with_a_sound(&mut app);
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    block(&mut rt, &mut app);
+    let _ = loudest(&mut rt, 96_000);
+
+    // The sample is a second long. Held, it stops when `;` is let go.
+    let now = Instant::now();
+    app.key(Key::char(';'), now);
+    assert!(loudest(&mut rt, 4800) > 0.1);
+    app.key_repeated(Key::char(';'), now + Duration::from_millis(200));
+    app.key_released(Key::char(';'), now + Duration::from_millis(400));
+    let _ = loudest(&mut rt, 4800);
+    assert_eq!(loudest(&mut rt, 2000), 0.0, "held, it stops");
+
+    // Tapped, it plays on.
+    hold_for(&mut app, ';', 100);
+    let _ = loudest(&mut rt, 4800);
+    assert!(loudest(&mut rt, 2000) > 0.1, "tapped, it plays out");
+    let _ = loudest(&mut rt, 96_000);
+
+    // The chain view's `;` is held the same way.
+    press(&mut app, " 2");
+    let now = Instant::now();
+    app.key(Key::char(';'), now);
+    assert!(loudest(&mut rt, 4800) > 0.1);
+    app.key_released(Key::char(';'), now + Duration::from_millis(400));
+    let _ = loudest(&mut rt, 4800);
+    assert_eq!(loudest(&mut rt, 2000), 0.0, "the chain view's stops too");
+}
+
+#[test]
+fn a_tapped_audition_of_a_synth_that_holds_ends_when_let_go() {
+    let (mut app, mut rt) = app();
+    choose_machine(&mut app, "VA");
+    press(&mut app, " 3ia");
+    special(&mut app, KeyCode::Esc);
+    block(&mut rt, &mut app);
+    let _ = loudest(&mut rt, 96_000);
+    let now = Instant::now();
+    app.key(Key::char(';'), now);
+    let _ = loudest(&mut rt, 48_000);
+    assert!(
+        loudest(&mut rt, 2400) > 0.01,
+        "it holds while the key is down"
+    );
+    app.key_released(Key::char(';'), now + Duration::from_millis(100));
+    let _ = loudest(&mut rt, 9600);
+    assert!(loudest(&mut rt, 2400) < 1e-3, "and no longer drones on");
+
+    // A tap shorter than a preview still sounds as long as one.
+    let now = Instant::now();
+    app.key(Key::char(';'), now);
+    let _ = loudest(&mut rt, 480);
+    app.key_released(Key::char(';'), now + Duration::from_millis(10));
+    let _ = loudest(&mut rt, 4800);
+    assert!(loudest(&mut rt, 2400) > 0.01, "a quick tap is still heard");
+    let _ = loudest(&mut rt, 9600);
+    assert!(loudest(&mut rt, 2400) < 1e-3);
+}
+
+#[test]
+fn a_held_mute_or_solo_goes_back_when_let_go_and_a_tap_stays() {
+    let (mut app, _rt) = app();
+    press(&mut app, " ");
+    let now = Instant::now();
+    app.key(Key::char('m'), now);
+    assert!(app.levels[0].mute, "it mutes at once");
+    app.key_repeated(Key::char('m'), now + Duration::from_millis(500));
+    assert!(app.levels[0].mute, "a repeat doesn't switch it back");
+    app.key_released(Key::char('m'), now + Duration::from_millis(600));
+    assert!(!app.levels[0].mute, "held, it goes back");
+
+    press(&mut app, " ");
+    hold_for(&mut app, 'm', 100);
+    assert!(app.levels[0].mute, "tapped, it stays");
+    // Held from muted, it unmutes until it's let go.
+    press(&mut app, " ");
+    hold_for(&mut app, 'm', 400);
+    assert!(app.levels[0].mute);
+
+    press(&mut app, " ");
+    let now = Instant::now();
+    app.key(Key::char('s'), now);
+    assert!(app.levels[0].solo);
+    app.key_released(Key::char('s'), now + Duration::from_millis(400));
+    assert!(!app.levels[0].solo, "a held solo goes back too");
+    press(&mut app, " ");
+    hold_for(&mut app, 's', 100);
+    assert!(app.levels[0].solo);
+}
+
+#[test]
+fn a_save_while_a_mute_key_is_down_keeps_it_as_it_was() {
+    let (mut app, _rt) = app();
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    press(&mut app, " ");
+    let now = Instant::now();
+    app.key(Key::char('m'), now);
+    command(&mut app, "w");
+    let saved = vt_model::project::load_song(&path).unwrap();
+    assert!(!saved.tracks[0].mute, "it may yet go back");
+    assert!(!app.dirty);
+    // Let go as a tap, it stays muted, and the song has changed since the save.
+    app.key_released(Key::char('m'), now + Duration::from_millis(100));
+    assert!(app.levels[0].mute);
+    assert!(app.dirty);
+    command(&mut app, "w");
+    assert!(vt_model::project::load_song(&path).unwrap().tracks[0].mute);
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn losing_focus_lets_go_of_a_held_mute() {
+    let (mut app, _rt) = app();
+    press(&mut app, " ");
+    let now = Instant::now();
+    app.key(Key::char('m'), now);
+    app.focus_lost(now + Duration::from_millis(400));
+    assert!(!app.levels[0].mute, "held past the hold time, it goes back");
+    // Its release, if it comes after all, does nothing more.
+    app.key_released(Key::char('m'), now + Duration::from_millis(500));
+    assert!(!app.levels[0].mute);
 }
 
 #[test]
@@ -5185,7 +5321,7 @@ fn option_s_turns_the_scale_off_and_on_and_remembers_it() {
     assert_eq!(app.mode, Mode::Insert, "in Insert, it stays");
     press(&mut app, "s");
     assert_eq!(written_notes(&app), [Note::On(62)], "the piano again");
-    app.key_released(Key::char('s'));
+    app.key_released(Key::char('s'), Instant::now());
     alt(&mut app, "M-s");
     assert_eq!(app.scale.root_name(), "D");
     assert_eq!(app.scale.kind.name(), "Dorian");
@@ -6384,10 +6520,10 @@ fn a_held_key_on_the_keyboard_holds_its_note() {
     // The terminal's repeats don't start it again, even sent as presses, as kitty sends `a`'s,
     // and another key's release doesn't end it.
     app.key_repeated(Key::char('a'), Instant::now());
-    app.key_released(Key::char('s'));
+    app.key_released(Key::char('s'), Instant::now());
     let _ = loudest(&mut realtime, 4800);
     assert!(loudest(&mut realtime, 4800) > 0.01);
-    app.key_released(Key::char('a'));
+    app.key_released(Key::char('a'), Instant::now());
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3, "letting go ends it");
 
@@ -6453,7 +6589,7 @@ fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
         "{after} after the press, {held} before: it started again"
     );
     // After a release, a press starts it again.
-    app.key_released(Key::char('a'));
+    app.key_released(Key::char('a'), Instant::now());
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 2400) > held * 1.5);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -6477,12 +6613,12 @@ fn a_held_note_key_in_insert_writes_once_and_holds_its_note() {
     // once.
     app.key_repeated(Key::char('a'), Instant::now());
     press(&mut app, "a");
-    app.key_released(Key::char('s'));
+    app.key_released(Key::char('s'), Instant::now());
     assert_eq!(written_notes(&app), [Note::On(60)]);
     assert_eq!(app.cursor.step, 1);
     let _ = loudest(&mut realtime, 4800);
     assert!(loudest(&mut realtime, 4800) > 0.01);
-    app.key_released(Key::char('a'));
+    app.key_released(Key::char('a'), Instant::now());
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3, "letting go ends it");
 
@@ -6505,7 +6641,7 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     press(&mut app, "1");
     assert_eq!(written_notes(&app), [Note::Off], "OFF is written once");
     assert_eq!(app.cursor.step, 1);
-    app.key_released(Key::char('1'));
+    app.key_released(Key::char('1'), Instant::now());
     special(&mut app, KeyCode::Esc);
 
     // With the scale on, `j` is a degree, and is held as a note is.
@@ -6515,14 +6651,14 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     app.key_repeated(Key::char('j'), Instant::now());
     assert_eq!(written_notes(&app).len(), 2);
     assert_eq!(app.cursor.step, 2);
-    app.key_released(Key::char('j'));
+    app.key_released(Key::char('j'), Instant::now());
 
     // The arrows and Backspace repeat.
     let down = Key::new(KeyCode::Down);
     special(&mut app, KeyCode::Down);
     app.key_repeated(down, Instant::now());
     assert_eq!(app.cursor.step, 4);
-    app.key_released(down);
+    app.key_released(down, Instant::now());
     let backspace = Key::new(KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
     app.key_repeated(backspace, Instant::now());
@@ -6551,7 +6687,7 @@ fn losing_focus_lets_go_of_a_held_note() {
     // On the keyboard.
     press(&mut app, ";a");
     let _ = loudest(&mut realtime, 4800);
-    app.focus_lost();
+    app.focus_lost(Instant::now());
     let _ = loudest(&mut realtime, 48_000);
     assert!(
         loudest(&mut realtime, 4800) < 1e-3,
@@ -6560,13 +6696,13 @@ fn losing_focus_lets_go_of_a_held_note() {
     // The release never came, but the next press of the key is a press.
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 4800) > 0.01);
-    app.key_released(Key::char('a'));
+    app.key_released(Key::char('a'), Instant::now());
     press(&mut app, ";");
 
     // In Insert.
     press(&mut app, " 3ia");
     let _ = loudest(&mut realtime, 4800);
-    app.focus_lost();
+    app.focus_lost(Instant::now());
     assert_eq!(app.mode, Mode::Insert, "it stays in Insert");
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3, "Insert's note ends");

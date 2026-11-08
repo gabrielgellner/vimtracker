@@ -304,7 +304,7 @@ fn main_loop(
                     Event::Key(key) => {
                         app.key_event(Key::from_event(key), key.kind, Instant::now())
                     }
-                    Event::FocusLost => app.focus_lost(),
+                    Event::FocusLost => app.focus_lost(Instant::now()),
                     _ => {}
                 }
             }

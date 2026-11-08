@@ -110,6 +110,37 @@ pub struct TrackLive {
     pub solo: bool,
 }
 
+/// How long a key has to be down to count as held rather than tapped, for the keys that act
+/// differently held: a held mute or solo goes back when it's let go, and a held audition stops.
+/// Polyend's Tracker takes a button as held after 333 ms.
+pub const HOLD_TIME: Duration = Duration::from_millis(300);
+
+/// What a key started that lasts while it's down, and is undone or ended when it's let go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Momentary {
+    /// A track's mute or solo was switched from this.
+    Mute {
+        track: usize,
+        was: bool,
+    },
+    Solo {
+        track: usize,
+        was: bool,
+    },
+    /// A row is sounding on every track.
+    Audition,
+    /// A row outside the loop is sounding this note on the preview voice.
+    AuditionNote(u8),
+}
+
+/// A momentary change, the key it's held by, and when that key went down.
+#[derive(Debug, Clone, Copy)]
+struct Held {
+    key: KeyCode,
+    since: Instant,
+    what: Momentary,
+}
+
 /// The audio output as it plays, and what the audio page offers.
 #[derive(Debug, Clone, Default)]
 pub struct AudioState {
@@ -212,6 +243,10 @@ pub struct App {
     repeats_ignored: bool,
     /// The key holding a note, on the keyboard or in Insert, and that note.
     held_key: Option<(KeyCode, u8)>,
+    /// What the key that's down started that lasts while it's held.
+    momentary: Option<Held>,
+    /// What the press being handled started, for [`App::press`] to tie to its key.
+    started: Option<Momentary>,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
     pub top: usize,
@@ -329,6 +364,8 @@ impl App {
             key_down: None,
             repeats_ignored: false,
             held_key: None,
+            momentary: None,
+            started: None,
             entry: Entry::default(),
             top: 0,
             view_height: 16,
@@ -399,6 +436,23 @@ impl App {
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
+        }
+        // While a mute or solo key is down it may yet be a hold, which goes back when it's let go,
+        // so what's saved is how it was. A tap marks the song changed again when it's let go.
+        if let Some(held) = self.momentary {
+            match held.what {
+                Momentary::Mute { track, was } => {
+                    if let Some(track) = song.tracks.get_mut(track) {
+                        track.mute = was;
+                    }
+                }
+                Momentary::Solo { track, was } => {
+                    if let Some(track) = song.tracks.get_mut(track) {
+                        track.solo = was;
+                    }
+                }
+                Momentary::Audition | Momentary::AuditionNote(_) => {}
+            }
         }
         Arc::new(song)
     }
@@ -572,7 +626,7 @@ impl App {
         match kind {
             KeyEventKind::Press => self.key(key, now),
             KeyEventKind::Repeat => self.key_repeated(key, now),
-            KeyEventKind::Release => self.key_released(key),
+            KeyEventKind::Release => self.key_released(key, now),
         }
     }
 
@@ -599,8 +653,9 @@ impl App {
         self.press(key, now);
     }
 
-    /// A key let go: the held note ends if it was this key's.
-    pub fn key_released(&mut self, key: Key) {
+    /// A key let go: the held note ends if it was this key's, and so does what it started that
+    /// lasts while it's held.
+    pub fn key_released(&mut self, key: Key, now: Instant) {
         if self.key_down == Some(key.physical()) {
             self.key_down = None;
             self.repeats_ignored = false;
@@ -611,6 +666,50 @@ impl App {
         {
             self.let_go_of_held_key();
         }
+        if self
+            .momentary
+            .is_some_and(|held| held.key == key.physical())
+        {
+            self.end_momentary(now);
+        }
+    }
+
+    /// End what a key started that lasts while it's held. Down for less than [`HOLD_TIME`], it was
+    /// a tap, and stays as it is: a mute or solo stays switched, and an audition plays out. Held
+    /// longer, a mute or solo goes back to how it was, and an audition stops.
+    fn end_momentary(&mut self, now: Instant) {
+        let Some(held) = self.momentary.take() else {
+            return;
+        };
+        let long = now.saturating_duration_since(held.since) >= HOLD_TIME;
+        match held.what {
+            Momentary::Mute { track, was } | Momentary::Solo { track, was } => {
+                let mute = matches!(held.what, Momentary::Mute { .. });
+                match self.levels.get_mut(track) {
+                    Some(live) if long => {
+                        if mute {
+                            live.mute = was;
+                            self.handle.send(Command::SetMute { track, mute: was });
+                        } else {
+                            live.solo = was;
+                            self.handle.send(Command::SetSolo { track, solo: was });
+                        }
+                    }
+                    // A save while it was down kept how it was before.
+                    Some(_) => self.dirty = true,
+                    None => {}
+                }
+            }
+            Momentary::Audition => {
+                self.handle.send(Command::EndAudition { held: long });
+            }
+            Momentary::AuditionNote(note) if long => {
+                self.handle.send(Command::ReleasePreview { note });
+            }
+            Momentary::AuditionNote(note) => {
+                self.handle.send(Command::FinishPreview { note });
+            }
+        }
     }
 
     fn let_go_of_held_key(&mut self) {
@@ -620,11 +719,13 @@ impl App {
     }
 
     /// The terminal window lost focus, so a key that's down may never be reported let go. Its
-    /// note ends now, and the next press of it is a press.
-    pub fn focus_lost(&mut self) {
+    /// note ends now, what it started that lasts while it's held ends as if it was let go now,
+    /// and the next press of it is a press.
+    pub fn focus_lost(&mut self, now: Instant) {
         self.key_down = None;
         self.repeats_ignored = false;
         self.let_go_of_held_key();
+        self.end_momentary(now);
     }
 
     /// Sound a note for as long as this key is down, ignoring the key's repeats.
@@ -641,7 +742,19 @@ impl App {
     /// Act on a press, or a repeat that acts as one.
     fn press(&mut self, key: Key, now: Instant) {
         let was = self.mode;
+        self.started = None;
         self.handle_key(key, now);
+        // Something that lasts while its key is down is tied to that key, and doesn't repeat.
+        // One already held ends as if let go now, as only one is kept.
+        if let Some(what) = self.started.take() {
+            self.end_momentary(now);
+            self.momentary = Some(Held {
+                key: key.physical(),
+                since: now,
+                what,
+            });
+            self.repeats_ignored = true;
+        }
         // Leaving the keyboard, or Insert, lets go of what it's holding.
         if matches!(was, Mode::Keys | Mode::Insert) && self.mode != was {
             self.let_go_of_held_key();
@@ -780,16 +893,23 @@ impl App {
         }
     }
 
-    /// Hear a row, unless playback is using the tracks.
+    /// Hear a row, unless playback is using the tracks, for as long as the key is down if it's
+    /// held.
     pub(crate) fn audition(&mut self, section_step: usize) {
         if self.transport == Transport::Playing {
             self.status = "Audition works while stopped or paused".to_owned();
         } else {
-            self.handle.send(Command::Audition {
-                section: self.cursor.section,
-                section_step,
-            });
+            self.audition_section(self.cursor.section, section_step);
         }
+    }
+
+    /// Hear a row of a section, for as long as the key is down if it's held.
+    pub(crate) fn audition_section(&mut self, section: usize, section_step: usize) {
+        self.handle.send(Command::Audition {
+            section,
+            section_step,
+        });
+        self.started = Some(Momentary::Audition);
     }
 
     /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
@@ -908,9 +1028,33 @@ impl App {
             Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
             Cmd::PreviousTrack => self.move_track(-1),
-            Cmd::ToggleMute => self.toggle_mute(),
-            Cmd::ToggleSolo => self.toggle_solo(),
-            Cmd::ClearMutes => self.clear_live(),
+            Cmd::ToggleMute => {
+                let track = self.cursor.track;
+                if let Some(was) = self.levels.get(track).map(|live| live.mute) {
+                    self.toggle_mute();
+                    if self.levels[track].mute != was {
+                        self.started = Some(Momentary::Mute { track, was });
+                    }
+                }
+            }
+            Cmd::ToggleSolo => {
+                let track = self.cursor.track;
+                if let Some(was) = self.levels.get(track).map(|live| live.solo) {
+                    self.toggle_solo();
+                    if self.levels[track].solo != was {
+                        self.started = Some(Momentary::Solo { track, was });
+                    }
+                }
+            }
+            Cmd::ClearMutes => {
+                // A held mute or solo stays cleared when it's let go.
+                if self.momentary.is_some_and(|held| {
+                    matches!(held.what, Momentary::Mute { .. } | Momentary::Solo { .. })
+                }) {
+                    self.momentary = None;
+                }
+                self.clear_live();
+            }
             Cmd::Undo => {
                 let before = self.loop_place();
                 if self.history.undo().is_some() {
@@ -1108,11 +1252,12 @@ impl App {
             .map_or(0, |entry| entry.transpose);
         let note = (i16::from(midi) + i16::from(transpose))
             .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-        self.handle.send(Command::Preview {
+        self.handle.send(Command::HoldPreview {
             track: self.cursor.track,
             note,
             velocity,
         });
+        self.started = Some(Momentary::AuditionNote(note));
     }
 
     fn stored_steps(&self) -> usize {

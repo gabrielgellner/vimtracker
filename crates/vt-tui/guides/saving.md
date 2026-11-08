@@ -32,6 +32,9 @@ through a pattern. Each audition cuts the last, and an empty row silences
 it. FX on a row don't run, so `DEL`, `CUT` and the like are only heard in
 playback.
 
+Hold `;` and the row sounds until you let go. A tap plays a sample out to its
+end, and gives a synth that would otherwise hold its note a short blip.
+
 ## Rendering to a WAV
 
 `:render loop.wav` writes the loop, ready to drop into Ableton. It uses what

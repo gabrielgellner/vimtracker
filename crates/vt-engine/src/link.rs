@@ -52,6 +52,11 @@ pub enum Command {
     ReleasePreview { note: u8 },
     /// Hear a row of the section while not playing.
     Audition { section: usize, section_step: usize },
+    /// The audition's key was let go, after a hold or a tap.
+    EndAudition { held: bool },
+    /// An audition's key on the preview voice was tapped: let its note go once it has sounded
+    /// as long as a preview does.
+    FinishPreview { note: u8 },
     /// Mute or unmute a track.
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
@@ -321,6 +326,8 @@ impl Realtime {
                     section,
                     section_step,
                 } => self.engine.audition_section(section, section_step),
+                Command::EndAudition { held } => self.engine.end_audition(held),
+                Command::FinishPreview { note } => self.engine.finish_preview(note),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),

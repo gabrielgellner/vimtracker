@@ -183,8 +183,16 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("S-Tab", Cmd::PlayFromStart, "Play from the start"),
     ("Space c", Cmd::PlayFromCursor, "Play from the cursor"),
     ("Space q q", Cmd::Quit, "Quit"),
-    ("Space m", Cmd::ToggleMute, "Mute or unmute this track"),
-    ("Space s", Cmd::ToggleSolo, "Solo or unsolo this track"),
+    (
+        "Space m",
+        Cmd::ToggleMute,
+        "Mute or unmute; held, until let go",
+    ),
+    (
+        "Space s",
+        Cmd::ToggleSolo,
+        "Solo or unsolo; held, until let go",
+    ),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
     ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
