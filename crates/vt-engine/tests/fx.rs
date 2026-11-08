@@ -1016,3 +1016,72 @@ fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
     // While the tone plays, both are the same.
     assert_eq!(frozen[..RATE as usize / 2], free[..RATE as usize / 2]);
 }
+
+/// How strong a frequency is in the left side of some frames.
+fn strength(out: &[[f32; 2]], hertz: f32) -> f32 {
+    let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
+    for (frame, sample) in out.iter().enumerate() {
+        let phase =
+            f64::from(frame as u32) / f64::from(RATE) * f64::from(hertz) * std::f64::consts::TAU;
+        real += f64::from(sample[0]) * phase.cos();
+        imaginary += f64::from(sample[0]) * phase.sin();
+    }
+    ((real * real + imaginary * imaginary).sqrt() * 2.0 / out.len() as f64) as f32
+}
+
+#[test]
+fn warps_ring_modulates_one_track_by_another_thats_muted() {
+    use vt_model::insert::Warps;
+    // A 300 Hz tone, which the first track plays at `C-4` and the second a tritone up, so none of
+    // what comes out lands on either tone.
+    let tone: Vec<[f32; 2]> = (0..RATE as usize * 4)
+        .map(|frame| [(frame as f32 / RATE as f32 * 300.0 * std::f32::consts::TAU).sin() * 0.5; 2])
+        .collect();
+    let samples = pool(tone);
+    let tritone = 300.0 * std::f32::consts::SQRT_2;
+    let played = |source| {
+        let mut song = Song::new(2);
+        for (track, note) in [(0, "C-4"), (1, "F#4")] {
+            song.tracks[track].sample = Some("s".to_owned());
+            song.tracks[track].envelopes[0].attack_ms = 0;
+            song.tracks[track].envelopes[0].release_ms = 0;
+            let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
+            *phrase.step_mut(0).unwrap() = format!("{note} -- --- --- ---").parse().unwrap();
+        }
+        // The digital ring modulation, with the first track as the modulator.
+        song.tracks[1].inserts[0] = Insert::Warps(Warps {
+            timbre: 0x00,
+            source,
+            ..Warps::DEFAULT
+        });
+        let version = Arc::new(Published::new(Arc::new(song), Arc::clone(&samples)));
+        let mut engine = Engine::new(RATE, version);
+        engine.set_mute(0, true);
+        engine.play_from(0);
+        let mut out = vec![0.0; STEP * 8];
+        engine.process(&mut out);
+        // A tenth of a second in, once it's going.
+        out.as_chunks::<2>().0[RATE as usize / 10..].to_vec()
+    };
+    let ringing = played(1);
+    assert!(ringing.iter().flatten().all(|s| s.is_finite()));
+    // Track 01 is muted, but it's heard after its slots: out comes the sum and difference, and
+    // neither tone on its own.
+    let sum = strength(&ringing, tritone + 300.0);
+    let difference = strength(&ringing, tritone - 300.0);
+    assert!(sum > 0.02 && difference > 0.02, "{sum} {difference}");
+    for alone in [300.0, tritone] {
+        let alone = strength(&ringing, alone);
+        assert!(
+            alone < sum.min(difference) * 0.05,
+            "{alone} {sum} {difference}"
+        );
+    }
+    // A source that's silent ring modulates by nothing: track 64 has nothing on it.
+    let silent = played(64);
+    let loudest = silent
+        .iter()
+        .flatten()
+        .fold(0.0_f32, |most, s| most.max(s.abs()));
+    assert!(loudest < 1e-3, "{loudest}");
+}

@@ -16,6 +16,7 @@ use crate::dsp::pitch_shifter::PitchShifter;
 use crate::dsp::plate::Plate;
 use crate::dsp::reverb::Reverb;
 use crate::dsp::tape::Tape;
+use crate::dsp::warps::Warps;
 use crate::engine::sample_of_tick;
 
 /// How long a reverb or plate has to stay below `SILENT` to be done, in seconds. It's longer than the way
@@ -36,6 +37,7 @@ pub enum Memory {
     Plate(Box<Plate>),
     Pitch(Box<PitchShifter>),
     Grains(Box<Granular>),
+    Warps(Box<Warps>),
 }
 
 impl Memory {
@@ -86,6 +88,11 @@ impl Memory {
         Self::Grains(Box::new(Granular::new(rate)))
     }
 
+    /// Warps', for its vocoder's filter bank.
+    pub fn warps(rate: u32) -> Self {
+        Self::Warps(Box::new(Warps::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -99,6 +106,7 @@ impl Memory {
             Self::Plate(plate) => plate.process(input),
             Self::Pitch(shifter) => shifter.process(input),
             Self::Grains(granular) => granular.process(input),
+            Self::Warps(warps) => warps.process_alone(input),
         }
     }
 
@@ -113,6 +121,7 @@ impl Memory {
             Self::Tape(tape) => tape.quiet_frames(),
             Self::Pitch(shifter) => shifter.frames() as u32,
             Self::Grains(granular) => granular.quiet_frames(),
+            Self::Warps(warps) => warps.quiet_frames(),
         }
     }
 
@@ -133,6 +142,7 @@ impl Memory {
             (Self::Plate(plate), Insert::Plate(settings)) => plate.follow(settings, frames),
             (Self::Pitch(shifter), Insert::Pitch(settings)) => shifter.follow(settings),
             (Self::Grains(granular), Insert::Grains(settings)) => granular.follow(settings),
+            (Self::Warps(warps), Insert::Warps(settings)) => warps.follow(settings),
             _ => {}
         }
     }
@@ -149,6 +159,7 @@ impl Memory {
             Self::Plate(plate) => plate.settle(),
             Self::Pitch(shifter) => shifter.settle(),
             Self::Grains(granular) => granular.settle(),
+            Self::Warps(warps) => warps.settle(),
         }
     }
 
@@ -163,6 +174,7 @@ impl Memory {
             Self::Plate(plate) => plate.clear(),
             Self::Pitch(shifter) => shifter.clear(),
             Self::Grains(granular) => granular.clear(),
+            Self::Warps(warps) => warps.clear(),
         }
     }
 }
@@ -179,6 +191,7 @@ pub struct MemoryCount {
     pub plate: u16,
     pub pitch: u16,
     pub grains: u16,
+    pub warps: u16,
 }
 
 impl MemoryCount {
@@ -196,6 +209,7 @@ impl MemoryCount {
                 Insert::Plate(_) => count.plate += 1,
                 Insert::Pitch(_) => count.pitch += 1,
                 Insert::Grains(_) => count.grains += 1,
+                Insert::Warps(_) => count.warps += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -219,6 +233,7 @@ pub struct MemoryPool {
     plates: Vec<Memory>,
     pitches: Vec<Memory>,
     grains: Vec<Memory>,
+    warps: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -239,6 +254,7 @@ impl MemoryPool {
             plates: Vec::with_capacity(POOL_CAPACITY),
             pitches: Vec::with_capacity(POOL_CAPACITY),
             grains: Vec::with_capacity(POOL_CAPACITY),
+            warps: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -269,6 +285,9 @@ impl MemoryPool {
         for _ in 0..needed.grains {
             pool.put(Memory::grains(rate));
         }
+        for _ in 0..needed.warps {
+            pool.put(Memory::warps(rate));
+        }
         pool
     }
 
@@ -284,6 +303,7 @@ impl MemoryPool {
             Memory::Plate(_) => &mut self.plates,
             Memory::Pitch(_) => &mut self.pitches,
             Memory::Grains(_) => &mut self.grains,
+            Memory::Warps(_) => &mut self.warps,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -306,6 +326,7 @@ impl MemoryPool {
             Insert::Plate(_) => &mut self.plates,
             Insert::Pitch(_) => &mut self.pitches,
             Insert::Grains(_) => &mut self.grains,
+            Insert::Warps(_) => &mut self.warps,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -330,6 +351,7 @@ impl MemoryPool {
         self.owed.plate += count.plate;
         self.owed.pitch += count.pitch;
         self.owed.grains += count.grains;
+        self.owed.warps += count.warps;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -388,6 +410,12 @@ impl MemoryPool {
             self.owed.grains -= 1;
             return Some(memory);
         }
+        if self.owed.warps > 0
+            && let Some(memory) = self.warps.pop()
+        {
+            self.owed.warps -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -402,6 +430,7 @@ impl MemoryPool {
             + self.plates.len()
             + self.pitches.len()
             + self.grains.len()
+            + self.warps.len()
     }
 }
 

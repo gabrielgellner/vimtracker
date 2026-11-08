@@ -44,3 +44,33 @@ impl Oversampler {
         0.5 * (a + b)
     }
 }
+
+/// The same with two sounds going up together, for what mixes them before it comes back down.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PairOversampler {
+    up: [[Allpass; 2]; 2],
+    down: [Allpass; 2],
+}
+
+impl PairOversampler {
+    /// One sample of each at the normal rate, with `step` run twice on both at the higher one.
+    #[inline]
+    pub(crate) fn process(
+        &mut self,
+        input: [f32; 2],
+        mut step: impl FnMut(f32, f32) -> f32,
+    ) -> f32 {
+        let [first_up, second_up] = &mut self.up;
+        let first = step(
+            first_up[0].process(input[0], &HALFBAND_A),
+            second_up[0].process(input[1], &HALFBAND_A),
+        );
+        let second = step(
+            first_up[1].process(input[0], &HALFBAND_B),
+            second_up[1].process(input[1], &HALFBAND_B),
+        );
+        let a = self.down[0].process(second, &HALFBAND_A);
+        let b = self.down[1].process(first, &HALFBAND_B);
+        0.5 * (a + b)
+    }
+}

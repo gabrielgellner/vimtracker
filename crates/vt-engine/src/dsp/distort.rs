@@ -6,7 +6,7 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Grains, Insert, Limiter,
-    Phaser, Pitch, Plate, Reverb, Tape,
+    Phaser, Pitch, Plate, Reverb, Tape, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -23,6 +23,8 @@ use crate::track_state::Keys;
 const MOST_DRIVE_DB: f32 = 30.0;
 /// The longest `Down` holds a sample, in seconds, so it's the same at any device rate.
 const LONGEST_HOLD: f32 = 0.01;
+/// The note a slot's oscillator plays before the track has played one: middle C.
+const DEFAULT_NOTE: f32 = 60.0;
 
 /// What a track keeps for one of its slots. Nothing here allocates.
 #[derive(Debug, Clone)]
@@ -47,6 +49,8 @@ pub struct InsertState {
     phaser: AllPasses,
     /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
     on: Smoothed,
+    /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator to follow.
+    note: f32,
 }
 
 impl Default for InsertState {
@@ -65,6 +69,7 @@ impl Default for InsertState {
             dynamics: Dynamics::default(),
             phaser: AllPasses::default(),
             on: Smoothed::at(1.0),
+            note: DEFAULT_NOTE,
         }
     }
 }
@@ -84,7 +89,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Tape(_), Insert::Tape(_))
         | (Insert::Plate(_), Insert::Plate(_))
         | (Insert::Pitch(_), Insert::Pitch(_))
-        | (Insert::Grains(_), Insert::Grains(_)) => true,
+        | (Insert::Grains(_), Insert::Grains(_))
+        | (Insert::Warps(_), Insert::Warps(_)) => true,
         _ => false,
     }
 }
@@ -101,7 +107,14 @@ fn drive_of(amount: f32) -> f32 {
 /// can't do that for a quiet one, which comes up as the clip takes hold.
 #[inline]
 fn overdrive_gains(amount: f32) -> (f32, f32) {
-    let drive = 0.5 + amount * 0.5;
+    saturating_gains(0.5 + amount * 0.5)
+}
+
+/// The gains before and after a soft clip for a drive from `0` to `1`, as Plaits' overdrive and
+/// Warps' saturating amplifier both have them: about unity a little past half way, and the gain
+/// after the clip holding back a loud sound's level.
+#[inline]
+pub(crate) fn saturating_gains(drive: f32) -> (f32, f32) {
     let drive_2 = drive * drive;
     let low = drive * 0.5;
     let high = drive_2 * drive_2 * drive * 24.0;
@@ -202,7 +215,8 @@ impl InsertState {
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
-            | Insert::Grains(Grains { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Grains(Grains { mix, gain, .. })
+            | Insert::Warps(Warps { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -212,9 +226,10 @@ impl InsertState {
             level_gain(f32::from(gain)),
         );
         if !same_effect(self.insert, insert) {
-            let on = self.on;
+            let (on, note) = (self.on, self.note);
             *self = Self::default();
             self.on = on;
+            self.note = note;
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
@@ -285,6 +300,37 @@ impl InsertState {
         [wet, dry]
     }
 
+    /// One frame through Warps, all wet, hearing another track or playing its oscillator. It keeps
+    /// going while either the slot's own sound or the track it hears has something in it, then
+    /// fades out over its tail, so its oscillator and vocoder never stop dead.
+    #[inline]
+    fn warps(&mut self, input: [f32; 2], settings: Warps, smoothing: f32, keys: &Keys) -> [f32; 2] {
+        let heard = |frame: [f32; 2]| frame[0].abs() >= SILENT || frame[1].abs() >= SILENT;
+        let modulator = settings
+            .source_track(keys.sounds)
+            .map(|track| keys.of(track));
+        let busy = heard(input) || modulator.is_some_and(heard);
+        let Some(Memory::Warps(warps)) = &mut self.memory else {
+            return [0.0; 2];
+        };
+        self.quiet = if busy {
+            0
+        } else {
+            self.quiet.saturating_add(1)
+        };
+        let tail = warps.quiet_frames();
+        if self.quiet >= tail {
+            return [0.0; 2];
+        }
+        let fade = 1.0 - self.quiet as f32 / tail as f32;
+        [warps.process(input, modulator, self.note, smoothing) * fade; 2]
+    }
+
+    /// Follow the track's note, for an oscillator of the slot's own.
+    pub fn follow_note(&mut self, note: f32) {
+        self.note = note;
+    }
+
     /// Switch the slot out, or back in. It keeps running underneath, so a tail or a compressor's
     /// state carries on as if it had never gone.
     pub fn bypass(&mut self, bypassed: bool) {
@@ -343,6 +389,15 @@ impl InsertState {
                 return [
                     (wet[0] * mix + dry[0] * (1.0 - mix)) * gain,
                     (wet[1] * mix + dry[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            Insert::Warps(settings) => {
+                let wet = self.warps(input, settings, smoothing, keys);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
                 ];
             }
             Insert::Phaser(_) => {

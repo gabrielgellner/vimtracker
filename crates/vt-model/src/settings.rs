@@ -5,11 +5,12 @@
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::insert::{
-    CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, FLANGER_PARAMS,
-    GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param,
-    REVERB_PARAMS, Setting, TAPE_PARAMS, Triggering, attack_ms, ceiling_db, fine_cents,
-    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
-    limit_release_ms, plate_size, ratio, release_ms, tape_drive_db, threshold_db,
+    ALGORITHM_NAMES, CHORUS_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS,
+    FLANGER_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, PHASER_PARAMS, PITCH_PARAMS,
+    PLATE_PARAMS, Param, REVERB_PARAMS, Setting, TAPE_PARAMS, Triggering, WARPS_PARAMS,
+    algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density,
+    grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms, plate_size, ratio,
+    release_ms, tape_drive_db, threshold_db,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -76,6 +77,8 @@ pub enum Units {
     GrainTime,
     GrainLength,
     Density,
+    /// Where Warps' algorithm knob is, by the algorithms it's between.
+    Algorithm,
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -167,6 +170,7 @@ impl Kind {
                     Triggering::Off => "Off".to_owned(),
                     Triggering::Random(hertz) => format!("{} rnd", rate(hertz)),
                 },
+                Units::Algorithm => algorithm_text(coarse as f32),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -195,6 +199,18 @@ fn milliseconds(ms: f32) -> String {
         ms if ms < 1.0 => format!("{ms:.2} ms"),
         ms if ms < 1000.0 => format!("{ms:.0} ms"),
         ms => format!("{:.2} s", ms / 1000.0),
+    }
+}
+
+/// Where Warps' `Algo` is, as the status line names it: one algorithm, the two it's between, or
+/// the vocoder, frozen at the top.
+fn algorithm_text(value: f32) -> String {
+    let (from, to, by) = algorithm_blend(value);
+    match by {
+        _ if value >= 255.0 => "Vocoder hold".to_owned(),
+        by if by < 0.05 => ALGORITHM_NAMES[from].to_owned(),
+        by if by > 0.95 => ALGORITHM_NAMES[to].to_owned(),
+        _ => format!("{}>{}", ALGORITHM_NAMES[from], ALGORITHM_NAMES[to]),
     }
 }
 
@@ -514,10 +530,11 @@ pub enum Effect {
     Plate,
     Pitch,
     Grains,
+    Warps,
 }
 
 impl Effect {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -531,6 +548,7 @@ impl Effect {
         Self::Plate,
         Self::Pitch,
         Self::Grains,
+        Self::Warps,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -550,6 +568,7 @@ impl Effect {
             Self::Plate => &PLATE_PARAMS,
             Self::Pitch => &PITCH_PARAMS,
             Self::Grains => &GRAINS_PARAMS,
+            Self::Warps => &WARPS_PARAMS,
         }
     }
 
@@ -568,6 +587,7 @@ impl Effect {
             Self::Plate => "plate",
             Self::Pitch => "pitch",
             Self::Grains => "grains",
+            Self::Warps => "warps",
         }
     }
 
@@ -586,6 +606,7 @@ impl Effect {
             Self::Plate => "Plate",
             Self::Pitch => "Pitch",
             Self::Grains => "Grains",
+            Self::Warps => "Warps",
         }
     }
 
@@ -606,6 +627,7 @@ impl Effect {
             Insert::Plate(_) => Some(Self::Plate),
             Insert::Pitch(_) => Some(Self::Pitch),
             Insert::Grains(_) => Some(Self::Grains),
+            Insert::Warps(_) => Some(Self::Warps),
         }
     }
 }
@@ -641,6 +663,7 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Position => (false, Units::GrainTime),
                 Setting::Length => (false, Units::GrainLength),
                 Setting::Density => (false, Units::Density),
+                Setting::Algorithm => (false, Units::Algorithm),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -801,6 +824,21 @@ const fn effect_start(effect: Effect) -> usize {
                 + PLATE_PARAMS.len()
                 + PITCH_PARAMS.len()
         }
+        Effect::Warps => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+        }
     }
 }
 
@@ -819,7 +857,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + TAPE_PARAMS.len()
     + PLATE_PARAMS.len()
     + PITCH_PARAMS.len()
-    + GRAINS_PARAMS.len();
+    + GRAINS_PARAMS.len()
+    + WARPS_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 
 /// What a setting belongs to.
@@ -1166,6 +1205,16 @@ mod tests {
         assert_eq!(shown(eq(1), 0xFF00), "+15.0 dB");
         assert_eq!(shown(eq(1), 0x0000), "-15.0 dB");
         assert_eq!(shown(eq(6), 0x4000), "Q 0.71");
+        let algo = SettingId::slot(0, Effect::Warps, 0).unwrap();
+        assert_eq!(shown(algo, 0x0000), "Xfade");
+        assert_eq!(shown(algo, 0x6000), "Digital");
+        assert_eq!(shown(algo, 0x7000), "Digital>XOR");
+        assert_eq!(shown(algo, 0xB300), "Mod");
+        assert_eq!(shown(algo, 0xD000), "Vocoder");
+        assert_eq!(shown(algo, 0xFF00), "Vocoder hold");
+        let source = SettingId::slot(0, Effect::Warps, 2).unwrap();
+        assert_eq!(shown(source, 0x0000), "Osc");
+        assert_eq!(shown(source, 0x4100), "A");
     }
 
     #[test]

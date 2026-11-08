@@ -195,6 +195,9 @@ impl Handle {
         for _ in self.held.grains..needed.grains {
             self.unsent.push(Memory::grains(self.rate));
         }
+        for _ in self.held.warps..needed.warps {
+            self.unsent.push(Memory::warps(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -205,6 +208,7 @@ impl Handle {
             plate: self.held.plate.saturating_sub(needed.plate),
             pitch: self.held.pitch.saturating_sub(needed.pitch),
             grains: self.held.grains.saturating_sub(needed.grains),
+            warps: self.held.warps.saturating_sub(needed.warps),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -370,6 +374,8 @@ mod tests {
     const PITCH: Insert = Insert::Pitch(vt_model::insert::Pitch::DEFAULT);
     /// A granular effect, which takes its recording from the pool.
     const GRAINS: Insert = Insert::Grains(vt_model::insert::Grains::DEFAULT);
+    /// Warps, which takes its vocoder's filter bank from the pool.
+    const WARPS: Insert = Insert::Warps(vt_model::insert::Warps::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -499,8 +505,10 @@ mod tests {
                 next.tracks[round % 8].inserts = [PLATE, TAPE, PLATE];
             } else if round % 32 == 15 {
                 next.tracks[round % 8].inserts = [PITCH, PLATE, PITCH];
-            } else {
+            } else if round % 64 == 31 {
                 next.tracks[round % 8].inserts = [GRAINS, PITCH, GRAINS];
+            } else {
+                next.tracks[round % 8].inserts = [WARPS, GRAINS, WARPS];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -513,7 +521,7 @@ mod tests {
     #[test]
     fn long_buffers_go_ahead_of_their_version_and_come_back_to_be_freed() {
         let pool = samples();
-        let plain = song(5, 16);
+        let plain = song(6, 16);
         let needed = MemoryCount::of(&plain);
         let engine = Engine::new(48_000, published(plain.clone(), &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -526,6 +534,7 @@ mod tests {
         more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty];
         more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty];
         more.tracks[4].inserts = [Insert::Empty, Insert::Empty, GRAINS];
+        more.tracks[5].inserts = [WARPS, Insert::Empty, Insert::Empty];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -539,6 +548,7 @@ mod tests {
                 plate: needed.plate + 1,
                 pitch: needed.pitch + 1,
                 grains: needed.grains + 1,
+                warps: needed.warps + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -553,7 +563,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 9);
+        assert_eq!(freed, 10);
     }
 
     #[test]

@@ -26,6 +26,7 @@ pub enum Insert {
     Plate(Plate),
     Pitch(Pitch),
     Grains(Grains),
+    Warps(Warps),
 }
 
 /// What a distortion does to the sound.
@@ -140,6 +141,12 @@ pub enum Setting {
     Spread,
     Freeze,
     Random,
+    /// Warps': where its algorithm knob is, what each algorithm's own setting is, how hard the
+    /// modulator is driven, and its oscillator's waveform.
+    Algorithm,
+    Timbre,
+    ModulatorLevel,
+    Wave,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -170,6 +177,7 @@ impl Setting {
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
             Self::PingPong | Self::Freeze => 1,
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
+            Self::Wave => WAVE_NAMES.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -187,6 +195,7 @@ impl Setting {
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
             Self::PingPong | Self::Freeze => 1.0,
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
+            Self::Wave => (WAVE_NAMES.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -956,6 +965,114 @@ pub fn grain_density(value: f32) -> Triggering {
     }
 }
 
+/// What Warps can take as its modulator: its own oscillator, a track by its number, or a return,
+/// as the compressor's `Source` but with the oscillator in place of `Self`.
+pub const WARPS_SOURCE_NAMES: [&str; SOURCE_NAMES.len()] = {
+    let mut names = SOURCE_NAMES;
+    names[0] = "Osc";
+    names
+};
+
+/// The waveforms Warps' oscillator plays, as Warps' own: a sine, a triangle, a saw, a square, and
+/// noise low-passed at four times its pitch.
+pub const WAVE_NAMES: [&str; 5] = ["Sine", "Tri", "Saw", "Square", "Noise"];
+
+/// What Warps' `Algo` goes through from `00` to `FF`, as the status line names them: its six
+/// cross-modulations, the modulator on its own as it fades over, and the vocoder.
+pub const ALGORITHM_NAMES: [&str; 8] = [
+    "Xfade", "Fold", "Ring", "Digital", "XOR", "Compare", "Mod", "Vocoder",
+];
+
+/// Where Warps' `Algo` starts fading from its cross-modulations to the bare modulator, where it's
+/// only the modulator, and where it's only the vocoder, on its `0` to `1` scale.
+pub const ALGORITHM_FADE_START: f32 = 0.675;
+pub const ALGORITHM_MODULATOR: f32 = 0.7;
+pub const ALGORITHM_VOCODER: f32 = 0.725;
+
+/// Where Warps' algorithm knob is, from `0` to `1`, for `Algo` on the `00` to `FF` scale. It's
+/// out of 256, so each cross-modulation, an eighth of the way from the last, lands on a value:
+/// `00`, `20`, `40`, `60`, `80` and `A0`.
+pub fn algorithm_knob(value: f32) -> f32 {
+    (value / 256.0).clamp(0.0, 1.0)
+}
+
+/// Where Warps' `Algo` is, for a value on the `00` to `FF` scale, as the two of `ALGORITHM_NAMES`
+/// it's between and how far it is from the first to the second. Each cross-modulation is an
+/// eighth of the way from the last, as Warps' knob has them, then it fades through the modulator
+/// into the vocoder.
+pub fn algorithm_blend(value: f32) -> (usize, usize, f32) {
+    let at = algorithm_knob(value);
+    if at < 0.625 {
+        let place = at * 8.0;
+        let from = place as usize;
+        (from, from + 1, place - from as f32)
+    } else if at < ALGORITHM_MODULATOR {
+        (5, 6, (at - 0.625) / (ALGORITHM_MODULATOR - 0.625))
+    } else if at < ALGORITHM_VOCODER {
+        (
+            6,
+            7,
+            (at - ALGORITHM_MODULATOR) / (ALGORITHM_VOCODER - ALGORITHM_MODULATOR),
+        )
+    } else {
+        (7, 7, 0.0)
+    }
+}
+
+/// Warps', in the order the page shows them, as columns of two: the algorithm and its setting,
+/// the modulator and how hard it's driven, then the oscillator's pitch and waveform.
+pub(crate) const WARPS_PARAMS: [Param; 8] = [
+    hex_param(
+        "Algo",
+        "algo",
+        "ALGO",
+        Setting::Algorithm,
+        Warps::DEFAULT.algorithm,
+    ),
+    hex_param(
+        "Timbre",
+        "timbre",
+        "TMBR",
+        Setting::Timbre,
+        Warps::DEFAULT.timbre,
+    ),
+    Param {
+        name: "Source",
+        key: "source",
+        // What it hears is part of how it's set up, so steps don't change it.
+        label: None,
+        setting: Setting::Source,
+        choices: &WARPS_SOURCE_NAMES,
+        wraps: false,
+        default: Warps::DEFAULT.source,
+    },
+    hex_param(
+        "Level",
+        "level",
+        "LEVL",
+        Setting::ModulatorLevel,
+        Warps::DEFAULT.level,
+    ),
+    Param {
+        default: Warps::DEFAULT.pitch,
+        ..PITCH_PARAMS[0]
+    },
+    Param {
+        name: "Shape",
+        key: "shape",
+        label: Some("SHAP"),
+        setting: Setting::Wave,
+        choices: &WAVE_NAMES,
+        wraps: true,
+        default: Warps::DEFAULT.shape,
+    },
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -964,7 +1081,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -979,6 +1096,7 @@ impl Insert {
         Self::Plate(Plate::DEFAULT),
         Self::Pitch(Pitch::DEFAULT),
         Self::Grains(Grains::DEFAULT),
+        Self::Warps(Warps::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1010,6 +1128,7 @@ impl Insert {
             Self::Plate(_) => "Plate",
             Self::Pitch(_) => "Pitch",
             Self::Grains(_) => "Grains",
+            Self::Warps(_) => "Warps",
         }
     }
 
@@ -1030,6 +1149,7 @@ impl Insert {
             Self::Plate(_) => "Puts the sound on a bright, dense plate",
             Self::Pitch(_) => "Shifts its pitch up or down, keeping its time",
             Self::Grains(_) => "Records it and plays it back as a cloud of grains",
+            Self::Warps(_) => "Ring mods, folds or vocodes it with another track",
         }
     }
 
@@ -1054,6 +1174,7 @@ impl Insert {
             Self::Plate(_) => &PLATE_PARAMS,
             Self::Pitch(_) => &PITCH_PARAMS,
             Self::Grains(_) => &GRAINS_PARAMS,
+            Self::Warps(_) => &WARPS_PARAMS,
         }
     }
 
@@ -1151,6 +1272,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| grains.read(setting));
             }
+            Self::Warps(warps) => {
+                return WARPS_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| warps.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1185,6 +1312,7 @@ impl Insert {
             Self::Plate(plate) => return Self::Plate(plate.written(setting, whole)),
             Self::Pitch(pitch) => return Self::Pitch(pitch.written(setting, whole)),
             Self::Grains(grains) => return Self::Grains(grains.written(setting, whole)),
+            Self::Warps(warps) => return Self::Warps(warps.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -1554,12 +1682,7 @@ impl Compressor {
     /// The track it hears, by its place among the tracks, if not its own input. The returns come
     /// after the sound tracks, at `sounds` and the one after.
     pub fn source_track(self, sounds: usize) -> Option<usize> {
-        let source = usize::from(self.source);
-        match source {
-            0 => None,
-            track if track <= MAX_SOUND_TRACKS => Some(track - 1),
-            other => Some(sounds + other - MAX_SOUND_TRACKS - 1),
-        }
+        source_track(self.source, sounds)
     }
 
     /// A setting's value. One it doesn't have reads as nothing.
@@ -2101,6 +2224,103 @@ impl Grains {
     }
 }
 
+/// The track a `Source` hears, by its place among the tracks, if not the slot's own input or
+/// oscillator: `0` is that, then the sound tracks by number, then the returns after them, at
+/// `sounds` and the one after.
+fn source_track(source: u8, sounds: usize) -> Option<usize> {
+    match usize::from(source) {
+        0 => None,
+        track if track <= MAX_SOUND_TRACKS => Some(track - 1),
+        other => Some(sounds + other - MAX_SOUND_TRACKS - 1),
+    }
+}
+
+/// Warps' settings, after Mutable Instruments' Warps. The slot's own sound is the carrier, Warps'
+/// first input. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Warps {
+    /// Warps' algorithm knob, from crossfading, through folding, ring modulation, XOR and the
+    /// comparator, to the vocoder, each blending into the next.
+    pub algorithm: u8,
+    /// Warps' timbre knob: what each algorithm does with it, from how far it crossfades to the
+    /// vocoder's formant shift.
+    pub timbre: u8,
+    /// The modulator, Warps' second input: `0` for its own oscillator, a track's number, or a
+    /// return after the tracks.
+    pub source: u8,
+    /// How hard the modulator is driven, Warps' second level knob.
+    pub level: u8,
+    /// How far the oscillator is from the track's note, as a place in the list from two octaves
+    /// down to two up.
+    pub pitch: u8,
+    /// The oscillator's waveform, as a place among `WAVE_NAMES`.
+    pub shape: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Warps {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Warps {
+    /// As it starts: the digital ring modulation of the sound by a sine an octave above its note,
+    /// driven a little over unity, all wet.
+    pub const DEFAULT: Self = Self {
+        algorithm: 0x60,
+        timbre: 0x80,
+        source: 0,
+        level: 0xA0,
+        pitch: MOST_SHIFT + 12,
+        shape: 0,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// The track it takes as its modulator, by its place among the tracks, if not its own
+    /// oscillator.
+    pub fn source_track(self, sounds: usize) -> Option<usize> {
+        source_track(self.source, sounds)
+    }
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Algorithm => self.algorithm,
+            Setting::Timbre => self.timbre,
+            Setting::Source => self.source,
+            Setting::ModulatorLevel => self.level,
+            Setting::Shift => self.pitch,
+            Setting::Wave => self.shape,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut warps = self;
+        match setting {
+            Setting::Algorithm => warps.algorithm = value,
+            Setting::Timbre => warps.timbre = value,
+            Setting::Source => warps.source = value,
+            Setting::ModulatorLevel => warps.level = value,
+            Setting::Shift => warps.pitch = value,
+            Setting::Wave => warps.shape = value,
+            Setting::Mix => warps.mix = value,
+            Setting::Gain => warps.gain = value,
+            _ => {}
+        }
+        warps
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -2482,6 +2702,52 @@ mod tests {
             grain_density(255.0),
             Triggering::Random(MOST_GRAIN_HERTZ * 0.5)
         );
+    }
+
+    #[test]
+    fn warps_settings_read_back_and_save_and_its_algo_reads_as_warps_knob() {
+        let warps = Insert::Warps(Warps::DEFAULT);
+        let names: Vec<&str> = warps.params().iter().map(|param| param.name).collect();
+        assert_eq!(
+            names,
+            [
+                "Algo", "Timbre", "Source", "Level", "Pitch", "Shape", "Mix", "Gain"
+            ]
+        );
+        assert_eq!(WARPS_PARAMS[2].choices[0], "Osc");
+        assert_eq!(WARPS_PARAMS[2].choices[1..], SOURCE_NAMES[1..]);
+        assert_eq!(
+            WARPS_PARAMS[4].choices[usize::from(warps.value(4))],
+            "+12 st"
+        );
+        assert_eq!(WARPS_PARAMS[5].choices[usize::from(warps.value(5))], "Sine");
+        assert_eq!(warps.with_value(5, 0xFF).read(Setting::Wave), Some(4));
+        let fed = warps.with_value(2, 2);
+        assert_eq!(
+            match fed {
+                Insert::Warps(warps) => warps.source_track(8),
+                _ => None,
+            },
+            Some(1)
+        );
+        assert_eq!(Warps::DEFAULT.source_track(8), None);
+        assert_eq!(warps.read(Setting::Shape), None);
+        let text = ron::to_string(&fed).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&text).unwrap(), fed);
+        // Each cross-modulation is an eighth further, on a value of its own, then the modulator,
+        // then the vocoder.
+        for (at, name) in ["Xfade", "Fold", "Ring", "Digital", "XOR", "Compare"]
+            .into_iter()
+            .enumerate()
+        {
+            let value = at as f32 * 32.0;
+            assert_eq!(algorithm_blend(value), (at, at + 1, 0.0), "{name}");
+            assert_eq!(ALGORITHM_NAMES[at], name);
+        }
+        let (from, to, by) = algorithm_blend(f32::from(0xB3_u8));
+        assert_eq!((from, to), (5, 6));
+        assert!(by > 0.95, "{by}");
+        assert_eq!(algorithm_blend(255.0), (7, 7, 0.0));
     }
 
     #[test]

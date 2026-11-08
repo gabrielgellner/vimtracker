@@ -380,6 +380,17 @@ impl TrackState {
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
         self.voice.tie(note.note, note.gain);
+        self.tell_slots_the_note();
+    }
+
+    /// Tell the slots what note is playing, with the track's `Pitch` and its modulation, for an
+    /// oscillator of their own to follow.
+    fn tell_slots_the_note(&mut self) {
+        let played = self.last_note.map_or(60.0, |note| f32::from(note.note));
+        let note = played + 12.0 * self.pitch.log2() as f32;
+        for insert in &mut self.inserts {
+            insert.follow_note(note);
+        }
     }
 
     /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values
@@ -539,6 +550,7 @@ impl TrackState {
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
+        self.tell_slots_the_note();
     }
 
     /// What this track is playing with right now. `VOL` and its modulation are shown on the track's
@@ -647,6 +659,7 @@ impl TrackState {
         self.kill_at = None;
         self.off_at = None;
         self.last_note = Some(note);
+        self.tell_slots_the_note();
         self.voice = Voice::start(note, rate, from, self.pitch);
         self.voice.set_synth(self.synth_settings());
         if self.voice.uses_noise() {

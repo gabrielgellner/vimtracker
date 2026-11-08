@@ -295,6 +295,37 @@ Changes to `Time`, `Size`, `Pitch` and `Shape` reach the next grains, so
 moving them never clicks. For a held drone, turn `Freeze` on with a step's
 FX slot, then move `Time` to scan through what's held.
 
+`Warps` crosses the sound with a second one, after Mutable Instruments'
+Warps. The track's own sound is the carrier. The modulator is another
+track, chosen with `Source` as `Comp`'s is, or with `Source` on `Osc`,
+Warps' own oscillator, which plays the track's note. It starts as a ring
+modulator, with a sine an octave above the note.
+
+| Setting | Does |
+|---|---|
+| `Algo` | Which algorithm, blending from each one into the next |
+| `Timbre` | What that algorithm does with it, as Warps' timbre knob |
+| `Source` | `Osc`, a track by its number, or return `A` or `B` |
+| `Level` | How hard the modulator is driven, clipping above about `A0` |
+| `Pitch` | The oscillator, in semitones from the track's note |
+| `Shape` | The oscillator's wave: sine, triangle, saw, square or noise |
+
+`Algo` goes through Warps' algorithms in order, each on a value of its
+own: a crossfade at `00`, a wavefolder at `20`, a diode ring modulator at
+`40`, a multiplying one at `60`, XOR at `80` and a comparator at `A0`.
+Between two, it blends them. Past `A0` it fades into the bare modulator,
+at about `B3`, then into a vocoder from `BA`. Further up, the vocoder lets
+go more slowly, until at `FF` it holds what it heard. `Timbre` crossfades
+from the carrier to the modulator, folds harder, drives the ring
+modulators harder, blends XOR in, or picks among the comparator's modes.
+In the vocoder, it's none at `80`, and shifts the formants either side.
+
+The modulator track is heard after its slots and before its level and
+mute, so mute it to hear only what Warps makes of it. With a silent
+modulator, the ring modulators and the vocoder are silent too; the
+crossfade, fold, XOR and comparator still shape the carrier on its own.
+The diode ring modulator wants loud sounds, as Warps' does. It's mono.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
