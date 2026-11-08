@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::audio::LoadReadout;
+use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::meter::Meter;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
@@ -110,6 +110,26 @@ pub struct TrackLive {
     pub solo: bool,
 }
 
+/// The audio output as it plays, and what the audio page offers.
+#[derive(Debug, Clone, Default)]
+pub struct AudioState {
+    pub device: String,
+    /// The buffer it plays with, in frames, if the device says.
+    pub buffer: Option<u32>,
+    /// How long from the callback to the sound leaving the device, in microseconds.
+    pub latency_us: u64,
+    /// Buffers filled too late, and dropouts the device reported, since it started.
+    pub late: u64,
+    pub xruns: u64,
+    /// Whether the main loop should list the devices again, as the page has just opened.
+    pub refresh: bool,
+    /// Whether it's playing. It stops when the device changes or goes away.
+    pub running: bool,
+    /// What's chosen, which the system's own choices fill in.
+    pub choice: AudioChoice,
+    pub devices: Vec<DeviceInfo>,
+}
+
 /// The whole program's state.
 pub struct App {
     pub history: History,
@@ -118,6 +138,12 @@ pub struct App {
     pub samples: Arc<SamplePool>,
     pub handle: Handle,
     pub rate: u32,
+    /// The audio output as it plays, and what the audio page chooses from.
+    pub audio: AudioState,
+    /// A different output the audio page has chosen, for the main loop to open.
+    pub audio_request: Option<AudioChoice>,
+    /// The audio page's row: device, rate or buffer.
+    pub audio_row: usize,
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
@@ -255,6 +281,9 @@ impl App {
             watched: 0,
             track_row: 0,
             track_field: 0,
+            audio: AudioState::default(),
+            audio_request: None,
+            audio_row: 0,
             track_fine: false,
             recent_views: View::ALL.to_vec(),
             picker: None,
@@ -318,6 +347,21 @@ impl App {
         };
         app.send_live();
         app
+    }
+
+    /// Play through a new engine, on another output or at another rate. The song, undo, mutes and
+    /// solos stay, and the transport is stopped, as the new engine starts that way.
+    pub fn reconnect(&mut self, handle: Handle, samples: Arc<SamplePool>, rate: u32) {
+        self.handle = handle;
+        self.samples = samples;
+        self.rate = rate;
+        self.transport = Transport::Stopped;
+        self.playhead = 0;
+        self.live = None;
+        self.jam = vec![JamState::default(); MAX_TRACKS];
+        // Sent again when the next frame finds it differs.
+        self.watched = usize::MAX;
+        self.send_live();
     }
 
     /// Tell the engine every track's live controls, after loading a song.
@@ -519,7 +563,8 @@ impl App {
             | Mode::Chain
             | Mode::Track
             | Mode::Mixer
-            | Mode::Song => {
+            | Mode::Song
+            | Mode::Audio => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key, now),
@@ -594,6 +639,7 @@ impl App {
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
+            (Mode::Normal, View::Audio) => Mode::Audio,
             (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,
         }
@@ -601,6 +647,8 @@ impl App {
 
     pub(crate) fn show_view(&mut self, view: View) {
         self.count = None;
+        // The audio page lists the devices afresh each time it opens.
+        self.audio.refresh |= view == View::Audio && self.view != View::Audio;
         self.view = view;
         self.note_view(view);
         self.clamp_cursor();
@@ -692,6 +740,7 @@ impl App {
             View::Chain => self.run_chain(cmd),
             View::Track => self.run_track_page(cmd),
             View::Mixer => self.run_mixer(cmd),
+            View::Audio => self.run_audio_page(cmd),
             View::Song => self.run_song(cmd),
             View::Phrase => false,
         };

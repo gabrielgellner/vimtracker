@@ -19,7 +19,7 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::app::App;
-use crate::audio::{AudioError, AudioStats, Output};
+use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics, Support};
@@ -35,8 +35,6 @@ pub enum RunError {
     Project(#[from] ProjectError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("the audio device was lost")]
-    DeviceLost,
     #[error("couldn't write the render: {0}")]
     Render(#[from] hound::Error),
     #[error("{0} couldn't be loaded, so the render would be missing it")]
@@ -117,9 +115,11 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
 
 /// Open a project, or start an unsaved one, and run until the user quits.
 pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
-    let output = Output::open()?;
+    // What this machine played through last, or the system's own choice if that won't open.
+    let choice = AudioChoice::load();
+    let output = Output::open(&choice).or_else(|_| Output::open(&AudioChoice::default()))?;
     let rate = output.rate();
-    let mut status = String::new();
+    let mut status = output.note.clone().unwrap_or_default();
     let song = match &path {
         Some(folder) if folder.join("song.ron").exists() => project::load_song(folder)?,
         Some(folder) => {
@@ -137,8 +137,18 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(rate, version));
     let stats = Arc::new(AudioStats::default());
-    let _stream = output.start(realtime, Arc::clone(&stats))?;
+    let device = output.name.clone();
+    let (stream, buffer) = output.start(realtime, Arc::clone(&stats))?;
+    let mut stream = Some(stream);
     let mut app = App::new(song, path, samples, handle, rate);
+    app.audio = crate::app::AudioState {
+        device,
+        buffer,
+        running: true,
+        choice,
+        devices: audio::devices(),
+        ..crate::app::AudioState::default()
+    };
     app.status = status;
     app.offer_restore();
     let support = if no_graphics {
@@ -152,7 +162,13 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
     let mut graphics = (support == Support::Images).then(Graphics::new);
 
     let mut terminal = ratatui::init();
-    let result = main_loop(&mut terminal, &mut app, &stats, graphics.as_mut());
+    let result = main_loop(
+        &mut terminal,
+        &mut app,
+        &stats,
+        graphics.as_mut(),
+        &mut stream,
+    );
     if let Some(graphics) = &graphics {
         graphics.forget(&mut std::io::stdout())?;
     }
@@ -163,13 +179,37 @@ pub fn run(path: Option<PathBuf>, no_graphics: bool) -> Result<(), RunError> {
 fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
-    stats: &AudioStats,
+    stats: &Arc<AudioStats>,
     mut graphics: Option<&mut Graphics>,
+    stream: &mut Option<cpal::Stream>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
     while !app.should_quit {
-        if stats.lost.load(Ordering::Acquire) {
-            return Err(RunError::DeviceLost);
+        // A device that changes or goes away stops audio, and the audio page chooses again.
+        if stream.is_some() && stats.lost.load(Ordering::Acquire) {
+            *stream = None;
+            app.audio.running = false;
+            app.audio.devices = audio::devices();
+            app.status =
+                "The audio device changed or went away, so audio stopped. Space 7 chooses one"
+                    .to_owned();
+        }
+        app.audio.latency_us = stats.latency.load(Ordering::Relaxed);
+        app.audio.late = stats.late.load(Ordering::Relaxed);
+        app.audio.xruns = stats.errors.load(Ordering::Relaxed);
+        if std::mem::take(&mut app.audio.refresh) {
+            app.audio.devices = audio::devices();
+        }
+        if let Some(choice) = app.audio_request.take() {
+            // The old stream lets go of its device first.
+            *stream = None;
+            match switch_audio(app, &choice, stats) {
+                Ok(playing) => *stream = Some(playing),
+                Err(error) => {
+                    app.audio.running = false;
+                    app.status = format!("Couldn't play through that: {error}");
+                }
+            }
         }
         app.tick();
         app.cpu
@@ -192,6 +232,40 @@ fn main_loop(
     Ok(())
 }
 
+/// Open what the audio page chose and play through a new engine at its rate, with the samples
+/// loaded again at that rate. The song, undo, mutes and solos stay, and it's kept for next time.
+fn switch_audio(
+    app: &mut App,
+    choice: &AudioChoice,
+    stats: &Arc<AudioStats>,
+) -> Result<cpal::Stream, AudioError> {
+    let output = Output::open(choice)?;
+    let rate = output.rate();
+    let mut pool = SamplePool::default();
+    let errors = project::load_samples(app.folder.as_deref(), app.song(), rate, &mut pool);
+    let samples = Arc::new(pool);
+    let version = Arc::new(Published::new(Arc::clone(app.song()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(rate, version));
+    let device = output.name.clone();
+    let note = output.note.clone();
+    let (stream, buffer) = output.start(realtime, Arc::clone(stats))?;
+    app.reconnect(handle, samples, rate);
+    app.audio.device = device;
+    app.audio.buffer = buffer;
+    app.audio.running = true;
+    app.audio.choice = choice.clone();
+    app.audio.devices = audio::devices();
+    app.status = match (note, errors.first()) {
+        (Some(note), _) => note,
+        (None, Some(error)) => error.to_string(),
+        (None, None) => format!("Playing through {} at {rate} Hz", app.audio.device),
+    };
+    if let Err(error) = choice.save() {
+        app.status = format!("Playing, but the choice couldn't be kept: {error}");
+    }
+    Ok(stream)
+}
+
 /// Draw the whole screen: the view, the meter, the status line, and whatever is open over them.
 /// Without audio stats, as for a screenshot, the system line shows no trouble.
 pub fn draw_screen(
@@ -212,6 +286,7 @@ pub fn draw_screen(
         View::Phrase => views::phrase::draw(frame, view, app),
         View::Track => views::track::draw(frame, view, app),
         View::Mixer => views::mixer::draw(frame, view, app),
+        View::Audio => views::audio::draw(frame, view, app),
         View::Song => views::song::draw(frame, view, app),
     }
     // Inside the box the track page has while the keyboard plays it.

@@ -13,6 +13,7 @@ use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterType, Machine};
 use vt_model::step::{FxCommand, GateKind};
 
+use crate::audio::AudioChoice;
 use crate::guides::Guide;
 use crate::input::mode::View;
 
@@ -90,6 +91,8 @@ pub enum Pick {
         slot: usize,
     },
     Guide(Guide),
+    /// Play through another output, from the audio page.
+    Audio(AudioChoice),
 }
 
 /// One row.

@@ -51,3 +51,19 @@ reads `--`. It is saved with the project.
 
 It doesn't change what you hear while playing: the output clips at `0` either
 way, so nothing over full reaches your gear.
+
+## The audio page
+
+`Space 7` opens the audio page: which device plays, its rate and its buffer. `j` and
+`k` choose a row, `=` and `-` step through its choices, `K` lists them, and `x` goes back
+to the system's own. A change takes effect at once: the transport stops, and the song,
+undo, mutes and solos all stay. This machine remembers the choice for next time, in
+`~/.config/vimtracker/audio.ron`.
+
+The buffer is how much sound is worked out at a time. A smaller one answers keys sooner,
+but leaves less room when the CPU is busy, so it drops out sooner. Lower it until `late`
+or `xruns` start to count up, then go back a step. `Latency` is the time from working the
+sound out to it leaving the device. On Bluetooth, most of it is the headset's own.
+
+If the device changes or goes away while playing, audio stops and the status line says
+so. Choose one on the audio page to play again.

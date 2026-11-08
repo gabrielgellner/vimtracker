@@ -8,16 +8,19 @@ pub enum View {
     Phrase,
     Track,
     Mixer,
+    /// The audio output: its device, rate and buffer.
+    Audio,
 }
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Phrase,
         Self::Chain,
         Self::Song,
         Self::Track,
         Self::Mixer,
+        Self::Audio,
     ];
 
     /// The view's name.
@@ -28,6 +31,7 @@ impl View {
             Self::Phrase => "phrase",
             Self::Track => "track",
             Self::Mixer => "mixer",
+            Self::Audio => "audio",
         }
     }
 }
@@ -66,6 +70,8 @@ pub enum Mode {
     Mixer,
     /// Normal mode's keys in the song view. Only the binding table and the label use this.
     Song,
+    /// Normal mode's keys on the audio page. Only the binding table and the label use this.
+    Audio,
 }
 
 impl Mode {
@@ -89,6 +95,7 @@ impl Mode {
             Self::Track => "TRACK",
             Self::Mixer => "MIX",
             Self::Song => "SONG",
+            Self::Audio => "AUDIO",
         }
     }
 

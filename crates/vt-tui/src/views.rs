@@ -1,5 +1,6 @@
 //! What is drawn on screen.
 
+pub mod audio;
 pub mod braille;
 pub mod chain;
 pub mod guide;
