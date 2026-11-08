@@ -8,6 +8,7 @@ use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::Song;
 
 use crate::dsp::chorus::Chorus;
+use crate::dsp::comb::Comb;
 use crate::dsp::delay::Delay;
 use crate::dsp::flanger::Flanger;
 use crate::dsp::granular::Granular;
@@ -40,6 +41,7 @@ pub enum Memory {
     Grains(Box<Granular>),
     Warps(Box<Warps>),
     Reso(Box<Resonator>),
+    Comb(Box<Comb>),
 }
 
 impl Memory {
@@ -100,6 +102,11 @@ impl Memory {
         Self::Reso(Box::new(Resonator::new(rate)))
     }
 
+    /// A comb's, for its lines.
+    pub fn comb(rate: u32) -> Self {
+        Self::Comb(Box::new(Comb::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -115,6 +122,7 @@ impl Memory {
             Self::Grains(granular) => granular.process(input),
             Self::Warps(warps) => warps.process_alone(input),
             Self::Reso(resonator) => resonator.process_alone(input),
+            Self::Comb(comb) => comb.process_alone(input),
         }
     }
 
@@ -131,6 +139,7 @@ impl Memory {
             Self::Grains(granular) => granular.quiet_frames(),
             Self::Warps(warps) => warps.quiet_frames(),
             Self::Reso(resonator) => resonator.quiet_frames(),
+            Self::Comb(comb) => comb.quiet_frames(),
         }
     }
 
@@ -153,6 +162,7 @@ impl Memory {
             (Self::Grains(granular), Insert::Grains(settings)) => granular.follow(settings),
             (Self::Warps(warps), Insert::Warps(settings)) => warps.follow(settings),
             (Self::Reso(resonator), Insert::Reso(settings)) => resonator.follow(settings),
+            (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
             _ => {}
         }
     }
@@ -171,6 +181,7 @@ impl Memory {
             Self::Grains(granular) => granular.settle(),
             Self::Warps(warps) => warps.settle(),
             Self::Reso(resonator) => resonator.settle(),
+            Self::Comb(comb) => comb.settle(),
         }
     }
 
@@ -187,6 +198,7 @@ impl Memory {
             Self::Grains(granular) => granular.clear(),
             Self::Warps(warps) => warps.clear(),
             Self::Reso(resonator) => resonator.clear(),
+            Self::Comb(comb) => comb.clear(),
         }
     }
 }
@@ -205,6 +217,7 @@ pub struct MemoryCount {
     pub grains: u16,
     pub warps: u16,
     pub reso: u16,
+    pub comb: u16,
 }
 
 impl MemoryCount {
@@ -224,6 +237,7 @@ impl MemoryCount {
                 Insert::Grains(_) => count.grains += 1,
                 Insert::Warps(_) => count.warps += 1,
                 Insert::Reso(_) => count.reso += 1,
+                Insert::Comb(_) => count.comb += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -250,6 +264,7 @@ pub struct MemoryPool {
     grains: Vec<Memory>,
     warps: Vec<Memory>,
     reso: Vec<Memory>,
+    comb: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -272,6 +287,7 @@ impl MemoryPool {
             grains: Vec::with_capacity(POOL_CAPACITY),
             warps: Vec::with_capacity(POOL_CAPACITY),
             reso: Vec::with_capacity(POOL_CAPACITY),
+            comb: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -308,6 +324,9 @@ impl MemoryPool {
         for _ in 0..needed.reso {
             pool.put(Memory::reso(rate));
         }
+        for _ in 0..needed.comb {
+            pool.put(Memory::comb(rate));
+        }
         pool
     }
 
@@ -325,6 +344,7 @@ impl MemoryPool {
             Memory::Grains(_) => &mut self.grains,
             Memory::Warps(_) => &mut self.warps,
             Memory::Reso(_) => &mut self.reso,
+            Memory::Comb(_) => &mut self.comb,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -349,6 +369,7 @@ impl MemoryPool {
             Insert::Grains(_) => &mut self.grains,
             Insert::Warps(_) => &mut self.warps,
             Insert::Reso(_) => &mut self.reso,
+            Insert::Comb(_) => &mut self.comb,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -376,6 +397,7 @@ impl MemoryPool {
         self.owed.grains += count.grains;
         self.owed.warps += count.warps;
         self.owed.reso += count.reso;
+        self.owed.comb += count.comb;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -446,6 +468,12 @@ impl MemoryPool {
             self.owed.reso -= 1;
             return Some(memory);
         }
+        if self.owed.comb > 0
+            && let Some(memory) = self.comb.pop()
+        {
+            self.owed.comb -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -462,6 +490,7 @@ impl MemoryPool {
             + self.grains.len()
             + self.warps.len()
             + self.reso.len()
+            + self.comb.len()
     }
 }
 

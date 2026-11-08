@@ -29,6 +29,7 @@ pub enum Insert {
     Warps(Warps),
     Lpg(LowPassGate),
     Reso(Resonator),
+    Comb(Comb),
 }
 
 /// What a distortion does to the sound.
@@ -160,6 +161,9 @@ pub enum Setting {
     Material,
     Bright,
     Pickup,
+    /// A comb's: whether it's a comb or a flanger. Its `Feedback` is the flanger's, its `Tone`
+    /// the resonator's `Bright` and its `Spread` the granular effect's.
+    CombMode,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -192,6 +196,7 @@ impl Setting {
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             Self::Wave => WAVE_NAMES.len() as u8 - 1,
             Self::GateMode => GateMode::ALL.len() as u8 - 1,
+            Self::CombMode => CombMode::ALL.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -211,6 +216,7 @@ impl Setting {
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             Self::Wave => (WAVE_NAMES.len() - 1) as f32,
             Self::GateMode => (GateMode::ALL.len() - 1) as f32,
+            Self::CombMode => (CombMode::ALL.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -1215,6 +1221,65 @@ pub(crate) const RESO_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// What a comb does with what it delays, after Vital's comb filter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CombMode {
+    /// Feedback alone: the sound and its echoes, each a cycle of the note apart, so it rings.
+    #[default]
+    Comb,
+    /// The sound with a delayed copy, which feedback sharpens: notches between the note's
+    /// harmonics, and peaks on them.
+    Flange,
+}
+
+impl CombMode {
+    pub const ALL: [Self; 2] = [Self::Comb, Self::Flange];
+}
+
+const COMB_MODE_NAMES: [&str; 2] = ["Comb", "Flange"];
+
+/// A comb's, in the order the page shows them, as columns of two: what it is and its pitch, how
+/// long it rings and how bright, then how wide a band it keeps and the mix, then its gain.
+pub(crate) const COMB_PARAMS: [Param; 7] = [
+    Param {
+        name: "Mode",
+        key: "mode",
+        // Choosing a mode chooses a sound, so steps don't lock it.
+        label: None,
+        setting: Setting::CombMode,
+        choices: &COMB_MODE_NAMES,
+        wraps: true,
+        default: 0,
+    },
+    Param {
+        name: "Tune",
+        key: "tune",
+        label: Some("TUNE"),
+        default: Comb::DEFAULT.tune,
+        ..PITCH_PARAMS[0]
+    },
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::FlangerFeedback,
+        Comb::DEFAULT.feedback,
+    ),
+    hex_param("Tone", "tone", "TONE", Setting::Bright, Comb::DEFAULT.tone),
+    hex_param(
+        "Spread",
+        "spread",
+        "SPRD",
+        Setting::Spread,
+        Comb::DEFAULT.spread,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1223,7 +1288,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1241,6 +1306,7 @@ impl Insert {
         Self::Warps(Warps::DEFAULT),
         Self::Lpg(LowPassGate::DEFAULT),
         Self::Reso(Resonator::DEFAULT),
+        Self::Comb(Comb::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1275,6 +1341,7 @@ impl Insert {
             Self::Warps(_) => "Warps",
             Self::Lpg(_) => "LPG",
             Self::Reso(_) => "Reso",
+            Self::Comb(_) => "Comb",
         }
     }
 
@@ -1298,6 +1365,7 @@ impl Insert {
             Self::Warps(_) => "Ring mods, folds or vocodes it with another track",
             Self::Lpg(_) => "Gates or filters it by its level, or another track's",
             Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
+            Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
         }
     }
 
@@ -1325,6 +1393,7 @@ impl Insert {
             Self::Warps(_) => &WARPS_PARAMS,
             Self::Lpg(_) => &LPG_PARAMS,
             Self::Reso(_) => &RESO_PARAMS,
+            Self::Comb(_) => &COMB_PARAMS,
         }
     }
 
@@ -1440,6 +1509,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| resonator.read(setting));
             }
+            Self::Comb(comb) => {
+                return COMB_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| comb.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1477,6 +1552,7 @@ impl Insert {
             Self::Warps(warps) => return Self::Warps(warps.written(setting, whole)),
             Self::Lpg(gate) => return Self::Lpg(gate.written(setting, whole)),
             Self::Reso(resonator) => return Self::Reso(resonator.written(setting, whole)),
+            Self::Comb(comb) => return Self::Comb(comb.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -2645,6 +2721,79 @@ impl Resonator {
             _ => {}
         }
         resonator
+    }
+}
+
+/// A comb's settings: a delay tuned to the track's note, fed back through a filter, after Vital's
+/// comb filter. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Comb {
+    pub mode: CombMode,
+    /// How far its pitch is from the track's note, as a place in the list from two octaves down to
+    /// two up.
+    pub tune: u8,
+    /// How long it rings, from none at `80`: above, its peaks sit on all the note's harmonics, and
+    /// below, on its odd ones, for a hollower ring at the same pitch.
+    pub feedback: u8,
+    /// How bright what goes round is: its low-pass, from the note at `00` to everything at `FF`.
+    pub tone: u8,
+    /// How far down from `Tone` what goes round reaches, from a narrow band at `00` to everything
+    /// under it at `FF`.
+    pub spread: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Comb {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Comb {
+    /// As it starts: a comb in tune with the note, ringing for about half a second at middle C,
+    /// losing what's over four octaves up as it rings, and all wet.
+    pub const DEFAULT: Self = Self {
+        mode: CombMode::Comb,
+        tune: MOST_SHIFT,
+        feedback: 0xF0,
+        tone: 0x80,
+        spread: 0xFF,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::CombMode => self.mode as u8,
+            Setting::Shift => self.tune,
+            Setting::FlangerFeedback => self.feedback,
+            Setting::Bright => self.tone,
+            Setting::Spread => self.spread,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut comb = self;
+        match setting {
+            Setting::CombMode => comb.mode = CombMode::ALL[usize::from(value)],
+            Setting::Shift => comb.tune = value,
+            Setting::FlangerFeedback => comb.feedback = value,
+            Setting::Bright => comb.tone = value,
+            Setting::Spread => comb.spread = value,
+            Setting::Mix => comb.mix = value,
+            Setting::Gain => comb.gain = value,
+            _ => {}
+        }
+        comb
     }
 }
 
