@@ -192,6 +192,24 @@ pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
+/// The same for a synth with more than four, whose later settings carry on down the left.
+pub const SYNTH8_ROWS: [&[Control]; 15] = [
+    &[Control::Machine, Control::Level],
+    &[Control::Setting(0), base(TrackControl::Pan)],
+    &[Control::Setting(1), base(TrackControl::SendA)],
+    &[Control::Setting(2), base(TrackControl::SendB)],
+    &[Control::Setting(3), Control::Swing],
+    &[Control::Setting(4)],
+    &[Control::Setting(5)],
+    &[Control::Setting(6)],
+    &[Control::Setting(7)],
+    &[Control::FilterType],
+    &[base(TrackControl::Cutoff)],
+    &[base(TrackControl::Resonance)],
+    &[base(TrackControl::Drive)],
+    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::HighCut)],
+];
 /// The same for a synth with three, whose last row has only its swing, on the right.
 pub const SYNTH3_ROWS: [&[Control]; 11] = [
     &[Control::Machine, Control::Level],
@@ -256,6 +274,7 @@ impl Page {
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
             (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
+            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 4 => &SYNTH8_ROWS,
             (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
             (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
             (Self::Mod, _) => &MOD_ROWS,

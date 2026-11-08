@@ -353,7 +353,11 @@ impl TrackState {
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
             offsets: [0.0; SettingId::COUNT],
-            synth: [0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0],
+            synth: {
+                let mut synth = [0.0; MAX_MACHINE_SETTINGS];
+                synth[..4].copy_from_slice(&[0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0]);
+                synth
+            },
             cut_offset: Smoothed::at(0.0),
             res_offset: Smoothed::at(0.0),
             pan_offset: Smoothed::at(0.0),
@@ -379,7 +383,7 @@ impl TrackState {
     /// Carry the sounding note on as this one, with no new attack.
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
-        self.voice.tie(note.note, note.gain);
+        self.voice.tie(note);
         self.tell_slots_the_note();
     }
 
@@ -576,7 +580,7 @@ impl TrackState {
             resonance: moved(self.resonance.target, SettingId::RES),
             send_a: on_level(self.send_a, SettingId::SEND_A),
             send_b: on_level(self.send_b, SettingId::SEND_B),
-            machine: [synth.harmonics, synth.timbre, synth.morph, synth.accent].map(shown),
+            machine: std::array::from_fn(|place| shown(synth.at(place))),
             inserts: self.resolved.map(|insert| {
                 let mut values = [0; MAX_PARAMS];
                 for (param, value) in values.iter_mut().enumerate() {
@@ -596,12 +600,7 @@ impl TrackState {
                 .map_or(0.0, |id| self.offsets[id.index()]);
             (self.synth[setting] + offset).clamp(0.0, 1.0)
         };
-        Settings {
-            harmonics: at(0),
-            timbre: at(1),
-            morph: at(2),
-            accent: at(3),
-        }
+        Settings::from_places(std::array::from_fn(at))
     }
 
     /// Start the track's envelopes for a note.
@@ -654,13 +653,21 @@ impl TrackState {
         } else {
             self.voice.level()
         };
-        self.cut_to_tail();
+        // `Acid` plays one note at a time, and the next carries on from its filter and accent.
+        let carries_on = note.synth == Some(SynthVoice::Acid) && self.voice.plays_acid();
+        if !carries_on {
+            self.cut_to_tail();
+        }
         self.delayed = None;
         self.kill_at = None;
         self.off_at = None;
         self.last_note = Some(note);
         self.tell_slots_the_note();
-        self.voice = Voice::start(note, rate, from, self.pitch);
+        if carries_on {
+            self.voice.retrigger(note);
+        } else {
+            self.voice = Voice::start(note, rate, from, self.pitch);
+        }
         self.voice.set_synth(self.synth_settings());
         if self.voice.uses_noise() {
             self.voice.seed_noise(self.rng.next_u32());

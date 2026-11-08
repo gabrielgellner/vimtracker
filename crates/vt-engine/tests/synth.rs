@@ -198,7 +198,7 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
             let id = SettingId::voice(voice, setting).unwrap();
             let value = match id.entry().kind {
                 vt_model::settings::Kind::Stepped { .. } => {
-                    format!("{:02X}", id.entry().kind.top() / 2)
+                    format!("{:02X}", id.entry().kind.top().div_ceil(2))
                 }
                 _ => "F0".to_owned(),
             };
@@ -330,4 +330,66 @@ fn each_snare_hit_has_its_own_noise_and_a_render_repeats() {
     assert!(play(snare.clone(), 8) == out, "the same seed differs");
     snare.seed = 7;
     assert!(play(snare, 8) != out, "another seed is the same");
+}
+
+/// How many times a stretch of the left channel rises through zero, a second's worth.
+fn pitch_of(out: &[f32], from: usize, to: usize) -> f32 {
+    let left: Vec<f32> = out[from * STEP * 2..to * STEP * 2]
+        .iter()
+        .step_by(2)
+        .copied()
+        .collect();
+    let rising = left
+        .windows(2)
+        .filter(|pair| pair[0] < 0.0 && pair[1] >= 0.0)
+        .count();
+    rising as f32 * RATE as f32 / left.len() as f32
+}
+
+#[test]
+fn acid_accents_a_note_from_its_velocity() {
+    // Velocities either side of the line sound nearly as loud as each other, but for the accent.
+    let plain = play(on(SynthVoice::Acid, &["C-2 6F", REST]), 2);
+    let accented = play(on(SynthVoice::Acid, &["C-2 70", REST]), 2);
+    let louder = 20.0 * (peak(&accented, 0) / peak(&plain, 0)).log10();
+    assert!(louder > 3.0, "{louder} dB");
+}
+
+#[test]
+fn acid_slides_into_the_note_after_a_hold() {
+    let slid = play(
+        on(SynthVoice::Acid, &["C-2 64 HLD1", "C-3 64", REST, REST]),
+        4,
+    );
+    let struck = play(on(SynthVoice::Acid, &["C-2 64", "C-3 64", REST, REST]), 4);
+    // Both end on the second note's pitch.
+    for out in [&slid, &struck] {
+        let hertz = pitch_of(out, 2, 4);
+        assert!((hertz - 130.8).abs() < 6.0, "{hertz} Hz");
+    }
+    // Struck again, its envelopes start over, so it's louder and brighter at the second note than
+    // when it slides there.
+    assert!(
+        peak(&struck, 1) > peak(&slid, 1) * 1.1,
+        "{} {}",
+        peak(&struck, 1),
+        peak(&slid, 1)
+    );
+}
+
+#[test]
+fn acid_carries_its_accent_sweep_from_note_to_note() {
+    // Accents in a row, at full resonance, swell more than a lone one does. Played with the
+    // track's resonance, and the voice's own up.
+    let mut steps = vec!["C-2 7F"; 4];
+    steps.push(REST);
+    let mut song = on(SynthVoice::Acid, &steps);
+    song.tracks[0].set_machine_value(2, 0xFF);
+    let out = play(song, 5);
+    assert!(
+        peak(&out, 3) > peak(&out, 0),
+        "{} {}",
+        peak(&out, 3),
+        peak(&out, 0)
+    );
 }

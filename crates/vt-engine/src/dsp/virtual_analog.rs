@@ -38,6 +38,8 @@ pub struct Settings {
     pub morph: f32,
     /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
     pub accent: f32,
+    /// The settings after the first four, for a voice with more.
+    pub further: [f32; 4],
 }
 
 impl Default for Settings {
@@ -47,6 +49,33 @@ impl Default for Settings {
             timbre: 0.0,
             morph: 0.5,
             accent: 0.8,
+            further: [0.0; 4],
+        }
+    }
+}
+
+impl Settings {
+    /// A setting by its place among the voice's.
+    #[inline]
+    pub fn at(&self, place: usize) -> f32 {
+        match place {
+            0 => self.harmonics,
+            1 => self.timbre,
+            2 => self.morph,
+            3 => self.accent,
+            _ => self.further.get(place - 4).copied().unwrap_or(0.0),
+        }
+    }
+
+    /// The settings in their places, as the track holds them.
+    pub fn from_places(places: [f32; 8]) -> Self {
+        let [harmonics, timbre, morph, accent, a, b, c, d] = places;
+        Self {
+            harmonics,
+            timbre,
+            morph,
+            accent,
+            further: [a, b, c, d],
         }
     }
 }

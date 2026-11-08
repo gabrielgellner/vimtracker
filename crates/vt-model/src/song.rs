@@ -478,6 +478,8 @@ pub enum SynthVoice {
     VirtualAnalog,
     /// A saw or a square, with a sub, through a resonant filter.
     VirtualAnalogVcf,
+    /// A saw or a square through a diode ladder, with accent and slide, after Roland's TB-303.
+    Acid,
     /// Two-operator FM.
     Fm,
     /// A sine bent by a second wave's phase.
@@ -518,9 +520,10 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
+        Self::Acid,
         Self::Fm,
         Self::PhaseDistortion,
         Self::Waveshaping,
@@ -546,6 +549,7 @@ impl SynthVoice {
         match self {
             Self::VirtualAnalog => "VA",
             Self::VirtualAnalogVcf => "VA VCF",
+            Self::Acid => "Acid",
             Self::Fm => "FM",
             Self::PhaseDistortion => "PD",
             Self::Waveshaping => "Fold",
@@ -571,7 +575,8 @@ impl SynthVoice {
     pub fn meaning(self) -> &'static str {
         match self {
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
-            Self::VirtualAnalogVcf => "A saw or square through a filter, for acid",
+            Self::VirtualAnalogVcf => "A saw or square with a sub, through a filter",
+            Self::Acid => "A 303-style bass, with accent and slide",
             Self::PhaseDistortion => "A sine bent out of shape, as on Casio's CZ",
             Self::Formant => "Two formants of grains, for vowels and leads",
             Self::Additive => "24 harmonics in bumps, for organs and glass",
@@ -599,6 +604,7 @@ impl SynthVoice {
             self,
             Self::VirtualAnalog
                 | Self::VirtualAnalogVcf
+                | Self::Acid
                 | Self::Fm
                 | Self::PhaseDistortion
                 | Self::Waveshaping
