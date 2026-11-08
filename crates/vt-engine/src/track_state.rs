@@ -19,6 +19,45 @@ use crate::mixer::Reading;
 use crate::rng::Pcg32;
 use crate::voice::{NoteOn, Voice};
 
+/// How many envelopes and LFOs a track has, each moving at most one setting.
+const MODULATORS: usize = TRACK_ENVELOPES + LFOS_PER_TRACK;
+
+/// What a track's envelopes move, by setting, kept as a short list as there are only a few.
+#[derive(Debug, Clone, Copy, Default)]
+struct Moved {
+    entries: [(usize, f32); TRACK_ENVELOPES],
+    count: usize,
+}
+
+impl Moved {
+    /// Add to what a setting is moved by.
+    fn add(&mut self, index: usize, by: f32) {
+        let count = self.count;
+        match self.entries[..count]
+            .iter_mut()
+            .find(|(at, _)| *at == index)
+        {
+            Some((_, value)) => *value += by,
+            None => {
+                self.entries[count] = (index, 0.0 + by);
+                self.count += 1;
+            }
+        }
+    }
+
+    /// What a setting is moved by.
+    fn at(&self, index: usize) -> f32 {
+        self.entries()
+            .iter()
+            .find(|(at, _)| *at == index)
+            .map_or(0.0, |(_, value)| *value)
+    }
+
+    fn entries(&self) -> &[(usize, f32)] {
+        &self.entries[..self.count]
+    }
+}
+
 /// How often filter coefficients are recalculated while the cutoff moves, in frames.
 const FILTER_UPDATE_FRAMES: u32 = 32;
 /// How close to wide open the utility filter counts as out of the way, on `0..=1`.
@@ -168,6 +207,8 @@ pub struct TrackState {
     /// What each setting is set to, by its place in the registry. The fields below it are what's
     /// heard: a voice's or an effect's settings only reach them while it's the one loaded.
     values: [ValueLayers; SettingId::COUNT],
+    /// How many of `values` have a glide running, so moving them along is skipped when none do.
+    gliding: usize,
     /// The voice and effects whose settings are heard now.
     loaded_voice: Option<SynthVoice>,
     loaded_effects: [Option<Effect>; INSERTS],
@@ -208,6 +249,9 @@ pub struct TrackState {
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
+    /// The settings `offsets` has anything on, at most one for each envelope and LFO, so only those
+    /// are cleared next time rather than every setting.
+    offset_marks: [Option<usize>; MODULATORS],
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
@@ -342,6 +386,7 @@ impl TrackState {
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|_| InsertState::default()),
+            gliding: 0,
             slot_values: [[0.0; MAX_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             slot_moving: [false; INSERTS],
@@ -353,6 +398,7 @@ impl TrackState {
             filter_countdown: 0,
             lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
             offsets: [0.0; SettingId::COUNT],
+            offset_marks: [None; MODULATORS],
             synth: {
                 let mut synth = [0.0; MAX_MACHINE_SETTINGS];
                 synth[..4].copy_from_slice(&[0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0]);
@@ -408,6 +454,7 @@ impl TrackState {
             self.values[id.index()] = ValueLayers::at(base);
             self.write_value(id, scaled(base));
         }
+        self.gliding = 0;
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
     }
 
@@ -458,7 +505,8 @@ impl TrackState {
         }
         self.filter_moving = false;
         // Envelopes, then each LFO, so each reads what's before it, and there's no way back round.
-        let mut moved = [0.0_f32; SettingId::COUNT];
+        // What the envelopes move is kept by setting, as there are only a few.
+        let mut moved = Moved::default();
         for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
             let Some(destination) = envelope.destination else {
                 continue;
@@ -475,16 +523,24 @@ impl TrackState {
                 continue;
             }
             let level = run.level(envelope, now.clock, now.rate);
-            moved[destination.index()] += level * f32::from(envelope.depth) / 255.0;
+            moved.add(
+                destination.index(),
+                level * f32::from(envelope.depth) / 255.0,
+            );
         }
-        let mut offsets = [0.0_f32; SettingId::COUNT];
+        // Only what was moved last time needs clearing.
+        for index in self.offset_marks.iter_mut().filter_map(Option::take) {
+            self.offsets[index] = 0.0;
+        }
+        let mut marks = 0;
+        let offsets = &mut self.offsets;
         for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
             let Some(destination) = lfo.destination else {
                 continue;
             };
             let moved_by = |setting: usize| {
                 SettingId::lfo(slot, setting)
-                    .map_or(0.0, |id| offsets[id.index()] + moved[id.index()])
+                    .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
             };
             let [depth, phase] = self.lfo_values[slot];
             let depth = depth_of(depth) + moved_by(0) * 255.0;
@@ -503,6 +559,8 @@ impl TrackState {
             let value = wave(lfo.shape, cycles + phase, key);
             let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
             offsets[destination.index()] += value * depth / 255.0;
+            self.offset_marks[marks] = Some(destination.index());
+            marks += 1;
         }
         // A different filter starts from silence rather than from another's state.
         if self.filter_type != track.filter {
@@ -516,11 +574,13 @@ impl TrackState {
         self.cut_offset.target = offsets[SettingId::CUT.index()];
         self.res_offset.target = offsets[SettingId::RES.index()];
         self.pan_offset.target = offsets[SettingId::PAN.index()];
-        self.cut_envelope.target = moved[SettingId::CUT.index()];
-        self.res_envelope.target = moved[SettingId::RES.index()];
-        self.pan_envelope.target = moved[SettingId::PAN.index()];
-        for (offset, envelope) in offsets.iter_mut().zip(moved) {
-            *offset += envelope;
+        self.cut_envelope.target = moved.at(SettingId::CUT.index());
+        self.res_envelope.target = moved.at(SettingId::RES.index());
+        self.pan_envelope.target = moved.at(SettingId::PAN.index());
+        for &(index, envelope) in moved.entries() {
+            offsets[index] += envelope;
+            self.offset_marks[marks] = Some(index);
+            marks += 1;
         }
         // Each slot's effect gets finished values, and doesn't know where they came from.
         for (slot, insert) in track.inserts.into_iter().enumerate() {
@@ -548,7 +608,6 @@ impl TrackState {
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
             self.inserts[slot].bypass(track.bypassed[slot]);
         }
-        self.offsets = offsets;
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
         self.voice.set_pitch(self.pitch);
@@ -698,7 +757,9 @@ impl TrackState {
     /// Run a lock or hold value from a step. Anything else on that value gives way to it.
     pub fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
         let layers = &mut self.values[id.index()];
-        layers.glide = None;
+        if layers.glide.take().is_some() {
+            self.gliding -= 1;
+        }
         if mark == Mark::Hold {
             layers.base = value;
             layers.lock = None;
@@ -727,6 +788,7 @@ impl TrackState {
                 start_tick: now.tick,
                 ticks,
             });
+            self.gliding += 1;
         }
     }
 
@@ -752,6 +814,17 @@ impl TrackState {
 
     /// Move glides along to where the song is.
     fn advance_glides(&mut self, now: SongTime) {
+        debug_assert_eq!(
+            self.gliding,
+            self.values
+                .iter()
+                .filter(|layers| layers.glide.is_some())
+                .count(),
+            "the count of glides is out"
+        );
+        if self.gliding == 0 {
+            return;
+        }
         for id in SettingId::all() {
             let Some(glide) = self.values[id.index()].glide else {
                 continue;

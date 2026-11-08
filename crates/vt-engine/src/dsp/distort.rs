@@ -82,7 +82,8 @@ impl Default for InsertState {
 fn same_effect(before: Insert, after: Insert) -> bool {
     match (before, after) {
         (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
-        (Insert::Delay(_), Insert::Delay(_))
+        (Insert::Empty, Insert::Empty)
+        | (Insert::Delay(_), Insert::Delay(_))
         | (Insert::Reverb(_), Insert::Reverb(_))
         | (Insert::Chorus(_), Insert::Chorus(_))
         | (Insert::Eq(_), Insert::Eq(_))
