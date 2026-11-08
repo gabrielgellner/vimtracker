@@ -428,12 +428,12 @@ fn a_held_preview_lasts_until_its_key_is_let_go() {
     let mut held = Engine::new(48_000, version(song, samples));
     held.hold_preview(0, 60, 0xFF);
     assert!(level(&mut held, 24_000) > 0.1, "a held one is still going");
-    held.release_preview(62);
+    held.release_preview(0, 62);
     assert!(
         level(&mut held, 24_000) > 0.1,
         "another key's release doesn't end it"
     );
-    held.release_preview(60);
+    held.release_preview(0, 60);
     assert!(level(&mut held, 24_000) < 1e-3, "its own does");
 }
 
@@ -448,7 +448,7 @@ fn a_finished_preview_sounds_as_long_as_a_short_one_however_soon_it_ends() {
     let mut engine = Engine::new(48_000, version(song_with_notes(1, &[]), samples));
     engine.hold_preview(0, 60, 0xFF);
     let _ = level(&mut engine, 2400);
-    engine.finish_preview(60);
+    engine.finish_preview(0, 60);
     assert!(level(&mut engine, 4800) > 0.1, "it plays on after a tap");
     assert!(
         level(&mut engine, 24_000) < 1e-3,
@@ -457,7 +457,7 @@ fn a_finished_preview_sounds_as_long_as_a_short_one_however_soon_it_ends() {
     // Finished after it's sounded that long, it ends at once.
     engine.hold_preview(0, 60, 0xFF);
     let _ = level(&mut engine, 24_000);
-    engine.finish_preview(60);
+    engine.finish_preview(0, 60);
     assert!(level(&mut engine, 480) < 1e-3);
 }
 
@@ -499,4 +499,104 @@ fn a_preview_plays_without_touching_sequenced_notes() {
     let mut both = vec![0.0; 2000];
     engine.process(&mut both);
     assert!(both[1000] > alone[1000], "the preview should add level");
+}
+
+#[test]
+fn held_previews_play_a_chord_and_each_ends_with_its_own_key() {
+    let level = |engine: &mut Engine, frames: usize| {
+        let mut out = vec![0.0; frames * 2];
+        engine.process(&mut out);
+        out[out.len() - 2].abs()
+    };
+    let samples = pool(&[("flat", flat(SECOND * 4, 0.05))]);
+    let mut engine = Engine::new(48_000, version(song_with_notes(1, &[]), samples));
+    engine.hold_preview(0, 60, 0xFF);
+    let one = level(&mut engine, 2400);
+    engine.hold_preview(0, 64, 0xFF);
+    engine.hold_preview(0, 67, 0xFF);
+    assert_eq!(engine.previews_sounding(), 3);
+    let three = level(&mut engine, 2400);
+    assert!(
+        (three / one - 3.0).abs() < 0.05,
+        "three notes, {three} against {one} for one"
+    );
+    // Letting go of the middle note leaves the other two.
+    engine.release_preview(0, 64);
+    let _ = level(&mut engine, 2400);
+    assert_eq!(engine.previews_sounding(), 2);
+    let two = level(&mut engine, 2400);
+    assert!((two / one - 2.0).abs() < 0.05, "{two} against {one}");
+    // The same note on another track is another key's.
+    engine.release_preview(1, 60);
+    assert_eq!(engine.previews_sounding(), 2);
+    engine.release_preview(0, 60);
+    engine.release_preview(0, 67);
+    assert!(level(&mut engine, 2400) < 1e-3, "all let go");
+    assert_eq!(engine.previews_sounding(), 0);
+}
+
+#[test]
+fn a_ninth_held_preview_takes_over_the_oldest() {
+    let level = |engine: &mut Engine, frames: usize| {
+        let mut out = vec![0.0; frames * 2];
+        engine.process(&mut out);
+        out[out.len() - 2].abs()
+    };
+    let samples = pool(&[("flat", flat(SECOND * 4, 0.02))]);
+    let mut engine = Engine::new(48_000, version(song_with_notes(1, &[]), samples));
+    engine.hold_preview(0, 48, 0xFF);
+    let one = level(&mut engine, 480);
+    for note in 49..56 {
+        engine.hold_preview(0, note, 0xFF);
+    }
+    let _ = level(&mut engine, 480);
+    assert_eq!(engine.previews_sounding(), 8);
+    engine.hold_preview(0, 56, 0xFF);
+    // The oldest fades out, rather than stopping with a click.
+    let _ = level(&mut engine, 480);
+    assert_eq!(engine.previews_sounding(), 8);
+    let eight = level(&mut engine, 480);
+    assert!((eight / one - 8.0).abs() < 0.1, "{eight} against {one}");
+    // The first note is gone, so letting go of the other eight ends everything.
+    for note in 49..=56 {
+        engine.release_preview(0, note);
+    }
+    assert!(level(&mut engine, 2400) < 1e-3, "the first was taken over");
+
+    // With every voice held but one let go and still ringing, that one is taken over rather than
+    // the oldest.
+    let mut ringing = song_with_notes(1, &[]);
+    ringing.tracks[0].envelopes[0].release_ms = 2000;
+    let samples = pool(&[("flat", flat(SECOND * 4, 0.02))]);
+    let mut engine = Engine::new(48_000, version(ringing, samples));
+    for note in 60..68 {
+        engine.hold_preview(0, note, 0xFF);
+    }
+    let full = level(&mut engine, 480);
+    engine.release_preview(0, 65);
+    let fading = level(&mut engine, SECOND);
+    assert!(fading < full * 0.99, "{fading} from {full}");
+    engine.hold_preview(0, 70, 0xFF);
+    let _ = level(&mut engine, 480);
+    let after = level(&mut engine, 480);
+    assert!(
+        (after / full - 1.0).abs() < 0.01,
+        "eight held again, {after} against {full}"
+    );
+}
+
+#[test]
+fn a_held_note_pressed_again_starts_again_on_its_own_voice() {
+    let samples = pool(&[("flat", flat(SECOND * 4, 0.05))]);
+    let mut engine = Engine::new(48_000, version(song_with_notes(1, &[]), samples));
+    let mut out = vec![0.0; 960];
+    for _ in 0..4 {
+        engine.preview(0, 60, 0xFF);
+        engine.process(&mut out);
+    }
+    assert_eq!(
+        engine.previews_sounding(),
+        1,
+        "taps of one note don't pile up"
+    );
 }

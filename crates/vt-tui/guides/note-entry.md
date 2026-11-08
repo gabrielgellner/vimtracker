@@ -19,6 +19,11 @@ long as you held it. `1` is written once too, however long it's held. Other
 keys, such as `Backspace`, the arrows and the digits in other columns, repeat
 while held. If the window loses focus while a note is held, it stops.
 
+Each note key writes as it goes down, even while another is held, so keys
+rolled one into the next are all written. Without auto-jump the last one down
+wins the row; with it, each moves on. Every key held keeps sounding until you
+let go, so a chord is heard, though a row holds one note.
+
 | Keys | Does |
 |---|---|
 | `z` `x` | Octave down or up. The status line shows it as `Oct` |

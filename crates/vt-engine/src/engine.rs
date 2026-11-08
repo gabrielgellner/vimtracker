@@ -19,9 +19,10 @@ use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
 use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
+use crate::preview::{LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{DelayedNote, Keys, LiveValues, Retrigger, SongTime, TrackState, base_of};
-use crate::voice::{NoteOn, Voice};
+use crate::voice::NoteOn;
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
@@ -54,11 +55,8 @@ pub struct Engine {
     rate: u32,
     current: Arc<Published>,
     tracks: Box<[TrackState; MAX_TRACKS]>,
-    preview: Voice,
-    /// The track the preview voice goes through.
-    preview_track: usize,
-    /// The note the preview voice is playing, for letting go of a held key.
-    preview_note: Option<u8>,
+    /// The voices the keyboard plays through, each tied to the note its key started.
+    previews: Previews,
     /// The tracks the last audition started a note on, for letting go of them when its key is.
     auditioned: [bool; MAX_TRACKS],
     /// Each track's sound after its slots, for compressors and Warps that hear another track.
@@ -140,9 +138,7 @@ impl Engine {
                 .collect::<Box<[TrackState]>>()
                 .try_into()
                 .unwrap_or_else(|_| unreachable!("one state for each track")),
-            preview: Voice::default(),
-            preview_track: 0,
-            preview_note: None,
+            previews: Previews::default(),
             auditioned: [false; MAX_TRACKS],
             keys: Keys::default(),
             listened: [false; MAX_TRACKS],
@@ -889,34 +885,35 @@ impl Engine {
         }
     }
 
-    /// Play a note on the preview voice. It never cuts a sequenced note, or is cut by one.
+    /// Play a note on a preview voice for a short while. It never cuts a sequenced note, or is
+    /// cut by one.
     pub fn preview(&mut self, track: usize, note: u8, velocity: u8) {
         let frames = PREVIEW_MS * self.rate / 1000;
         self.start_preview(track, note, velocity, Some(frames));
     }
 
-    /// Play a note on the preview voice until [`Engine::release_preview`] lets it go, for a key
-    /// held down where the terminal reports when it's let go.
+    /// Play a note on a preview voice until [`Engine::release_preview`] lets it go, for a key
+    /// held down. Each key down has a voice of its own, so they play a chord.
     pub fn hold_preview(&mut self, track: usize, note: u8, velocity: u8) {
         self.start_preview(track, note, velocity, None);
     }
 
-    /// Let go of the preview voice's note, if it's still this one.
-    pub fn release_preview(&mut self, note: u8) {
-        if self.preview_note == Some(note) {
-            self.preview.release();
-            self.preview_note = None;
-        }
+    /// Let go of a note held through a track, leaving any others sounding.
+    pub fn release_preview(&mut self, track: usize, note: u8) {
+        self.previews.let_go(track, note, LetGo::Now);
     }
 
-    /// Let go of the preview voice's note, if it's still this one, once it has sounded as long as
-    /// a preview does: an audition's key tapped rather than held.
-    pub fn finish_preview(&mut self, note: u8) {
-        if self.preview_note == Some(note) {
-            self.preview
-                .release_once_sounded(PREVIEW_MS * self.rate / 1000);
-            self.preview_note = None;
-        }
+    /// Let go of a note held through a track once it has sounded as long as a preview does: an
+    /// audition's key tapped rather than held.
+    pub fn finish_preview(&mut self, track: usize, note: u8) {
+        let frames = PREVIEW_MS * self.rate / 1000;
+        self.previews
+            .let_go(track, note, LetGo::OnceSounded(frames));
+    }
+
+    /// How many preview voices are sounding.
+    pub fn previews_sounding(&self) -> usize {
+        self.previews.count()
     }
 
     fn start_preview(&mut self, track: usize, note: u8, velocity: u8, release_after: Option<u32>) {
@@ -924,25 +921,20 @@ impl Engine {
         let Some(on) = self.note_on(track, note, velocity, shape) else {
             return;
         };
-        if let Some(state) = self.tracks.get_mut(track)
-            && !state.sounding()
-        {
+        let sounding = self.previews.sounding();
+        let previewing = self.previews.on_track(&sounding, track);
+        let Some(state) = self.tracks.get_mut(track) else {
+            return;
+        };
+        if !state.sounding() && !previewing {
             state.settle();
         }
-        self.preview_track = track;
-        self.preview_note = Some(note);
-        self.preview = Voice::start(
-            NoteOn {
-                release_after,
-                ..on
-            },
-            self.rate,
-            0.0,
-            1.0,
-        );
-        if let Some(state) = self.tracks.get(track) {
-            self.preview.set_synth(state.synth_settings());
-        }
+        let on = NoteOn {
+            release_after,
+            ..on
+        };
+        self.previews
+            .start(track, on, state.synth_settings(), self.rate);
     }
 
     /// A note at a velocity, which sets its level and whether it's accented.
@@ -1424,13 +1416,15 @@ impl Engine {
         // track that's silent at the start of this one stays silent through it and is only asked
         // once. The others are asked each frame, as one can fall silent part way.
         // The fixed tracks have their turn after the rest, with what's sent to them.
+        // The preview voices sounding are found once too, so with none there's nothing to ask.
+        let previews = self.previews.sounding();
         let mut playing = [0_usize; MAX_TRACKS];
         let mut count = 0;
         for (index, track) in self.tracks.iter().enumerate() {
             if (return_a..=master_track).contains(&index) {
                 continue;
             }
-            let previewing = index == self.preview_track && self.preview.active();
+            let previewing = self.previews.on_track(&previews, index);
             if !track.sounding() && !previewing && !track.ringing(self.rate) {
                 self.keys.frames[index] = [0.0; 2];
             } else {
@@ -1444,18 +1438,14 @@ impl Engine {
             let mut send_b = [0.0_f32; 2];
             for &index in &playing[..count] {
                 let track = &mut self.tracks[index];
-                let previewing = index == self.preview_track && self.preview.active();
-                if !track.sounding() && !previewing && !track.ringing(self.rate) {
+                let preview = self.previews.next(&previews, index, &samples);
+                if !track.sounding() && preview.is_none() && !track.ringing(self.rate) {
                     self.keys.frames[index] = [0.0; 2];
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));
                 let tail = track.tail.next(samples.get(track.tail.sample()));
-                let preview = if previewing {
-                    self.preview.next(samples.get(self.preview.sample()))
-                } else {
-                    [0.0; 2]
-                };
+                let preview = preview.unwrap_or([0.0; 2]);
                 let shaped = track.shape(
                     [
                         main[0] + tail[0] + preview[0],

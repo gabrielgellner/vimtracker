@@ -300,6 +300,11 @@ impl Voice {
         self.stage != Stage::Idle
     }
 
+    /// Whether it's sounding and hasn't been let go.
+    pub fn is_held(&self) -> bool {
+        matches!(self.stage, Stage::Held { .. })
+    }
+
     /// The level its envelope is at now.
     pub fn level(&self) -> f32 {
         self.level

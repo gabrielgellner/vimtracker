@@ -393,3 +393,51 @@ fn acid_carries_its_accent_sweep_from_note_to_note() {
         peak(&out, 0)
     );
 }
+
+#[test]
+fn acid_plays_one_held_note_at_a_time_and_slides_between_overlapping_keys() {
+    let mut engine = Engine::new(RATE, version(on(SynthVoice::Acid, &[REST])));
+    let listen = |engine: &mut Engine, steps: usize| {
+        let mut out = vec![0.0; steps * STEP * 2];
+        engine.process(&mut out);
+        out
+    };
+    engine.hold_preview(0, 36, 0x64);
+    let low = pitch_of(&listen(&mut engine, 4), 1, 4);
+    // A key down while the first is held slides there on the same voice.
+    engine.hold_preview(0, 48, 0x64);
+    assert_eq!(engine.previews_sounding(), 1);
+    let high = pitch_of(&listen(&mut engine, 4), 1, 4);
+    assert!(
+        (high / low - 2.0).abs() < 0.1,
+        "an octave up: {high} Hz from {low} Hz"
+    );
+    // Letting go of the newest slides back to the one still down.
+    engine.release_preview(0, 48);
+    let back = pitch_of(&listen(&mut engine, 4), 1, 4);
+    assert!((back / low - 1.0).abs() < 0.05, "{back} Hz, not {low} Hz");
+    // A key let go under the one playing is forgotten, so letting go of it ends the note.
+    engine.hold_preview(0, 48, 0x64);
+    engine.release_preview(0, 36);
+    let still = listen(&mut engine, 2);
+    assert!(peak(&still, 1) > 0.01, "the newest still sounds");
+    engine.release_preview(0, 48);
+    let ended = listen(&mut engine, 8);
+    assert!(peak(&ended, 7) < 1e-3, "{}", peak(&ended, 7));
+}
+
+#[test]
+fn every_other_synth_plays_a_voice_for_each_held_key() {
+    for voice in SynthVoice::ALL
+        .into_iter()
+        .filter(|voice| *voice != SynthVoice::Acid)
+    {
+        let mut engine = Engine::new(RATE, version(on(voice, &[REST])));
+        engine.hold_preview(0, 48, 0x64);
+        engine.hold_preview(0, 52, 0x64);
+        engine.hold_preview(0, 55, 0x64);
+        let mut out = vec![0.0; 256];
+        engine.process(&mut out);
+        assert_eq!(engine.previews_sounding(), 3, "{voice:?}");
+    }
+}

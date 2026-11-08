@@ -43,6 +43,8 @@ notes around `C-2`, with `Resonance` well up.
   neither envelope starting again. `Slide` sets how long it takes.
 - A note holds until the next one, or an `OFF`. For the 303's short, bouncing notes, end
   some early with `OFF`.
+- From the keyboard, holding a second key slides to its note, and letting go of it slides
+  back to the first, rather than playing a chord.
 
 | Setting | Does |
 |---|---|

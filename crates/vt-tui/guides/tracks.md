@@ -24,9 +24,11 @@ hat pattern.
 | `x` | Back to its default: centre pan, 0 dB and so on |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
-Where the terminal reports a key being let go, as kitty, Ghostty and WezTerm
-do through the kitty keyboard protocol, a note holds for as long as its key is
-down. Elsewhere, including inside tmux, each key plays a short note.
+A note holds for as long as its key is down, and several keys down play a
+chord, up to eight notes; a ninth takes over the oldest. Letting go of one key
+ends only its note. `Acid` plays one note at a time, as a 303 does: a key
+pressed while another is down slides to its note, and letting go of it slides
+back to the one still down.
 
 Cut, Res, Pan, the sends and the machine's settings that sweep have a fine part,
 the dim pair of digits after the value, as FX values do in a phrase. `l` stops on

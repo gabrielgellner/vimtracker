@@ -65,6 +65,9 @@ pub const DECLICK_FRAMES: u32 = 64;
 pub const DEFAULT_NOTE_VELOCITY: u8 = 0x64;
 /// Tuning: how long an entered note previews.
 pub const PREVIEW_MS: u32 = 250;
+/// Tuning: how many notes the keyboard can sound at once, for chords. A ninth takes over the
+/// oldest.
+pub const PREVIEW_VOICES: usize = 8;
 /// Tuning: time between redraws.
 pub const FRAME_MS: u64 = 33;
 
