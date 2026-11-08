@@ -14,6 +14,10 @@ This manual has three parts:
 The reference chapters are the same guides the program shows with `Space ?`, so what you
 read here is what you see there.
 
+It runs in [kitty](https://sw.kovidgoyal.net/kitty/) and [Ghostty](https://ghostty.org),
+which have the kitty keyboard and graphics protocols, and won't start in other terminals or
+inside tmux.
+
 To run it:
 
 ```sh
@@ -24,5 +28,11 @@ or, with [just](https://github.com/casey/just) installed, `just run my-song` to 
 start a project in the folder `my-song`.
 
 The pictures of the program in this manual are made from the program itself, with
-`just screenshots`, so they show what it really draws. What the terminal draws as
-images, like the filter curve, isn't in them.
+`just screenshots`, so they show what it really draws. That includes the drawings the
+terminal is sent as images, like a track's filter curve on its Sound page:
+
+![A track's Sound page, with its filter curve](images/track-sound.svg)
+
+and its envelopes and LFO shapes on its Mod page:
+
+![A track's Mod page, with its envelopes and LFO shapes](images/track-mod.svg)

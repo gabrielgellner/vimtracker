@@ -20,7 +20,6 @@ use crate::theme;
 use crate::track_page::{
     Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
-use crate::views::braille::envelope_lines;
 use crate::views::status::format_swing;
 
 /// The size of an envelope's diagram, in characters.
@@ -488,13 +487,14 @@ pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
     }
 }
 
-/// Each envelope's shape, side by side, with the one being edited picked out.
+/// Each envelope's name and shape, side by side, with the one being edited picked out. The shapes
+/// are images, and they're left blank until they've been sent.
 fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     let current = envelope_being_edited(app);
-    let shapes = track.envelopes.map(|envelope| match app.envelope_images {
+    let shape = match app.envelope_images {
         Some(_) => kitty::placeholder_lines(DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
-        None => envelope_lines(&envelope, DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
-    });
+        None => vec![" ".repeat(DIAGRAM_WIDTH); DIAGRAM_HEIGHT],
+    };
     let style = |slot: usize| {
         if current == Some(slot) {
             theme::active()
@@ -522,11 +522,10 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
             (0..TRACK_ENVELOPES)
                 .map(|slot| {
                     // A placeholder's colour says which image it's part of.
-                    let shape = match app.envelope_images {
-                        Some(ids) => Style::new().fg(kitty::id_color(ids[slot])),
-                        None => style(slot),
-                    };
-                    Span::styled(format!("{}  ", shapes[slot][row]), shape)
+                    let image = app.envelope_images.map_or_else(Style::new, |ids| {
+                        Style::new().fg(kitty::id_color(ids[slot]))
+                    });
+                    Span::styled(format!("{}  ", shape[row]), image)
                 })
                 .collect::<Vec<_>>(),
         )

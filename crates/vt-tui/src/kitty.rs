@@ -1,12 +1,15 @@
-//! Small drawings in pixels, using kitty's graphics protocol. An image is sent ahead of time, and
-//! placeholder characters say where it goes. As they're text, they stay inside a tmux
-//! pane, and a window can be drawn over them.
+//! Small drawings in pixels, using kitty's graphics protocol, which kitty and Ghostty both have. An
+//! image is sent ahead of time, and placeholder characters say where it goes. As they're text, a
+//! window can be drawn over them.
 
-use std::io::{self, Write};
-use std::process::Command;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::constants::TRACK_ENVELOPES;
@@ -18,16 +21,16 @@ use crate::app::App;
 use crate::input::mode::View;
 use crate::theme;
 use crate::track_page::Page;
-use crate::views::braille::{envelope_columns, line_columns};
+use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LFO_ICON_WIDTH,
     envelope_being_edited, filter_being_edited, lfo_being_edited,
 };
 
 /// The character that stands for a piece of an image.
-const PLACEHOLDER: char = '\u{10EEEE}';
+pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
 /// The marks that give a placeholder's row and column, from kitty's `rowcolumn-diacritics.txt`.
-const POSITIONS: [char; 28] = [
+pub(crate) const POSITIONS: [char; 28] = [
     '\u{305}', '\u{30D}', '\u{30E}', '\u{310}', '\u{312}', '\u{33D}', '\u{33E}', '\u{33F}',
     '\u{346}', '\u{34A}', '\u{34B}', '\u{34C}', '\u{350}', '\u{351}', '\u{352}', '\u{357}',
     '\u{35B}', '\u{363}', '\u{364}', '\u{365}', '\u{366}', '\u{367}', '\u{368}', '\u{369}',
@@ -194,21 +197,13 @@ pub fn filter_png(
     line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
-/// Write one command, wrapped so tmux passes it on.
-fn command(out: &mut impl Write, controls: &str, data: &[u8], in_tmux: bool) -> io::Result<()> {
-    if in_tmux {
-        out.write_all(b"\x1bPtmux;\x1b\x1b_G")?;
-    } else {
-        out.write_all(b"\x1b_G")?;
-    }
+/// Write one command.
+fn command(out: &mut impl Write, controls: &str, data: &[u8]) -> io::Result<()> {
+    out.write_all(b"\x1b_G")?;
     out.write_all(controls.as_bytes())?;
     out.write_all(b";")?;
     out.write_all(data)?;
-    if in_tmux {
-        out.write_all(b"\x1b\x1b\\\x1b\\")
-    } else {
-        out.write_all(b"\x1b\\")
-    }
+    out.write_all(b"\x1b\\")
 }
 
 /// A PNG to send, and how many characters it covers.
@@ -220,7 +215,7 @@ pub struct Image<'a> {
 }
 
 /// Send an image, in pieces. `q=2` keeps the terminal from answering, as its answers would arrive as key presses.
-pub fn transmit(out: &mut impl Write, image: &Image, in_tmux: bool) -> io::Result<()> {
+pub fn transmit(out: &mut impl Write, image: &Image) -> io::Result<()> {
     let encoded = STANDARD.encode(image.png);
     let mut chunks = encoded.as_bytes().chunks(CHUNK).peekable();
     let mut first = true;
@@ -234,58 +229,60 @@ pub fn transmit(out: &mut impl Write, image: &Image, in_tmux: bool) -> io::Resul
         } else {
             format!("q=2,m={more}")
         };
-        command(out, &controls, chunk, in_tmux)?;
+        command(out, &controls, chunk)?;
         first = false;
     }
     Ok(())
 }
 
-/// Whether images can reach the terminal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Support {
-    Images,
-    /// The terminal isn't known to draw them.
-    NoTerminal,
-    /// It's kitty, but tmux won't pass them on.
-    NoPassthrough,
+/// The id the question about images asks with, which no image of the program's has.
+const QUERY_ID: u32 = 31;
+/// How long the terminal has to answer it. Both answer at once, so this is only for one that never
+/// does.
+const QUERY_WAIT: Duration = Duration::from_secs(2);
+
+/// What the terminal said to the question about images, once it has said all of it: whether it
+/// takes a PNG. The question is followed by one for the terminal's attributes, which every terminal
+/// answers, and in order, so an answer that ends without an OK first is a no.
+fn answer(reply: &[u8]) -> Option<bool> {
+    let text = String::from_utf8_lossy(reply);
+    let attributes = text.find("\x1b[?")?;
+    text[attributes..]
+        .contains('c')
+        .then(|| text[..attributes].contains(&format!("\x1b_Gi={QUERY_ID};OK\x1b\\")))
 }
 
-/// What the status line says when tmux is what's in the way.
-pub const PASSTHROUGH_HINT: &str =
-    "Drawing in Braille: `tmux set -g allow-passthrough on` lets images through";
-
-/// Work out support from the terminal's name and, in tmux, whether it passes images on.
-fn judge(terminal: &str, passthrough: Option<&str>) -> Support {
-    if !terminal.contains("kitty") {
-        Support::NoTerminal
-    } else if passthrough.is_none_or(|setting| matches!(setting, "on" | "all")) {
-        Support::Images
-    } else {
-        Support::NoPassthrough
-    }
-}
-
-/// What tmux says about this pane, or nothing if it can't be asked.
-fn ask_tmux(args: &[&str]) -> String {
-    Command::new("tmux")
-        .args(args)
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .unwrap_or_default()
-}
-
-/// Whether images can reach this terminal. Inside tmux, its client is the terminal that counts.
-pub fn support() -> Support {
-    if std::env::var_os("TMUX").is_some() {
-        let terminal = ask_tmux(&["display-message", "-p", "#{client_termname}"]);
-        let setting = ask_tmux(&["show", "-Apv", "allow-passthrough"]);
-        return judge(&terminal, Some(&setting));
-    }
-    let terminal = std::env::var("TERM").unwrap_or_default();
-    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
-        return Support::Images;
-    }
-    judge(&terminal, None)
+/// Whether the terminal draws images with the graphics protocol. It asks the terminal to take a PNG
+/// of one dot and not show it, as the program's own images are, and reads the answer before
+/// anything else reads the keyboard.
+pub fn supports_graphics() -> io::Result<bool> {
+    let mut tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
+    let mut reader: File = tty.try_clone()?;
+    terminal::enable_raw_mode()?;
+    let dot = STANDARD.encode(png(&[vec![true]], [255; 3]));
+    let asked = command(&mut tty, &format!("a=q,i={QUERY_ID},f=100"), dot.as_bytes())
+        .and_then(|()| tty.write_all(b"\x1b[c"))
+        .and_then(|()| tty.flush());
+    let (send, receive) = mpsc::channel();
+    // On its own thread, so a terminal that never answers can't hold up the program. If it
+    // doesn't, the program stops, and the thread with it.
+    std::thread::spawn(move || {
+        let mut reply = Vec::new();
+        let mut buffer = [0; 256];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => reply.extend(&buffer[..read]),
+            }
+            if let Some(answer) = answer(&reply) {
+                let _ = send.send(answer);
+                return;
+            }
+        }
+    });
+    let supported = receive.recv_timeout(QUERY_WAIT).unwrap_or(false);
+    terminal::disable_raw_mode()?;
+    asked.map(|()| supported)
 }
 
 /// The settings a filter curve is drawn from.
@@ -318,7 +315,6 @@ pub struct Graphics {
     filter: [Option<(FilterSettings, u32)>; 2],
     /// Images to forget once the screen has moved on from them.
     retired: Vec<u32>,
-    in_tmux: bool,
 }
 
 impl Graphics {
@@ -331,7 +327,6 @@ impl Graphics {
             shapes: [[None; 2]; Shape::ALL.len()],
             filter: [None; 2],
             retired: Vec::new(),
-            in_tmux: std::env::var_os("TMUX").is_some(),
         }
     }
 
@@ -363,7 +358,7 @@ impl Graphics {
     /// Send the images the screen is about to show, if the terminal lacks them, and say which to use.
     pub fn sync(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
         for id in self.retired.drain(..) {
-            command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
+            command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
         }
         if app.view == View::Track
             && let Some(track) = app.song().tracks.get(app.cursor.track).cloned()
@@ -478,7 +473,7 @@ impl Graphics {
             columns,
             rows,
         };
-        transmit(out, &image, self.in_tmux)
+        transmit(out, &image)
     }
 
     /// Have the terminal forget the images.
@@ -487,7 +482,7 @@ impl Graphics {
         let shapes = self.shapes.iter().flatten().flatten();
         let filter = self.filter.iter().flatten().map(|image| &image.1);
         for id in held.chain(shapes).chain(filter).chain(&self.retired) {
-            command(out, &format!("a=d,d=I,i={id},q=2"), &[], self.in_tmux)?;
+            command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
         }
         out.flush()
     }
@@ -559,7 +554,7 @@ mod tests {
         }
     }
 
-    fn sent(in_tmux: bool, png: &[u8]) -> Vec<u8> {
+    fn sent(png: &[u8]) -> Vec<u8> {
         let image = Image {
             id: 7,
             png,
@@ -567,7 +562,7 @@ mod tests {
             rows: 4,
         };
         let mut out = Vec::new();
-        transmit(&mut out, &image, in_tmux).unwrap();
+        transmit(&mut out, &image).unwrap();
         out
     }
 
@@ -586,14 +581,17 @@ mod tests {
     }
 
     #[test]
-    fn images_go_to_kitty_when_tmux_lets_them_through() {
-        assert_eq!(judge("xterm-kitty", None), Support::Images);
-        assert_eq!(judge("xterm-kitty", Some("on")), Support::Images);
-        assert_eq!(judge("xterm-kitty", Some("all")), Support::Images);
-        assert_eq!(judge("xterm-kitty", Some("off")), Support::NoPassthrough);
-        assert_eq!(judge("xterm-256color", None), Support::NoTerminal);
-        assert_eq!(judge("alacritty", Some("on")), Support::NoTerminal);
-        assert_eq!(judge("", Some("")), Support::NoTerminal);
+    fn the_terminal_takes_images_if_it_says_ok_before_its_attributes() {
+        let attributes = "\x1b[?62;22c";
+        let ok = format!("\x1b_Gi={QUERY_ID};OK\x1b\\{attributes}");
+        assert_eq!(answer(ok.as_bytes()), Some(true));
+        let refused = format!("\x1b_Gi={QUERY_ID};ENOTSUPPORTED:no\x1b\\{attributes}");
+        assert_eq!(answer(refused.as_bytes()), Some(false));
+        assert_eq!(answer(attributes.as_bytes()), Some(false));
+        // Until the attributes have all come, it isn't over.
+        assert_eq!(answer(&ok.as_bytes()[..ok.len() - 1]), None);
+        assert_eq!(answer(b"\x1b_Gi=31;OK\x1b\\"), None);
+        assert_eq!(answer(b""), None);
     }
 
     #[test]
@@ -731,7 +729,7 @@ mod tests {
     #[test]
     fn an_image_is_sent_in_pieces_the_protocol_takes() {
         let pixels = vec![9; 10_000];
-        let out = String::from_utf8(sent(false, &pixels)).unwrap();
+        let out = String::from_utf8(sent(&pixels)).unwrap();
         let commands: Vec<&str> = out
             .split("\x1b\\")
             .filter(|command| !command.is_empty())
@@ -754,12 +752,5 @@ mod tests {
             data.push_str(chunk);
         }
         assert_eq!(STANDARD.decode(data).unwrap(), pixels);
-    }
-
-    #[test]
-    fn tmux_gets_each_piece_wrapped_with_its_escapes_doubled() {
-        let out = String::from_utf8(sent(true, &[1, 2, 3, 4])).unwrap();
-        assert!(out.starts_with("\x1bPtmux;\x1b\x1b_Ga=T"), "{out:?}");
-        assert!(out.ends_with("\x1b\x1b\\\x1b\\"), "{out:?}");
     }
 }

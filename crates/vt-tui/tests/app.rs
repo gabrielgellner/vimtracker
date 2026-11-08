@@ -3037,40 +3037,43 @@ fn the_track_page_sets_envelopes() {
 
 #[test]
 fn the_track_page_draws_each_envelopes_shape() {
+    use vt_tui::kitty::{Graphics, id_color};
     let (mut app, _realtime) = on_track_page();
-    let page = |app: &App| {
+    let mut graphics = Graphics::new();
+    let page = |app: &mut App, graphics: &mut Graphics| {
+        graphics.sync(app, &mut Vec::new()).unwrap();
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
             .unwrap();
-        let buffer = terminal.backend().buffer().clone();
+        terminal.backend().buffer().clone()
+    };
+    let text = |buffer: &ratatui::buffer::Buffer| {
         (0..24)
             .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
             .collect::<Vec<_>>()
     };
     press(&mut app, "L");
-    let lines = page(&app);
+    let drawn = page(&mut app, &mut graphics);
+    let lines = text(&drawn);
     let heading = lines.iter().position(|l| l.contains("Env 1  Vol")).unwrap();
     assert!(lines[heading].contains("Env 2  Cut"));
-    let dots = |line: &String| {
-        line.chars()
-            .filter(|c| ('\u{2801}'..='\u{28FF}').contains(c))
-            .count()
-    };
-    assert!(dots(&lines[heading + 1]) > 0);
+    let first = app.envelope_images.unwrap()[0];
+    assert_eq!(drawn[(0, heading as u16 + 1)].fg, id_color(first));
 
-    // Changing a value redraws it.
+    // Changing a value sends a new image, which the placeholders point to.
     press(&mut app, "gg0lll");
     typed(&mut app, "0");
-    assert_ne!(page(&app)[heading + 1], lines[heading + 1]);
+    let changed = page(&mut app, &mut graphics);
+    assert_ne!(changed[(0, heading as u16 + 1)].fg, id_color(first));
     assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
 
     // The first envelope on Vol has no depth to show, and off it, it does.
-    assert!(page(&app)[3].contains("--"));
+    assert!(text(&page(&mut app, &mut graphics))[3].contains("--"));
     press(&mut app, "0K/cut");
     special(&mut app, KeyCode::Enter);
-    assert!(page(&app)[3].contains("00"));
+    assert!(text(&page(&mut app, &mut graphics))[3].contains("00"));
 }
 
 #[test]

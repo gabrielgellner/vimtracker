@@ -59,7 +59,7 @@ falling well under `Cut`, with a peak at `Cut` that grows sharp and squelchy
 and thins the bass more than `Ladder` does. These two cost more than the
 others, which matters only for tracks using them.
 
-In kitty, a curve in a box under the filter's rows shows what the filter and utility filter
+A curve in a box under the filter's rows shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's
 playing `Cut` and `Res`, including step commands, LFOs and envelopes, but it
 doesn't show `Drive`'s saturation.

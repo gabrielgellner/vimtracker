@@ -1,10 +1,8 @@
-//! Line graphs in Braille characters, which have 2 by 4 dots in each cell.
+//! Lines through a grid of dots, which the track page's drawings are made from.
 
 use vt_model::constants::MAX_ENVELOPE_MS;
 use vt_model::envelope::{Envelope, fall, rise};
 
-/// The dot in a Braille character for a position within its cell.
-const DOTS: [[u8; 2]; 4] = [[0, 3], [1, 4], [2, 5], [6, 7]];
 /// How many places to look within each column of dots.
 const SAMPLES_PER_COLUMN: usize = 8;
 /// The most of a diagram's width each stage can take, with a sustain always taking this much.
@@ -88,26 +86,6 @@ pub(crate) fn envelope_columns(
     spans
 }
 
-/// An envelope's shape as lines of Braille, from silence up to full and back down to silence.
-pub fn envelope_lines(envelope: &Envelope, width: usize, height: usize) -> Vec<String> {
-    let mut cells = vec![vec![0_u8; width]; height];
-    let spans = envelope_columns(envelope, width * 2, height * 4);
-    for (column, (high, low)) in spans.into_iter().enumerate() {
-        for y in high..=low {
-            cells[y / 4][column / 2] |= 1 << DOTS[y % 4][column % 2];
-        }
-    }
-    cells
-        .into_iter()
-        .map(|cells| {
-            cells
-                .into_iter()
-                .filter_map(|dots| char::from_u32(0x2800 + u32::from(dots)))
-                .collect()
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,33 +101,17 @@ mod tests {
     }
 
     /// The highest dot in each column, as a level from 0 at the bottom row.
-    fn tops(lines: &[String]) -> Vec<Option<usize>> {
-        let height = lines.len() * 4;
-        let width = lines[0].chars().count() * 2;
-        (0..width)
-            .map(|column| {
-                (0..height).find_map(|y| {
-                    let cell = lines[y / 4].chars().nth(column / 2)? as u32 - 0x2800;
-                    (cell & (1 << DOTS[y % 4][column % 2]) != 0).then_some(height - 1 - y)
-                })
-            })
+    fn tops(envelope: &Envelope, columns: usize, rows: usize) -> Vec<usize> {
+        envelope_columns(envelope, columns, rows)
+            .into_iter()
+            .map(|(high, _)| rows - 1 - high)
             .collect()
     }
 
     #[test]
-    fn it_is_the_size_asked_for_and_all_braille() {
-        let lines = envelope_lines(&adsr(10, 100, 50, 100), 28, 4);
-        assert_eq!(lines.len(), 4);
-        for line in &lines {
-            assert_eq!(line.chars().count(), 28);
-            assert!(line.chars().all(|c| ('\u{2800}'..='\u{28FF}').contains(&c)));
-        }
-    }
-
-    #[test]
     fn it_rises_to_full_settles_on_the_sustain_and_ends_at_silence() {
-        let tops = tops(&envelope_lines(&adsr(100, 100, 50, 100), 28, 4));
-        let levels: Vec<usize> = tops.iter().map(|top| top.unwrap_or(0)).collect();
+        let levels = tops(&adsr(100, 100, 50, 100), 56, 16);
+        assert_eq!(levels.len(), 56);
         assert_eq!(levels[0], 0);
         assert_eq!(*levels.iter().max().unwrap(), 15, "reaches the top row");
         assert_eq!(*levels.last().unwrap(), 0);
@@ -162,10 +124,10 @@ mod tests {
 
     #[test]
     fn a_short_attack_still_shows() {
-        let tops = tops(&envelope_lines(&adsr(1, 180, 0, 50), 28, 4));
-        let peak = tops.iter().position(|top| *top == Some(15)).unwrap();
+        let levels = tops(&adsr(1, 180, 0, 50), 56, 16);
+        let peak = levels.iter().position(|level| *level == 15).unwrap();
         assert!(peak < 8, "the attack is near the start, at {peak}");
-        assert!(tops[peak + 8].unwrap() < 15, "and it comes back down");
+        assert!(levels[peak + 8] < 15, "and it comes back down");
     }
 
     #[test]
@@ -196,9 +158,9 @@ mod tests {
 
     #[test]
     fn an_instant_envelope_is_safe_to_draw() {
-        let lines = envelope_lines(&adsr(0, 0, 100, 0), 28, 4);
-        let tops = tops(&lines);
-        assert!(tops.iter().all(Option::is_some));
-        assert_eq!(tops[1], Some(15));
+        let spans = envelope_columns(&adsr(0, 0, 100, 0), 56, 16);
+        assert_eq!(spans.len(), 56);
+        assert!(spans.iter().all(|(high, low)| high <= low && *low < 16));
+        assert_eq!(spans[2].0, 0);
     }
 }
