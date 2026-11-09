@@ -17,6 +17,7 @@ use crate::envelope::{Envelope, default_envelopes};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
+use crate::order::{Deal, Dealer, Order, Pass};
 use crate::scale::Scale;
 use crate::selection::Extent;
 use crate::settings::{Owner, SettingId};
@@ -492,12 +493,15 @@ impl Track {
         })
     }
 
-    /// Find a step within a chain, looping the chain if the position is past its end.
-    pub fn chain_position(&self, chain: u32, step: usize) -> Option<ChainPosition> {
+    /// Find a step within a chain, counted from where it started, looping the chain if the
+    /// position is past its end. Which time round it is deals any phrase in it whose order is
+    /// dealt, from the track's dealer.
+    pub fn chain_position(&self, chain: u32, step: usize, dealer: Dealer) -> Option<ChainPosition> {
         let total = self.chain_steps(chain);
         if total == 0 {
             return None;
         }
+        let lap = (step / total) as i64;
         let mut remaining = step % total;
         let chain = self.chains.get(&chain)?;
         for (slot, entry) in chain.entries.iter().enumerate() {
@@ -506,13 +510,16 @@ impl Track {
             };
             let time = phrase.time();
             if remaining < time {
-                let (step, pulse) = phrase.row_at(remaining)?;
+                let deal = dealer.deal(lap, slot);
+                let visit = phrase.row_at(remaining, deal)?;
                 return Some(ChainPosition {
                     slot,
                     phrase: entry.phrase,
-                    step,
-                    pulse,
+                    step: visit.row,
+                    pulse: visit.pulse,
                     transpose: entry.transpose,
+                    visit: visit.visit,
+                    deal,
                 });
             }
             remaining -= time;
@@ -520,8 +527,17 @@ impl Track {
         None
     }
 
-    /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them.
-    pub fn chain_place(&self, chain: u32, slot: usize, row: usize) -> Option<usize> {
+    /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them:
+    /// at this visit of its phrase's pass with this deal if the pass plays the row there, and
+    /// where it first plays it if not.
+    pub fn chain_place(
+        &self,
+        chain: u32,
+        slot: usize,
+        row: usize,
+        visit: usize,
+        deal: Deal,
+    ) -> Option<usize> {
         let entries = &self.chains.get(&chain)?.entries;
         let phrase = self.phrases.get(&entries.get(slot)?.phrase)?;
         if row >= phrase.len() {
@@ -532,7 +548,7 @@ impl Track {
             .filter_map(|entry| self.phrases.get(&entry.phrase))
             .map(|phrase| phrase.time())
             .sum();
-        Some(before + phrase.time_to(row))
+        Some(before + phrase.time_to_visit(row, visit, deal))
     }
 
     /// The step at a position, once a chain position has been found.
@@ -992,7 +1008,8 @@ impl Lane {
 ///
 /// It stores more than it plays, like a clip: a loop of `length` steps starting at `start`, with
 /// anything either side of it kept but silent. Rows on screen count from the loop's start, so the
-/// loop's first step is always beat 1. Each FX column can have a lane of its own.
+/// loop's first step is always beat 1. Each FX column can have a lane of its own. Its loop's rows
+/// play in its order, while its lanes keep to their own loops, forward.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "PhraseFile", into = "PhraseFile")]
 pub struct Phrase {
@@ -1000,6 +1017,7 @@ pub struct Phrase {
     start: usize,
     length: usize,
     lanes: [Option<Lane>; FX_SLOTS],
+    order: Order,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1011,6 +1029,8 @@ struct PhraseFile {
     length: Option<usize>,
     #[serde(default)]
     lanes: [Option<Lane>; FX_SLOTS],
+    #[serde(default, skip_serializing_if = "Order::is_forward")]
+    order: Order,
 }
 
 /// A lane that fits in this many stored steps, or none if it can't.
@@ -1035,6 +1055,7 @@ impl From<PhraseFile> for Phrase {
             steps: file.steps,
             start,
             length,
+            order: file.order,
         }
     }
 }
@@ -1046,6 +1067,7 @@ impl From<Phrase> for PhraseFile {
             start: phrase.start,
             length: Some(phrase.length),
             lanes: phrase.lanes,
+            order: phrase.order,
         }
     }
 }
@@ -1059,6 +1081,7 @@ impl Phrase {
             start: 0,
             length,
             lanes: [None; FX_SLOTS],
+            order: Order::Forward,
         }
     }
 
@@ -1070,6 +1093,7 @@ impl Phrase {
             start: 0,
             length,
             lanes: [None; FX_SLOTS],
+            order: Order::Forward,
         }
     }
 
@@ -1083,19 +1107,44 @@ impl Phrase {
         &self.steps[self.start..self.start + self.length]
     }
 
-    /// The next value with this command in a slot, looking forward from a step of the loop and
-    /// wrapping, with how many steps away it is. The step itself doesn't count.
-    pub fn next_value(
+    /// The order its loop's rows play in.
+    pub fn order(&self) -> Order {
+        self.order
+    }
+
+    /// Play its loop's rows in another order.
+    pub fn set_order(&mut self, order: Order) {
+        self.order = order;
+    }
+
+    /// The rows of its loop one pass visits, in its order, with this deal if it's dealt.
+    pub fn pass(&self, deal: Deal) -> Pass<'_> {
+        Pass::new(self.loop_steps(), self.order, deal)
+    }
+
+    /// The next value with this command in a slot, for a glide: looking on from a visit of a pass,
+    /// in the order the rows play and wrapping round the pass, with how many steps there are from
+    /// the start of that visit's row to the row it's on. The row itself doesn't count.
+    pub fn glide_to(
         &self,
-        step: usize,
+        visit: usize,
+        deal: Deal,
         slot: usize,
         command: FxCommand,
     ) -> Option<(usize, FxSlot)> {
         let steps = self.loop_steps();
-        (1..steps.len()).find_map(|distance| {
-            let fx = steps[(step + distance) % steps.len()].fx.get(slot)?;
-            (fx.command == Some(command)).then_some((distance, *fx))
-        })
+        let visits = self.pass(deal).count();
+        let mut time = 0;
+        for (distance, row) in self.pass(deal).cycle().skip(visit).take(visits).enumerate() {
+            if distance > 0 {
+                let fx = steps[row].fx.get(slot)?;
+                if fx.command == Some(command) {
+                    return Some((time, *fx));
+                }
+            }
+            time += steps[row].pulses();
+        }
+        None
     }
 
     /// An FX column's own lane, if it has one. One without follows the phrase's loop.
@@ -1132,37 +1181,69 @@ impl Phrase {
         })
     }
 
-    /// How many steps its loop lasts: each row's pulses, so a skipped row takes none.
+    /// How many steps a pass of its loop lasts: each row's pulses, so a skipped row takes none, and
+    /// in an order that visits some rows twice, theirs twice.
     pub fn time(&self) -> usize {
-        self.loop_steps().iter().map(Step::pulses).sum()
+        if self.order.keeps_time() {
+            self.loop_steps().iter().map(Step::pulses).sum()
+        } else {
+            let steps = self.loop_steps();
+            self.pass(Deal::default())
+                .map(|row| steps[row].pulses())
+                .sum()
+        }
     }
 
-    /// How many steps into the loop a row of it starts.
-    pub fn time_to(&self, row: usize) -> usize {
-        self.loop_steps().iter().take(row).map(Step::pulses).sum()
+    /// How many steps into a pass with this deal a row of the loop first plays, or 0 for a row the
+    /// pass doesn't visit, which only `Random`'s can leave out.
+    pub fn time_to(&self, row: usize, deal: Deal) -> usize {
+        let steps = self.loop_steps();
+        let mut time = 0;
+        for visited in self.pass(deal) {
+            if visited == row {
+                return time;
+            }
+            time += steps[visited].pulses();
+        }
+        0
     }
 
-    /// The row of the loop playing this many steps in, and which of its pulses. Skipped rows are
-    /// passed over, and a loop that takes no time has none.
-    pub fn row_at(&self, time: usize) -> Option<(usize, usize)> {
+    /// How many steps into a pass with this deal a row plays at this visit, if the pass plays it
+    /// there, or else where it first plays it.
+    pub fn time_to_visit(&self, row: usize, visit: usize, deal: Deal) -> usize {
+        let steps = self.loop_steps();
+        let mut time = 0;
+        for (at, visited) in self.pass(deal).enumerate() {
+            if at == visit {
+                return if visited == row {
+                    time
+                } else {
+                    self.time_to(row, deal)
+                };
+            }
+            time += steps[visited].pulses();
+        }
+        self.time_to(row, deal)
+    }
+
+    /// The visit of a pass with this deal playing this many steps in: its row, which of the row's
+    /// pulses, and which visit of the pass it is. Skipped rows are passed over, and a loop that
+    /// takes no time has none.
+    pub fn row_at(&self, time: usize, deal: Deal) -> Option<Visit> {
+        let steps = self.loop_steps();
         let mut left = time;
-        for (row, step) in self.loop_steps().iter().enumerate() {
-            let pulses = step.pulses();
+        for (visit, row) in self.pass(deal).enumerate() {
+            let pulses = steps[row].pulses();
             if left < pulses {
-                return Some((row, left));
+                return Some(Visit {
+                    row,
+                    pulse: left,
+                    visit,
+                });
             }
             left -= pulses;
         }
         None
-    }
-
-    /// How many steps there are from the start of a row of the loop to a row this many after it,
-    /// wrapping round, for a glide's time.
-    pub fn time_between(&self, row: usize, rows: usize) -> usize {
-        let steps = self.loop_steps();
-        (0..rows)
-            .map(|at| steps[(row + at) % steps.len()].pulses())
-            .sum()
     }
 
     /// The number of rows that play.
@@ -1272,6 +1353,17 @@ impl Phrase {
 }
 
 /// A sample and how it plays.
+/// Where a place in a pass of a phrase lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Visit {
+    /// The row of the phrase's loop.
+    pub row: usize,
+    /// Which of the row's pulses, from 0 for its first.
+    pub pulse: usize,
+    /// Which of the pass's visits, which is the row in a phrase played forward.
+    pub visit: usize,
+}
+
 /// Where a position in a chain lands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChainPosition {
@@ -1282,6 +1374,9 @@ pub struct ChainPosition {
     /// Which of the row's pulses, from 0 for its first.
     pub pulse: usize,
     pub transpose: i8,
+    /// Which visit of the phrase's pass it is, and the pass's deal, for looking on in its order.
+    pub visit: usize,
+    pub deal: Deal,
 }
 
 fn default_limiter() -> bool {
@@ -1536,6 +1631,7 @@ mod tests {
             steps: vec![Step::default(); 2],
             start: 0,
             length: Some(2),
+            order: Order::Forward,
             lanes: [
                 Some(Lane {
                     start: 1,
@@ -1603,7 +1699,7 @@ mod tests {
         let phrase = Phrase::from_steps(steps);
         let found = |step, slot, command| {
             phrase
-                .next_value(step, slot, command)
+                .glide_to(step, Deal::default(), slot, command)
                 .map(|(distance, fx)| (distance, fx.coarse()))
         };
         assert_eq!(found(0, 0, FxCommand::CUT), Some((2, 0x30)));
@@ -1682,14 +1778,110 @@ mod tests {
     fn a_row_lasts_its_pulses_and_a_skipped_one_none() {
         let phrase = gated(&["SGL1", "HLD3", "MLT0", "RST2"]);
         assert_eq!(phrase.time(), 6);
-        let rows: Vec<(usize, usize)> = (0..6).filter_map(|t| phrase.row_at(t)).collect();
+        let deal = Deal::default();
+        let rows: Vec<(usize, usize)> = (0..6)
+            .filter_map(|t| phrase.row_at(t, deal))
+            .map(|visit| (visit.row, visit.pulse))
+            .collect();
         assert_eq!(rows, [(0, 0), (1, 0), (1, 1), (1, 2), (3, 0), (3, 1)]);
-        assert_eq!(phrase.row_at(6), None);
-        assert_eq!(phrase.time_to(3), 4, "the skipped row takes no time");
-        assert_eq!(phrase.time_between(3, 2), 2 + 1, "wrapping to row 0");
+        assert_eq!(phrase.row_at(6, deal), None);
+        assert_eq!(phrase.time_to(3, deal), 4, "the skipped row takes no time");
         let skipped = gated(&["SGL0", "HLD0"]);
         assert_eq!(skipped.time(), 0);
-        assert_eq!(skipped.row_at(0), None, "nothing to play, and no hang");
+        assert_eq!(
+            skipped.row_at(0, deal),
+            None,
+            "nothing to play, and no hang"
+        );
+    }
+
+    #[test]
+    fn an_order_plays_rows_with_their_pulses_together_and_lasts_its_pass() {
+        let mut phrase = gated(&["SGL1", "MLT2", "SGL1"]);
+        let deal = Deal::default();
+        let rows = |phrase: &Phrase| -> Vec<(usize, usize)> {
+            (0..phrase.time())
+                .filter_map(|t| phrase.row_at(t, deal))
+                .map(|visit| (visit.row, visit.pulse))
+                .collect()
+        };
+        phrase.set_order(Order::Reverse);
+        assert_eq!(phrase.time(), 4);
+        assert_eq!(rows(&phrase), [(2, 0), (1, 0), (1, 1), (0, 0)]);
+        assert_eq!(phrase.time_to(0, deal), 3);
+        phrase.set_order(Order::Pendulum);
+        assert_eq!(phrase.time(), 6, "the middle row twice");
+        assert_eq!(
+            rows(&phrase),
+            [(0, 0), (1, 0), (1, 1), (2, 0), (1, 0), (1, 1)]
+        );
+        assert_eq!(phrase.time_to(1, deal), 1, "where it first plays");
+        assert_eq!(phrase.time_to_visit(1, 3, deal), 4, "on the way back");
+        assert_eq!(phrase.time_to_visit(1, 2, deal), 1, "not at that visit");
+        phrase.set_order(Order::PingPong);
+        assert_eq!(phrase.time(), 8, "every row twice");
+    }
+
+    #[test]
+    fn a_glide_looks_on_in_the_order_the_rows_play() {
+        let steps = [
+            "--- -- cut:10 ---",
+            "--- -- --- ---",
+            "--- -- cut:30 ---",
+            "--- -- --- ---",
+        ];
+        let mut phrase = Phrase::from_steps(steps.iter().map(|t| t.parse().unwrap()).collect());
+        phrase.set_order(Order::Reverse);
+        let found = |phrase: &Phrase, visit| {
+            phrase
+                .glide_to(visit, Deal::default(), 0, FxCommand::CUT)
+                .map(|(time, fx)| (time, fx.coarse()))
+        };
+        // Reverse plays rows 3 2 1 0, so from row 2, its visit 1, row 0 is two rows on.
+        assert_eq!(found(&phrase, 1), Some((2, 0x10)));
+        assert_eq!(found(&phrase, 3), Some((2, 0x30)), "round to row 2 again");
+        phrase.set_order(Order::Pendulum);
+        // Pendulum plays 0 1 2 3 2 1, so from row 2 on the way up, row 2 again is two on.
+        assert_eq!(found(&phrase, 2), Some((2, 0x30)));
+    }
+
+    #[test]
+    fn a_phrase_saves_its_order_only_when_it_has_one() {
+        let mut phrase = Phrase::new(2);
+        assert!(!ron::to_string(&phrase).unwrap().contains("order"));
+        phrase.set_order(Order::PingPong);
+        let saved = ron::to_string(&phrase).unwrap();
+        assert!(saved.contains("order:PingPong"), "{saved}");
+        let loaded: Phrase = ron::from_str(&saved).unwrap();
+        assert_eq!(loaded.order(), Order::PingPong);
+    }
+
+    #[test]
+    fn a_dealt_order_is_dealt_by_the_time_round_the_chain_and_the_slot() {
+        let mut song = Song::new(1);
+        let mut phrase = Phrase::new(8);
+        phrase.set_order(Order::Shuffle);
+        song.tracks[0].phrases.insert(0, Arc::new(phrase));
+        let track = &song.tracks[0];
+        let dealer = Dealer::new(5, 0);
+        let lap = |lap: usize| -> Vec<usize> {
+            (0..8)
+                .map(|step| {
+                    track
+                        .chain_position(0, lap * 8 + step, dealer)
+                        .unwrap()
+                        .step
+                })
+                .collect()
+        };
+        assert_ne!(lap(0), lap(1));
+        assert_eq!(lap(1), lap(1));
+        let row = lap(1)[3];
+        assert_eq!(
+            track.chain_place(0, 0, row, 0, dealer.deal(1, 0)),
+            Some(3),
+            "where the deal plays it"
+        );
     }
 
     #[test]
@@ -1713,15 +1905,15 @@ mod tests {
         let track = &song.tracks[0];
         assert_eq!(track.chain_steps(0), 6);
         let at = |step| {
-            let found = track.chain_position(0, step).unwrap();
+            let found = track.chain_position(0, step, Dealer::default()).unwrap();
             (found.slot, found.step, found.pulse)
         };
         assert_eq!(at(2), (0, 0, 2));
         assert_eq!(at(3), (0, 1, 0));
         assert_eq!(at(5), (1, 0, 1));
         assert_eq!(at(6), (0, 0, 0), "and round again");
-        assert_eq!(track.chain_place(0, 1, 0), Some(4));
-        assert_eq!(track.chain_place(0, 0, 1), Some(3));
+        assert_eq!(track.chain_place(0, 1, 0, 0, Deal::default()), Some(4));
+        assert_eq!(track.chain_place(0, 0, 1, 0, Deal::default()), Some(3));
     }
 
     #[test]
@@ -1740,10 +1932,22 @@ mod tests {
             }),
         );
         let track = &song.tracks[0];
-        assert_eq!(track.chain_place(0, 1, 2), Some(16 + 2));
-        assert_eq!(track.chain_place(0, 1, 4), None, "past its loop");
-        assert_eq!(track.chain_place(0, 2, 0), None, "no third slot");
-        assert_eq!(track.chain_place(9, 0, 0), None, "no such chain");
+        assert_eq!(track.chain_place(0, 1, 2, 0, Deal::default()), Some(16 + 2));
+        assert_eq!(
+            track.chain_place(0, 1, 4, 0, Deal::default()),
+            None,
+            "past its loop"
+        );
+        assert_eq!(
+            track.chain_place(0, 2, 0, 0, Deal::default()),
+            None,
+            "no third slot"
+        );
+        assert_eq!(
+            track.chain_place(9, 0, 0, 0, Deal::default()),
+            None,
+            "no such chain"
+        );
     }
 
     #[test]
@@ -1767,11 +1971,22 @@ mod tests {
             }),
         );
         assert_eq!(song.tracks[0].chain_steps(0), 20);
-        let position = song.tracks[0].chain_position(0, 17).unwrap();
+        let position = song.tracks[0]
+            .chain_position(0, 17, Dealer::default())
+            .unwrap();
         assert_eq!((position.slot, position.phrase, position.step), (1, 7, 1));
         assert_eq!(position.transpose, 3);
-        assert_eq!(song.tracks[0].chain_position(0, 20).unwrap().step, 0);
-        assert_eq!(song.tracks[0].chain_position(99, 0), None);
+        assert_eq!(
+            song.tracks[0]
+                .chain_position(0, 20, Dealer::default())
+                .unwrap()
+                .step,
+            0
+        );
+        assert_eq!(
+            song.tracks[0].chain_position(99, 0, Dealer::default()),
+            None
+        );
     }
 
     /// A phrase whose steps can be told apart by velocity, which is the step's stored position.
@@ -1814,6 +2029,7 @@ mod tests {
             start: 0,
             lanes: [None; FX_SLOTS],
             length: None,
+            order: Order::Forward,
         };
         let phrase = Phrase::from(file);
         assert_eq!((phrase.start(), phrase.len()), (0, 3));
@@ -1826,6 +2042,7 @@ mod tests {
             start: 9,
             lanes: [None; FX_SLOTS],
             length: Some(9),
+            order: Order::Forward,
         };
         let phrase = Phrase::from(file);
         assert_eq!((phrase.start(), phrase.len()), (2, 1));
@@ -2007,7 +2224,9 @@ mod tests {
         phrase.slide(2);
         song.tracks[0].phrases.insert(0, Arc::new(phrase));
         assert_eq!(song.tracks[0].chain_steps(0), 4);
-        let position = song.tracks[0].chain_position(0, 5).unwrap();
+        let position = song.tracks[0]
+            .chain_position(0, 5, Dealer::default())
+            .unwrap();
         assert_eq!(position.step, 1, "the chain loops over the loop");
         assert_eq!(song.tracks[0].step_at(position).unwrap().velocity, Some(3));
     }

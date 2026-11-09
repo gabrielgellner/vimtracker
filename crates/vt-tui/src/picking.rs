@@ -9,6 +9,7 @@ use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
 use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
+use vt_model::order::Order;
 use vt_model::project;
 use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
@@ -196,6 +197,37 @@ impl App {
             ("The project's groove", song.groove.index())
         };
         self.show_picker(Picker::new(title, items).opened_on(Some(at)));
+    }
+
+    /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
+    pub(crate) fn open_order_picker(&mut self) {
+        self.count = None;
+        let Some(phrase) = self.phrase_here() else {
+            self.status = "This track has no phrase here".to_owned();
+            return;
+        };
+        let at = Order::ALL.iter().position(|order| *order == phrase.order());
+        let items = Order::ALL
+            .map(|order| {
+                Item::new(order.name(), Pick::Line(Line::Order(Some(order))))
+                    .meaning(order.meaning())
+            })
+            .to_vec();
+        self.show_picker(Picker::new("This phrase's order", items).opened_on(at));
+    }
+
+    /// Play the cursor's phrase's rows in an order.
+    pub(crate) fn set_order(&mut self, order: Order) {
+        let Some(phrase) = self.phrase_id() else {
+            self.status = "This track has no phrase here".to_owned();
+            return;
+        };
+        self.apply(&Action::SetOrder {
+            track: self.cursor.track,
+            phrase,
+            order,
+        });
+        self.status = format!("This phrase plays {}: {}", order, order.meaning());
     }
 
     /// Give the cursor's track its own groove, or have it follow the project's again.

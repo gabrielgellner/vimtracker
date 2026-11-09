@@ -263,7 +263,11 @@ impl App {
         }
         let groove = song.groove(song.track_groove(track));
         let into = (now - jam.started as f64).rem_euclid(length as f64);
-        let position = owner.chain_position(chain, into as usize)?;
+        // Every time round the chain counts, as which one deals a dealt order.
+        let lap = ((now - jam.started as f64).div_euclid(length as f64)).max(0.0) as usize;
+        let dealer = self.dealer(track);
+        let at = |place: f64| owner.chain_position(chain, lap * length + place as usize, dealer);
+        let position = at(into)?;
         let start = (into as usize).saturating_sub(position.pulse) as f64;
         let end = start + owner.step_at(position)?.pulses() as f64;
         // Where a place in the chain lands as it's heard, on the running count.
@@ -272,7 +276,7 @@ impl App {
             count + pushed(&groove, count)
         };
         let (position, start) = if (heard(end) - now).abs() < (now - heard(start)).abs() {
-            (owner.chain_position(chain, end as usize)?, end)
+            (at(end)?, end)
         } else {
             (position, start)
         };

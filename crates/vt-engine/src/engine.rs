@@ -13,6 +13,7 @@ use vt_model::constants::{
 use vt_model::envelope::Envelope;
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
+use vt_model::order::Dealer;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 use vt_model::settings::SettingId;
@@ -490,12 +491,20 @@ impl Engine {
         *section.chains.get(index)?
     }
 
-    /// The chain a track is on, and how far into it a step of its running count falls.
+    /// The chain a track is on, and how far into it a step of its running count falls, counting
+    /// every time round it since it started, as which time round deals a dealt order. A step
+    /// before it started, as playing from a step can count, is in its first time round.
     fn track_place(&self, index: usize, count: i64) -> Option<(u32, usize)> {
         let chain = self.track_chain(index)?;
-        let length = self.current.song.tracks.get(index)?.chain_steps(chain) as i64;
+        let length = (self.current.song.tracks.get(index)?.chain_steps(chain) as i64).max(1);
         let place = count - self.tracks[index].started;
-        Some((chain, place.rem_euclid(length.max(1)) as usize))
+        let laps = place.div_euclid(length).max(0);
+        Some((chain, (laps * length + place.rem_euclid(length)) as usize))
+    }
+
+    /// What a track's dealt orders are dealt from.
+    fn dealer(&self, index: usize) -> Dealer {
+        Dealer::new(self.current.song.seed, index)
     }
 
     /// Start what a track has cued, if this place on the grid is one its launch timing starts one
@@ -789,16 +798,21 @@ impl Engine {
             if old_length == 0 || length == 0 {
                 continue;
             }
+            let dealer = self.dealer(index);
             let state = &mut self.tracks[index];
             let place = state.clock.count;
             let count = place - state.started;
             let next = count.rem_euclid(old_length);
-            let Some(was_at) = before.chain_position(chain, next as usize) else {
+            let laps = count.div_euclid(old_length);
+            let lapped = |length: i64, at: i64| (laps.max(0) * length + at) as usize;
+            let Some(was_at) = before.chain_position(chain, lapped(old_length, next), dealer)
+            else {
                 continue;
             };
-            // The same pulse of the row too, as far as the row still lasts.
+            // The same pulse of the row too, as far as the row still lasts, at the same visit of
+            // its phrase's order if that still plays it, or where it first plays it.
             let kept = track
-                .chain_place(chain, was_at.slot, was_at.step)
+                .chain_place(chain, was_at.slot, was_at.step, was_at.visit, was_at.deal)
                 .map_or(0, |start| {
                     let pulses = track
                         .chains
@@ -811,12 +825,11 @@ impl Engine {
                 }) as i64;
             let moved = length != old_length || kept != next;
             if moved {
-                let laps = count.div_euclid(old_length);
                 state.started = place - (laps * length + kept);
             }
             let (Some(old_phrase), Some(at)) = (
                 before.phrases.get(&was_at.phrase),
-                track.chain_position(chain, kept as usize),
+                track.chain_position(chain, lapped(length, kept), dealer),
             ) else {
                 continue;
             };
@@ -1701,7 +1714,7 @@ impl Engine {
             return 0;
         };
         owner
-            .chain_position(chain, place)
+            .chain_position(chain, place, self.dealer(index))
             .and_then(|position| owner.step_at(position))
             .map_or(0, |step| i64::from(step.nudge) * NUDGE_TICKS as i64)
     }
@@ -1720,7 +1733,7 @@ impl Engine {
             .filter(|_| self.current.groove_steps || self.current.speed_steps)
             .and_then(|(chain, place)| {
                 let owner = song.tracks.get(index)?;
-                let position = owner.chain_position(chain, place)?;
+                let position = owner.chain_position(chain, place, self.dealer(index))?;
                 let phrase = owner.phrases.get(&position.phrase)?;
                 Some((position, owner.step_at(position)?, phrase))
             });
@@ -1771,7 +1784,7 @@ impl Engine {
         let Some(owner) = song.tracks.get(index) else {
             return;
         };
-        let Some(position) = owner.chain_position(chain, place) else {
+        let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
         };
         let Some(step) = owner.step_at(position) else {
@@ -1908,9 +1921,7 @@ impl Engine {
                     let to = phrase.and_then(|phrase| {
                         match lane_steps[number] {
                             Some(at) => phrase.next_in_lane(number, at, value),
-                            None => phrase
-                                .next_value(position.step, number, value)
-                                .map(|(rows, to)| (phrase.time_between(position.step, rows), to)),
+                            None => phrase.glide_to(position.visit, position.deal, number, value),
                         }
                         .map(|(steps, to)| (to, steps as f64 * pending.ticks as f64))
                     });
@@ -2263,7 +2274,7 @@ impl Engine {
             };
             let owner = &song.tracks[index];
             let place = (tick / owner.speed.ticks()) as usize;
-            let Some(position) = owner.chain_position(*chain, place) else {
+            let Some(position) = owner.chain_position(*chain, place, self.dealer(index)) else {
                 continue;
             };
             let Some(step) = owner.step_at(position) else {
