@@ -4,7 +4,7 @@
 //! heard, with how far from the row it was played as the row's nudge.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{TrackPlace, Transport};
@@ -236,9 +236,11 @@ impl App {
         self.carried_on(self.places.get(track).copied().unwrap_or_default())
     }
 
-    /// Where a place the engine last reported has got to by now, less the output's latency.
+    /// Where a place the engine last reported has got to at the frame or key being handled, less
+    /// the output's latency.
     fn carried_on(&self, place: TrackPlace) -> f64 {
-        let elapsed = Instant::now()
+        let elapsed = self
+            .now
             .saturating_duration_since(self.report_at)
             .min(MOST_ELAPSED);
         let latency = Duration::from_micros(self.audio.latency_us);
