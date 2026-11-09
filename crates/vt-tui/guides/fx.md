@@ -103,6 +103,7 @@ These have no mark.
 | `OFF` | Start the envelopes' release after `xx` units |
 | `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
+| `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
 track's own, so on a track at `1/8` it's half an eighth. They count from where
@@ -111,6 +112,44 @@ goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder. Use `:seed 7` to choose which results `CHA` gives.
+
+## Conditions
+
+`CND` plays its row only some of the time, as Elektron's trig conditions do, so a
+loop can change from pass to pass without each variation written out. Choose `CND`
+with `K` and then its condition from the list that follows; `K` on its value lists
+them again, and `=` and `-` step through them.
+
+| Value | Name | Plays the row |
+|---|---|---|
+| `12` to `88` | `1:2` to `8:8` | On pass `x` of every `y` |
+| `01` `02` | `FILL` `!FILL` | While fill is on, or off |
+| `03` `04` | `PRE` `!PRE` | When this track's last condition passed, or not |
+| `05` `06` | `NEI` `!NEI` | Likewise for the track to the left |
+| `07` `08` | `1ST` `!1ST` | The first time round only, or every time after |
+
+So `12` plays every other pass, and `44` the last of four.
+
+A pass is each time the track plays the row since its chain started, counting its
+own steps at its own speed, so a phrase played twice in its chain counts two passes
+each time round. Passes start again wherever the chain starts: playing from the
+top, a section that brings the chain in or resets, a launch and `:reset`. Playing
+from a step counts the passes before it, as playing up to it would.
+
+When a condition fails, the row's note, its events and its own locks are all
+skipped, as Elektron skips a trig and its locks. A column with a lane of its own
+keeps to its loop, and a `CND` in a lane counts the lane's passes. With two
+conditions on a row, both must hold. While playing, the row under the playhead is
+faint when its `CND` or `CHA` skipped it.
+
+`PRE` and `NEI` read what the last `CND` or `CHA` decided, and aren't counted
+themselves, so after a `1:2`, a `PRE` row plays with it and a `!PRE` row plays
+instead of it. Nothing has passed when playing starts. `CHA` is still rolled when a
+condition fails it, so its results stay the same, and a failed `CHA` skips only the
+note, as it always has.
+
+`Space l` turns fill on or off, and held, it's on until you let go. The status
+line says `FILL` while it's on.
 
 ## Groove
 

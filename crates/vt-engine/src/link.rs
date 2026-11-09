@@ -71,6 +71,8 @@ pub enum Command {
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
     SetSolo { track: usize, solo: bool },
+    /// Turn fill on or off, for `CND`'s `FILL` and `!FILL`.
+    SetFill { on: bool },
     /// Play a chain on one track when its launch timing allows, or stop it then.
     Launch { track: usize, chain: Option<u32> },
     /// Carry on in a captured section, with launched chains still running.
@@ -389,6 +391,7 @@ impl Realtime {
                     self.engine.finish_preview(track, note);
                 }
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
+                Command::SetFill { on } => self.engine.set_fill(on),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
                 Command::ContinueIn { section, length } => {

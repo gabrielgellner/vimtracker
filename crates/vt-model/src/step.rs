@@ -38,6 +38,8 @@ pub enum FxCommand {
     Off,
     Ret,
     Cha,
+    /// Plays the row only when a trig condition holds, which its value names.
+    Cnd,
     /// Sets a setting, by its id, so it belongs to its owner: the track, a voice, or an effect in
     /// a slot.
     Set(SettingId),
@@ -52,7 +54,14 @@ impl FxCommand {
     pub const SEND_B: Self = Self::Set(SettingId::SEND_B);
 
     /// Every event, in the order a list shows them.
-    pub const EVENTS: [Self; 5] = [Self::Del, Self::Kil, Self::Off, Self::Ret, Self::Cha];
+    pub const EVENTS: [Self; 6] = [
+        Self::Del,
+        Self::Kil,
+        Self::Off,
+        Self::Ret,
+        Self::Cha,
+        Self::Cnd,
+    ];
 
     /// What it does, for a list to show.
     pub fn meaning(self) -> String {
@@ -62,6 +71,7 @@ impl FxCommand {
             Self::Off => "Start the release after xx units".to_owned(),
             Self::Ret => "Retrigger. x is the fade, y the units between".to_owned(),
             Self::Cha => "Play the note with a chance of xx out of FF".to_owned(),
+            Self::Cnd => "Play the row only when condition xx holds".to_owned(),
             Self::Set(id) => format!("{}: {}", id.group(), id.name()),
         }
     }
@@ -70,6 +80,8 @@ impl FxCommand {
     pub fn highest(self) -> u8 {
         match self {
             Self::Set(id) => id.entry().kind.top(),
+            // The last condition, `8:8`.
+            Self::Cnd => 0x88,
             _ => 0xFF,
         }
     }
@@ -82,6 +94,7 @@ impl FxCommand {
             Self::Off => "OFF".to_owned(),
             Self::Ret => "RET".to_owned(),
             Self::Cha => "CHA".to_owned(),
+            Self::Cnd => "CND".to_owned(),
             Self::Set(id) => id.label().unwrap_or_else(|| id.key()),
         }
     }

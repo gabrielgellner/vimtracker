@@ -287,8 +287,25 @@ pub struct PendingStep {
     pub place: Option<(u32, usize)>,
     /// The count its lanes read at.
     pub count: i64,
-    /// Whether the row plays, past its `CHA`, once the step's first part has rolled it.
-    pub plays: Option<bool>,
+    /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
+    pub plays: Option<Decided>,
+}
+
+/// What a row's chance and conditions decided, once, on its first pulse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Decided {
+    /// Whether its note plays, past its `CHA` and `CND`.
+    pub note: bool,
+    /// Whether its own FX run, past its `CND`. A failed `CHA` skips only the note.
+    pub fx: bool,
+}
+
+impl Decided {
+    /// A row with nothing against it.
+    pub const PLAYS: Self = Self {
+        note: true,
+        fx: true,
+    };
 }
 
 /// Retriggering the current note.
@@ -313,8 +330,11 @@ pub struct TrackState {
     /// The step of its own running count its chain began at. A cursor partway through a chain can
     /// put it below 0.
     pub started: i64,
-    /// Whether the row playing passed its `CHA`, which is rolled once for all its pulses.
-    pub row_plays: bool,
+    /// What the row playing's `CHA` and `CND` decided, once for all its pulses.
+    pub row: Decided,
+    /// Whether the last condition decided on this track passed, `CHA` included, which `PRE`
+    /// reads here and `NEI` on the track to the right.
+    pub passed: bool,
     /// Whether the note sounding is a `Hold`, to be tied into the next row's note.
     pub tied: bool,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -510,7 +530,8 @@ impl TrackState {
             playing: None,
             started: 0,
             lane_offsets: [0; FX_SLOTS],
-            row_plays: true,
+            row: Decided::PLAYS,
+            passed: false,
             tied: false,
             voice: Voice::default(),
             tail: Voice::default(),
@@ -606,6 +627,13 @@ impl TrackState {
         self.tied = false;
     }
 
+    /// Forget what the last conditions decided, as playing starts, so `PRE` and `NEI` start from
+    /// none having passed.
+    pub fn forget_conditions(&mut self) {
+        self.row = Decided::PLAYS;
+        self.passed = false;
+    }
+
     /// Carry the sounding note on as this one, with no new attack.
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
@@ -627,6 +655,7 @@ impl TrackState {
     /// glide back, so anything still sounding doesn't click.
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
+        self.forget_conditions();
         self.groove_rng = groove_rng(seed, index);
         self.last_note = None;
         self.load(track);
@@ -1038,8 +1067,8 @@ impl TrackState {
             .max()
     }
 
-    /// Tell a step's other part, still waiting, whether its row plays.
-    pub fn decide(&mut self, step: u64, plays: bool) {
+    /// Tell a step's other part, still waiting, what its row's chance and conditions decided.
+    pub fn decide(&mut self, step: u64, plays: Decided) {
         for part in self.pending.iter_mut().flatten() {
             if part.step == step {
                 part.plays = Some(plays);

@@ -60,6 +60,8 @@ pub enum Cmd {
     ToggleMute,
     ToggleSolo,
     ClearMutes,
+    /// Turn fill on or off, for the conditions that play only with it or without it.
+    ToggleFill,
     /// Arm or disarm live recording.
     ToggleRecord,
     Double,
@@ -203,6 +205,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Solo or unsolo; held, until let go",
     ),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
+    (
+        "Space l",
+        Cmd::ToggleFill,
+        "Fill on or off; held, until let go",
+    ),
     ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),

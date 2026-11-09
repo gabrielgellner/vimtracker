@@ -21,6 +21,7 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_engine::track_state::LiveValues;
 use vt_model::action::{Action, FieldValue, edit};
+use vt_model::condition::Condition;
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
     TICKS_PER_STEP, TRACK_ENVELOPES,
@@ -136,6 +137,10 @@ enum Momentary {
     },
     Solo {
         track: usize,
+        was: bool,
+    },
+    /// Fill was switched from this.
+    Fill {
         was: bool,
     },
     /// A row is sounding on every track.
@@ -290,6 +295,8 @@ pub struct App {
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid, likewise.
     pub auto_jump: bool,
+    /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
+    pub fill: bool,
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
@@ -455,6 +462,7 @@ impl App {
             levels,
             scale,
             auto_jump,
+            fill: false,
             key_down: None,
             repeats_ignored: false,
             held_notes: Vec::new(),
@@ -559,7 +567,7 @@ impl App {
                         track.solo = was;
                     }
                 }
-                Momentary::Audition | Momentary::AuditionNote { .. } => {}
+                Momentary::Fill { .. } | Momentary::Audition | Momentary::AuditionNote { .. } => {}
             }
         }
         Arc::new(song)
@@ -599,6 +607,7 @@ impl App {
                 count: (step as u64 * TICKS_PER_STEP / ticks) as i64,
                 progress: 0.0,
                 ticks: ticks as u32,
+                skipped: false,
             };
         }
     }
@@ -865,6 +874,8 @@ impl App {
                     None => {}
                 }
             }
+            Momentary::Fill { was } if long => self.set_fill(was),
+            Momentary::Fill { .. } => {}
             Momentary::Audition => {
                 self.handle.send(Command::EndAudition { held: long });
             }
@@ -1264,6 +1275,11 @@ impl App {
                     }
                 }
             }
+            Cmd::ToggleFill => {
+                let was = self.fill;
+                self.set_fill(!was);
+                self.started = Some(Momentary::Fill { was });
+            }
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
                 if self.momentary.is_some_and(|held| {
@@ -1614,6 +1630,13 @@ impl App {
             self.handle.send(Command::SetMute { track, mute });
             self.dirty = true;
         }
+    }
+
+    /// Turn fill on or off, saying which.
+    pub(crate) fn set_fill(&mut self, on: bool) {
+        self.fill = on;
+        self.handle.send(Command::SetFill { on });
+        self.status = if on { "Fill on" } else { "Fill off" }.to_owned();
     }
 
     pub(crate) fn toggle_solo(&mut self) {
@@ -1997,6 +2020,12 @@ impl App {
             }
             Field::FxValue(slot) => {
                 let current = self.current_slot(slot).unwrap_or_default();
+                // A condition's value is one of a list, and anything else is refused.
+                let command = self.entry.command.or(current.command);
+                if command == Some(FxCommand::Cnd) && Condition::from_value(value).is_none() {
+                    self.status = format!("CND {value:02X} isn't a condition: K lists them");
+                    return;
+                }
                 let Some(command) = self.entry.command.take().or(current.command) else {
                     self.status = "Type an FX command first".to_owned();
                     return;

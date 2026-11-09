@@ -1,6 +1,7 @@
 //! Song data, actions and project files for vimtracker.
 
 pub mod action;
+pub mod condition;
 pub mod constants;
 pub mod envelope;
 pub mod groove;

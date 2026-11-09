@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
     MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS, TICKS_PER_QUARTER,
@@ -12,7 +13,9 @@ use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
 use vt_model::sample::SampleData;
 use vt_model::settings::SettingId;
-use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
+use vt_model::song::{
+    ChainPosition, Launch, Machine, Section, SectionStart, Song, Track, level_gain,
+};
 use vt_model::speed::Speed;
 use vt_model::step::{
     ACCENT_VELOCITY, FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note,
@@ -26,8 +29,8 @@ use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{
-    Clock, DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime, TrackState,
-    Worked, base_of,
+    Clock, Decided, DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime,
+    TrackState, Worked, base_of,
 };
 use crate::voice::NoteOn;
 
@@ -43,6 +46,8 @@ pub struct TrackPlace {
     pub progress: f32,
     /// How long that step is, in ticks.
     pub ticks: u32,
+    /// Whether the row heard skipped its note, as its `CHA` or `CND` decided.
+    pub skipped: bool,
 }
 
 /// Whether the sequencer is moving.
@@ -111,6 +116,8 @@ pub struct Engine {
     reading: Reading,
     /// Frames until LFOs are next worked out.
     lfo_countdown: u32,
+    /// Whether fill is on, which `CND`'s `FILL` and `!FILL` read.
+    fill: bool,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -180,6 +187,7 @@ impl Engine {
             rendered: 0,
             reading: Reading::default(),
             lfo_countdown: 0,
+            fill: false,
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -256,6 +264,7 @@ impl Engine {
             count: state.clock.count,
             progress: 0.0,
             ticks: ticks as u32,
+            skipped: false,
         };
         let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
         if !moved {
@@ -267,6 +276,7 @@ impl Engine {
             progress: ((now - worked.grid as f64) / worked.ticks.max(1) as f64).clamp(0.0, 1.0)
                 as f32,
             ticks: worked.ticks as u32,
+            skipped: !state.row.note,
         })
     }
 
@@ -344,6 +354,7 @@ impl Engine {
             track.clock = Clock::default();
             track.restart(0);
             track.forget_worked(0);
+            track.forget_conditions();
         }
         let song = Arc::clone(&self.current.song);
         let Some(rows) = song.sections.get(..=section) else {
@@ -1030,6 +1041,16 @@ impl Engine {
         self.transport = to;
     }
 
+    /// Turn fill on or off, which `CND`'s `FILL` and `!FILL` read as each row is decided.
+    pub fn set_fill(&mut self, on: bool) {
+        self.fill = on;
+    }
+
+    /// Whether fill is on.
+    pub fn fill(&self) -> bool {
+        self.fill
+    }
+
     /// Set whether a track is muted. A muted track's sounding note fades.
     pub fn set_mute(&mut self, track: usize, mute: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
@@ -1698,24 +1719,39 @@ impl Engine {
         let mut kill_units = None;
         let mut off_units = None;
         let mut retrigger = None;
-        // `CHA` goes first, as whether the note plays decides whether locks end. A row's own is
-        // rolled once, on its first pulse, by the step's first part to land.
-        let plays = match pending.plays {
-            Some(plays) => plays,
+        // `CHA` and `CND` go first, as whether the note plays decides whether locks end. A row's
+        // own are decided once, on its first pulse, by the step's first part to land. Every `CHA`
+        // is rolled whatever the conditions say, so its rolls are the same with or without them.
+        let decided = match pending.plays {
+            Some(decided) => decided,
             None => {
-                let mut plays = first || self.tracks[index].row_plays;
+                let mut decided = if first {
+                    Decided::PLAYS
+                } else {
+                    self.tracks[index].row
+                };
+                let mut chance = None;
                 for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
-                    plays &= self.tracks[index].rng.chance(slot.coarse());
+                    let rolled = self.tracks[index].rng.chance(slot.coarse());
+                    decided.note &= rolled;
+                    chance = Some(chance.unwrap_or(true) && rolled);
+                }
+                if !self.conditions_hold(index, &fx, &lane_steps, &pending, position, chance) {
+                    decided = Decided {
+                        note: false,
+                        fx: false,
+                    };
                 }
                 if first {
-                    self.tracks[index].row_plays = plays;
+                    self.tracks[index].row = decided;
                 }
                 if pending.part != Part::Whole {
-                    self.tracks[index].decide(pending.step, plays);
+                    self.tracks[index].decide(pending.step, decided);
                 }
-                plays
+                decided
             }
         };
+        let plays = decided.note;
         // What the row's note does on this pulse.
         let event = match (step.note, gate) {
             (Note::On(_), GateKind::Rest) if first => Note::Off,
@@ -1731,12 +1767,19 @@ impl Engine {
             self.tracks[index].end_locks();
         }
         // A lane's values stay where the groove lands the step. What times the note goes with it,
-        // wherever it's written.
+        // wherever it's written. A failed `CND` skips the row's own FX, as Elektron's skips a
+        // trig's locks, while a lane keeps to its own loop.
         let runs = |number: usize, slot: &FxSlot| match slot.command {
-            Some(FxCommand::Del | FxCommand::Kil | FxCommand::Off | FxCommand::Ret)
-            | Some(FxCommand::Cha) => row,
+            Some(
+                FxCommand::Del
+                | FxCommand::Kil
+                | FxCommand::Off
+                | FxCommand::Ret
+                | FxCommand::Cha
+                | FxCommand::Cnd,
+            ) => row && decided.fx,
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
-            _ => row,
+            _ => row && decided.fx,
         };
         for (number, slot) in fx.iter().enumerate() {
             let Some(command) = slot.command.filter(|_| runs(number, slot)) else {
@@ -1747,7 +1790,7 @@ impl Engine {
                 FxCommand::Kil => kill_units = Some(slot.coarse()),
                 FxCommand::Off => off_units = Some(slot.coarse()),
                 FxCommand::Ret => retrigger = Some(slot.coarse()),
-                FxCommand::Cha => {}
+                FxCommand::Cha | FxCommand::Cnd => {}
                 FxCommand::Set(id) if slot.mark == Mark::Glide => {
                     let value = command;
                     let to = phrase.and_then(|phrase| {
@@ -1860,6 +1903,99 @@ impl Engine {
                 });
             }
         }
+    }
+
+    /// Decide a row's conditions, left to right, as its first pulse lands, and keep what they and
+    /// its `CHA` came to for `PRE` here and `NEI` on the track to the right to read next. The row
+    /// plays only if every one holds. A value that isn't a condition is left out, as if it wasn't
+    /// there.
+    fn conditions_hold(
+        &mut self,
+        index: usize,
+        fx: &[FxSlot; FX_SLOTS],
+        lane_steps: &[Option<usize>; FX_SLOTS],
+        pending: &PendingStep,
+        position: ChainPosition,
+        chance: Option<bool>,
+    ) -> bool {
+        let previous = self.tracks[index].passed;
+        let neighbour = index
+            .checked_sub(1)
+            .is_some_and(|left| self.tracks[left].passed);
+        let mut holds = true;
+        let mut decided = chance;
+        for (number, slot) in fx.iter().enumerate() {
+            if slot.command != Some(FxCommand::Cnd) {
+                continue;
+            }
+            let Some(condition) = Condition::from_value(slot.coarse()) else {
+                continue;
+            };
+            let pass = match lane_steps[number] {
+                Some(_) => self.lane_pass(index, number, pending, position),
+                None => self.row_pass(index, pending, position),
+            };
+            let result = condition.holds(Situation {
+                pass,
+                fill: self.fill,
+                previous,
+                neighbour,
+            });
+            holds &= result;
+            if !condition.reads_last() {
+                decided = Some(decided.unwrap_or(true) && result);
+            }
+        }
+        if let Some(passed) = decided {
+            self.tracks[index].passed = passed;
+        }
+        holds
+    }
+
+    /// How many times the track has played this row before, since its chain started: once each
+    /// time round the chain for each time its phrase is in it, so a phrase played four times in
+    /// a row counts four passes, and the first is 0.
+    fn row_pass(&self, index: usize, pending: &PendingStep, position: ChainPosition) -> i64 {
+        let Some((chain, _)) = pending.place else {
+            return 0;
+        };
+        let Some(owner) = self.current.song.tracks.get(index) else {
+            return 0;
+        };
+        let Some(entries) = owner.chains.get(&chain).map(|chain| &chain.entries) else {
+            return 0;
+        };
+        let length = owner.chain_steps(chain).max(1) as i64;
+        let times = |entries: &[vt_model::song::ChainEntry]| {
+            entries
+                .iter()
+                .filter(|entry| entry.phrase == position.phrase)
+                .count() as i64
+        };
+        let before = times(entries.get(..position.slot).unwrap_or_default());
+        pending.count.div_euclid(length) * times(entries) + before
+    }
+
+    /// How many times round its own loop a lane has been since the track's chain started.
+    fn lane_pass(
+        &self,
+        index: usize,
+        number: usize,
+        pending: &PendingStep,
+        position: ChainPosition,
+    ) -> i64 {
+        let lane = self
+            .current
+            .song
+            .tracks
+            .get(index)
+            .and_then(|owner| owner.phrases.get(&position.phrase))
+            .and_then(|phrase| phrase.lane(number));
+        let Some(lane) = lane else {
+            return 0;
+        };
+        let count = pending.count + self.tracks[index].lane_offsets[number];
+        count.div_euclid(lane.length.max(1) as i64)
     }
 
     /// Hear a row while not playing: every audible track's note at this step of the section, with
