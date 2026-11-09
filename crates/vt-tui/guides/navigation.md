@@ -80,6 +80,25 @@ number, as for a chain or a phrase. The samples, the tracks and the FX commands 
 their search instead, as they're usually found by name, and `Esc` goes from the search
 to the list.
 
+## The command line
+
+`:` opens the command line at the bottom. `Tab` completes what you're typing, as in
+Vim: command names, `:set` keys and their values, each command's own words, such as
+`:launch 4bar` and `:track add`, kit names, and paths for `:e`, `:w`, `:new`,
+`:sample`, `:render` and `:kit`. Paths go one folder at a time, and `~` is your home
+folder.
+
+| Keys | Does |
+|---|---|
+| `Tab` | Complete, or list the matches and fill in what they share |
+| `Tab` `Shift-Tab` | Move through the list. Typing narrows it |
+| `Enter` | Take the match from the list, or run the line |
+| `Esc` | Close the list and keep what's typed, or leave the line |
+| `Up` `Down` | Earlier commands, those starting with what is typed |
+
+The commands you run are kept for next time in `history.ron`, beside `settings.ron`,
+the last 100, with one run again moved to the end.
+
 ## When you forget
 
 Press `Space` or another prefix and wait: a popup lists what can come next.

@@ -696,6 +696,8 @@ impl App {
             }
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
+            // The list above the command line takes its own choices, so none comes here.
+            Pick::Completion(_) => {}
             Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),
             Pick::Gate(kind) => self.pick_gate(kind),
             Pick::Lfo { track, slot, lfo } => {

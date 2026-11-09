@@ -6,8 +6,8 @@ use crate::step::{MAX_NOTE, MIN_NOTE};
 
 /// The notes in an octave.
 const OCTAVE: u16 = 12;
-/// The roots' names, from C.
-const ROOTS: [&str; 12] = [
+/// The roots' names, from C, which `:set root=` completes from.
+pub const ROOTS: [&str; 12] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
 ];
 

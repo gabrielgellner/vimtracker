@@ -19,6 +19,10 @@ const MIN_LIST_WIDTH: usize = 32;
 const MAX_LIST_WIDTH: usize = 72;
 /// The most rows a list shows before it scrolls.
 const MAX_ROWS: usize = 16;
+/// The command line's list of matches: its narrowest, and the most rows it shows before it
+/// scrolls, as Vim's popup menu keeps to a few.
+const MIN_MENU_WIDTH: usize = 12;
+const MAX_MENU_ROWS: usize = 10;
 /// The preview's width, and the rows a box with one has.
 const PREVIEW_WIDTH: usize = 40;
 pub const PREVIEW_ROWS: usize = 18;
@@ -96,6 +100,49 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
     }
 }
 
+/// Draw the list of matches the command line's Tab shows, as a small box that sits on the status
+/// line, above the command line in the bottom row of `status`, with its names under the word
+/// they finish, which starts `column` characters in. It's after Vim's popup menu, with no search
+/// line, as the command line is its search.
+pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &Picker) {
+    let area = frame.area();
+    let columns = Columns::of(picker);
+    let list_width =
+        (GUTTER + columns.label + columns.meaning).clamp(MIN_MENU_WIDTH, MAX_LIST_WIDTH);
+    let rows_shown = picker.items().len().clamp(1, MAX_MENU_ROWS);
+    // The border all round, and a space inside it on the right.
+    let width = ((list_width + 3) as u16).min(area.width);
+    let bottom = status.bottom().saturating_sub(1);
+    let height = ((rows_shown + 2) as u16).min(bottom.saturating_sub(area.y));
+    let left = (column.saturating_sub(GUTTER + 1) as u16).min(area.width - width);
+    let window = Rect {
+        x: area.x + left,
+        y: bottom - height,
+        width,
+        height,
+    };
+    let block = Block::new()
+        .style(theme::window())
+        .borders(Borders::ALL)
+        .title(Line::from(vec![
+            Span::styled(
+                format!(" {} ", picker.title),
+                Style::new().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!("{} ", picker.items().len()), theme::dim()),
+        ]));
+    let inner = block.inner(window);
+    frame.render_widget(Clear, window);
+    frame.render_widget(block, window);
+    let lines = rows(
+        picker,
+        &columns,
+        usize::from(inner.width),
+        usize::from(inner.height),
+    );
+    frame.render_widget(Paragraph::new(lines), inner);
+}
+
 /// How wide each part of an item's line is, from every item, so the box doesn't change size as
 /// the list is searched or opened.
 struct Columns {
@@ -127,15 +174,21 @@ impl Columns {
 
 /// The search line and the rows that fit, scrolled just enough to keep the cursor in view.
 fn list(picker: &Picker, columns: &Columns, area: Rect) -> Vec<Line<'static>> {
-    let width = usize::from(area.width);
-    let room = usize::from(area.height).saturating_sub(1);
     let query = if picker.focus == crate::input::picker::Focus::Search {
         Line::raw(format!("> {}_", picker.query))
     } else {
         Line::styled(format!("> {}", picker.count()), theme::dim())
     };
-    let first = (picker.selected + 1).saturating_sub(room);
+    let room = usize::from(area.height).saturating_sub(1);
     let mut lines = vec![query];
+    lines.extend(rows(picker, columns, usize::from(area.width), room));
+    lines
+}
+
+/// The rows that fit in `room`, scrolled just enough to keep the cursor in view.
+fn rows(picker: &Picker, columns: &Columns, width: usize, room: usize) -> Vec<Line<'static>> {
+    let first = (picker.selected + 1).saturating_sub(room);
+    let mut lines = Vec::new();
     for (at, row) in picker.rows().iter().enumerate().skip(first).take(room) {
         let spans = match row {
             Row::Category(category) => {
