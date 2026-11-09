@@ -1,5 +1,5 @@
-//! The shape panel: fill a selected column with a ramp, random values, a wave or two values in turn,
-//! heard while it's adjusted.
+//! The shape panel: fill a selected column with a ramp, random values, a wave, two values in turn
+//! or a short list of them, heard while it's adjusted.
 
 use std::sync::Arc;
 
@@ -8,7 +8,8 @@ use vt_model::action::{Action, edit};
 use vt_model::lfo::{Rate, Shape as Wave, note_rates};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
-    DEFAULT_RATE, FillKind, MAX_BEND, Shape, ShapeColumn, WAVES, Where, default_ends,
+    DEFAULT_RATE, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES, Where,
+    default_ends,
 };
 use vt_model::song::Song;
 
@@ -46,6 +47,7 @@ pub enum ShapeRow {
     Wave,
     Rate,
     Phase,
+    Values,
     Run,
     Where,
     Amount,
@@ -63,6 +65,7 @@ impl ShapeRow {
             Self::Wave => "Shape",
             Self::Rate => "Rate",
             Self::Phase => "Phase",
+            Self::Values => "Values",
             Self::Run => "Run",
             Self::Where => "Where",
             Self::Amount => "Amount",
@@ -87,14 +90,18 @@ pub struct ShapePanel {
 
 impl ShapePanel {
     /// The rows on show. `Fill` comes first, as it decides the rest: a wave and `Alternate` have
-    /// their own settings in place of a curve, and `Amount` only means something for some choices
-    /// of rows.
+    /// their own settings in place of a curve, a `List` has its values in place of the two ends,
+    /// and `Amount` only means something for some choices of rows.
     pub fn rows(&self) -> Vec<ShapeRow> {
-        let mut rows = vec![ShapeRow::Fill, ShapeRow::From, ShapeRow::To];
+        let mut rows = vec![ShapeRow::Fill];
+        if self.shape.kind != FillKind::List {
+            rows.extend_from_slice(&[ShapeRow::From, ShapeRow::To]);
+        }
         rows.extend_from_slice(match self.shape.kind {
             FillKind::Ramp | FillKind::Random => &[ShapeRow::Curve, ShapeRow::S],
             FillKind::Wave => &[ShapeRow::Wave, ShapeRow::Rate, ShapeRow::Phase],
             FillKind::Alternate => &[ShapeRow::Run],
+            FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
         });
         rows.push(ShapeRow::Where);
         if matches!(self.shape.place, Where::Every(_) | Where::Chance(_)) {
@@ -118,6 +125,24 @@ fn turned<T: Copy + PartialEq>(choices: &[T], current: T, sign: i16) -> T {
     let at = choices.iter().position(|c| *c == current).unwrap_or(0);
     let step = if sign > 0 { 1 } else { choices.len() - 1 };
     choices[(at + step) % choices.len()]
+}
+
+/// A character typed into a list of values. Two hex digits make a value, and the space after it
+/// comes by itself, so `704055` types `70 40 55`; a space ends a value of one digit sooner.
+fn type_list(text: &mut String, c: char) {
+    let count = text.split_whitespace().count();
+    let last = text.rsplit(' ').next().unwrap_or("");
+    if c.is_ascii_hexdigit() {
+        if last.len() == 2 {
+            if count == MAX_VALUES {
+                return;
+            }
+            text.push(' ');
+        }
+        text.push(c.to_ascii_uppercase());
+    } else if c == ' ' && !last.is_empty() && count < MAX_VALUES {
+        text.push(' ');
+    }
 }
 
 /// A value moved and kept in `0..=top`.
@@ -197,6 +222,7 @@ impl App {
                 rate: DEFAULT_RATE,
                 phase: 0,
                 run: 1,
+                values: Values::default(),
                 place: column.default_where(),
                 seed: base.seed.wrapping_add(self.shape_seed),
             },
@@ -264,7 +290,7 @@ impl App {
     }
 
     /// Apply a shape to a range. A ramp's or random fill's ends are chosen again from what's there,
-    /// and a wave or `Alternate` keeps the two values it moves between.
+    /// a wave or `Alternate` keeps the two values it moves between, and a `List` keeps its list.
     pub(crate) fn shape_again(&mut self, range: StepRange, column: ShapeColumn, shape: Shape) {
         let Some(phrase) = self.phrase_id() else {
             return;
@@ -276,7 +302,7 @@ impl App {
             .map_or(&[][..], |p| p.steps());
         let (from, to) = match shape.kind {
             FillKind::Ramp | FillKind::Random => default_ends(steps, range, column),
-            FillKind::Wave | FillKind::Alternate => (shape.from, shape.to),
+            FillKind::Wave | FillKind::Alternate | FillKind::List => (shape.from, shape.to),
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
@@ -316,7 +342,12 @@ impl App {
             KeyCode::Char('_') => self.adjust_shape(-1, true),
             KeyCode::Char('x') => self.reset_shape_row(),
             KeyCode::Char('~') => self.change_shape(|panel| {
-                std::mem::swap(&mut panel.shape.from, &mut panel.shape.to);
+                let shape = &mut panel.shape;
+                if shape.kind == FillKind::List {
+                    shape.values = shape.values.reversed();
+                } else {
+                    std::mem::swap(&mut shape.from, &mut shape.to);
+                }
             }),
             KeyCode::Char('r') => {
                 self.shape_seed = self.shape_seed.wrapping_add(1);
@@ -334,6 +365,11 @@ impl App {
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
         if let Some(panel) = &mut self.shape {
             change(panel);
+            // A list starts as the two ends, so it sounds as `Alternate` did until it's typed.
+            let shape = &mut panel.shape;
+            if shape.kind == FillKind::List && shape.values.is_empty() {
+                shape.values = Values::new(&[shape.from, shape.to]);
+            }
         }
         self.preview_shape();
     }
@@ -348,6 +384,14 @@ impl App {
     }
 
     fn adjust_shape(&mut self, sign: i16, large: bool) {
+        if self
+            .shape
+            .as_ref()
+            .is_some_and(|panel| panel.row == ShapeRow::Values)
+        {
+            self.status = "Type the values with i, as hex values like 70 40 55".to_owned();
+            return;
+        }
         self.change_shape(|panel| {
             let top = i16::from(panel.column.highest());
             let shape = &mut panel.shape;
@@ -369,6 +413,7 @@ impl App {
                     let by = sign * if large { PHASE_JUMP } else { PHASE_NUDGE };
                     shape.phase = (shape.phase as i16 + by).rem_euclid(360) as u16;
                 }
+                ShapeRow::Values => {}
                 ShapeRow::Run => {
                     let by = sign * if large { RUN_JUMP } else { 1 };
                     shape.run = moved(shape.run as i16, by, 1, MAX_RUN) as u16;
@@ -412,6 +457,7 @@ impl App {
                 ShapeRow::Wave => shape.wave = Wave::Sine,
                 ShapeRow::Rate => shape.rate = DEFAULT_RATE,
                 ShapeRow::Phase => shape.phase = 0,
+                ShapeRow::Values => shape.values = Values::new(&[shape.from, shape.to]),
                 ShapeRow::Run => shape.run = 1,
                 ShapeRow::Where => shape.place = default_where,
                 ShapeRow::Amount => {
@@ -521,6 +567,7 @@ impl App {
         let hex = matches!(panel.row, ShapeRow::From | ShapeRow::To);
         let signed = matches!(panel.row, ShapeRow::Curve | ShapeRow::S);
         let rate = panel.row == ShapeRow::Rate;
+        let list = panel.row == ShapeRow::Values;
         let Some(text) = &mut panel.typing else {
             return;
         };
@@ -530,6 +577,7 @@ impl App {
                 text.pop();
             }
             KeyCode::Enter => self.commit_shape_typing(),
+            KeyCode::Char(c) if list => type_list(text, c),
             KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
                 text.push(c.to_ascii_uppercase());
                 if text.len() == 2 {
@@ -611,6 +659,16 @@ impl App {
                     Ok(run) if run > 0 => shape.run = run.min(MAX_RUN) as u16,
                     _ => refused = Some("Run is a whole number above 0"),
                 },
+                ShapeRow::Values => {
+                    let typed: Option<Vec<u8>> = text
+                        .split_whitespace()
+                        .map(|value| u8::from_str_radix(value, 16).ok().map(|v| v.min(top)))
+                        .collect();
+                    match typed {
+                        Some(list) if !list.is_empty() => shape.values = Values::new(&list),
+                        _ => refused = Some("Values are hex values like 70 40 55, up to 8 of them"),
+                    }
+                }
                 ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where => {}
             }
         });

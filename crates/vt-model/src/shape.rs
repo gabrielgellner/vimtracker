@@ -1,5 +1,5 @@
-//! Filling a column across a selection with a shaped ramp, random values, a wave, or two values in
-//! turn.
+//! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
+//! turn, or a short list of them in turn.
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::lfo::{Rate, Shape as Wave, wave};
@@ -12,6 +12,8 @@ pub const MAX_BEND: i8 = 100;
 pub const WAVES: [Wave; 5] = [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square];
 /// How long a wave's cycle is unless told otherwise: a half note.
 pub const DEFAULT_RATE: Rate = Rate::Note(TICKS_PER_QUARTER as u32 * 2);
+/// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
+pub const MAX_VALUES: usize = 8;
 
 /// What goes in the rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,11 +26,19 @@ pub enum FillKind {
     Wave,
     /// One value then the other, on the rows it fills, however they're spaced.
     Alternate,
+    /// Each value of a short list in turn, on the rows it fills, then round again.
+    List,
 }
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 4] = [Self::Ramp, Self::Random, Self::Wave, Self::Alternate];
+    pub const ALL: [Self; 5] = [
+        Self::Ramp,
+        Self::Random,
+        Self::Wave,
+        Self::Alternate,
+        Self::List,
+    ];
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
@@ -37,6 +47,7 @@ impl FillKind {
             Self::Random => "Random",
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
+            Self::List => "List",
         }
     }
 
@@ -47,6 +58,7 @@ impl FillKind {
             Self::Random => "Anywhere between the two",
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
+            Self::List => "A few values in turn",
         }
     }
 }
@@ -169,6 +181,53 @@ impl ShapeColumn {
     }
 }
 
+/// The values a `List` fill goes through, up to `MAX_VALUES` of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Values {
+    values: [u8; MAX_VALUES],
+    len: u8,
+}
+
+impl Values {
+    /// The first `MAX_VALUES` of these values.
+    pub fn new(values: &[u8]) -> Self {
+        let mut list = Self::default();
+        for (slot, value) in list.values.iter_mut().zip(values) {
+            *slot = *value;
+            list.len += 1;
+        }
+        list
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.values[..usize::from(self.len)]
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// The same values the other way round.
+    pub fn reversed(&self) -> Self {
+        let mut list = *self;
+        list.values[..usize::from(self.len)].reverse();
+        list
+    }
+}
+
+/// The values in hex with a space between each, as they're typed.
+impl std::fmt::Display for Values {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, value) in self.as_slice().iter().enumerate() {
+            if index > 0 {
+                f.write_str(" ")?;
+            }
+            write!(f, "{value:02X}")?;
+        }
+        Ok(())
+    }
+}
+
 /// How to fill a column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Shape {
@@ -184,8 +243,10 @@ pub struct Shape {
     pub wave: Wave,
     pub rate: Rate,
     pub phase: u16,
-    /// How many rows in a row `Alternate` gives each value.
+    /// How many rows in a row `Alternate` and `List` give each value.
     pub run: u16,
+    /// What a `List` goes through, in place of `from` and `to`.
+    pub values: Values,
     pub place: Where,
     /// Picks the random values and the chance rows, so a change elsewhere doesn't reroll them.
     pub seed: u64,
@@ -347,6 +408,14 @@ fn shaped(
                     let turn = index / usize::from(shape.run.max(1));
                     whole(if turn.is_multiple_of(2) { from } else { to })
                 }
+                FillKind::List => {
+                    let list = shape.values.as_slice();
+                    let turn = index / usize::from(shape.run.max(1));
+                    // An empty list never comes from the panel, but leaves the rows at nothing
+                    // rather than failing.
+                    let value = list.get(turn % list.len().max(1)).copied().unwrap_or(0);
+                    whole(f64::from(value).min(top))
+                }
             };
             (row, value)
         })
@@ -448,6 +517,7 @@ mod tests {
             rate: DEFAULT_RATE,
             phase: 0,
             run: 1,
+            values: Values::default(),
             place: Where::Notes,
             seed: 1,
         }
@@ -704,6 +774,55 @@ mod tests {
         ]);
         let out = values(&steps, all(&steps), VEL, &alternating(1, 0x70, 0x40));
         assert_eq!(out, [(0, 0x70), (3, 0x40), (4, 0x70), (6, 0x40)]);
+    }
+
+    fn listing(run: u16, list: &[u8]) -> Shape {
+        Shape {
+            kind: FillKind::List,
+            run,
+            values: Values::new(list),
+            ..ramp(0, 0x7F, 0, 0)
+        }
+    }
+
+    #[test]
+    fn a_list_goes_round_its_values_for_its_run() {
+        assert_eq!(
+            written(&notes(7), listing(1, &[0x70, 0x40, 0x55])),
+            [0x70, 0x40, 0x55, 0x70, 0x40, 0x55, 0x70]
+        );
+        assert_eq!(
+            written(&notes(7), listing(2, &[0x70, 0x40, 0x55])),
+            [0x70, 0x70, 0x40, 0x40, 0x55, 0x55, 0x70]
+        );
+        assert_eq!(written(&notes(3), listing(1, &[0x30])), [0x30; 3]);
+    }
+
+    #[test]
+    fn a_list_counts_only_the_rows_it_fills_and_stops_at_the_columns_top() {
+        let steps = rows(&[
+            "C-4 -- --- --- ---",
+            "--- -- --- --- ---",
+            "C-4 -- --- --- ---",
+            "C-4 -- --- --- ---",
+            "--- -- --- --- ---",
+            "C-4 -- --- --- ---",
+        ]);
+        let out = values(&steps, all(&steps), VEL, &listing(1, &[0x70, 0xFF, 0x20]));
+        assert_eq!(out, [(0, 0x70), (2, 0x7F), (3, 0x20), (5, 0x70)]);
+    }
+
+    #[test]
+    fn a_list_keeps_at_most_eight_values_and_shows_them_in_hex() {
+        let list = Values::new(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(list.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(Values::new(&[0x70, 0x40, 0x5]).to_string(), "70 40 05");
+        assert_eq!(
+            Values::new(&[0x70, 0x40, 0x5]).reversed().as_slice(),
+            [0x5, 0x40, 0x70]
+        );
+        assert!(Values::default().is_empty());
+        assert!(written(&notes(2), listing(1, &[])).iter().all(|v| *v == 0));
     }
 
     #[test]

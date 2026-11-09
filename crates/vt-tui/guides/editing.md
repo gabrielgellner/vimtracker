@@ -57,7 +57,7 @@ loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp` between the ends, `Random`, `Wave` or `Alternate`. `r` picks anew |
+| Fill | `Ramp`, `Random`, `Wave`, `Alternate` or `List`. `r` picks anew |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -80,6 +80,13 @@ LFO, `Sine` and `Tri` start half way and head for `To`.
 other hit flips however they're spaced. `Run` sets how many rows each value gets
 in a row: `1` gives `70 40 70 40` and `2` gives `70 70 40 40`.
 
+`List` goes round a short list of values instead, for accents two values can't
+make, such as `70 40 55` over a hat. Its `Values` row takes the place of From and
+To: `i`, then up to eight hex values, where two digits make a value and the space
+comes by itself, so `704055` types `70 40 55`. It starts as the two ends. `Run`
+works as for `Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the
+list round.
+
 The ends start as the first and last values selected, or if those match, the
 lowest and highest.
 
@@ -100,7 +107,8 @@ selected, and a row holding a different command keeps it.
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+`, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
 `.` applies the same shape to another selection. A ramp or random fill takes that
-selection's own ends, and `Wave` and `Alternate` keep theirs.
+selection's own ends, `Wave` and `Alternate` keep theirs, and `List` keeps its
+list.
 
 ## Values and small edits
 

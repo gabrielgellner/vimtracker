@@ -4262,6 +4262,30 @@ fn the_shape_panel_draws_its_settings_beside_the_grid() {
 }
 
 #[test]
+fn a_list_fill_draws_its_values_in_place_of_the_ends() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    press(&mut app, "lvGSK/list");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "ji704055");
+    special(&mut app, KeyCode::Enter);
+    let panel = app.shape.clone().unwrap();
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), &app, &panel))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let all: String = (0..16)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for expected in ["List", "Values  70 40 55", "Run", "~ reverse the list"] {
+        assert!(all.contains(expected), "{expected} in {all}");
+    }
+    assert!(!all.contains("From"), "{all}");
+}
+
+#[test]
 fn reset_shows_on_the_status_line_and_undoes() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let time = Instant::now();

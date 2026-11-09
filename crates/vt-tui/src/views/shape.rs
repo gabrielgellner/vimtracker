@@ -40,6 +40,7 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
         ShapeRow::Wave => shape.wave.name().to_owned(),
         ShapeRow::Rate => shape.rate.to_string(),
         ShapeRow::Phase => format!("{}°", shape.phase),
+        ShapeRow::Values => shape.values.to_string(),
         ShapeRow::Run => shape.run.to_string(),
         ShapeRow::Where => shape.place.name().to_owned(),
         ShapeRow::Amount => match shape.place {
@@ -93,10 +94,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             Span::styled(text, style),
         ]));
     }
-    let hint = if app.mode == Mode::Shape && panel.shape.kind == FillKind::Random {
-        "~ swap  r reroll"
-    } else {
-        "~ swap the ends"
+    let hint = match panel.shape.kind {
+        FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
+        FillKind::List => "~ reverse the list",
+        _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
     frame.render_widget(Clear, window);
