@@ -77,6 +77,9 @@ pub enum Command {
     /// `Space A`: send every track back to its start at the next line of the launch grid, or
     /// take back a realign waiting for it.
     Realign,
+    /// `Space a`: start one track's chain again at the next line of the launch grid, or take back
+    /// one waiting for it.
+    RealignTrack { track: usize },
     /// Set the scale an `ACU` moves notes through.
     SetScale { scale: Scale },
     /// Play a chain on one track when its launch timing allows, or stop it then.
@@ -117,6 +120,8 @@ pub struct Telemetry {
     pub transport: Transport,
     /// Whether a realign is waiting for its line of the grid.
     pub realigning: bool,
+    /// Whether each track's own realign is waiting for its line of the grid.
+    pub realigning_tracks: [bool; MAX_TRACKS],
     pub reading: Reading,
     /// Each track's levels.
     pub tracks: [Reading; MAX_TRACKS],
@@ -401,6 +406,7 @@ impl Realtime {
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetFill { on } => self.engine.set_fill(on),
                 Command::Realign => self.engine.toggle_realign(),
+                Command::RealignTrack { track } => self.engine.toggle_realign_track(track),
                 Command::SetScale { scale } => self.engine.set_scale(scale),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
@@ -442,6 +448,9 @@ impl Realtime {
             places: std::array::from_fn(|track| self.engine.track_heard(track)),
             transport: self.engine.transport(),
             realigning: self.engine.realign_waiting(),
+            realigning_tracks: std::array::from_fn(|track| {
+                self.engine.track_realign_waiting(track)
+            }),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,

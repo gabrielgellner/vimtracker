@@ -32,6 +32,9 @@ pub const MAX_PHRASE_STEPS: usize = 4096;
 pub const BEAT_STEPS: usize = 4;
 /// Steps per bar, for launch timing and large steps through lengths.
 pub const BAR_STEPS: usize = 16;
+/// The longest a track's own `Reset` can be, in steps: 64 bars, as far as Elektron's master
+/// length goes.
+pub const MAX_TRACK_RESET: u16 = 1024;
 /// The most characters a chain's label can have.
 pub const MAX_LABEL_CHARS: usize = 32;
 /// The most characters a project's name can have.

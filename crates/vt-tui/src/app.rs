@@ -304,6 +304,8 @@ pub struct App {
     pub fill: bool,
     /// Whether a realign is waiting for the launch grid, as the engine last said.
     pub realigning: bool,
+    /// Whether each track's own realign is waiting for the launch grid, as the engine last said.
+    pub realigning_tracks: [bool; MAX_TRACKS],
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
@@ -472,6 +474,7 @@ impl App {
             auto_jump,
             fill: false,
             realigning: false,
+            realigning_tracks: [false; MAX_TRACKS],
             key_down: None,
             repeats_ignored: false,
             held_notes: Vec::new(),
@@ -785,6 +788,7 @@ impl App {
             self.playing_section = report.section;
             self.transport = report.transport;
             self.realigning = report.realigning;
+            self.realigning_tracks = report.realigning_tracks;
             self.live = (report.watched == track).then_some(report.live);
         }
         while let Some((track, state)) = self.handle.jam_change() {
@@ -1316,6 +1320,10 @@ impl App {
                 self.realign();
                 self.repeats_ignored = true;
             }
+            Cmd::RealignTrack => {
+                self.realign_track();
+                self.repeats_ignored = true;
+            }
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
                 if self.momentary.is_some_and(|held| {
@@ -1688,6 +1696,37 @@ impl App {
                 every => every.when(),
             };
             format!("Every track realigns {when}; Space A again takes it back")
+        };
+    }
+
+    /// Start the cursor's track's chain again at the next line of the launch grid, or take back
+    /// one waiting for it, as `Space A` does for every track.
+    pub(crate) fn realign_track(&mut self) {
+        let track = self.cursor.track;
+        let Some(owner) = self.song().tracks.get(track) else {
+            return;
+        };
+        if !owner.is_sound() {
+            self.status = format!("{} plays no chain to realign", owner.kind.title());
+            return;
+        }
+        if self.transport != Transport::Playing {
+            self.status = "Realign works while playing".to_owned();
+            return;
+        }
+        if !self.handle.send(Command::RealignTrack { track }) {
+            return;
+        }
+        let name = format!("Track {:02}", track + 1);
+        // The engine decides, and the transport shows it from its next report.
+        self.status = if self.realigning_tracks[track] {
+            format!("{name}'s realign taken back")
+        } else {
+            let when = match self.song().launch {
+                Launch::ChainEnd => "on the next bar".to_owned(),
+                every => every.when(),
+            };
+            format!("{name} realigns {when}; Space a again takes it back")
         };
     }
 

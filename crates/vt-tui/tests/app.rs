@@ -5909,8 +5909,8 @@ fn the_filter_curve_sits_in_a_box_under_the_filters_rows() {
             })
             .unwrap()
     };
-    // `Glide` is under it, on the right, the page's last row.
-    let last = row_of("High cut") + 1;
+    // `Reset` and `Glide` are under it, on the right, the page's last rows.
+    let last = row_of("High cut") + 2;
     // Without an image, there's no box.
     assert_eq!(plain[(0, last + 1)].symbol(), " ");
 
@@ -9950,6 +9950,164 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
 }
 
 #[test]
+fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let reset = |app: &App| app.song().tracks[0].reset;
+    let line = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.contains("Reset"))
+            .unwrap_or_default()
+    };
+    assert!(line(&app).contains("Off"), "{}", line(&app));
+    press(&mut app, "gg$jjjjjjjjj");
+    assert_eq!(app.track_control(), Control::Reset);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("Off: its chain plays on")
+    );
+    press(&mut app, "=");
+    assert_eq!(reset(&app), Some(1));
+    press(&mut app, "4=");
+    assert_eq!(reset(&app), Some(5));
+    assert!(line(&app).contains("5-step"), "{}", line(&app));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("its chain starts again every 5 steps of the song")
+    );
+    // A large step goes to the next whole bar, and back to the one before.
+    press(&mut app, "+");
+    assert_eq!(reset(&app), Some(16));
+    assert!(line(&app).contains("1bar"), "{}", line(&app));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("its chain starts again every bar of the song")
+    );
+    press(&mut app, "+");
+    assert_eq!(reset(&app), Some(32));
+    press(&mut app, "-");
+    assert_eq!(reset(&app), Some(31));
+    press(&mut app, "_");
+    assert_eq!(reset(&app), Some(16));
+    press(&mut app, "_");
+    assert_eq!(reset(&app), None, "below a bar is off");
+
+    typed(&mut app, "12");
+    assert_eq!(reset(&app), Some(12));
+    typed(&mut app, "2bar");
+    assert_eq!(reset(&app), Some(32));
+    typed(&mut app, "0x40");
+    assert_eq!(reset(&app), Some(64));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("its chain starts again every 4 bars of the song")
+    );
+    typed(&mut app, "0");
+    assert_eq!(reset(&app), Some(64), "0 isn't a reset");
+    assert!(app.status.contains("1 to 1024"), "{}", app.status);
+    typed(&mut app, "off");
+    assert_eq!(reset(&app), None);
+    press(&mut app, "u");
+    assert_eq!(reset(&app), Some(64));
+    press(&mut app, "x");
+    assert_eq!(reset(&app), None);
+    press(&mut app, "-");
+    assert_eq!(reset(&app), None, "down from off stays off");
+}
+
+#[test]
+fn a_tracks_reset_is_saved_only_when_set() {
+    let mut song = Song::new(1);
+    let plain = ron::to_string(&song.tracks[0]).unwrap();
+    // An envelope's `reset` is another thing.
+    assert!(!plain.contains("reset:None"), "{plain}");
+    assert!(!plain.contains("reset:Some"), "{plain}");
+    song.tracks[0].reset = Some(16);
+    let saved = ron::to_string(&song.tracks[0]).unwrap();
+    assert!(saved.contains("reset:Some(16)"), "{saved}");
+    let back: vt_model::song::Track = ron::from_str(&saved).unwrap();
+    assert_eq!(back.reset, Some(16));
+}
+
+#[test]
+fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
+    let (mut app, mut rt) = app();
+    tap(&mut app, " a");
+    assert_eq!(app.status, "Realign works while playing");
+
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    tap(&mut app, " a");
+    assert_eq!(
+        app.status,
+        "Track 01 realigns on the 1bar grid; Space a again takes it back"
+    );
+    block(&mut rt, &mut app);
+    assert!(rt.engine().track_realign_waiting(0));
+    assert!(!rt.engine().realign_waiting(), "only this track");
+    assert!(app.realigning_tracks[0]);
+    assert!(status_line(&app).contains("playing REALIGN"));
+    assert!(!app.dirty, "it moves playback, not the song");
+
+    // Again, it's taken back.
+    tap(&mut app, " a");
+    assert_eq!(app.status, "Track 01's realign taken back");
+    block(&mut rt, &mut app);
+    assert!(!rt.engine().track_realign_waiting(0));
+    assert!(!status_line(&app).contains("REALIGN"));
+
+    // Asked for again, it lands on the bar and is done.
+    tap(&mut app, " a");
+    block(&mut rt, &mut app);
+    assert!(app.realigning_tracks[0]);
+    for _ in 0..400 {
+        block(&mut rt, &mut app);
+    }
+    assert!(!app.realigning_tracks[0], "landed on the bar");
+    press(&mut app, "u");
+    assert!(!app.dirty);
+}
+
+#[test]
+fn space_a_on_a_return_says_it_has_no_chain() {
+    let (mut app, mut rt) = app();
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    let returns = app.song().sound_tracks();
+    app.cursor.track = returns;
+    tap(&mut app, " a");
+    assert_eq!(app.status, "Return A plays no chain to realign");
+}
+
+#[test]
+fn space_a_works_in_every_view_and_space_k_lists_it_beside_space_capital_a() {
+    let (mut app, mut rt) = app();
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    for view in ["1", "2", "3", "4", "6", "7", "9"] {
+        press(&mut app, &format!(" {view}"));
+        tap(&mut app, " a");
+        assert!(
+            app.status.starts_with("Track 01 realigns"),
+            "{view}: {}",
+            app.status
+        );
+        block(&mut rt, &mut app);
+        tap(&mut app, " a");
+        assert_eq!(app.status, "Track 01's realign taken back", "{view}");
+        block(&mut rt, &mut app);
+    }
+    let rows = app.help_rows();
+    let listed = rows
+        .iter()
+        .filter(|row| row.trim_start().starts_with("Space a "))
+        .count();
+    assert_eq!(listed, 7, "{rows:?}");
+}
+
+#[test]
 fn a_step_locks_the_speed_by_its_label() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
@@ -10851,8 +11009,8 @@ fn the_track_page_sets_how_long_a_tie_glides() {
     };
     assert!(line(&app).contains("Off"), "{}", line(&app));
 
-    // Past Res's fine digits, and down past Pitch, Choke, Gate and Speed.
-    press(&mut app, "jlljjjj");
+    // Past Res's fine digits, and down past Pitch, Choke, Gate, Speed and Reset.
+    press(&mut app, "jlljjjjj");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -10890,7 +11048,7 @@ fn the_track_page_sets_how_long_a_tie_glides() {
         Machine::Plaits(SynthVoice::Acid)
     );
     assert!(line(&app).contains("Slide"), "{}", line(&app));
-    press(&mut app, "gg$jjjjjjjjj");
+    press(&mut app, "gg$jjjjjjjjjj");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
         value_shown(&app).as_deref(),

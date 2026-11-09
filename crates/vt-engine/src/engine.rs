@@ -329,6 +329,60 @@ impl Engine {
         self.realign_waiting
     }
 
+    /// Start one track's chain again at the next line of the realign grid, or take back one
+    /// waiting for it. Only while playing, as an every-track realign is.
+    pub fn toggle_realign_track(&mut self, index: usize) {
+        let playing = self.transport == Transport::Playing;
+        if let Some(track) = self.tracks.get_mut(index) {
+            track.realign_waiting = playing && !track.realign_waiting;
+        }
+    }
+
+    /// Whether a track's own realign is waiting for its line of the grid.
+    pub fn track_realign_waiting(&self, index: usize) -> bool {
+        self.tracks
+            .get(index)
+            .is_some_and(|track| track.realign_waiting)
+    }
+
+    /// How far apart a track's own resets are on the grid, in ticks, if it has them.
+    fn reset_ticks(&self, index: usize) -> Option<u64> {
+        let steps = self.current.song.tracks.get(index)?.reset?;
+        Some(u64::from(steps.max(1)) * TICKS_PER_STEP)
+    }
+
+    /// Whether a track's own reset falls on the song's step at this place on the grid: the first
+    /// of the song's steps at or after its reset's length from where its chain last started.
+    fn reset_due(&self, index: usize, grid: u64) -> bool {
+        let Some(every) = self.reset_ticks(index) else {
+            return false;
+        };
+        let (every, step) = (every as i64, TICKS_PER_STEP as i64);
+        let since = grid as i64 - self.tracks[index].clock.anchor;
+        since >= every && since.div_euclid(every) > (since - step).div_euclid(every)
+    }
+
+    /// Start each track's chain again at the last of its own resets before this place on the
+    /// grid, as playing up to it would have, for working out where playing from a place starts.
+    /// Each track's clock is no more than a step of its own past the last place this was asked.
+    fn reset_tracks_before(&mut self, at: u64) {
+        for index in 0..MAX_TRACKS {
+            let Some(every) = self.reset_ticks(index) else {
+                continue;
+            };
+            let anchor = self.tracks[index].clock.anchor;
+            let first = ((anchor + every as i64).max(0) as u64).next_multiple_of(TICKS_PER_STEP);
+            if first >= at {
+                continue;
+            }
+            let last = first + (at - 1 - first) / every * every;
+            let ticks = self.speed_ticks(index);
+            let track = &mut self.tracks[index];
+            track.clock.skip_to(last, ticks);
+            track.restart_at(last);
+        }
+    }
+
     /// How many steps apart the lines are that a realign waits for: the launch grid's, or a bar's
     /// when launches wait for a chain's end, as every track's chain ends at a different place.
     fn realign_grid(&self) -> u64 {
@@ -419,6 +473,7 @@ impl Engine {
             if length == 0 {
                 continue;
             }
+            self.reset_tracks_before(tick);
             self.skip_tracks_to(tick);
             self.start_row(row, tick);
             let plays = song.section_plays(row) as u64;
@@ -442,6 +497,7 @@ impl Engine {
             self.place = place;
             tick += steps * TICKS_PER_STEP;
         }
+        self.reset_tracks_before(tick);
         self.skip_tracks_to(tick);
         let by = (within * TICKS_PER_STEP) as i64 - tick as i64;
         for track in self.tracks.iter_mut() {
@@ -454,9 +510,12 @@ impl Engine {
     /// the others where they are.
     pub fn place_track(&mut self, track: usize, step: usize) {
         let at = self.next_step * TICKS_PER_STEP;
+        let ticks = self.speed_ticks(track) as i64;
         if let Some(state) = self.tracks.get_mut(track) {
             state.clock.line_up(at);
             state.restart(state.clock.count - step as i64);
+            // Its own reset counts from where its chain would have started, on the same grid.
+            state.clock.anchor -= step as i64 * ticks;
         }
     }
 
@@ -1083,6 +1142,9 @@ impl Engine {
         }
         self.transport = to;
         self.realign_waiting = false;
+        for track in self.tracks.iter_mut() {
+            track.realign_waiting = false;
+        }
     }
 
     /// Turn fill on or off, which `CND`'s `FILL` and `!FILL` read as each row is decided.
@@ -1631,14 +1693,31 @@ impl Engine {
         if self.past_reset(self.place) {
             self.realign();
         }
-        // A realign asked for lands here as a reset would, after the section has moved on.
-        if self.realign_waiting && self.on_grid_line(self.realign_grid()) {
+        // A realign asked for, of every track or of one, lands here as a reset would, after the
+        // section has moved on.
+        let waiting = self.realign_waiting || self.tracks.iter().any(|t| t.realign_waiting);
+        let line = waiting && self.on_grid_line(self.realign_grid());
+        if self.realign_waiting && line {
             self.realign_waiting = false;
             self.realign();
+            // Every track's own realign waiting for this line comes with it.
+            for track in self.tracks.iter_mut() {
+                track.realign_waiting = false;
+            }
         }
         let grid = self.next_step * TICKS_PER_STEP;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
+            // A track's own realign, or its own reset, starts its chain again here, as a section
+            // bringing it in would, a longer step cut short. A reset or realign of every track
+            // just now has started it here already.
+            let realigns = line && self.tracks[index].realign_waiting;
+            if realigns {
+                self.tracks[index].realign_waiting = false;
+            }
+            if realigns || self.reset_due(index, grid) {
+                self.tracks[index].restart_at(grid);
+            }
             if self.tracks[index].clock.beat != grid {
                 self.start_cued(index, grid, true);
                 if self.tracks[index].clock.beat != grid {
@@ -2311,6 +2390,10 @@ impl Engine {
                 continue;
             };
             let owner = &song.tracks[index];
+            // A track with a reset of its own has started its chain again since the section's.
+            let tick = owner.reset.map_or(tick, |steps| {
+                tick % (u64::from(steps.max(1)) * TICKS_PER_STEP)
+            });
             let place = (tick / owner.speed.ticks()) as usize;
             let Some(position) = owner.chain_position(*chain, place, self.dealer(index)) else {
                 continue;

@@ -12,7 +12,8 @@ use crate::arpeggio::Arpeggio;
 use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
-    FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
+    FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, MAX_TRACK_RESET, TRACK_ENVELOPES,
+    UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::groove::{Groove, GrooveId};
@@ -338,6 +339,11 @@ pub struct Track {
     /// How long each of its steps is, and where held `RATE` starts: a sixteenth unless changed.
     #[serde(default, skip_serializing_if = "is_sixteenth")]
     pub speed: Speed,
+    /// How many of the song's steps its chain plays before starting again from its top, counted
+    /// from where its chain last started, or `None` to play on, so a short part can be kept to a
+    /// bar while the others drift. From 1 to [`MAX_TRACK_RESET`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset: Option<u16>,
     /// How long a tie glides into the next note, and where held `GLD` starts, on the `00` to `FF`
     /// scale of [`glide_ms`](crate::settings::glide_ms): `00`, unless changed, jumps, or on `Acid`
     /// slides by its own `Slide`.
@@ -622,6 +628,7 @@ impl Default for Track {
             choke: None,
             gate_length: None,
             speed: Speed::Sixteenth,
+            reset: None,
             glide: 0,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
@@ -941,6 +948,47 @@ impl fmt::Display for Launch {
             None => write!(f, "{steps}-step"),
         }
     }
+}
+
+/// A track's own `Reset` as the track page shows it: `Off`, whole bars as `:launch` names them,
+/// such as `1bar`, and anything else in steps, such as `5-step`.
+pub fn reset_name(reset: Option<u16>) -> String {
+    match reset {
+        None => "Off".to_owned(),
+        Some(steps) if usize::from(steps).is_multiple_of(BAR_STEPS) => {
+            format!("{}bar", usize::from(steps) / BAR_STEPS)
+        }
+        Some(steps) => format!("{steps}-step"),
+    }
+}
+
+/// A track's own `Reset` from what's typed: `off`, a number of steps, in hex after `0x`, or of
+/// bars, such as `2bar`, from 1 step to [`MAX_TRACK_RESET`]. The outer `None` is for text that
+/// isn't one.
+pub fn reset_named(text: &str) -> Option<Option<u16>> {
+    let text = text.trim().to_ascii_lowercase();
+    if text == "off" {
+        return Some(None);
+    }
+    let steps = if let Some(bars) = text.strip_suffix("bars").or(text.strip_suffix("bar")) {
+        bars.trim()
+            .parse::<u32>()
+            .ok()?
+            .checked_mul(BAR_STEPS as u32)?
+    } else if let Some(digits) = text.strip_prefix("0x") {
+        u32::from_str_radix(digits, 16).ok()?
+    } else {
+        text.trim_end_matches("-step")
+            .trim_end_matches("steps")
+            .trim_end_matches("step")
+            .trim()
+            .parse::<u32>()
+            .ok()?
+    };
+    let steps = u16::try_from(steps).ok()?;
+    (1..=MAX_TRACK_RESET)
+        .contains(&steps)
+        .then_some(Some(steps))
 }
 
 /// How many times a section plays before moving on. Saved songs can't hold 0.
@@ -1673,6 +1721,37 @@ pub fn lowest_unused<T>(items: &BTreeMap<u32, T>) -> u32 {
 mod tests {
     use super::*;
     use crate::insert::{Distort, DistortType};
+
+    #[test]
+    fn a_tracks_reset_is_named_in_bars_or_steps() {
+        assert_eq!(reset_name(None), "Off");
+        assert_eq!(reset_name(Some(5)), "5-step");
+        assert_eq!(reset_name(Some(16)), "1bar");
+        assert_eq!(reset_name(Some(48)), "3bar");
+        assert_eq!(reset_named("off"), Some(None));
+        assert_eq!(reset_named("Off"), Some(None));
+        assert_eq!(reset_named("5"), Some(Some(5)));
+        assert_eq!(reset_named("5-step"), Some(Some(5)));
+        assert_eq!(reset_named("0x10"), Some(Some(16)));
+        assert_eq!(reset_named("2bar"), Some(Some(32)));
+        assert_eq!(reset_named("3 bars"), Some(Some(48)));
+        assert_eq!(reset_named("1024"), Some(Some(MAX_TRACK_RESET)));
+        for wrong in ["0", "0bar", "1025", "65bar", "", "x", "-1", "0x"] {
+            assert_eq!(reset_named(wrong), None, "{wrong}");
+        }
+    }
+
+    #[test]
+    fn a_tracks_reset_is_from_one_step_to_the_most() {
+        let song = Arc::new(Song::new(1));
+        let set = |reset| crate::action::Action::SetTrackReset { track: 0, reset };
+        let edited = crate::action::edit(&song, &set(Some(16))).unwrap();
+        assert_eq!(edited.tracks[0].reset, Some(16));
+        assert!(crate::action::edit(&song, &set(Some(0))).is_err());
+        assert!(crate::action::edit(&song, &set(Some(MAX_TRACK_RESET + 1))).is_err());
+        let off = crate::action::edit(&edited, &set(None)).unwrap();
+        assert_eq!(off.tracks[0].reset, None);
+    }
 
     #[test]
     fn a_lane_saves_fits_its_steps_and_follows_them() {

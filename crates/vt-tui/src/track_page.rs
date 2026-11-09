@@ -6,7 +6,7 @@ use std::sync::Arc;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
+use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_TRACK_RESET, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
@@ -18,7 +18,7 @@ use vt_model::selection::Motion;
 use vt_model::settings::{
     Effect, Kind, LONGEST_GLIDE_MS, SettingId, gate_percent, gate_value, glide_value, voice_entries,
 };
-use vt_model::song::{FilterType, Machine, Track, TrackKind};
+use vt_model::song::{FilterType, Machine, Track, TrackKind, reset_named};
 use vt_model::speed::Speed;
 
 use crate::app::{App, Entry};
@@ -102,6 +102,8 @@ pub enum Control {
     GateLength,
     /// How long its steps are, as a note division.
     Speed,
+    /// How many of the song's steps its chain plays before starting again, or off.
+    Reset,
     /// How long a tie glides into the next note, in ms, or off.
     Glide,
     FilterType,
@@ -222,7 +224,7 @@ const fn base(control: TrackControl) -> Control {
 }
 
 /// The Sound page of a track playing a sample, top to bottom, with output on the right.
-pub const SAMPLE_ROWS: [&[Control]; 10] = [
+pub const SAMPLE_ROWS: [&[Control]; 11] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::FilterType, base(TrackControl::SendA)],
@@ -232,6 +234,7 @@ pub const SAMPLE_ROWS: [&[Control]; 10] = [
     &[base(TrackControl::Drive), Control::Choke],
     &[base(TrackControl::LowCut), Control::GateLength],
     &[base(TrackControl::HighCut), Control::Speed],
+    &[Control::Reset],
     &[Control::Glide],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
@@ -246,8 +249,8 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Glide],
-    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::Drive), Control::Reset],
+    &[base(TrackControl::LowCut), Control::Glide],
     &[base(TrackControl::HighCut)],
 ];
 /// The same for a synth with more than four, whose later settings carry on down the left.
@@ -261,8 +264,8 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(5), Control::Choke],
     &[Control::Setting(6), Control::GateLength],
     &[Control::Setting(7), Control::Speed],
-    &[Control::FilterType, Control::Glide],
-    &[Control::FilterMode],
+    &[Control::FilterType, Control::Reset],
+    &[Control::FilterMode, Control::Glide],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
@@ -280,8 +283,8 @@ pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Glide],
-    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::Drive), Control::Reset],
+    &[base(TrackControl::LowCut), Control::Glide],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a return, which has no machine or filter.
@@ -369,6 +372,7 @@ impl Control {
             Self::Choke => "Choke",
             Self::GateLength => "Gate",
             Self::Speed => "Speed",
+            Self::Reset => "Reset",
             Self::Glide => "Glide",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
@@ -441,6 +445,7 @@ impl Control {
             | Self::Choke
             | Self::GateLength
             | Self::Speed
+            | Self::Reset
             | Self::Glide
             | Self::Base(
                 TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
@@ -524,6 +529,7 @@ impl Control {
             | Self::Choke
             | Self::GateLength
             | Self::Speed
+            | Self::Reset
             | Self::Glide
             | Self::Accumulator(_)
             | Self::Arpeggio(_) => track.is_sound(),
@@ -697,6 +703,14 @@ impl App {
         });
     }
 
+    /// Set how many of the song's steps the track's chain plays before starting again, or none.
+    fn set_reset(&mut self, reset: Option<u16>) {
+        self.apply(&Action::SetTrackReset {
+            track: self.cursor.track,
+            reset,
+        });
+    }
+
     /// Set how long the track's ties glide into the next note.
     fn set_glide(&mut self, glide: u8) {
         self.apply(&Action::SetTrackGlide {
@@ -860,6 +874,22 @@ impl App {
                 let by = size * count.min(0x100) as i64;
                 let moved = i64::from(track.glide) + if up { by } else { -by };
                 self.set_glide(moved.clamp(0, 0xFF) as u8);
+            }
+            Control::Reset => {
+                // A step at a time, or a bar to the next whole bar, with off below 1.
+                let from = u32::from(track.reset.unwrap_or(0));
+                let (bar, by) = (
+                    BAR_STEPS as u32,
+                    count.min(usize::from(MAX_TRACK_RESET)) as u32,
+                );
+                let moved = match (large, up) {
+                    (false, true) => from + by,
+                    (false, false) => from.saturating_sub(by),
+                    (true, true) => (from / bar + by) * bar,
+                    (true, false) => from.div_ceil(bar).saturating_sub(by) * bar,
+                };
+                let moved = moved.min(u32::from(MAX_TRACK_RESET)) as u16;
+                self.set_reset((moved > 0).then_some(moved));
             }
             Control::Speed => {
                 // One way at a time, stopping at either end, as the list runs short to long.
@@ -1361,6 +1391,8 @@ impl App {
                 });
             }
             Control::Speed => {}
+            Control::Reset if track.reset.is_some() => self.set_reset(None),
+            Control::Reset => {}
             Control::FilterType => {
                 if track.filter != fresh.filter {
                     self.apply(&Action::SetFilterType {
@@ -2037,6 +2069,14 @@ impl App {
                 Some(ms) => self.set_glide(glide_value(ms)),
                 None => {
                     self.status = format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
+                }
+            },
+            Control::Reset => match reset_named(text) {
+                Some(reset) => self.set_reset(reset),
+                None => {
+                    self.status = format!(
+                        "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
+                    );
                 }
             },
             Control::Groove | Control::Speed => {}

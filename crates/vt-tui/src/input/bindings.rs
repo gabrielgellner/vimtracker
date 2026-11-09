@@ -65,6 +65,9 @@ pub enum Cmd {
     /// Send every track back to its start at the next line of the launch grid, or take back a
     /// realign waiting for it.
     Realign,
+    /// Start the cursor's track's chain again at the next line of the launch grid, or take back
+    /// one waiting for it.
+    RealignTrack,
     /// Arm or disarm live recording.
     ToggleRecord,
     Double,
@@ -217,6 +220,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Space A",
         Cmd::Realign,
         "Realign every track on the launch grid, or take it back",
+    ),
+    (
+        "Space a",
+        Cmd::RealignTrack,
+        "Realign this track on the launch grid, or take it back",
     ),
     ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),

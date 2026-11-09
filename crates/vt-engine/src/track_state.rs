@@ -483,6 +483,9 @@ pub struct TrackState {
     pub tied: bool,
     /// How many times its chain has started, which its accumulators count from.
     pub chain_starts: u64,
+    /// Whether its chain starts again at the next line of the realign grid, as `Space a` asks
+    /// while playing.
+    pub realign_waiting: bool,
     /// Where its `ACU`s have moved its notes.
     pub accumulators: Accumulators,
     /// The note the row playing was heard at, before its chain's transpose, when an accumulator
@@ -702,6 +705,7 @@ impl TrackState {
             passed: false,
             tied: false,
             chain_starts: 0,
+            realign_waiting: false,
             accumulators: Accumulators::default(),
             accumulated: None,
             voice: Voice::default(),

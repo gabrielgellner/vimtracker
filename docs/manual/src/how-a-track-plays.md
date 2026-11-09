@@ -199,10 +199,43 @@ The count, and with it every lane, starts over on:
 - a launch;
 - realigning with `:reset`, or by hand with `Space A`, which waits for the next line
   of the launch grid, a bar unless `:launch` changes it, and which a second press
-  takes back.
+  takes back;
+- the track's own `Reset`, or `Space a`, which realigns just the cursor's track as
+  `Space A` realigns them all.
 
 Each of those also lines the track's steps up again, so a track at a slower speed
 starts its next step there, even if that cuts the one before short.
+
+### A track's own reset
+
+`Reset` on the track page, under `Speed`, starts the track's chain again every so
+many of the song's steps, while the other tracks drift on. A 5-step part with
+`Reset` at `1bar` plays five, five, five and one, the same bar every time, while a
+7-step part beside it drifts:
+
+```text
+song:        0 1 2 3 4 5 6 7 8 9 A B C D E F | 0 1 2 3 4 5 6 7 8 9 A B C D E F
+5, 1bar:     0 1 2 3 4 0 1 2 3 4 0 1 2 3 4 0 | 0 1 2 3 4 0 1 2 3 4 0 1 2 3 4 0
+7, Off:      0 1 2 3 4 5 6 0 1 2 3 4 5 6 0 1 | 2 3 4 5 6 0 1 2 3 4 5 6 0 1 2 3
+```
+
+Type a number of steps, such as `5`, or of bars, such as `2bar`, or `off`; `=` and
+`-` move it a step, `+` and `_` to the next whole bar, and `x` turns it off. It
+counts the song's sixteenths whatever the track's `Speed`, and from where the
+track's chain last started: a section bringing a new chain in, a launch, a realign
+or its own last reset. So it's always that many steps of the chain. It isn't a
+step's lock.
+
+A reset is the start of the track's chain, as a section bringing it in is: the
+chain plays from its top with its lanes in line, conditions count passes from the
+first, accumulators set to `Chain` or to loops start again, and the phrase's walk
+starts again. The groove carries on counting the track's steps, so the track
+swings on the same sixteenths as every other, however odd its reset.
+
+A section's `:reset` and the track's own both apply. The section's realigns every
+track, so the track's own counts again from there: with `Reset` at 8 and `:reset 12`,
+the track starts again at 8, 12, 20, 24 and so on. Where the two fall together, the
+track starts once.
 
 Edits while playing don't start it over. Changing `:len`, a gate's pulses, a chain, a
 lane's length, a phrase's order, or undoing one of them, leaves the track on the row it
@@ -384,7 +417,8 @@ pedal:         1  2  1  3 | 1  4  1  2 | 1  3  1  4 | 1 ...    a round of 6
 
 `reverse`, `odd-even`, `converge` and `diverge` visit each row once a round, so each
 pass plays the same. The walk starts again where the chain does: from the top, at a
-section that brings the chain in or resets, a launch, `:reset` or `Space A`, which
+section that brings the chain in or resets, a launch, `:reset`, `Space A`, `Space a`
+or the track's own `Reset`, which
 is where a condition's passes and the accumulators start again too. It's worked out
 from the count, as everything else is, so playing from a step hears what playing up
 to it would.
