@@ -496,7 +496,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(format!(" {marker}"), theme::active()),
             Span::styled(side, edge),
         ];
-        let body = if playhead == Some(index) {
+        // A row its `CHA` or `CND` skipped this time is faint under the playhead, so the logic
+        // can be followed.
+        let skipped = app
+            .places
+            .get(app.cursor.track)
+            .is_some_and(|place| place.skipped);
+        let body = if playhead == Some(index) && skipped {
+            theme::faint()
+        } else if playhead == Some(index) {
             theme::active()
         } else if plays {
             Style::new()

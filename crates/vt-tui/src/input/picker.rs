@@ -47,6 +47,11 @@ pub enum Pick {
     },
     /// Put this gate type in the gate cell, or empty it.
     Gate(Option<GateKind>),
+    /// Put a `CND` with this condition, by its value, in an FX slot.
+    Condition {
+        slot: usize,
+        value: u8,
+    },
     /// Replace one of a track's LFOs.
     Lfo {
         track: usize,

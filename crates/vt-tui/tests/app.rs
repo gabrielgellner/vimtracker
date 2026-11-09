@@ -10024,3 +10024,90 @@ fn space_k_lists_the_accent_and_slide_keys() {
     assert!(rows[insert + 1].trim_start().starts_with("'"), "{rows:?}");
     assert!(rows[insert + 2].trim_start().starts_with("/"), "{rows:?}");
 }
+
+#[test]
+fn k_chooses_cnd_then_its_condition_from_a_list() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    press(&mut app, "lllllK");
+    press(&mut app, "CND");
+    special(&mut app, KeyCode::Enter);
+    // Choosing `CND` lists the conditions, with Elektron's names.
+    let picker = app.picker.as_ref().expect("the conditions are listed");
+    assert_eq!(picker.title, "Conditions");
+    assert_eq!(picker.focus, vt_tui::input::picker::Focus::Search);
+    press(&mut app, "1:4");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "1:4");
+    let depth = app.history.undo_depth();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).command, Some(FxCommand::Cnd));
+    assert_eq!(slot(&app).coarse(), 0x14);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(
+        column_name(&app),
+        "Play the row only when condition xx holds"
+    );
+    assert_eq!(value_shown(&app).as_deref(), Some("1:4, pass 1 of every 4"));
+
+    // `K` on its value lists them again, on its own.
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.title, "Conditions");
+    assert_eq!(picker.current().unwrap().label, "1:4");
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+
+    // `=` steps through the list, and `+` to a longer cycle.
+    press(&mut app, "=");
+    assert_eq!(slot(&app).coarse(), 0x24);
+    press(&mut app, "+");
+    assert_eq!(slot(&app).coarse(), 0x25);
+    press(&mut app, "--");
+    assert_eq!(slot(&app).coarse(), 0x44, "back through 1:5 to 4:4");
+
+    // A value that isn't a condition isn't taken.
+    press(&mut app, "r09");
+    assert_eq!(slot(&app).coarse(), 0x44);
+    assert!(app.status.contains("isn't a condition"), "{}", app.status);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "r07");
+    assert_eq!(slot(&app).coarse(), 0x07);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("1ST, the first time round only")
+    );
+}
+
+#[test]
+fn space_l_turns_fill_on_and_held_it_goes_back() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ");
+    hold_for(&mut app, 'l', 100);
+    assert!(app.fill, "tapped, it stays on");
+    assert_eq!(app.status, "Fill on");
+    let backend = ratatui::backend::TestBackend::new(120, 2);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let status: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(status.contains("stopped FILL"), "{status}");
+
+    press(&mut app, " ");
+    hold_for(&mut app, 'l', 100);
+    assert!(!app.fill, "tapped again, it's off");
+
+    // Held, it's on until it's let go.
+    press(&mut app, " ");
+    let now = Instant::now();
+    app.key(Key::char('l'), now);
+    assert!(app.fill);
+    app.key_repeated(Key::char('l'), now + Duration::from_millis(300));
+    assert!(app.fill, "a repeat doesn't switch it back");
+    app.key_released(Key::char('l'), now + Duration::from_millis(600));
+    assert!(!app.fill, "held, it goes back");
+    assert!(!app.dirty, "fill isn't part of the song");
+}

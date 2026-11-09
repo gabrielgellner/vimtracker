@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
+use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
@@ -12,7 +13,7 @@ use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
-use vt_model::step::{FxCommand, FxSlot, Gate, GateKind};
+use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry, Field};
 use crate::explorer::Purpose;
@@ -368,6 +369,12 @@ impl App {
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
+            // A condition's value is one of a list, so `K` on it lists them.
+            Field::FxValue(slot)
+                if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Cnd) =>
+            {
+                self.open_condition_picker(slot);
+            }
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
             }
@@ -448,7 +455,8 @@ impl App {
     }
 
     /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
-    /// to be typed, as a command with no value yet doesn't take effect.
+    /// to be typed, as a command with no value yet doesn't take effect, and a `CND` lists its
+    /// conditions to choose from, unless the slot's value already is one.
     fn pick_fx_command(&mut self, slot: usize, command: Option<FxCommand>) {
         let Some(command) = command else {
             self.set_field(FieldValue::Slot(slot, FxSlot::default()));
@@ -457,6 +465,13 @@ impl App {
         };
         self.cursor.field = Field::FxValue(slot);
         let current = self.current_slot(slot);
+        let has_condition = current
+            .filter(|s| s.command.is_some())
+            .is_some_and(|s| Condition::from_value(s.coarse()).is_some());
+        if command == FxCommand::Cnd && !has_condition {
+            self.open_condition_picker(slot);
+            return;
+        }
         if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {
             self.set_field(FieldValue::Slot(
                 slot,
@@ -474,6 +489,51 @@ impl App {
         };
         self.replacing = Some(Field::FxValue(slot));
         self.mode = Mode::Replace;
+    }
+
+    /// List the conditions a `CND` can hold, in Elektron's order and by Elektron's names, in
+    /// groups, opening on the slot's own and on its search, as the FX commands' list does.
+    pub(crate) fn open_condition_picker(&mut self, slot: usize) {
+        let current = self
+            .current_slot(slot)
+            .filter(|s| s.command == Some(FxCommand::Cnd))
+            .and_then(|s| Condition::from_value(s.coarse()));
+        let items = Condition::all()
+            .map(|condition| {
+                Item::new(
+                    condition.label(),
+                    Pick::Condition {
+                        slot,
+                        value: condition.value(),
+                    },
+                )
+                .meaning(format!(
+                    "{:02X}  {}",
+                    condition.value(),
+                    condition.meaning()
+                ))
+                .category(condition.group())
+            })
+            .collect();
+        let position = Condition::all().position(|condition| Some(condition) == current);
+        self.show_picker(
+            Picker::new("Conditions", items)
+                .opened_on(position)
+                .searching(""),
+        );
+    }
+
+    /// Put a chosen condition in a slot as a `CND`.
+    fn pick_condition(&mut self, slot: usize, value: u8) {
+        self.cursor.field = Field::FxValue(slot);
+        self.set_field(FieldValue::Slot(
+            slot,
+            FxSlot {
+                command: Some(FxCommand::Cnd),
+                value: u16::from(value) << 8,
+                mark: Mark::default(),
+            },
+        ));
     }
 
     /// Choose this track's sample in the explorer, with the kit's sounds first.
@@ -564,6 +624,7 @@ impl App {
             Pick::Completion(_) => {}
             Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),
             Pick::Gate(kind) => self.pick_gate(kind),
+            Pick::Condition { slot, value } => self.pick_condition(slot, value),
             Pick::Lfo { track, slot, lfo } => {
                 self.apply(&Action::SetLfo { track, slot, lfo });
             }

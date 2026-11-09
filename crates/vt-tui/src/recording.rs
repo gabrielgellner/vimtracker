@@ -224,6 +224,7 @@ impl App {
             count: self.playhead as i64,
             progress: self.progress,
             ticks: TICKS_PER_STEP as u32,
+            skipped: false,
         };
         self.carried_on(place)
     }

@@ -264,6 +264,30 @@ rows:        00  01  02      03      04       RATE 04h, 1/8, on row 01
                  └ lasts to the next eighth
 ```
 
+## Conditions count passes
+
+A `CND` plays its row only on some passes, as Elektron's trig conditions do. A pass
+is each time the track plays the row since its chain started, so it's the count
+divided by the chain's length, times the times the row's phrase is in the chain,
+plus the times it came before this place:
+
+```text
+chain:       P0 P1                  P0 twice:    P0 P0
+count:       0  4  8  12            count:       0  4  8  12
+P0's pass:   0  -  1  -             P0's pass:   0  1  2  3
+1:2 plays:   x     .                1:2 plays:   x  .  x  .
+```
+
+As it's worked out from the count, a pass is what the count is: it follows the
+track's own speed, starts over wherever the count does, and playing from a step
+hears the pass playing up to it would. A `CND` in a lane counts the lane's loops
+instead, its count divided by the lane's length.
+
+A failed condition skips its row's note, events and own locks, while columns with
+lanes keep to theirs. A step's `GRV` and `RATE` still time it, as they're chosen
+before it lands. `PRE` and `NEI` read what the last condition on this track, or on
+the track to the left, decided, as each row lands.
+
 ## The keys, by column
 
 | Cursor on | `gs`, `ge`, `:len` | `:lane 3` |

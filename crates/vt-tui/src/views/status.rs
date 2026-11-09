@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
+use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 
@@ -112,6 +113,9 @@ pub fn value_shown(app: &App) -> Option<String> {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 let cell = app.current_slot(slot)?;
+                if cell.command == Some(FxCommand::Cnd) {
+                    return Some(condition_shown(cell.coarse()));
+                }
                 let id = cell.command?.setting()?;
                 (id, cell.value)
             }
@@ -127,6 +131,18 @@ pub fn value_shown(app: &App) -> Option<String> {
         _ => return None,
     };
     id.exists_on(track).then(|| shown(id, value))
+}
+
+/// A `CND`'s condition, by Elektron's name and when its row plays.
+fn condition_shown(value: u8) -> String {
+    match Condition::from_value(value) {
+        Some(condition) => format!(
+            "{}, {}",
+            condition.label(),
+            condition.meaning().to_lowercase()
+        ),
+        None => "not a condition, so the row plays".to_owned(),
+    }
 }
 
 /// How far a nudge moves its row, in 24ths of a step.
@@ -160,6 +176,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Transport::Playing if app.recording() => "playing REC",
         Transport::Playing => "playing",
         Transport::Paused => "paused",
+    };
+    // Fill changes what the conditions play, so it's shown while it's on.
+    let transport = if app.fill {
+        format!("{transport} FILL")
+    } else {
+        transport.to_owned()
     };
     let mode_style = Style::new()
         .fg(theme::BASE)
