@@ -26,6 +26,7 @@ use vt_model::song::Song;
 use crate::app::App;
 use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
 use crate::config::Settings;
+use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics};
@@ -226,6 +227,15 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
             status = note;
         }
     }
+    if let Some(path) = CommandHistory::default_path() {
+        let (history, note) = CommandHistory::load(&path);
+        app.command_history = history;
+        if let Some(note) = note
+            && status.is_empty()
+        {
+            status = note;
+        }
+    }
     app.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();
@@ -409,5 +419,12 @@ pub fn draw_screen(
     }
     if let Some(picker) = &app.picker {
         views::picker::draw(frame, body, picker);
+    }
+    if let Some(menu) = &app.command_menu
+        && app.mode == Mode::Command
+    {
+        // Under the names it finishes, after the `:`.
+        let column = 1 + menu.column(&app.command_line);
+        views::picker::draw_menu(frame, status, column, &menu.picker);
     }
 }

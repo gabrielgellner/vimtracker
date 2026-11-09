@@ -28,12 +28,20 @@ pub fn config_folder() -> Option<PathBuf> {
 
 /// A path as it's written, with a leading `~/` meaning the home folder.
 pub fn expand_home(text: &str) -> PathBuf {
-    if let Some(rest) = text.strip_prefix("~/")
-        && let Some(home) = std::env::var_os("HOME")
-    {
-        return PathBuf::from(home).join(rest);
+    expand_from(text, home_folder().as_deref())
+}
+
+/// A path as it's written, with a leading `~/` meaning this home folder, if there is one.
+pub fn expand_from(text: &str, home: Option<&Path>) -> PathBuf {
+    match (text.strip_prefix("~/"), home) {
+        (Some(rest), Some(home)) => home.join(rest),
+        _ => PathBuf::from(text),
     }
-    PathBuf::from(text)
+}
+
+/// The home folder, which `~` stands for.
+pub fn home_folder() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 /// Where kits and samples are found. Each list is searched in order, and a folder that isn't

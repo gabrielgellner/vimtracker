@@ -10,6 +10,9 @@
 | `:q!` | Quit and discard changes |
 | `Space qq` | The same as `:q` |
 
+`Tab` completes a path, one folder at a time, and `Up` brings back an earlier
+command. **Navigation** has the rest of the command line.
+
 ## Samples and moving projects
 
 A project refers to its samples where they are, so it is small, but it needs

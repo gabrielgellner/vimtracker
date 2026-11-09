@@ -797,6 +797,20 @@ const LAUNCH_NAMES: [(&str, u32); 7] = [
     ("8bar", BAR_STEPS as u32 * 8),
 ];
 
+/// What `:launch` takes for launching when a chain ends.
+const LAUNCH_CHAIN: &str = "chain";
+
+/// Every name `:launch` takes, in order, which the command line completes from.
+pub const LAUNCH_WORDS: [&str; LAUNCH_NAMES.len() + 1] = {
+    let mut words = [LAUNCH_CHAIN; LAUNCH_NAMES.len() + 1];
+    let mut at = 0;
+    while at < LAUNCH_NAMES.len() {
+        words[at] = LAUNCH_NAMES[at].0;
+        at += 1;
+    }
+    words
+};
+
 impl Launch {
     /// Launch on a grid of this many steps, if it's 1 or more.
     pub fn every(steps: usize) -> Option<Self> {
@@ -806,7 +820,7 @@ impl Launch {
 
     /// The setting with this name in `:launch`.
     pub fn named(name: &str) -> Option<Self> {
-        if name == "chain" {
+        if name == LAUNCH_CHAIN {
             return Some(Self::ChainEnd);
         }
         let (_, steps) = LAUNCH_NAMES.iter().find(|(known, _)| *known == name)?;

@@ -37,7 +37,9 @@ use vt_model::step::{
 use crate::grammar::Change;
 use crate::guides::Guide;
 use crate::input::bindings::{Cmd, Op, Resolved, Table, degree_key, note_key};
-use crate::input::command::{self, Line};
+use crate::input::command::Line;
+use crate::input::command_history::CommandHistory;
+use crate::input::completion::CommandMenu;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
@@ -238,6 +240,10 @@ pub struct App {
     /// The field a replace started on, since typing an FX command moves on to its value.
     pub(crate) replacing: Option<Field>,
     pub command_line: String,
+    /// The list of matches above the command line, while there's more than one.
+    pub command_menu: Option<CommandMenu>,
+    /// The command lines run before, which `Up` and `Down` go through.
+    pub command_history: CommandHistory,
     pub status: String,
     pub transport: Transport,
     pub playhead: usize,
@@ -384,6 +390,8 @@ impl App {
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
             command_line: String::new(),
+            command_menu: None,
+            command_history: CommandHistory::default(),
             status: String::new(),
             transport: Transport::Stopped,
             playhead: 0,
@@ -2081,27 +2089,6 @@ impl App {
                 self.publish();
             }
             Err(error) => self.status = error.to_string(),
-        }
-    }
-
-    fn command_key(&mut self, key: Key) {
-        match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
-            KeyCode::Enter => {
-                self.mode = Mode::Normal;
-                let text = std::mem::take(&mut self.command_line);
-                match command::parse(&text) {
-                    Ok(line) => self.line(line),
-                    Err(error) => self.status = error.to_string(),
-                }
-            }
-            KeyCode::Backspace => {
-                if self.command_line.pop().is_none() {
-                    self.mode = Mode::Normal;
-                }
-            }
-            KeyCode::Char(c) if !key.ctrl => self.command_line.push(c),
-            _ => {}
         }
     }
 

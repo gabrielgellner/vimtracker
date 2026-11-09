@@ -111,6 +111,8 @@ pub enum Pick {
     Guide(Guide),
     /// Play through another output, from the audio page.
     Audio(AudioChoice),
+    /// Put this in the command line in place of the word being completed.
+    Completion(String),
 }
 
 /// Something to show beside the list for the item under the cursor.

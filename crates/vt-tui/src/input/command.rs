@@ -6,7 +6,7 @@ use vt_model::scale::{ScaleKind, parse_root};
 use thiserror::Error;
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::label::is_name;
-use vt_model::song::Launch;
+use vt_model::song::{LAUNCH_WORDS, Launch};
 
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,22 +148,27 @@ pub(crate) fn swing(text: &str) -> Option<u16> {
     u16::try_from(thousandths / 100).ok()
 }
 
+/// `:render`'s flags, which its parser reads and Tab completes.
+pub const RENDER_FLAGS: [&str; 3] = ["--rows", "--tail", "--stems"];
+
 /// Read `:render`'s arguments. Anything that isn't a flag is the path, which can hold spaces.
 fn render(argument: &str) -> Result<Line, LineError> {
+    let [rows_flag, tail_flag, stems_flag] = RENDER_FLAGS;
     let mut words = Vec::new();
     let mut rows = None;
     let mut tail = false;
     let mut stems = false;
     let mut parts = argument.split_whitespace();
     while let Some(part) = parts.next() {
-        match part {
-            "--tail" => tail = true,
-            "--stems" => stems = true,
-            "--rows" => {
-                let count = parts.next().and_then(|n| n.parse().ok());
-                rows = Some(count.filter(|n| *n > 0).ok_or(LineError::Render)?);
-            }
-            word => words.push(word),
+        if part == tail_flag {
+            tail = true;
+        } else if part == stems_flag {
+            stems = true;
+        } else if part == rows_flag {
+            let count = parts.next().and_then(|n| n.parse().ok());
+            rows = Some(count.filter(|n| *n > 0).ok_or(LineError::Render)?);
+        } else {
+            words.push(part);
         }
     }
     if words.is_empty() {
@@ -177,41 +182,257 @@ fn render(argument: &str) -> Result<Line, LineError> {
     })
 }
 
-/// Parse a command line, without its leading `:`.
-pub fn parse(text: &str) -> Result<Line, LineError> {
-    let text = text.trim();
-    let (name, argument) = match text.split_once(char::is_whitespace) {
-        Some((name, rest)) => (name, rest.trim()),
-        None => (text, ""),
-    };
-    let needed = |label| {
-        if argument.is_empty() {
-            Err(LineError::NeedsPath(label))
-        } else {
-            Ok(path(argument))
-        }
-    };
-    match name {
-        "w" => Ok(Line::Write((!argument.is_empty()).then(|| path(argument)))),
-        "e" => needed(":e").map(Line::Edit),
-        "q" => Ok(Line::Quit { force: false }),
-        "q!" => Ok(Line::Quit { force: true }),
-        "new" => needed(":new").map(Line::New),
-        "sample" => needed(":sample").map(Line::Sample),
-        "kit" => Ok(match argument.strip_suffix(" all") {
-            Some(kit) => Line::KitTracks(path(kit.trim_end())),
-            None => Line::Kit((!argument.is_empty()).then(|| path(argument))),
-        }),
-        "name" if argument.is_empty() => Ok(Line::Name(None)),
-        "name" if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
-        "name" => Err(LineError::Name),
-        "bpm" => millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
-        "len" => steps(argument).map(Line::Len).ok_or(LineError::Len),
-        "lane" if argument.is_empty() => Ok(Line::Lane(None)),
-        "lane" => steps(argument)
-            .map(|length| Line::Lane(Some(length)))
-            .ok_or(LineError::Lane),
-        "track" => match argument.split_whitespace().collect::<Vec<_>>()[..] {
+/// What comes after a command's name, or after a `:set` key's `=`, which says what Tab completes
+/// there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Takes {
+    /// Nothing, or a number or text that nothing completes.
+    Nothing,
+    /// One of these words, or for some commands a number in their place.
+    Words(&'static [&'static str]),
+    /// A project's folder.
+    Folder,
+    /// A sample file.
+    Sample,
+    /// A WAV file, or a folder for stems, then `:render`'s flags.
+    Render,
+    /// A kit by name, from the kit folders, or by path, then `all`.
+    Kit,
+    /// One of [`SETTINGS`], as `key=value`.
+    Setting,
+    /// `on`, `off`, or a kind of scale.
+    Scale,
+    /// A root note.
+    Root,
+}
+
+/// A command: its name, what it does, what it takes, and how its argument is read.
+#[derive(Debug, Clone, Copy)]
+pub struct Command {
+    pub name: &'static str,
+    pub meaning: &'static str,
+    pub takes: Takes,
+    /// Read the argument, already trimmed.
+    parse: fn(&str) -> Result<Line, LineError>,
+}
+
+/// A `:set` key: its name, what it sets, what its value is, and how the value is read.
+#[derive(Debug, Clone, Copy)]
+pub struct Setting {
+    pub key: &'static str,
+    pub meaning: &'static str,
+    pub takes: Takes,
+    parse: fn(&str) -> Option<Line>,
+}
+
+/// `on` and `off`, for settings that turn something on.
+const ON_OFF: &[&str] = &["on", "off"];
+
+/// Every `:set` key, which the parser reads and Tab completes.
+pub const SETTINGS: [Setting; 4] = [
+    Setting {
+        key: "skip",
+        meaning: "Steps the arrows jump in Insert",
+        takes: Takes::Nothing,
+        parse: |value| value.parse().ok().map(Line::SetSkip),
+    },
+    Setting {
+        key: "limiter",
+        meaning: "The limiter on the output",
+        takes: Takes::Words(ON_OFF),
+        parse: |value| match value {
+            "on" => Some(Line::SetLimiter(true)),
+            "off" => Some(Line::SetLimiter(false)),
+            _ => None,
+        },
+    },
+    Setting {
+        key: "scale",
+        meaning: "The kind of scale, or on or off",
+        takes: Takes::Scale,
+        parse: |value| match value {
+            "on" => Some(Line::ScaleOn(true)),
+            "off" => Some(Line::ScaleOn(false)),
+            kind => ScaleKind::parse(kind).map(Line::SetScale),
+        },
+    },
+    Setting {
+        key: "root",
+        meaning: "The scale's root note",
+        takes: Takes::Root,
+        parse: |value| parse_root(value).map(Line::SetRoot),
+    },
+];
+
+/// A path that must be given.
+fn needed(label: &'static str, argument: &str) -> Result<PathBuf, LineError> {
+    if argument.is_empty() {
+        Err(LineError::NeedsPath(label))
+    } else {
+        Ok(path(argument))
+    }
+}
+
+/// A path that can be left out.
+fn optional_path(argument: &str) -> Option<PathBuf> {
+    (!argument.is_empty()).then(|| path(argument))
+}
+
+/// Every command, in the order Tab lists them, which the parser reads and Tab completes.
+pub const COMMANDS: [Command; 27] = [
+    Command {
+        name: "w",
+        meaning: "Save, or save to a new folder",
+        takes: Takes::Folder,
+        parse: |argument| Ok(Line::Write(optional_path(argument))),
+    },
+    Command {
+        name: "e",
+        meaning: "Open a project",
+        takes: Takes::Folder,
+        parse: |argument| needed(":e", argument).map(Line::Edit),
+    },
+    Command {
+        name: "new",
+        meaning: "Start a new project",
+        takes: Takes::Folder,
+        parse: |argument| needed(":new", argument).map(Line::New),
+    },
+    Command {
+        name: "q",
+        meaning: "Quit",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Quit { force: false }),
+    },
+    Command {
+        name: "q!",
+        meaning: "Quit and discard changes",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Quit { force: true }),
+    },
+    Command {
+        name: "render",
+        meaning: "Render the loop to a WAV",
+        takes: Takes::Render,
+        parse: render,
+    },
+    Command {
+        name: "sample",
+        meaning: "Load a sample on this track",
+        takes: Takes::Sample,
+        parse: |argument| needed(":sample", argument).map(Line::Sample),
+    },
+    Command {
+        name: "kit",
+        meaning: "Choose a kit, or put one on tracks with all",
+        takes: Takes::Kit,
+        parse: |argument| {
+            Ok(match argument.strip_suffix(KIT_ALL) {
+                Some(kit) if kit.ends_with(' ') => Line::KitTracks(path(kit.trim_end())),
+                _ => Line::Kit(optional_path(argument)),
+            })
+        },
+    },
+    Command {
+        name: "set",
+        meaning: "Set skip, limiter, scale or root",
+        takes: Takes::Setting,
+        parse: |argument| {
+            let (key, value) = argument.split_once('=').ok_or(LineError::Set)?;
+            let setting = SETTINGS.iter().find(|setting| setting.key == key);
+            setting
+                .and_then(|setting| (setting.parse)(value))
+                .ok_or(LineError::Set)
+        },
+    },
+    Command {
+        name: "scale",
+        meaning: "Choose a scale, or fit notes to it",
+        takes: Takes::Words(&["fit"]),
+        parse: |argument| match argument {
+            "" => Ok(Line::PickScale),
+            "fit" => Ok(Line::FitToScale),
+            _ => Err(LineError::Scale),
+        },
+    },
+    Command {
+        name: "bpm",
+        meaning: "The tempo",
+        takes: Takes::Nothing,
+        parse: |argument| millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
+    },
+    Command {
+        name: "swing",
+        meaning: "The song's swing",
+        takes: Takes::Nothing,
+        parse: |argument| swing(argument).map(Line::Swing).ok_or(LineError::Swing),
+    },
+    Command {
+        name: "tswing",
+        meaning: "This track's swing, or off",
+        takes: Takes::Words(&["off"]),
+        parse: |argument| match argument {
+            "off" => Ok(Line::TrackSwing(None)),
+            _ => swing(argument)
+                .map(|value| Line::TrackSwing(Some(value)))
+                .ok_or(LineError::TrackSwing),
+        },
+    },
+    Command {
+        name: "tvol",
+        meaning: "This track's level, in hex",
+        takes: Takes::Nothing,
+        parse: |argument| {
+            u8::from_str_radix(argument, 16)
+                .map(Line::TrackLevel)
+                .map_err(|_| LineError::TrackLevel)
+        },
+    },
+    Command {
+        name: "len",
+        meaning: "The phrase's or lane's length",
+        takes: Takes::Nothing,
+        parse: |argument| steps(argument).map(Line::Len).ok_or(LineError::Len),
+    },
+    Command {
+        name: "lane",
+        meaning: "Give this FX column a lane",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "" => Ok(Line::Lane(None)),
+            _ => steps(argument)
+                .map(|length| Line::Lane(Some(length)))
+                .ok_or(LineError::Lane),
+        },
+    },
+    Command {
+        name: "reset",
+        meaning: "Start every track again after this many steps, or off",
+        takes: Takes::Words(&["off"]),
+        parse: |argument| match argument {
+            "off" => Ok(Line::Reset(None)),
+            _ => steps(argument)
+                .map(|steps| Line::Reset(Some(steps)))
+                .ok_or(LineError::Reset),
+        },
+    },
+    Command {
+        name: "launch",
+        meaning: "When launched chains start",
+        takes: Takes::Words(&LAUNCH_WORDS),
+        parse: |argument| match argument {
+            "" => Ok(Line::Launch(None)),
+            _ => Launch::named(argument)
+                .or_else(|| steps(argument).and_then(Launch::every))
+                .map(|launch| Line::Launch(Some(launch)))
+                .ok_or(LineError::Launch),
+        },
+    },
+    Command {
+        name: "track",
+        meaning: "Add tracks, or delete the last",
+        takes: Takes::Words(&["add", "del"]),
+        parse: |argument| match argument.split_whitespace().collect::<Vec<_>>()[..] {
             ["add"] => Ok(Line::TrackAdd(1)),
             ["add", count] => count
                 .parse()
@@ -222,59 +443,98 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
             ["del"] => Ok(Line::TrackDel),
             _ => Err(LineError::Track),
         },
-        "seed" => argument
-            .parse()
-            .map(Line::Seed)
-            .map_err(|_| LineError::Seed),
-        "swing" => swing(argument).map(Line::Swing).ok_or(LineError::Swing),
-        "tswing" if argument == "off" => Ok(Line::TrackSwing(None)),
-        "tswing" => swing(argument)
-            .map(|value| Line::TrackSwing(Some(value)))
-            .ok_or(LineError::TrackSwing),
-        "tvol" => u8::from_str_radix(argument, 16)
-            .map(Line::TrackLevel)
-            .map_err(|_| LineError::TrackLevel),
-        "reset" if argument == "off" => Ok(Line::Reset(None)),
-        "reset" => steps(argument)
-            .map(|steps| Line::Reset(Some(steps)))
-            .ok_or(LineError::Reset),
-        "launch" if argument.is_empty() => Ok(Line::Launch(None)),
-        "launch" => Launch::named(argument)
-            .or_else(|| steps(argument).and_then(Launch::every))
-            .map(|launch| Line::Launch(Some(launch)))
-            .ok_or(LineError::Launch),
-        "label" if argument.is_empty() => Ok(Line::Label(None)),
-        "label" if argument.chars().count() <= MAX_LABEL_CHARS => {
-            Ok(Line::Label(Some(argument.to_owned())))
-        }
-        "label" => Err(LineError::Label),
-        "render" => render(argument),
-        "chain" => u32::from_str_radix(argument, 16)
-            .map(Line::Chain)
-            .map_err(|_| LineError::Chain),
-        "double" => Ok(Line::Double),
-        "set" => match argument.split_once('=') {
-            Some(("skip", n)) => n.parse().map(Line::SetSkip).map_err(|_| LineError::Set),
-            Some(("limiter", "on")) => Ok(Line::SetLimiter(true)),
-            Some(("limiter", "off")) => Ok(Line::SetLimiter(false)),
-            Some(("scale", "on")) => Ok(Line::ScaleOn(true)),
-            Some(("scale", "off")) => Ok(Line::ScaleOn(false)),
-            Some(("scale", kind)) => ScaleKind::parse(kind)
-                .map(Line::SetScale)
-                .ok_or(LineError::Set),
-            Some(("root", root)) => parse_root(root).map(Line::SetRoot).ok_or(LineError::Set),
-            _ => Err(LineError::Set),
+    },
+    Command {
+        name: "name",
+        meaning: "Name this track",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "" => Ok(Line::Name(None)),
+            _ if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
+            _ => Err(LineError::Name),
         },
-        "scale" => match argument {
-            "" => Ok(Line::PickScale),
-            "fit" => Ok(Line::FitToScale),
-            _ => Err(LineError::Scale),
+    },
+    Command {
+        name: "label",
+        meaning: "Label this chain",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "" => Ok(Line::Label(None)),
+            _ if argument.chars().count() <= MAX_LABEL_CHARS => {
+                Ok(Line::Label(Some(argument.to_owned())))
+            }
+            _ => Err(LineError::Label),
         },
-        "loop" => Ok(Line::Loop),
-        "mute" => Ok(Line::Mute),
-        "solo" => Ok(Line::Solo),
-        other => Err(LineError::Unknown(other.to_owned())),
+    },
+    Command {
+        name: "chain",
+        meaning: "Put a chain on this track",
+        takes: Takes::Nothing,
+        parse: |argument| {
+            u32::from_str_radix(argument, 16)
+                .map(Line::Chain)
+                .map_err(|_| LineError::Chain)
+        },
+    },
+    Command {
+        name: "double",
+        meaning: "Double the phrase, notes and all",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Double),
+    },
+    Command {
+        name: "loop",
+        meaning: "Keep playing this section, or the song again",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Loop),
+    },
+    Command {
+        name: "mute",
+        meaning: "Mute this track",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Mute),
+    },
+    Command {
+        name: "solo",
+        meaning: "Solo this track",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Solo),
+    },
+    Command {
+        name: "seed",
+        meaning: "The seed chance FX play from",
+        takes: Takes::Nothing,
+        parse: |argument| {
+            argument
+                .parse()
+                .map(Line::Seed)
+                .map_err(|_| LineError::Seed)
+        },
+    },
+];
+
+/// The word after a kit that puts its sounds on tracks.
+pub const KIT_ALL: &str = "all";
+
+/// The command with this name.
+pub fn find(name: &str) -> Option<&'static Command> {
+    COMMANDS.iter().find(|command| command.name == name)
+}
+
+/// Split a command line, without its leading `:`, into the command's name and its argument.
+pub fn split(text: &str) -> (&str, &str) {
+    let text = text.trim();
+    match text.split_once(char::is_whitespace) {
+        Some((name, rest)) => (name, rest.trim()),
+        None => (text, ""),
     }
+}
+
+/// Parse a command line, without its leading `:`.
+pub fn parse(text: &str) -> Result<Line, LineError> {
+    let (name, argument) = split(text);
+    let command = find(name).ok_or_else(|| LineError::Unknown(name.to_owned()))?;
+    (command.parse)(argument)
 }
 
 #[cfg(test)]
