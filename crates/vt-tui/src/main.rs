@@ -37,6 +37,11 @@ enum Command {
         #[arg(long)]
         stems: bool,
     },
+    /// Make and manage kits.
+    Kits {
+        #[command(subcommand)]
+        command: KitsCommand,
+    },
     /// Measure how much of a core a saved project takes to play, as the status line's CPU figure.
     Bench {
         project: PathBuf,
@@ -52,10 +57,26 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum KitsCommand {
+    /// Write a kit for each of Ableton Live's drum racks, its sounds pointing into Live's
+    /// library. Running it again replaces the kits it wrote, and nothing else.
+    ImportAbleton {
+        /// Live's Core Library folder. The newest Live in /Applications if not given.
+        library: Option<PathBuf>,
+        /// Where to write the kits, a folder for each category. The first kit folder in
+        /// settings.ron, under Ableton, if not given.
+        out: Option<PathBuf>,
+    },
+}
+
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
+        Some(Command::Kits {
+            command: KitsCommand::ImportAbleton { library, out },
+        }) => vt_tui::ableton::run(library, out).map_err(|e| e.to_string()),
         Some(Command::Bench {
             project,
             rate,

@@ -68,8 +68,10 @@ can come next.
 No samples come with the repo. Put your own WAV, AIFF or FLAC files in
 `~/Music/vimtracker/samples` to see them in the browser. A file in `~/Music/vimtracker/kits`
 listing sounds, such as `909.ron`, is a kit: `:kit 909 all` puts its sounds on tracks from the
-first. Both folders are lists you can change in `~/.config/vimtracker/settings.ron`. Tracks can
-have two-character names like `BD` and `CH`. See the sounds guide.
+first. Both folders are lists you can change in `~/.config/vimtracker/settings.ron`. With
+Ableton Live installed, `vimtracker kits import-ableton` makes a kit of each of its drum racks,
+pointing at Live's samples where they are. Tracks can have two-character names like `BD` and
+`CH`. See the sounds guide.
 
 Samples stay where they are, and a project refers to them. `:w new-folder` saves a copy with every
 sample gathered into it, ready to move or share.

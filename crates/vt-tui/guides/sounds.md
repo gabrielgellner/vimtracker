@@ -340,3 +340,28 @@ Where kits and samples are found is set for this machine in
 Each is a list of folders, looked through in order, and a folder that isn't
 there is passed over. `:kit 909` opens the first `909.ron` found. Changes are
 read the next time the program starts.
+
+`:kit` lists the kits in the folders inside them too, by their path, such as
+`Ableton/Drum Machines/909 Core Kit`, and `:kit` takes that path.
+
+## Kits from Ableton Live
+
+If you have Ableton Live, run this in a terminal to make a kit of each of its
+drum racks:
+
+```
+vimtracker kits import-ableton
+```
+
+It reads the newest Live in `/Applications` and writes into the first kit
+folder, under `Ableton`, a folder for each kind of rack. The kits point at
+Live's samples where they are, so nothing is copied. Each pad becomes a sound,
+named and labelled from its name and its sample, with its choke group, its
+level and tune, and the other tones and velocity layers it has. Pads that play
+a synth are left out. Run it again after Live updates: it replaces the kits it
+made, and leaves anything else alone. To change one of its kits, copy it out of
+the `Ableton` folder first. A library and a folder to write to can be given:
+
+```
+vimtracker kits import-ableton "/path/to/Core Library" ~/kits/Live
+```
