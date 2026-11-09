@@ -6,19 +6,22 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
+use vt_model::accumulator::{Accumulation, MOST_DEGREES, Moves, amount, amount_text};
 use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 
 use vt_model::settings::SettingId;
-use vt_model::step::FxCommand;
+use vt_model::step::{FxCommand, Note};
 
 use crate::app::{App, Field};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
+use crate::track_page::{AccumulatorField, Control};
 use crate::tree::ChainColumn;
+use crate::views::phrase::{heard_note, playhead_step};
 
 /// Show a tempo without trailing zeros.
 pub fn format_bpm(millibpm: u32) -> String {
@@ -109,12 +112,31 @@ pub fn value_shown(app: &App) -> Option<String> {
     if app.view == View::Phrase && app.cursor.field == Field::Nudge {
         return Some(nudge_shown(app.current_nudge()));
     }
+    // While an accumulator moves the row playing, the Note column says what it's heard as, as the
+    // grid shows notes as written.
+    if app.view == View::Phrase && app.cursor.field == Field::Note {
+        playhead_step(app)?;
+        let heard = heard_note(app)?;
+        return Some(format!("the row playing is heard as {}", Note::On(heard)));
+    }
+    if app.view == View::Track
+        && let Control::Accumulator(field) = app.track_control()
+    {
+        return Some(accumulator_shown(field, track.accumulation, app.scale.on));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 let cell = app.current_slot(slot)?;
                 if cell.command == Some(FxCommand::Cnd) {
                     return Some(condition_shown(cell.coarse()));
+                }
+                if cell.command == Some(FxCommand::Acu) {
+                    return Some(amount_shown(
+                        cell.coarse(),
+                        track.accumulation,
+                        app.scale.on,
+                    ));
                 }
                 let id = cell.command?.setting()?;
                 (id, cell.value)
@@ -143,6 +165,51 @@ fn condition_shown(value: u8) -> String {
         ),
         None => "not a condition, so the row plays".to_owned(),
     }
+}
+
+/// How far an `ACU` moves its note, and when, in degrees or semitones as the scale is on or off.
+fn amount_shown(value: u8, accumulation: Accumulation, scale_on: bool) -> String {
+    match amount(value) {
+        Some(0) => "doesn't move the note".to_owned(),
+        Some(by) => format!(
+            "{} {}, {} {}",
+            amount_text(by, scale_on),
+            accumulation.adds.each(),
+            accumulation.at_limit.name().to_lowercase(),
+            match accumulation.moves {
+                Moves::Row => "on this row",
+                Moves::Track => "with the whole track",
+            }
+        ),
+        None => format!("past {MOST_DEGREES} either way, so it doesn't move the note"),
+    }
+}
+
+/// What one of the track's accumulator settings does, as it's set.
+fn accumulator_shown(
+    field: AccumulatorField,
+    accumulation: Accumulation,
+    scale_on: bool,
+) -> String {
+    let unit = if scale_on { "degrees" } else { "semitones" };
+    match field {
+        AccumulatorField::Up => format!("{} {unit} above the note as written", accumulation.up),
+        AccumulatorField::Down => {
+            format!("{} {unit} below the note as written", accumulation.down)
+        }
+        AccumulatorField::Moves => lowered(accumulation.moves.meaning()),
+        AccumulatorField::AtLimit => lowered(accumulation.at_limit.meaning()),
+        AccumulatorField::Adds => lowered(accumulation.adds.meaning()),
+        AccumulatorField::Reset => lowered(&accumulation.reset.meaning()),
+    }
+}
+
+/// A meaning to follow a name on the status line, its first letter small.
+fn lowered(text: &str) -> String {
+    let mut letters = text.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_lowercase().chain(letters).collect()
+    })
 }
 
 /// How far a nudge moves its row, in 24ths of a step.

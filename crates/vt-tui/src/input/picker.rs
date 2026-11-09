@@ -13,6 +13,7 @@ use std::sync::Arc;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
+use vt_model::accumulator::Accumulation;
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
@@ -51,6 +52,16 @@ pub enum Pick {
     Condition {
         slot: usize,
         value: u8,
+    },
+    /// Put an `ACU` moving its note this far, by its value, in an FX slot.
+    Amount {
+        slot: usize,
+        value: u8,
+    },
+    /// Give a track these accumulator settings.
+    Accumulation {
+        track: usize,
+        accumulation: Accumulation,
     },
     /// Replace one of a track's LFOs.
     Lfo {

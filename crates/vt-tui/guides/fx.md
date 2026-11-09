@@ -104,6 +104,7 @@ These have no mark.
 | `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
+| `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
 track's own, so on a track at `1/8` it's half an eighth. They count from where
@@ -150,6 +151,51 @@ note, as it always has.
 
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.
+
+## Accumulators
+
+`ACU` moves its row's note on each time the row plays, as the Metropolix's
+accumulator does, so a line climbs, falls or swings from pass to pass. It moves by
+scale degrees with the scale on, `:set scale=on`, and by semitones with it off. A
+note outside the scale lands on the next one in. The value is signed: `01` to `1C`
+go up 1 to 28, and `FF` to `E4` go down 1 to 28, so `FE` is two down. Choose `ACU`
+with `K` and then how far from the list that follows; `K` on its value lists them
+again, `=` and `-` go up and down through `00`, and `+` and `_` move by 7.
+
+The first time the row plays it's as written, and each time after, its `ACU`
+adds first. With `C D E F` and `ACU 01` on the `C`, it plays:
+
+```text
+C D E F | D D E F | E D E F | F D E F
+```
+
+The track's accumulator settings are the `Acc` row on the Mod page:
+
+| Setting | Does |
+|---|---|
+| `Up` `Down` | How far from the note as written it goes, 1 to 28 |
+| `Moves` | `Row` moves only its own row, `Track` every row |
+| `Limit` | `Wrap`, `Bounce` or `Hold` at the limit |
+| `Adds` | `Row` once a row, `Pulse` each pulse, `Retrig` each hit |
+| `Reset` | `Chain`, `Play`, or every 1 to 16 loops of the chain |
+
+The limits are 7 unless changed. With `Moves` at `Track`, every row on the track
+moves with the `ACU`s, rows without one too, so `C D E F` plays `D E F G` the
+second time. `Wrap` carries on from the note as written, `Bounce` turns back at
+the limit and again at the note, and `Hold` stays at the limit. `Pulse` adds on
+every pulse of a `MLT` too, and `Retrig` on every hit of a `RET` as well. `Reset`
+says when it goes back to the notes as written: `Chain`, wherever the chain
+starts, or `Play`, only when playing starts.
+
+A row that `CHA` or `CND` skips doesn't add, nor does a `RST`, and two `ACU`s on
+a row add up. Playing from the top or from a step starts every accumulator from
+the notes as written, and so does the chain starting, with `Reset` at `Chain`: a
+section that brings it in or resets, a launch and `:reset`. A phrase played twice
+in its chain moves on each time.
+
+The grid shows notes as written. While playing, the row under the playhead shows
+the note heard, before the chain's transpose, and the status line says it on the
+Note column.
 
 ## Groove
 

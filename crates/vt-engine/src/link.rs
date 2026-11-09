@@ -12,6 +12,7 @@ use vt_model::constants::{
 };
 
 use vt_model::sample::SampleData;
+use vt_model::scale::Scale;
 
 use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, TrackPlace, Transport};
@@ -73,6 +74,8 @@ pub enum Command {
     SetSolo { track: usize, solo: bool },
     /// Turn fill on or off, for `CND`'s `FILL` and `!FILL`.
     SetFill { on: bool },
+    /// Set the scale an `ACU` moves notes through.
+    SetScale { scale: Scale },
     /// Play a chain on one track when its launch timing allows, or stop it then.
     Launch { track: usize, chain: Option<u32> },
     /// Carry on in a captured section, with launched chains still running.
@@ -392,6 +395,7 @@ impl Realtime {
                 }
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetFill { on } => self.engine.set_fill(on),
+                Command::SetScale { scale } => self.engine.set_scale(scale),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
                 Command::ContinueIn { section, length } => {

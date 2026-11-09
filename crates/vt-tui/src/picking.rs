@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use vt_model::accumulator::{MOST_DEGREES, amount, amount_text, amount_value};
 use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
 use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
@@ -375,6 +376,12 @@ impl App {
             {
                 self.open_condition_picker(slot);
             }
+            // So is an amount, as a signed byte is hard to type.
+            Field::FxValue(slot)
+                if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Acu) =>
+            {
+                self.open_amount_picker(slot);
+            }
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
             }
@@ -456,7 +463,7 @@ impl App {
 
     /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
     /// to be typed, as a command with no value yet doesn't take effect, and a `CND` lists its
-    /// conditions to choose from, unless the slot's value already is one.
+    /// conditions to choose from and an `ACU` its amounts, unless the slot's value already is one.
     fn pick_fx_command(&mut self, slot: usize, command: Option<FxCommand>) {
         let Some(command) = command else {
             self.set_field(FieldValue::Slot(slot, FxSlot::default()));
@@ -470,6 +477,13 @@ impl App {
             .is_some_and(|s| Condition::from_value(s.coarse()).is_some());
         if command == FxCommand::Cnd && !has_condition {
             self.open_condition_picker(slot);
+            return;
+        }
+        let has_amount = current
+            .filter(|s| s.command.is_some())
+            .is_some_and(|s| amount(s.coarse()).is_some_and(|amount| amount != 0));
+        if command == FxCommand::Acu && !has_amount {
+            self.open_amount_picker(slot);
             return;
         }
         if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {
@@ -521,6 +535,50 @@ impl App {
                 .opened_on(position)
                 .searching(""),
         );
+    }
+
+    /// List how far an `ACU` can move its note each time, up and then down, in degrees or semitones
+    /// as the scale is on or off, opening on the slot's own, or on one up.
+    pub(crate) fn open_amount_picker(&mut self, slot: usize) {
+        let current = self
+            .current_slot(slot)
+            .filter(|s| s.command == Some(FxCommand::Acu))
+            .and_then(|s| amount(s.coarse()))
+            .filter(|amount| *amount != 0)
+            .unwrap_or(1);
+        let most = MOST_DEGREES as i8;
+        let amounts: Vec<i8> = (1..=most).chain((1..=most).map(|down| -down)).collect();
+        let items = amounts
+            .iter()
+            .map(|&amount| {
+                let value = amount_value(amount);
+                Item::new(format!("{amount:+}"), Pick::Amount { slot, value })
+                    .meaning(format!(
+                        "{value:02X}  {}",
+                        capitalised(&amount_text(amount, self.scale.on))
+                    ))
+                    .category(if amount > 0 { "Up" } else { "Down" })
+            })
+            .collect();
+        let position = amounts.iter().position(|amount| *amount == current);
+        self.show_picker(
+            Picker::new("Accumulate", items)
+                .opened_on(position)
+                .searching(""),
+        );
+    }
+
+    /// Put a chosen amount in a slot as an `ACU`.
+    fn pick_amount(&mut self, slot: usize, value: u8) {
+        self.cursor.field = Field::FxValue(slot);
+        self.set_field(FieldValue::Slot(
+            slot,
+            FxSlot {
+                command: Some(FxCommand::Acu),
+                value: u16::from(value) << 8,
+                mark: Mark::default(),
+            },
+        ));
     }
 
     /// Put a chosen condition in a slot as a `CND`.
@@ -625,6 +683,16 @@ impl App {
             Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),
             Pick::Gate(kind) => self.pick_gate(kind),
             Pick::Condition { slot, value } => self.pick_condition(slot, value),
+            Pick::Amount { slot, value } => self.pick_amount(slot, value),
+            Pick::Accumulation {
+                track,
+                accumulation,
+            } => {
+                self.apply(&Action::SetAccumulation {
+                    track,
+                    accumulation,
+                });
+            }
             Pick::Lfo { track, slot, lfo } => {
                 self.apply(&Action::SetLfo { track, slot, lfo });
             }
@@ -709,4 +777,12 @@ impl App {
         self.recent_views.retain(|other| *other != view);
         self.recent_views.insert(0, view);
     }
+}
+
+/// Text with its first letter a capital, as a list's meanings start.
+fn capitalised(text: &str) -> String {
+    let mut letters = text.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(letters).collect()
+    })
 }

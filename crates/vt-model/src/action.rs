@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
     MAX_SOUND_TRACKS, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
@@ -269,6 +270,11 @@ pub enum Action {
         track: usize,
         speed: Speed,
     },
+    /// Set how a track's `ACU`s move its notes.
+    SetAccumulation {
+        track: usize,
+        accumulation: Accumulation,
+    },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         track: usize,
@@ -487,6 +493,10 @@ pub enum EditError {
     Lfo,
     #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
     Choke(u8),
+    #[error(
+        "an accumulator's limits go from 1 to {MOST_DEGREES}, and its loops from 1 to {MOST_LOOPS}"
+    )]
+    Accumulation,
     #[error(
         "a project's name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
     )]
@@ -880,6 +890,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .speed = *speed;
+        }
+        Action::SetAccumulation {
+            track,
+            accumulation,
+        } => {
+            if !accumulation.in_range() {
+                return Err(EditError::Accumulation);
+            }
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .accumulation = *accumulation;
         }
         Action::SetLength {
             track,

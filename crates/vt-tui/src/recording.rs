@@ -225,6 +225,7 @@ impl App {
             progress: self.progress,
             ticks: TICKS_PER_STEP as u32,
             skipped: false,
+            accumulated: None,
         };
         self.carried_on(place)
     }

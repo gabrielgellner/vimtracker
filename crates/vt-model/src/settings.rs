@@ -1328,13 +1328,14 @@ impl<'de> serde::Deserialize<'de> for SettingId {
 
 /// The events, which act on a note and aren't settings. Their labels share the grid with
 /// settings', so none may match one.
-pub const EVENTS: [FxCommand; 6] = [
+pub const EVENTS: [FxCommand; 7] = [
     FxCommand::Del,
     FxCommand::Kil,
     FxCommand::Off,
     FxCommand::Ret,
     FxCommand::Cha,
     FxCommand::Cnd,
+    FxCommand::Acu,
 ];
 
 #[cfg(test)]

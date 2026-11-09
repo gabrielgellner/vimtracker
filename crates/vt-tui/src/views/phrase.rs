@@ -155,7 +155,7 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 }
 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
-fn playhead_step(app: &App) -> Option<usize> {
+pub(crate) fn playhead_step(app: &App) -> Option<usize> {
     let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
     let playhead = app.chain_playhead(app.cursor.track, chain)?;
@@ -163,6 +163,12 @@ fn playhead_step(app: &App) -> Option<usize> {
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some(start + position.step)
+}
+
+/// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
+/// accumulator moved it.
+pub(crate) fn heard_note(app: &App) -> Option<u8> {
+    app.places.get(app.cursor.track)?.accumulated
 }
 
 /// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
@@ -469,6 +475,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             let (start, end) = field_range(app.cursor.field);
             if end <= text.len() {
                 text.replace_range(start..end, &format!("{}_", app.entry.text));
+            }
+        }
+        // The row playing shows the note heard where an accumulator moved it, as the note column
+        // otherwise shows notes as written.
+        if playhead == Some(index)
+            && matches!(step.note, Note::On(_))
+            && let Some(heard) = heard_note(app)
+        {
+            let (start, end) = field_range(Field::Note);
+            if end <= text.len() {
+                text.replace_range(start..end, &Note::On(heard).to_string());
             }
         }
         // A lane's playhead goes in the gap before its column.

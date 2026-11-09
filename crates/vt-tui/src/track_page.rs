@@ -3,6 +3,7 @@
 use ratatui::crossterm::event::KeyCode;
 use std::sync::Arc;
 
+use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
@@ -57,6 +58,17 @@ pub enum EnvelopeField {
     Reset,
 }
 
+/// One of the track's accumulator settings, which its `ACU`s share.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccumulatorField {
+    Up,
+    Down,
+    Moves,
+    AtLimit,
+    Adds,
+    Reset,
+}
+
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
@@ -83,6 +95,7 @@ pub enum Control {
     FilterMode,
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
+    Accumulator(AccumulatorField),
     /// What's in one of the track's slots.
     Insert(usize),
     /// One of the settings declared by what's in a slot.
@@ -116,6 +129,16 @@ const fn envelope_row(slot: usize) -> [Control; 7] {
 pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelope_row(1)];
 /// Each LFO's row.
 pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
+/// The accumulators' row, under the LFOs, as they move notes from pass to pass as the LFOs move
+/// settings over time.
+pub const ACCUMULATOR: [Control; 6] = [
+    Control::Accumulator(AccumulatorField::Up),
+    Control::Accumulator(AccumulatorField::Down),
+    Control::Accumulator(AccumulatorField::Moves),
+    Control::Accumulator(AccumulatorField::AtLimit),
+    Control::Accumulator(AccumulatorField::Adds),
+    Control::Accumulator(AccumulatorField::Reset),
+];
 
 /// The mixer's columns.
 pub const MIXER: [Control; 6] = [
@@ -243,7 +266,15 @@ pub const RETURN_ROWS: [&[Control]; 2] = [&[Control::Level], &[base(TrackControl
 /// The Sound page of the master.
 pub const MASTER_ROWS: [&[Control]; 1] = [&[Control::Level]];
 /// The Mod page's rows, top to bottom.
-pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
+pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 1] = [
+    &ENVELOPES[0],
+    &ENVELOPES[1],
+    &LFOS[0],
+    &LFOS[1],
+    &ACCUMULATOR,
+];
+/// The Mod page of a return or the master, which have no notes for an accumulator to move.
+pub const FIXED_MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
     [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
 
 /// An effect taken out of a slot, waiting to be put in another.
@@ -335,6 +366,12 @@ impl Control {
             Self::Envelope(_, EnvelopeField::Release) => "Release",
             Self::Envelope(_, EnvelopeField::Depth) => "Depth",
             Self::Envelope(_, EnvelopeField::Reset) => "Reset",
+            Self::Accumulator(AccumulatorField::Up) => "Up",
+            Self::Accumulator(AccumulatorField::Down) => "Down",
+            Self::Accumulator(AccumulatorField::Moves) => "Moves",
+            Self::Accumulator(AccumulatorField::AtLimit) => "Limit",
+            Self::Accumulator(AccumulatorField::Adds) => "Adds",
+            Self::Accumulator(AccumulatorField::Reset) => "Reset",
             Self::Insert(_) => "Effect",
             Self::InsertParam(..) => "Setting",
         }
@@ -343,6 +380,15 @@ impl Control {
     /// The setting's name on screen, on this track, as a slot's settings depend on what's in it.
     pub fn name_on(self, track: &Track) -> &'static str {
         match self {
+            // The status line names it in full, as its column's name is short.
+            Self::Accumulator(field) => match field {
+                AccumulatorField::Up => "Accumulator up",
+                AccumulatorField::Down => "Accumulator down",
+                AccumulatorField::Moves => "Accumulator moves",
+                AccumulatorField::AtLimit => "Accumulator at its limit",
+                AccumulatorField::Adds => "Accumulator adds",
+                AccumulatorField::Reset => "Accumulator starts again",
+            },
             Self::InsertParam(slot, param) => track.inserts[slot]
                 .params()
                 .get(param)
@@ -439,7 +485,8 @@ impl Control {
             Self::Base(TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch)
             | Self::Choke
             | Self::GateLength
-            | Self::Speed => track.is_sound(),
+            | Self::Speed
+            | Self::Accumulator(_) => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -486,6 +533,12 @@ impl Control {
                     LfoField::Destination | LfoField::Shape | LfoField::Retrig
                 )
                 | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
+                | Self::Accumulator(
+                    AccumulatorField::Moves
+                        | AccumulatorField::AtLimit
+                        | AccumulatorField::Adds
+                        | AccumulatorField::Reset
+                )
         )
     }
 }
@@ -580,6 +633,7 @@ impl App {
         match (self.track_page, kind) {
             (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
             (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
+            (Page::Mod, kind) if kind != TrackKind::Sound => &FIXED_MOD_ROWS,
             _ => self
                 .track_page
                 .rows(track.map_or(Machine::Sample, |track| track.machine)),
@@ -783,6 +837,22 @@ impl App {
                 }
                 self.set_envelope(slot, envelope);
             }
+            Control::Accumulator(field) => {
+                let mut accumulation = track.accumulation;
+                for _ in 0..count.min(0x100) {
+                    adjust_accumulation(&mut accumulation, field, up, large);
+                }
+                self.set_accumulation(accumulation);
+            }
+        }
+    }
+
+    fn set_accumulation(&mut self, accumulation: Accumulation) {
+        if accumulation != self.page_track().accumulation {
+            self.apply(&Action::SetAccumulation {
+                track: self.cursor.track,
+                accumulation,
+            });
         }
     }
 
@@ -1297,6 +1367,36 @@ impl App {
                     self.set_envelope(slot, reset);
                 }
             }
+            Control::Accumulator(field) => {
+                let (now, default) = (track.accumulation, Accumulation::default());
+                let reset = match field {
+                    AccumulatorField::Up => Accumulation {
+                        up: default.up,
+                        ..now
+                    },
+                    AccumulatorField::Down => Accumulation {
+                        down: default.down,
+                        ..now
+                    },
+                    AccumulatorField::Moves => Accumulation {
+                        moves: default.moves,
+                        ..now
+                    },
+                    AccumulatorField::AtLimit => Accumulation {
+                        at_limit: default.at_limit,
+                        ..now
+                    },
+                    AccumulatorField::Adds => Accumulation {
+                        adds: default.adds,
+                        ..now
+                    },
+                    AccumulatorField::Reset => Accumulation {
+                        reset: default.reset,
+                        ..now
+                    },
+                };
+                self.set_accumulation(reset);
+            }
         }
     }
 
@@ -1356,6 +1456,10 @@ impl App {
         }
         if let Control::Envelope(slot, field) = self.track_control() {
             self.open_envelope_picker(slot, field);
+            return;
+        }
+        if let Control::Accumulator(field) = self.track_control() {
+            self.open_accumulator_picker(field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
@@ -1493,6 +1597,63 @@ impl App {
             .to_vec();
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
         self.show_picker(Picker::new("Filter type", items).opened_on(position));
+    }
+
+    /// List what one of the accumulator's settings can be, with what each does and the one it has
+    /// highlighted. Its limits are numbers, typed or moved instead.
+    fn open_accumulator_picker(&mut self, field: AccumulatorField) {
+        let track = self.cursor.track;
+        let now = self.page_track().accumulation;
+        let pick = |accumulation| Pick::Accumulation {
+            track,
+            accumulation,
+        };
+        let (title, items): (&str, Vec<Item>) = match field {
+            AccumulatorField::Up | AccumulatorField::Down => {
+                self.status = format!(
+                    "A limit is a number of degrees from 1 to {MOST_DEGREES}: i types it, = and - move it"
+                );
+                return;
+            }
+            AccumulatorField::Moves => (
+                "Accumulator moves",
+                Moves::ALL
+                    .map(|moves| {
+                        Item::new(moves.name(), pick(Accumulation { moves, ..now }))
+                            .meaning(moves.meaning())
+                    })
+                    .to_vec(),
+            ),
+            AccumulatorField::AtLimit => (
+                "Accumulator at its limit",
+                AtLimit::ALL
+                    .map(|at_limit| {
+                        Item::new(at_limit.name(), pick(Accumulation { at_limit, ..now }))
+                            .meaning(at_limit.meaning())
+                    })
+                    .to_vec(),
+            ),
+            AccumulatorField::Adds => (
+                "Accumulator adds",
+                Adds::ALL
+                    .map(|adds| {
+                        Item::new(adds.name(), pick(Accumulation { adds, ..now }))
+                            .meaning(adds.meaning())
+                    })
+                    .to_vec(),
+            ),
+            AccumulatorField::Reset => (
+                "Accumulator starts again",
+                Reset::all()
+                    .map(|reset| {
+                        Item::new(reset.name(), pick(Accumulation { reset, ..now }))
+                            .meaning(reset.meaning())
+                    })
+                    .collect(),
+            ),
+        };
+        let position = items.iter().position(|item| item.pick == pick(now));
+        self.show_picker(Picker::new(title, items).opened_on(position));
     }
 
     /// List the speeds a track's steps can go at, with the one it plays highlighted.
@@ -1734,6 +1895,23 @@ impl App {
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
             Control::Lfo(..) | Control::FilterType | Control::FilterMode | Control::Machine => {}
+            Control::Accumulator(field @ (AccumulatorField::Up | AccumulatorField::Down)) => {
+                match text.trim().parse::<u8>() {
+                    Ok(limit) if (1..=MOST_DEGREES).contains(&limit) => {
+                        let now = track.accumulation;
+                        self.set_accumulation(if field == AccumulatorField::Up {
+                            Accumulation { up: limit, ..now }
+                        } else {
+                            Accumulation { down: limit, ..now }
+                        });
+                    }
+                    _ => {
+                        self.status =
+                            format!("A limit is a number of degrees from 1 to {MOST_DEGREES}");
+                    }
+                }
+            }
+            Control::Accumulator(_) => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
@@ -1847,6 +2025,52 @@ fn adjust_lfo(lfo: &mut Lfo, slot: usize, field: LfoField, up: bool, large: bool
             lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
         }
         LfoField::Retrig => lfo.retrig = !lfo.retrig,
+    }
+}
+
+/// How far a large step moves an accumulator's limit: an octave of a seven-note scale.
+const LIMIT_JUMP: u8 = 7;
+
+/// Move one of the accumulator's settings one notch. The limits stop at either end, as does the
+/// list of resets, and the short lists go round.
+fn adjust_accumulation(
+    accumulation: &mut Accumulation,
+    field: AccumulatorField,
+    up: bool,
+    large: bool,
+) {
+    let limit = |value: u8| {
+        let size = if large { LIMIT_JUMP } else { 1 };
+        let moved = if up {
+            value.saturating_add(size)
+        } else {
+            value.saturating_sub(size)
+        };
+        moved.clamp(1, MOST_DEGREES)
+    };
+    match field {
+        AccumulatorField::Up => accumulation.up = limit(accumulation.up),
+        AccumulatorField::Down => accumulation.down = limit(accumulation.down),
+        AccumulatorField::Moves => {
+            accumulation.moves = next_in(&Moves::ALL, accumulation.moves, up)
+        }
+        AccumulatorField::AtLimit => {
+            accumulation.at_limit = next_in(&AtLimit::ALL, accumulation.at_limit, up);
+        }
+        AccumulatorField::Adds => accumulation.adds = next_in(&Adds::ALL, accumulation.adds, up),
+        AccumulatorField::Reset => {
+            let resets: Vec<Reset> = Reset::all().collect();
+            let at = resets
+                .iter()
+                .position(|reset| *reset == accumulation.reset)
+                .unwrap_or(0);
+            let to = if up {
+                (at + 1).min(resets.len() - 1)
+            } else {
+                at.saturating_sub(1)
+            };
+            accumulation.reset = resets[to];
+        }
     }
 }
 

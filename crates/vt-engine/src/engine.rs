@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
@@ -12,6 +13,7 @@ use vt_model::envelope::Envelope;
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
 use vt_model::sample::SampleData;
+use vt_model::scale::Scale;
 use vt_model::settings::SettingId;
 use vt_model::song::{
     ChainPosition, Launch, Machine, Section, SectionStart, Song, Track, level_gain,
@@ -29,8 +31,8 @@ use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{
-    Clock, Decided, DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime,
-    TrackState, Worked, base_of,
+    Accumulating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part, PendingStep,
+    Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
 };
 use crate::voice::NoteOn;
 
@@ -48,6 +50,9 @@ pub struct TrackPlace {
     pub ticks: u32,
     /// Whether the row heard skipped its note, as its `CHA` or `CND` decided.
     pub skipped: bool,
+    /// The note the row heard was played at, before its chain's transpose, when an accumulator
+    /// moved it from the note as written.
+    pub accumulated: Option<u8>,
 }
 
 /// Whether the sequencer is moving.
@@ -118,6 +123,8 @@ pub struct Engine {
     lfo_countdown: u32,
     /// Whether fill is on, which `CND`'s `FILL` and `!FILL` read.
     fill: bool,
+    /// The scale an `ACU` moves notes through, a live control as it's outside undo.
+    scale: Scale,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -153,6 +160,7 @@ impl Engine {
     pub fn new(rate: u32, current: Arc<Published>) -> Self {
         let millibpm = current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         let seed = current.song.seed;
+        let scale = current.song.scale;
         let memory = MemoryPool::for_song(&current.song, rate);
         let mut engine = Self {
             rate,
@@ -188,6 +196,7 @@ impl Engine {
             reading: Reading::default(),
             lfo_countdown: 0,
             fill: false,
+            scale,
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -265,6 +274,7 @@ impl Engine {
             progress: 0.0,
             ticks: ticks as u32,
             skipped: false,
+            accumulated: None,
         };
         let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
         if !moved {
@@ -277,6 +287,7 @@ impl Engine {
                 as f32,
             ticks: worked.ticks as u32,
             skipped: !state.row.note,
+            accumulated: state.accumulated,
         })
     }
 
@@ -355,6 +366,7 @@ impl Engine {
             track.restart(0);
             track.forget_worked(0);
             track.forget_conditions();
+            track.forget_accumulators();
         }
         let song = Arc::clone(&self.current.song);
         let Some(rows) = song.sections.get(..=section) else {
@@ -1051,6 +1063,11 @@ impl Engine {
         self.fill
     }
 
+    /// Set the scale an `ACU` moves notes through, from the next note it moves.
+    pub fn set_scale(&mut self, scale: Scale) {
+        self.scale = scale;
+    }
+
     /// Set whether a track is muted. A muted track's sounding note fades.
     pub fn set_mute(&mut self, track: usize, mute: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
@@ -1463,13 +1480,29 @@ impl Engine {
         if self.tracks[index].last_note.is_some() {
             self.start_modulation(index);
         }
+        // With the track's `ACU`s adding on each hit, each moves the row's note on.
+        let moved = match (retrigger.accumulates, self.tracks[index].last_note) {
+            (Some(row), Some(_)) => {
+                let heard =
+                    self.accumulate(index, row.epoch, row.row, row.written, Some(row.amount));
+                Some(
+                    (i16::from(heard) + i16::from(row.transpose))
+                        .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8,
+                )
+            }
+            _ => None,
+        };
         let track = &mut self.tracks[index];
         let Some(note) = track.last_note else {
             track.retrigger = None;
             return;
         };
         let gain = (note.gain * retrigger.factor).clamp(0.0, 1.0);
-        let next = NoteOn { gain, ..note };
+        let next = NoteOn {
+            gain,
+            note: moved.unwrap_or(note.note),
+            ..note
+        };
         let (kill, off, gate) = (track.kill_at, track.off_at, track.gate_at);
         if audible {
             track.start(next, rate);
@@ -1555,6 +1588,7 @@ impl Engine {
             place,
             count: running - self.tracks[index].started,
             plays: None,
+            start: self.tracks[index].chain_starts,
         };
         // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
         // never lands before the last row's.
@@ -1695,7 +1729,13 @@ impl Engine {
                 || gate == GateKind::Multi
                     && matches!(
                         slot.command,
-                        Some(FxCommand::Del | FxCommand::Kil | FxCommand::Off | FxCommand::Ret)
+                        Some(
+                            FxCommand::Del
+                                | FxCommand::Kil
+                                | FxCommand::Off
+                                | FxCommand::Ret
+                                | FxCommand::Acu
+                        )
                     )
         };
         // Each FX column reads its own lane's step if it has one, and the note's row if not.
@@ -1719,6 +1759,7 @@ impl Engine {
         let mut kill_units = None;
         let mut off_units = None;
         let mut retrigger = None;
+        let mut accumulates: Option<i8> = None;
         // `CHA` and `CND` go first, as whether the note plays decides whether locks end. A row's
         // own are decided once, on its first pulse, by the step's first part to land. Every `CHA`
         // is rolled whatever the conditions say, so its rolls are the same with or without them.
@@ -1776,7 +1817,8 @@ impl Engine {
                 | FxCommand::Off
                 | FxCommand::Ret
                 | FxCommand::Cha
-                | FxCommand::Cnd,
+                | FxCommand::Cnd
+                | FxCommand::Acu,
             ) => row && decided.fx,
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
             _ => row && decided.fx,
@@ -1791,6 +1833,15 @@ impl Engine {
                 FxCommand::Off => off_units = Some(slot.coarse()),
                 FxCommand::Ret => retrigger = Some(slot.coarse()),
                 FxCommand::Cha | FxCommand::Cnd => {}
+                // Two on a row add up, as far as an `ACU` goes at once. A value past that is left
+                // out, as if it wasn't there.
+                FxCommand::Acu => {
+                    if let Some(amount) = amount(slot.coarse()) {
+                        let most = MOST_DEGREES as i8;
+                        let sum = accumulates.unwrap_or(0).saturating_add(amount);
+                        accumulates = Some(sum.clamp(-most, most));
+                    }
+                }
                 FxCommand::Set(id) if slot.mark == Mark::Glide => {
                     let value = command;
                     let to = phrase.and_then(|phrase| {
@@ -1826,7 +1877,18 @@ impl Engine {
         if first {
             self.tracks[index].tied =
                 gate == GateKind::Hold && plays && matches!(event, Note::On(_));
+            self.tracks[index].accumulated = None;
         }
+        // A row's `ACU` adds once as it plays, or on each pulse of a `MLT` and each hit of a `RET`
+        // as the track says. A note that's skipped, or rests, adds nothing.
+        let accumulation = owner.accumulation;
+        let adds = first || accumulation.adds != Adds::Row;
+        let key = RowKey {
+            phrase: position.phrase,
+            row: position.step,
+        };
+        let epoch = self.epoch(index, &pending, chain);
+        let mut accumulating = None;
         match event {
             Note::Empty => {}
             Note::Off if plays => {
@@ -1837,7 +1899,17 @@ impl Engine {
             Note::Off => {}
             Note::On(_) if !plays => {}
             Note::On(midi) => {
-                let note = (i16::from(midi) + i16::from(position.transpose))
+                let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| adds));
+                if accumulation.adds == Adds::Retrig {
+                    accumulating = accumulates.map(|amount| Accumulating {
+                        row: key,
+                        amount,
+                        written: midi,
+                        transpose: position.transpose,
+                        epoch,
+                    });
+                }
+                let note = (i16::from(heard) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
                 // The groove's velocity for the step scales the note's own.
@@ -1900,9 +1972,53 @@ impl Engine {
                     next_at: start_at + interval,
                     interval,
                     factor: retrigger_factor(value >> 4),
+                    accumulates: accumulating,
                 });
             }
         }
+    }
+
+    /// Which epoch a step's accumulators count in: the start of its chain it was worked out after,
+    /// and with a reset every so many loops, which group of them its count is in. With a reset only
+    /// when playing starts, it's always the same one.
+    fn epoch(&self, index: usize, pending: &PendingStep, chain: u32) -> Epoch {
+        let Some(owner) = self.current.song.tracks.get(index) else {
+            return (0, 0);
+        };
+        match owner.accumulation.reset {
+            Reset::Play => (0, 0),
+            Reset::Chain => (pending.start, 0),
+            Reset::Loops(loops) => {
+                let length = owner.chain_steps(chain).max(1) as i64 * i64::from(loops.max(1));
+                (pending.start, pending.count.div_euclid(length))
+            }
+        }
+    }
+
+    /// The note a row plays at, before its chain's transpose: the note as written, moved on by the
+    /// track's accumulators. Its own `ACU`, if it adds now, adds first, unless this is its first
+    /// play since they started again.
+    fn accumulate(
+        &mut self,
+        index: usize,
+        epoch: Epoch,
+        key: RowKey,
+        written: u8,
+        amount: Option<i8>,
+    ) -> u8 {
+        let Some(owner) = self.current.song.tracks.get(index) else {
+            return written;
+        };
+        let settings = owner.accumulation;
+        let state = &mut self.tracks[index];
+        state.accumulators.enter(epoch);
+        if let Some(amount) = amount.filter(|amount| *amount != 0) {
+            state.accumulators.add(key, amount, settings);
+        }
+        let offset = state.accumulators.offset(key, settings.moves);
+        let heard = moved_note(written, offset, self.scale);
+        state.accumulated = (heard != written).then_some(heard);
+        heard
     }
 
     /// Decide a row's conditions, left to right, as its first pulse lands, and keep what they and

@@ -20,6 +20,7 @@ use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_engine::track_state::LiveValues;
+use vt_model::accumulator::{MOST_DEGREES, amount};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::condition::Condition;
 use vt_model::constants::{
@@ -530,8 +531,10 @@ impl App {
         self.send_live();
     }
 
-    /// Tell the engine every track's live controls, after loading a song.
+    /// Tell the engine every track's live controls, and the scale `ACU` moves notes through, after
+    /// loading a song.
     fn send_live(&mut self) {
+        self.handle.send(Command::SetScale { scale: self.scale });
         for (track, live) in self.levels.clone().into_iter().enumerate() {
             self.handle.send(Command::SetMute {
                 track,
@@ -608,6 +611,7 @@ impl App {
                 progress: 0.0,
                 ticks: ticks as u32,
                 skipped: false,
+                accumulated: None,
             };
         }
     }
@@ -1779,6 +1783,7 @@ impl App {
     /// Set the scale, which isn't an edit to undo, and say what it now does.
     pub(crate) fn set_scale(&mut self, scale: Scale) {
         self.scale = scale;
+        self.handle.send(Command::SetScale { scale });
         self.dirty = true;
         self.status = if scale.on {
             format!("Scale {} {}", scale.root_name(), scale.kind.name())
@@ -2024,6 +2029,12 @@ impl App {
                 let command = self.entry.command.or(current.command);
                 if command == Some(FxCommand::Cnd) && Condition::from_value(value).is_none() {
                     self.status = format!("CND {value:02X} isn't a condition: K lists them");
+                    return;
+                }
+                if command == Some(FxCommand::Acu) && amount(value).is_none() {
+                    self.status = format!(
+                        "ACU {value:02X} is past {MOST_DEGREES}: 01 to 1C go up, FF to E4 down, and K lists them"
+                    );
                     return;
                 }
                 let Some(command) = self.entry.command.take().or(current.command) else {

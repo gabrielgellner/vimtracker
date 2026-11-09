@@ -288,6 +288,31 @@ lanes keep to theirs. A step's `GRV` and `RATE` still time it, as they're chosen
 before it lands. `PRE` and `NEI` read what the last condition on this track, or on
 the track to the left, decided, as each row lands.
 
+## Accumulators remember what played
+
+An `ACU` moves its row's note on each time the row plays, by scale degrees with the
+scale on and semitones with it off. Unlike a condition's pass, which is worked out
+from the count, an accumulator is kept as the track plays, as what it adds depends
+on what played: a row that `CHA` or `CND` skips, or that rests, adds nothing. So
+playing from a step starts it from the notes as written, rather than working out
+what playing up to it would have left.
+
+The first time a row plays it's as written, and each time after, its `ACU` adds
+before the note sounds. With `Moves` at `Row`, only that row moves; at `Track`,
+every row on the track moves by what the track's `ACU`s have added up to:
+
+```text
+rows:        C  D  E  F             ACU 01 on the C
+Row:         C D E F | D D E F | E D E F
+Track:       C D E F | D E F G | E F G A
+```
+
+At a limit, `Wrap` carries on from the note as written, `Bounce` turns back and
+turns again at the note, and `Hold` stays. With `Reset` at `Chain`, the default, it
+starts again wherever the count does; at `Play`, only when playing starts; and
+every so many loops of the chain, counted from where it started. It adds once a
+row, or with `Adds` set, on each pulse of a `MLT` or each hit of a `RET`.
+
 ## The keys, by column
 
 | Cursor on | `gs`, `ge`, `:len` | `:lane 3` |

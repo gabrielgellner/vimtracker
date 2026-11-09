@@ -1,5 +1,6 @@
 //! Motions, targets and what operators do to the steps they cover. No terminal is needed here.
 
+use crate::accumulator::{MOST_DEGREES, amount, amount_value};
 use crate::condition::Condition;
 use crate::constants::BEAT_STEPS;
 use crate::scale::Scale;
@@ -388,7 +389,7 @@ const LARGE_NOTE: i32 = 12;
 
 /// Move an FX value's coarse digits, within what its command takes, keeping its fine part. `RET`'s
 /// two digits mean separate things, a fade and a rate, so each moves alone and never carries into
-/// the other, and `CND`'s moves through its conditions.
+/// the other, `CND`'s moves through its conditions, and `ACU`'s is signed.
 fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
     let large = kind == Shift::Large;
     let coarse = slot.coarse();
@@ -405,6 +406,14 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
     if command == FxCommand::Cnd {
         let condition = Condition::from_value(coarse).unwrap_or(Condition::Fill(true));
         return u16::from(condition.moved(by, large).value()) << 8;
+    }
+    // An amount is signed, so it goes down through `00` to `FF`, and stops 28 either way. A large
+    // step is 7, an octave of a seven-note scale.
+    if command == FxCommand::Acu {
+        let most = i32::from(MOST_DEGREES);
+        let from = amount(coarse).map_or(0, i32::from);
+        let moved = (from + by * if large { 7 } else { 1 }).clamp(-most, most);
+        return u16::from(amount_value(moved as i8)) << 8;
     }
     let by = if large { by * LARGE_HEX } else { by };
     let moved = i32::from(coarse) + by;
