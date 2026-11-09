@@ -10,6 +10,7 @@ pub mod comb;
 pub mod compressor;
 pub mod delay;
 pub mod diode_filter;
+pub mod dirty_filter;
 pub mod distort;
 pub mod drums;
 pub mod eq;

@@ -1,9 +1,11 @@
 //! Each track's filter. The clean modes share a TPT state-variable filter, which stays stable near
-//! the top of the range. The ladder, diode and Korg 35 are the character filters, and cost more.
+//! the top of the range. The ladder, diode, Korg 35 and Vital's `Dirty` are the character filters,
+//! and cost more.
 
 use vt_model::song::{FilterType, Track};
 
 use crate::dsp::diode_filter::{self, DiodeFilter, RESONANT_SHARE};
+use crate::dsp::dirty_filter::{self, DirtyFilter};
 use crate::dsp::korg35::{self, Korg35};
 use crate::dsp::oversampler::Oversampler;
 
@@ -59,6 +61,8 @@ pub struct Coefficients {
     /// The Korg 35's one-pole coefficient at twice the rate, `g / (1 + g)`, and its feedback.
     korg_coefficient: f32,
     korg_feedback: f32,
+    /// The `Dirty` filter's tuning at twice the rate.
+    dirty: dirty_filter::Tuning,
 }
 
 impl Coefficients {
@@ -88,6 +92,7 @@ impl Coefficients {
             resonance,
             korg_coefficient: double_g / (1.0 + double_g),
             korg_feedback: resonance * korg35::MOST_FEEDBACK,
+            dirty: dirty_filter::Tuning::new(double_g / (1.0 + double_g), resonance),
         }
     }
 }
@@ -184,6 +189,7 @@ pub struct Channel {
     ladder: Ladder,
     diode: DiodeFilter,
     korg: Korg35,
+    dirty: DirtyFilter,
     oversampler: Oversampler,
 }
 
@@ -209,6 +215,16 @@ impl Channel {
             return self.oversampler.process(input * DIODE_INPUT, |x| {
                 diode.next(x, c.diode_cutoff, c.resonance, gain, c.diode_feedback) * DIODE_OUTPUT
             });
+        }
+        if kind == FilterType::Dirty {
+            // Its drive goes only to what comes straight into its loop, and adds a little
+            // resonance.
+            let settings = dirty_filter::Settings::new(&c.dirty, drive, gain);
+            let dirty = &mut self.dirty;
+            return self
+                .oversampler
+                .process(input, |x| dirty.next(x, &settings))
+                / gain.sqrt();
         }
         let output = if kind == FilterType::Ladder {
             let ladder = &mut self.ladder;
@@ -237,10 +253,23 @@ impl Channel {
 
 /// How much a filter lets through at a frequency, in dB, for a quiet signal. This is the filter's
 /// exact response, so a drawing of it shows what's heard.
-pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, hertz: f32) -> f32 {
+///
+/// `Drive` only changes the level and the saturation of the others, but it adds resonance to
+/// `Dirty`, which changes its shape, so that's drawn. Its level isn't, as for the others.
+pub fn response_db(
+    kind: FilterType,
+    cutoff: f32,
+    resonance: f32,
+    drive: f32,
+    rate: u32,
+    hertz: f32,
+) -> f32 {
     let c = Coefficients::new(cutoff, resonance, rate);
     let hertz = hertz.min(rate as f32 * 0.499);
-    let power = if kind == FilterType::Diode {
+    let power = if kind == FilterType::Dirty {
+        let settings = dirty_filter::Settings::new(&c.dirty, drive, 1.0);
+        dirty_filter::response(&settings, hertz / (2.0 * rate as f32))
+    } else if kind == FilterType::Diode {
         let gain = DIODE_INPUT * DIODE_OUTPUT;
         gain * gain
             * diode_filter::response(
@@ -271,7 +300,8 @@ pub fn response_db(kind: FilterType, cutoff: f32, resonance: f32, rate: u32, her
             | FilterType::Ladder
             | FilterType::Diode
             | FilterType::Ms20LowPass
-            | FilterType::Ms20HighPass => 1.0,
+            | FilterType::Ms20HighPass
+            | FilterType::Dirty => 1.0,
         };
         top / (rest + k2 * w2)
     };
@@ -289,13 +319,34 @@ pub fn track_response_db(track: &Track, rate: u32, hertz: f32) -> f32 {
     let mut db = 0.0;
     if !open {
         let (cutoff, resonance) = (value(track.cutoff), value(track.resonance));
-        db += response_db(track.filter, cutoff, resonance, rate, hertz);
+        db += response_db(
+            track.filter,
+            cutoff,
+            resonance,
+            value(track.drive),
+            rate,
+            hertz,
+        );
     }
     if track.low_cut > 0 {
-        db += response_db(FilterType::HighPass, value(track.low_cut), 0.0, rate, hertz);
+        db += response_db(
+            FilterType::HighPass,
+            value(track.low_cut),
+            0.0,
+            0.0,
+            rate,
+            hertz,
+        );
     }
     if track.high_cut < u8::MAX {
-        db += response_db(FilterType::LowPass, value(track.high_cut), 0.0, rate, hertz);
+        db += response_db(
+            FilterType::LowPass,
+            value(track.high_cut),
+            0.0,
+            0.0,
+            rate,
+            hertz,
+        );
     }
     db
 }
@@ -349,7 +400,8 @@ fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, c: &Coefficient
         | FilterType::Ladder
         | FilterType::Diode
         | FilterType::Ms20LowPass
-        | FilterType::Ms20HighPass => low,
+        | FilterType::Ms20HighPass
+        | FilterType::Dirty => low,
     }
 }
 
@@ -395,7 +447,7 @@ mod tests {
         for kind in FilterType::ALL {
             for res in [0.0, 0.5, 0.8] {
                 for hertz in [100.0, 400.0, 1000.0, 2500.0, 8000.0] {
-                    let worked_out = response_db(kind, cutoff(1000.0), res, RATE, hertz);
+                    let worked_out = response_db(kind, cutoff(1000.0), res, 0.0, RATE, hertz);
                     // A notch at its very centre is too deep to measure.
                     if worked_out < -60.0 {
                         continue;
@@ -504,6 +556,7 @@ mod tests {
             FilterType::Diode,
             FilterType::Ms20LowPass,
             FilterType::Ms20HighPass,
+            FilterType::Dirty,
         ] {
             // Open, so only the drive changes the level.
             let cut = if kind == FilterType::Ms20HighPass {
@@ -540,13 +593,18 @@ mod tests {
 
     /// The frequency of what's left once a filter has been struck once.
     fn ringing_at(kind: FilterType, cut: f32, res: f32) -> f32 {
+        driven_ringing_at(kind, cut, res, 0.0)
+    }
+
+    /// The same with some drive.
+    fn driven_ringing_at(kind: FilterType, cut: f32, res: f32, drive: f32) -> f32 {
         let c = Coefficients::new(cutoff(cut), res, RATE);
         let mut channel = Channel::default();
-        channel.process(0.5, kind, 0.0, &c);
+        channel.process(0.5, kind, drive, &c);
         let frames = RATE as usize * 2;
         let (mut crossings, mut last, mut peak) = (0, 0.0_f32, 0.0_f32);
         for frame in 0..frames {
-            let output = channel.process(0.0, kind, 0.0, &c);
+            let output = channel.process(0.0, kind, drive, &c);
             assert!(output.is_finite());
             if frame > frames / 2 {
                 if last <= 0.0 && output > 0.0 {
@@ -640,6 +698,7 @@ mod tests {
             FilterType::Diode,
             FilterType::Ms20LowPass,
             FilterType::Ms20HighPass,
+            FilterType::Dirty,
         ];
         for kind in kinds {
             for (alias, most) in [(3000.0, -50.0), (13_000.0, -50.0), (23_000.0, -30.0)] {
@@ -782,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn moving_the_korg_35s_settings_in_steps_glides_without_a_step() {
+    fn moving_a_sallen_keys_settings_in_steps_glides_without_a_step() {
         // The biggest jump between frames from a tone through it, with the settings smoothed and its
         // coefficients worked out every 32 frames, as a track does. They're held at one of two, or
         // jump between them every 64 frames, as a knob or an LFO steps them block by block.
@@ -819,13 +878,101 @@ mod tests {
             }
             most
         };
-        for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
+        for kind in [
+            FilterType::Ms20LowPass,
+            FilterType::Ms20HighPass,
+            FilterType::Dirty,
+        ] {
             let held = biggest_jump(kind, |_| false).max(biggest_jump(kind, |_| true));
             let moving = biggest_jump(kind, |frame| frame / 64 % 2 == 1);
             assert!(
                 moving < held * 1.5,
                 "{kind:?}: {held} held and {moving} moving"
             );
+        }
+    }
+
+    #[test]
+    fn the_dirty_filter_slopes_at_24_db_and_loses_bass_as_resonance_rises() {
+        let db = |res, hertz| gain_db(FilterType::Dirty, 1000.0, res, 0.0, hertz, 0.01);
+        // A quiet sound comes through at its level with no resonance.
+        near(db(0.0, 50.0), 0.0, 0.1);
+        // Four one-poles at the cutoff, each 3 dB down there.
+        near(db(0.0, 1000.0), -12.0, 0.6);
+        near(db(0.0, 4000.0) - db(0.0, 8000.0), 24.0, 2.0);
+        // Its loop takes from what comes straight in as it rises, as the ladder's does.
+        assert!(db(0.5, 50.0) < -4.0, "{}", db(0.5, 50.0));
+        assert!(db(0.75, 50.0) < db(0.5, 50.0) - 1.0, "{}", db(0.75, 50.0));
+    }
+
+    #[test]
+    fn the_dirty_filter_peaks_at_its_cutoff_and_self_oscillates_there() {
+        for cut in [200.0, 1000.0, 4000.0] {
+            // Just short of ringing by itself, its peak is louder at `Cut` than a semitone either
+            // side.
+            let db = |hertz| gain_db(FilterType::Dirty, cut, 0.85, 0.0, hertz, 0.001);
+            let semitone = 2_f32.powf(1.0 / 12.0);
+            assert!(db(cut) > db(cut * semitone) && db(cut) > db(cut / semitone));
+        }
+        // It rings by itself from about `Res DB`, and drive, which adds resonance, rings it louder
+        // and so flatter, until the loop's tuning is raised to meet it.
+        for drive in [0.0, 1.0] {
+            for res in [0.9, 1.0] {
+                for cut in [50.0, 200.0, 1000.0, 4000.0, 8000.0, 12_000.0, 16_000.0] {
+                    if res < 1.0 && cut > 4000.0 {
+                        // It's eased off at high cutoffs, so it needs more there.
+                        continue;
+                    }
+                    let pitch = driven_ringing_at(FilterType::Dirty, cut, res, drive);
+                    let cents = 1200.0 * (pitch / cut).log2();
+                    assert!(cents.abs() < 15.0, "{drive} {res} {cut} rang at {pitch}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_dirty_filters_curve_shows_drives_resonance() {
+        // Drive adds resonance, which changes its shape, so its curve takes that, though not the
+        // level drive leaves it at.
+        let (cut, res) = (1000.0, 0.75);
+        for drive in [0.0, 1.0] {
+            let worked_out =
+                |hertz| response_db(FilterType::Dirty, cutoff(cut), res, drive, RATE, hertz);
+            let measured = |hertz| gain_db(FilterType::Dirty, cut, res, drive, hertz, 0.0005);
+            for hertz in [400.0, 1000.0, 2500.0] {
+                near(
+                    measured(hertz) - measured(100.0),
+                    worked_out(hertz) - worked_out(100.0),
+                    0.5,
+                );
+            }
+        }
+        let peak = |drive| response_db(FilterType::Dirty, cutoff(cut), res, drive, RATE, cut);
+        assert!(
+            peak(1.0) > peak(0.0) + 3.0,
+            "{} and {}",
+            peak(1.0),
+            peak(0.0)
+        );
+    }
+
+    #[test]
+    fn the_dirty_filter_stays_in_bounds_at_full_resonance_with_loud_input_and_fast_sweeps() {
+        for drive in [0.0, 1.0] {
+            let mut channel = Channel::default();
+            let mut most = 0.0_f32;
+            for frame in 0..RATE as usize * 2 {
+                // Up and down the whole range eight times a second, with a full-level saw in.
+                let along = frame as f32 / RATE as f32;
+                let sweep = (along * 8.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+                let c = Coefficients::new(sweep, 1.0, RATE);
+                let input = (along * 55.0).fract() * 2.0 - 1.0;
+                let output = channel.process(input, FilterType::Dirty, drive, &c);
+                assert!(output.is_finite(), "{output}");
+                most = most.max(output.abs());
+            }
+            assert!(most < 0.8, "at drive {drive} it reached {most}");
         }
     }
 }
