@@ -49,13 +49,40 @@ is why jump forward is now on `Ctrl-I` (decision 52), `Ctrl-J` and `Ctrl-M` apar
 and `Ctrl` with any digit. Shift is kept only on the arrows, and folded into characters or dropped
 elsewhere, so `Shift-Enter` is `Enter`.
 
-Cmd is `SUPER`, named `D-` as in Vim. It reaches the program, but nothing is bound to it, so a key
-pressed with Cmd is dropped, and `probe-keys` shows it as `D-1, ignored`. Its release still counts,
+Cmd is `SUPER`, named `D-` as in Vim. It reaches the program, and only `Cmd-h` `Cmd-j` `Cmd-k`
+`Cmd-l` are bound (decision 67). Any other key pressed with Cmd is dropped, and `probe-keys` shows
+it as `D-1, ignored`. Its release still counts,
 so letting go of a held note with Cmd down ends the note. Remote control sends a key to the program
 past kitty's own shortcuts, and those take `Cmd-1` to `Cmd-9` (its windows), `Cmd-0` (font size),
 `Cmd-C`, `Cmd-V`, `Cmd-T`, `Cmd-W` and more by default, so on a real keyboard those only reach
 the program once `kitty.conf` unmaps them. The same goes for `Ctrl-Shift` with a letter, kitty's
 `kitty_mod`.
+
+### Cmd keys
+
+`Cmd-h` `Cmd-j` `Cmd-k` `Cmd-l` change the value under the cursor without moving it. kitty takes
+three of them by default: `cmd+h` hides kitty, `cmd+k` clears up to the cursor, and `cmd+l` clears
+the last command's output; `cmd+j` is free. The program sets the window title to `vimtracker`, or
+`vimtracker: <project>`, so these lines in `kitty.conf` hand the keys to it while its window has
+focus, and leave kitty's shortcuts everywhere else:
+
+```
+map --when-focus-on title:vimtracker cmd+h
+map --when-focus-on title:vimtracker cmd+j
+map --when-focus-on title:vimtracker cmd+k
+map --when-focus-on title:vimtracker cmd+l
+```
+
+A mapping with no action unmaps the shortcut, so the key goes to the program, and
+`--when-focus-on` makes that hold only for a window whose title matches (`title:` is a regular
+expression, so it matches the project's title too). The alternative is `map cmd+h no_op` and so on,
+which passes the key to every program in every window, so kitty's own shortcuts are gone
+everywhere.
+
+Ghostty's equivalent is `keybind = super+k=unbind` and so on, from its keybind docs, which pass
+the key to the program. Ghostty has no condition on the window title, so that frees the key in
+every window. Unchecked: Ghostty isn't installed here, its docs say an unbound key is sent through
+"if it is printable", and whether that covers a key with Cmd isn't known.
 
 `Option-1`, `Option-2` and `Option-s` work in kitty, on 2026-11-06, with `macos_option_as_alt`
 set. `scripts/live.sh` sets it.
@@ -103,6 +130,8 @@ tried:
 
 ## Still to check by hand
 
+*   The `--when-focus-on` lines above on a real keyboard: that `Cmd-l` adjusts in vimtracker's
+    window and still clears in another.
 *   The same in Ghostty, with `macos-option-as-alt`: shifted keys, held keys, the Option keys,
     `Ctrl-I` apart from `Tab`, `Ctrl` with digits, and which `Cmd` keys Ghostty's own shortcuts take.
 *   In Ghostty, that the program starts, so its answer to the image query is `OK`, and that the

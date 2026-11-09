@@ -9,6 +9,7 @@ use ratatui::crossterm::event::{
     self, DisableFocusChange, EnableFocusChange, Event, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags,
 };
+use ratatui::crossterm::terminal::SetTitle;
 use ratatui::crossterm::{execute, terminal};
 use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::widgets::Block;
@@ -266,7 +267,13 @@ fn main_loop(
     stream: &mut Option<cpal::Stream>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
+    // Set at start, and again when opening, saving as or starting a new project changes it.
+    let mut title = String::new();
     while !app.should_quit {
+        if app.window_title() != title {
+            title = app.window_title();
+            execute!(std::io::stdout(), SetTitle(&title))?;
+        }
         // A device that changes or goes away stops audio, and the audio page chooses again.
         if stream.is_some() && stats.lost.load(Ordering::Acquire) {
             *stream = None;

@@ -23,8 +23,8 @@ pub struct Key {
     pub code: KeyCode,
     pub ctrl: bool,
     pub alt: bool,
-    /// Cmd on a Mac, the super or Windows key elsewhere. Nothing is bound to it, so a key held with
-    /// it is dropped rather than read as the key alone.
+    /// Cmd on a Mac, the super or Windows key elsewhere. Only `Cmd-h` `Cmd-j` `Cmd-k` `Cmd-l` are
+    /// bound; any other key held with it is dropped rather than read as the key alone.
     pub command: bool,
     /// Only ever set on an arrow, so nothing else has to care about it. Elsewhere Shift is in the
     /// character, as `G` or `:`, and away from `Enter`, `Space` and the like, so a Shift held a
