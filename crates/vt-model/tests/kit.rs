@@ -131,3 +131,20 @@ fn a_kit_file_writes_only_what_it_says_and_reads_back() {
     );
     assert_eq!(ron::from_str::<KitFile>(&text).unwrap(), file);
 }
+
+#[test]
+fn a_sounds_gain_and_tune_are_its_tracks_level_and_pitch() {
+    let path = kit(r#"(sounds: [
+        (path: "a.wav"),
+        (path: "b.wav", gain: -6.0, tune: 3),
+        (path: "c.wav", gain: 20.0, tune: -48),
+        (path: "d.wav", gain: -100.0, tune: 48),
+    ])"#);
+    let kit = load_kit(&path).unwrap();
+    let tracks: Vec<(u8, u8)> = kit.sounds.iter().map(|s| (s.level(), s.pitch())).collect();
+    assert_eq!(
+        tracks,
+        [(0xE0, 0x80), (0xC8, 0x83), (0xF8, 0x50), (0x00, 0xB0)],
+        "a quarter of a dB and a semitone a step, within the level's scale"
+    );
+}

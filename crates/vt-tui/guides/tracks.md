@@ -480,6 +480,11 @@ and changing one here is heard straight away unless a lock or glide is on top. `
 Dimmed `Swing` is the project's, which this track follows. Changing it gives the
 track its own, and `x` follows the project again.
 
+`Pitch` moves every note on the track, a semitone a step either side of `80`,
+as `PTCH` on a step does for that step. `Choke` puts the track in a group, `1`
+to `16`, or `Off`: a note on it cuts off what's sounding on the other tracks in
+the group, as a closed hat cuts an open one. A kit sets both, with the level.
+
 ## Returns and the master
 
 Every song ends with three fixed tracks, labelled `A`, `B` and `M`. `W`, `B` and the

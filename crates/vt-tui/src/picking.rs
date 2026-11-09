@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::action::{Action, FieldValue, KitSound};
+use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
 use vt_model::sample::{is_sample_file, load_sample};
@@ -107,6 +107,9 @@ fn kit_item(entry: &KitEntry) -> Item {
         pick: Pick::KitSound {
             path: entry.path.clone(),
             label: entry.label.clone(),
+            level: entry.level(),
+            pitch: entry.pitch(),
+            choke: entry.choke,
         },
     }
 }
@@ -299,6 +302,9 @@ impl App {
             sounds.push(KitSound {
                 sample: stored,
                 name: entry.label.clone(),
+                level: entry.level(),
+                pitch: entry.pitch(),
+                choke: entry.choke,
             });
         }
         let replaced: Vec<String> = sounds
@@ -555,9 +561,27 @@ impl App {
                     }) => self.open_use(section, track, slot),
                     Some(Pick::Sample(path)) => self.sample(&path),
                     Some(Pick::Kit(path)) => self.use_kit(&path),
-                    Some(Pick::KitSound { path, label }) => {
-                        let label = (!label.is_empty()).then_some(label.as_str());
-                        self.sample_named(&path, label);
+                    Some(Pick::KitSound {
+                        path,
+                        label,
+                        level,
+                        pitch,
+                        choke,
+                    }) => {
+                        let track = self.cursor.track;
+                        let mut more = vec![
+                            Action::SetTrackLevel { track, level },
+                            Action::SetTrackBase {
+                                track,
+                                control: TrackControl::Pitch,
+                                value: pitch,
+                            },
+                            Action::SetTrackChoke { track, choke },
+                        ];
+                        if !label.is_empty() {
+                            more.push(Action::SetTrackName { track, name: label });
+                        }
+                        self.sample_with(&path, more);
                     }
                     Some(Pick::Track(track)) => self.go_to_track(track),
                     Some(Pick::Audio(choice)) => self.pick_audio(choice),

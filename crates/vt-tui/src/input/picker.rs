@@ -47,10 +47,14 @@ pub enum Pick {
         slot: usize,
         envelope: Envelope,
     },
-    /// A sound from the current kit, for this track, and the label the track takes as its name.
+    /// A sound from the current kit, for this track, and the label the track takes as its name,
+    /// its level, its pitch and its choke group.
     KitSound {
         path: PathBuf,
         label: String,
+        level: u8,
+        pitch: u8,
+        choke: Option<u8>,
     },
     /// Go to this track.
     Track(usize),

@@ -2371,6 +2371,19 @@ impl App {
     /// Put a sample on the current track and name the track after it, if there's a name, as one
     /// undo step.
     pub(crate) fn sample_named(&mut self, source: &Path, name: Option<&str>) {
+        let track = self.cursor.track;
+        let more = name
+            .map(|name| Action::SetTrackName {
+                track,
+                name: name.to_owned(),
+            })
+            .into_iter()
+            .collect();
+        self.sample_with(source, more);
+    }
+
+    /// Put a sample on the current track, with other changes to the track, as one undo step.
+    pub(crate) fn sample_with(&mut self, source: &Path, more: Vec<Action>) {
         if source.is_dir() {
             self.open_sample_picker(&[source.to_path_buf()]);
             return;
@@ -2393,12 +2406,7 @@ impl App {
                     track,
                     sample: Some(stored),
                 }];
-                if let Some(name) = name {
-                    actions.push(Action::SetTrackName {
-                        track,
-                        name: name.to_owned(),
-                    });
-                }
+                actions.extend(more);
                 self.apply(&Action::Batch(actions));
                 if self.status.is_empty() {
                     self.status = format!("Track {:02} sample loaded", self.cursor.track + 1);

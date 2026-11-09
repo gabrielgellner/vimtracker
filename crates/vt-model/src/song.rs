@@ -198,6 +198,13 @@ pub struct Track {
     /// How much it sends to return `B`, and where held `SNB` starts.
     #[serde(default)]
     pub send_b: u8,
+    /// Where held `PTCH` starts, in semitones from `80`, as a kit sound's tune sets it.
+    #[serde(default = "centre")]
+    pub pitch: u8,
+    /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
+    /// sounding on the other tracks in the group, as a closed hat cuts an open one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub choke: Option<u8>,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -417,6 +424,8 @@ impl Default for Track {
             pan: centre(),
             send_a: 0,
             send_b: 0,
+            pitch: centre(),
+            choke: None,
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),

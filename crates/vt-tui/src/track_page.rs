@@ -7,6 +7,7 @@ use vt_model::action::{Action, TrackControl, edit};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
+use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{
     LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, depth_value, note_rates, phase_value,
 };
@@ -70,6 +71,8 @@ pub enum Control {
     Base(TrackControl),
     Level,
     Swing,
+    /// The choke group it's in, or none.
+    Choke,
     FilterType,
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
@@ -173,8 +176,8 @@ pub const SAMPLE_ROWS: [&[Control]; 8] = [
     &[Control::FilterType, base(TrackControl::SendA)],
     &[base(TrackControl::Cutoff), base(TrackControl::SendB)],
     &[base(TrackControl::Resonance), Control::Swing],
-    &[base(TrackControl::Drive)],
-    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::Drive), base(TrackControl::Pitch)],
+    &[base(TrackControl::LowCut), Control::Choke],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
@@ -185,8 +188,8 @@ pub const SYNTH_ROWS: [&[Control]; 11] = [
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Setting(3), Control::Swing],
-    &[Control::FilterType],
-    &[base(TrackControl::Cutoff)],
+    &[Control::FilterType, base(TrackControl::Pitch)],
+    &[base(TrackControl::Cutoff), Control::Choke],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -199,8 +202,8 @@ pub const SYNTH8_ROWS: [&[Control]; 15] = [
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Setting(3), Control::Swing],
-    &[Control::Setting(4)],
-    &[Control::Setting(5)],
+    &[Control::Setting(4), base(TrackControl::Pitch)],
+    &[Control::Setting(5), Control::Choke],
     &[Control::Setting(6)],
     &[Control::Setting(7)],
     &[Control::FilterType],
@@ -217,8 +220,8 @@ pub const SYNTH3_ROWS: [&[Control]; 11] = [
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Swing],
-    &[Control::FilterType],
-    &[base(TrackControl::Cutoff)],
+    &[Control::FilterType, base(TrackControl::Pitch)],
+    &[base(TrackControl::Cutoff), Control::Choke],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -295,6 +298,8 @@ impl Control {
             Self::Base(TrackControl::Drive) => "Drive",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
+            Self::Base(TrackControl::Pitch) => "Pitch",
+            Self::Choke => "Choke",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "File",
@@ -337,7 +342,10 @@ impl Control {
         match self {
             Self::Level
             | Self::Swing
-            | Self::Base(TrackControl::Pan | TrackControl::SendA | TrackControl::SendB) => 1,
+            | Self::Choke
+            | Self::Base(
+                TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
+            ) => 1,
             _ => 0,
         }
     }
@@ -364,6 +372,7 @@ impl Control {
             Self::Base(TrackControl::Pan) => base(SettingId::PAN, track.pan),
             Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
             Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
+            Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
                 let setting = insert.params().get(param)?.setting;
@@ -404,7 +413,8 @@ impl Control {
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
-            Self::Base(TrackControl::SendA | TrackControl::SendB) => track.is_sound(),
+            Self::Base(TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch)
+            | Self::Choke => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -641,6 +651,7 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
+                    TrackControl::Pitch => track.pitch,
                 };
                 self.set_hex(control, change(value));
             }
@@ -670,6 +681,15 @@ impl App {
                 self.apply(&Action::SetFilterType {
                     track: self.cursor.track,
                     filter,
+                });
+            }
+            Control::Choke => {
+                let from = i64::from(track.choke.unwrap_or(0));
+                let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
+                    .clamp(0, i64::from(CHOKE_GROUPS)) as u8;
+                self.apply(&Action::SetTrackChoke {
+                    track: self.cursor.track,
+                    choke: (moved > 0).then_some(moved),
                 });
             }
             Control::Swing => {
@@ -1048,6 +1068,7 @@ impl App {
                     TrackControl::Drive => track.drive,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
+                    TrackControl::Pitch => track.pitch,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));
@@ -1109,6 +1130,13 @@ impl App {
                 });
             }
             Control::Swing => {}
+            Control::Choke if track.choke.is_some() => {
+                self.apply(&Action::SetTrackChoke {
+                    track: self.cursor.track,
+                    choke: None,
+                });
+            }
+            Control::Choke => {}
             Control::FilterType => {
                 if track.filter != fresh.filter {
                     self.apply(&Action::SetFilterType {
@@ -1562,6 +1590,21 @@ impl App {
                     self.set_hex(control, value);
                 }
             }
+            Control::Choke if text.eq_ignore_ascii_case("off") => {
+                self.apply(&Action::SetTrackChoke {
+                    track: self.cursor.track,
+                    choke: None,
+                });
+            }
+            Control::Choke => match text.parse::<u8>() {
+                Ok(group) if (1..=CHOKE_GROUPS).contains(&group) => {
+                    self.apply(&Action::SetTrackChoke {
+                        track: self.cursor.track,
+                        choke: Some(group),
+                    });
+                }
+                _ => self.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+            },
             Control::Swing if text.eq_ignore_ascii_case("off") => {
                 self.apply(&Action::SetTrackSwing {
                     track: self.cursor.track,
