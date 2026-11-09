@@ -1,5 +1,5 @@
 //! Live recording: armed with `Space r` while the song plays, notes played in Insert go in where
-//! the cursor's track is playing, each as long as its key was held, in its gate cell.
+//! the cursor's track is playing, each with how long its key was held in its gate cell.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,17 +8,14 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_model::action::Action;
 use vt_model::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
-use vt_model::step::{Gate, GateKind, MAX_PULSES, Note};
+use vt_model::step::{Gate, GateKind, Note};
 
 use crate::app::App;
 use crate::input::keys::Key;
 use crate::input::mode::View;
 
-/// The longest a recorded note can be, in steps: the most pulses a row can last.
-const LONGEST_NOTE: f64 = MAX_PULSES as f64;
-
-/// The longest a recorded note's length can be, just under all of its last pulse, so it ends
-/// where it was let go rather than holding on to the next note as `FF` does.
+/// The longest a recorded note's length can be while it's let go within its row, just under all
+/// of its last pulse, so it ends there rather than holding on to the next note as `FF` does.
 const LONGEST_LENGTH: u8 = 0xFE;
 
 /// The furthest past the engine's last report the playhead is worked out from the clock, so a
@@ -50,7 +47,7 @@ struct Take {
     /// engine reports.
     pressed: f64,
     starts: f64,
-    /// How long it can last: until its row comes round again, or the most pulses a row can last.
+    /// How long it can last: until its row comes round again.
     longest: f64,
     written: bool,
     /// How long its key was held, once it's let go or the note has run as long as it can.
@@ -231,13 +228,14 @@ impl App {
             phrase: position.phrase,
             step: phrase.start() + position.step,
             starts: now + start - into,
-            longest: (length as f64).min(LONGEST_NOTE),
+            longest: length as f64,
         })
     }
 
     /// Write a recorded note over its row's note, velocity and gate cell, with its length in the
-    /// cell. Until it's let go, it holds on the pulses the row had. Other columns and rows are left
-    /// alone, and the pass is one undo step.
+    /// cell. The row keeps its pulses, so recording never changes a loop's length, and until it's
+    /// let go the note holds on. Other columns and rows are left alone, and the pass is one undo
+    /// step.
     fn write_take(&mut self, take: &Take, held: Option<f64>, depth: &mut Option<usize>) {
         let Some(phrase) = self
             .song()
@@ -253,12 +251,12 @@ impl App {
         };
         step.note = Note::On(take.note);
         step.velocity = Some(take.velocity);
-        // The note is one note, held, so its gate is a `SGL`. Until it's let go, it holds on the
-        // row's pulses until something ends it, and then the row lasts as long as it was held.
-        let (pulses, length) = match held {
-            Some(held) => recorded_length(held.min(take.longest)),
-            None => (step.gate.map_or(1, |gate| gate.pulses), u8::MAX),
-        };
+        // The note is one note, held, so its gate is a `SGL`, on the pulses the row had. Until
+        // it's let go, it holds on until something ends it.
+        let pulses = step.gate.map_or(1, |gate| gate.pulses);
+        let length = held.map_or(u8::MAX, |held| {
+            recorded_length(held.min(take.longest), pulses)
+        });
         step.gate = Some(Gate {
             kind: GateKind::Single,
             pulses,
@@ -282,15 +280,19 @@ impl App {
     }
 }
 
-/// The pulses and length a note held this many steps is written with. The row lasts as long as it
-/// was held, to the nearest step, as a press goes on the nearest row, so a key let go just past a
-/// step doesn't add one. The note lasts what was held of the row's last pulse, up to just under
-/// all of it.
-fn recorded_length(held: f64) -> (u8, u8) {
-    let pulses = held.round().clamp(1.0, LONGEST_NOTE);
-    let last = (held - (pulses - 1.0)).clamp(0.0, 1.0);
-    let length = (last * 255.0).round().min(f64::from(LONGEST_LENGTH));
-    (pulses as u8, length as u8)
+/// The length a note held this many steps is written with on a row of so many pulses, which stay
+/// as they are: what was held of the row's last pulse, up to just under all of it, or `FF` if it
+/// was held past the row's end, so it rings on until the next note or something else ends it, as a
+/// held note does. One let go before the row's last pulse lasts into it as little as the cell can
+/// say, `00`.
+fn recorded_length(held: f64, pulses: u8) -> u8 {
+    let last = held - f64::from(pulses.max(1) - 1);
+    if last > 1.0 {
+        return u8::MAX;
+    }
+    (last.max(0.0) * 255.0)
+        .round()
+        .min(f64::from(LONGEST_LENGTH)) as u8
 }
 
 #[cfg(test)]
@@ -298,13 +300,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_hold_gives_its_row_the_nearest_whole_steps_and_the_rest_as_its_length() {
-        assert_eq!(recorded_length(0.5), (1, 0x80));
-        assert_eq!(recorded_length(0.0), (1, 0x00), "00 still sounds, at 1%");
-        // Let go just past a step, the row doesn't take another.
-        assert_eq!(recorded_length(1.3), (1, LONGEST_LENGTH));
-        assert_eq!(recorded_length(1.6), (2, 0x99));
-        assert_eq!(recorded_length(2.0), (2, LONGEST_LENGTH));
-        assert_eq!(recorded_length(12.0), (MAX_PULSES, LONGEST_LENGTH));
+    fn a_hold_is_what_was_held_of_the_rows_last_pulse_and_past_it_holds_on() {
+        assert_eq!(recorded_length(0.5, 1), 0x80);
+        assert_eq!(recorded_length(0.0, 1), 0x00, "00 still sounds, at 1%");
+        assert_eq!(
+            recorded_length(1.0, 1),
+            LONGEST_LENGTH,
+            "let go at the row's end"
+        );
+        assert_eq!(recorded_length(1.3, 1), 0xFF, "held past it, it rings on");
+        // On a row of several pulses, it's the share of the last.
+        assert_eq!(recorded_length(3.5, 4), 0x80);
+        assert_eq!(
+            recorded_length(0.25, 4),
+            0x00,
+            "a tap lasts into the last pulse"
+        );
+        assert_eq!(recorded_length(4.5, 4), 0xFF);
     }
 }

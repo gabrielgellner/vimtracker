@@ -75,15 +75,15 @@ Notes sound as you play them, chords too.
   16-row one gets its own row. A key pressed past halfway through a row goes on
   the next one. How early or late it was is dropped, as there's no micro-timing
   yet.
-- **How long.** The note is as long as you held its key, written in its gate
-  cell. Its row lasts as many steps as you held it, to the nearest, and its length
-  is how much of the last you held: half a step is `SGL1 80`, and two and a half
-  `SGL3 80`. So a note held over several rows makes its row longer, and the rows
-  after it move on, as the gate's pulses are the row's time. A key let go just past
-  a step doesn't add one, as it rounds down. A note still held when its row comes
-  round again ends there, and it's at most 8 steps.
+- **How long.** The note's length goes in its gate cell, and its row keeps its
+  pulses, so recording never changes how long a row or the loop is. The length is
+  how much of the row's last pulse you held it for: half a step on a one-pulse row
+  is `SGL1 80`. Held past the row's end, it's `FF`, which rings on until the next
+  note, as a held note does. A tap on a row of several pulses gets `00`, so it
+  lasts just into the last. A note still held when its row comes round again ends
+  there.
 - **What's replaced.** Only the note, its velocity and its gate cell, which
-  becomes a `SGL`. Other columns and rows stay. The velocity is `Vel`, and
+  becomes a `SGL` with the pulses it had. Other columns and rows stay. The velocity is `Vel`, and
   auto-jump doesn't move the cursor.
 - **Undo.** `u` takes back everything recorded since it was armed, at once.
 

@@ -7979,13 +7979,13 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     // Until it's let go, it holds on the row's pulse until something ends it.
     assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))));
 
-    // Held for two steps, so the row now lasts two, and the note just under all of the second.
+    // Held for two steps, past its row's end, so it rings on, and the row keeps its pulse.
     play_to(&mut app, &mut rt, &mut at, 11.25);
     app.key_released(a, Instant::now());
     let rows = rows_of(&app, 1);
-    assert_eq!(length_of(&rows[1]), Some((2, Some(0xFE))), "{rows:?}");
+    assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))), "{rows:?}");
     assert!(
-        rows[1].to_string().starts_with("C-4 64 SGL2 FE "),
+        rows[1].to_string().starts_with("C-4 64 SGL1 FF "),
         "{}",
         rows[1]
     );
@@ -7995,8 +7995,8 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     );
     assert_eq!(
         rows.iter().map(Step::pulses).sum::<usize>(),
-        5,
-        "the rows after it move on"
+        4,
+        "the loop keeps its length"
     );
     assert_eq!(
         rows.iter().filter(|step| step.note != Note::Empty).count(),
@@ -8049,9 +8049,39 @@ fn a_note_held_until_its_row_comes_round_ends_there() {
     assert_eq!(rows[1].note, Note::On(60));
     assert_eq!(
         length_of(&rows[1]),
-        Some((4, Some(0xFE))),
-        "4 steps, the whole loop"
+        Some((1, Some(0xFF))),
+        "held past its row, it rings on"
     );
+}
+
+#[test]
+fn a_recorded_note_on_a_long_row_keeps_its_pulses_and_lasts_into_the_last() {
+    let rows: Vec<Step> = ["--- -- SGL2", "--- --", "--- --"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    let (mut app, mut rt) = recording_app(rows);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    // Step 8 starts the 4-step loop's row 0, which lasts two.
+    let a = Key::char('a');
+    play_to(&mut app, &mut rt, &mut at, 8.0);
+    app.key(a, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 9.5);
+    app.key_released(a, Instant::now());
+    let (pulses, length) = length_of(&rows_of(&app, 1)[0]).unwrap();
+    assert_eq!(pulses, 2);
+    assert!(near(length, 0x80), "half of its second pulse: {length:?}");
+
+    // A tap lasts into its last pulse as little as the cell says, and the row stays as long.
+    play_to(&mut app, &mut rt, &mut at, 12.0);
+    app.key(a, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 12.25);
+    app.key_released(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(length_of(&rows[0]), Some((2, Some(0x00))), "{rows:?}");
+    assert_eq!(rows.iter().map(Step::pulses).sum::<usize>(), 4);
 }
 
 #[test]
@@ -8104,11 +8134,13 @@ fn a_held_note_when_recording_stops_keeps_its_length_so_far() {
     tap(&mut app, "i");
     play_to(&mut app, &mut rt, &mut at, 8.0);
     app.key(Key::char('a'), Instant::now());
-    play_to(&mut app, &mut rt, &mut at, 10.0);
+    play_to(&mut app, &mut rt, &mut at, 8.5);
     special(&mut app, KeyCode::Esc);
     press(&mut app, " r");
     assert!(!app.recording());
-    assert_eq!(length_of(&rows_of(&app, 1)[0]), Some((2, Some(0xFE))));
+    let (pulses, length) = length_of(&rows_of(&app, 1)[0]).unwrap();
+    assert_eq!(pulses, 1);
+    assert!(near(length, 0x80), "half a step so far: {length:?}");
 }
 
 #[test]
