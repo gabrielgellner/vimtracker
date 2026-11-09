@@ -1219,3 +1219,90 @@ fn a_vowel_filter_says_its_vowel_whatever_the_note() {
         assert!(around(&i, i_first) > around(&a, i_first) * 4.0, "{note}");
     }
 }
+
+/// A track whose first slot turns its sound well down, holding one note, with these rows.
+fn bypassing(texts: &[&str]) -> Vec<[f32; 2]> {
+    let mut song = song(texts);
+    song.tracks[0].inserts[0] = Insert::Distort(Distort {
+        gain: 0x80,
+        ..Distort::DEFAULT
+    });
+    render(song, flat(0.25), STEP * texts.len())
+}
+
+#[test]
+fn a_step_locks_a_slots_bypass_and_it_switches_without_a_click() {
+    let out = bypassing(&[
+        "C-4 -- --- --- ---",
+        "--- -- 1.bypass:01 --- ---",
+        "--- -- 1.bypass:00 --- ---",
+    ]);
+    let wet = level_at(&out, STEP - 1);
+    let dry = 0.25;
+    assert!(wet < dry * 0.2, "{wet}");
+    // Switched out on the second step, and back in on the third.
+    assert!((level_at(&out, 2 * STEP - 1) - dry).abs() < 1e-4);
+    assert!((level_at(&out, 3 * STEP - 1) - wet).abs() < 1e-4);
+    for switch in [STEP, 2 * STEP] {
+        // A straight crossfade, nowhere outside the two levels, over a few ms each way.
+        let around = &out[switch - 100..switch + 1000];
+        for pair in around.windows(2) {
+            let jump = (pair[1][0] - pair[0][0]).abs();
+            assert!(jump < (dry - wet) / 100.0, "a jump of {jump} at {switch}");
+        }
+        for frame in around {
+            assert!(
+                (wet - 1e-4..=dry + 1e-4).contains(&frame[0]),
+                "{}",
+                frame[0]
+            );
+        }
+        assert!(
+            (level_at(&out, switch + 200) - level_at(&out, switch - 1)).abs() > (dry - wet) / 2.0,
+            "it's on its way within a few ms"
+        );
+        let done = level_at(&out, switch + 10 * RATE as usize / 1000);
+        let settled = level_at(&out, switch + STEP - 1);
+        assert!(
+            (done - settled).abs() < 1e-4,
+            "done within 10 ms at {switch}"
+        );
+    }
+}
+
+#[test]
+fn a_bypass_lock_lasts_its_note_and_a_held_one_stays() {
+    let locked = bypassing(&[
+        "C-4 -- 1.bypass:01 --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
+    ]);
+    let dry = 0.25;
+    assert!(
+        (level_at(&locked, STEP + 3000) - dry).abs() < 1e-4,
+        "it lasts the note"
+    );
+    assert!(
+        level_at(&locked, 2 * STEP + 3000) < dry * 0.2,
+        "the next note brings it back"
+    );
+    let held = bypassing(&[
+        "C-4 -- 1.bypass:01h --- ---",
+        "--- -- --- --- ---",
+        "C-4 -- --- --- ---",
+    ]);
+    assert!(
+        (level_at(&held, 2 * STEP + 3000) - dry).abs() < 1e-4,
+        "held, it stays"
+    );
+}
+
+#[test]
+fn a_bypass_lock_on_an_empty_slot_does_nothing() {
+    let locked = song(&["C-4 -- 1.bypass:01 --- ---"]);
+    let plain = song(&["C-4 -- --- --- ---"]);
+    assert_eq!(
+        render(locked, flat(0.25), STEP),
+        render(plain, flat(0.25), STEP)
+    );
+}

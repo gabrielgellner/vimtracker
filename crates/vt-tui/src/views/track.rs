@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use vt_engine::engine::Transport;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
@@ -12,7 +13,7 @@ use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
-use vt_model::song::Track;
+use vt_model::song::{SynthVoice, Track};
 use vt_model::speed::Speed;
 
 use crate::app::App;
@@ -291,6 +292,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         } else if *control == Control::Groove && track.groove.is_none()
             || *control == Control::GateLength && track.gate_length.is_none()
             || *control == Control::Speed && track.speed == Speed::Sixteenth
+            || *control == Control::Glide && track.glide == 0
             || *control == Control::FilterMode && !track.filter.has_modes()
         {
             theme::dim()
@@ -360,6 +362,14 @@ pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
         Control::GateLength => format!("{}%", gate_percent(track.gate_length())),
         Control::Speed => track.speed.name().to_owned(),
+        // Off, `Acid` slides by its own `Slide`, as a 303 does.
+        Control::Glide if track.glide == 0 && track.voice() == Some(SynthVoice::Acid) => {
+            "Slide".to_owned()
+        }
+        Control::Glide => SettingId::GLIDE
+            .entry()
+            .kind
+            .shown(u16::from(track.glide) << 8),
         Control::Sample => track.sample.as_deref().map_or_else(
             || "---".to_owned(),
             |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),
@@ -606,8 +616,15 @@ fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
     lines
 }
 
-/// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
-/// effect is only drawn in its first row.
+/// Whether a slot is switched out as it's heard: while the song plays, a step's lock of its bypass
+/// counts, so the slot fades and comes back with the lock, and otherwise it's the slot's own.
+fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
+    match app.live {
+        Some(live) if app.transport == Transport::Playing => live.bypassed[slot],
+        _ => track.bypassed[slot],
+    }
+}
+
 /// A bypassed slot's row, faint but for the cursor.
 fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
     if !bypassed {
@@ -629,6 +646,8 @@ fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
     )
 }
 
+/// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
+/// effect is only drawn in its first row.
 fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'static> {
     let current = app.track_control();
     let mut spans = Vec::new();
@@ -711,7 +730,7 @@ fn slot_drawing(app: &App, track: &Track, slot: usize, row: usize) -> Vec<Span<'
     let color = style.fg.unwrap_or(theme::TEXT);
     let reduction = app
         .live
-        .filter(|_| !track.bypassed[slot])
+        .filter(|_| !heard_bypassed(app, track, slot))
         .map_or(0.0, |live| live.reduction[slot]);
     match (track.inserts[slot], app.slot_images[slot]) {
         (Insert::Compressor(_), Some(id)) => vec![
@@ -832,7 +851,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         Page::Fx => {
             for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
-                let bypassed = track.bypassed[slot];
+                let bypassed = heard_bypassed(app, track, slot);
                 let first = fx_row(app, track, rows[0], true);
                 let drawing = slot_drawing(app, track, slot, 0);
                 lines.push(faded(

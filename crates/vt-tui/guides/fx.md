@@ -44,6 +44,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
+| `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
+| `1BYP` | Switch slot 1 out, `01`, or back in, `00`. `2BYP` and `3BYP` the others |
 | `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
 | `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 

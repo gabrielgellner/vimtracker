@@ -2,14 +2,14 @@
 //! lock, and what they're called on it. A setting another voice or effect owns stays where it was
 //! chosen, and does nothing until its owner is back.
 
-use crate::insert::INSERTS;
+use crate::insert::{INSERTS, Insert};
 use crate::lfo::LFOS_PER_TRACK;
 use crate::settings::{Effect, Owner, SettingId, voice_entries};
 use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 12] = [
+const TRACK_MEANINGS: [&str; 13] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -22,11 +22,12 @@ const TRACK_MEANINGS: [&str; 12] = [
     "Gate length, up or down from the note's own",
     "Groove: how late or early the steps land, from this one",
     "Speed: how long the steps are, from this one",
+    "Glide: how long a tied note takes to reach the next",
 ];
 
-/// The track's own settings in the order lists show them: the filter, then output, then pitch
-/// and gate.
-const TRACK_ORDER: [SettingId; 12] = [
+/// The track's own settings in the order lists show them: the filter, then output, then pitch,
+/// gate, time and glide.
+const TRACK_ORDER: [SettingId; 13] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -39,6 +40,7 @@ const TRACK_ORDER: [SettingId; 12] = [
     SettingId::GATE_DELTA,
     SettingId::GROOVE,
     SettingId::SPEED,
+    SettingId::GLIDE,
 ];
 
 impl SettingId {
@@ -63,6 +65,10 @@ impl SettingId {
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
             (Owner::Lfo(_), _) => true,
+            (Owner::Bypass(slot), _) => track
+                .inserts
+                .get(slot)
+                .is_some_and(|insert| *insert != Insert::Empty),
         }
     }
 
@@ -76,8 +82,12 @@ impl SettingId {
         let here = self.exists_on(track);
         match self.owner() {
             // A slot's setting with the effect gone says only which slot, so it fits a column.
-            (Owner::Slot { slot, .. }, _) if !here => format!("{} ---", slot + 1),
-            (Owner::Slot { slot, .. }, _) => format!("{} {}", slot + 1, self.name()),
+            (Owner::Slot { slot, .. } | Owner::Bypass(slot), _) if !here => {
+                format!("{} ---", slot + 1)
+            }
+            (Owner::Slot { slot, .. } | Owner::Bypass(slot), _) => {
+                format!("{} {}", slot + 1, self.name())
+            }
             (Owner::Lfo(lfo), _) => format!("L{} {}", lfo + 1, self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
@@ -92,11 +102,25 @@ impl SettingId {
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
             (Owner::Lfo(lfo), 0) => format!("How far LFO {} swings", lfo + 1),
             (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
+            (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
+        }
+    }
+
+    /// What it's listed with on this track: a slot's bypass goes with the effect in the slot.
+    pub fn group_on(self, track: &Track) -> String {
+        match self.owner().0 {
+            Owner::Bypass(slot) => Effect::of(track.inserts[slot]).map_or_else(
+                || self.group(),
+                |effect| {
+                    SettingId::slot(slot, effect, 0).map_or_else(|| self.group(), SettingId::group)
+                },
+            ),
+            _ => self.group(),
         }
     }
 
     /// What's on a track to choose from, in order: its own, its machine's, and its slots' effects',
-    /// in the modes they're in.
+    /// in the modes they're in, each slot's with its bypass after them.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let mut settings: Vec<Self> = TRACK_ORDER
             .into_iter()
@@ -113,6 +137,7 @@ impl SettingId {
                         .filter_map(|at| Self::slot(slot, effect, at))
                         .filter(|id| id.exists_on(track)),
                 );
+                settings.extend(Self::bypass(slot));
             }
         }
         settings
@@ -136,10 +161,14 @@ impl SettingId {
 
     /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
     /// `Gate`, which modulation already moves up or down from each note's own length, and so are
-    /// `GRV` and `RATE`, as a groove and a speed are chosen rather than moved through.
+    /// `GRV`, `RATE` and a slot's bypass, as a groove, a speed and whether a slot's in are chosen
+    /// rather than moved through, and `GLD`, which is read only as a tie comes.
     fn to_modulate(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
-        settings.retain(|id| ![Self::GATE_DELTA, Self::GROOVE, Self::SPEED].contains(id));
+        settings.retain(|id| {
+            ![Self::GATE_DELTA, Self::GROOVE, Self::SPEED, Self::GLIDE].contains(id)
+                && !matches!(id.owner().0, Owner::Bypass(_))
+        });
         settings
     }
 }
@@ -212,11 +241,18 @@ mod tests {
         );
         track.inserts[1] = Insert::ALL[2];
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered.len(), own + 4 + 9);
+        assert_eq!(offered.len(), own + 4 + 9 + 1);
         assert_eq!(
             offered[own + 4],
             SettingId::slot(1, Effect::Delay, 0).unwrap()
         );
+        assert_eq!(
+            offered[own + 4 + 9],
+            SettingId::bypass(1).unwrap(),
+            "the slot's bypass after its effect's"
+        );
+        assert_eq!(SettingId::bypass(1).unwrap().name_on(&track), "2 Bypass");
+        assert_eq!(SettingId::bypass(0).unwrap().name_on(&track), "1 ---");
     }
 
     #[test]
@@ -283,7 +319,11 @@ mod tests {
         let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
         let offered = SettingId::on_track(return_a);
         assert_eq!(offered[..2], [SettingId::PAN, SettingId::VOL]);
-        assert_eq!(offered.len(), 2 + 9, "and its delay's settings");
+        assert_eq!(
+            offered.len(),
+            2 + 9 + 1,
+            "and its delay's settings and bypass"
+        );
         assert_eq!(SettingId::on_track(master)[0], SettingId::VOL);
         assert!(!SettingId::on_track(master).contains(&SettingId::PAN));
         assert!(

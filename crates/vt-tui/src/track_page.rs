@@ -15,7 +15,9 @@ use vt_model::lfo::{
     LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, depth_value, note_rates, phase_value,
 };
 use vt_model::selection::Motion;
-use vt_model::settings::{Effect, Kind, SettingId, gate_percent, gate_value, voice_entries};
+use vt_model::settings::{
+    Effect, Kind, LONGEST_GLIDE_MS, SettingId, gate_percent, gate_value, glide_value, voice_entries,
+};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
 use vt_model::speed::Speed;
 
@@ -100,6 +102,8 @@ pub enum Control {
     GateLength,
     /// How long its steps are, as a note division.
     Speed,
+    /// How long a tie glides into the next note, in ms, or off.
+    Glide,
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
@@ -218,7 +222,7 @@ const fn base(control: TrackControl) -> Control {
 }
 
 /// The Sound page of a track playing a sample, top to bottom, with output on the right.
-pub const SAMPLE_ROWS: [&[Control]; 9] = [
+pub const SAMPLE_ROWS: [&[Control]; 10] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::FilterType, base(TrackControl::SendA)],
@@ -228,6 +232,7 @@ pub const SAMPLE_ROWS: [&[Control]; 9] = [
     &[base(TrackControl::Drive), Control::Choke],
     &[base(TrackControl::LowCut), Control::GateLength],
     &[base(TrackControl::HighCut), Control::Speed],
+    &[Control::Glide],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
 /// output on the right.
@@ -241,7 +246,7 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive)],
+    &[base(TrackControl::Drive), Control::Glide],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
@@ -256,7 +261,7 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(5), Control::Choke],
     &[Control::Setting(6), Control::GateLength],
     &[Control::Setting(7), Control::Speed],
-    &[Control::FilterType],
+    &[Control::FilterType, Control::Glide],
     &[Control::FilterMode],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
@@ -275,7 +280,7 @@ pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive)],
+    &[base(TrackControl::Drive), Control::Glide],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
@@ -364,6 +369,7 @@ impl Control {
             Self::Choke => "Choke",
             Self::GateLength => "Gate",
             Self::Speed => "Speed",
+            Self::Glide => "Glide",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "File",
@@ -435,6 +441,7 @@ impl Control {
             | Self::Choke
             | Self::GateLength
             | Self::Speed
+            | Self::Glide
             | Self::Base(
                 TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
             ) => 1,
@@ -467,6 +474,7 @@ impl Control {
             Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
             Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
             Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
+            Self::Glide => Some((SettingId::GLIDE, u16::from(track.glide) << 8)),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -516,6 +524,7 @@ impl Control {
             | Self::Choke
             | Self::GateLength
             | Self::Speed
+            | Self::Glide
             | Self::Accumulator(_)
             | Self::Arpeggio(_) => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
@@ -688,6 +697,14 @@ impl App {
         });
     }
 
+    /// Set how long the track's ties glide into the next note.
+    fn set_glide(&mut self, glide: u8) {
+        self.apply(&Action::SetTrackGlide {
+            track: self.cursor.track,
+            glide,
+        });
+    }
+
     fn set_hex(&mut self, control: Control, value: u8) {
         let track = self.cursor.track;
         // On the mixer, the cursor can be on a setting this track doesn't have.
@@ -832,6 +849,12 @@ impl App {
                     track: self.cursor.track,
                     gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
                 });
+            }
+            Control::Glide => {
+                let size = if large { HEX_JUMP } else { 1 };
+                let by = size * count.min(0x100) as i64;
+                let moved = i64::from(track.glide) + if up { by } else { -by };
+                self.set_glide(moved.clamp(0, 0xFF) as u8);
             }
             Control::Speed => {
                 // One way at a time, stopping at either end, as the list runs short to long.
@@ -1324,6 +1347,8 @@ impl App {
                 });
             }
             Control::GateLength => {}
+            Control::Glide if track.glide != fresh.glide => self.set_glide(fresh.glide),
+            Control::Glide => {}
             Control::Speed if track.speed != fresh.speed => {
                 self.apply(&Action::SetTrackSpeed {
                     track: self.cursor.track,
@@ -1982,6 +2007,19 @@ impl App {
                     });
                 }
                 _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
+            },
+            Control::Glide if text.eq_ignore_ascii_case("off") => self.set_glide(0),
+            Control::Glide => match text
+                .trim_end_matches("ms")
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .filter(|ms| (0.0..=LONGEST_GLIDE_MS).contains(ms))
+            {
+                Some(ms) => self.set_glide(glide_value(ms)),
+                None => {
+                    self.status = format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
+                }
             },
             Control::Groove | Control::Speed => {}
             Control::Lfo(slot, LfoField::Rate) => match text.parse::<Rate>() {

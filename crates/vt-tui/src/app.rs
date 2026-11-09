@@ -276,6 +276,10 @@ pub struct App {
     /// song's needs.
     pub places: [TrackPlace; MAX_TRACKS],
     pub(crate) report_at: Instant,
+    /// The time of the frame or key being handled, which the playhead is carried on to from the
+    /// engine's last report, so what's recorded goes by the times the app is given and never
+    /// reads the clock itself.
+    pub(crate) now: Instant,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
     /// The main output's level.
@@ -452,6 +456,7 @@ impl App {
             progress: 0.0,
             places: [TrackPlace::default(); MAX_TRACKS],
             report_at: Instant::now(),
+            now: Instant::now(),
             recording: None,
             meter: Meter::default(),
             scope: crate::scope::Scope::new(rate),
@@ -757,6 +762,7 @@ impl App {
 
     /// Do a frame's work as if it's `now`, so the screenshots can step the meters by a fixed time.
     pub fn tick_at(&mut self, now: Instant) {
+        self.now = now;
         self.handle.pump();
         let seconds = now.saturating_duration_since(self.last_tick).as_secs_f32();
         self.last_tick = now;
@@ -822,6 +828,7 @@ impl App {
 
     /// A key pressed.
     pub fn key(&mut self, key: Key, now: Instant) {
+        self.now = now;
         // A real second press comes after a release, so a press of the key that's down is the
         // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
         // presses. A key holding a note is down too, even after another key has gone down.
@@ -837,6 +844,7 @@ impl App {
     /// A key the terminal repeats while it's held. A transport key acts once however long it's
     /// held, and a note on the keyboard is already held; anything else repeats as a press.
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
+        self.now = now;
         if (self.repeats_ignored && self.key_down == Some(key.physical()))
             || self.holds_note(key)
             || self.holds_flag(key)
@@ -849,6 +857,7 @@ impl App {
     /// A key let go: its held note ends, leaving any others held, and so does what it started
     /// that lasts while it's held.
     pub fn key_released(&mut self, key: Key, now: Instant) {
+        self.now = now;
         if self.key_down == Some(key.physical()) {
             self.key_down = None;
             self.repeats_ignored = false;
@@ -944,6 +953,7 @@ impl App {
     /// note ends now, what it started that lasts while it's held ends as if it was let go now,
     /// and the next press of it is a press.
     pub fn focus_lost(&mut self, now: Instant) {
+        self.now = now;
         self.key_down = None;
         self.repeats_ignored = false;
         self.let_go_of_held_notes();

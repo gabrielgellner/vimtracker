@@ -135,9 +135,14 @@ On a slot's bottom line, `0` goes to its first setting there, and `h` from it to
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.
 
-A bypassed slot goes faint and fades out over a moment, so it doesn't click. It keeps running
+A bypassed slot goes faint and crossfades out over 5 ms, so it doesn't click. It keeps running
 underneath, so a reverb's tail or a compressor carries on as if it had never gone, and it's
 saved with the song. Emptying the slot brings it back in.
+
+A step switches a slot out for its note with `1BYP 01`, for slot 1, and back in with `00`,
+as a lock: the next note brings back what `b` set, and held with `h` it stays. While the song
+plays, the page fades the slot as it's heard, so it goes faint and comes back with the lock.
+`K` lists it with the slot's effect, and LFOs and envelopes can't move it.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. Each mode has its
@@ -529,6 +534,12 @@ triplets between, so one track can play eighths or triplets against the others'
 sixteenths. `=` and `-` move through the list, `K` and `i` choose from it, and
 `x` goes back to `1/16`, which is dimmed. Its rows, pulses, groove and timing
 commands all follow its step. See **Speed** in the FX guide.
+
+`Glide` is how long a `HLD` tie glides into the next note, from 2 ms to 2 s, on
+every voice: a synth by its pitch, a sample by its speed. `Off`, dimmed, jumps, or
+on `Acid`, shown as `Slide`, slides by the voice's own `Slide`. `=` and `-` move it
+a step, `+` and `_` sixteen, `i` takes a time in ms or `off`, and `x` turns it off.
+`GLD` on a step sets it for that tie. See **Note entry**.
 
 ## Returns and the master
 

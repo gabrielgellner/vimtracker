@@ -158,6 +158,8 @@ pub struct Acid {
     countdown: u32,
     decay: f32,
     slide: f32,
+    /// How long the slide under way takes, if it was given a time rather than taking `Slide`'s.
+    slide_ms: Option<f32>,
     // Coefficients for the fixed times.
     attack: f32,
     level_decay: f32,
@@ -199,6 +201,7 @@ impl Acid {
             countdown: 0,
             decay: 0.0,
             slide: 0.0,
+            slide_ms: None,
             attack: one_pole(ATTACK_MS, rate),
             level_decay: falling(LEVEL_DECAY_MS, rate),
             release: falling(RELEASE_MS, rate),
@@ -213,6 +216,7 @@ impl Acid {
 
     /// Start a note, from wherever the last one left the filter and the accent sweep.
     pub fn trigger(&mut self, accent: bool) {
+        self.slide_ms = None;
         self.gate = true;
         self.accented = accent;
         self.envelope = 1.0;
@@ -223,10 +227,12 @@ impl Acid {
     }
 
     /// Glide to the next note with the gate held, so neither envelope starts again. The note
-    /// slid to brings its own accent, which sets the filter envelope's decay from here.
-    pub fn slide(&mut self, accent: bool) {
+    /// slid to brings its own accent, which sets the filter envelope's decay from here. It takes
+    /// as long as its `Slide` says, or a time it's given, from the track's `Glide`.
+    pub fn slide(&mut self, accent: bool, ms: Option<f32>) {
         self.accented = accent;
         self.sliding = true;
+        self.slide_ms = ms;
         self.countdown = 0;
     }
 
@@ -279,7 +285,10 @@ impl Acid {
                 acid_decay_ms(values[DECAY] * 255.0)
             };
             self.decay = falling(decay, self.rate);
-            self.slide = one_pole(slide_ms(values[SLIDE] * 255.0) * SLIDE_SHARE, self.rate);
+            let slide = self
+                .slide_ms
+                .unwrap_or_else(|| slide_ms(values[SLIDE] * 255.0));
+            self.slide = one_pole(slide * SLIDE_SHARE, self.rate);
             self.countdown = CONTROL_FRAMES;
         }
         self.countdown -= 1;
@@ -530,7 +539,7 @@ mod tests {
             acid.next(hertz(110.0), plain());
         }
         let before = acid.envelope();
-        acid.slide(false);
+        acid.slide(false, None);
         // Ten ms into a 60 ms slide, it's on its way.
         for _ in 0..RATE / 100 {
             acid.next(hertz(220.0), plain());
@@ -563,7 +572,7 @@ mod tests {
         for (acid, settings) in [(&mut quick, plain()), (&mut slow, slow_settings)] {
             acid.trigger(false);
             acid.next(hertz(110.0), settings);
-            acid.slide(false);
+            acid.slide(false, None);
             for _ in 0..RATE / 20 {
                 acid.next(hertz(220.0), settings);
             }
@@ -633,7 +642,7 @@ mod tests {
                             if frame % (rate as usize / 20) == 0 {
                                 acid.trigger(true);
                             } else {
-                                acid.slide(true);
+                                acid.slide(true, None);
                             }
                         }
                         let sample = acid.next(hertz / rate as f32, settings);
