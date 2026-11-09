@@ -4,6 +4,8 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::constants::MAX_PROJECT_NAME_CHARS;
+
 /// The adjectives that start most names.
 pub const ADJECTIVES: &str = include_str!("names/adjectives.txt");
 
@@ -84,6 +86,18 @@ impl Names {
     }
 }
 
+/// Whether a project can be called this, which is also the name of the folder saving it as a new
+/// project makes: something, with no `/` or control characters, not starting with a dot and not
+/// starting or ending with a space, as those would hide the folder or be lost, and not too long
+/// to read.
+pub fn is_project_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().count() <= MAX_PROJECT_NAME_CHARS
+        && !name.starts_with(['.', ' '])
+        && !name.ends_with(' ')
+        && !name.chars().any(|c| c == '/' || c.is_control())
+}
+
 /// A name, or if it's taken, the name with the lowest number after it from 2 that isn't.
 pub fn numbered(name: &str, taken: impl Fn(&str) -> bool) -> String {
     if !taken(name) {
@@ -99,6 +113,17 @@ pub fn numbered(name: &str, taken: impl Fn(&str) -> bool) -> String {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn a_project_name_can_make_a_folder() {
+        assert!(is_project_name("dusty-breakdown"));
+        assert!(is_project_name("Verse Ideas 2"));
+        assert!(is_project_name(&"x".repeat(MAX_PROJECT_NAME_CHARS)));
+        for refused in ["", "a/b", ".hidden", " lead", "trail ", "tab\tin"] {
+            assert!(!is_project_name(refused), "{refused:?}");
+        }
+        assert!(!is_project_name(&"x".repeat(MAX_PROJECT_NAME_CHARS + 1)));
+    }
 
     #[test]
     fn the_lists_have_only_letters_and_no_word_twice() {

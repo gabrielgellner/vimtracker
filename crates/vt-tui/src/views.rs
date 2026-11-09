@@ -9,6 +9,7 @@ pub mod meter;
 pub mod mixer;
 pub mod phrase;
 pub mod picker;
+pub mod project;
 pub mod shape;
 pub mod song;
 pub mod status;

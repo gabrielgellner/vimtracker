@@ -1240,6 +1240,10 @@ fn default_skip() -> u32 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Song {
     pub format_version: u32,
+    /// The project's name, which saving it to a new folder names the folder after. Empty in a song
+    /// that hasn't been given one, which takes its folder's.
+    #[serde(default)]
+    pub name: String,
     /// Tempo, in thousandths of a BPM.
     pub millibpm: u32,
     pub seed: u64,
@@ -1270,6 +1274,7 @@ impl Song {
     pub fn new(tracks: usize) -> Self {
         let mut song = Self {
             format_version: FORMAT_VERSION,
+            name: String::new(),
             millibpm: DEFAULT_MILLIBPM,
             seed: 0,
             auto_jump: false,

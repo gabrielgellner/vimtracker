@@ -5,13 +5,14 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::constants::{
-    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING,
-    MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
+    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
+    MAX_SOUND_TRACKS, MAX_SWING, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
 use crate::lfo::Lfo;
+use crate::names::is_project_name;
 use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
@@ -153,6 +154,8 @@ pub enum Action {
     },
     SetSkipSize(u32),
     SetLimiter(bool),
+    /// Name the project.
+    SetSongName(String),
     /// Set the project's random seed.
     SetSeed(u64),
     /// When launched chains start.
@@ -460,6 +463,10 @@ pub enum EditError {
     Lfo,
     #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
     Choke(u8),
+    #[error(
+        "a project's name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
+    )]
+    SongName,
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -649,6 +656,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
         Action::SetSkipSize(size) => next.skip = *size,
         Action::SetLimiter(on) => next.limiter = *on,
+        Action::SetSongName(name) => {
+            if !is_project_name(name) {
+                return Err(EditError::SongName);
+            }
+            next.name.clone_from(name);
+        }
         Action::SetSeed(seed) => next.seed = *seed,
         Action::SetLaunch(launch) => next.launch = *launch,
         Action::SetChainLabel {

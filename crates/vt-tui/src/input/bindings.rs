@@ -210,6 +210,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         Cmd::ShowView(View::Audio),
         "Audio: the device, rate and buffer",
     ),
+    (
+        "Space 9",
+        Cmd::ShowView(View::Project),
+        "Project: tempo, scale, saving and rendering",
+    ),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space f b", Cmd::TrackPicker, "Open the track picker"),
@@ -485,6 +490,34 @@ const AUDIO: &[(&str, Cmd, &str)] = &[
     ("K", Cmd::PickValue, "List the choices"),
 ];
 
+const PROJECT: &[(&str, Cmd, &str)] = &[
+    ("j", Cmd::Move(Motion::Down), "Next row"),
+    ("k", Cmd::Move(Motion::Up), "Previous row"),
+    ("g g", Cmd::Move(Motion::First), "First row, or row n"),
+    ("G", Cmd::Move(Motion::Last), "Last row, or row n"),
+    ("h", Cmd::Move(Motion::Left), "Previous setting"),
+    (
+        "l",
+        Cmd::Move(Motion::Right),
+        "Next setting, or the tempo's fine part",
+    ),
+    ("0", Cmd::Move(Motion::RowStart), "First setting"),
+    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+    ("=", Cmd::Increase, "Increase the value, or switch on"),
+    ("-", Cmd::Decrease, "Decrease the value, or switch off"),
+    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+    ("C-a", Cmd::Increase, "Increase the value"),
+    ("C-x", Cmd::Decrease, "Decrease the value"),
+    ("x", Cmd::ClearField, "Back to a new project's"),
+    ("K", Cmd::PickValue, "Choose from a list, switch, or do it"),
+    (
+        "Enter",
+        Cmd::PickValue,
+        "Do this action, or open the audio page",
+    ),
+];
+
 const MIXER: &[(&str, Cmd, &str)] = &[
     ("h", Cmd::Move(Motion::Left), "Previous track"),
     ("l", Cmd::Move(Motion::Right), "Next track"),
@@ -597,6 +630,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Audio, AUDIO);
     add(Mode::Audio, ADJUST);
     add(Mode::Audio, EVERY_VIEW);
+    add(Mode::Project, PROJECT);
+    add(Mode::Project, ADJUST);
+    add(Mode::Project, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

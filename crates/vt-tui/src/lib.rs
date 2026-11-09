@@ -19,6 +19,7 @@ pub mod meter;
 pub mod picking;
 pub mod places;
 pub mod probe;
+pub mod project_page;
 pub mod recording;
 pub mod run;
 pub mod scope;

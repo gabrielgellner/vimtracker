@@ -396,6 +396,7 @@ pub fn draw_screen(
         View::Track => views::track::draw(frame, view, app),
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Audio => views::audio::draw(frame, view, app),
+        View::Project => views::project::draw(frame, view, app),
         View::Song => views::song::draw(frame, view, app),
     }
     // Inside the box the track page has while the keyboard plays it.
