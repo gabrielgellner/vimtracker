@@ -16,7 +16,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::envelope::Envelope;
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
-use vt_model::scale::ScaleKind;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterMode, FilterType, Machine};
@@ -25,6 +25,7 @@ use vt_model::step::{FxCommand, GateKind};
 use crate::audio::AudioChoice;
 use crate::explorer::{self, Purpose};
 use crate::guides::Guide;
+use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::View;
 
@@ -122,6 +123,10 @@ pub enum Pick {
     Folder(PathBuf),
     /// A project's folder, to open.
     Project(PathBuf),
+    /// Run a command line, from a list of a project setting's values.
+    Line(Line),
+    /// The scale as a whole: its root, its kind and whether it's on.
+    ScaleTo(Scale),
 }
 
 /// Something to show beside the list for the item under the cursor.

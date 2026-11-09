@@ -110,7 +110,7 @@ impl App {
         match self.view {
             View::Chain => self.open_row(),
             View::Song => self.open_section_chain(),
-            View::Phrase | View::Track | View::Mixer | View::Audio => {}
+            View::Phrase | View::Track | View::Mixer | View::Audio | View::Project => {}
         }
     }
 

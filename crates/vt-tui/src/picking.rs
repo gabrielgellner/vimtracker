@@ -564,6 +564,8 @@ impl App {
                 slot,
                 insert,
             }),
+            Pick::Line(line) => self.line(line),
+            Pick::ScaleTo(scale) => self.set_scale(scale),
             Pick::Scale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,

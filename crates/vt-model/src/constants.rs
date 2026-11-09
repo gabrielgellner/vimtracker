@@ -32,6 +32,8 @@ pub const BEAT_STEPS: usize = 4;
 pub const BAR_STEPS: usize = 16;
 /// The most characters a chain's label can have.
 pub const MAX_LABEL_CHARS: usize = 32;
+/// The most characters a project's name can have.
+pub const MAX_PROJECT_NAME_CHARS: usize = 32;
 /// FX slots per step.
 pub const FX_SLOTS: usize = 3;
 /// New project tempo, in thousandths of a BPM.

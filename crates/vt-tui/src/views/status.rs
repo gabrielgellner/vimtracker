@@ -64,6 +64,7 @@ fn fx_name(app: &App, slot: usize) -> String {
 pub fn column_name(app: &App) -> String {
     match app.view {
         View::Audio => app.audio_row_here().name().to_owned(),
+        View::Project => app.project_control().label().to_owned(),
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
@@ -129,7 +130,7 @@ fn shown(id: SettingId, value: u16) -> String {
 }
 
 /// A grid size as a note division where it is one, or otherwise in steps.
-fn grid_name(skip: u32) -> String {
+pub(crate) fn grid_name(skip: u32) -> String {
     let rate = Rate::Note(skip.saturating_mul(TICKS_PER_STEP as u32));
     if note_rates().contains(&rate) {
         rate.to_string()
@@ -155,7 +156,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::Track
             | Mode::Mixer
             | Mode::Song
-            | Mode::Audio => theme::BLUE,
+            | Mode::Audio
+            | Mode::Project => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,

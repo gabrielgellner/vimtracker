@@ -49,7 +49,9 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 4` | Track page: filter, output, envelopes and LFOs |
 | `Space 5` | Choose this track's sample |
 | `Space 6` | Mixer |
+| `Space 7` | Audio: the device, its rate and buffer |
 | `Space 8` | Choose a kit |
+| `Space 9` | Project: its name, tempo, scale, saving and rendering |
 | `Space Space` | Pick a view. `Enter` flips back to the last one |
 | `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |

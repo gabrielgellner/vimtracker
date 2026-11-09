@@ -149,9 +149,12 @@ pub fn sample_preview(item: usize, path: &Path, read: Option<&Read>) -> Shown {
 
 /// What a project's preview shows: its name, its tempo and tracks, and when it was saved.
 pub fn project_preview(item: usize, folder: &Path) -> Shown {
-    let name = name_of(folder);
+    let mut name = name_of(folder);
     match project::load_song(folder) {
         Ok(song) => {
+            if !song.name.is_empty() {
+                name.clone_from(&song.name);
+            }
             let tracks = match song.sound_tracks() {
                 1 => "1 track".to_owned(),
                 count => format!("{count} tracks"),
@@ -279,13 +282,13 @@ impl App {
         self.open_explorer(purpose, roots, on.as_deref());
     }
 
-    /// The name a name line starts with in a folder. Saving a project with no folder yet starts
-    /// with the name it was given when it was made, and `:new` with a new one, either rolled again
-    /// if it's taken there. A render starts with the project's name, with a number after it if
-    /// that's taken, so an earlier render isn't written over.
+    /// The name a name line starts with in a folder. Saving a project somewhere new starts with
+    /// its name, and a render with the project's name, either with a number after it if that's
+    /// taken there, so nothing is written over; `:new` starts with a new random name, rolled again
+    /// if it's taken.
     pub(crate) fn suggested_name(&mut self, naming: &Naming, folder: &Path) -> String {
         let taken = taken_in(folder);
-        let is_taken = |name: &str| taken.contains(name);
+        let is_taken = |name: &str| taken.contains(&name.to_lowercase());
         match naming.purpose {
             Purpose::Render => {
                 let stem = numbered(&self.project_name(), is_taken);
@@ -295,18 +298,16 @@ impl App {
                     format!("{stem}.wav")
                 }
             }
-            _ if naming.command == "w" && !is_taken(&self.unsaved_name) => {
-                self.unsaved_name.clone()
-            }
+            // Saving keeps the project's name, numbered if the folder has it, as a copy is.
+            _ if naming.command == "w" => numbered(&self.project_name(), is_taken),
             _ => self.names.fresh(is_taken),
         }
     }
 
-    /// The project's name: its folder's, or before it has one, the random name it was given.
+    /// The project's name, which is the song's own: the random one it was given when it was
+    /// made, its folder's when it's saved somewhere new, or what the project page names it.
     pub fn project_name(&self) -> String {
-        self.folder
-            .as_deref()
-            .map_or_else(|| self.unsaved_name.clone(), name_of)
+        self.song().name.clone()
     }
 
     /// `C-r` on a name line: put a new random name in place of the one there, keeping the folder,

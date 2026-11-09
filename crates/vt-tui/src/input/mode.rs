@@ -10,17 +10,20 @@ pub enum View {
     Mixer,
     /// The audio output: its device, rate and buffer.
     Audio,
+    /// The project's own settings, and saving, rendering and opening.
+    Project,
 }
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Phrase,
         Self::Chain,
         Self::Song,
         Self::Track,
         Self::Mixer,
         Self::Audio,
+        Self::Project,
     ];
 
     /// The view's name.
@@ -32,6 +35,7 @@ impl View {
             Self::Track => "track",
             Self::Mixer => "mixer",
             Self::Audio => "audio",
+            Self::Project => "project",
         }
     }
 }
@@ -72,6 +76,8 @@ pub enum Mode {
     Song,
     /// Normal mode's keys on the audio page. Only the binding table and the label use this.
     Audio,
+    /// Normal mode's keys on the project page. Only the binding table and the label use this.
+    Project,
 }
 
 impl Mode {
@@ -96,6 +102,7 @@ impl Mode {
             Self::Mixer => "MIX",
             Self::Song => "SONG",
             Self::Audio => "AUDIO",
+            Self::Project => "PROJECT",
         }
     }
 

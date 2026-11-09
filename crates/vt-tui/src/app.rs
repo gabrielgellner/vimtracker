@@ -230,6 +230,12 @@ pub struct App {
     pub(crate) track_wanted: Option<(usize, usize, usize)>,
     /// Whether the cursor is on the fine digits of the track page's setting.
     pub track_fine: bool,
+    /// The project page's row and setting, whether the cursor is on the tempo's fine part, and
+    /// the field `j` and `k` aim for, as on the track page.
+    pub project_row: usize,
+    pub project_field: usize,
+    pub project_fine: bool,
+    pub(crate) project_wanted: Option<(usize, usize, usize)>,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
@@ -336,8 +342,6 @@ pub struct App {
     pub naming: Option<Naming>,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
-    /// The name the project was given when it was made, which saving it starts with.
-    pub(crate) unsaved_name: String,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -364,7 +368,8 @@ impl App {
         let scale = song.scale;
         let auto_jump = song.auto_jump;
         let mut names = Names::from_clock();
-        let unsaved_name = names.name();
+        let mut song = song;
+        name_song(&mut song, folder.as_deref(), &mut names);
         let mut app = Self {
             history: History::new(Arc::new(song)),
             folder,
@@ -390,6 +395,10 @@ impl App {
             track_row: 0,
             track_field: 0,
             track_wanted: None,
+            project_row: 0,
+            project_field: 0,
+            project_fine: false,
+            project_wanted: None,
             audio: AudioState::default(),
             audio_request: None,
             settings: Settings::none(),
@@ -470,7 +479,6 @@ impl App {
             recent_places: RecentPlaces::default(),
             naming: None,
             names,
-            unsaved_name,
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,
@@ -723,19 +731,11 @@ impl App {
         }
     }
 
-    /// The terminal window's title: `vimtracker`, and the project's folder name once there is
-    /// one. kitty's `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be
-    /// left to this window alone.
+    /// The terminal window's title: `vimtracker` and the project's name. kitty's
+    /// `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be left to this
+    /// window alone.
     pub fn window_title(&self) -> String {
-        match self
-            .folder
-            .as_deref()
-            .and_then(Path::file_name)
-            .map(|name| name.to_string_lossy())
-        {
-            Some(name) => format!("vimtracker: {name}"),
-            None => "vimtracker".to_owned(),
-        }
+        format!("vimtracker: {}", self.project_name())
     }
 
     /// Whether a key, after any typed before it, means something here.
@@ -918,7 +918,8 @@ impl App {
             | Mode::Track
             | Mode::Mixer
             | Mode::Song
-            | Mode::Audio => {
+            | Mode::Audio
+            | Mode::Project => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key),
@@ -990,6 +991,7 @@ impl App {
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
             (Mode::Normal, View::Audio) => Mode::Audio,
+            (Mode::Normal, View::Project) => Mode::Project,
             (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,
         }
@@ -1101,6 +1103,7 @@ impl App {
             View::Track => self.run_track_page(cmd),
             View::Mixer => self.run_mixer(cmd),
             View::Audio => self.run_audio_page(cmd),
+            View::Project => self.run_project_page(cmd),
             View::Song => self.run_song(cmd),
             View::Phrase => false,
         };
@@ -1651,6 +1654,10 @@ impl App {
             }
             return;
         }
+        if self.view == View::Project {
+            self.insert_project_page(key);
+            return;
+        }
         if self.view != View::Phrase {
             if !key.ctrl {
                 match self.view {
@@ -2092,7 +2099,7 @@ impl App {
 
     /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
     /// undo.
-    fn toggle_auto_jump(&mut self) {
+    pub(crate) fn toggle_auto_jump(&mut self) {
         self.auto_jump = !self.auto_jump;
         self.dirty = true;
         self.status = if self.auto_jump {
@@ -2331,8 +2338,12 @@ impl App {
                 }
             }
         } else {
+            // A project saved to a new folder is named after it, which the line saving it starts
+            // with, so the two only differ if another name is typed there.
             let target = path.expect("a different path is present");
-            project::save_as(self.folder.as_deref(), &target, &self.song_to_save())
+            let mut song = Song::clone(&self.song_to_save());
+            song.name = folder_name(&target);
+            project::save_as(self.folder.as_deref(), &target, &song)
                 .map(|saved| (target, Some(saved)))
         };
         match result {
@@ -2374,7 +2385,10 @@ impl App {
             self.status = "Unsaved changes: use :w to save first".to_owned();
             return;
         }
-        let song = Song::new(DEFAULT_TRACKS);
+        let song = Song {
+            name: folder_name(path),
+            ..Song::new(DEFAULT_TRACKS)
+        };
         match project::create_project(path, &song) {
             Ok(()) => {
                 self.handle.send(Command::Return);
@@ -2388,7 +2402,8 @@ impl App {
     }
 
     /// Replace the song and undo history, loading any samples it needs.
-    pub(crate) fn replace_song(&mut self, song: Song, folder: Option<PathBuf>) {
+    pub(crate) fn replace_song(&mut self, mut song: Song, folder: Option<PathBuf>) {
+        name_song(&mut song, folder.as_deref(), &mut self.names);
         let mut pool = SamplePool::clone(&self.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
         self.samples = Arc::new(pool);
@@ -2479,7 +2494,7 @@ impl App {
 }
 
 /// The grid sizes `Option-1` and `Option-2` go through, in steps: `1/16` up to a bar.
-const GRID_SIZES: [u32; 5] = [1, 2, 4, 8, 16];
+pub(crate) const GRID_SIZES: [u32; 5] = [1, 2, 4, 8, 16];
 
 /// How far to move from a row to reach the next multiple of the skip, so a jump lands on the grid
 /// wherever it starts.
@@ -2527,4 +2542,22 @@ fn live_from(song: &Song) -> Vec<TrackLive> {
             solo: t.solo,
         })
         .collect()
+}
+
+/// A folder's own name, which a project saved in it is called.
+fn folder_name(folder: &Path) -> String {
+    folder
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Give a song with no name its folder's, or a random one before it has a folder.
+fn name_song(song: &mut Song, folder: Option<&Path>, names: &mut Names) {
+    if song.name.is_empty() {
+        song.name = folder.map(folder_name).unwrap_or_default();
+    }
+    if song.name.is_empty() {
+        song.name = names.name();
+    }
 }

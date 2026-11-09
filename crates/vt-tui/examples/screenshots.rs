@@ -107,6 +107,14 @@ const SHOTS: &[Shot] = &[
         kick: false,
     },
     Shot {
+        name: "project",
+        rows: GATES,
+        keys: " 9jj=l+++:set scale=dorian<Enter>",
+        play: 0,
+        voice: None,
+        kick: false,
+    },
+    Shot {
         name: "track-mod",
         rows: GATES,
         keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
@@ -137,6 +145,8 @@ fn kick() -> SampleData {
 /// A song whose first track plays these rows in a phrase of 16, with this synth if it's given.
 fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
     let mut song = Song::new(4);
+    // A name of its own, as a random one would differ on every run.
+    song.name = "dusty-breakdown".to_owned();
     if let Some(voice) = voice {
         song.tracks[0].machine = Machine::Plaits(voice);
     }
@@ -205,6 +215,9 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let start = Instant::now();
     let (handle, mut realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
+    // The output as a laptop plays it, for the project page's audio row.
+    app.audio.device = "MacBook Pro Speakers".to_owned();
+    app.audio.running = true;
     press(&mut app, shot.keys);
     let now = play(&mut app, &mut realtime, shot.play, start);
     let mut sent = Vec::new();

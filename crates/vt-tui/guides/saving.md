@@ -11,7 +11,8 @@
 | `:q!` | Quit and discard changes |
 | `Space qq` | The same as `:q` |
 
-`Tab` completes a path, one folder at a time, and `Up` brings back an earlier
+`Space 9` opens the project page, which does the same from rows; see **The project
+page** below. `Tab` completes a path, one folder at a time, and `Up` brings back an earlier
 command. **Navigation** has the rest of the command line.
 
 `:e` on its own lists projects and folders as a tree, starting beside this project,
@@ -22,11 +23,50 @@ and a name filled in, so `Enter` saves it there.
 
 ## Names
 
-A new project is given a random name, such as `dusty-breakdown`, and saving it
-starts with that name; `:new` starts with a fresh one. A name already in the folder
-is never offered: another is rolled. Type over the name, or press `C-r` on the
-command line for another, as many times as you like. `C-r` works on any `:w`,
-`:new` or `:render` line, keeping the folder, a `.wav` and any options.
+A new project is given a random name, such as `dusty-breakdown`, which the song
+keeps, and the window's title shows. Saving it somewhere new starts with that name,
+and the project is then named after the folder it went into, so the two agree unless
+you type another. If the folder has that name already, it gets a number, as
+`dusty-breakdown-2`. `:new` starts with a fresh random name, and one already in the
+folder is never offered. Type over the name, or press `C-r` on the command line for
+another, as many times as you like. `C-r` works on any `:w`, `:new` or `:render` line,
+keeping the folder, a `.wav` and any options.
+
+Renaming a project on the project page keeps its folder: `:w` still saves there, and
+Save as starts with the new name. A project saved before it had a name takes its
+folder's.
+
+## The project page
+
+`Space 9` shows the project's own settings in one place, each the same value as its
+command changes, with undo where the command has it:
+
+| Row | Is | Command |
+|---|---|---|
+| Name | The project's name | |
+| Folder | Where it's saved, and if it has changes | |
+| BPM | The tempo, and its fine part | `:bpm` |
+| Swing | The project's swing | `:swing` |
+| Launch | When launched chains start | `:launch` |
+| Reset | When this section starts tracks again | `:reset` |
+| Seed | The seed chance FX play from | `:seed` |
+| Limiter | The limiter on the output | `:set limiter` |
+| Scale, Root | The scale for entering notes | `:set scale`, `root` |
+| Grid | How far the arrows move in Insert | `:set skip` |
+| Auto-jump | Whether entering moves on | `;` in Insert |
+| Audio | The device and rate | `Space 7` |
+
+`i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
+part, the digits after the point. `Enter` on Audio opens the audio page.
+
+It moves as the track page does: `j` `k` go between rows and keep their column,
+`h` `l` between settings, `=` `-` `+` `_` change a value, `i` types one, as its
+command takes it, `K` lists the choices on Launch, Scale, Root and Grid, and switches
+the Limiter and Auto-jump, and `x` puts one back as a new project has it.
+
+At the bottom are Save, Save as, Render, Open and New, which `Enter` does: they are
+`:w`, `:w` to a new folder, `:render`, `:e` and `:new`, and open the file explorer
+and the name line as those do.
 
 ## Samples and moving projects
 

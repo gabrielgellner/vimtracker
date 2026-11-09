@@ -484,7 +484,11 @@ fn saving_needs_a_folder_then_round_trips() {
 #[test]
 fn the_window_title_names_the_project() {
     let (mut app, _rt) = app();
-    assert_eq!(app.window_title(), "vimtracker");
+    assert_eq!(
+        app.window_title(),
+        format!("vimtracker: {}", app.project_name()),
+        "its random name before it's saved"
+    );
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     let name = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -4089,7 +4093,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     special(&mut app, KeyCode::Backspace);
     assert_eq!(
         app.picker.as_ref().unwrap().shown().count(),
-        6,
+        7,
         "every view"
     );
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
@@ -8713,14 +8717,14 @@ fn random_name_like(name: &str) -> bool {
 }
 
 #[test]
-fn a_new_project_has_a_random_name_not_reused_in_the_folder_it_is_saved_in() {
+fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     let root = projects();
     let (mut app, _realtime) = app();
     let name = app.project_name();
     assert!(random_name_like(&name), "{name}");
     let (other, _other_realtime) = self::app();
     assert_ne!(other.project_name(), name, "each starts with its own");
-    // A folder with the name already in it gets another.
+    // A folder with the name already in it gets it numbered, as the project keeps its name.
     std::fs::create_dir_all(root.join(&name)).unwrap();
     app.recent_places
         .add(vt_tui::explorer::Purpose::Save, &root)
@@ -8729,8 +8733,19 @@ fn a_new_project_has_a_random_name_not_reused_in_the_folder_it_is_saved_in() {
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
     let given = app.command_line.rsplit('/').next().unwrap().to_owned();
-    assert!(random_name_like(&given), "{given}");
-    assert_ne!(given, name, "{name} is in the folder already");
+    assert_eq!(
+        given,
+        format!("{name}-2"),
+        "{name} is in the folder already"
+    );
+    // :new is a new project, so it starts with a new random name.
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "new");
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    let fresh = app.command_line.rsplit('/').next().unwrap().to_owned();
+    assert!(random_name_like(&fresh), "{fresh}");
+    assert_ne!(fresh, name);
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -8817,4 +8832,395 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
         unsaved.command_line
     );
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// Open the project page, with the cursor on its first row.
+fn on_the_project_page() -> (App, Realtime) {
+    let (mut app, realtime) = app();
+    tap(&mut app, " 9");
+    assert_eq!(app.view, View::Project);
+    assert_eq!(app.key_scope(), Mode::Project);
+    (app, realtime)
+}
+
+/// Put the project page's cursor on a setting.
+fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectControl) {
+    use vt_tui::project_page::PROJECT_ROWS;
+    let (row, field) = PROJECT_ROWS
+        .iter()
+        .enumerate()
+        .find_map(|(row, controls)| {
+            let field = controls.iter().position(|found| *found == control)?;
+            Some((row, field))
+        })
+        .expect("the page has it");
+    tap(app, "gg");
+    tap(app, "0");
+    for _ in 0..row {
+        tap(app, "j");
+    }
+    for _ in 0..field {
+        tap(app, "l");
+    }
+    // The tempo's fine part is a stop of its own.
+    if field > 0 && app.project_fine {
+        tap(app, "l");
+    }
+    assert_eq!(app.project_control(), control);
+}
+
+#[test]
+fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    project_cursor_on(&mut app, ProjectControl::Bpm);
+    tap(&mut app, "=");
+    assert_eq!(app.song().millibpm, 121_000);
+    tap(&mut app, "+");
+    assert_eq!(app.song().millibpm, 131_000, "a large step is 10 BPM");
+    tap(&mut app, "u");
+    assert_eq!(app.song().millibpm, 121_000, "each change is an undo step");
+    // l goes onto the fine part, which moves by hundredths and carries into the whole.
+    tap(&mut app, "l");
+    assert!(app.project_fine);
+    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    tap(&mut app, "-");
+    assert_eq!(app.song().millibpm, 120_990);
+    tap(&mut app, "x");
+    assert_eq!(app.song().millibpm, 120_000, "x on the fine part clears it");
+    // Typing on the fine part is the digits after the point.
+    tap(&mut app, "i63");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().millibpm, 120_630);
+    // On the whole, it's what :bpm takes, and says what :bpm says.
+    tap(&mut app, "h");
+    tap(&mut app, "i137.635");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().millibpm, 137_635);
+    tap(&mut app, "i9");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().millibpm, 137_635);
+    assert!(app.status.contains("20 to 400"), "{}", app.status);
+    tap(&mut app, "ifast");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains(":bpm takes"), "{}", app.status);
+    tap(&mut app, "x");
+    assert_eq!(
+        app.song().millibpm,
+        120_000,
+        "x goes back to a new project's"
+    );
+    // Cmd with the movement keys changes it too, as everywhere.
+    app.key(parse_sequence("D-l").unwrap()[0], Instant::now());
+    assert_eq!(app.song().millibpm, 121_000);
+}
+
+#[test]
+fn the_project_page_edits_the_values_its_commands_set() {
+    use vt_model::song::Launch;
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+
+    project_cursor_on(&mut app, ProjectControl::Swing);
+    tap(&mut app, "=");
+    assert_eq!(app.song().swing, 510);
+    tap(&mut app, "i66.7");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().swing, 667);
+    tap(&mut app, "x");
+    assert_eq!(app.song().swing, 500);
+    tap(&mut app, "u");
+    assert_eq!(app.song().swing, 667, "undo, as :swing has");
+
+    project_cursor_on(&mut app, ProjectControl::Launch);
+    assert_eq!(app.song().launch, Launch::named("1bar").unwrap());
+    tap(&mut app, "=");
+    assert_eq!(app.song().launch, Launch::named("2bar").unwrap());
+    tap(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    tap(&mut app, "/chain");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().launch, Launch::ChainEnd);
+    tap(&mut app, "i12");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().launch, Launch::every(12).unwrap());
+    tap(&mut app, "=");
+    assert_eq!(
+        app.song().launch,
+        Launch::named("1bar").unwrap(),
+        "a grid with no name goes to the named one above it"
+    );
+    tap(&mut app, "u");
+    assert_eq!(app.song().launch, Launch::every(12).unwrap());
+
+    project_cursor_on(&mut app, ProjectControl::Reset);
+    tap(&mut app, "+");
+    assert_eq!(app.song().sections[0].reset, Some(16));
+    tap(&mut app, "i0x40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().sections[0].reset, Some(64), "as :reset reads it");
+    tap(&mut app, "x");
+    assert_eq!(app.song().sections[0].reset, None);
+    tap(&mut app, "u");
+    assert_eq!(app.song().sections[0].reset, Some(64));
+
+    project_cursor_on(&mut app, ProjectControl::Seed);
+    tap(&mut app, "i42");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().seed, 42);
+    tap(&mut app, "+");
+    assert_eq!(app.song().seed, 52);
+    tap(&mut app, "u");
+    assert_eq!(app.song().seed, 42);
+
+    project_cursor_on(&mut app, ProjectControl::Limiter);
+    assert!(app.song().limiter);
+    tap(&mut app, "K");
+    assert!(!app.song().limiter, "K switches it");
+    tap(&mut app, "=");
+    assert!(app.song().limiter, "= switches it on");
+    tap(&mut app, "u");
+    assert!(!app.song().limiter);
+
+    project_cursor_on(&mut app, ProjectControl::Grid);
+    assert_eq!(app.song().skip, 4);
+    tap(&mut app, "=");
+    assert_eq!(app.song().skip, 8);
+    tap(&mut app, "i3");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().skip,
+        3,
+        "any number of steps, as :set skip takes"
+    );
+    tap(&mut app, "K");
+    tap(&mut app, "/1/16");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().skip, 1);
+    tap(&mut app, "u");
+    assert_eq!(app.song().skip, 3);
+}
+
+#[test]
+fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
+    use vt_model::scale::ScaleKind;
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    project_cursor_on(&mut app, ProjectControl::Scale);
+    assert!(!app.scale.on);
+    tap(&mut app, "=");
+    assert!(app.scale.on);
+    assert_eq!(app.scale.kind, ScaleKind::ALL[0]);
+    tap(&mut app, "-");
+    assert!(!app.scale.on, "off is the first choice");
+    // i lists them, as K does.
+    tap(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker);
+    tap(&mut app, "/dorian");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.scale.on);
+    assert_eq!(app.scale.kind, ScaleKind::Dorian);
+
+    // The root moves by a semitone, and keeps the scale as it is.
+    tap(&mut app, "j");
+    assert_eq!(app.project_control(), ProjectControl::Root);
+    tap(&mut app, "=");
+    assert_eq!(app.scale.root, 1);
+    tap(&mut app, "if#");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.scale.root, 6);
+    tap(&mut app, "x");
+    assert_eq!(app.scale.root, 0);
+    project_cursor_on(&mut app, ProjectControl::Scale);
+    tap(&mut app, "x");
+    assert!(!app.scale.on);
+    project_cursor_on(&mut app, ProjectControl::Root);
+    tap(&mut app, "=");
+    assert!(!app.scale.on, "the root alone doesn't turn it on");
+    assert_eq!(app.scale.root, 1);
+
+    project_cursor_on(&mut app, ProjectControl::AutoJump);
+    assert!(!app.auto_jump);
+    tap(&mut app, "=");
+    assert!(app.auto_jump);
+    assert!(app.dirty, "it's kept with the song");
+    tap(&mut app, "K");
+    assert!(!app.auto_jump);
+}
+
+#[test]
+fn the_project_page_names_the_project_and_the_window_title_says_it() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    let random = app.project_name();
+    assert_eq!(app.song().name, random, "the song holds its name");
+    assert_eq!(app.window_title(), format!("vimtracker: {random}"));
+    assert_eq!(app.project_control(), ProjectControl::Name);
+    // i starts with the name as it is.
+    tap(&mut app, "i");
+    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.entry.text, random);
+    app.key(parse_sequence("C-u").unwrap()[0], Instant::now());
+    tap(&mut app, "Verse Ideas");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.project_name(), "Verse Ideas");
+    assert_eq!(app.window_title(), "vimtracker: Verse Ideas");
+    assert!(app.dirty);
+    tap(&mut app, "u");
+    assert_eq!(app.project_name(), random, "renaming is an undo step");
+    // C-r while typing rolls a new name.
+    tap(&mut app, "i");
+    app.key(parse_sequence("C-r").unwrap()[0], Instant::now());
+    let rolled = app.entry.text.clone();
+    assert!(random_name_like(&rolled), "{rolled}");
+    assert_ne!(rolled, random);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.project_name(), rolled);
+    // A name that couldn't be a folder's is refused.
+    tap(&mut app, "i");
+    app.key(parse_sequence("C-u").unwrap()[0], Instant::now());
+    tap(&mut app, "a/b");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.project_name(), rolled);
+    assert!(app.status.contains("no /"), "{}", app.status);
+}
+
+#[test]
+fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_after() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    app.apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
+    // Saving starts with its name.
+    app.recent_places
+        .add(vt_tui::explorer::Purpose::Save, &root)
+        .unwrap();
+    command(&mut app, "w");
+    tap(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.command_line.ends_with("/verse"), "{}", app.command_line);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.folder.as_deref(), Some(root.join("verse").as_path()));
+    // Renaming keeps the folder, and Save as starts with the new name.
+    app.apply(&vt_model::action::Action::SetSongName("chorus".to_owned()));
+    command(&mut app, "w");
+    assert_eq!(app.folder.as_deref(), Some(root.join("verse").as_path()));
+    let (mut other, _other_realtime) = self::app();
+    command(&mut other, &format!("e {}", root.join("verse").display()));
+    assert_eq!(
+        other.project_name(),
+        "chorus",
+        "the name is kept in the song"
+    );
+    // A copy of the same name in the same place is numbered.
+    command(&mut other, "w");
+    let (mut copy, _copy_realtime) = self::app();
+    copy.apply(&vt_model::action::Action::SetSongName("one".to_owned()));
+    copy.recent_places
+        .add(vt_tui::explorer::Purpose::Save, &root)
+        .unwrap();
+    command(&mut copy, "w");
+    tap(&mut copy, "k");
+    special(&mut copy, KeyCode::Enter);
+    assert!(
+        copy.command_line.ends_with("/one-2"),
+        "{}",
+        copy.command_line
+    );
+    // A name typed in its place names the project after it.
+    for _ in 0.."one-2".len() {
+        special(&mut copy, KeyCode::Backspace);
+    }
+    tap(&mut copy, "bridge");
+    special(&mut copy, KeyCode::Enter);
+    assert_eq!(copy.project_name(), "bridge");
+    // An old song with no name takes its folder's.
+    let mut nameless = Song::new(1);
+    nameless.name.clear();
+    vt_model::project::save_song(&root.join("old"), &nameless).unwrap();
+    command(&mut copy, &format!("e {}", root.join("old").display()));
+    assert_eq!(copy.project_name(), "old");
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    for (action, title) in [
+        (ProjectControl::Save, "Save in"),
+        (ProjectControl::SaveAs, "Save in"),
+        (ProjectControl::Render, "Render into"),
+        (ProjectControl::Open, "Open a project"),
+        (ProjectControl::New, "Save in"),
+    ] {
+        project_cursor_on(&mut app, action);
+        special(&mut app, KeyCode::Enter);
+        assert_eq!(app.mode, Mode::Picker, "{action:?}");
+        assert_eq!(app.picker.as_ref().unwrap().title, title, "{action:?}");
+        special(&mut app, KeyCode::Esc);
+        assert_eq!(app.view, View::Project, "{action:?} comes back to the page");
+    }
+    // A folder chosen goes on to the name line, as :w's does.
+    project_cursor_on(&mut app, ProjectControl::SaveAs);
+    tap(&mut app, "K");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Command);
+    let name = app.project_name();
+    assert!(
+        app.command_line.starts_with("w ") && app.command_line.ends_with(&format!("/{name}")),
+        "{}",
+        app.command_line
+    );
+    special(&mut app, KeyCode::Esc);
+    // With changes, open and new refuse, as :e and :new do.
+    project_cursor_on(&mut app, ProjectControl::Seed);
+    tap(&mut app, "=");
+    project_cursor_on(&mut app, ProjectControl::Open);
+    special(&mut app, KeyCode::Enter);
+    assert_ne!(app.mode, Mode::Picker);
+    assert!(app.status.contains("Unsaved"), "{}", app.status);
+
+    project_cursor_on(&mut app, ProjectControl::Audio);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Audio);
+    assert!(app.audio.refresh, "it lists the devices afresh");
+}
+
+#[test]
+fn the_project_page_keeps_the_column_through_j_and_k() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    project_cursor_on(&mut app, ProjectControl::Root);
+    tap(&mut app, "jj");
+    assert_eq!(app.project_control(), ProjectControl::AutoJump);
+    tap(&mut app, "j");
+    assert_eq!(app.project_control(), ProjectControl::Seed, "a row of one");
+    tap(&mut app, "jj");
+    assert_eq!(app.project_control(), ProjectControl::Audio);
+    tap(&mut app, "kkk");
+    assert_eq!(
+        app.project_control(),
+        ProjectControl::AutoJump,
+        "back in the right column"
+    );
+    // A count goes further, and gg and G go to the ends, keeping it too.
+    tap(&mut app, "2k");
+    assert_eq!(app.project_control(), ProjectControl::Root);
+    tap(&mut app, "G");
+    assert_eq!(app.project_control(), ProjectControl::New);
+    tap(&mut app, "g");
+    tap(&mut app, "g");
+    assert_eq!(app.project_control(), ProjectControl::Name);
+    project_cursor_on(&mut app, ProjectControl::Scale);
+    tap(&mut app, "0");
+    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    assert!(!app.project_fine);
+    tap(&mut app, "$");
+    assert_eq!(app.project_control(), ProjectControl::Scale);
+    // h from the right column lands on the tempo's fine part, as the track page's does.
+    tap(&mut app, "h");
+    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    assert!(app.project_fine);
+    // The status line names the row.
+    assert_eq!(vt_tui::views::status::column_name(&app), "BPM");
 }
