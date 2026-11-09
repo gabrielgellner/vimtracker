@@ -5,8 +5,8 @@ The keyboard is now a piano, laid out as in Ableton:
 
 ```
  w e   t y u   o        black keys
-a s d f g h j k l       white keys, a is C
-z x c v                 octave and velocity
+a s d f g h j k l   '   white keys, a is C, then accent
+z x c v           /     octave and velocity, then slide
 ```
 
 So in Insert, `j` is a note. **Each note plays and is written, and the cursor
@@ -29,6 +29,8 @@ let go, so a chord is heard, though a row holds one note.
 | `z` `x` | Octave down or up. The status line shows it as `Oct` |
 | `c` `v` | Lower or raise the velocity written. The status line shows `Vel` |
 | `1` | Note off |
+| `'` | Accent the note just written, or held, the notes played |
+| `/` | Slide from the note just written, or held, the notes played |
 | `;` | Auto-jump on or off. The status line shows `Jump` |
 | `Backspace` | Clear this note. With auto-jump, back a grid step first |
 | `Tab` | Play or pause, and stay in Insert |
@@ -39,6 +41,28 @@ Our octave numbers are one above Live's: `a` starts on `C-4`, the same pitch
 Live calls C3.
 
 Notes play the track's sample: see **Sounds, samples and kits**.
+
+## Accent and slide
+
+As on a 303, `'` and `/` sit past the top of the keyboard, for accent and slide.
+They work on every track, though `Acid` is made for them.
+
+- **After a note.** Tap `'` and the note just written is accented; tap it again
+  and it isn't. With auto-jump that's the row the cursor just left. If you've
+  moved since, with the arrows, it's the cursor's row.
+- **With a note.** Hold `'` and every note you play while it's down is written
+  accented, a run of them too. Letting go then changes nothing more.
+- **Slide** is the same on `/`, and both can be held at once.
+
+An accent is velocity `7F`. Taking one off writes `Vel`, or `64` if `Vel` is
+itself an accent, `70` or above. A slide is `HLD` on the row's gate, tying its
+note into the next row's, which `Acid` glides to: put it on the note that slides
+away, as a 303 does. The gate keeps its pulses and length, and taking the slide
+off makes it a `SGL` again. The status line says `Accent on`, `Slide off` and so
+on, and `u` takes each back as it does a note.
+
+While recording, hold them as you play: a tap has no row to go on, as a note
+goes in only once its row starts.
 
 ## Moving without writing a note
 

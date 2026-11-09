@@ -46,6 +46,8 @@ struct Take {
     step: usize,
     note: u8,
     velocity: u8,
+    /// Whether the slide's key was down as it was played, so it's a `HLD`.
+    slide: bool,
     /// When its key went down, and when its row starts, in steps of its track's running count,
     /// which the engine reports, and where its track was last seen.
     pressed: f64,
@@ -121,7 +123,9 @@ impl App {
             self.status = "This track isn't playing".to_owned();
             return;
         };
-        let velocity = self.note_velocity;
+        let velocity = self.flagged_velocity(self.note_velocity);
+        let slide = self.flagged_slide();
+        self.use_flags();
         let Some(recording) = self.recording.as_mut() else {
             return;
         };
@@ -136,6 +140,7 @@ impl App {
             step: row.step,
             note,
             velocity,
+            slide,
             pressed: now,
             starts: row.starts,
             seen: now,
@@ -304,15 +309,20 @@ impl App {
         step.note = Note::On(take.note);
         step.velocity = Some(take.velocity);
         step.nudge = recorded_nudge(take.pressed - take.starts);
-        // The note is one note, held, so its gate is a `SGL`, on the pulses the row had. Until
-        // it's let go, it holds on until something ends it.
+        // The note is one note, held, so its gate is a `SGL`, on the pulses the row had, or a
+        // `HLD` if it was played with the slide's key down. Until it's let go, it holds on until
+        // something ends it.
         let pulses = step.gate.map_or(1, |gate| gate.pulses);
         let length = held.map_or(u8::MAX, |held| {
             let held = held.min(take.longest) - take.moved;
             recorded_length(held, pulses, take.last_pulse)
         });
         step.gate = Some(Gate {
-            kind: GateKind::Single,
+            kind: if take.slide {
+                GateKind::Hold
+            } else {
+                GateKind::Single
+            },
             pulses,
             length: Some(length),
         });

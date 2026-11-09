@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::accent_slide::{HeldFlag, Written, slid};
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::config::Settings;
 use crate::explorer::Purpose;
@@ -292,10 +293,14 @@ pub struct App {
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
-    repeats_ignored: bool,
+    pub(crate) repeats_ignored: bool,
     /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
     /// they play a chord.
     held_notes: Vec<HeldNote>,
+    /// The keys holding an accent or slide in Insert, for the notes played while they're down.
+    pub(crate) held_flags: Vec<HeldFlag>,
+    /// Where the last note played in Insert went, for an accent or slide tapped after it.
+    pub(crate) last_written: Option<Written>,
     /// What the key that's down started that lasts while it's held.
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
@@ -453,6 +458,8 @@ impl App {
             key_down: None,
             repeats_ignored: false,
             held_notes: Vec::new(),
+            held_flags: Vec::new(),
+            last_written: None,
             momentary: None,
             started: None,
             entry: Entry::default(),
@@ -787,7 +794,7 @@ impl App {
         // A real second press comes after a release, so a press of the key that's down is the
         // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
         // presses. A key holding a note is down too, even after another key has gone down.
-        if self.key_down == Some(key.physical()) || self.holds_note(key) {
+        if self.key_down == Some(key.physical()) || self.holds_note(key) || self.holds_flag(key) {
             self.key_repeated(key, now);
             return;
         }
@@ -799,7 +806,10 @@ impl App {
     /// A key the terminal repeats while it's held. A transport key acts once however long it's
     /// held, and a note on the keyboard is already held; anything else repeats as a press.
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
-        if (self.repeats_ignored && self.key_down == Some(key.physical())) || self.holds_note(key) {
+        if (self.repeats_ignored && self.key_down == Some(key.physical()))
+            || self.holds_note(key)
+            || self.holds_flag(key)
+        {
             return;
         }
         self.press(key, now);
@@ -820,6 +830,7 @@ impl App {
             let held = self.held_notes.remove(at);
             self.let_go_of(held);
         }
+        self.let_go_of_flag(key);
         if self
             .momentary
             .is_some_and(|held| held.key == key.physical())
@@ -903,6 +914,7 @@ impl App {
         self.key_down = None;
         self.repeats_ignored = false;
         self.let_go_of_held_notes();
+        self.drop_flags();
         self.end_momentary(now);
     }
 
@@ -942,6 +954,8 @@ impl App {
         // Leaving the keyboard, or Insert, lets go of what it's holding.
         if matches!(was, Mode::Keys | Mode::Insert) && self.mode != was {
             self.let_go_of_held_notes();
+            self.drop_flags();
+            self.last_written = None;
         }
     }
 
@@ -1192,6 +1206,7 @@ impl App {
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
+                self.last_written = None;
                 self.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
@@ -1788,6 +1803,12 @@ impl App {
     }
 
     fn insert_note(&mut self, key: Key) {
+        if self.mode == Mode::Insert
+            && let Some(flag) = self.flag_key(key)
+        {
+            self.hold_flag(key, flag);
+            return;
+        }
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
@@ -1814,7 +1835,8 @@ impl App {
                     && self.mode == Mode::Insert
                 {
                     self.record_note(key, midi);
-                    self.hold_note(key, midi, self.note_velocity);
+                    let velocity = self.flagged_velocity(self.note_velocity);
+                    self.hold_note(key, midi, velocity);
                 } else if let Some(midi) = self.played_key(c) {
                     let on_step = self
                         .phrase_here()
@@ -1823,9 +1845,17 @@ impl App {
                     let velocity = on_step
                         .as_ref()
                         .map_or(self.note_velocity, |step| self.played_with(step));
-                    self.write_played_note(midi);
+                    let velocity = self.flagged_velocity(velocity);
+                    let (track, step) = (self.cursor.track, self.cursor.step);
+                    let phrase = self.write_played_note(midi);
                     self.hold_note(key, midi, velocity);
                     self.advance();
+                    self.last_written = phrase.map(|phrase| Written {
+                        track,
+                        phrase,
+                        step,
+                        cursor: self.cursor,
+                    });
                 }
             }
             _ => {}
@@ -1845,17 +1875,21 @@ impl App {
         self.move_step(by);
     }
 
-    /// Write a played note with its velocity, as one change.
-    fn write_played_note(&mut self, midi: u8) {
+    /// Write a played note with its velocity, and an accent or slide whose key is down, as one
+    /// change, and say which phrase it went in.
+    fn write_played_note(&mut self, midi: u8) -> Option<u32> {
         let Some(id) = self.phrase_id() else {
             self.status = "This track has no phrase here".to_owned();
-            return;
+            return None;
         };
         let current = self.phrase_here();
-        let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
-            return;
+        let step = current.and_then(|p| p.steps().get(self.cursor.step).cloned())?;
+        let velocity = self.flagged_velocity(self.played_with(&step));
+        let gate = if self.flagged_slide() {
+            slid(step.gate, true)
+        } else {
+            step.gate
         };
-        let velocity = self.played_with(&step);
         self.apply(&Action::SetStep {
             track: self.cursor.track,
             phrase: id,
@@ -1863,9 +1897,12 @@ impl App {
             value: Step {
                 note: Note::On(midi),
                 velocity: Some(velocity),
+                gate,
                 ..step
             },
         });
+        self.use_flags();
+        Some(id)
     }
 
     /// The velocity a played note takes. Replacing keeps what the step has.
