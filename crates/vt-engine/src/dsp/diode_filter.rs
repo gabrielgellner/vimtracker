@@ -32,20 +32,21 @@ pub const RESONANT_SHARE: f32 = 0.6;
 /// How far under the cutoff the input's high-pass sits, as a ratio: Vital's lowest, `2^-9`.
 const HIGH_PASS_RATIO: f32 = 1.0 / 512.0;
 
-/// A one-pole low-pass in trapezoidal form, whose state can be saturated as it goes.
+/// A one-pole low-pass in trapezoidal form, whose state can be saturated as it goes. Vital's
+/// `Dirty` filter is built from it too.
 #[derive(Debug, Clone, Copy, Default)]
-struct OnePole {
+pub(crate) struct OnePole {
     /// The output at this sample.
-    current: f32,
+    pub(crate) current: f32,
     /// What it holds for the next sample, and the same through its saturation.
     state: f32,
-    saturated: f32,
+    pub(crate) saturated: f32,
 }
 
 impl OnePole {
     /// One sample with no saturation.
     #[inline]
-    fn tick_plain(&mut self, input: f32, coefficient: f32) -> f32 {
+    pub(crate) fn tick_plain(&mut self, input: f32, coefficient: f32) -> f32 {
         let delta = coefficient * (input - self.state);
         self.state += delta;
         self.current = self.state;
@@ -55,7 +56,7 @@ impl OnePole {
 
     /// One sample, with the state passed through `saturate`.
     #[inline]
-    fn tick(&mut self, input: f32, coefficient: f32, saturate: impl Fn(f32) -> f32) {
+    pub(crate) fn tick(&mut self, input: f32, coefficient: f32, saturate: impl Fn(f32) -> f32) {
         let delta = coefficient * (input - self.saturated);
         self.state += delta;
         self.current = saturate(self.state);
@@ -77,7 +78,7 @@ fn coefficient(frequency: f32) -> f32 {
 /// Vital's rational approximation of `tanh`, from `futils.h`, which is much cheaper. It runs a
 /// hair over 1 for very large values.
 #[inline]
-fn tanh(value: f32) -> f32 {
+pub(crate) fn tanh(value: f32) -> f32 {
     let magnitude = value.abs();
     let square = value * value;
     let numerator = value
@@ -166,25 +167,25 @@ impl DiodeFilter {
 
 /// A complex number, for working out the response.
 #[derive(Clone, Copy)]
-struct Complex(f32, f32);
+pub(crate) struct Complex(pub(crate) f32, pub(crate) f32);
 
 impl Complex {
-    fn add(self, other: Self) -> Self {
+    pub(crate) fn add(self, other: Self) -> Self {
         Self(self.0 + other.0, self.1 + other.1)
     }
 
-    fn scale(self, by: f32) -> Self {
+    pub(crate) fn scale(self, by: f32) -> Self {
         Self(self.0 * by, self.1 * by)
     }
 
-    fn times(self, other: Self) -> Self {
+    pub(crate) fn times(self, other: Self) -> Self {
         Self(
             self.0 * other.0 - self.1 * other.1,
             self.0 * other.1 + self.1 * other.0,
         )
     }
 
-    fn over(self, other: Self) -> Self {
+    pub(crate) fn over(self, other: Self) -> Self {
         let size = other.0 * other.0 + other.1 * other.1;
         Self(
             (self.0 * other.0 + self.1 * other.1) / size,
@@ -192,7 +193,7 @@ impl Complex {
         )
     }
 
-    fn power(self) -> f32 {
+    pub(crate) fn power(self) -> f32 {
         self.0 * self.0 + self.1 * self.1
     }
 }

@@ -42,7 +42,7 @@ digits keep it, and at the top there's none. An effect's settings are whole.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP`. `K` lists them |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
@@ -51,7 +51,7 @@ filter's character. They run from 20 Hz at `00` to 20 kHz at `FF`, at 12 dB with
 no resonance. `Low cut 00` and `High cut FF` are off, and off costs nothing.
 Unlike `Cut`, steps and modulators don't move them.
 
-`LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
+`K` on `Filter` lists the types. `LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
 it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
 rises, and near `FF` it sings by itself while a note lasts. `Diode` is the
 303's filter, the one in `Acid`: rubbery and softer at first, as it starts
@@ -60,13 +60,20 @@ and thins the bass more than `Ladder` does. `MS20 LP` and `MS20 HP` are the
 Korg MS-20's filter, at 12 dB and 6 dB. With much `Res` their peak is at
 `Cut`. They keep the bass, or for `MS20 HP` the top, however high `Res` goes,
 so they get louder and harsher as it rises, and near `FF` they scream by
-themselves, much louder than `Ladder`. `Drive` makes them grittier. These four cost more than the
-others, which matters only for tracks using them.
+themselves, much louder than `Ladder`. `Drive` makes them grittier. `Dirty` is
+Vital's: 24 dB, as `Ladder` is, but its resonance comes round a loop that
+saturates. It thins the bass as `Res` rises, though less than `Ladder` does,
+and it sings by itself sooner, from about `DB`, at `Cut`. A loud sound comes
+out a little crunched even at `Drive 00`. `Drive` grits up what comes straight
+in, less so as `Res` rises so the peak isn't swamped, and adds a little
+resonance. These five cost more than the others, which matters only for tracks
+using them.
 
 A curve in a box under the filter's rows shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's
 playing `Cut` and `Res`, including step commands, LFOs and envelopes, but it
-doesn't show `Drive`'s saturation.
+doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
+adds.
 
 ## Jumping to a setting
 

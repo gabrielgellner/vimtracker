@@ -45,11 +45,13 @@ pub enum FilterType {
     Ms20LowPass,
     /// The Korg 35's high-pass, from the same circuit.
     Ms20HighPass,
+    /// Vital's `Dirty` low-pass, whose resonance loop saturates, which costs more too.
+    Dirty,
 }
 
 impl FilterType {
     /// Every type, in the order a list shows them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::LowPass,
         Self::HighPass,
         Self::BandPass,
@@ -58,6 +60,7 @@ impl FilterType {
         Self::Diode,
         Self::Ms20LowPass,
         Self::Ms20HighPass,
+        Self::Dirty,
     ];
 
     /// The name on screen.
@@ -71,6 +74,7 @@ impl FilterType {
             Self::Diode => "Diode",
             Self::Ms20LowPass => "MS20 LP",
             Self::Ms20HighPass => "MS20 HP",
+            Self::Dirty => "Dirty",
         }
     }
 
@@ -85,6 +89,7 @@ impl FilterType {
             Self::Diode => "Diode ladder low-pass, 303 style, self-oscillates",
             Self::Ms20LowPass => "Korg 35 low-pass, MS-20 style, 12 dB, screams",
             Self::Ms20HighPass => "Korg 35 high-pass, MS-20 style, 6 dB, screams",
+            Self::Dirty => "Vital's low-pass, 24 dB, saturating resonance",
         }
     }
 
@@ -92,7 +97,7 @@ impl FilterType {
     pub fn saturates(self) -> bool {
         matches!(
             self,
-            Self::Ladder | Self::Diode | Self::Ms20LowPass | Self::Ms20HighPass
+            Self::Ladder | Self::Diode | Self::Ms20LowPass | Self::Ms20HighPass | Self::Dirty
         )
     }
 }
