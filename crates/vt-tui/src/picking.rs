@@ -324,7 +324,7 @@ impl App {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
             }
-            Field::Gate => self.open_gate_picker(),
+            Field::Gate | Field::GateLength => self.open_gate_picker(),
             Field::Note | Field::Velocity => {
                 self.status = "K chooses on the gate and FX columns".to_owned();
             }
@@ -347,12 +347,10 @@ impl App {
         self.show_picker(Picker::new("Gates", items).opened_on(Some(position)));
     }
 
-    /// Put a chosen gate type in the cell, keeping its pulses, or empty it.
+    /// Put a chosen gate type in the cell, keeping its pulses and length, or empty it.
     fn pick_gate(&mut self, kind: Option<GateKind>) {
-        let gate = kind.map(|kind| Gate {
-            kind,
-            pulses: self.current_gate().map_or(1, |gate| gate.pulses),
-        });
+        let current = self.current_gate().unwrap_or_default();
+        let gate = kind.map(|kind| Gate { kind, ..current });
         self.set_field(FieldValue::Gate(gate));
     }
 

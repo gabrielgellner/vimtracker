@@ -75,14 +75,16 @@ Notes sound as you play them, chords too.
   16-row one gets its own row. A key pressed past halfway through a row goes on
   the next one. How early or late it was is dropped, as there's no micro-timing
   yet.
-- **How long.** The note is as long as you held its key, to a sixth of a step,
-  written as an `OFF` in a free FX column of its row, so `OFF0C` is two steps.
-  Rows don't move: the gate's pulses still say how long the row lasts. A note
-  still held when its row comes round again ends there. With no FX column free,
-  the note goes in with no length.
-- **What's replaced.** Only the note, its velocity and its gate, which becomes
-  `SGL` with the pulses it had. Other columns and rows stay. The velocity is
-  `Vel`, and auto-jump doesn't move the cursor.
+- **How long.** The note is as long as you held its key, written in its gate
+  cell. Its row lasts as many steps as you held it, to the nearest, and its length
+  is how much of the last you held: half a step is `SGL1 80`, and two and a half
+  `SGL3 80`. So a note held over several rows makes its row longer, and the rows
+  after it move on, as the gate's pulses are the row's time. A key let go just past
+  a step doesn't add one, as it rounds down. A note still held when its row comes
+  round again ends there, and it's at most 8 steps.
+- **What's replaced.** Only the note, its velocity and its gate cell, which
+  becomes a `SGL`. Other columns and rows stay. The velocity is `Vel`, and
+  auto-jump doesn't move the cursor.
 - **Undo.** `u` takes back everything recorded since it was armed, at once.
 
 ## Auto-jump
@@ -149,14 +151,16 @@ Press `l` in Normal mode to move to another column, then `i`:
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`. Auto-jump moves on |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
+| Length | The gate's length, two hex digits: `80` is half the last pulse |
 | FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
 
 ## Gates
 
 The gate column, after velocity, says how long a row lasts and what its note does
 over that time. Its argument is always the row's length in pulses, which are
-steps, from `0` to `8`. An empty cell, `----`, is one pulse of `SGL`, as every row
-used to be.
+steps, from `0` to `8`. An empty cell, `---- --`, is one pulse of `SGL`, as every
+row used to be. The dim pair after it is how long the note lasts: see **How long a
+note lasts**.
 
 | Gate | Its pulses |
 |---|---|
@@ -168,16 +172,23 @@ used to be.
 Any gate with `0` pulses skips the row: it takes no time and plays nothing. A gate on
 a row with no note still sets how long the row lasts, so `RST4` there is four steps
 of nothing. `K` chooses the gate, `=` and `-` change the pulses, and `x` empties
-it. The row's FX run on its first pulse, though a `MLT` runs its `DEL`, `KIL`,
+it, length and all. The row's FX run on its first pulse, though a `MLT` runs its `DEL`, `KIL`,
 `OFF` and `RET` on each, and lanes keep running on every step. A beat row is one
 that starts on a beat, however long the rows before it.
 
 ## How long a note lasts
 
-The track's `Gate`, on the track page under `Choke`, is how much of its last
-pulse a note lasts before its gate closes, from `1%` to `100%`. Closing the gate
-starts the release, as `OFF` does, so the release shapes the gap before the next
-note.
+A note lasts so much of its row's last pulse before its gate closes, from `1%` to
+`100%`. Closing the gate starts the release, as `OFF` does, so the release shapes
+the gap before the next note.
+
+A row can say how long in its gate cell, after the gate and its pulses: `SGL1 80`
+lasts half its step, and `SGL3 40` two steps and a quarter. It's on the `00` to
+`FF` scale, with `FF` all of it, and drawn dim. `l` goes from the gate onto it,
+two hex digits in Insert or after `r` set it, `=` and `-` move it by one and `+`
+and `_` by 16, and `x` takes it away. It's copied and pasted with the gate. An
+empty one, `--`, is the track's `Gate`, on the track page under `Choke`, and `=`
+or `-` on it start from there.
 
 | Gate | At `Gate` 50% |
 |---|---|
@@ -188,5 +199,19 @@ note.
 
 At `100%`, every voice's default but `Acid`'s, a note holds until something ends
 it. A delayed note's length counts from where it starts, and a `RET` repeats only
-while the gate is open. `LEN` on a step sets the `Gate` of that row's notes. See
-**FX commands**.
+while the gate is open.
+
+What moves `Gate` moves a note's length up or down from where it is, a row's own
+too, as an LFO moves any setting around where a step put it, and it stays from
+`1%` to `100%`:
+
+- `LEN` on a step sets `Gate` for its row's notes, if the row has no length of
+  its own.
+- `LDLT` on a step moves the note's length: `80` leaves it, `40` takes a quarter
+  of the pulse off, and `C0` adds a quarter.
+- An LFO or envelope on `Gate` moves every note's length as it starts, a row's
+  own too.
+
+`HLD` ignores all of them. `LDLT` is made for lanes: in an FX column with a lane of
+its own, it drifts against the notes, so a row plays short one pass and long the
+next. See **FX commands**.

@@ -6,7 +6,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::selection::{
-    Block, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
+    Block, FIRST_FX_ORDER, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
 };
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::step::{FxCommand, Note, Step};
@@ -485,6 +485,9 @@ impl App {
         let kind = match (self.cursor.field, kind) {
             (Field::FxFine(_), Shift::Large) => Shift::FineLarge,
             (Field::FxFine(_), Shift::Increment | Shift::Chromatic) => Shift::Fine,
+            // On a gate's length, they move the length rather than the pulses.
+            (Field::GateLength, Shift::Large) => Shift::LengthLarge,
+            (Field::GateLength, Shift::Increment | Shift::Chromatic) => Shift::Length,
             _ => kind,
         };
         let amount = self.count.take().unwrap_or(1) as i32;
@@ -554,7 +557,7 @@ impl App {
                 return false;
             };
             match field {
-                Field::Velocity => matches!(step.note, Note::On(_)),
+                Field::Velocity | Field::GateLength => matches!(step.note, Note::On(_)),
                 Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
                 Field::FxFine(slot) => step
                     .fx
@@ -642,6 +645,7 @@ impl App {
             },
             Field::Velocity => Fill::Velocity(value.velocity),
             Field::Gate => Fill::Gate(value.gate),
+            Field::GateLength => Fill::GateLength(value.length()),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
             Field::FxValue(slot) => Fill::SlotValue(slot, value.fx[slot].coarse()),
             Field::FxFine(slot) => Fill::SlotFine(slot, value.fx[slot].fine()),
@@ -697,6 +701,12 @@ impl App {
                     self.set_fine(slot, 0);
                 }
             }
+            // `x` on a gate's length takes the row's own away, and keeps the gate.
+            Change::ClearField
+                if !self.mode.is_visual() && self.cursor.field == Field::GateLength =>
+            {
+                self.set_length(None);
+            }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
@@ -732,6 +742,12 @@ impl App {
                     value,
                 );
             }
+            // A length goes on the row's own gate cell, which keeps its gate and pulses.
+            Change::Replace {
+                field: Field::GateLength,
+                value,
+                ..
+            } => self.set_length(value.length()),
             Change::Replace { field, value, .. } => {
                 let Some(phrase) = self.phrase_id() else {
                     return;
@@ -750,7 +766,7 @@ impl App {
                         step,
                         value: FieldValue::Velocity(value.velocity),
                     },
-                    Field::Gate => Action::SetField {
+                    Field::Gate | Field::GateLength => Action::SetField {
                         track: self.cursor.track,
                         phrase,
                         step,
@@ -966,7 +982,7 @@ impl App {
     /// then each FX slot, as the headings over the grid name them.
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
-        let last = 2 + slots * 3;
+        let last = FIRST_FX_ORDER - 1 + slots * 3;
         let order = self.cursor.field.order();
         let group = self.cursor.field.group();
         // A value with no fine part has no fine digits to land on, so they're passed over.

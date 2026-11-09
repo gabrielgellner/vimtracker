@@ -6,7 +6,7 @@ use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
-use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_share};
+use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_delta, gate_share};
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
@@ -276,6 +276,8 @@ pub struct TrackState {
     held_pitch: f32,
     /// Held `LEN`, the track's `Gate`, on the `00` to `FF` scale.
     held_gate: f32,
+    /// Held `LDLT`, which moves each note's length up or down from its own, with `80` as none.
+    held_gate_delta: f32,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -431,6 +433,7 @@ impl TrackState {
             lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
             held_pitch: 128.0,
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
+            held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             filter_moving: false,
             key: [0.0; 2],
         }
@@ -761,10 +764,14 @@ impl TrackState {
         }
     }
 
-    /// How much of its last pulse a note starting now lasts, with what modulation adds: 1 holds
-    /// it to the next note.
-    pub fn gate_share(&self) -> f32 {
-        gate_share(self.held_gate + self.offsets[SettingId::GATE_LENGTH.index()] * 255.0)
+    /// How much of its last pulse a note starting now lasts: its row's own length, or the held
+    /// `Gate` if it has none, moved up or down by `LDLT` and by what modulation adds to `Gate`, as
+    /// an LFO moves any setting around where a step put it. 1 holds it to the next note.
+    pub fn gate_share(&self, own: Option<u8>) -> f32 {
+        let base = own.map_or(self.held_gate, f32::from);
+        let moved =
+            gate_delta(self.held_gate_delta) + self.offsets[SettingId::GATE_LENGTH.index()] * 255.0;
+        gate_share(base + moved)
     }
 
     /// Fade the playing note.
@@ -906,6 +913,10 @@ impl TrackState {
                 }
                 SettingId::GATE_LENGTH => {
                     self.held_gate = value;
+                    return;
+                }
+                SettingId::GATE_DELTA => {
+                    self.held_gate_delta = value;
                     return;
                 }
                 _ => return,

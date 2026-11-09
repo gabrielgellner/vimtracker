@@ -1137,10 +1137,11 @@ impl Engine {
         soonest
     }
 
-    /// How long a note of so many pulses is held for at the track's `Gate`, from its start, or
-    /// `None` at 100%, which holds it until something ends it, as before there was a `Gate`.
-    fn gate_frames(&self, index: usize, pulses: usize) -> Option<u64> {
-        let share = self.tracks[index].gate_share();
+    /// How long a note of so many pulses is held for, from its start, at its row's own length or
+    /// else the track's `Gate`, or `None` at 100%, which holds it until something ends it, as
+    /// before there was a `Gate`.
+    fn gate_frames(&self, index: usize, pulses: usize, own: Option<u8>) -> Option<u64> {
+        let share = self.tracks[index].gate_share(own);
         if share >= 1.0 {
             return None;
         }
@@ -1429,8 +1430,10 @@ impl Engine {
                 }
             }
         }
-        // A note's gate closes `Gate` of the way through its last pulse: a `Single`'s is its row's
-        // last, a `Multi`'s note is one pulse long, and a `Hold` ties past it into the next row.
+        // A note's gate closes its length of the way through its last pulse: a `Single`'s is its
+        // row's last, a `Multi`'s note is one pulse long, and a `Hold` ties past it into the next
+        // row. It's worked out after the FX have run, so a `LEN` or `LDLT` on this step counts,
+        // and so does a lane's.
         if plays && matches!(event, Note::On(_)) && gate != GateKind::Hold {
             let pulses = if gate == GateKind::Multi {
                 1
@@ -1438,7 +1441,7 @@ impl Engine {
                 step.pulses()
             };
             self.tracks[index].gate_at = self
-                .gate_frames(index, pulses)
+                .gate_frames(index, pulses, step.length())
                 .map(|frames| start_at + frames);
         }
         if let Some(units) = kill_units {

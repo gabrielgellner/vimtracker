@@ -7,8 +7,8 @@ use vt_engine::render::render_frames;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::settings::SettingId;
-use vt_model::song::{ACID_GATE, Machine, Phrase, Song, SynthVoice};
+use vt_model::settings::{SHORTEST_GATE, SettingId};
+use vt_model::song::{ACID_GATE, Lane, Machine, Phrase, Song, SynthVoice};
 
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
@@ -61,6 +61,25 @@ fn render(song: &Song, steps: usize) -> Vec<f32> {
 
 fn sounding(out: &[f32], at: usize) -> bool {
     out[at].abs() > SILENT
+}
+
+/// How long the note starting at this step sounds for, in frames.
+fn heard_for(out: &[f32], step: usize) -> usize {
+    let start = step * STEP;
+    (start..out.len())
+        .find(|at| !sounding(out, *at))
+        .unwrap_or(out.len())
+        - start
+}
+
+/// Where a gate at this value closes in its first pulse, in frames.
+fn closes(value: usize) -> usize {
+    STEP * value / 0xFF
+}
+
+/// Whether a note sounded for about as long as a gate at this value.
+fn lasted(out: &[f32], step: usize, value: usize) -> bool {
+    heard_for(out, step).abs_diff(closes(value)) < NEAR
 }
 
 #[test]
@@ -239,4 +258,175 @@ fn an_acid_slide_holds_its_gate_into_the_next_note() {
     assert!(peak(&out, STEP, STEP + 1000) > held / 4.0);
     // The note slid to closes its own gate halfway through its step.
     assert!(peak(&out, STEP + HALF + 2000, 2 * STEP) < held / 100.0);
+}
+
+#[test]
+fn a_rows_own_length_overrides_the_tracks_gate() {
+    let out = render(
+        &gated(
+            &["C-4 -- SGL1 40", "C-4 --", "C-4 -- SGL2 C0", "--- --"],
+            0x80,
+        ),
+        4,
+    );
+    assert!(lasted(&out, 0, 0x40), "{}", heard_for(&out, 0));
+    assert!(lasted(&out, 1, 0x80), "the next row plays at the track's");
+    // A `SGL2`'s length is of its last pulse, as `Gate`'s is.
+    assert!(lasted(&out, 2, 0xFF + 0xC0), "{}", heard_for(&out, 2));
+}
+
+#[test]
+fn a_len_lock_only_moves_rows_without_a_length() {
+    let out = render(
+        &song(&[
+            "C-4 -- SGL1 C0 gate:40h",
+            "C-4 --",
+            "C-4 -- SGL1 C0 gate:20",
+            "C-4 -- gate:20",
+            "--- --",
+        ]),
+        5,
+    );
+    assert!(lasted(&out, 0, 0xC0), "its own length, not the lock's");
+    assert!(lasted(&out, 1, 0x40), "the held lock, on a row with none");
+    assert!(lasted(&out, 2, 0xC0));
+    assert!(lasted(&out, 3, 0x20));
+}
+
+#[test]
+fn ldlt_moves_both_kinds_of_row_up_or_down() {
+    let out = render(
+        &gated(
+            &[
+                "C-4 -- SGL1 80 gatedelta:40",
+                "C-4 -- SGL1 40 gatedelta:C0",
+                "C-4 -- gatedelta:40",
+                "C-4 -- gatedelta:C0",
+                "C-4 --",
+                "--- --",
+            ],
+            0x80,
+        ),
+        6,
+    );
+    // `40` takes a quarter of a pulse off, and `C0` adds a quarter.
+    assert!(lasted(&out, 0, 0x40), "{}", heard_for(&out, 0));
+    assert!(lasted(&out, 1, 0x80), "{}", heard_for(&out, 1));
+    assert!(lasted(&out, 2, 0x40), "{}", heard_for(&out, 2));
+    assert!(lasted(&out, 3, 0xC0), "{}", heard_for(&out, 3));
+    assert!(lasted(&out, 4, 0x80), "a lock ends with its note");
+}
+
+#[test]
+fn ldlt_in_a_drifting_lane_gives_a_row_a_different_length_each_pass() {
+    let rows = [
+        "C-4 -- gatedelta:40",
+        "C-4 -- gatedelta:80",
+        "C-4 -- gatedelta:C0",
+        "C-4 --",
+    ];
+    let mut song = gated(&rows, 0x80);
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    phrase.set_lane(
+        0,
+        Some(Lane {
+            start: 0,
+            length: 3,
+        }),
+    );
+    let out = render(&song, 12);
+    // The 4-row phrase's first row reads the 3-row lane's rows 0, 1 and 2 in turn.
+    for (pass, value) in [0x40, 0x80, 0xC0].into_iter().enumerate() {
+        assert!(
+            lasted(&out, pass * 4, value),
+            "pass {pass}: {}",
+            heard_for(&out, pass * 4)
+        );
+    }
+}
+
+#[test]
+fn an_lfo_on_gate_moves_a_rows_own_length() {
+    let mut song = song(&[
+        "C-4 -- SGL1 80",
+        "C-4 -- SGL1 80",
+        "C-4 -- SGL1 80",
+        "C-4 -- SGL1 80",
+    ]);
+    song.tracks[0].lfos[0] = Lfo {
+        destination: Some(SettingId::GATE_LENGTH),
+        shape: Shape::Square,
+        rate: Rate::Steps(4),
+        depth: 0x40,
+        ..Lfo::default()
+    };
+    let out = render(&song, 4);
+    assert!(lasted(&out, 1, 0xC0), "{}", heard_for(&out, 1));
+    assert!(lasted(&out, 3, 0x40), "{}", heard_for(&out, 3));
+}
+
+#[test]
+fn a_moved_length_stays_between_1_and_100_percent() {
+    let out = render(
+        &song(&[
+            "C-4 -- SGL1 10 gatedelta:00",
+            "C-4 -- SGL1 C0 gatedelta:FF",
+            "--- --",
+            "C-4 -- SGL1 01 gatedelta:00",
+            "--- --",
+        ]),
+        5,
+    );
+    // The shortest, 1%, still sounds.
+    let shortest = (STEP as f32 * SHORTEST_GATE) as usize;
+    assert!(
+        heard_for(&out, 0).abs_diff(shortest) < NEAR / 2,
+        "{}",
+        heard_for(&out, 0)
+    );
+    assert!(
+        heard_for(&out, 3).abs_diff(shortest) < NEAR / 2,
+        "{}",
+        heard_for(&out, 3)
+    );
+    // At 100% nothing closes it, so it holds through the empty row to the next note.
+    assert!(sounding(&out, 2 * STEP + STEP / 2));
+}
+
+#[test]
+fn hold_ignores_its_own_length_and_ldlt() {
+    let out = render(
+        &gated(&["C-4 -- HLD2 20 gatedelta:00", "D-4 --", "--- --"], 0xFF),
+        4,
+    );
+    for at in [STEP / 2, STEP + STEP / 2, 2 * STEP + NEAR] {
+        assert!(sounding(&out, at), "tied at {at}");
+    }
+    // The note tied into closes its own gate, and the lock is still on, as it's the same note.
+    let closes = 2 * STEP + closes(0xFF - 0x80);
+    assert!(sounding(&out, closes - NEAR));
+    assert!(!sounding(&out, closes + NEAR));
+}
+
+#[test]
+fn lengths_of_100_percent_and_an_ldlt_of_80_play_exactly_as_none() {
+    let plain = [
+        "C-4 -- MLT3",
+        "D-4 -- SGL2",
+        "--- -- ret:02",
+        "C-4 -- HLD1",
+        "E-4 --",
+    ];
+    let full = [
+        "C-4 -- MLT3 FF gatedelta:80",
+        "D-4 -- SGL2 FF",
+        "--- -- ret:02",
+        "C-4 -- HLD1 FF gatedelta:80h",
+        "E-4 -- SGL1 FF",
+    ];
+    let mut none = song(&plain);
+    none.tracks[0].envelopes[0] = Default::default();
+    let mut set = song(&full);
+    set.tracks[0].envelopes[0] = Default::default();
+    assert_eq!(render(&none, 8), render(&set, 8));
 }

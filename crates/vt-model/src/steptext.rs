@@ -1,7 +1,8 @@
 //! The readable text form of a step, used on disk and in tests.
 //!
 //! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
-//! leaves it out, as every row did before gates: `C-4 64 cut:40 --- ret:14`.
+//! leaves it out, as every row did before gates: `C-4 64 cut:40 --- ret:14`. A gate with a length
+//! of its own has it after the pulses, as the grid shows it: `C-4 64 SGL1 80 cut:40`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -26,30 +27,44 @@ pub enum StepTextError {
     Slot(String),
     #[error("unknown FX command: {0:?}")]
     Command(String),
-    #[error("not a gate: {0:?}, which is a gate and 0 to 8 pulses, like HLD3")]
+    #[error("not a gate: {0:?}, which is a gate, 0 to 8 pulses and perhaps a length, like SGL1 80")]
     Gate(String),
 }
 
 impl FromStr for Gate {
     type Err = StepTextError;
 
+    /// A gate's name and its pulses, like `HLD3`, then a space and a length in hex if it has one of
+    /// its own, like `SGL1 80`.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let bad = || StepTextError::Gate(text.to_owned());
-        let (name, pulses) = text.split_at_checked(3).ok_or_else(bad)?;
+        let (cell, length) = match text.split_once(' ') {
+            Some((cell, length)) => (cell, Some(hex_byte(length).ok_or_else(bad)?)),
+            None => (text, None),
+        };
+        let (name, pulses) = cell.split_at_checked(3).ok_or_else(bad)?;
         let kind = GateKind::from_name(name).ok_or_else(bad)?;
         let pulses = match pulses.as_bytes() {
             [digit @ b'0'..=b'9'] => digit - b'0',
             _ => return Err(bad()),
         };
         (pulses <= MAX_PULSES)
-            .then_some(Self { kind, pulses })
+            .then_some(Self {
+                kind,
+                pulses,
+                length,
+            })
             .ok_or_else(bad)
     }
 }
 
 impl fmt::Display for Gate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.kind.name(), self.pulses)
+        write!(f, "{}{}", self.kind.name(), self.pulses)?;
+        match self.length {
+            Some(length) => write!(f, " {length:02X}"),
+            None => Ok(()),
+        }
     }
 }
 
@@ -190,7 +205,15 @@ impl FromStr for Step {
             field.len() == 4 && field.get(..3).and_then(GateKind::from_name).is_some()
         };
         let gate = match fields.next_if(is_gate) {
-            Some(field) => Some(field.parse()?),
+            Some(field) => {
+                let gate: Gate = field.parse()?;
+                // Its length is two hex digits, which no FX slot is.
+                let length = fields.next_if(|field| hex_byte(field).is_some());
+                Some(Gate {
+                    length: length.and_then(hex_byte),
+                    ..gate
+                })
+            }
             None => None,
         };
         let fx = fields.map(str::parse).collect::<Result<Vec<_>, _>>()?;
@@ -238,6 +261,9 @@ mod tests {
             "C-4 64 HLD3 cut:40 --- ---",
             "--- -- RST4 --- --- ---",
             "E-4 -- MLT0",
+            "C-4 64 SGL1 80 cut:40 --- ---",
+            "--- -- HLD3 FF",
+            "E-4 -- MLT2 00 ---",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);
@@ -266,10 +292,14 @@ mod tests {
             gate("HLD3"),
             Ok(Gate {
                 kind: GateKind::Hold,
-                pulses: 3
+                pulses: 3,
+                length: None,
             })
         );
-        for text in ["HLD9", "XYZ1", "HLD", "HLD10", "hld3"] {
+        assert_eq!(gate("SGL1 80").map(|gate| gate.length), Ok(Some(0x80)));
+        for text in [
+            "HLD9", "XYZ1", "HLD", "HLD10", "hld3", "SGL1 8", "SGL1 ff", "SGL1 --",
+        ] {
             assert!(gate(text).is_err(), "{text} should be refused");
         }
         let step: Step = "C-4 64 --- --- ---".parse().unwrap();
@@ -316,6 +346,8 @@ mod tests {
                 StepTextError::Slot("1.distort.bits:03g".into()),
             ),
             ("C-4", StepTextError::TooFewFields("C-4".into())),
+            ("C-4 -- SGL1 8", StepTextError::Slot("8".into())),
+            ("C-4 -- 80", StepTextError::Slot("80".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");
         }

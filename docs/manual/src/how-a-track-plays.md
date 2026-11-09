@@ -25,16 +25,17 @@ loop:                  [03 ............. 08]     only these play
 ## One row has four parts
 
 ```text
- Note  Vel  Gate   FX1         FX2         FX3
- C-4   40   HLD3   CUT   40 .  ---   00    ---   00
- └─ what sounds    └─ what changes while it plays
+ Note  Vel  Gate      FX1         FX2         FX3
+ C-4   40   HLD3 --   CUT   40 .  ---   00    ---   00
+ └─ what sounds       └─ what changes while it plays
            └─ how long it lasts
 ```
 
 - **Note and velocity** are what sounds.
 - **Gate** is how long the row lasts, in **pulses**, which are steps, from `0` to `8`,
   and what the note does over that time. An empty cell, `----`, is one pulse of `SGL`,
-  as every row was before gates.
+  as every row was before gates. The dim pair after it is how long the note lasts, and
+  `--` leaves that to the track.
 - **FX columns** hold commands such as `CUT`, `RET` and `CHA`.
 
 ## Time: one count, which everything reads
@@ -69,9 +70,10 @@ loop, and when it ends, the chain moves on to its next phrase.
 
 Any gate with `0` pulses skips its row.
 
-How long each note sounds within its row is the track's `Gate`, a share of the note's
-last pulse. At `100%`, the default, a note holds until something ends it. Below that,
-its gate closes that far through its last pulse and its release starts, as with `OFF`:
+How long each note sounds within its row is a share of the note's last pulse: the
+row's own length, the dim pair in its gate cell, or the track's `Gate` where it has
+none. At `100%`, the default, a note holds until something ends it. Below that, its
+gate closes that far through its last pulse and its release starts, as with `OFF`:
 
 ```text
 Gate 50%:
@@ -82,10 +84,12 @@ gate:     ━━━━━━━━━━━━━━━━━━━━───�
 
 A `SGL` holds through its row and closes halfway through its last pulse, each of a
 `MLT`'s notes lasts half its pulse, and a `HLD` ties on into the next row's note,
-which closes its own gate. `Acid` starts at `50%`, as a 303 does.
+which closes its own gate. `Acid` starts at `50%`, as a 303 does. An LFO on `Gate`,
+and `LDLT` on a step, move each note's length up or down from that, a row's own too.
 
 Here's a phrase with gates. Row 00 holds for 3 steps, then ties into row 01. Row 02
-plays twice, row 03 is skipped, and row 04 rests for 2 steps. The yellow numbers are
+plays twice, each note half its pulse long, row 03 is skipped, and row 04 rests for 2
+steps. The yellow numbers are
 beats, and they fall on the rows that start on a beat, however long the rows before
 them are.
 
@@ -143,7 +147,9 @@ lane row:   00   01   02   00         a new value every step, even mid-note
 ```
 
 `RET` and `CHA` in a lane are ratchet and probability lanes, as on Metropolix: they
-act on whatever step they land on, and do nothing on a step with no note.
+act on whatever step they land on, and do nothing on a step with no note. `LDLT` in a
+lane is a length lane: it moves each note's length up or down from its own, so the
+same row plays short one pass and long the next.
 
 ### The two side by side
 

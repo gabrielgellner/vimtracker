@@ -40,7 +40,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
-| `LEN` | Gate: how much of its last pulse a note lasts. `80` is half |
+| `LEN` | Gate, for rows with no length of their own. `80` is half |
+| `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
 | `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
 | `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 
@@ -48,6 +49,12 @@ Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't
 playing, or an effect no longer in its slot, is drawn faint and does nothing
 until its voice or effect is back.
+
+`LDLT` is for lanes. A note's length is its row's own, in its gate cell, or the
+track's `Gate`, and `LDLT` adds to it as the note starts, as an LFO adds to what
+a step sets, from `1%` to `100%`. In an FX column with a lane of its own, its
+values drift against the notes, so the same row plays short on one pass and long
+on the next: an articulation that moves on its own. See **Note entry**.
 
 A slot's settings can be set from a step, the same way as the rest, while the
 slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`

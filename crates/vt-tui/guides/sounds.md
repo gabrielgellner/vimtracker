@@ -46,7 +46,7 @@ notes around `C-2`, with `Resonance` well up.
   so each note's gate closes halfway through its step and it falls silent about 16 ms
   later. A slide holds its gate on into the note it slides to, and an `SGL2` is a note
   tied over two steps. Turn `Gate` up to `100%`, on the track page, for notes that hold
-  until the next, or lock `LEN` on a step for one note.
+  until the next, or give one note a length of its own in its gate cell, like `SGL1 FF`.
 - From the keyboard, holding a second key slides to its note, and letting go of it slides
   back to the first, rather than playing a chord.
 

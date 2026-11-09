@@ -47,7 +47,7 @@ struct Shot {
 const GATES: &[&str] = &[
     "C-4 64 HLD3 --- --- ---",
     "E-4 64 --- --- ---",
-    "G-4 50 MLT2 --- --- ---",
+    "G-4 50 MLT2 80 --- --- ---",
     "C-5 64 SGL0 --- --- ---",
     "--- -- RST2 --- --- ---",
     "A-3 64 --- --- ---",
@@ -85,7 +85,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "lane",
         rows: LANE,
-        keys: "lll:lane 3<Enter><Tab>",
+        keys: "llll:lane 3<Enter><Tab>",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,
