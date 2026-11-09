@@ -6,7 +6,7 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Grains, Insert,
-    Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Warps,
+    Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -18,6 +18,7 @@ use crate::dsp::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::oversampler::Oversampler;
 use crate::dsp::phaser::Phaser as AllPasses;
 use crate::dsp::smoother::Smoothed;
+use crate::dsp::vowel::Formants;
 use crate::track_state::Keys;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
@@ -50,6 +51,8 @@ pub struct InsertState {
     phaser: AllPasses,
     /// A low-pass gate's follower, vactrol and filters, small enough as well.
     gate: Gate,
+    /// A vowel filter's formants, small enough as well.
+    vowel: Formants,
     /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
     on: Smoothed,
     /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator or resonator to
@@ -73,6 +76,7 @@ impl Default for InsertState {
             dynamics: Dynamics::default(),
             phaser: AllPasses::default(),
             gate: Gate::default(),
+            vowel: Formants::default(),
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
         }
@@ -99,7 +103,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Warps(_), Insert::Warps(_))
         | (Insert::Lpg(_), Insert::Lpg(_))
         | (Insert::Reso(_), Insert::Reso(_))
-        | (Insert::Comb(_), Insert::Comb(_)) => true,
+        | (Insert::Comb(_), Insert::Comb(_))
+        | (Insert::Vowel(_), Insert::Vowel(_)) => true,
         _ => false,
     }
 }
@@ -228,7 +233,8 @@ impl InsertState {
             | Insert::Warps(Warps { mix, gain, .. })
             | Insert::Lpg(LowPassGate { mix, gain, .. })
             | Insert::Reso(Resonator { mix, gain, .. })
-            | Insert::Comb(Comb { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Comb(Comb { mix, gain, .. })
+            | Insert::Vowel(Vowel { mix, gain, .. }) => (0, mix, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -251,6 +257,13 @@ impl InsertState {
             self.eq.follow(settings);
             if fresh {
                 self.eq.settle();
+            }
+        }
+        if let Insert::Vowel(settings) = insert {
+            let fresh = !same_effect(self.insert, insert);
+            self.vowel.follow(settings);
+            if fresh {
+                self.vowel.settle();
             }
         }
         self.insert = insert;
@@ -385,7 +398,7 @@ impl InsertState {
         wet
     }
 
-    /// Follow the track's note, for an oscillator, resonator or comb of the slot's own.
+    /// Follow the track's note, for an oscillator, resonator, comb or vowel filter of the slot's own.
     pub fn follow_note(&mut self, note: f32) {
         self.note = note;
     }
@@ -474,6 +487,15 @@ impl InsertState {
             }
             Insert::Reso(_) | Insert::Comb(_) => {
                 let wet = self.resonate(input, smoothing, rate);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
+                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            Insert::Vowel(_) => {
+                let wet = self.vowel.process(input, self.note, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [

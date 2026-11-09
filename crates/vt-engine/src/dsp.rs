@@ -43,6 +43,7 @@ pub mod tape;
 mod variable_shape;
 pub mod virtual_analog;
 pub mod virtual_analog_vcf;
+pub mod vowel;
 pub mod warps;
 pub mod wave_terrain;
 pub mod waveshaping;

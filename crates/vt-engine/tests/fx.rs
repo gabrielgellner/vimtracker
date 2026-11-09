@@ -1247,3 +1247,39 @@ fn a_comb_rings_at_the_note_the_track_plays() {
         strength(&plain, g)
     );
 }
+
+#[test]
+fn a_vowel_filter_says_its_vowel_whatever_the_note() {
+    use vt_model::insert::Vowel;
+    // White noise, played at `C-4` and an octave up, through `A` and through `I`.
+    let mut seed = 1_u32;
+    let noise: Vec<[f32; 2]> = (0..RATE as usize * 4)
+        .map(|_| {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            [(seed >> 8) as f32 / 8_388_608.0 - 1.0; 2]
+        })
+        .collect();
+    let played = |vowel: u8, note: &str| {
+        let mut song = song(&[&format!("{note} -- --- --- ---")]);
+        song.tracks[0].inserts[0] = Insert::Vowel(Vowel {
+            vowel,
+            resonance: 0xC0,
+            ..Vowel::DEFAULT
+        });
+        render(song, pool(noise.clone()), STEP * 4)
+    };
+    // How strong it is around a frequency, across a quarter of a semitone either side.
+    let around = |out: &[[f32; 2]], hertz: f32| {
+        (-5..=5)
+            .map(|step| strength(out, hertz * (step as f32 / 240.0).exp2()))
+            .sum::<f32>()
+    };
+    // Their first formants, in the middle voice: `A`'s at `E-5` and `I`'s at `C-4`.
+    let (a_first, i_first) = (659.26, 261.63);
+    for note in ["C-4", "C-5"] {
+        let (a, i) = (played(0x00, note), played(0x80, note));
+        assert!(a.iter().flatten().all(|s| s.is_finite() && s.abs() <= 1.0));
+        assert!(around(&a, a_first) > around(&i, a_first) * 4.0, "{note}");
+        assert!(around(&i, i_first) > around(&a, i_first) * 4.0, "{note}");
+    }
+}

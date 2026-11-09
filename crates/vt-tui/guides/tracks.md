@@ -435,6 +435,39 @@ At most settings a drum comes out about as loud as it went in, and a long
 `Feedback` rings on and builds up. Rings' limiter, as `Reso` has, holds
 what comes out under full scale.
 
+`Vowel` is a vowel filter, after Plaits' speech synth and Vital's formant
+filter: the sound goes through five band-passes side by side, a voice's
+formants, fixed in pitch as a vowel's are, so a saw or a drum loop through
+it says a vowel. It starts as an `A` in a middle-sized voice, all wet.
+
+| Setting | Does |
+|---|---|
+| `Vowel` | Which vowel: `A` at `00`, `E` at `40`, `I` at `80`, `O` at `C0`, `U` at `FF` |
+| `Size` | How big a voice: a child's at `00`, a deep one at `FF` |
+| `Res` | How sharp its formants are, from broad at `00` to ringing at `FF` |
+| `Track` | How far its formants follow the note, from not at all at `00` |
+
+Between two places `Vowel` blends from one vowel to the next, so an LFO or
+envelope on `1 Vowel` makes it talk as it sweeps through them. A step can
+set it as `1VOWL`. `Size` moves the formants together, lower as the voice
+grows, as Plaits' five registers do. Their pitches and levels come from
+Plaits' table of five vowels in five voices.
+
+Formants stay put whatever note plays, which is what makes it a vowel, so
+`Track` starts at `00`. Turned up, they follow the track's note from
+middle C: at `FF` an octave up takes them an octave up, as if the voice
+were sped up.
+
+`Res` runs from a Q of 2, broad enough to hear the sound through, to 30,
+past Plaits' 20, where the formants ring and a saw's harmonics stand out
+one at a time as they pass. The level is matched to pink noise at every
+setting. A saw comes out louder where a harmonic lands on a formant and
+quieter where none does, by up to about 8 dB, and a drum loses what's
+above its formants, its hats and the top of its snare, so it comes out
+quieter; `Gain` can make that up. A tone held on a formant at full `Res`
+can ring loud, so Rings' limiter, as `Reso` has, holds what comes out
+under full scale.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

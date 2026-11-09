@@ -103,9 +103,17 @@ impl Svf {
     /// One sample's band and low outputs.
     #[inline]
     fn tick(&mut self, input: f32, c: &Coefficients) -> (f32, f32) {
+        self.tick_tuned(input, c.g, c.a1)
+    }
+
+    /// The same, tuned by `g`, `tan(pi f)` for its frequency `f` as a fraction of the rate, and
+    /// `a1`, `1 / (1 + g (g + k))` for its damping `k`, so a bank of them can share theirs between
+    /// sides.
+    #[inline]
+    pub(crate) fn tick_tuned(&mut self, input: f32, g: f32, a1: f32) -> (f32, f32) {
         let v3 = input - self.ic2;
-        let v1 = c.a1 * self.ic1 + c.a1 * c.g * v3;
-        let v2 = self.ic2 + c.g * v1;
+        let v1 = a1 * self.ic1 + a1 * g * v3;
+        let v2 = self.ic2 + g * v1;
         self.ic1 = 2.0 * v1 - self.ic1;
         self.ic2 = 2.0 * v2 - self.ic2;
         (v1, v2)

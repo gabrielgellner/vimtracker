@@ -30,6 +30,7 @@ pub enum Insert {
     Lpg(LowPassGate),
     Reso(Resonator),
     Comb(Comb),
+    Vowel(Vowel),
 }
 
 /// What a distortion does to the sound.
@@ -164,6 +165,11 @@ pub enum Setting {
     /// A comb's: whether it's a comb or a flanger. Its `Feedback` is the flanger's, its `Tone`
     /// the resonator's `Bright` and its `Spread` the granular effect's.
     CombMode,
+    /// A vowel filter's: where it is among the vowels, how big a voice it makes, and how far its
+    /// formants follow the note. Its `Res` is the low-pass gate's.
+    Vowel,
+    VoiceSize,
+    KeyTrack,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -1280,6 +1286,63 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
     GAIN_PARAM,
 ];
 
+/// The vowels a vowel filter moves through, in order along its `Vowel`.
+pub const VOWEL_NAMES: [&str; 5] = ["A", "E", "I", "O", "U"];
+
+/// Where a vowel filter's `Vowel` or `Size` is among its five vowels or voices, for a value on the
+/// `00` to `FF` scale: the one it's coming from, the next, and how far it is from one to the other.
+/// They sit at `00`, `40`, `80`, `C0` and `FF`, so `A` is at `00`, `E` at `40`, `I` at `80`, `O` at
+/// `C0` and `U` at `FF`.
+pub fn vowel_blend(value: f32) -> (usize, usize, f32) {
+    let value = value.clamp(0.0, 255.0);
+    let from = ((value / 64.0) as usize).min(VOWEL_NAMES.len() - 2);
+    // The last is a step shorter, as `FF` is one short of `100`.
+    let width = if from == VOWEL_NAMES.len() - 2 {
+        63.0
+    } else {
+        64.0
+    };
+    (from, from + 1, (value - from as f32 * 64.0) / width)
+}
+
+/// A vowel filter's, in the order the page shows them, as columns of two: which vowel and how big
+/// a voice, how sharp its formants are and how far they follow the note, then the mix and gain.
+pub(crate) const VOWEL_PARAMS: [Param; 6] = [
+    hex_param(
+        "Vowel",
+        "vowel",
+        "VOWL",
+        Setting::Vowel,
+        Vowel::DEFAULT.vowel,
+    ),
+    hex_param(
+        "Size",
+        "size",
+        "SIZE",
+        Setting::VoiceSize,
+        Vowel::DEFAULT.size,
+    ),
+    hex_param(
+        "Res",
+        "res",
+        "RESO",
+        Setting::Resonance,
+        Vowel::DEFAULT.resonance,
+    ),
+    hex_param(
+        "Track",
+        "track",
+        "TRK",
+        Setting::KeyTrack,
+        Vowel::DEFAULT.track,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1288,7 +1351,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1307,6 +1370,7 @@ impl Insert {
         Self::Lpg(LowPassGate::DEFAULT),
         Self::Reso(Resonator::DEFAULT),
         Self::Comb(Comb::DEFAULT),
+        Self::Vowel(Vowel::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1342,6 +1406,7 @@ impl Insert {
             Self::Lpg(_) => "LPG",
             Self::Reso(_) => "Reso",
             Self::Comb(_) => "Comb",
+            Self::Vowel(_) => "Vowel",
         }
     }
 
@@ -1366,6 +1431,7 @@ impl Insert {
             Self::Lpg(_) => "Gates or filters it by its level, or another track's",
             Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
             Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
+            Self::Vowel(_) => "Makes it say a vowel, morphing from A to U",
         }
     }
 
@@ -1394,6 +1460,7 @@ impl Insert {
             Self::Lpg(_) => &LPG_PARAMS,
             Self::Reso(_) => &RESO_PARAMS,
             Self::Comb(_) => &COMB_PARAMS,
+            Self::Vowel(_) => &VOWEL_PARAMS,
         }
     }
 
@@ -1515,6 +1582,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| comb.read(setting));
             }
+            Self::Vowel(vowel) => {
+                return VOWEL_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| vowel.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1553,6 +1626,7 @@ impl Insert {
             Self::Lpg(gate) => return Self::Lpg(gate.written(setting, whole)),
             Self::Reso(resonator) => return Self::Reso(resonator.written(setting, whole)),
             Self::Comb(comb) => return Self::Comb(comb.written(setting, whole)),
+            Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -2794,6 +2868,74 @@ impl Comb {
             _ => {}
         }
         comb
+    }
+}
+
+/// A vowel filter's settings: a voice's formants, fixed in pitch as a vowel's are, morphing from
+/// one vowel to the next, after Plaits' speech synth and Vital's formant filter. One a file
+/// doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Vowel {
+    /// Which vowel, from `A` at `00` through `E`, `I` and `O` to `U` at `FF`, blending between.
+    pub vowel: u8,
+    /// How big a voice, from a child's at `00` to a deep one at `FF`: its formants lower as it
+    /// grows.
+    pub size: u8,
+    /// How sharp its formants are, from broad at `00` to ringing at `FF`.
+    pub resonance: u8,
+    /// How far its formants follow the track's note from middle C, from not at all at `00` to as
+    /// far as the note moves at `FF`.
+    pub track: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Vowel {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Vowel {
+    /// As it starts: an `A` in a voice of middle size, its formants fixed, and all wet.
+    pub const DEFAULT: Self = Self {
+        vowel: 0x00,
+        size: 0x80,
+        resonance: 0x80,
+        track: 0x00,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Vowel => self.vowel,
+            Setting::VoiceSize => self.size,
+            Setting::Resonance => self.resonance,
+            Setting::KeyTrack => self.track,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut vowel = self;
+        match setting {
+            Setting::Vowel => vowel.vowel = value,
+            Setting::VoiceSize => vowel.size = value,
+            Setting::Resonance => vowel.resonance = value,
+            Setting::KeyTrack => vowel.track = value,
+            Setting::Mix => vowel.mix = value,
+            Setting::Gain => vowel.gain = value,
+            _ => {}
+        }
+        vowel
     }
 }
 
