@@ -1,5 +1,6 @@
 //! The `:` command line's keys: typing, Tab completing, after Vim's `wildmenu`, and `Up` and
-//! `Down` going back through what was run before, as Vim's history does.
+//! `Down` going back through what was run before, as Vim's history does, and `C-r` rolling a new
+//! random name on a name line.
 
 use ratatui::crossterm::event::KeyCode;
 
@@ -50,6 +51,7 @@ impl App {
                     self.leave_command_line();
                 }
             }
+            KeyCode::Char('r') if key.ctrl => self.roll_name(),
             KeyCode::Char(c) if !key.ctrl => {
                 self.command_history.stop();
                 self.command_line.push(c);

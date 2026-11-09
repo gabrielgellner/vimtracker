@@ -8,6 +8,7 @@ pub mod insert;
 pub mod kit;
 pub mod label;
 pub mod lfo;
+pub mod names;
 pub mod patch_names;
 pub mod project;
 pub mod sample;

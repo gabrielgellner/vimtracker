@@ -8678,22 +8678,101 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     assert_eq!(app.mode, Mode::Command);
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
     let shown = vt_tui::explorer::place_name(&root, Some(&home));
-    assert_eq!(app.command_line, format!("w {shown}/"));
+    // The project's random name is filled in after the folder, so Enter saves it.
+    let name = app.project_name();
+    assert_eq!(app.command_line, format!("w {shown}/{name}"));
     assert!(app.status.contains("name"), "{}", app.status);
-    // The name is typed, with Tab to complete it, and Enter saves.
-    press(&mut app, "song");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.folder.as_deref(), Some(root.join("song").as_path()));
+    assert_eq!(app.folder.as_deref(), Some(root.join(&name).as_path()));
     assert!(!app.dirty, "{}", app.status);
+    assert_eq!(app.project_name(), name, "the folder's name now");
 
-    // :new does the same.
+    // :new does the same, with a new name, which can be typed over.
     command(&mut app, "new");
     assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Enter);
-    assert!(app.command_line.starts_with("new "), "{}", app.command_line);
+    let line = app.command_line.clone();
+    assert!(line.starts_with(&format!("new {shown}/")), "{line}");
+    assert!(!line.ends_with(&format!("/{name}")), "{line} is a new name");
+    for _ in line.rsplit('/').next().unwrap().chars() {
+        special(&mut app, KeyCode::Backspace);
+    }
     press(&mut app, "fresh");
     special(&mut app, KeyCode::Enter);
     assert!(root.join("fresh/song.ron").is_file(), "{}", app.status);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// Whether a name is two lower case words joined by a hyphen, as random names are.
+fn random_name_like(name: &str) -> bool {
+    name.split_once('-').is_some_and(|(first, second)| {
+        [first, second]
+            .iter()
+            .all(|word| !word.is_empty() && word.chars().all(|c| c.is_ascii_lowercase()))
+    })
+}
+
+#[test]
+fn a_new_project_has_a_random_name_not_reused_in_the_folder_it_is_saved_in() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    let name = app.project_name();
+    assert!(random_name_like(&name), "{name}");
+    let (other, _other_realtime) = self::app();
+    assert_ne!(other.project_name(), name, "each starts with its own");
+    // A folder with the name already in it gets another.
+    std::fs::create_dir_all(root.join(&name)).unwrap();
+    app.recent_places
+        .add(vt_tui::explorer::Purpose::Save, &root)
+        .unwrap();
+    command(&mut app, "w");
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    let given = app.command_line.rsplit('/').next().unwrap().to_owned();
+    assert!(random_name_like(&given), "{given}");
+    assert_ne!(given, name, "{name} is in the folder already");
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn ctrl_r_rolls_a_new_name_on_a_name_line() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    let roll = parse_sequence("C-r").unwrap()[0];
+    let typed = format!("w {}/typed", root.display());
+    press(&mut app, ":");
+    press(&mut app, &typed);
+    app.key(roll, Instant::now());
+    let first = app.command_line.clone();
+    let folder = format!("w {}/", root.display());
+    assert!(first.starts_with(&folder), "{first}");
+    assert!(random_name_like(&first[folder.len()..]), "{first}");
+    app.key(roll, Instant::now());
+    assert_ne!(app.command_line, first, "each press rolls again");
+    assert_eq!(app.mode, Mode::Command);
+    special(&mut app, KeyCode::Enter);
+    let saved = app.folder.clone().unwrap();
+    assert_eq!(saved.parent(), Some(root.as_path()), "{}", app.status);
+
+    // A render's extension and flags stay.
+    command(&mut app, "render --tail");
+    special(&mut app, KeyCode::Enter);
+    let line = app.command_line.clone();
+    let project = app.project_name();
+    assert!(line.ends_with(&format!("/{project}.wav --tail")), "{line}");
+    app.key(roll, Instant::now());
+    assert!(
+        app.command_line.ends_with(".wav --tail"),
+        "{}",
+        app.command_line
+    );
+    assert!(!app.command_line.contains(&format!("/{project}.wav")));
+
+    // A line that names nothing is left alone.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, ":bpm 12");
+    app.key(roll, Instant::now());
+    assert_eq!(app.command_line, "bpm 12");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -8716,5 +8795,26 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     assert_eq!(app.command_line, format!("render {shown}/one.wav --tail"));
     special(&mut app, KeyCode::Enter);
     assert!(root.join("one/one.wav").is_file(), "{}", app.status);
+    // Another render is numbered, rather than written over the first.
+    command(&mut app, "render");
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.command_line, format!("render {shown}/one-2.wav"));
+    special(&mut app, KeyCode::Esc);
+
+    // A project with no folder yet renders under its random name.
+    let (mut unsaved, _unsaved_realtime) = self::app();
+    unsaved
+        .recent_places
+        .add(vt_tui::explorer::Purpose::Render, &root)
+        .unwrap();
+    command(&mut unsaved, "render");
+    special(&mut unsaved, KeyCode::Enter);
+    let name = unsaved.project_name();
+    assert!(
+        unsaved.command_line.ends_with(&format!("/{name}.wav")),
+        "{}",
+        unsaved.command_line
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
