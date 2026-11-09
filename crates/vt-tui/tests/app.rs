@@ -3086,6 +3086,89 @@ fn the_gap_above_the_filter_is_only_on_screen() {
 }
 
 #[test]
+fn the_track_page_sets_pitch_and_a_choke_group() {
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    let lines = track_page_text(&app);
+    assert!(
+        lines[8].contains("Pitch") && lines[8].contains("80"),
+        "{}",
+        lines[8]
+    );
+    assert!(
+        lines[9].contains("Choke") && lines[9].contains("Off"),
+        "{}",
+        lines[9]
+    );
+
+    press(&mut app, "jjl");
+    assert_eq!(app.track_control().label(), "Pitch");
+    press(&mut app, "i8C");
+    assert_eq!(track(&app).pitch, 0x8C);
+    press(&mut app, "x");
+    assert_eq!(track(&app).pitch, 0x80);
+
+    press(&mut app, "j");
+    assert_eq!(app.track_control().label(), "Choke");
+    press(&mut app, "=");
+    assert_eq!(track(&app).choke, Some(1));
+    press(&mut app, "3=");
+    assert_eq!(track(&app).choke, Some(4));
+    typed(&mut app, "16");
+    assert_eq!(track(&app).choke, Some(16));
+    press(&mut app, "=");
+    assert_eq!(track(&app).choke, Some(16), "16 is the last");
+    typed(&mut app, "17");
+    assert_eq!(track(&app).choke, Some(16));
+    assert!(app.status.contains("1 to 16"), "{}", app.status);
+    assert!(track_page_text(&app)[9].contains("16"));
+    typed(&mut app, "off");
+    assert_eq!(track(&app).choke, None);
+    press(&mut app, "u");
+    assert_eq!(track(&app).choke, Some(16));
+    press(&mut app, "x");
+    assert_eq!(track(&app).choke, None);
+    press(&mut app, "=-");
+    assert_eq!(track(&app).choke, None, "down from 1 is none");
+}
+
+#[test]
+fn a_kit_sound_sets_its_tracks_level_pitch_and_choke_group() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let hats = kit.parent().unwrap().join("hats.ron");
+    std::fs::write(
+        &hats,
+        r#"(sounds: [
+            (label: "CH", path: "drums/hat.wav", choke: Some(1), gain: -6.0, tune: 3),
+            (label: "OH", path: "drums/snare.wav", choke: Some(1)),
+        ])"#,
+    )
+    .unwrap();
+    let track = |app: &App, index: usize| {
+        let track = &app.song().tracks[index];
+        (track.level, track.pitch, track.choke)
+    };
+    command(&mut app, &format!("kit {} all", hats.display()));
+    assert_eq!(track(&app, 0), (0xC8, 0x83, Some(1)), "6 dB down, 3 up");
+    assert_eq!(track(&app, 1), (0xE0, 0x80, Some(1)));
+
+    // Choosing one for a track sets them all with the sample, as one step to undo.
+    press(&mut app, "u");
+    assert_eq!(track(&app, 0), (0xE0, 0x80, None));
+    command(&mut app, &format!("kit {}", hats.display()));
+    let depth = app.history.undo_depth();
+    press(&mut app, " 5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app, 0), (0xC8, 0x83, Some(1)));
+    assert_eq!(app.song().tracks[0].name, "CH");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(track(&app, 0), (0xE0, 0x80, None));
+    assert_eq!(app.song().tracks[0].sample, None);
+}
+
+#[test]
 fn the_track_page_sets_the_utility_filter() {
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
@@ -5081,7 +5164,7 @@ fn the_filter_curve_sits_in_a_box_under_the_filters_rows() {
     let top = last + 1;
     // As wide as a value and its bar, which ends at the line after its cells.
     let bar_end = (0..80)
-        .rfind(|x| plain[(*x, row_of("Drive"))].symbol() == "▏")
+        .find(|x| plain[(*x, row_of("Drive"))].symbol() == "▏")
         .unwrap();
     assert_eq!(drawn[(0, top)].symbol(), "┌");
     assert_eq!(drawn[(bar_end, top)].symbol(), "┐");
@@ -5166,9 +5249,9 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
     // Machine takes `a` for the `c`, and goes when the search narrows, leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["d Low cut", "f High cut", "s Cut"]);
+    assert_eq!(jump_labels(&app), ["f Low cut", "j High cut", "s Cut"]);
 
-    press(&mut app, "d");
+    press(&mut app, "f");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -5309,8 +5392,8 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     };
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cus").starts_with("Cus       sF00 ▕"));
-    assert!(line(&app, "Low cud").starts_with("Low cud   d0   ▕"));
-    assert!(line(&app, "High cuf").starts_with("High cuf  fF   ▕"));
+    assert!(line(&app, "Low cuf").starts_with("Low cuf   f0   ▕"));
+    assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");

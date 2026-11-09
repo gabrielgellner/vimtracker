@@ -311,8 +311,9 @@ where it came from and what kind it is. For each sound:
 | `gain` | In dB |
 | `tune` | In semitones, up to 48 either way |
 
-Variants, layers, choke groups, gain and tune are kept for now, and don't yet
-change what you hear.
+A sound's track takes its choke group, its gain as its `Level` and its tune
+as its `Pitch`, whether `:kit 909 all` puts it there or `Space 5` chooses it.
+Variants and layers are kept for now, and don't yet change what you hear.
 
 | Command | Does |
 |---|---|

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use vt_model::action::{Action, EditError, KitSound, edit};
-use vt_model::constants::MAX_SOUND_TRACKS;
+use vt_model::constants::{MAX_SOUND_TRACKS, UNITY_LEVEL};
 use vt_model::history::History;
 use vt_model::song::{Launch, Song};
 use vt_model::step::Note;
@@ -134,8 +134,17 @@ fn a_kit_fills_tracks_from_the_first_and_adds_what_it_needs() {
     let sound = |sample: &str, name: &str| KitSound {
         sample: sample.into(),
         name: name.into(),
+        level: UNITY_LEVEL,
+        pitch: 0x80,
+        choke: None,
     };
-    let kit = Action::LoadKit(vec![sound("a.wav", "BD"), sound("b.wav", "")]);
+    let hat = KitSound {
+        level: 0xD8,
+        pitch: 0x83,
+        choke: Some(1),
+        ..sound("b.wav", "CH")
+    };
+    let kit = Action::LoadKit(vec![sound("a.wav", "BD"), hat]);
     let next = edit(&start, &kit).unwrap();
     assert_eq!(next.sound_tracks(), 2);
     assert_eq!(next.sections[0].chains.len(), next.tracks.len());
@@ -143,8 +152,26 @@ fn a_kit_fills_tracks_from_the_first_and_adds_what_it_needs() {
     assert_eq!(next.tracks[0].name, "BD");
     assert_eq!(next.tracks[0].cutoff, 0x40, "other settings stay");
     assert_eq!(next.tracks[1].sample.as_deref(), Some("b.wav"));
+    let hat = &next.tracks[1];
+    assert_eq!((hat.level, hat.pitch, hat.choke), (0xD8, 0x83, Some(1)));
     let huge = Action::LoadKit(vec![sound("a.wav", ""); MAX_SOUND_TRACKS + 1]);
     assert_eq!(edit(&start, &huge), Err(EditError::TooManyTracks));
+    let bad = Action::LoadKit(vec![KitSound {
+        choke: Some(17),
+        ..sound("a.wav", "")
+    }]);
+    assert_eq!(edit(&start, &bad), Err(EditError::Choke(17)));
+}
+
+#[test]
+fn a_choke_group_is_one_to_sixteen_or_none() {
+    let start = Arc::new(Song::new(1));
+    let choke = |choke| Action::SetTrackChoke { track: 0, choke };
+    let next = edit(&start, &choke(Some(16))).unwrap();
+    assert_eq!(next.tracks[0].choke, Some(16));
+    assert_eq!(edit(&next, &choke(None)).unwrap().tracks[0].choke, None);
+    assert_eq!(edit(&start, &choke(Some(0))), Err(EditError::Choke(0)));
+    assert_eq!(edit(&start, &choke(Some(17))), Err(EditError::Choke(17)));
 }
 
 mod tree {

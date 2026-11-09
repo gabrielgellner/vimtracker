@@ -314,6 +314,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::RES => track.resonance,
             SettingId::SEND_A => track.send_a,
             SettingId::SEND_B => track.send_b,
+            SettingId::PITCH => track.pitch,
             _ => id.entry().default,
         },
         (Owner::Voice(_), _) => track.setting(id),

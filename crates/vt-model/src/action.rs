@@ -10,6 +10,7 @@ use crate::constants::{
 };
 use crate::envelope::Envelope;
 use crate::insert::Insert;
+use crate::kit::CHOKE_GROUPS;
 use crate::lfo::Lfo;
 use crate::scale::Scale;
 use crate::selection::{
@@ -50,11 +51,14 @@ pub enum Fill {
     SlotFine(usize, u8),
 }
 
-/// A sound from a kit going on a track.
+/// A sound from a kit going on a track, with the level, pitch and choke group its track takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KitSound {
     pub sample: String,
     pub name: String,
+    pub level: u8,
+    pub pitch: u8,
+    pub choke: Option<u8>,
 }
 
 /// One edit, as plain data so it can be replayed and tested without a terminal.
@@ -233,6 +237,11 @@ pub enum Action {
         track: usize,
         level: u8,
     },
+    /// Put a track in a choke group, from 1 to `CHOKE_GROUPS`, or in none.
+    SetTrackChoke {
+        track: usize,
+        choke: Option<u8>,
+    },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         track: usize,
@@ -355,6 +364,7 @@ pub enum TrackControl {
     Drive,
     LowCut,
     HighCut,
+    Pitch,
 }
 
 impl TrackControl {
@@ -366,6 +376,7 @@ impl TrackControl {
             Self::Pan => Some(SettingId::PAN),
             Self::SendA => Some(SettingId::SEND_A),
             Self::SendB => Some(SettingId::SEND_B),
+            Self::Pitch => Some(SettingId::PITCH),
             Self::Drive | Self::LowCut | Self::HighCut => None,
         }
     }
@@ -391,6 +402,14 @@ fn section_mut(song: &mut Song, section: usize) -> Result<&mut Section, EditErro
     song.sections
         .get_mut(section)
         .ok_or(EditError::NoSection(section))
+}
+
+/// A choke group is 1 to `CHOKE_GROUPS`, or none.
+fn check_choke(choke: Option<u8>) -> Result<(), EditError> {
+    match choke {
+        Some(group) if !(1..=CHOKE_GROUPS).contains(&group) => Err(EditError::Choke(group)),
+        _ => Ok(()),
+    }
 }
 
 fn track_mut(song: &mut Song, track: usize) -> Result<&mut Track, EditError> {
@@ -434,6 +453,8 @@ pub enum EditError {
     Reset,
     #[error("an LFO's rate, depth or phase is out of range")]
     Lfo,
+    #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
+    Choke(u8),
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -669,6 +690,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::Drive => track.drive = *value,
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
+                TrackControl::Pitch => track.pitch = *value,
             }
             // At the top, a fine part goes.
             if let Some(id) = control.setting() {
@@ -775,6 +797,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .level = (*level).min(MAX_LEVEL);
         }
+        Action::SetTrackChoke { track, choke } => {
+            check_choke(*choke)?;
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .choke = *choke;
+        }
         Action::SetLength {
             track,
             phrase,
@@ -847,9 +876,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 next.add_track();
             }
             for (track, sound) in next.tracks.iter_mut().zip(sounds) {
+                check_choke(sound.choke)?;
                 track.sample = Some(sound.sample.clone());
                 track.machine = Machine::Sample;
                 track.name = sound.name.clone();
+                track.level = sound.level.min(MAX_LEVEL);
+                track.pitch = sound.pitch;
+                track.choke = sound.choke;
             }
         }
         Action::SetChainEntry {

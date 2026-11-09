@@ -1071,7 +1071,7 @@ impl SettingId {
     pub const RES: Self = Self(3);
     pub const SEND_A: Self = Self(4);
     pub const SEND_B: Self = Self(5);
-    /// Moved by modulation only, in semitones.
+    /// In semitones, from the track's own pitch.
     pub const PITCH: Self = Self(6);
 
     /// How many settings there are.

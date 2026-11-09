@@ -185,6 +185,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     match control {
         Control::Level => level(track.level),
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
+        Control::Base(TrackControl::Pitch) => Some((track.pitch, true)),
         // Those with a middle that's a setting of its own show where they are around it.
         Control::Setting(_) => {
             let id = control.setting_on(track)?;
@@ -347,6 +348,10 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         Control::Base(TrackControl::Drive) => hex(track.drive),
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
+        Control::Base(TrackControl::Pitch) => hex(track.pitch),
+        Control::Choke => track
+            .choke
+            .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
         Control::Sample => track.sample.as_deref().map_or_else(
             || "---".to_owned(),
             |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),

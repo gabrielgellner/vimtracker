@@ -547,6 +547,21 @@ impl Engine {
         self.audible(index) || self.listened[index]
     }
 
+    /// A note has started on a track, so what's sounding on the others in its choke group stops,
+    /// fading out as a new note fades the old one.
+    fn choke(&mut self, index: usize) {
+        let sounds = self.sounds();
+        let tracks = &self.current.song.tracks;
+        let Some(group) = tracks.get(index).and_then(|track| track.choke) else {
+            return;
+        };
+        for (other, track) in tracks.iter().enumerate().take(sounds) {
+            if other != index && track.choke == Some(group) {
+                self.tracks[other].cut_to_tail();
+            }
+        }
+    }
+
     /// The fixed tracks come after the others, so as those come and go, what the fixed tracks keep
     /// moves with them.
     fn keep_fixed_tracks(&mut self, was: usize) {
@@ -1099,6 +1114,7 @@ impl Engine {
                         (t.kill_at, t.off_at, t.retrigger)
                     };
                     self.tracks[index].start(delayed.note, self.rate);
+                    self.choke(index);
                     let t = &mut self.tracks[index];
                     t.kill_at = kill;
                     t.off_at = off;
@@ -1321,7 +1337,10 @@ impl Engine {
                             note: on,
                         });
                     }
-                    Some(on) if self.plays(index) => self.tracks[index].start(on, self.rate),
+                    Some(on) if self.plays(index) => {
+                        self.tracks[index].start(on, self.rate);
+                        self.choke(index);
+                    }
                     Some(on) => {
                         self.tracks[index].last_note = Some(on);
                         self.tracks[index].cut_to_tail();
@@ -1400,6 +1419,7 @@ impl Engine {
             track.start(on, self.rate);
             track.last_note = last_note;
             self.auditioned[index] = true;
+            self.choke(index);
         }
     }
 
