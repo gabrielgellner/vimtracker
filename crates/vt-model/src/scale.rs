@@ -1,4 +1,4 @@
-//! The song's scale, an aid to entering and moving notes. Nothing that plays the song uses it.
+//! The song's scale, an aid to entering and moving notes, and what an `ACU` moves notes through.
 
 use serde::{Deserialize, Serialize};
 

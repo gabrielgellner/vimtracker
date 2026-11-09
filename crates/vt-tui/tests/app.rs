@@ -10111,3 +10111,185 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
     assert!(!app.fill, "held, it goes back");
     assert!(!app.dirty, "fill isn't part of the song");
 }
+
+#[test]
+fn k_chooses_acu_then_its_amount_from_a_list() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    press(&mut app, "lllllK");
+    press(&mut app, "ACU");
+    special(&mut app, KeyCode::Enter);
+    // Choosing `ACU` lists how far it can move the note, up and then down.
+    let picker = app.picker.as_ref().expect("the amounts are listed");
+    assert_eq!(picker.title, "Accumulate");
+    assert_eq!(picker.current().unwrap().label, "+1", "it opens on one up");
+    assert_eq!(
+        listed(picker.current().unwrap()),
+        "+1  01  Up 1 semitone",
+        "the scale is off"
+    );
+    press(&mut app, "-2");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "-2");
+    let depth = app.history.undo_depth();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).command, Some(FxCommand::Acu));
+    assert_eq!(slot(&app).coarse(), 0xFE);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(
+        column_name(&app),
+        "Move the note on xx scale degrees each time it plays"
+    );
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("down 2 semitones each time it plays, wrap on this row")
+    );
+
+    // `K` on its value lists them again, on its own.
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "-2");
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+
+    // `=` goes up through `00`, as the amount is signed, and `+` by seven.
+    press(&mut app, "==");
+    assert_eq!(slot(&app).coarse(), 0x00);
+    assert_eq!(value_shown(&app).as_deref(), Some("doesn't move the note"));
+    press(&mut app, "=+");
+    assert_eq!(slot(&app).coarse(), 0x08);
+    press(&mut app, "+++++");
+    assert_eq!(slot(&app).coarse(), 0x1C, "it stops at 28");
+
+    // A value past 28 isn't taken.
+    press(&mut app, "r1D");
+    assert_eq!(slot(&app).coarse(), 0x1C);
+    assert!(app.status.contains("is past 28"), "{}", app.status);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "rE4");
+    assert_eq!(slot(&app).coarse(), 0xE4);
+
+    // With the scale on, it's degrees.
+    command(&mut app, "set scale=on");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("down 28 scale degrees each time it plays, wrap on this row")
+    );
+}
+
+#[test]
+fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
+    use vt_model::accumulator::{Accumulation, AtLimit, Moves, Reset};
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LG");
+    let text = track_text(&app).join("\n");
+    assert!(
+        text.contains("Up     Down   Moves  Limit  Adds   Reset"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Acc       7      7      Row    Wrap   Row    Chain"),
+        "{text}"
+    );
+    assert_eq!(column_name(&app), "Accumulator up");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("7 semitones above the note as written")
+    );
+    let accumulation = |app: &App| app.song().tracks[0].accumulation;
+
+    // The limits move by one, or seven with `+`, and stop at 1 and 28.
+    press(&mut app, "=");
+    assert_eq!(accumulation(&app).up, 8);
+    press(&mut app, "+++++");
+    assert_eq!(accumulation(&app).up, 28);
+    press(&mut app, "x");
+    assert_eq!(accumulation(&app), Accumulation::default());
+    // Typed, it's a number of degrees.
+    press(&mut app, "li3");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(accumulation(&app).down, 3);
+    press(&mut app, "i40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(accumulation(&app).down, 3);
+    assert!(app.status.contains("from 1 to 28"), "{}", app.status);
+
+    // The others are lists, which `K` shows with what each does.
+    press(&mut app, "l");
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().expect("the choices are listed");
+    assert_eq!(picker.title, "Accumulator moves");
+    let items: Vec<String> = picker.items().iter().map(listed).collect();
+    assert_eq!(
+        items,
+        [
+            "Row  Only the row with the ACU moves",
+            "Track  Every row on the track moves with the ACUs"
+        ]
+    );
+    press(&mut app, "j");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(accumulation(&app).moves, Moves::Track);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("every row on the track moves with the ACUs")
+    );
+    press(&mut app, "l=");
+    assert_eq!(accumulation(&app).at_limit, AtLimit::Bounce);
+    press(&mut app, "ll==");
+    assert_eq!(accumulation(&app).reset, Reset::Loops(1));
+    let text = track_text(&app).join("\n");
+    assert!(text.contains("Track  Bounce Row    1 loop"), "{text}");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("each time round the chain")
+    );
+}
+
+#[test]
+fn a_return_has_no_accumulator() {
+    let (mut app, _realtime) = app();
+    let returns = app
+        .song()
+        .tracks
+        .iter()
+        .position(|track| !track.is_sound())
+        .unwrap();
+    for _ in 0..returns {
+        press(&mut app, "W");
+    }
+    press(&mut app, " 4LG");
+    let text = track_text(&app).join("\n");
+    assert!(!text.contains("Acc "), "{text}");
+}
+
+#[test]
+fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
+    use vt_tui::views::status::value_shown;
+    let rows = vec!["C-4 -- acu:02".parse().unwrap(), "D-4 --".parse().unwrap()];
+    let (mut app, mut rt) = recording_app(rows);
+    let row_text = |app: &App, row: u16| {
+        let buffer = screen(app);
+        (0..40)
+            .map(|x| buffer[(x, row + 2)].symbol())
+            .collect::<String>()
+    };
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    // The first time round, it plays as written.
+    play_to(&mut app, &mut rt, &mut at, 0.5);
+    assert!(row_text(&app, 0).contains("C-4"), "{}", row_text(&app, 0));
+    assert_eq!(value_shown(&app), None);
+    // The second time, two semitones up, as the scale is off.
+    play_to(&mut app, &mut rt, &mut at, 2.5);
+    assert!(row_text(&app, 0).contains(">"), "{}", row_text(&app, 0));
+    assert!(row_text(&app, 0).contains("D-4"), "{}", row_text(&app, 0));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("the row playing is heard as D-4")
+    );
+    // The row after, which has none, plays as written.
+    play_to(&mut app, &mut rt, &mut at, 3.5);
+    assert!(row_text(&app, 1).contains("D-4"), "{}", row_text(&app, 1));
+    assert_eq!(value_shown(&app), None);
+}

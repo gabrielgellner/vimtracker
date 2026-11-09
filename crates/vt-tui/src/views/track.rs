@@ -20,7 +20,8 @@ use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
 use crate::track_page::{
-    Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
+    ACCUMULATOR, AccumulatorField, Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS,
+    LfoField, Page, SLOT_ROWS,
 };
 use crate::views::meter::{hanging_cell, hanging_eighths};
 
@@ -391,6 +392,17 @@ pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -
                 EnvelopeField::Reset => if envelope.reset { "on" } else { "off" }.to_owned(),
             }
         }
+        Control::Accumulator(field) => {
+            let accumulation = track.accumulation;
+            match field {
+                AccumulatorField::Up => accumulation.up.to_string(),
+                AccumulatorField::Down => accumulation.down.to_string(),
+                AccumulatorField::Moves => accumulation.moves.name().to_owned(),
+                AccumulatorField::AtLimit => accumulation.at_limit.name().to_owned(),
+                AccumulatorField::Adds => accumulation.adds.name().to_owned(),
+                AccumulatorField::Reset => accumulation.reset.name(),
+            }
+        }
         Control::Insert(slot) => track.inserts[slot].name().to_owned(),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
@@ -427,6 +439,8 @@ fn width(control: Control) -> usize {
         Control::Lfo(_, LfoField::Rate) => 9,
         Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + LFO_ICON_WIDTH + 2,
         Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 8,
+        // Room for `16 loops`.
+        Control::Accumulator(AccumulatorField::Reset) => 9,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
             _,
@@ -837,6 +851,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(heading(app, &LFOS));
             for (slot, controls) in LFOS.iter().enumerate() {
                 lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
+            }
+            // A track with no note to move has no accumulator.
+            if track.is_sound() {
+                lines.push(Line::raw(""));
+                lines.push(heading(app, &[ACCUMULATOR]));
+                lines.push(row(app, track, "Acc", &ACCUMULATOR));
             }
             lines.push(Line::raw(""));
             lines.extend(diagrams(app, track));

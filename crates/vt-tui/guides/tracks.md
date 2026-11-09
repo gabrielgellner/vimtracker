@@ -3,8 +3,8 @@
 Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
 has its machine, filter and output, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
-plays it, with a dim mark left where it's set, Mod its envelopes and
-LFOs, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
+plays it, with a dim mark left where it's set, Mod its envelopes,
+LFOs and accumulator, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -622,6 +622,16 @@ sits at its held values, so `;` hears those. Pausing freezes the LFO.
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
 is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
 on a step.
+
+## The accumulator
+
+The `Acc` row under the LFOs says how the track's `ACU`s move its notes from pass
+to pass: `Up` and `Down`, how far from the note as written, in scale degrees with
+the scale on and semitones with it off; `Moves`, `Row` for only the row with the
+`ACU` or `Track` for every row; `Limit`, `Wrap` `Bounce` or `Hold`; `Adds`, once a
+row, on each `MLT` pulse or on each `RET` hit; and `Reset`, when it goes back to
+the notes as written. `=` and `-` move each, `+` and `_` move a limit by 7, `i`
+types a limit and `K` lists the others. See **FX commands**.
 
 ## The mixer
 

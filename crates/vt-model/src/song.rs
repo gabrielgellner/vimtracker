@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::accumulator::Accumulation;
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
     FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
@@ -337,6 +338,10 @@ pub struct Track {
     /// How long each of its steps is, and where held `RATE` starts: a sixteenth unless changed.
     #[serde(default, skip_serializing_if = "is_sixteenth")]
     pub speed: Speed,
+    /// How its `ACU`s move its notes: how far, what happens at the limits, and when they start
+    /// again.
+    #[serde(default, skip_serializing_if = "is_default_accumulation")]
+    pub accumulation: Accumulation,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -351,6 +356,10 @@ pub struct Track {
 
 fn is_sixteenth(speed: &Speed) -> bool {
     *speed == Speed::Sixteenth
+}
+
+fn is_default_accumulation(accumulation: &Accumulation) -> bool {
+    *accumulation == Accumulation::default()
 }
 
 fn none_bypassed(bypassed: &[bool; INSERTS]) -> bool {
@@ -572,6 +581,7 @@ impl Default for Track {
             choke: None,
             gate_length: None,
             speed: Speed::Sixteenth,
+            accumulation: Accumulation::default(),
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),
@@ -1290,7 +1300,8 @@ pub struct Song {
     /// The grid: how far the left and right arrows move in Insert, and auto-jump with them.
     #[serde(default = "default_skip")]
     pub skip: u32,
-    /// The scale for entering and moving notes, kept with the song and not used to play it.
+    /// The scale for entering and moving notes, kept with the song. Playing reads it only for what an
+    /// `ACU` moves notes through, which the app sends the engine as it changes.
     #[serde(default)]
     pub scale: Scale,
     /// Whether the main output clips at full level. Off, a render keeps levels above it.

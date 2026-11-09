@@ -1,5 +1,6 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
+use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
@@ -289,6 +290,9 @@ pub struct PendingStep {
     pub count: i64,
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
+    /// Which of its track's chain starts it was worked out after, which its accumulators count
+    /// from.
+    pub start: u64,
 }
 
 /// What a row's chance and conditions decided, once, on its first pulse.
@@ -315,6 +319,118 @@ pub struct Retrigger {
     pub interval: u64,
     /// Multiplies the level on each retrigger.
     pub factor: f32,
+    /// The row's accumulator, where each hit moves its note on.
+    pub accumulates: Option<Accumulating>,
+}
+
+/// A row whose accumulator moves its note on each time its retrigger hits.
+#[derive(Debug, Clone, Copy)]
+pub struct Accumulating {
+    pub row: RowKey,
+    pub amount: i8,
+    /// The note as written, which it's moved from.
+    pub written: u8,
+    /// Its chain's transpose, added after.
+    pub transpose: i8,
+    pub epoch: Epoch,
+}
+
+/// The most rows on a track that keep an accumulator of their own at once. Past it, a row with an
+/// `ACU` plays its note as written, though in Track mode it still moves with the track.
+pub const ACCUMULATED_ROWS: usize = 64;
+
+/// A row of a phrase, which an accumulator belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowKey {
+    pub phrase: u32,
+    pub row: usize,
+}
+
+/// Which start of a track's chain, and which group of loops round it, a track's accumulators are
+/// counting in. They start again from the notes as written once it moves on.
+pub type Epoch = (u64, i64);
+
+/// One row's accumulator, and whether its row has played since they started again, as its first
+/// play is as written.
+#[derive(Debug, Clone, Copy)]
+struct RowWalk {
+    key: RowKey,
+    played: bool,
+    walk: Walk,
+}
+
+/// A track's accumulators: one for each row with an `ACU`, and the track's own for Track mode, in a
+/// fixed table so the callback never allocates.
+#[derive(Debug, Clone, Copy)]
+pub struct Accumulators {
+    rows: [Option<RowWalk>; ACCUMULATED_ROWS],
+    track: Walk,
+    epoch: Epoch,
+}
+
+impl Default for Accumulators {
+    fn default() -> Self {
+        Self {
+            rows: [None; ACCUMULATED_ROWS],
+            track: Walk::default(),
+            epoch: (0, 0),
+        }
+    }
+}
+
+impl Accumulators {
+    /// Go back to the notes as written.
+    pub fn forget(&mut self) {
+        self.rows = [None; ACCUMULATED_ROWS];
+        self.track = Walk::default();
+    }
+
+    /// Count in this epoch, starting again if it's a new one.
+    pub fn enter(&mut self, epoch: Epoch) {
+        if epoch != self.epoch {
+            self.forget();
+            self.epoch = epoch;
+        }
+    }
+
+    /// Add a row's amount as it plays, to its own accumulator or the track's. Its first play since
+    /// they started again is as written, and adds nothing.
+    pub fn add(&mut self, key: RowKey, amount: i8, settings: Accumulation) {
+        let found = self
+            .rows
+            .iter()
+            .position(|row| row.is_some_and(|r| r.key == key));
+        let at = match found.or_else(|| self.rows.iter().position(Option::is_none)) {
+            Some(at) => at,
+            None => return,
+        };
+        let row = self.rows[at].get_or_insert(RowWalk {
+            key,
+            played: false,
+            walk: Walk::default(),
+        });
+        if !row.played {
+            row.played = true;
+            return;
+        }
+        match settings.moves {
+            Moves::Row => row.walk.add(amount, settings),
+            Moves::Track => self.track.add(amount, settings),
+        }
+    }
+
+    /// How far a row's note is moved: by its own accumulator, or the track's in Track mode.
+    pub fn offset(&self, key: RowKey, moves: Moves) -> i16 {
+        match moves {
+            Moves::Track => self.track.offset,
+            Moves::Row => self
+                .rows
+                .iter()
+                .flatten()
+                .find(|row| row.key == key)
+                .map_or(0, |row| row.walk.offset),
+        }
+    }
 }
 
 /// One track's voices, held FX values and pending events.
@@ -337,6 +453,13 @@ pub struct TrackState {
     pub passed: bool,
     /// Whether the note sounding is a `Hold`, to be tied into the next row's note.
     pub tied: bool,
+    /// How many times its chain has started, which its accumulators count from.
+    pub chain_starts: u64,
+    /// Where its `ACU`s have moved its notes.
+    pub accumulators: Accumulators,
+    /// The note the row playing was heard at, before its chain's transpose, when an accumulator
+    /// moved it.
+    pub accumulated: Option<u8>,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
     /// on its step. Anything that sets `started` again sets these back to 0.
     pub lane_offsets: [i64; FX_SLOTS],
@@ -533,6 +656,9 @@ impl TrackState {
             row: Decided::PLAYS,
             passed: false,
             tied: false,
+            chain_starts: 0,
+            accumulators: Accumulators::default(),
+            accumulated: None,
             voice: Voice::default(),
             tail: Voice::default(),
             reading: Reading::default(),
@@ -625,6 +751,7 @@ impl TrackState {
         self.started = started;
         self.lane_offsets = [0; FX_SLOTS];
         self.tied = false;
+        self.chain_starts += 1;
     }
 
     /// Forget what the last conditions decided, as playing starts, so `PRE` and `NEI` start from
@@ -632,6 +759,12 @@ impl TrackState {
     pub fn forget_conditions(&mut self) {
         self.row = Decided::PLAYS;
         self.passed = false;
+    }
+
+    /// Put its accumulators back to the notes as written, as playing starts.
+    pub fn forget_accumulators(&mut self) {
+        self.accumulators.forget();
+        self.accumulated = None;
     }
 
     /// Carry the sounding note on as this one, with no new attack.
@@ -656,6 +789,7 @@ impl TrackState {
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
         self.forget_conditions();
+        self.forget_accumulators();
         self.groove_rng = groove_rng(seed, index);
         self.last_note = None;
         self.load(track);

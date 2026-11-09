@@ -40,6 +40,8 @@ pub enum FxCommand {
     Cha,
     /// Plays the row only when a trig condition holds, which its value names.
     Cnd,
+    /// Moves the row's note on by its value each time the row plays, an accumulator.
+    Acu,
     /// Sets a setting, by its id, so it belongs to its owner: the track, a voice, or an effect in
     /// a slot.
     Set(SettingId),
@@ -54,13 +56,14 @@ impl FxCommand {
     pub const SEND_B: Self = Self::Set(SettingId::SEND_B);
 
     /// Every event, in the order a list shows them.
-    pub const EVENTS: [Self; 6] = [
+    pub const EVENTS: [Self; 7] = [
         Self::Del,
         Self::Kil,
         Self::Off,
         Self::Ret,
         Self::Cha,
         Self::Cnd,
+        Self::Acu,
     ];
 
     /// What it does, for a list to show.
@@ -72,6 +75,7 @@ impl FxCommand {
             Self::Ret => "Retrigger. x is the fade, y the units between".to_owned(),
             Self::Cha => "Play the note with a chance of xx out of FF".to_owned(),
             Self::Cnd => "Play the row only when condition xx holds".to_owned(),
+            Self::Acu => "Move the note on xx scale degrees each time it plays".to_owned(),
             Self::Set(id) => format!("{}: {}", id.group(), id.name()),
         }
     }
@@ -95,6 +99,7 @@ impl FxCommand {
             Self::Ret => "RET".to_owned(),
             Self::Cha => "CHA".to_owned(),
             Self::Cnd => "CND".to_owned(),
+            Self::Acu => "ACU".to_owned(),
             Self::Set(id) => id.label().unwrap_or_else(|| id.key()),
         }
     }
