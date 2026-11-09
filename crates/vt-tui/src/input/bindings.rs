@@ -124,6 +124,11 @@ pub enum Cmd {
     /// Move a value, and a note by a semitone whatever the scale.
     IncreaseChromatic,
     DecreaseChromatic,
+    /// In Insert on the Note column, accent the note just written, or the notes played while it's
+    /// held.
+    Accent,
+    /// Likewise, slide from the note into the next row's, with `HLD` on its gate.
+    Slide,
 }
 
 /// One row of the table.
@@ -589,6 +594,22 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
 ];
 
+/// Keys for Insert on the Note column, beside the note keys, which are its own and aren't listed
+/// here. As a 303 has its ACCENT and SLIDE keys past the top of its keyboard, these are past
+/// ours: `'` is a stress mark, and `/` a slide in guitar tab.
+const INSERT_NOTE: &[(&str, Cmd, &str)] = &[
+    (
+        "'",
+        Cmd::Accent,
+        "Note column: accent the note just written; held, the notes played",
+    ),
+    (
+        "/",
+        Cmd::Slide,
+        "Note column: slide from the note just written; held, the notes played",
+    ),
+];
+
 /// A doubled operator key acts on the current step.
 const WHOLE_STEP: &[(&str, Cmd, &str)] = &[
     ("d", Cmd::WholeStep, "This step"),
@@ -615,6 +636,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, NORMAL);
     add(Mode::Normal, ADJUST);
     add(Mode::Normal, EVERY_VIEW);
+    add(Mode::Insert, INSERT_NOTE);
     add(Mode::Chain, CHAIN);
     add(Mode::Chain, ADJUST);
     add(Mode::Chain, EVERY_VIEW);
@@ -812,6 +834,6 @@ mod tests {
         let notes: Vec<u8> = "awsedftgyhujkol".chars().filter_map(note_key).collect();
         assert_eq!(notes, (0..15).collect::<Vec<u8>>());
         // As in Ableton, the keyboard stops at `l`, and `;` toggles auto-jump.
-        assert_eq!("zxcvqrinmbp;".chars().filter_map(note_key).count(), 0);
+        assert_eq!("zxcvqrinmbp;'/".chars().filter_map(note_key).count(), 0);
     }
 }

@@ -9793,3 +9793,234 @@ fn a_recorded_note_goes_on_the_row_of_its_tracks_own_speed() {
     assert_eq!(pulses, 1);
     assert!(near(length, 0x80), "{length:?}");
 }
+
+/// The rows of the cursor's phrase.
+fn rows_here(app: &App) -> Vec<Step> {
+    app.phrase_here().unwrap().steps().to_vec()
+}
+
+/// Press a key and hold it, as a test can't from a script.
+fn hold(app: &mut App, c: char) {
+    app.key(Key::char(c), Instant::now());
+}
+
+fn let_go_of(app: &mut App, c: char) {
+    app.key_released(Key::char(c), Instant::now());
+}
+
+#[test]
+fn a_tapped_accent_goes_on_the_note_just_written_and_off_again() {
+    let (mut app, _rt) = app();
+    command(&mut app, "set skip=4");
+    app.auto_jump = true;
+    tap(&mut app, "ia");
+    assert_eq!(app.cursor.step, 4, "auto-jump moved on");
+    let depth = app.history.undo_depth();
+    tap(&mut app, "'");
+    let rows = rows_here(&app);
+    assert_eq!(rows[0].velocity, Some(0x7F), "the row just written");
+    assert_eq!(rows[4].velocity, None, "not the cursor's");
+    assert_eq!(app.status, "Accent on");
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change to undo");
+    assert_eq!(app.cursor.step, 4, "the cursor stays");
+
+    // Again takes it off, back to the velocity notes are written with.
+    tap(&mut app, "'");
+    assert_eq!(rows_here(&app)[0].velocity, Some(0x64));
+    assert_eq!(app.status, "Accent off");
+    tap(&mut app, "v");
+    assert_eq!(app.note_velocity, 0x74);
+    tap(&mut app, "'");
+    tap(&mut app, "'");
+    assert_eq!(
+        rows_here(&app)[0].velocity,
+        Some(0x64),
+        "a written velocity that's an accent itself leaves a new song's"
+    );
+    tap(&mut app, "c");
+
+    // An empty velocity plays at full, which is an accent, so a tap takes it off.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "ggl");
+    tap(&mut app, "x");
+    press(&mut app, "h");
+    assert_eq!(rows_here(&app)[0].velocity, None);
+    tap(&mut app, "i'");
+    assert_eq!(rows_here(&app)[0].velocity, Some(0x64));
+    assert_eq!(app.status, "Accent off");
+    // A row with no note has nothing to accent.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "j");
+    tap(&mut app, "i'");
+    assert_eq!(app.status, "No note here to accent");
+    assert_eq!(rows_here(&app)[1], Step::default());
+
+    // Undo takes each back as a note is.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "u");
+    assert_eq!(rows_here(&app)[0].velocity, None);
+}
+
+#[test]
+fn with_the_cursor_moved_off_a_tapped_flag_goes_on_the_cursors_row() {
+    let (mut app, _rt) = app();
+    entering_steps_down(&mut app);
+    tap(&mut app, "iasd");
+    assert_eq!(app.cursor.step, 3);
+    special(&mut app, KeyCode::Up);
+    tap(&mut app, "'");
+    let rows = rows_here(&app);
+    assert_eq!(rows[2].velocity, Some(0x7F), "the arrow moved onto it");
+    assert_eq!(rows[1].velocity, Some(0x64));
+    // Leaving Insert and coming back forgets the note just written.
+    tap(&mut app, "f");
+    assert_eq!(app.cursor.step, 3);
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    tap(&mut app, "i");
+    tap(&mut app, "/");
+    assert_eq!(
+        rows_here(&app)[2].gate_kind(),
+        vt_model::step::GateKind::Hold
+    );
+    assert_eq!(rows_here(&app)[3].gate, None);
+}
+
+#[test]
+fn a_tapped_slide_puts_hld_on_the_gate_and_keeps_its_pulses_and_length() {
+    use vt_model::step::{Gate, GateKind};
+    let (mut app, _rt) = app();
+    command(&mut app, "set skip=4");
+    app.auto_jump = true;
+    tap(&mut app, "ia");
+    tap(&mut app, "/");
+    let hold = Gate {
+        kind: GateKind::Hold,
+        pulses: 1,
+        length: None,
+    };
+    assert_eq!(rows_here(&app)[0].gate, Some(hold));
+    assert_eq!(app.status, "Slide on");
+    tap(&mut app, "/");
+    assert_eq!(rows_here(&app)[0].gate, None, "back to the empty cell");
+    assert_eq!(app.status, "Slide off");
+
+    // A cell with pulses and a length of its own keeps them, so the row lasts as long, and is a
+    // `SGL` with them again after.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "gg");
+    let three = Step {
+        note: Note::On(60),
+        velocity: Some(0x64),
+        gate: Some(Gate {
+            kind: GateKind::Single,
+            pulses: 3,
+            length: Some(0x80),
+        }),
+        ..Step::default()
+    };
+    let phrase = app.phrase_id().unwrap();
+    app.apply(&vt_model::action::Action::SetStep {
+        track: 0,
+        phrase,
+        step: 0,
+        value: three.clone(),
+    });
+    tap(&mut app, "i/");
+    let slid = rows_here(&app)[0].gate.unwrap();
+    assert_eq!(
+        (slid.kind, slid.pulses, slid.length),
+        (GateKind::Hold, 3, Some(0x80))
+    );
+    tap(&mut app, "/");
+    assert_eq!(rows_here(&app)[0], three);
+}
+
+#[test]
+fn notes_played_with_a_flag_held_are_written_with_it_and_letting_go_switches_nothing() {
+    use vt_model::step::GateKind;
+    let (mut app, _rt) = app();
+    entering_steps_down(&mut app);
+    tap(&mut app, "ia");
+    // Hold the accent, and roll three notes under it.
+    hold(&mut app, '\'');
+    tap(&mut app, "sd");
+    // kitty's repeats of the held key, as presses or repeats, do nothing.
+    hold(&mut app, '\'');
+    app.key_repeated(Key::char('\''), Instant::now());
+    tap(&mut app, "f");
+    let_go_of(&mut app, '\'');
+    let rows = rows_here(&app);
+    let velocities: Vec<_> = rows[..4].iter().map(|step| step.velocity).collect();
+    assert_eq!(
+        velocities,
+        [Some(0x64), Some(0x7F), Some(0x7F), Some(0x7F)],
+        "the note before is left alone"
+    );
+    assert_eq!(app.status, "Accent on");
+
+    // Both held, a note gets both, on any track: here an `Acid`.
+    special(&mut app, KeyCode::Esc);
+    choose_machine(&mut app, "Acid");
+    press(&mut app, " 3");
+    tap(&mut app, "i");
+    hold(&mut app, '/');
+    hold(&mut app, '\'');
+    hold(&mut app, 'g');
+    let row = rows_here(&app)[4].clone();
+    assert_eq!(row.note, Note::On(67));
+    assert_eq!(row.velocity, Some(0x7F));
+    assert_eq!(row.gate_kind(), GateKind::Hold);
+    assert_eq!(app.status, "Accent and slide on");
+    let_go_of(&mut app, 'g');
+    let_go_of(&mut app, '\'');
+    let_go_of(&mut app, '/');
+    assert_eq!(rows_here(&app)[4], row, "letting go switches nothing");
+
+    // Leaving Insert with one held lets go of it too, and its release does nothing.
+    hold(&mut app, '/');
+    special(&mut app, KeyCode::Esc);
+    let before = rows_here(&app);
+    let_go_of(&mut app, '/');
+    assert_eq!(rows_here(&app), before);
+    // So does losing focus.
+    tap(&mut app, "i");
+    hold(&mut app, '/');
+    app.focus_lost(Instant::now());
+    let_go_of(&mut app, '/');
+    assert_eq!(rows_here(&app), before);
+}
+
+#[test]
+fn a_note_recorded_with_a_flag_held_is_written_with_it() {
+    use vt_model::step::GateKind;
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    play_to(&mut app, &mut rt, &mut at, 9.0);
+    hold(&mut app, '\'');
+    hold(&mut app, '/');
+    hold(&mut app, 'a');
+    play_to(&mut app, &mut rt, &mut at, 9.5);
+    let_go_of(&mut app, 'a');
+    let_go_of(&mut app, '/');
+    let_go_of(&mut app, '\'');
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
+    assert_eq!(rows[1].velocity, Some(0x7F));
+    assert_eq!(rows[1].gate_kind(), GateKind::Hold);
+    // A tap has no row to go on yet.
+    tap(&mut app, "'");
+    assert_eq!(app.status, "While recording, hold ' as you play a note");
+    assert_eq!(rows_of(&app, 1), rows);
+}
+
+#[test]
+fn space_k_lists_the_accent_and_slide_keys() {
+    let (app, _rt) = app();
+    let rows = app.help_rows();
+    let insert = rows.iter().position(|row| row == "Insert").unwrap();
+    assert!(rows[insert + 1].trim_start().starts_with("'"), "{rows:?}");
+    assert!(rows[insert + 2].trim_start().starts_with("/"), "{rows:?}");
+}

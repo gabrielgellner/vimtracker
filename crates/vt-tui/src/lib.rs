@@ -1,6 +1,7 @@
 //! The vimtracker terminal program.
 
 pub mod ableton;
+pub mod accent_slide;
 pub mod app;
 pub mod audio;
 pub mod audio_page;
