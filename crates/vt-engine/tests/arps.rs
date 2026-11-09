@@ -231,6 +231,8 @@ fn the_modes_go_round_in_their_orders() {
     assert_eq!(notes(&down, TICK, 6), named("G E C G E C"));
     let up_down = song(&rows, with(ArpRate::Tick, ArpMode::UpDown, 1));
     assert_eq!(notes(&up_down, TICK, 9), named("C E G E C E G E C"));
+    let up_down_inc = song(&rows, with(ArpRate::Tick, ArpMode::UpDownInc, 1));
+    assert_eq!(notes(&up_down_inc, TICK, 9), named("C E G G E C C E G"));
     let both_octaves = song(&rows, with(ArpRate::Tick, ArpMode::UpDown, 2));
     assert_eq!(
         notes(&both_octaves, TICK, 11),

@@ -362,52 +362,75 @@ without it, and a render repeats.
 ## A phrase's order
 
 A phrase's rows play top to bottom unless `:order` gives it another order, after
-the Metropolix's ORDER. A **pass** of the phrase is one time round its order, and
-the note column walks it as it walks rows forward, so a row's pulses stay together
-and a skipped row takes no time:
+the Metropolix's ORDER. An order is a **walk** the track keeps taking over the rows.
+A **pass** of the phrase is still its length in steps, what its rows' pulses add up
+to, as it is forward, so the chain and a section whose length it sets keep theirs,
+and the walk carries on from one pass to the next. A **round** is the visits an
+order makes before it repeats. Most visit each row once, so a round is a pass; the
+up-and-down orders and `pedal` visit some rows twice, so their rounds are longer
+and drift across the passes, and against the other tracks, as a polymeter does:
 
 ```text
-rows:        00 SGL1   01 MLT2   02 SGL1
-forward:     00  01 01  02                  4 steps
-reverse:     02  01 01  00                  4 steps
-pendulum:    00  01 01  02  01 01           6 steps: the middle row twice
+rows:          1  2  3  4                      a pass is 4 steps
+forward:       1  2  3  4 | 1  2  3  4
+up-down:       1  2  3  4 | 3  2  1  2 | 3  4  3  2 | 1 ...    a round of 6
+up-down-inc:   1  2  3  4 | 4  3  2  1 | 1 ...                 a round of 8
+down-up:       4  3  2  1 | 2  3  4  3 | 2  1  2  3 | 4 ...    a round of 6
+down-up-inc:   4  3  2  1 | 1  2  3  4 | 4 ...                 a round of 8
+pedal:         1  2  1  3 | 1  4  1  2 | 1  3  1  4 | 1 ...    a round of 6
 ```
 
-`pendulum`, `ping-pong` and `pedal` play some rows twice, so a pass lasts longer
-than the rows do, and the chain, and a section it sets the length of, with it.
-Every other order plays each row once a pass, except `random`, which picks a row
-each time until the pass has lasted as long as the rows would forward, cutting its
-last pick short if it has to, so the length never depends on what it picks.
+`reverse`, `odd-even`, `converge` and `diverge` visit each row once a round, so each
+pass plays the same. The walk starts again where the chain does: from the top, at a
+section that brings the chain in or resets, a launch, or `:reset`, which is where a
+condition's passes and the accumulators start again too. It's worked out from the
+count, as everything else is, so playing from a step hears what playing up to it
+would.
 
-What plays next is the next row in the order, so a `HLD` ties into it, and a
-glide goes to the next value in the order the rows play. A column with a lane
-keeps its own forward loop, as it counts steps rather than rows. The groove pushes
-each step by its place in the count, not by its row, and a row's nudge goes with
-its row.
-
-A condition's pass is a time round the order, still worked out from the count, so
-a row that a pendulum plays twice is in the same pass both times, and a `1:2`
-plays both or neither. An accumulator adds each time its row plays, so the same
-row moves on twice:
+The note column walks the rows as it walks them forward, so a row's pulses stay
+together and a skipped row takes no time. A row whose pulses run past the end of a
+pass plays the rest of them at the start of the next, so every pass keeps its
+length:
 
 ```text
-rows:        00 -  01 C  02 -  03 -        ACU 01 on row 01's C, pendulum
-plays:       00 01 02 03 02 01 | 00 01 02 03 02 01
-heard:          C           D  |    E           F
+rows:        00 SGL1   01 SGL2   02 SGL1       a pass is 4 steps
+up-down:     00 01 01 02 | 01 01 00 01 | 01 02 01 01
+```
+
+In a chain of several phrases, the rest of that row waits for its phrase to come
+round again.
+
+What plays next is the next row in the walk, so a `HLD` ties into it, and a glide
+goes to the next value in the order the rows play. A column with a lane keeps its
+own forward loop, as it counts steps rather than rows. The groove pushes each step
+by its place in the count, not by its row, and a row's nudge goes with its row.
+
+A condition's pass is the phrase's length, worked out from the count, so `1:2`
+means the same whatever the order: a row that plays twice in a pass plays both
+times or neither. An accumulator adds each time its row plays:
+
+```text
+rows:        00 -  01 C  02 -  03 -        ACU 01 on row 01's C, up-down
+plays:       00 01 02 03 | 02 01 00 01 | 02 03 02 01
+heard:          C        |    D     E  |          F
 ```
 
 `shuffle` deals each pass a new order with every row in it once; `random` picks
-any row each time, so rows repeat and some are left out. Both are dealt from the
-project's `:seed`, the track and which time round its chain this is, counted from
-where the chain started. That's a hash rather than the track's generator, so
-`CHA`, a groove's humanise and a `Random` arpeggio roll as they would without it,
-a render repeats, and playing from a step hears what playing up to it would. A
-chain that starts again deals again from its first time round, as its conditions'
-passes start again.
+any row each time, so rows repeat and some are left out. It picks among the rows
+that fit what's left of the pass, so a row's pulses stay together, and only if none
+fits is its last pick cut short. Both are dealt from the project's `:seed`, the
+track and which time round its chain this is, counted from where the chain started.
+That's a hash rather than the track's generator, so `CHA`, a groove's humanise and a
+`Random` arpeggio roll as they would without it, a render repeats, and playing from
+a step hears what playing up to it would. A chain that starts again deals again from
+its first time round, as its conditions' passes start again.
 
-The playhead and the other tracks' columns show the row playing. Playing from a
-row starts the phrase where its order first plays that row: a reverse phrase's
-top row is its last.
+The playhead and the other tracks' columns show the row playing. Playing from a row
+starts at that row's step, where it's written, with the walk wherever it is then:
+in reverse, the top row's step plays the bottom row. Changing the order, or the
+phrase's length, while it plays keeps the row that was about to play: the track
+moves to where this pass of the new walk plays it, the nearest if it plays it
+twice, or stays where it is if this pass doesn't play it.
 
 ## The keys, by column
 

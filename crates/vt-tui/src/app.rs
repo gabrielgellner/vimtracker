@@ -733,12 +733,9 @@ impl App {
         } else {
             0
         };
-        // Rows before it last their pulses, in the phrase's order, up to where its first time
-        // round first plays the row.
-        let deal = self.dealer(self.cursor.track).deal(0, self.cursor.slot);
-        let time = self
-            .phrase_here()
-            .map_or(row, |phrase| phrase.time_to(row, deal));
+        // Rows above it last their pulses. In another order, the walk is wherever it is at that
+        // step, worked out from the count as everything else is.
+        let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
         self.slot_start() + time
     }
 

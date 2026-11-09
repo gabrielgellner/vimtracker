@@ -178,29 +178,41 @@ place its own.
 
 A phrase's rows play top to bottom unless it's given another order, as the
 Metropolix's ORDER does. `:order` lists them, opened on the one it plays, and
-`:order pendulum` sets one by name. The title names an order other than
-forward, like `Pendulum`, and undo puts it back.
+`:order up-down` sets one by name. The title names an order other than
+forward, like `Up-down`, and undo puts it back.
 
-| Order | Plays, in a phrase of four |
+An order is a walk the track keeps taking. A pass of the phrase stays its
+length in steps, so the chain and the section keep theirs, and the walk carries
+on from one pass to the next.
+
+| Order | Plays, over two passes of a phrase of four |
 |---|---|
-| `forward` | 1 2 3 4 |
-| `reverse` | 4 3 2 1 |
-| `pendulum` | 1 2 3 4 3 2, the end rows once |
-| `ping-pong` | 1 2 3 4 4 3 2 1, the end rows twice |
-| `odd-even` | 1 3 2 4 |
+| `forward` | 1 2 3 4, 1 2 3 4 |
+| `reverse` | 4 3 2 1, 4 3 2 1 |
+| `up-down` | 1 2 3 4, 3 2 1 2, the end rows once |
+| `up-down-inc` | 1 2 3 4, 4 3 2 1, the end rows twice |
+| `down-up` | 4 3 2 1, 2 3 4 3, from the last row |
+| `down-up-inc` | 4 3 2 1, 1 2 3 4, from the last row |
+| `odd-even` | 1 3 2 4, 1 3 2 4 |
 | `converge` | 1 4 2 3, from both ends in |
 | `diverge` | 2 3 1 4, from the middle out |
-| `pedal` | 1 2 1 3 1 4, the first between the others |
+| `pedal` | 1 2 1 3, 1 4 1 2, the first between the others |
 | `shuffle` | each row once a pass, dealt again each pass |
 | `random` | any row each step, so rows repeat |
 
-A row's pulses stay together, and a `HLD` ties into whichever row plays next.
-`pendulum`, `ping-pong` and `pedal` play some rows twice, so a pass lasts
-longer: a pendulum of 16 rows is 30 steps. `shuffle` and `random` are dealt
-from the project's `:seed` and the pass, so a render repeats, playing from a
-step hears what playing to it would, and `CHA` rolls as it did. Lanes keep
-their own loops, forward. The playhead shows the row playing, and `Space c`
-on a row plays from where the order first plays it.
+The up-and-down orders and `pedal` take longer than a pass to come round, so
+they drift against other tracks as a polymeter does. The walk starts again
+where the chain does: from the top, a section that brings it in, a launch, or
+`:reset`. A row's pulses stay together, so a row whose pulses run past the end
+of a pass plays the rest at the start of the next, and a `HLD` ties into
+whichever row plays next. A `CND 1:2` counts passes, whatever the order, and
+an `ACU` adds each time its row plays. `shuffle` and `random` are dealt from
+the project's `:seed` and the pass, so a render repeats, playing from a step
+hears what playing to it would, and `CHA` rolls as it did. Lanes keep their
+own loops, forward. The playhead shows the row playing, and `Space c` on a row
+plays from that row's step, with the walk wherever it is there. Changing the
+order while it plays keeps the row that was next, where the new walk plays it
+in the same pass, or stays put if that pass doesn't play it.
 
 ## Lanes
 

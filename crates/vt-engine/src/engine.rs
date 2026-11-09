@@ -23,7 +23,6 @@ use vt_model::song::{
 use vt_model::speed::Speed;
 use vt_model::step::{
     ACCENT_VELOCITY, FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note,
-    Step,
 };
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
@@ -809,20 +808,12 @@ impl Engine {
             else {
                 continue;
             };
-            // The same pulse of the row too, as far as the row still lasts, at the same visit of
-            // its phrase's order if that still plays it, or where it first plays it.
+            // The same pulse of the row too, as far as the row still lasts, where this pass of
+            // its phrase's walk plays it nearest to where it was, or where it was if the pass
+            // doesn't play it.
             let kept = track
-                .chain_place(chain, was_at.slot, was_at.step, was_at.visit, was_at.deal)
-                .map_or(0, |start| {
-                    let pulses = track
-                        .chains
-                        .get(&chain)
-                        .and_then(|c| c.entries.get(was_at.slot))
-                        .and_then(|entry| track.phrases.get(&entry.phrase))
-                        .and_then(|phrase| phrase.loop_steps().get(was_at.step))
-                        .map_or(1, Step::pulses);
-                    start + was_at.pulse.min(pulses.saturating_sub(1))
-                }) as i64;
+                .chain_place(chain, was_at.row_place(), laps.max(0) as usize, dealer)
+                .unwrap_or(0) as i64;
             let moved = length != old_length || kept != next;
             if moved {
                 state.started = place - (laps * length + kept);

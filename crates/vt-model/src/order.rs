@@ -1,12 +1,13 @@
 //! The order a phrase's rows play in, after the Metropolix's ORDER: forward as written, reverse,
-//! the two ways of going down and back, four that visit the rows out of turn, and two that are
-//! dealt at random from the project's seed.
+//! four ways of going up and down, four that visit the rows out of turn, and two that are dealt at
+//! random from the project's seed.
 //!
-//! A pass of a phrase is one time round its order. Most orders visit each row once a pass, so a
-//! pass lasts what the rows' pulses add up to. `Pendulum`, `Ping-pong` and `Pedal` visit some rows
-//! twice, so their passes last longer. `Random` picks rows until the pass has lasted as long as
-//! the rows would forward, cutting its last pick short if it has to, so a phrase's length never
-//! depends on what it picks.
+//! An order is a walk the track keeps taking over the rows, while a pass of the phrase stays the
+//! phrase's length in steps, what its rows' pulses add up to, as it is forward. A round of an
+//! order is the visits it makes before it repeats. Most visit each row once, so a round is a pass.
+//! `Up-down`, `Down-up`, their `-inc` forms and `Pedal` visit some rows twice, so their rounds are
+//! longer than a pass and drift across the passes, as a polymeter does. `Shuffle` deals a new
+//! round each pass, and `Random` picks rows until the pass is full.
 
 use std::fmt;
 
@@ -21,10 +22,18 @@ pub enum Order {
     #[default]
     Forward,
     Reverse,
-    /// Down and back up, with the end rows once each.
-    Pendulum,
-    /// Down and back up, with the end rows twice.
-    PingPong,
+    /// First row to last and back, turning on the end rows: `1 2 3 4 3 2 1 2`, the Metropolix's
+    /// Pendulum.
+    UpDown,
+    /// First row to last and back, playing the end rows twice: `1 2 3 4 4 3 2 1 1 2`, the
+    /// Metropolix's Ping Pong.
+    UpDownInc,
+    /// Last row to first and back, turning on the end rows: `4 3 2 1 2 3 4 3`, the Metropolix's
+    /// Pendulum in reverse.
+    DownUp,
+    /// Last row to first and back, playing the end rows twice: `4 3 2 1 1 2 3 4 4`, the
+    /// Metropolix's Ping Pong in reverse.
+    DownUpInc,
     OddEven,
     Converge,
     Diverge,
@@ -38,11 +47,13 @@ pub enum Order {
 
 impl Order {
     /// Every order, as lists show them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 12] = [
         Self::Forward,
         Self::Reverse,
-        Self::Pendulum,
-        Self::PingPong,
+        Self::UpDown,
+        Self::UpDownInc,
+        Self::DownUp,
+        Self::DownUpInc,
         Self::OddEven,
         Self::Converge,
         Self::Diverge,
@@ -56,8 +67,10 @@ impl Order {
         match self {
             Self::Forward => "Forward",
             Self::Reverse => "Reverse",
-            Self::Pendulum => "Pendulum",
-            Self::PingPong => "Ping-pong",
+            Self::UpDown => "Up-down",
+            Self::UpDownInc => "Up-down-inc",
+            Self::DownUp => "Down-up",
+            Self::DownUpInc => "Down-up-inc",
             Self::OddEven => "Odd-even",
             Self::Converge => "Converge",
             Self::Diverge => "Diverge",
@@ -67,7 +80,7 @@ impl Order {
         }
     }
 
-    /// The order a name such as `ping-pong` gives, ignoring case.
+    /// The order a name such as `up-down` gives, ignoring case.
     pub fn named(name: &str) -> Option<Self> {
         let name = name.trim();
         Self::ALL
@@ -80,31 +93,28 @@ impl Order {
         ORDER_WORDS[self as usize]
     }
 
-    /// What it plays, with the rows of a phrase of four counted from 1 where it helps.
+    /// What it plays over two passes of a phrase of four rows, counted from 1.
     pub const fn meaning(self) -> &'static str {
         match self {
-            Self::Forward => "Top to bottom, as written",
-            Self::Reverse => "Bottom to top: 4 3 2 1",
-            Self::Pendulum => "Down and back up, the end rows once: 1 2 3 4 3 2",
-            Self::PingPong => "Down and back up, the end rows twice: 1 2 3 4 4 3 2 1",
-            Self::OddEven => "Every other row, then the rows between: 1 3 2 4",
-            Self::Converge => "From both ends in to the middle: 1 4 2 3",
-            Self::Diverge => "From the middle out to both ends: 2 3 1 4",
-            Self::Pedal => "The first row between each of the others: 1 2 1 3 1 4",
+            Self::Forward => "Top to bottom, as written: 1 2 3 4 1 2 3 4",
+            Self::Reverse => "Bottom to top: 4 3 2 1 4 3 2 1",
+            Self::UpDown => "First to last and back, the ends once: 1 2 3 4 3 2 1 2",
+            Self::UpDownInc => "First to last and back, the ends twice: 1 2 3 4 4 3 2 1",
+            Self::DownUp => "Last to first and back, the ends once: 4 3 2 1 2 3 4 3",
+            Self::DownUpInc => "Last to first and back, the ends twice: 4 3 2 1 1 2 3 4",
+            Self::OddEven => "Every other row, then the rows between: 1 3 2 4 1 3 2 4",
+            Self::Converge => "From both ends in to the middle: 1 4 2 3 1 4 2 3",
+            Self::Diverge => "From the middle out to both ends: 2 3 1 4 2 3 1 4",
+            Self::Pedal => "The first row between the others: 1 2 1 3 1 4 1 2",
             Self::Shuffle => "Every row once a pass, in an order dealt again each pass",
             Self::Random => "Any row each time, so rows can repeat or be left out",
         }
     }
 
     /// Whether it's dealt from the project's seed, so which row plays when depends on the pass.
+    /// A dealt order's round is one pass.
     pub const fn is_dealt(self) -> bool {
         matches!(self, Self::Shuffle | Self::Random)
-    }
-
-    /// Whether a pass lasts what the rows' pulses add up to, as each row is in it once, or as
-    /// `Random` stops when it has.
-    pub const fn keeps_time(self) -> bool {
-        !matches!(self, Self::Pendulum | Self::PingPong | Self::Pedal)
     }
 
     /// Whether it's the order every phrase plays in unless it's given another, which files leave
@@ -113,19 +123,19 @@ impl Order {
         *self == Self::Forward
     }
 
-    /// How many rows a pass of this many visits, for every order but `Random`, which picks until
-    /// the pass has lasted long enough.
+    /// How many visits a round of this many rows makes before it repeats, for every order but
+    /// `Random`, which picks until the pass is full.
     pub const fn visits(self, rows: usize) -> usize {
         match self {
-            Self::Pendulum | Self::Pedal if rows > 1 => 2 * rows - 2,
-            Self::PingPong => 2 * rows,
+            Self::UpDown | Self::DownUp | Self::Pedal if rows > 1 => 2 * rows - 2,
+            Self::UpDownInc | Self::DownUpInc => 2 * rows,
             _ => rows,
         }
     }
 
-    /// The row a visit of a pass plays, for a phrase of this many rows, with the visit below
-    /// [`Order::visits`]. `Random` picks among every row here; a pass leaves out those that take no
-    /// time.
+    /// The row a visit of a round plays, for a phrase of this many rows, with the visit below
+    /// [`Order::visits`]. `Random` picks among every row here; a round leaves out those that take
+    /// no time.
     pub fn row(self, rows: usize, visit: usize, deal: Deal) -> usize {
         if rows <= 1 {
             return 0;
@@ -134,10 +144,14 @@ impl Order {
         match self {
             Self::Forward => visit,
             Self::Reverse => last - visit,
-            Self::Pendulum if visit < rows => visit,
-            Self::Pendulum => 2 * last - visit,
-            Self::PingPong if visit < rows => visit,
-            Self::PingPong => 2 * rows - 1 - visit,
+            Self::UpDown if visit < rows => visit,
+            Self::UpDown => 2 * last - visit,
+            Self::UpDownInc if visit < rows => visit,
+            Self::UpDownInc => 2 * rows - 1 - visit,
+            Self::DownUp if visit < rows => last - visit,
+            Self::DownUp => visit - last,
+            Self::DownUpInc if visit < rows => last - visit,
+            Self::DownUpInc => visit - rows,
             Self::OddEven => {
                 let evens = rows.div_ceil(2);
                 if visit < evens {
@@ -159,11 +173,13 @@ impl Order {
 }
 
 /// The words `:order` takes, one for each order in the order lists show them.
-pub const ORDER_WORDS: [&str; 10] = [
+pub const ORDER_WORDS: [&str; 12] = [
     "forward",
     "reverse",
-    "pendulum",
-    "ping-pong",
+    "up-down",
+    "up-down-inc",
+    "down-up",
+    "down-up-inc",
     "odd-even",
     "converge",
     "diverge",
@@ -242,25 +258,25 @@ fn shuffled(deal: Deal, rows: usize, visit: usize) -> usize {
     }
 }
 
-/// The row a `Random` picks at a visit, on a try at it, as a pick that takes no time is picked
-/// again.
+/// The row a `Random` picks at a visit, on a try at it, as a pick that takes no time, or more than
+/// the pass has left, is picked again.
 fn picked(deal: Deal, rows: usize, visit: usize, attempt: u64) -> usize {
     below(mix(deal.0 ^ mix((visit as u64) << 8 | attempt)), rows)
 }
 
-/// The rows one pass of a phrase visits, in order.
+/// The rows one round of an order visits, in turn: the visits the walk repeats.
 #[derive(Debug, Clone)]
-pub struct Pass<'a> {
+pub struct Round<'a> {
     steps: &'a [Step],
     order: Order,
     deal: Deal,
     visit: usize,
-    /// How many steps `Random` has still to play, as it stops when they've gone.
+    /// How many steps `Random` has still to fill, as it stops when the pass is full.
     left: usize,
 }
 
-impl<'a> Pass<'a> {
-    /// A pass of these rows in this order, with this deal if it's dealt.
+impl<'a> Round<'a> {
+    /// A round of these rows in this order, with this deal if it's dealt.
     pub fn new(steps: &'a [Step], order: Order, deal: Deal) -> Self {
         Self {
             steps,
@@ -272,11 +288,11 @@ impl<'a> Pass<'a> {
     }
 }
 
-/// How many times `Random` picks again for a row that takes some time, before taking the next one
-/// down that does.
+/// How many times `Random` picks again for a row that fits, before taking the next one down that
+/// does.
 const PICKS: u64 = 16;
 
-impl Iterator for Pass<'_> {
+impl Iterator for Round<'_> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
@@ -289,15 +305,24 @@ impl Iterator for Pass<'_> {
             if self.left == 0 {
                 return None;
             }
-            // A row that takes no time would be no pick at all, so it's picked again.
-            let takes_time = |row: &usize| self.steps[*row].pulses() > 0;
-            let row = (0..PICKS)
-                .map(|attempt| picked(self.deal, rows, visit, attempt))
-                .find(takes_time)
-                .or_else(|| {
-                    let from = picked(self.deal, rows, visit, 0);
-                    (0..rows).map(|at| (from + at) % rows).find(takes_time)
-                })?;
+            // A row that takes no time would be no pick at all, and one that runs past the end of
+            // the pass would split its pulses, so either is picked again. Only when no row fits
+            // what's left is the last pick cut short.
+            let left = self.left;
+            let pick = |fits: &dyn Fn(usize) -> bool| {
+                (0..PICKS)
+                    .map(|attempt| picked(self.deal, rows, visit, attempt))
+                    .find(|row| fits(*row))
+                    .or_else(|| {
+                        let from = picked(self.deal, rows, visit, 0);
+                        (0..rows)
+                            .map(|at| (from + at) % rows)
+                            .find(|row| fits(*row))
+                    })
+            };
+            let pulses = |row: usize| self.steps[row].pulses();
+            let row = pick(&|row| (1..=left).contains(&pulses(row)))
+                .or_else(|| pick(&|row| pulses(row) > 0))?;
             self.left = self.left.saturating_sub(self.steps[row].pulses());
             row
         } else {
@@ -317,27 +342,38 @@ mod tests {
 
     fn rows(order: Order, rows: usize) -> Vec<usize> {
         let steps = vec![Step::default(); rows];
-        Pass::new(&steps, order, Deal::default())
+        Round::new(&steps, order, Deal::default())
             .map(|row| row + 1)
             .collect()
     }
 
+    fn manual(text: &str) -> Vec<usize> {
+        text.split_whitespace()
+            .map(|n| n.parse().unwrap())
+            .collect()
+    }
+
     #[test]
-    fn the_fixed_orders_play_as_the_metropolix_manual_shows_them() {
-        let manual = |text: &str| -> Vec<usize> {
-            text.split_whitespace()
-                .map(|n| n.parse().unwrap())
-                .collect()
-        };
+    fn the_fixed_orders_go_round_as_the_metropolix_manual_shows_them() {
         assert_eq!(rows(Order::Forward, 8), manual("1 2 3 4 5 6 7 8"));
         assert_eq!(rows(Order::Reverse, 8), manual("8 7 6 5 4 3 2 1"));
+        // Pendulum, forward and reverse.
         assert_eq!(
-            rows(Order::Pendulum, 8),
+            rows(Order::UpDown, 8),
             manual("1 2 3 4 5 6 7 8 7 6 5 4 3 2")
         );
         assert_eq!(
-            rows(Order::PingPong, 8),
+            rows(Order::DownUp, 8),
+            manual("8 7 6 5 4 3 2 1 2 3 4 5 6 7")
+        );
+        // Ping Pong, forward and reverse.
+        assert_eq!(
+            rows(Order::UpDownInc, 8),
             manual("1 2 3 4 5 6 7 8 8 7 6 5 4 3 2 1")
+        );
+        assert_eq!(
+            rows(Order::DownUpInc, 8),
+            manual("8 7 6 5 4 3 2 1 1 2 3 4 5 6 7 8")
         );
         assert_eq!(rows(Order::OddEven, 8), manual("1 3 5 7 2 4 6 8"));
         assert_eq!(rows(Order::Converge, 8), manual("1 8 2 7 3 6 4 5"));
@@ -359,9 +395,12 @@ mod tests {
                 assert_eq!(played, (1..=length).collect::<Vec<_>>(), "{order} {length}");
             }
         }
-        assert_eq!(rows(Order::Pendulum, 1), [1]);
+        assert_eq!(rows(Order::UpDown, 1), [1]);
+        assert_eq!(rows(Order::DownUp, 1), [1]);
         assert_eq!(rows(Order::Pedal, 1), [1]);
-        assert_eq!(rows(Order::PingPong, 1), [1, 1]);
+        assert_eq!(rows(Order::UpDownInc, 1), [1, 1]);
+        assert_eq!(rows(Order::DownUpInc, 2), [2, 1, 1, 2]);
+        assert_eq!(rows(Order::DownUp, 2), [2, 1]);
         assert_eq!(rows(Order::Diverge, 7), [4, 5, 3, 6, 2, 7, 1]);
     }
 
@@ -369,7 +408,8 @@ mod tests {
     fn a_shuffle_plays_every_row_once_and_is_dealt_again_each_pass() {
         let steps = vec![Step::default(); 16];
         let dealer = Dealer::new(7, 0);
-        let pass = |lap| Pass::new(&steps, Order::Shuffle, dealer.deal(lap, 0)).collect::<Vec<_>>();
+        let pass =
+            |lap| Round::new(&steps, Order::Shuffle, dealer.deal(lap, 0)).collect::<Vec<_>>();
         let (first, second) = (pass(0), pass(1));
         for played in [&first, &second] {
             let mut sorted = played.clone();
@@ -393,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn random_picks_rows_that_take_time_until_the_pass_has_lasted() {
+    fn random_picks_rows_that_take_time_until_the_pass_is_full() {
         let mut steps: Vec<Step> = (0..8)
             .map(|_| "C-4 -- SGL1 --- --- ---".parse().unwrap())
             .collect();
@@ -404,7 +444,7 @@ mod tests {
         let mut seen = [false; 8];
         for lap in 0..32 {
             let played: Vec<usize> =
-                Pass::new(&steps, Order::Random, dealer.deal(lap, 0)).collect();
+                Round::new(&steps, Order::Random, dealer.deal(lap, 0)).collect();
             assert_eq!(played.len(), 4, "four steps' worth of one-pulse rows");
             for row in played {
                 assert_eq!(row % 2, 0, "never a skipped row");
@@ -415,11 +455,30 @@ mod tests {
     }
 
     #[test]
+    fn random_picks_rows_that_fit_what_the_pass_has_left() {
+        // Three steps a pass, from a row of two and a row of one: whatever comes first, the pass
+        // is filled without splitting a row.
+        let steps: Vec<Step> = ["C-4 -- SGL2 --- --- ---", "C-4 -- SGL1 --- --- ---"]
+            .iter()
+            .map(|text| text.parse().unwrap())
+            .collect();
+        let dealer = Dealer::new(5, 0);
+        for lap in 0..32 {
+            let played: Vec<usize> =
+                Round::new(&steps, Order::Random, dealer.deal(lap, 0)).collect();
+            let time: usize = played.iter().map(|row| steps[*row].pulses()).sum();
+            assert_eq!(time, 3, "{played:?}");
+        }
+    }
+
+    #[test]
     fn orders_are_named_ignoring_case() {
         for order in Order::ALL {
             assert_eq!(Order::named(order.word()), Some(order));
+            assert_eq!(order.word(), order.name().to_lowercase());
         }
-        assert_eq!(Order::named("PING-PONG"), Some(Order::PingPong));
+        assert_eq!(Order::named("UP-DOWN-INC"), Some(Order::UpDownInc));
+        assert_eq!(Order::named("pendulum"), None, "the old names are gone");
         assert_eq!(Order::named("sideways"), None);
     }
 }
