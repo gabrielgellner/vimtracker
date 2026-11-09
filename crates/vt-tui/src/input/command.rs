@@ -11,13 +11,17 @@ use vt_model::song::{LAUNCH_WORDS, Launch};
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
+    /// Save, or save to a new folder. With no folder yet, the explorer chooses one.
     Write(Option<PathBuf>),
-    Edit(PathBuf),
+    /// Open a project, or choose one in the explorer.
+    Edit(Option<PathBuf>),
     Quit {
         force: bool,
     },
-    New(PathBuf),
-    Sample(PathBuf),
+    /// Start a project, or choose where in the explorer.
+    New(Option<PathBuf>),
+    /// Put a sample on this track, or browse a folder of them, or choose one in the explorer.
+    Sample(Option<PathBuf>),
     /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
     /// Put a kit's sounds on tracks, by name or path.
@@ -48,8 +52,9 @@ pub enum Line {
     Seed(u64),
     Swing(u16),
     Chain(u32),
+    /// Render the loop, into a file the explorer chooses the folder of if there's no path.
     Render {
-        path: PathBuf,
+        path: Option<PathBuf>,
         rows: Option<usize>,
         tail: bool,
         /// Write one file per track into the path, as a folder.
@@ -69,8 +74,6 @@ pub enum Line {
 pub enum LineError {
     #[error("unknown command: {0}")]
     Unknown(String),
-    #[error("{0} needs a path")]
-    NeedsPath(&'static str),
     #[error(":name takes two characters, the first a letter, or nothing to clear it")]
     Name,
     #[error(":bpm takes a number from 20 to 400")]
@@ -171,11 +174,8 @@ fn render(argument: &str) -> Result<Line, LineError> {
             words.push(part);
         }
     }
-    if words.is_empty() {
-        return Err(LineError::Render);
-    }
     Ok(Line::Render {
-        path: path(&words.join(" ")),
+        path: (!words.is_empty()).then(|| path(&words.join(" "))),
         rows,
         tail,
         stems,
@@ -264,15 +264,6 @@ pub const SETTINGS: [Setting; 4] = [
     },
 ];
 
-/// A path that must be given.
-fn needed(label: &'static str, argument: &str) -> Result<PathBuf, LineError> {
-    if argument.is_empty() {
-        Err(LineError::NeedsPath(label))
-    } else {
-        Ok(path(argument))
-    }
-}
-
 /// A path that can be left out.
 fn optional_path(argument: &str) -> Option<PathBuf> {
     (!argument.is_empty()).then(|| path(argument))
@@ -290,13 +281,13 @@ pub const COMMANDS: [Command; 27] = [
         name: "e",
         meaning: "Open a project",
         takes: Takes::Folder,
-        parse: |argument| needed(":e", argument).map(Line::Edit),
+        parse: |argument| Ok(Line::Edit(optional_path(argument))),
     },
     Command {
         name: "new",
         meaning: "Start a new project",
         takes: Takes::Folder,
-        parse: |argument| needed(":new", argument).map(Line::New),
+        parse: |argument| Ok(Line::New(optional_path(argument))),
     },
     Command {
         name: "q",
@@ -320,7 +311,7 @@ pub const COMMANDS: [Command; 27] = [
         name: "sample",
         meaning: "Load a sample on this track",
         takes: Takes::Sample,
-        parse: |argument| needed(":sample", argument).map(Line::Sample),
+        parse: |argument| Ok(Line::Sample(optional_path(argument))),
     },
     Command {
         name: "kit",
@@ -596,7 +587,7 @@ mod tests {
         assert_eq!(
             parse("render a b.wav --rows 8 --tail"),
             Ok(Line::Render {
-                path: "a b.wav".into(),
+                path: Some("a b.wav".into()),
                 rows: Some(8),
                 tail: true,
                 stems: false,
@@ -605,13 +596,22 @@ mod tests {
         assert_eq!(
             parse("render out --stems"),
             Ok(Line::Render {
-                path: "out".into(),
+                path: Some("out".into()),
                 rows: None,
                 tail: false,
                 stems: true,
             })
         );
-        assert!(parse("render").is_err());
+        assert_eq!(
+            parse("render --tail"),
+            Ok(Line::Render {
+                path: None,
+                rows: None,
+                tail: true,
+                stems: false,
+            }),
+            "the explorer chooses where"
+        );
         assert!(parse("render a.wav --rows 0").is_err());
         assert!(parse("seed x").is_err());
         assert_eq!(parse("swing 66.7"), Ok(Line::Swing(667)));
@@ -680,7 +680,13 @@ mod tests {
         assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
         assert_eq!(parse("name"), Ok(Line::Name(None)));
         assert_eq!(parse("name 1A"), Err(LineError::Name));
-        assert_eq!(parse("sample a b.wav"), Ok(Line::Sample("a b.wav".into())));
+        assert_eq!(
+            parse("sample a b.wav"),
+            Ok(Line::Sample(Some("a b.wav".into())))
+        );
+        assert_eq!(parse("sample"), Ok(Line::Sample(None)));
+        assert_eq!(parse("e"), Ok(Line::Edit(None)));
+        assert_eq!(parse("new"), Ok(Line::New(None)));
         assert_eq!(parse("kit"), Ok(Line::Kit(None)));
         assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
         assert_eq!(parse("kit 909 all"), Ok(Line::KitTracks("909".into())));
@@ -693,7 +699,6 @@ mod tests {
         assert_eq!(parse("lane"), Ok(Line::Lane(None)));
         assert_eq!(parse("lane 3"), Ok(Line::Lane(Some(3))));
         assert_eq!(parse("lane 0"), Err(LineError::Lane));
-        assert_eq!(parse("e"), Err(LineError::NeedsPath(":e")));
         assert_eq!(parse("nope"), Err(LineError::Unknown("nope".into())));
     }
 }

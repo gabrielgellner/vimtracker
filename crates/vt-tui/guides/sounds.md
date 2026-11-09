@@ -246,17 +246,21 @@ note on the track rings out, or lock it on a step for one hard hit.
 
 ## Choosing a sample
 
-Press `Space 5` to list WAV, AIFF and FLAC files in the project's `samples`
-folder, in your sample folders, and under the folder you ran from, each under the
-folder it's in. It opens on the track's own sample. Type to search, and press
-`Enter` to put one on the current track.
+Press `Space 5`, or type `:sample`, to choose a WAV, AIFF or FLAC file from a tree of
+folders: the last few you chose from, the project's folder, your sample folders, where
+you ran the program from and your home folder. It opens on the track's own sample.
+`l` opens a folder, `h` closes it, and `l` or `Enter` on a file puts it on the current
+track. **Navigation** has the rest of the keys.
+
+Moving onto a sample plays it through the current track, as an Elektron's or the M8's
+browser does, and `A` stops that or starts it again. Beside the list is its waveform,
+how long it is, its rate and whether it's mono or stereo. A long file is read in the
+background, so the list doesn't wait for it, and the last few are kept.
 
 | Command | Does |
 |---|---|
 | `:sample path/kick.wav` | Put one file on this track |
-| `:sample path/drums` | Browse a folder |
-
-The browser looks 4 folders deep and lists up to 2000 files.
+| `:sample path/drums` | Choose from one folder |
 
 Samples stay where they are, and the project refers to them, so moving a
 file breaks the projects that use it. To gather every sample into one
@@ -296,7 +300,7 @@ A kit fills tracks in one go. It is a file in a kit folder, such as
 
 A kit is a list of sounds to choose from, so it adds no tracks of its own. Use one
 with `:kit 909`, or choose it from `Space 8`, then `Space 5` on a track lists its
-sounds first, by label and name. Choosing one puts it on this track, and its label becomes the track's name.
+sounds first, by label and name, under the kit's name. Choosing one puts it on this track, and its label becomes the track's name.
 Paths are relative to the kit file, or absolute, or start with `~/`.
 
 Only `sounds`, and each sound's `path`, are needed. A kit's `name` is its file's
@@ -343,12 +347,11 @@ Each is a list of folders, looked through in order, and a folder that isn't
 there is passed over. `:kit 909` opens the first `909.ron` found. Changes are
 read the next time the program starts.
 
-`Space 8` lists the kits in the folders inside them too, under each folder, such
-as `Ableton/Drum Machines`, and opens on the kit in use. Beside the list are the
-sounds of the kit under the cursor, each with its label, its name and its
-waveform. `Enter` uses the kit, as `:kit 909` does, and `L` puts its sounds on
-tracks, as `:kit 909 all` does. `:kit` takes a kit's path in its folder, such as
-`:kit Ableton/Drum Machines/909 Core Kit`.
+`Space 8` opens the kit folders as a tree, with the first one open, and opens on
+the kit in use. Beside the list are the sounds of the kit under the cursor, each
+with its label, its name and its waveform. `Enter` uses the kit, as `:kit 909`
+does, and `L` puts its sounds on tracks, as `:kit 909 all` does. `:kit` takes a
+kit's path in its folder, such as `:kit Ableton/Drum Machines/909 Core Kit`.
 
 ## Kits from Ableton Live
 

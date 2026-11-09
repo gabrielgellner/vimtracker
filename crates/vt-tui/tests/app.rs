@@ -54,6 +54,47 @@ fn listed(item: &vt_tui::input::picker::Item) -> String {
     }
 }
 
+/// The explorer's rows as they're shown: each indented by its depth, a folder with its arrow, and
+/// a folder at the top by why it's there.
+fn explorer_rows(app: &App) -> Vec<String> {
+    use vt_tui::input::picker::Row;
+    let picker = app.picker.as_ref().expect("the explorer is open");
+    picker
+        .rows()
+        .iter()
+        .map(|row| {
+            let Row::Item(item) = row else {
+                return String::new();
+            };
+            let arrow = match picker.folder_open(*item) {
+                Some(true) => "v ",
+                Some(false) => "> ",
+                None => "  ",
+            };
+            let depth = picker.depth(*item);
+            let shown = picker.item(*item);
+            let label = if depth == 0 && !shown.meaning.is_empty() {
+                &shown.meaning
+            } else {
+                &shown.label
+            };
+            format!("{}{arrow}{label}", "  ".repeat(depth))
+        })
+        .collect()
+}
+
+/// The folders at the top of the explorer: each one's name and why it's there.
+fn explorer_roots(app: &App) -> Vec<(String, String)> {
+    let picker = app.picker.as_ref().expect("the explorer is open");
+    picker
+        .items()
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| picker.depth(*at) == 0)
+        .map(|(_, item)| (item.label.clone(), item.meaning.clone()))
+        .collect()
+}
+
 fn special(app: &mut App, code: KeyCode) {
     app.key(Key::new(code), Instant::now());
 }
@@ -425,7 +466,10 @@ fn saving_needs_a_folder_then_round_trips() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
     assert!(app.dirty);
-    assert!(app.status.contains(":w path"));
+    assert_eq!(app.mode, Mode::Picker, "the explorer chooses where");
+    assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.naming, None, "nothing waits for a name");
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     assert!(!app.dirty, "{}", app.status);
@@ -779,7 +823,7 @@ fn wav(path: &std::path::Path) {
 }
 
 #[test]
-fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
+fn a_folder_opens_the_sample_explorer_and_choosing_loads_the_sample() {
     let (mut app, _realtime) = app();
     let folder = std::env::temp_dir().join(format!("vt-browse-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
@@ -787,27 +831,19 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
     wav(&folder.join("kit/kick.wav"));
     wav(&folder.join("kit/snare.WAV"));
     wav(&folder.join("kit/.hidden/secret.wav"));
-    std::fs::create_dir_all(folder.join("target")).unwrap();
-    wav(&folder.join("target/built.wav"));
     std::fs::write(folder.join("kit/notes.txt"), "not audio").unwrap();
 
-    command(&mut app, &format!("sample {}", folder.display()));
-    assert_eq!(app.mode, Mode::Picker);
-    let labels: Vec<String> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .items()
-        .iter()
-        .map(listed)
-        .collect();
-    assert_eq!(labels, ["kick.wav", "snare.WAV"]);
-    let picker = app.picker.as_ref().unwrap();
-    assert!(
-        picker.items().iter().all(|item| item.category == "kit"),
-        "under the folder they're in"
+    command(
+        &mut app,
+        &format!("sample {}", folder.join("kit").display()),
     );
-    press(&mut app, "sn");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(
+        explorer_rows(&app)[1..],
+        ["    kick.wav", "    snare.WAV"],
+        "only samples, and no hidden ones"
+    );
+    press(&mut app, "/sn");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
     let chosen = app.song().tracks[0].sample.clone().unwrap();
@@ -816,7 +852,7 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
 }
 
 #[test]
-fn the_sample_browser_lists_and_loads_aiff_and_flac() {
+fn the_sample_explorer_lists_and_loads_aiff_and_flac() {
     let (mut app, _realtime) = app();
     let folder = std::env::temp_dir().join(format!("vt-browse-formats-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&folder);
@@ -829,16 +865,16 @@ fn the_sample_browser_lists_and_loads_aiff_and_flac() {
     std::fs::write(folder.join("loop.mp3"), "not read").unwrap();
 
     command(&mut app, &format!("sample {}", folder.display()));
-    let labels: Vec<String> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .items()
-        .iter()
-        .map(listed)
-        .collect();
-    assert_eq!(labels, ["hat.aif", "kick.wav", "ride.aiff", "tom.flac"]);
-    press(&mut app, "tom");
+    assert_eq!(
+        explorer_rows(&app)[1..],
+        [
+            "    hat.aif",
+            "    kick.wav",
+            "    ride.aiff",
+            "    tom.flac"
+        ]
+    );
+    press(&mut app, "/tom");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.status, "Track 01 sample loaded");
     let chosen = app.song().tracks[0].sample.clone().unwrap();
@@ -1716,8 +1752,8 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
         .map(listed)
         .collect();
     assert_eq!(
-        labels[..2],
-        ["SD  Snare 909", "  hat"],
+        labels[..3],
+        ["Kit named", "SD  Snare 909", "  hat"],
         "the kit first, by name or the file's"
     );
     special(&mut app, KeyCode::Enter);
@@ -2147,11 +2183,8 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
 }
 
 #[test]
-fn a_missing_kit_or_none_at_all_says_so() {
+fn a_missing_kit_says_so_and_a_missing_kit_folder_isnt_listed() {
     let (mut app, _realtime) = app();
-    command(&mut app, "kit");
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("settings.ron"), "{}", app.status);
     app.settings = Settings {
         kits: vec!["/nowhere/kits".to_owned(), "/nowhere/else".to_owned()],
         samples: Vec::new(),
@@ -2163,8 +2196,17 @@ fn a_missing_kit_or_none_at_all_says_so() {
         app.status
     );
     command(&mut app, "kit");
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("/nowhere/kits"), "{}", app.status);
+    assert_eq!(app.mode, Mode::Picker);
+    let roots = explorer_roots(&app);
+    assert!(
+        roots.iter().all(|(_, meaning)| meaning != "kits"),
+        "{roots:?}"
+    );
+    assert_eq!(
+        roots.last().unwrap().1,
+        "home",
+        "the home folder is always there"
+    );
 }
 
 #[test]
@@ -2200,22 +2242,19 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
         "{}",
         app.status
     );
+    // The explorer starts from each kit folder, in order, on the kit in use.
     command(&mut app, "kit");
-    let shown: Vec<(String, Pick)> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .shown()
-        .map(|item| (item.label.clone(), item.pick.clone()))
+    let roots = explorer_roots(&app);
+    let kit_roots: Vec<&str> = roots
+        .iter()
+        .filter(|(_, meaning)| meaning == "kits")
+        .map(|(label, _)| label.as_str())
         .collect();
-    assert_eq!(
-        shown,
-        [
-            ("909".to_owned(), Pick::Kit(first)),
-            ("909".to_owned(), Pick::Kit(shadowed.join("909.ron"))),
-            ("808".to_owned(), Pick::Kit(second)),
-        ]
-    );
+    let named: Vec<String> = folders.iter().map(|f| f.display().to_string()).collect();
+    assert_eq!(kit_roots, named);
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().pick, Pick::Kit(first));
+    assert_eq!(picker.marked(), picker.current_index());
 }
 
 /// A kit folder with a kit of three labelled sounds at its top, and one of Ableton's under its
@@ -2242,8 +2281,7 @@ fn kit_folders() -> PathBuf {
 }
 
 #[test]
-fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
-    use vt_tui::input::picker::Row;
+fn space_8_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     let (mut app, _realtime) = app();
     let root = kit_folders();
     app.settings = Settings {
@@ -2255,9 +2293,13 @@ fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Kits");
     assert!(picker.hint.unwrap().contains("L on tracks"));
-    assert_eq!(picker.rows(), [Row::Item(0), Row::Category(0)], "folded");
-    assert_eq!(picker.category(0), ("Ableton/Drum Machines", 2, false));
+    assert_eq!(
+        explorer_rows(&app)[..4],
+        ["v kits", "  > Ableton", "  > drums", "    909"]
+    );
     // The kit under the cursor is shown beside the list, each sound with its waveform.
+    press(&mut app, "jj");
+    let picker = app.picker.as_ref().unwrap();
     let shown = picker.preview.as_deref().unwrap();
     assert_eq!(shown.heading, "909");
     assert_eq!(shown.note, "3 sounds");
@@ -2265,8 +2307,8 @@ fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
     assert_eq!(labels, ["BD", "CH", ""]);
     assert!(shown.lines.iter().all(|line| line.wave.is_some()));
 
-    // Into the folder, and the preview follows.
-    press(&mut app, "jl");
+    // Into the folders, and the preview follows.
+    press(&mut app, "kkll");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "808 Core Kit");
     let shown = picker.preview.as_deref().unwrap();
@@ -2285,8 +2327,14 @@ fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
         "{}",
         app.status
     );
+    assert_eq!(
+        app.recent_places.of(vt_tui::explorer::Purpose::Kit),
+        [root.join("Ableton/Drum Machines")],
+        "its folder is a recent place"
+    );
 
-    // It opens on the kit in use, and L puts its sounds on tracks, as one undo step.
+    // It opens on the kit in use, with its folder at the top as a recent place, and L puts its
+    // sounds on tracks, as one undo step.
     command(&mut app, "kit");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
@@ -2294,7 +2342,8 @@ fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
         "808 Core Kit",
         "opens on it"
     );
-    assert_eq!(picker.marked(), Some(1));
+    assert_eq!(picker.marked(), picker.current_index());
+    assert_eq!(explorer_roots(&app)[0].1, "recent");
     press(&mut app, "L");
     assert_eq!(app.mode, Mode::Normal);
     assert!(sample_of(&app, 0).unwrap().ends_with("kick.wav"));
@@ -2313,7 +2362,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 8");
+    press(&mut app, " 8jj");
     // The terminal is sent a waveform for each sound.
     let mut sent = Vec::new();
     let mut graphics = vt_tui::kitty::Graphics::new();
@@ -2335,13 +2384,13 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
                 + "\n"
         })
         .collect();
-    assert!(text.contains("Kits 3/3"), "{text}");
+    assert!(text.contains("┌ Kits ─"), "{text}");
     assert!(text.contains("Enter use   L on tracks"), "{text}");
     assert!(text.contains("│ 909"), "{text}");
     let bd = text.lines().find(|line| line.contains(" BD  ")).unwrap();
     assert!(bd.contains('\u{10EEEE}'), "its waveform beside it: {bd}");
     // Moving to another kit sends that kit's, and lets the old ones go.
-    press(&mut app, "jl");
+    press(&mut app, "kkll");
     sent.clear();
     graphics.sync(&mut app, &mut sent).unwrap();
     let sent = String::from_utf8_lossy(&sent);
@@ -2349,8 +2398,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
 }
 
 #[test]
-fn space_5_lists_samples_under_their_folders_and_opens_on_the_tracks_own() {
-    use vt_tui::input::picker::Focus;
+fn space_5_explores_the_sample_folders_and_opens_on_the_tracks_own() {
     let (mut app, _realtime) = app();
     let library = folder();
     std::fs::create_dir_all(library.join("hats")).unwrap();
@@ -2364,13 +2412,14 @@ fn space_5_lists_samples_under_their_folders_and_opens_on_the_tracks_own() {
         samples: vec![library.display().to_string()],
     };
     press(&mut app, " 5");
-    let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.focus, Focus::Search, "files are found by name");
-    assert_eq!(picker.shown().count(), 0, "both folders folded");
-    press(&mut app, "short");
+    assert_eq!(
+        explorer_rows(&app)[..3],
+        ["v samples", "  > hats", "  > kicks"],
+        "the first place open, on the list"
+    );
+    press(&mut app, "jl/short");
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 0).unwrap().ends_with("kicks/short.wav"));
-    special(&mut app, KeyCode::Esc);
     press(&mut app, " 5");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
@@ -2378,44 +2427,44 @@ fn space_5_lists_samples_under_their_folders_and_opens_on_the_tracks_own() {
         "short.wav",
         "on the track's own"
     );
-    assert!(picker.category(1).2, "its folder open");
-    assert!(!picker.category(0).2, "the other folded");
+    assert_eq!(picker.marked(), picker.current_index());
+    assert_eq!(
+        explorer_rows(&app)[..4],
+        ["v recent", "    deep.wav", "    short.wav", "> samples"],
+        "in its folder, at the top as the last place a sample came from"
+    );
     std::fs::remove_dir_all(&library).unwrap();
 }
 
 #[test]
-fn the_sample_browser_lists_the_settings_sample_folders() {
+fn the_sample_explorer_starts_from_the_project_the_settings_here_and_home() {
     let (mut app, _realtime) = app();
     let library = folder();
     std::fs::create_dir_all(library.join("hats")).unwrap();
     wav(&library.join("hats/closed.wav"));
+    let project = folder();
+    command(&mut app, &format!("w {}", project.display()));
     app.settings = Settings {
         kits: Vec::new(),
         samples: vec![library.display().to_string(), "/nowhere/samples".to_owned()],
     };
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(app.mode, Mode::Picker);
-    let first = app.picker.as_ref().unwrap().shown().next().unwrap().clone();
+    let meanings: Vec<String> = explorer_roots(&app)
+        .into_iter()
+        .map(|(_, meaning)| meaning)
+        .collect();
     assert_eq!(
-        (first.label.as_str(), first.category.as_str()),
-        ("closed.wav", "hats")
+        meanings,
+        ["project", "samples", "here", "home"],
+        "a folder that isn't there is passed over"
     );
-    assert_eq!(first.pick, Pick::Sample(library.join("hats/closed.wav")));
     std::fs::remove_dir_all(&library).unwrap();
+    std::fs::remove_dir_all(&project).unwrap();
 }
 
 #[test]
-fn only_ron_files_count_as_kits() {
-    use vt_tui::picking::kits_in;
-    let kit = kit_file();
-    let root = kit.parent().unwrap();
-    std::fs::write(root.join("stray.wav"), "").unwrap();
-    std::fs::write(root.join(".hidden.ron"), "").unwrap();
-    assert_eq!(kits_in(root), vec![kit.clone()]);
-}
-
-#[test]
-fn kits_in_folders_are_listed_and_named_by_their_path() {
+fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
     let (mut app, _realtime) = app();
     let kit = kit_file();
     let root = kit.parent().unwrap();
@@ -2430,27 +2479,21 @@ fn kits_in_folders_are_listed_and_named_by_their_path() {
         samples: Vec::new(),
     };
     command(&mut app, "kit");
-    let labels: Vec<String> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .items()
-        .iter()
-        .map(listed)
-        .collect();
-    assert_eq!(labels, ["909", "808 Core Kit"]);
-    let categories: Vec<&str> = app
-        .picker
-        .as_ref()
-        .unwrap()
-        .items()
-        .iter()
-        .map(|item| item.category.as_str())
-        .collect();
     assert_eq!(
-        categories,
-        ["", "Ableton/Drum Machines"],
-        "under its folder"
+        explorer_rows(&app)[..4],
+        ["v kits", "  > Ableton", "  > drums", "    909"],
+        "the first kit folder open, its folders first"
+    );
+    press(&mut app, "ll");
+    assert_eq!(
+        explorer_rows(&app)[..5],
+        [
+            "v kits",
+            "  v Ableton",
+            "    v Drum Machines",
+            "        808 Core Kit",
+            "  > drums"
+        ]
     );
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit Ableton/Drum Machines/808 Core Kit all");
@@ -8397,4 +8440,281 @@ fn up_and_down_go_through_earlier_commands_and_search_with_what_is_typed() {
         app.command_history.lines().last().map(String::as_str),
         Some("bmp 120")
     );
+}
+
+/// A WAV of a steady level, this long, at 44.1 kHz in stereo.
+fn long_wav(path: &std::path::Path, seconds: f32) {
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    for _ in 0..(seconds * 44_100.0) as usize * 2 {
+        writer.write_sample(8000_i16).unwrap();
+    }
+    writer.finalize().unwrap();
+}
+
+/// The picker as text, drawn on a screen this big.
+fn picker_text(app: &App, width: u16, height: u16) -> String {
+    let backend = ratatui::backend::TestBackend::new(width, height);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    let picker = app.picker.as_ref().unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect()
+}
+
+/// A library of one folder with a long sample and a short one in it, as the first sample folder.
+fn sample_library(app: &mut App) -> PathBuf {
+    let library = folder();
+    std::fs::create_dir_all(library.join("loops")).unwrap();
+    long_wav(&library.join("loops/break.wav"), 2.5);
+    long_wav(&library.join("loops/fill.wav"), 0.5);
+    app.settings = Settings {
+        kits: Vec::new(),
+        samples: vec![library.display().to_string()],
+    };
+    library
+}
+
+#[test]
+fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate() {
+    let (mut app, _realtime) = app();
+    let library = sample_library(&mut app);
+    press(&mut app, " 5l");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "break.wav");
+    let shown = picker.preview.as_deref().unwrap();
+    assert_eq!(shown.heading, "break.wav");
+    if app.loader.is_waiting() {
+        assert_eq!(shown.note, "Loading", "a placeholder until it's read");
+        assert_eq!(shown.wave, None);
+    }
+    app.finish_loading();
+    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    assert_eq!(shown.note, "2.50 s  44.1 kHz  stereo");
+    assert!(shown.wave.is_some());
+
+    // Its waveform is sent as an image, and drawn under the note.
+    let mut sent = Vec::new();
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    graphics.sync(&mut app, &mut sent).unwrap();
+    let sent = String::from_utf8_lossy(&sent);
+    assert_eq!(sent.matches("c=28,r=4").count(), 1, "28 by 4");
+    let picker = app.picker.as_ref().unwrap();
+    assert!(picker.preview_wave.is_some());
+    let text = picker_text(&app, 120, 26);
+    assert!(text.contains("│ 2.50 s  44.1 kHz  stereo"), "{text}");
+    let waves = text
+        .lines()
+        .filter(|line| line.contains('\u{10EEEE}'))
+        .count();
+    assert_eq!(waves, 4, "four rows of it: {text}");
+
+    // Moving away and back finds it kept, with nothing to wait for.
+    press(&mut app, "jk");
+    assert_eq!(
+        app.picker
+            .as_ref()
+            .unwrap()
+            .preview
+            .as_deref()
+            .unwrap()
+            .note,
+        "2.50 s  44.1 kHz  stereo"
+    );
+    // P hides the preview, and shows it again.
+    press(&mut app, "P");
+    let picker = app.picker.as_ref().unwrap();
+    assert!(!picker.has_previews());
+    assert!(picker.preview.is_none());
+    press(&mut app, "P");
+    assert!(app.picker.as_ref().unwrap().preview.is_some());
+    std::fs::remove_dir_all(&library).unwrap();
+}
+
+#[test]
+fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
+    let (mut app, mut realtime) = app();
+    let library = sample_library(&mut app);
+    let heard = |realtime: &mut Realtime, app: &mut App| {
+        let mut out = vec![0.0; 4096];
+        realtime.process(&mut out);
+        app.tick();
+        out[out.len() - 2].abs()
+    };
+    press(&mut app, " 5");
+    assert_eq!(app.file_wanted, None, "a folder plays nothing");
+    press(&mut app, "l");
+    app.finish_loading();
+    assert_eq!(app.file_playing, Some(library.join("loops/break.wav")));
+    assert!(heard(&mut realtime, &mut app) > 0.01, "it plays");
+    assert_eq!(realtime.engine().previews_sounding(), 1);
+    assert!(
+        app.song().tracks[0].sample.is_none(),
+        "and isn't put on the track"
+    );
+
+    // The next one takes over.
+    press(&mut app, "j");
+    app.finish_loading();
+    assert_eq!(app.file_playing, Some(library.join("loops/fill.wav")));
+    heard(&mut realtime, &mut app);
+
+    // A turns it off, and stops what's playing.
+    press(&mut app, "A");
+    assert_eq!(app.file_playing, None);
+    for _ in 0..8 {
+        heard(&mut realtime, &mut app);
+    }
+    assert_eq!(realtime.engine().previews_sounding(), 0, "stopped");
+    press(&mut app, "k");
+    assert_eq!(app.file_wanted, None, "nothing plays while it's off");
+    press(&mut app, "A");
+    app.finish_loading();
+    assert!(app.file_playing.is_some(), "A turns it on again");
+
+    // Leaving the explorer stops it.
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.file_playing, None);
+    for _ in 0..8 {
+        heard(&mut realtime, &mut app);
+    }
+    assert_eq!(realtime.engine().previews_sounding(), 0);
+    // Turned off, it stays off the next time.
+    press(&mut app, " 5lA");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " 5l");
+    assert!(!app.picker.as_ref().unwrap().tree().unwrap().audition);
+    assert_eq!(app.file_wanted, None);
+    std::fs::remove_dir_all(&library).unwrap();
+}
+
+/// A folder of two projects and a plain folder.
+fn projects() -> PathBuf {
+    let root = folder();
+    for (name, bpm) in [("one", 120_000), ("two", 137_630)] {
+        let mut song = Song::new(4);
+        song.millibpm = bpm;
+        vt_model::project::save_song(&root.join(name), &song).unwrap();
+    }
+    std::fs::create_dir_all(root.join("ideas")).unwrap();
+    std::fs::write(root.join("notes.txt"), "").unwrap();
+    root
+}
+
+#[test]
+fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("e {}", root.join("one").display()));
+    assert_eq!(app.folder.as_deref(), Some(root.join("one").as_path()));
+    command(&mut app, "e");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
+    assert_eq!(
+        explorer_rows(&app)[..4],
+        ["v projects", "  > ideas", "    one", "    two"],
+        "projects and folders only, on this one"
+    );
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "one");
+    assert_eq!(picker.marked(), picker.current_index());
+    press(&mut app, "j");
+    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    assert_eq!(shown.heading, "two");
+    assert_eq!(shown.note, "137.63 BPM  4 tracks");
+    assert_eq!(shown.details, ["Saved just now"]);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(app.song().millibpm, 137_630);
+    assert_eq!(
+        app.recent_places.of(vt_tui::explorer::Purpose::Project),
+        std::slice::from_ref(&root)
+    );
+
+    // Unsaved changes stop it before anything opens.
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "e");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("Unsaved"), "{}", app.status);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    app.recent_places
+        .add(vt_tui::explorer::Purpose::Save, &root)
+        .unwrap();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "w");
+    assert_eq!(
+        explorer_rows(&app)[..4],
+        ["v recent", "  > ideas", "  > one", "  > two"],
+        "folders only, the recent place first"
+    );
+    let picker = app.picker.as_ref().unwrap();
+    assert!(!picker.has_previews(), "nothing to show");
+    // l opens a folder, and Enter chooses one.
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Command);
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
+    let shown = vt_tui::explorer::place_name(&root, Some(&home));
+    assert_eq!(app.command_line, format!("w {shown}/"));
+    assert!(app.status.contains("name"), "{}", app.status);
+    // The name is typed, with Tab to complete it, and Enter saves.
+    press(&mut app, "song");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.folder.as_deref(), Some(root.join("song").as_path()));
+    assert!(!app.dirty, "{}", app.status);
+
+    // :new does the same.
+    command(&mut app, "new");
+    assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.command_line.starts_with("new "), "{}", app.command_line);
+    press(&mut app, "fresh");
+    special(&mut app, KeyCode::Enter);
+    assert!(root.join("fresh/song.ron").is_file(), "{}", app.status);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("e {}", root.join("one").display()));
+    command(&mut app, "render --tail");
+    assert_eq!(app.picker.as_ref().unwrap().title, "Render into");
+    assert_eq!(
+        explorer_rows(&app)[0],
+        "v project",
+        "the project's folder first"
+    );
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
+    let shown = vt_tui::explorer::place_name(&root.join("one"), Some(&home));
+    assert_eq!(app.command_line, format!("render {shown}/one.wav --tail"));
+    special(&mut app, KeyCode::Enter);
+    assert!(root.join("one/one.wav").is_file(), "{}", app.status);
+    std::fs::remove_dir_all(&root).unwrap();
 }

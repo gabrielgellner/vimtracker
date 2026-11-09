@@ -71,6 +71,11 @@ fn parse_song(text: &str, path: &Path) -> Result<Song, ProjectError> {
     Ok(song)
 }
 
+/// Whether a folder is a project's: whether it has a `song.ron`.
+pub fn is_project(folder: &Path) -> bool {
+    folder.join(SONG_FILE).is_file()
+}
+
 /// Read a project's song.
 pub fn load_song(folder: &Path) -> Result<Song, ProjectError> {
     let path = folder.join(SONG_FILE);

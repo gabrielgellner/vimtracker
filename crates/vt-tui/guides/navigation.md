@@ -58,7 +58,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 
 `K`, `Space Space`, `Space 5` and the others open the same list, in a box over the page,
 with a search line above it. It opens on what's chosen now, marked with a `•`. Long
-lists, such as `Dest` and the samples, keep their items in categories: dim headings with
+lists, such as `Dest` and the FX commands, keep their items in categories: dim headings with
 a count, which open and close. The one with what's chosen in it starts open, and the
 rest closed. The title shows how many items match, out of how many there are.
 
@@ -76,9 +76,32 @@ Any other letter starts a search with itself: on Machine, `K` then `pl` finds `P
 A name that starts with one of the keys above, such as `ladder`, needs `/` first. A
 search looks through every category, ranks the best match first, shows each match's
 category beside it, and picks out the letters it matched. Digits then `Enter` choose by
-number, as for a chain or a phrase. The samples, the tracks and the FX commands open on
-their search instead, as they're usually found by name, and `Esc` goes from the search
-to the list.
+number, as for a chain or a phrase. The tracks and the FX commands open on their search
+instead, as they're usually found by name, and `Esc` goes from the search to the list.
+
+## Files
+
+Samples, kits and projects are chosen in the same list as a tree of folders: `Space 5`,
+`Space 8`, and `:e`, `:w`, `:new`, `:sample` and `:render` with nothing after them. At
+the top are the places it starts from, each with why it's there: `recent` for the last
+few you chose from, then the project, your sample or kit folders, `here` for where the
+program was run from, and `home`. It opens on the current file, with its folders open.
+Only what fits is listed: samples and folders, kits and folders, or projects and
+folders, and hidden files are left out.
+
+| Keys | Does |
+|---|---|
+| `l` | Open a folder and go into it, or choose |
+| `h` | Close the folder, from inside it or on it |
+| `Backspace` | Go up: the folder at the top becomes its parent |
+| `H` | Show hidden files, or hide them |
+| `P` | Show the preview, or hide it |
+| `A` | Stop playing samples as you move, or start |
+| `/` | Search what's been opened |
+
+The numbers down the left count from the cursor, so `12j` can be read off them. A
+search matches names exactly, ignoring case, among the folders you've opened, and
+shows each match under its folders.
 
 ## The command line
 

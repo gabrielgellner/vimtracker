@@ -30,6 +30,7 @@ use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics};
+use crate::places::RecentPlaces;
 use crate::theme;
 use crate::views;
 
@@ -230,6 +231,15 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if let Some(path) = CommandHistory::default_path() {
         let (history, note) = CommandHistory::load(&path);
         app.command_history = history;
+        if let Some(note) = note
+            && status.is_empty()
+        {
+            status = note;
+        }
+    }
+    if let Some(path) = RecentPlaces::default_path() {
+        let (places, note) = RecentPlaces::load(&path);
+        app.recent_places = places;
         if let Some(note) = note
             && status.is_empty()
         {

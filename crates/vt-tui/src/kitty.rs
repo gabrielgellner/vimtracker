@@ -28,7 +28,10 @@ use crate::theme;
 use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
-use crate::views::picker::{PREVIEW_ROWS, PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
+use crate::views::picker::{
+    PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
+    PREVIEW_WAVE_WIDTH,
+};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
@@ -364,6 +367,9 @@ pub fn supports_graphics() -> io::Result<bool> {
     asked.map(|()| supported)
 }
 
+/// The images of a picker's preview: its lines' waveforms, a line each, and its own.
+type PreviewImages = (Vec<Option<u32>>, Option<u32>);
+
 /// The settings a filter curve is drawn from.
 type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
 
@@ -451,8 +457,8 @@ pub struct Graphics {
     slots: [[Option<(SlotDrawing, u32)>; 2]; INSERTS],
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
-    /// The picker's preview, and the images of its waveforms, a line each.
-    preview: Option<(Arc<Shown>, Vec<Option<u32>>)>,
+    /// The picker's preview and its images.
+    preview: Option<(Arc<Shown>, PreviewImages)>,
     /// How many times the screen has been brought up to date, for how often the scope is.
     frames: usize,
     /// Images to forget once the screen has moved on from them.
@@ -506,7 +512,7 @@ impl Graphics {
                 || self
                     .preview
                     .iter()
-                    .flat_map(|(_, ids)| ids.iter().flatten())
+                    .flat_map(|(_, (ids, wave))| ids.iter().chain(std::iter::once(wave)).flatten())
                     .any(|image| *image == id)
                 || self.retired.contains(&id);
             if !in_use {
@@ -551,8 +557,9 @@ impl Graphics {
             _ => false,
         };
         if !same {
-            if let Some((_, ids)) = self.preview.take() {
+            if let Some((_, (ids, wave))) = self.preview.take() {
                 self.retired.extend(ids.into_iter().flatten());
+                self.retired.extend(wave);
             }
             if let Some(shown) = shown {
                 let mut ids = Vec::new();
@@ -566,11 +573,21 @@ impl Graphics {
                     self.send(out, id, &png, PREVIEW_WAVE_WIDTH, PREVIEW_WAVE_HEIGHT)?;
                     ids.push(Some(id));
                 }
-                self.preview = Some((shown, ids));
+                let wave = match &shown.wave {
+                    Some(spans) => {
+                        let id = self.new_id();
+                        let png = spans_png(spans, PREVIEW_SAMPLE_HEIGHT, color(false));
+                        self.send(out, id, &png, PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)?;
+                        Some(id)
+                    }
+                    None => None,
+                };
+                self.preview = Some((shown, (ids, wave)));
             }
         }
-        if let (Some(picker), Some((_, ids))) = (app.picker.as_mut(), &self.preview) {
+        if let (Some(picker), Some((_, (ids, wave)))) = (app.picker.as_mut(), &self.preview) {
             picker.preview_images.clone_from(ids);
+            picker.preview_wave = *wave;
         }
         Ok(())
     }
