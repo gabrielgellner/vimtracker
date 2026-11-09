@@ -14,7 +14,7 @@ use vt_model::constants::{
 use vt_model::sample::SampleData;
 
 use crate::dsp::memory::{Memory, MemoryCount};
-use crate::engine::{Engine, Transport};
+use crate::engine::{Engine, TrackPlace, Transport};
 use crate::mixer::Reading;
 use crate::published::Published;
 use crate::track_state::LiveValues;
@@ -27,7 +27,8 @@ pub enum Command {
     Watch { track: usize },
     /// `Space c` and `Shift-Tab`: play from a section step, whatever is happening now.
     PlayFrom { step: usize },
-    /// `Space c`: play from a step of a section, with a track's chain at that step if it's given.
+    /// `Space c`: play from a step of a section, or from a step of a track's own with its chain at
+    /// that step if it's given.
     PlaySection {
         section: usize,
         step: usize,
@@ -54,8 +55,13 @@ pub enum Command {
     },
     /// A held key was let go: its note ends, and any others held carry on.
     ReleasePreview { track: usize, note: u8 },
-    /// Hear a row of the section while not playing.
-    Audition { section: usize, section_step: usize },
+    /// Hear a row of the section while not playing: a step of the song's, or of a track's own,
+    /// with every other track's row playing then.
+    Audition {
+        section: usize,
+        section_step: usize,
+        track: Option<usize>,
+    },
     /// The audition's key was let go, after a hold or a tap.
     EndAudition { held: bool },
     /// An audition's key on a preview voice was tapped: let its note go once it has sounded
@@ -85,7 +91,7 @@ pub struct JamState {
     pub cued: Option<Option<u32>>,
     /// The chain the track is on, launched or not.
     pub chain: Option<u32>,
-    /// The running count that chain began at.
+    /// The step of the track's own running count that chain began at.
     pub started: i64,
     /// What's added to that count for each FX column's lane.
     pub lane_offsets: [i64; FX_SLOTS],
@@ -98,6 +104,8 @@ pub struct Telemetry {
     pub position: usize,
     /// How far through that place the transport is, from 0 to 1.
     pub progress: f32,
+    /// Where each track is heard, as its own steps count.
+    pub places: [TrackPlace; MAX_TRACKS],
     pub transport: Transport,
     pub reading: Reading,
     /// Each track's levels.
@@ -369,17 +377,13 @@ impl Realtime {
                     section,
                     step,
                     track,
-                } => {
-                    self.engine.play_section(section, step);
-                    if let Some(track) = track {
-                        self.engine.place_track(track, step);
-                    }
-                }
+                } => self.engine.play_section_at(section, step, track),
                 Command::LoopSection(section) => self.engine.set_loop_section(section),
                 Command::Audition {
                     section,
                     section_step,
-                } => self.engine.audition_section(section, section_step),
+                    track,
+                } => self.engine.audition_from(section, section_step, track),
                 Command::EndAudition { held } => self.engine.end_audition(held),
                 Command::FinishPreview { track, note } => {
                     self.engine.finish_preview(track, note);
@@ -422,6 +426,7 @@ impl Realtime {
             section: self.engine.section(),
             position: self.engine.position(),
             progress: self.engine.step_progress(),
+            places: std::array::from_fn(|track| self.engine.track_heard(track)),
             transport: self.engine.transport(),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
@@ -976,6 +981,7 @@ mod tests {
             handle.send(Command::Audition {
                 section: 0,
                 section_step: step,
+                track: None,
             });
             assert_eq!(blocks(&mut rt, 4), 0);
         }
@@ -1098,11 +1104,13 @@ mod tests {
         handle.send(Command::Audition {
             section: 0,
             section_step: 0,
+            track: None,
         });
         assert_eq!(blocks(&mut rt, 2), 0);
         handle.send(Command::Audition {
             section: 0,
             section_step: 1,
+            track: None,
         });
         assert_eq!(blocks(&mut rt, 2), 0, "the audition has been cut");
         let reading = handle.latest().unwrap().reading;

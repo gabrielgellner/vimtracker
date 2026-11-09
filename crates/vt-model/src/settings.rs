@@ -17,6 +17,7 @@ use crate::insert::{
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
+use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
@@ -376,7 +377,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 11] = [
+const TRACK: [Entry; 12] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -454,11 +455,22 @@ const TRACK: [Entry; 11] = [
         },
         default: 0,
     },
+    // How long a step is, read before the step is played, as it says when the next one comes.
+    Entry {
+        key: "speed",
+        name: "Speed",
+        label: Some("RATE"),
+        kind: Kind::Stepped {
+            choices: &SPEED_NAMES,
+            wraps: false,
+        },
+        default: Speed::Sixteenth.index(),
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 11] = [
+const TRACK_GROUPS: [&str; 12] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine", "Machine",
+    "Machine", "Machine", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1162,6 +1174,8 @@ impl SettingId {
     /// The groove a step plays with: `0` for the project's, then a place in
     /// [`GROOVE_NAMES`](crate::groove::GROOVE_NAMES) after it.
     pub const GROOVE: Self = Self(10);
+    /// How long a step is: a place in [`Speed::ALL`].
+    pub const SPEED: Self = Self(11);
 
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();

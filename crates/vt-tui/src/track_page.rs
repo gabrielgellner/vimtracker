@@ -15,6 +15,7 @@ use vt_model::lfo::{
 use vt_model::selection::Motion;
 use vt_model::settings::{Effect, Kind, SettingId, gate_percent, gate_value, voice_entries};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
+use vt_model::speed::Speed;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -75,6 +76,8 @@ pub enum Control {
     Choke,
     /// How much of its last pulse a note lasts, as a percentage.
     GateLength,
+    /// How long its steps are, as a note division.
+    Speed,
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
@@ -183,7 +186,7 @@ pub const SAMPLE_ROWS: [&[Control]; 9] = [
     &[base(TrackControl::Resonance), base(TrackControl::Pitch)],
     &[base(TrackControl::Drive), Control::Choke],
     &[base(TrackControl::LowCut), Control::GateLength],
-    &[base(TrackControl::HighCut)],
+    &[base(TrackControl::HighCut), Control::Speed],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
 /// output on the right.
@@ -196,7 +199,7 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance)],
+    &[base(TrackControl::Resonance), Control::Speed],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
@@ -211,7 +214,7 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(4), base(TrackControl::Pitch)],
     &[Control::Setting(5), Control::Choke],
     &[Control::Setting(6), Control::GateLength],
-    &[Control::Setting(7)],
+    &[Control::Setting(7), Control::Speed],
     &[Control::FilterType],
     &[Control::FilterMode],
     &[base(TrackControl::Cutoff)],
@@ -230,7 +233,7 @@ pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance)],
+    &[base(TrackControl::Resonance), Control::Speed],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
@@ -309,6 +312,7 @@ impl Control {
             Self::Base(TrackControl::Pitch) => "Pitch",
             Self::Choke => "Choke",
             Self::GateLength => "Gate",
+            Self::Speed => "Speed",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "File",
@@ -354,6 +358,7 @@ impl Control {
             | Self::Groove
             | Self::Choke
             | Self::GateLength
+            | Self::Speed
             | Self::Base(
                 TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
             ) => 1,
@@ -385,6 +390,7 @@ impl Control {
             Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
             Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
             Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
+            Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -432,7 +438,8 @@ impl Control {
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
             Self::Base(TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch)
             | Self::Choke
-            | Self::GateLength => track.is_sound(),
+            | Self::GateLength
+            | Self::Speed => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -473,6 +480,7 @@ impl Control {
                 | Self::FilterType
                 | Self::FilterMode
                 | Self::Groove
+                | Self::Speed
                 | Self::Lfo(
                     _,
                     LfoField::Destination | LfoField::Shape | LfoField::Retrig
@@ -737,6 +745,15 @@ impl App {
                 self.apply(&Action::SetTrackGateLength {
                     track: self.cursor.track,
                     gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
+                });
+            }
+            Control::Speed => {
+                // One way at a time, stopping at either end, as the list runs short to long.
+                let at = usize::from(track.speed.index());
+                let speed = Speed::from_index(if up { at + 1 } else { at.saturating_sub(1) });
+                self.apply(&Action::SetTrackSpeed {
+                    track: self.cursor.track,
+                    speed,
                 });
             }
             Control::Groove => {
@@ -1189,6 +1206,13 @@ impl App {
                 });
             }
             Control::GateLength => {}
+            Control::Speed if track.speed != fresh.speed => {
+                self.apply(&Action::SetTrackSpeed {
+                    track: self.cursor.track,
+                    speed: fresh.speed,
+                });
+            }
+            Control::Speed => {}
             Control::FilterType => {
                 if track.filter != fresh.filter {
                     self.apply(&Action::SetFilterType {
@@ -1312,6 +1336,10 @@ impl App {
             self.open_filter_mode_picker();
             return;
         }
+        if self.track_control() == Control::Speed {
+            self.open_speed_picker();
+            return;
+        }
         if self.track_control() == Control::Machine {
             self.open_machine_picker();
             return;
@@ -1332,7 +1360,7 @@ impl App {
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Machine, Voice, Patch, File, Type, Groove, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, Voice, Patch, File, Type, Groove, Speed, Dest, Shape, Rate, Retrig and Reset"
                     .to_owned();
             return;
         };
@@ -1465,6 +1493,19 @@ impl App {
             .to_vec();
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
         self.show_picker(Picker::new("Filter type", items).opened_on(position));
+    }
+
+    /// List the speeds a track's steps can go at, with the one it plays highlighted.
+    fn open_speed_picker(&mut self) {
+        let track = self.cursor.track;
+        let current = self.page_track().speed;
+        let items = Speed::ALL
+            .map(|speed| {
+                Item::new(speed.name(), Pick::Speed { track, speed }).meaning(speed.meaning())
+            })
+            .to_vec();
+        let position = Speed::ALL.iter().position(|speed| *speed == current);
+        self.show_picker(Picker::new("Speed", items).opened_on(position));
     }
 
     /// List the modes the track's filter type offers, with what each does and the one it plays
@@ -1661,7 +1702,7 @@ impl App {
                 }
                 _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
             },
-            Control::Groove => {}
+            Control::Groove | Control::Speed => {}
             Control::Lfo(slot, LfoField::Rate) => match text.parse::<Rate>() {
                 Ok(rate) => {
                     let lfo = Lfo {

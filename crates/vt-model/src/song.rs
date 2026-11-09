@@ -18,6 +18,7 @@ use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::scale::Scale;
 use crate::selection::Extent;
 use crate::settings::{Owner, SettingId};
+use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
@@ -333,6 +334,9 @@ pub struct Track {
     /// for its machine's own, which [`Track::gate_length`] gives.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate_length: Option<u8>,
+    /// How long each of its steps is, and where held `RATE` starts: a sixteenth unless changed.
+    #[serde(default, skip_serializing_if = "is_sixteenth")]
+    pub speed: Speed,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -343,6 +347,10 @@ pub struct Track {
     /// The phrases its chains can play, numbered within it.
     #[serde(default)]
     pub phrases: BTreeMap<u32, Arc<Phrase>>,
+}
+
+fn is_sixteenth(speed: &Speed) -> bool {
+    *speed == Speed::Sixteenth
 }
 
 fn none_bypassed(bypassed: &[bool; INSERTS]) -> bool {
@@ -563,6 +571,7 @@ impl Default for Track {
             pitch: centre(),
             choke: None,
             gate_length: None,
+            speed: Speed::Sixteenth,
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),
@@ -1410,12 +1419,15 @@ impl Song {
         self.sections.insert(at.min(self.sections.len()), section);
     }
 
-    /// A section's length: its longest chain.
+    /// A section's length: its longest chain, in the song's steps, so a chain at half speed lasts
+    /// twice its rows. A triplet chain that doesn't end on one of the song's steps is rounded up.
     pub fn section_steps(&self, section: &Section) -> usize {
         self.tracks
             .iter()
             .zip(&section.chains)
-            .filter_map(|(track, chain)| chain.map(|chain| track.chain_steps(chain)))
+            .filter_map(|(track, chain)| {
+                chain.map(|chain| track.speed.song_steps(track.chain_steps(chain)))
+            })
             .max()
             .unwrap_or(0)
     }

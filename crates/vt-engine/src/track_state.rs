@@ -187,9 +187,80 @@ impl Part {
     }
 }
 
-/// How many parts of steps a track can have waiting: two steps' lanes and rows, as a nudged row
-/// can land after the next step is worked out, but never after the one after.
-pub const PENDING_PARTS: usize = 4;
+/// How many parts of steps a track can have waiting. At one speed it's two steps' lanes and rows,
+/// as a nudged row can land after the next step is worked out, but never after the one after. A
+/// slow track's early groove works every track's steps out further ahead, so a fast track can
+/// have several steps worked out before the one heard has landed: at most ten of a 32nd's steps
+/// against a quarter's earliest groove and nudge.
+pub const PENDING_PARTS: usize = 24;
+
+/// How many of the steps a track has worked out it keeps, to find the one heard while it works
+/// some out ahead: as many as a 32nd's steps worked out ahead of a quarter's earliest groove and
+/// nudge, and the one heard.
+const WORKED_KEPT: usize = 16;
+
+/// Where a track's own steps fall on the grid. Each track counts its own steps, so one at an
+/// eighth counts its eighths, and its groove swings them.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Clock {
+    /// Where its next step falls on the grid, in ticks on the engine's count of steps.
+    pub beat: u64,
+    /// The running count at that step: the track's own steps since the song's start or the last
+    /// reset.
+    pub count: i64,
+    /// Where its steps are counted from on the grid: where it last lined up, at a reset or as its
+    /// chain started. A step at a new speed lasts until the next of that speed's steps from here,
+    /// so a track keeps to its speed's grid however it changes.
+    pub anchor: i64,
+}
+
+impl Clock {
+    /// Have the next step fall here, and count the steps from here.
+    pub fn line_up(&mut self, at: u64) {
+        self.beat = at;
+        self.anchor = at as i64;
+    }
+
+    /// Where the step after the next falls if the next is this many ticks long: the next of its
+    /// speed's steps from the anchor, so a step that doesn't start on one is cut short.
+    pub fn after(&self, ticks: u64) -> u64 {
+        let ticks = ticks.max(1) as i64;
+        let from = self.beat as i64 - self.anchor;
+        (self.anchor + (from.div_euclid(ticks) + 1) * ticks) as u64
+    }
+
+    /// Move on to the step after the next, which is this many ticks long.
+    pub fn advance(&mut self, ticks: u64) {
+        self.beat = self.after(ticks);
+        self.count += 1;
+    }
+
+    /// Count on, as if it had played steps this many ticks long, to the first at or after a place.
+    pub fn skip_to(&mut self, at: u64, ticks: u64) {
+        if at <= self.beat {
+            return;
+        }
+        let steps = (at - self.beat).div_ceil(ticks.max(1));
+        self.beat += steps * ticks;
+        self.count += steps as i64;
+    }
+
+    /// Move it along the grid, as working out a place to play from does once it's known where it
+    /// starts.
+    pub fn shift(&mut self, by: i64) {
+        self.beat = (self.beat as i64 + by).max(0) as u64;
+        self.anchor += by;
+    }
+}
+
+/// A step a track has worked out, for where it's heard: where it falls on the grid, its running
+/// count and how long it lasts.
+#[derive(Debug, Clone, Copy)]
+pub struct Worked {
+    pub grid: u64,
+    pub count: i64,
+    pub ticks: u64,
+}
 
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
 /// than now.
@@ -197,13 +268,16 @@ pub const PENDING_PARTS: usize = 4;
 pub struct PendingStep {
     /// When it lands, on the track's clock.
     pub at: u64,
-    /// Its place in the section's running count.
-    pub section_step: usize,
+    /// Its place in the track's running count, which its groove counts.
+    pub running: usize,
     /// The groove it was worked out with, which its velocity and length follow.
     pub groove: Groove,
+    /// How long one of the track's steps is at its speed, in ticks, which its pushes, nudge,
+    /// timing commands and length are shares of.
+    pub ticks: u64,
     /// Which part of the step it is.
     pub part: Part,
-    /// Which step it is, counted as the engine works them out, which never wraps.
+    /// Which step it is: where it falls on the grid, in ticks, which never wraps.
     pub step: u64,
     /// Whether it's the step's first part to land, which rolls its `CHA` and ends the last note's
     /// locks.
@@ -236,7 +310,8 @@ pub struct TrackState {
     pub cued: Option<Option<u32>>,
     /// The chain this track played last.
     pub playing: Option<u32>,
-    /// The running count its chain began at. A cursor partway through a chain can put it below 0.
+    /// The step of its own running count its chain began at. A cursor partway through a chain can
+    /// put it below 0.
     pub started: i64,
     /// Whether the row playing passed its `CHA`, which is rolled once for all its pulses.
     pub row_plays: bool,
@@ -262,8 +337,15 @@ pub struct TrackState {
     /// When the note's gate closes, `Gate` of the way through its last pulse.
     pub gate_at: Option<u64>,
     pub retrigger: Option<Retrigger>,
-    /// Steps, or parts of them, waiting for where their groove and nudge land them.
+    /// Steps, or parts of them, waiting for where their groove and nudge land them, and when the
+    /// soonest lands, so a track with none waiting isn't looked through.
     pub pending: [Option<PendingStep>; PENDING_PARTS],
+    soonest: u64,
+    /// Where its own steps fall.
+    pub clock: Clock,
+    /// The steps it has worked out lately, newest last, going round.
+    worked: [Option<Worked>; WORKED_KEPT],
+    worked_next: usize,
     /// The random timing a groove's humanise adds, apart from `rng` so `CHA` rolls as it did.
     pub groove_rng: Pcg32,
     /// What each setting is set to, by its place in the registry. The fields below it are what's
@@ -386,6 +468,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::GROOVE => track
                 .groove
                 .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
+            SettingId::SPEED => track.speed.index(),
             _ => id.entry().default,
         },
         (Owner::Voice(_), _) => track.setting(id),
@@ -453,6 +536,10 @@ impl TrackState {
             loaded_voice: None,
             loaded_effects: [None; INSERTS],
             pending: [None; PENDING_PARTS],
+            soonest: u64::MAX,
+            clock: Clock::default(),
+            worked: [None; WORKED_KEPT],
+            worked_next: 0,
             vol: f32::from(UNITY_LEVEL),
             send_a: 0.0,
             send_b: 0.0,
@@ -504,6 +591,12 @@ impl TrackState {
             filter_moving: false,
             key: [0.0; 2],
         }
+    }
+
+    /// Start its chain at its next step, which falls here, with its steps counted from here.
+    pub fn restart_at(&mut self, at: u64) {
+        self.clock.line_up(at);
+        self.restart(self.clock.count);
     }
 
     /// Start counting the track's chain from this running count, with its lanes in line again.
@@ -842,10 +935,11 @@ impl TrackState {
         gate_share(base + moved)
     }
 
-    /// The groove a step chooses, on `GRV`'s scale: a lock over the held value, or the held value
-    /// alone once a new note has ended the locks.
-    pub fn held_groove(&self, locks_end: bool) -> u8 {
-        let layers = &self.values[SettingId::GROOVE.index()];
+    /// What a step chooses of a setting read before it plays, as `GRV` and `RATE` are, on its
+    /// scale: a lock over the held value, or the held value alone once a new note has ended the
+    /// locks.
+    pub fn held_choice(&self, id: SettingId, locks_end: bool) -> u8 {
+        let layers = &self.values[id.index()];
         let value = match layers.lock {
             Some(lock) if !locks_end => lock,
             _ => layers.base,
@@ -865,6 +959,9 @@ impl TrackState {
     /// Take the part that lands first, if it lands by this time. Parts that land together play in
     /// the order their steps were worked out, a step's first part before its other.
     pub fn take_due(&mut self, by: u64) -> Option<PendingStep> {
+        if self.soonest > by {
+            return None;
+        }
         let next = self
             .pending
             .iter()
@@ -873,7 +970,23 @@ impl TrackState {
             .filter(|(_, part)| part.at <= by)
             .min_by_key(|(_, part)| (part.at, part.step, !part.leads))?;
         self.pending[next.0] = None;
+        self.find_soonest();
         Some(next.1)
+    }
+
+    /// When the soonest part waiting lands, or `u64::MAX` with none.
+    pub fn soonest(&self) -> u64 {
+        self.soonest
+    }
+
+    fn find_soonest(&mut self) {
+        self.soonest = self
+            .pending
+            .iter()
+            .flatten()
+            .map(|part| part.at)
+            .min()
+            .unwrap_or(u64::MAX);
     }
 
     /// Wait for a part to land. With no room, which only a big change of tempo could bring
@@ -883,8 +996,35 @@ impl TrackState {
         let earliest = if full { self.take_due(u64::MAX) } else { None };
         if let Some(free) = self.pending.iter_mut().find(|part| part.is_none()) {
             *free = Some(part);
+            self.soonest = self.soonest.min(part.at);
         }
         earliest
+    }
+
+    /// Keep a step it has worked out, for where it's heard.
+    pub fn note_worked(&mut self, worked: Worked) {
+        self.worked[self.worked_next] = Some(worked);
+        self.worked_next = (self.worked_next + 1) % WORKED_KEPT;
+    }
+
+    /// The latest step it has worked out that falls by this tick on the grid, the one heard.
+    pub fn heard_at(&self, tick: f64) -> Option<Worked> {
+        self.worked
+            .iter()
+            .flatten()
+            .filter(|worked| worked.grid as f64 <= tick)
+            .max_by_key(|worked| worked.grid)
+            .copied()
+    }
+
+    /// Forget the steps it has worked out from this tick on the grid, as they'll be worked out
+    /// again, or all of them, when playing starts somewhere else.
+    pub fn forget_worked(&mut self, from: u64) {
+        for worked in &mut self.worked {
+            if worked.is_some_and(|worked| worked.grid >= from) {
+                *worked = None;
+            }
+        }
     }
 
     /// The latest any waiting part that plays a row's note lands, as the next row's can't land
@@ -907,13 +1047,16 @@ impl TrackState {
         }
     }
 
-    /// Forget whatever is waiting of one step, as it's to be worked out again.
-    pub fn forget_step(&mut self, step: u64) {
+    /// Forget whatever is waiting of the steps from this tick on the grid, as they're to be worked
+    /// out again.
+    pub fn forget_steps(&mut self, from: u64) {
         for part in &mut self.pending {
-            if part.is_some_and(|part| part.step == step) {
+            if part.is_some_and(|part| part.step >= from) {
                 *part = None;
             }
         }
+        self.find_soonest();
+        self.forget_worked(from);
     }
 
     /// Fade the playing note.
@@ -934,6 +1077,7 @@ impl TrackState {
         self.gate_at = None;
         self.retrigger = None;
         self.pending = [None; PENDING_PARTS];
+        self.soonest = u64::MAX;
         self.tied = false;
         self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }

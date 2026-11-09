@@ -9,7 +9,7 @@ use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 11] = [
+const TRACK_MEANINGS: [&str; 12] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -21,11 +21,12 @@ const TRACK_MEANINGS: [&str; 11] = [
     "Gate: how much of its last pulse a note lasts",
     "Gate length, up or down from the note's own",
     "Groove: how late or early the steps land, from this one",
+    "Speed: how long the steps are, from this one",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch
 /// and gate.
-const TRACK_ORDER: [SettingId; 11] = [
+const TRACK_ORDER: [SettingId; 12] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -37,6 +38,7 @@ const TRACK_ORDER: [SettingId; 11] = [
     SettingId::GATE_LENGTH,
     SettingId::GATE_DELTA,
     SettingId::GROOVE,
+    SettingId::SPEED,
 ];
 
 impl SettingId {
@@ -133,11 +135,11 @@ impl SettingId {
     }
 
     /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
-    /// `Gate`, which modulation already moves up or down from each note's own length, and so is
-    /// `GRV`, as a groove is chosen rather than moved through.
+    /// `Gate`, which modulation already moves up or down from each note's own length, and so are
+    /// `GRV` and `RATE`, as a groove and a speed are chosen rather than moved through.
     fn to_modulate(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
-        settings.retain(|id| *id != Self::GATE_DELTA && *id != Self::GROOVE);
+        settings.retain(|id| ![Self::GATE_DELTA, Self::GROOVE, Self::SPEED].contains(id));
         settings
     }
 }

@@ -21,6 +21,7 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Where};
 use vt_model::song::{FilterMode, FilterType, Machine};
+use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
 
 use crate::audio::AudioChoice;
@@ -61,6 +62,11 @@ pub enum Pick {
     FilterMode {
         track: usize,
         mode: FilterMode,
+    },
+    /// Choose how long a track's steps are.
+    Speed {
+        track: usize,
+        speed: Speed,
     },
     /// Replace one of a track's envelopes.
     Envelope {

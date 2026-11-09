@@ -524,6 +524,12 @@ own: `100%`, which holds a note until the next, or `50%` on `Acid`, as a 303's
 gate closes halfway through each step. `x` goes back to that. See **Note entry**
 for what it does to each gate.
 
+`Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
+triplets between, so one track can play eighths or triplets against the others'
+sixteenths. `=` and `-` move through the list, `K` and `i` choose from it, and
+`x` goes back to `1/16`, which is dimmed. Its rows, pulses, groove and timing
+commands all follow its step. See **Speed** in the FX guide.
+
 ## Returns and the master
 
 Every song ends with three fixed tracks, labelled `A`, `B` and `M`. `W`, `B` and the

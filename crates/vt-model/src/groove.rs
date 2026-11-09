@@ -31,10 +31,10 @@ pub const fn swing_push(tenths: u16) -> i16 {
     ((TICKS_PER_STEP * 2 * tenths + 500) / 1000) as i16 - TICKS_PER_STEP as i16
 }
 
-/// A pattern of pushes, from 1 to 16 steps long, counted on the running count every track shares,
-/// from the song's start or the last reset. Each step has a push in ticks, 240 to a step, and a
-/// velocity in percent, and the whole has a humanise, how far either way each step may land at
-/// random. The first step's push is always 0.
+/// A pattern of pushes, from 1 to 16 steps long, counted on each track's own running count of its
+/// steps, from the song's start or the last reset. Each step has a push in ticks, 240 to a step,
+/// so a share of the track's step at its speed, and a velocity in percent, and the whole has a
+/// humanise, how far either way each step may land at random. The first step's push is always 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "GrooveFile", into = "GrooveFile")]
 pub struct Groove {

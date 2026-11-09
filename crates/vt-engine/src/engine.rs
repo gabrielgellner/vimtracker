@@ -13,6 +13,7 @@ use vt_model::insert::Insert;
 use vt_model::sample::SampleData;
 use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
+use vt_model::speed::Speed;
 use vt_model::step::{
     ACCENT_VELOCITY, FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note,
     Step,
@@ -25,12 +26,24 @@ use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{
-    DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime, TrackState, base_of,
+    Clock, DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime, TrackState,
+    Worked, base_of,
 };
 use crate::voice::NoteOn;
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
+
+/// Where a track is heard, as its own steps count.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct TrackPlace {
+    /// The step of its running count heard.
+    pub count: i64,
+    /// How far through that step the transport is, from 0 to 1.
+    pub progress: f32,
+    /// How long that step is, in ticks.
+    pub ticks: u32,
+}
 
 /// Whether the sequencer is moving.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,6 +244,32 @@ impl Engine {
         progress.clamp(0.0, 1.0) as f32
     }
 
+    /// Where a track is heard: the step of its own running count last on the grid, how far
+    /// through it the transport is, and how long it is, which the playhead and recording follow.
+    /// Before a step has played, it's the next to.
+    pub fn track_heard(&self, index: usize) -> TrackPlace {
+        let Some(state) = self.tracks.get(index) else {
+            return TrackPlace::default();
+        };
+        let ticks = self.speed_ticks(index);
+        let waiting = TrackPlace {
+            count: state.clock.count,
+            progress: 0.0,
+            ticks: ticks as u32,
+        };
+        let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
+        if !moved {
+            return waiting;
+        }
+        let now = self.song_time().tick;
+        state.heard_at(now).map_or(waiting, |worked| TrackPlace {
+            count: worked.count,
+            progress: ((now - worked.grid as f64) / worked.ticks.max(1) as f64).clamp(0.0, 1.0)
+                as f32,
+            ticks: worked.ticks as u32,
+        })
+    }
+
     /// Whether the last step worked out has its place on the grid still to come, or just here
     /// if `or_now`, as a groove that lands steps early has them worked out before their place.
     fn worked_out_early(&self, or_now: bool) -> bool {
@@ -250,29 +289,61 @@ impl Engine {
 
     /// Send every track back to its start from the next step, leaving the beat where it is.
     pub fn realign(&mut self) {
+        self.realign_at(self.next_step * TICKS_PER_STEP);
+    }
+
+    /// Send every track back to its start at this place on the grid, counting its steps again
+    /// from there.
+    fn realign_at(&mut self, at: u64) {
         self.place = 0;
         for track in self.tracks.iter_mut() {
-            track.restart(0);
+            track.clock.count = 0;
+            track.restart_at(at);
         }
     }
 
-    /// Bring a section in: a track given a different chain starts it from its top.
-    fn start_row(&mut self, section: &Section) {
-        let place = self.place as i64;
+    /// Bring a section in at this place on the grid: a track given a different chain starts it
+    /// from its top there, lining its steps up with the section's start.
+    fn start_row(&mut self, section: &Section, at: u64) {
         for (track, chain) in self.tracks.iter_mut().zip(&section.chains) {
             if track.playing != *chain {
                 track.playing = *chain;
-                track.restart(place);
+                track.restart_at(at);
             }
+        }
+    }
+
+    /// How long a track's steps are at its own speed, in ticks.
+    fn speed_ticks(&self, index: usize) -> u64 {
+        self.current
+            .song
+            .tracks
+            .get(index)
+            .map_or(TICKS_PER_STEP, |track| track.speed.ticks())
+    }
+
+    /// Count every track on to the first of its steps at or after this place on the grid, as if
+    /// it had played at its own speed.
+    fn skip_tracks_to(&mut self, at: u64) {
+        for index in 0..MAX_TRACKS {
+            let ticks = self.speed_ticks(index);
+            self.tracks[index].clock.skip_to(at, ticks);
         }
     }
 
     /// Work out the running count and each track's start from the rows before this one, as if the
     /// song had played to this step of it, and give the step within the section.
+    ///
+    /// Each track's steps are walked at its own speed on a grid counted from the walk's start, and
+    /// moved to where playing starts once that's known. A track partway through a longer step
+    /// there comes in on its next.
     fn walk_to(&mut self, section: usize, step: usize) -> u64 {
-        self.realign();
+        self.place = 0;
         for track in self.tracks.iter_mut() {
             track.playing = None;
+            track.clock = Clock::default();
+            track.restart(0);
+            track.forget_worked(0);
         }
         let song = Arc::clone(&self.current.song);
         let Some(rows) = song.sections.get(..=section) else {
@@ -284,12 +355,14 @@ impl Engine {
             .rposition(|row| row.start == SectionStart::Reset)
             .unwrap_or(0);
         let mut within = 0;
+        let mut tick = 0;
         for (at, row) in rows.iter().enumerate().skip(first) {
             let length = song.section_length(row) as u64;
             if length == 0 {
                 continue;
             }
-            self.start_row(row);
+            self.skip_tracks_to(tick);
+            self.start_row(row, tick);
             let plays = song.section_plays(row) as u64;
             let mut steps = if at == section {
                 within = step as u64 % plays;
@@ -303,18 +376,42 @@ impl Engine {
             }
             let (place, reset) = after_steps(self.place, steps, row.reset);
             if reset {
-                self.realign();
+                // The last reset was as many steps back as the count has come since.
+                let reset_at = tick + (steps - place) * TICKS_PER_STEP;
+                self.skip_tracks_to(reset_at);
+                self.realign_at(reset_at);
             }
             self.place = place;
+            tick += steps * TICKS_PER_STEP;
+        }
+        self.skip_tracks_to(tick);
+        let by = (within * TICKS_PER_STEP) as i64 - tick as i64;
+        for track in self.tracks.iter_mut() {
+            track.clock.shift(by);
         }
         within
     }
 
-    /// Put a track's chain at this step, leaving the others where they are.
+    /// Put a track's chain at this step of its own, starting it there at the next step, leaving
+    /// the others where they are.
     pub fn place_track(&mut self, track: usize, step: usize) {
+        let at = self.next_step * TICKS_PER_STEP;
         if let Some(state) = self.tracks.get_mut(track) {
-            state.restart(self.place as i64 - step as i64);
+            state.clock.line_up(at);
+            state.restart(state.clock.count - step as i64);
         }
+    }
+
+    /// Start at a step within a section, or at a step of a track's own with that track's chain
+    /// there: the song starts at the step of its own that the track's falls in.
+    pub fn play_section_at(&mut self, section: usize, step: usize, track: Option<usize>) {
+        let Some(track) = track else {
+            self.play_section(section, step);
+            return;
+        };
+        let song_step = step as u64 * self.speed_ticks(track) / TICKS_PER_STEP;
+        self.play_section(section, song_step as usize);
+        self.place_track(track, step);
     }
 
     /// Play a chain on one track when its launch timing allows, or stop it then.
@@ -369,16 +466,18 @@ impl Engine {
         *section.chains.get(index)?
     }
 
-    /// The chain a track is on, and how far into it a place falls.
-    fn track_place(&self, index: usize, section_step: usize) -> Option<(u32, usize)> {
+    /// The chain a track is on, and how far into it a step of its running count falls.
+    fn track_place(&self, index: usize, count: i64) -> Option<(u32, usize)> {
         let chain = self.track_chain(index)?;
         let length = self.current.song.tracks.get(index)?.chain_steps(chain) as i64;
-        let place = section_step as i64 - self.tracks[index].started;
+        let place = count - self.tracks[index].started;
         Some((chain, place.rem_euclid(length.max(1)) as usize))
     }
 
-    /// Start what a track has cued, if this is a step its launch timing starts one on.
-    fn start_cued(&mut self, index: usize, section_step: usize) {
+    /// Start what a track has cued, if this place on the grid is one its launch timing starts one
+    /// on: one of the song's steps for a launch on the bar's grid, which a track partway through
+    /// a longer step starts on there, or the track's own step at its chain's end.
+    fn start_cued(&mut self, index: usize, at: u64, song_step: bool) {
         if self.tracks[index].cued.is_none() {
             return;
         }
@@ -388,23 +487,28 @@ impl Engine {
                 let length = self
                     .playing_section()
                     .map_or(0, |s| self.current.song.section_length(s));
-                (self.section_place % (length as u64).max(1)).is_multiple_of(u64::from(steps.get()))
+                song_step
+                    && (self.section_place % (length as u64).max(1))
+                        .is_multiple_of(u64::from(steps.get()))
             }
             Launch::ChainEnd => {
-                self.track_place(index, section_step)
-                    .is_none_or(|(current, place)| {
-                        let length = self.current.song.tracks[index].chain_steps(current);
-                        length == 0 || place.is_multiple_of(length)
-                    })
+                let state = &self.tracks[index];
+                state.clock.beat == at
+                    && self
+                        .track_place(index, state.clock.count)
+                        .is_none_or(|(current, place)| {
+                            let length = self.current.song.tracks[index].chain_steps(current);
+                            length == 0 || place.is_multiple_of(length)
+                        })
             }
         };
         if due {
-            self.begin_cued(index, section_step);
+            self.begin_cued(index, at);
         }
     }
 
-    /// Start what a track has cued now, if it has anything cued.
-    fn begin_cued(&mut self, index: usize, section_step: usize) {
+    /// Start what a track has cued now, at this place on the grid, if it has anything cued.
+    fn begin_cued(&mut self, index: usize, at: u64) {
         let Some(chain) = self.tracks[index].cued.take() else {
             return;
         };
@@ -412,7 +516,7 @@ impl Engine {
             self.tracks[index].stop();
         }
         self.tracks[index].launched = Some(chain);
-        self.tracks[index].restart(section_step as i64);
+        self.tracks[index].restart_at(at);
     }
 
     /// Whether any section has a length, so there's a next step to fire. One with a length and no
@@ -444,8 +548,9 @@ impl Engine {
     pub fn rewind(&mut self) {
         if self.worked_out_early(true) {
             self.next_step -= 1;
+            let from = self.next_step * TICKS_PER_STEP;
             for track in self.tracks.iter_mut() {
-                track.forget_step(self.next_step);
+                track.forget_steps(from);
             }
         }
         self.section = 0;
@@ -488,20 +593,20 @@ impl Engine {
         if next != from {
             self.end_launches();
         }
+        let at = self.next_step * TICKS_PER_STEP;
         if section.start == SectionStart::Reset {
             self.realign();
         } else if next != from && wrapped {
-            let place = self.place as i64;
             for track in self.tracks.iter_mut() {
-                track.restart(place);
+                track.restart_at(at);
             }
         } else if next != from {
-            self.start_row(section);
+            self.start_row(section, at);
         }
         // A cue left waiting isn't lost to the song moving on.
         if next != from {
             for index in 0..self.tracks.len() {
-                self.begin_cued(index, self.place as usize);
+                self.begin_cued(index, at);
             }
         }
         true
@@ -534,6 +639,7 @@ impl Engine {
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
         self.keep_fixed_tracks(old.song.sound_tracks());
+        self.line_up_new_tracks(old.song.sound_tracks());
         self.keep_places(&old.song);
         self.follow_base(&old);
         for track in self.tracks.iter_mut().skip(self.current.song.tracks.len()) {
@@ -608,6 +714,18 @@ impl Engine {
         }
     }
 
+    /// A track that's new comes in on the song's next step, counting its steps as if it had played
+    /// at its speed since the last reset.
+    fn line_up_new_tracks(&mut self, was: usize) {
+        let at = self.next_step * TICKS_PER_STEP;
+        for index in was.min(MAX_SOUND_TRACKS)..self.sounds() {
+            let ticks = self.speed_ticks(index);
+            let clock = &mut self.tracks[index].clock;
+            clock.line_up(at);
+            clock.count = (self.place * TICKS_PER_STEP).div_ceil(ticks) as i64;
+        }
+    }
+
     /// Keep each playing track on the row it was going to play next, as its chain's length changes:
     /// the same slot of its chain and row of that phrase's loop, or its chain's first row if those
     /// have gone. Only `started` moves, and a track whose chain didn't change is left alone, so its
@@ -616,7 +734,6 @@ impl Engine {
         if self.transport == Transport::Stopped {
             return;
         }
-        let place = self.place as i64;
         let (now, was) = (self.sounds(), old.sound_tracks());
         for index in 0..self.current.song.tracks.len().min(MAX_TRACKS) {
             // A fixed track is compared with what it was, wherever that was, and a new one is new.
@@ -649,6 +766,7 @@ impl Engine {
                 continue;
             }
             let state = &mut self.tracks[index];
+            let place = state.clock.count;
             let count = place - state.started;
             let next = count.rem_euclid(old_length);
             let Some(was_at) = before.chain_position(chain, next as usize) else {
@@ -880,6 +998,9 @@ impl Engine {
         self.realign();
         self.origin_tick = 0;
         self.frames_since_origin = 0;
+        for track in self.tracks.iter_mut() {
+            track.forget_worked(0);
+        }
         self.reset_tracks();
     }
 
@@ -1099,6 +1220,18 @@ impl Engine {
         let total = out.len() / 2;
         while written < total {
             let playing = self.transport == Transport::Playing;
+            // A track's own step that falls before the song's next is worked out first, so every
+            // step is worked out in the order it falls.
+            let track_step = if playing {
+                self.next_track_step()
+            } else {
+                None
+            };
+            if let Some((index, 0)) = track_step {
+                let at = self.tracks[index].clock.beat;
+                self.track_step(index, at, false);
+                continue;
+            }
             if playing && self.frames_until_next_step() == 0 {
                 self.fire_step();
                 self.next_step += 1;
@@ -1116,6 +1249,7 @@ impl Engine {
             let until_event = if playing {
                 self.frames_until_next_step()
                     .min(self.frames_until_track_event())
+                    .min(track_step.map_or(u64::MAX, |(_, frames)| frames))
             } else {
                 u64::MAX
             };
@@ -1140,22 +1274,52 @@ impl Engine {
         if !self.has_steps() {
             return u64::MAX;
         }
-        let tick = (self.next_step * TICKS_PER_STEP)
+        self.frames_until_worked_out(self.next_step * TICKS_PER_STEP)
+    }
+
+    /// Frames until a step at this place on the grid is worked out.
+    fn frames_until_worked_out(&self, grid: u64) -> u64 {
+        let tick = grid
             .saturating_sub(self.current.lead)
             .saturating_sub(self.origin_tick);
         sample_of_tick(tick, self.rate, self.millibpm).saturating_sub(self.frames_since_origin)
     }
 
-    /// Where on the clock a step lands: its place on the grid, moved by its push in ticks. Each
-    /// part is worked out from the tempo's origin, so a step on the grid lands where it always
-    /// did, and swing's delay is what it always was.
-    fn landing(&self, grid: u64, push: i64) -> u64 {
+    /// The track whose own step falls soonest before the song's next step, and frames until it's
+    /// worked out. One whose next step falls with the song's is worked out with it.
+    fn next_track_step(&self) -> Option<(usize, u64)> {
+        let next = self.next_step * TICKS_PER_STEP;
+        let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
+        let (index, beat) = (0..tracks)
+            .map(|index| (index, self.tracks[index].clock.beat))
+            .filter(|(_, beat)| *beat < next)
+            .min_by_key(|(index, beat)| (*beat, *index))?;
+        if !self.has_steps() {
+            return None;
+        }
+        Some((index, self.frames_until_worked_out(beat)))
+    }
+
+    /// Frames in so many ticks of a sixteenth, taken as shares of a step this many ticks long, so
+    /// a push, a nudge or a `DEL` on a slower track is that much longer. At a sixteenth it's the
+    /// frames in the ticks, exactly.
+    fn frames_of(&self, ticks: u64, step: u64) -> u64 {
+        let numerator = u128::from(ticks) * u128::from(step) * 60 * u128::from(self.rate) * 1000;
+        let denominator =
+            u128::from(TICKS_PER_STEP) * u128::from(TICKS_PER_QUARTER) * u128::from(self.millibpm);
+        (numerator / denominator) as u64
+    }
+
+    /// Where on the clock a step lands: its place on the grid, moved by its push in ticks of a
+    /// step this many ticks long. Each part is worked out from the tempo's origin, so a step on
+    /// the grid lands where it always did, and swing's delay is what it always was.
+    fn landing(&self, grid: u64, push: i64, step: u64) -> u64 {
         let on_grid = sample_of_tick(
             grid.saturating_sub(self.origin_tick),
             self.rate,
             self.millibpm,
         );
-        let moved = sample_of_tick(push.unsigned_abs(), self.rate, self.millibpm);
+        let moved = self.frames_of(push.unsigned_abs(), step);
         let lands = if push >= 0 {
             on_grid + moved
         } else {
@@ -1168,9 +1332,7 @@ impl Engine {
     fn frames_until_track_event(&self) -> u64 {
         let mut soonest = u64::MAX;
         for track in self.tracks.iter() {
-            for part in track.pending.iter().flatten() {
-                soonest = soonest.min(part.at.saturating_sub(self.clock));
-            }
+            soonest = soonest.min(track.soonest().saturating_sub(self.clock));
             let events = [
                 track.delayed.map(|d| d.at),
                 track.kill_at,
@@ -1188,7 +1350,8 @@ impl Engine {
     /// How long a note of so many pulses is held for, from its start, at its row's own length or
     /// else the track's `Gate`, or `None` at 100%, which holds it until something ends it, as
     /// before there was a `Gate`. Its pulses are steps as the groove lands them, so it runs to
-    /// where its last pulse lands, and then its share of how long the groove makes that pulse.
+    /// where its last pulse lands, and then its share of how long the groove makes that pulse,
+    /// each as long as the track's speed makes a step.
     fn gate_frames(
         &self,
         index: usize,
@@ -1200,23 +1363,20 @@ impl Engine {
         if share >= 1.0 {
             return None;
         }
-        let (groove, first) = (&step.groove, step.section_step);
+        let (groove, first) = (&step.groove, step.running);
         let last = first + pulses.saturating_sub(1);
         let ticks = TICKS_PER_STEP as f64;
         let moved = f64::from(groove.push(last)) - f64::from(groove.push(first));
         let length = groove.length(last) as f64 / ticks;
         let pulses = pulses.saturating_sub(1) as f64 + moved / ticks + f64::from(share) * length;
-        let step = TICKS_PER_STEP as f64 * 60.0 * f64::from(self.rate) * 1000.0
+        let step = step.ticks as f64 * 60.0 * f64::from(self.rate) * 1000.0
             / (TICKS_PER_QUARTER as f64 * f64::from(self.millibpm));
         Some((pulses * step).round() as u64)
     }
 
-    fn groove_units(&self, units: u8) -> u64 {
-        sample_of_tick(
-            u64::from(units) * GROOVE_UNIT_TICKS,
-            self.rate,
-            self.millibpm,
-        )
+    /// Frames in so many of `DEL`'s units, sixths of a step this many ticks long.
+    fn groove_units(&self, units: u8, step: u64) -> u64 {
+        self.frames_of(u64::from(units) * GROOVE_UNIT_TICKS, step)
     }
 
     fn audible(&self, index: usize) -> bool {
@@ -1303,8 +1463,9 @@ impl Engine {
         });
     }
 
-    /// Work out every track's next step, and play each now or when its groove lands it. A row with
-    /// a nudge lands its note part that much off where the groove lands its lanes.
+    /// Move the song on a step: into the next section if this one has played out, and back to the
+    /// start at a reset. Then work out the step of every track whose own step falls here, and
+    /// start what's cued on any partway through a longer step, which then comes in here.
     fn fire_step(&mut self) {
         // The step last worked out, which is still the one heard until this one's place comes.
         self.heard_place = self.place.saturating_sub(1);
@@ -1314,73 +1475,109 @@ impl Engine {
         if self.past_reset(self.place) {
             self.realign();
         }
-        let section_step = self.place as usize;
         let grid = self.next_step * TICKS_PER_STEP;
-        let (lead, groove_lead) = (self.current.lead as i64, self.current.groove_lead as i64);
-        let nudges = self.current.nudges;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
-            // A big tempo jump can bring this step before the last one landed. With nudges, a row
-            // nudged late can land after the next step is worked out, so only what's due goes now.
-            let by = if nudges { self.clock } else { u64::MAX };
-            while let Some(part) = self.tracks[index].take_due(by) {
-                self.fire_track(index, part);
-            }
-            self.start_cued(index, section_step);
-            self.tracks[index].playing = self.track_chain(index);
-            // The groove counts the running count every track shares, from the start or the last
-            // reset, not each track's own loop, so an odd length stays on the beat.
-            let groove = self.step_groove(index, section_step);
-            let humanise = self.tracks[index].humanise(groove.humanise());
-            let push = (i64::from(groove.push(section_step)) + humanise)
-                .clamp(-groove_lead, i64::from(MAX_PUSH));
-            let place = self.track_place(index, section_step);
-            let step = PendingStep {
-                at: self.landing(grid, push),
-                section_step,
-                groove,
-                part: Part::Whole,
-                step: self.next_step,
-                leads: true,
-                place,
-                count: section_step as i64 - self.tracks[index].started,
-                plays: None,
-            };
-            // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
-            // never lands before the last row's.
-            let row_at = if nudges {
-                let nudge = self.row_nudge(index, place);
-                let at = self.landing(grid, (push + nudge).max(-lead));
-                self.tracks[index]
-                    .last_row_at()
-                    .map_or(at, |last| at.max(last))
-            } else {
-                step.at
-            };
-            let parts = if row_at == step.at {
-                [Some(step), None]
-            } else {
-                let lanes = PendingStep {
-                    part: Part::Lanes,
-                    leads: step.at < row_at,
-                    ..step
-                };
-                let row = PendingStep {
-                    at: row_at,
-                    part: Part::Row,
-                    leads: row_at < step.at,
-                    ..step
-                };
-                [Some(lanes), Some(row)]
-            };
-            for part in parts.into_iter().flatten() {
-                if let Some(earliest) = self.tracks[index].wait_for(part) {
-                    self.fire_track(index, earliest);
+            if self.tracks[index].clock.beat != grid {
+                self.start_cued(index, grid, true);
+                if self.tracks[index].clock.beat != grid {
+                    continue;
                 }
             }
-            while let Some(part) = self.tracks[index].take_due(self.clock) {
-                self.fire_track(index, part);
+            self.track_step(index, grid, true);
+        }
+    }
+
+    /// Work out a track's next step, which falls here on the grid, after playing what's waiting
+    /// and starting what's cued, as the track's launch timing allows on the song's step or the
+    /// track's own.
+    fn track_step(&mut self, index: usize, at: u64, song_step: bool) {
+        // A big tempo jump can bring this step before the last one landed. With nudges, a row
+        // nudged late can land after the next step is worked out, and with speeds a fast track's
+        // steps can be worked out ahead of a slow one's lead, so only what's due goes now.
+        let by = if self.current.nudges || self.current.speeds {
+            self.clock
+        } else {
+            u64::MAX
+        };
+        while let Some(part) = self.tracks[index].take_due(by) {
+            self.fire_track(index, part);
+        }
+        self.start_cued(index, at, song_step);
+        self.work_out(index);
+    }
+
+    /// Work out a track's next step, and play it now or when its groove lands it. A row with a
+    /// nudge lands its note part that much off where the groove lands its lanes. The step lasts as
+    /// long as its speed says, until the next of that speed's steps.
+    fn work_out(&mut self, index: usize) {
+        let (lead, groove_lead) = (self.current.lead, self.current.groove_lead as i64);
+        let nudges = self.current.nudges;
+        let clock = self.tracks[index].clock;
+        let (grid, running) = (clock.beat, clock.count);
+        self.tracks[index].playing = self.track_chain(index);
+        // The groove counts the track's own steps from the start or the last reset, not its
+        // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
+        let (groove, ticks) = self.step_choices(index, running);
+        let humanise = self.tracks[index].humanise(groove.humanise());
+        let at = running.max(0) as usize;
+        let push = (i64::from(groove.push(at)) + humanise).clamp(-groove_lead, i64::from(MAX_PUSH));
+        let place = self.track_place(index, running);
+        let step = PendingStep {
+            at: self.landing(grid, push, ticks),
+            running: at,
+            groove,
+            ticks,
+            part: Part::Whole,
+            step: grid,
+            leads: true,
+            place,
+            count: running - self.tracks[index].started,
+            plays: None,
+        };
+        // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
+        // never lands before the last row's.
+        let row_at = if nudges {
+            let nudge = self.row_nudge(index, place);
+            let earliest = (lead * TICKS_PER_STEP / ticks) as i64;
+            let at = self.landing(grid, (push + nudge).max(-earliest), ticks);
+            self.tracks[index]
+                .last_row_at()
+                .map_or(at, |last| at.max(last))
+        } else {
+            step.at
+        };
+        let parts = if row_at == step.at {
+            [Some(step), None]
+        } else {
+            let lanes = PendingStep {
+                part: Part::Lanes,
+                leads: step.at < row_at,
+                ..step
+            };
+            let row = PendingStep {
+                at: row_at,
+                part: Part::Row,
+                leads: row_at < step.at,
+                ..step
+            };
+            [Some(lanes), Some(row)]
+        };
+        let state = &mut self.tracks[index];
+        let next = state.clock.after(ticks);
+        state.note_worked(Worked {
+            grid,
+            count: running,
+            ticks: next - grid,
+        });
+        state.clock.advance(ticks);
+        for part in parts.into_iter().flatten() {
+            if let Some(earliest) = self.tracks[index].wait_for(part) {
+                self.fire_track(index, earliest);
             }
+        }
+        while let Some(part) = self.tracks[index].take_due(self.clock) {
+            self.fire_track(index, part);
         }
     }
 
@@ -1398,26 +1595,28 @@ impl Engine {
             .map_or(0, |step| i64::from(step.nudge) * NUDGE_TICKS as i64)
     }
 
-    /// The groove a track's step plays with, worked out before it's played, as it says when the
-    /// step lands: a `GRV` on its row or in a lane at it, or else what the track holds, which a
-    /// note on the row's first pulse ends any lock of, as playing it will. `00` is the project's.
-    fn step_groove(&self, index: usize, section_step: usize) -> Groove {
+    /// The groove a track's step plays with and how long it is, in ticks, worked out before it's
+    /// played, as each says when the step lands: a `GRV` or `RATE` on its row or in a lane at it,
+    /// or else what the track holds, which a note on the row's first pulse ends any lock of, as
+    /// playing it will. A `GRV` of `00` is the project's.
+    fn step_choices(&self, index: usize, running: i64) -> (Groove, u64) {
         let song = &self.current.song;
         let state = &self.tracks[index];
-        // With no `GRV` in the song, there's no row to look on, and the track holds its own.
+        // With no `GRV` or `RATE` in the song, there's no row to look on, and the track holds its
+        // own.
         let row = self
-            .track_place(index, section_step)
-            .filter(|_| self.current.groove_steps)
+            .track_place(index, running)
+            .filter(|_| self.current.groove_steps || self.current.speed_steps)
             .and_then(|(chain, place)| {
                 let owner = song.tracks.get(index)?;
                 let position = owner.chain_position(chain, place)?;
                 let phrase = owner.phrases.get(&position.phrase)?;
                 Some((position, owner.step_at(position)?, phrase))
             });
-        let value = match row {
+        let choose = |id: SettingId| match row {
             Some((position, step, phrase)) => {
                 let first = position.pulse == 0;
-                let count = section_step as i64 - state.started;
+                let count = running - state.started;
                 // The last column's wins, as they run left to right.
                 let chosen = (0..FX_SLOTS)
                     .rev()
@@ -1429,25 +1628,26 @@ impl Engine {
                         None if first => step.fx.get(number),
                         None => None,
                     })
-                    .find(|slot| slot.command == Some(FxCommand::Set(SettingId::GROOVE)))
+                    .find(|slot| slot.command == Some(FxCommand::Set(id)))
                     .map(|slot| slot.coarse());
                 let note =
                     first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
-                chosen.unwrap_or_else(|| state.held_groove(note))
+                chosen.unwrap_or_else(|| state.held_choice(id, note))
             }
-            None => state.held_groove(false),
+            None => state.held_choice(id, false),
         };
-        let id = match usize::from(value).checked_sub(1) {
+        let groove = match usize::from(choose(SettingId::GROOVE)).checked_sub(1) {
             Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
             None => song.groove,
         };
-        song.groove(id)
+        let speed = Speed::from_index(usize::from(choose(SettingId::SPEED)));
+        (song.groove(groove), speed.ticks())
     }
 
     /// Start or stop a track's note for a step, and run its FX left to right: all of it, or the
     /// part a nudge has it land apart, its lanes' values or its row's note part.
     fn fire_track(&mut self, index: usize, pending: PendingStep) {
-        let section_step = pending.section_step;
+        let running = pending.running;
         let row = pending.part.plays_row();
         if row {
             self.tracks[index].retrigger = None;
@@ -1557,7 +1757,7 @@ impl Engine {
                                 .next_value(position.step, number, value)
                                 .map(|(rows, to)| (phrase.time_between(position.step, rows), to)),
                         }
-                        .map(|(steps, to)| (to, steps as f64 * TICKS_PER_STEP as f64))
+                        .map(|(steps, to)| (to, steps as f64 * pending.ticks as f64))
                     });
                     let now = self.song_time();
                     self.tracks[index].start_glide(id, slot.value, to, now);
@@ -1578,7 +1778,7 @@ impl Engine {
         if !self.tracks[index].sounding() {
             self.tracks[index].settle();
         }
-        let start_frames = delay_units.map_or(0, |units| self.groove_units(units));
+        let start_frames = delay_units.map_or(0, |units| self.groove_units(units, pending.ticks));
         let start_at = self.clock + start_frames;
         if first {
             self.tracks[index].tied =
@@ -1599,7 +1799,7 @@ impl Engine {
                     as u8;
                 // The groove's velocity for the step scales the note's own.
                 let own = u32::from(step.velocity.unwrap_or(MAX_VELOCITY));
-                let percent = u32::from(pending.groove.velocity(section_step));
+                let percent = u32::from(pending.groove.velocity(running));
                 let velocity = if percent == u32::from(FULL_VELOCITY) {
                     own
                 } else {
@@ -1644,15 +1844,15 @@ impl Engine {
                 .map(|frames| start_at + frames);
         }
         if let Some(units) = kill_units {
-            self.tracks[index].kill_at = Some(start_at + self.groove_units(units));
+            self.tracks[index].kill_at = Some(start_at + self.groove_units(units, pending.ticks));
         }
         if let Some(units) = off_units {
-            self.tracks[index].off_at = Some(start_at + self.groove_units(units));
+            self.tracks[index].off_at = Some(start_at + self.groove_units(units, pending.ticks));
         }
         if let Some(value) = retrigger {
             let units = value & 0x0F;
             if units > 0 {
-                let interval = self.groove_units(units).max(1);
+                let interval = self.groove_units(units, pending.ticks).max(1);
                 self.tracks[index].retrigger = Some(Retrigger {
                     next_at: start_at + interval,
                     interval,
@@ -1671,9 +1871,16 @@ impl Engine {
 
     /// Hear a row of a given section while not playing.
     pub fn audition_section(&mut self, section: usize, section_step: usize) {
+        self.audition_from(section, section_step, None);
+    }
+
+    /// Hear a row of a given section while not playing: a step of the song's, or one of a
+    /// track's own, and on every other track the row that's playing then at its own speed.
+    pub fn audition_from(&mut self, section: usize, step: usize, track: Option<usize>) {
         if self.transport == Transport::Playing {
             return;
         }
+        let tick = step as u64 * track.map_or(TICKS_PER_STEP, |track| self.speed_ticks(track));
         let current = Arc::clone(&self.current);
         let song = &current.song;
         let Some(section) = song.sections.get(section) else {
@@ -1689,7 +1896,8 @@ impl Engine {
                 continue;
             };
             let owner = &song.tracks[index];
-            let Some(position) = owner.chain_position(*chain, section_step) else {
+            let place = (tick / owner.speed.ticks()) as usize;
+            let Some(position) = owner.chain_position(*chain, place) else {
                 continue;
             };
             let Some(step) = owner.step_at(position) else {

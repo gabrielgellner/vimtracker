@@ -14,7 +14,7 @@ use crate::meter::Meter;
 use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
-use vt_engine::engine::Transport;
+use vt_engine::engine::{TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
@@ -22,7 +22,7 @@ use vt_engine::track_state::LiveValues;
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
-    TRACK_ENVELOPES,
+    TICKS_PER_STEP, TRACK_ENVELOPES,
 };
 use vt_model::groove::GrooveId;
 use vt_model::history::History;
@@ -264,6 +264,9 @@ pub struct App {
     pub playhead: usize,
     /// How far through the playhead's step the engine last said it was, and when that was read.
     pub progress: f32,
+    /// Where each track is heard, as its own steps count, which a track at another speed than the
+    /// song's needs.
+    pub places: [TrackPlace; MAX_TRACKS],
     pub(crate) report_at: Instant,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
@@ -433,6 +436,7 @@ impl App {
             transport: Transport::Stopped,
             playhead: 0,
             progress: 0.0,
+            places: [TrackPlace::default(); MAX_TRACKS],
             report_at: Instant::now(),
             recording: None,
             meter: Meter::default(),
@@ -503,6 +507,7 @@ impl App {
         self.scope = crate::scope::Scope::new(rate);
         self.transport = Transport::Stopped;
         self.playhead = 0;
+        self.places = [TrackPlace::default(); MAX_TRACKS];
         self.live = None;
         self.jam = vec![JamState::default(); MAX_TRACKS];
         // Sent again when the next frame finds it differs.
@@ -572,8 +577,35 @@ impl App {
             return None;
         }
         let length = self.song().tracks.get(track)?.chain_steps(chain) as i64;
-        let place = (self.playhead as i64 - jam.started).rem_euclid(length.max(1));
+        let place = (self.places.get(track)?.count - jam.started).rem_euclid(length.max(1));
         Some(place as usize)
+    }
+
+    /// Put the playhead at a step of the song's, with each track at the step of its own playing
+    /// then, as the engine reports them, for drawing without playing.
+    pub fn set_playhead(&mut self, step: usize) {
+        self.playhead = step;
+        let tracks = self.song().tracks.len().min(MAX_TRACKS);
+        for track in 0..tracks {
+            let ticks = self.song().tracks[track].speed.ticks();
+            self.places[track] = TrackPlace {
+                count: (step as u64 * TICKS_PER_STEP / ticks) as i64,
+                progress: 0.0,
+                ticks: ticks as u32,
+            };
+        }
+    }
+
+    /// The step of its own that one track is at when another is at this one of its own, at their
+    /// own speeds: the step playing then.
+    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
+        let ticks = |index: usize| {
+            self.song()
+                .tracks
+                .get(index)
+                .map_or(TICKS_PER_STEP, |track| track.speed.ticks())
+        };
+        (step as u64 * ticks(from) / ticks(track)) as usize
     }
 
     /// The track under the cursor.
@@ -705,6 +737,7 @@ impl App {
         if let Some(report) = report {
             self.playhead = report.position;
             self.progress = report.progress;
+            self.places = report.places;
             self.report_at = now;
             self.playing_section = report.section;
             self.transport = report.transport;
@@ -1055,7 +1088,7 @@ impl App {
         if self.transport == Transport::Playing {
             self.status = "Audition works while stopped or paused".to_owned();
         } else {
-            self.audition_section(self.cursor.section, section_step);
+            self.audition_track(self.cursor.section, section_step);
         }
     }
 
@@ -1064,6 +1097,18 @@ impl App {
         self.handle.send(Command::Audition {
             section,
             section_step,
+            track: None,
+        });
+        self.started = Some(Momentary::Audition);
+    }
+
+    /// Hear the row the cursor's track is on at a step of its own, with the row each other track
+    /// plays then, for as long as the key is down if it's held.
+    pub(crate) fn audition_track(&mut self, section: usize, step: usize) {
+        self.handle.send(Command::Audition {
+            section,
+            section_step: step,
+            track: Some(self.cursor.track),
         });
         self.started = Some(Momentary::Audition);
     }
@@ -1509,13 +1554,17 @@ impl App {
         let extent = self.extent();
         // A row outside the loop has no place in the section, so it keeps its number instead.
         let outside = (!extent.plays(self.cursor.step)).then(|| extent.row(self.cursor.step));
+        let from = self.cursor.track;
         self.cursor.track = track;
         let song = Arc::clone(self.song());
         let position = song
             .sections
             .get(self.cursor.section)
             .and_then(|s| s.chains.get(track).copied().flatten())
-            .and_then(|chain| song.tracks[track].chain_position(chain, section_step));
+            .and_then(|chain| {
+                let place = self.step_on(track, from, section_step);
+                song.tracks[track].chain_position(chain, place)
+            });
         match position {
             Some(position) => {
                 self.cursor.slot = position.slot;
