@@ -4,8 +4,10 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
+use vt_model::bank::MAX_CENTS;
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
+use vt_model::kit::MAX_TUNE;
 use vt_model::label::is_name;
 use vt_model::order::{ORDER_WORDS, Order};
 use vt_model::song::{LAUNCH_WORDS, Launch};
@@ -24,6 +26,8 @@ pub enum Line {
     New(Option<PathBuf>),
     /// Put a sample on this track, or browse a folder of them, or choose one in the explorer.
     Sample(Option<PathBuf>),
+    /// Change where the sample this track plays starts, ends or loops, or how it plays.
+    SampleChange(SampleChange),
     /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
     /// List the bank, to choose what this track plays.
@@ -83,6 +87,96 @@ pub enum Line {
     Label(Option<String>),
 }
 
+/// A change to the sample the current track plays, its bank entry, from `:sample` and a word.
+/// Times are in microseconds, so a line compares exactly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SampleChange {
+    /// Where it starts.
+    Start(u64),
+    /// Where it ends, or none for the file's end.
+    End(Option<u64>),
+    /// Its loop's start and end and its crossfade, or none.
+    Loop(Option<(u64, u64, u64)>),
+    /// Whether it plays reversed, or the other way to how it is.
+    Reverse(Option<bool>),
+    /// How long it fades in and out.
+    Fade(u64, u64),
+    /// Its gain, in hundredths of a dB.
+    Gain(i32),
+    /// Its tune, in semitones and cents.
+    Tune(i8, i8),
+}
+
+/// The words `:sample` takes to change the track's sample, rather than a file to load.
+pub const SAMPLE_WORDS: [&str; 7] = ["start", "end", "loop", "reverse", "fade", "gain", "tune"];
+
+/// The most an entry's gain can be moved by `:sample gain`, in dB either way.
+pub const MOST_SAMPLE_DB: f32 = 24.0;
+
+/// A time as `:sample` takes it, in microseconds: seconds, as `1.5` or `1.5s`, or milliseconds,
+/// as `250ms`.
+fn time(text: &str) -> Option<u64> {
+    let (number, scale) = match text.strip_suffix("ms") {
+        Some(number) => (number, 1000.0),
+        None => (text.strip_suffix('s').unwrap_or(text), 1_000_000.0),
+    };
+    let value: f64 = number.parse().ok()?;
+    (value.is_finite() && value >= 0.0).then(|| (value * scale).round() as u64)
+}
+
+/// Read `:sample`'s arguments: a word and what it takes, or else a file to load.
+fn sample(argument: &str) -> Result<Line, LineError> {
+    let mut words = argument.split_whitespace();
+    let word = words.next().unwrap_or("");
+    if !SAMPLE_WORDS.contains(&word) {
+        return Ok(Line::Sample(optional_path(argument)));
+    }
+    let rest: Vec<&str> = words.collect();
+    let times = |texts: &[&str]| {
+        texts
+            .iter()
+            .map(|text| time(text))
+            .collect::<Option<Vec<_>>>()
+    };
+    let change = match (word, &rest[..]) {
+        ("start", []) => Some(SampleChange::Start(0)),
+        ("start", [at]) => time(at).map(SampleChange::Start),
+        ("end", []) => Some(SampleChange::End(None)),
+        ("end", [at]) => time(at).map(|at| SampleChange::End(Some(at))),
+        ("loop", ["off"]) => Some(SampleChange::Loop(None)),
+        ("loop", [_, _] | [_, _, _]) => times(&rest).map(|found| {
+            SampleChange::Loop(Some((
+                found[0],
+                found[1],
+                found.get(2).copied().unwrap_or(0),
+            )))
+        }),
+        ("reverse", []) => Some(SampleChange::Reverse(None)),
+        ("reverse", ["on"]) => Some(SampleChange::Reverse(Some(true))),
+        ("reverse", ["off"]) => Some(SampleChange::Reverse(Some(false))),
+        ("fade", [] | ["off"]) => Some(SampleChange::Fade(0, 0)),
+        ("fade", [_, _]) => times(&rest).map(|found| SampleChange::Fade(found[0], found[1])),
+        ("gain", [db]) => db
+            .trim_end_matches("dB")
+            .parse::<f32>()
+            .ok()
+            .filter(|db| db.abs() <= MOST_SAMPLE_DB)
+            .map(|db| SampleChange::Gain((db * 100.0).round() as i32)),
+        ("tune", [semitones] | [semitones, _]) => {
+            let semitones = semitones.parse::<i8>().ok().filter(|s| s.abs() <= MAX_TUNE);
+            let cents = match rest.get(1) {
+                Some(cents) => cents.parse::<i8>().ok().filter(|c| c.abs() <= MAX_CENTS),
+                None => Some(0),
+            };
+            semitones.zip(cents).map(|(s, c)| SampleChange::Tune(s, c))
+        }
+        _ => None,
+    };
+    change
+        .map(Line::SampleChange)
+        .ok_or(LineError::SampleChange)
+}
+
 /// Why a command line was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LineError {
@@ -102,6 +196,10 @@ pub enum LineError {
     Order,
     #[error(":bank takes clean, or nothing to list the bank")]
     Bank,
+    #[error(
+        ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB or tune st [ct], with times as 1.5 or 250ms"
+    )]
+    SampleChange,
     #[error(":track takes add [n] or del")]
     Track,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
@@ -337,9 +435,9 @@ pub const COMMANDS: [Command; 30] = [
     },
     Command {
         name: "sample",
-        meaning: "Load a sample on this track",
+        meaning: "Load a sample on this track, or set where it starts, ends and loops",
         takes: Takes::Sample,
-        parse: |argument| Ok(Line::Sample(optional_path(argument))),
+        parse: sample,
     },
     Command {
         name: "kit",
@@ -766,6 +864,78 @@ mod tests {
         assert_eq!(parse("bank"), Ok(Line::Bank));
         assert_eq!(parse("bank clean"), Ok(Line::BankClean));
         assert_eq!(parse("bank all"), Err(LineError::Bank));
+    }
+
+    #[test]
+    fn sample_takes_words_for_its_points_and_play_settings() {
+        let change = |text: &str| {
+            parse(text).map(|line| match line {
+                Line::SampleChange(change) => Some(change),
+                _ => None,
+            })
+        };
+        assert_eq!(
+            change("sample start 1.5"),
+            Ok(Some(SampleChange::Start(1_500_000)))
+        );
+        assert_eq!(
+            change("sample start 250ms"),
+            Ok(Some(SampleChange::Start(250_000)))
+        );
+        assert_eq!(change("sample start"), Ok(Some(SampleChange::Start(0))));
+        assert_eq!(
+            change("sample end 2s"),
+            Ok(Some(SampleChange::End(Some(2_000_000))))
+        );
+        assert_eq!(change("sample end"), Ok(Some(SampleChange::End(None))));
+        assert_eq!(
+            change("sample loop 0.5 1 20ms"),
+            Ok(Some(SampleChange::Loop(Some((500_000, 1_000_000, 20_000)))))
+        );
+        assert_eq!(
+            change("sample loop 0.5 1"),
+            Ok(Some(SampleChange::Loop(Some((500_000, 1_000_000, 0)))))
+        );
+        assert_eq!(
+            change("sample loop off"),
+            Ok(Some(SampleChange::Loop(None)))
+        );
+        assert_eq!(
+            change("sample reverse"),
+            Ok(Some(SampleChange::Reverse(None)))
+        );
+        assert_eq!(
+            change("sample reverse on"),
+            Ok(Some(SampleChange::Reverse(Some(true))))
+        );
+        assert_eq!(
+            change("sample fade 10ms 0.2"),
+            Ok(Some(SampleChange::Fade(10_000, 200_000)))
+        );
+        assert_eq!(
+            change("sample gain -3.5"),
+            Ok(Some(SampleChange::Gain(-350)))
+        );
+        assert_eq!(
+            change("sample tune -2 30"),
+            Ok(Some(SampleChange::Tune(-2, 30)))
+        );
+        assert_eq!(change("sample tune 7"), Ok(Some(SampleChange::Tune(7, 0))));
+        for bad in [
+            "sample start -1",
+            "sample start soon",
+            "sample loop 1",
+            "sample gain 40",
+            "sample tune 1 100",
+            "sample reverse maybe",
+        ] {
+            assert_eq!(parse(bad), Err(LineError::SampleChange), "{bad}");
+        }
+        assert_eq!(
+            parse("sample starting.wav"),
+            Ok(Line::Sample(Some("starting.wav".into()))),
+            "a file whose name starts with a word"
+        );
     }
 
     #[test]

@@ -22,11 +22,14 @@ use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
+use vt_model::playable::Span;
 use vt_model::sample::SampleData;
 use vt_model::samples::SampleId;
 use vt_model::song::SynthVoice;
 
 use crate::dsp::smoother::fast_coefficient;
+pub use crate::reader::Cut;
+use crate::reader::Reader;
 
 /// How a voice's level is changing.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -177,7 +180,10 @@ impl Synth {
 pub struct Voice {
     stage: Stage,
     sample: SampleId,
-    position: f64,
+    /// The bank entry it plays, if it's a sampler's, which it follows as the entry changes.
+    entry: Option<u8>,
+    /// Where it is in its sample, and how it reads on.
+    reader: Reader,
     increment: f64,
     /// A tie gliding the speed to the next note's, if one is.
     gliding: Option<Gliding>,
@@ -185,7 +191,10 @@ pub struct Voice {
     pitch: f64,
     pitch_target: f64,
     pitch_slew: f64,
+    /// What it multiplies the sound by, the note's gain and its entry's, and where that's heading
+    /// after the entry's gain changes.
     gain: f32,
+    gain_target: f32,
     level: f32,
     shape: Envelope,
     rate: u32,
@@ -205,13 +214,15 @@ impl Default for Voice {
         Self {
             stage: Stage::Idle,
             sample: 0,
-            position: 0.0,
+            entry: None,
+            reader: Reader::default(),
             increment: 1.0,
             gliding: None,
             pitch: 1.0,
             pitch_target: 1.0,
             pitch_slew: 1.0,
             gain: 0.0,
+            gain_target: 0.0,
             level: 0.0,
             shape: Envelope::note_shape(),
             rate: 48_000,
@@ -233,10 +244,13 @@ pub struct NoteOn {
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
-    /// What its bank entry's own gain multiplies it by, apart from the note's, and how much faster
-    /// than its note the entry's tune plays it. A synth's are 1.
-    pub sample_gain: f32,
-    pub speed: f64,
+    /// The bank entry it plays, if it's a sampler's.
+    pub entry: Option<u8>,
+    /// What it plays of its sample, with its own gain and tune, or none for the whole sample as it
+    /// is, as a synth's and a file's are.
+    pub span: Option<Span>,
+    /// What the track's `Start`, `Length` and `Play` make of the span.
+    pub cut: Cut,
     /// Whether its velocity accents it, for a voice with an accent of its own.
     pub accent: bool,
     /// The shape of its level.
@@ -247,7 +261,12 @@ pub struct NoteOn {
 impl NoteOn {
     /// How fast it plays: its note, where `C-4` is as recorded, at its entry's tune.
     fn increment(&self) -> f64 {
-        2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.speed
+        2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.span.map_or(1.0, |span| span.speed)
+    }
+
+    /// What it multiplies the sound by: its own gain and its entry's.
+    fn sample_gain(&self) -> f32 {
+        self.gain * self.span.map_or(1.0, |span| span.gain)
     }
 }
 
@@ -261,13 +280,15 @@ impl Voice {
         Self {
             stage: Stage::Held { from },
             sample: note.sample,
-            position: 0.0,
+            entry: note.entry,
+            reader: Reader::new(note.span, note.cut),
             increment: note.increment(),
             gliding: None,
             pitch,
             pitch_target: pitch,
             pitch_slew: f64::from(fast_coefficient(rate)),
-            gain: note.gain * note.sample_gain,
+            gain: note.sample_gain(),
+            gain_target: note.sample_gain(),
             level: from,
             shape: note.shape,
             rate,
@@ -354,7 +375,8 @@ impl Voice {
     /// jumps. `Acid` always slides, for as long as its own `Slide` says unless it's given a time.
     pub fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
         let to = note.increment();
-        self.gain = note.gain * note.sample_gain;
+        self.gain = note.sample_gain();
+        self.gain_target = self.gain;
         if let Some(Synth::Acid(synth)) = &mut self.synth {
             // It lags its pitch itself, so it's given the note at once.
             self.increment = to;
@@ -387,7 +409,8 @@ impl Voice {
         self.elapsed = 0;
         self.increment = note.increment();
         self.gliding = None;
-        self.gain = note.gain * note.sample_gain;
+        self.gain = note.sample_gain();
+        self.gain_target = self.gain;
         self.shape = note.shape;
         self.release_after = note.release_after;
         if let Some(synth) = &mut self.synth {
@@ -425,6 +448,32 @@ impl Voice {
         self.sample
     }
 
+    /// The bank entry it's playing, if it's a sampler's.
+    pub fn entry(&self) -> Option<u8> {
+        self.entry
+    }
+
+    /// Carry on with its entry's span changed, as moving a point or changing its gain or tune does,
+    /// heard at once and without a click: it reads on from where it is, a new gain fades in, and a
+    /// new tune moves its pitch.
+    pub fn respan(&mut self, span: Span) {
+        let Some(old) = self.reader.span() else {
+            return;
+        };
+        if old == span || !self.active() {
+            return;
+        }
+        let ratio = span.speed / old.speed;
+        self.increment *= ratio;
+        if let Some(gliding) = &mut self.gliding {
+            gliding.to *= ratio;
+        }
+        if span.gain != old.gain && old.gain != 0.0 {
+            self.gain_target = self.gain_target / old.gain * span.gain;
+        }
+        self.reader.respan(span);
+    }
+
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.
     #[inline]
     pub fn next(&mut self, data: Option<&SampleData>) -> [f32; 2] {
@@ -436,21 +485,11 @@ impl Voice {
             let sample = synth.next(frequency as f32, self.settings);
             [sample, sample]
         } else {
-            let Some(data) = data else {
+            let Some(frame) = data.and_then(|data| self.reader.next(data)) else {
                 self.stage = Stage::Idle;
                 return [0.0, 0.0];
             };
-            let index = self.position as usize;
-            let Some(first) = data.frames.get(index) else {
-                self.stage = Stage::Idle;
-                return [0.0, 0.0];
-            };
-            let second = data.frames.get(index + 1).unwrap_or(first);
-            let fraction = (self.position - index as f64) as f32;
-            [
-                first[0] + (second[0] - first[0]) * fraction,
-                first[1] + (second[1] - first[1]) * fraction,
-            ]
+            frame
         };
         self.level = match self.stage {
             Stage::Held { from } => self.shape.held(self.elapsed, from, self.rate),
@@ -459,10 +498,16 @@ impl Voice {
             Stage::Idle => 0.0,
         }
         .max(0.0);
+        if self.gain != self.gain_target {
+            self.gain += (self.gain_target - self.gain) * self.pitch_slew as f32;
+            if (self.gain - self.gain_target).abs() < 1e-6 {
+                self.gain = self.gain_target;
+            }
+        }
         let level = self.level * self.gain;
         let frame = [source[0] * level, source[1] * level];
         self.pitch += (self.pitch_target - self.pitch) * self.pitch_slew;
-        self.position += self.increment * self.pitch;
+        let more = self.synth.is_some() || self.reader.advance(self.increment * self.pitch);
         if let Some(gliding) = self.gliding {
             self.increment *= (gliding.to / self.increment).powf(gliding.share);
             if (self.increment / gliding.to - 1.0).abs() < GLIDE_DONE {
@@ -486,7 +531,7 @@ impl Voice {
             }
             Stage::Fading { .. } => self.level <= 0.0,
             Stage::Idle => false,
-        };
+        } || !more;
         if finished {
             self.stage = Stage::Idle;
         }

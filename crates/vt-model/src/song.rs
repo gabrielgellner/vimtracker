@@ -430,9 +430,13 @@ impl Track {
         self.setting(SettingId::SAMPLE)
     }
 
-    /// One of its machine's settings, by its place among them.
+    /// One of its machine's settings, by its place among them: a synth's, or the sampler's, whose
+    /// first is `Sample`.
     pub fn machine_setting(&self, setting: usize) -> Option<SettingId> {
-        SettingId::voice(self.voice()?, setting)
+        match self.machine {
+            Machine::Sampler if self.is_sound() => SettingId::sampler(setting),
+            _ => SettingId::voice(self.voice()?, setting),
+        }
     }
 
     /// The value of one of its machine's settings, by its place among them, for `HAR`, `TIM`,

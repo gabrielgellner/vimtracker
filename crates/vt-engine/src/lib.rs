@@ -6,6 +6,7 @@ pub mod link;
 pub mod mixer;
 mod preview;
 pub mod published;
+pub mod reader;
 pub mod render;
 pub mod rng;
 pub mod track_state;

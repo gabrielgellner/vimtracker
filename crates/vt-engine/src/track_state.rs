@@ -10,7 +10,8 @@ use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
 use vt_model::settings::{
-    Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_delta, gate_share, glide_ms,
+    Effect, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta,
+    gate_share, glide_ms,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
@@ -22,7 +23,7 @@ use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::mixer::Reading;
 use crate::rng::Pcg32;
-use crate::voice::{NoteOn, Voice};
+use crate::voice::{Cut, NoteOn, Voice};
 
 /// How many envelopes and LFOs a track has, each moving at most one setting.
 const MODULATORS: usize = TRACK_ENVELOPES + LFOS_PER_TRACK;
@@ -598,8 +599,9 @@ pub struct TrackState {
     held_gate_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
     held_glide: f32,
-    /// Held `SMP`, the bank entry a sampler's next note plays, by number.
-    held_sample: f32,
+    /// Held `SMP`, `STA`, `SLEN` and `PLY`, the sampler's settings, which its next note reads as it
+    /// starts, on the `00` to `FF` scale: the bank entry it plays by number, and how it cuts it.
+    held_sampler: [f32; SAMPLER_SETTINGS],
     /// Whether each slot is switched out as it's heard: its own bypass, or a step's lock of it.
     bypassed: [bool; INSERTS],
     /// The loaded voice's held settings, in its order, on `0..=1`.
@@ -787,7 +789,9 @@ impl TrackState {
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
-            held_sample: 0.0,
+            held_sampler: std::array::from_fn(|at| {
+                SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
+            }),
             bypassed: [false; INSERTS],
             filter_moving: false,
             key: [0.0; 2],
@@ -1049,7 +1053,12 @@ impl TrackState {
             resonance: moved(self.resonance.target, SettingId::RES),
             send_a: on_level(self.send_a, SettingId::SEND_A),
             send_b: on_level(self.send_b, SettingId::SEND_B),
-            machine: std::array::from_fn(|place| shown(synth.at(place))),
+            machine: match self.loaded_voice {
+                Some(_) => std::array::from_fn(|place| shown(synth.at(place))),
+                None => std::array::from_fn(|place| {
+                    SettingId::sampler(place).map_or(0, |id| self.sampler_value(id).round() as u8)
+                }),
+            },
             inserts: self.resolved.map(|insert| {
                 let mut values = [0; MAX_PARAMS];
                 for (param, value) in values.iter_mut().enumerate() {
@@ -1186,8 +1195,25 @@ impl TrackState {
     /// The bank entry a sampler's note starting now plays, by number: the held `SMP`, or a lock
     /// over it, moved by what modulation adds, in whole entries.
     pub fn sample_number(&self) -> u8 {
-        let moved = self.held_sample + self.offsets[SettingId::SAMPLE.index()] * 255.0;
-        moved.round().clamp(0.0, 255.0) as u8
+        self.sampler_value(SettingId::SAMPLE).round() as u8
+    }
+
+    /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:
+    /// where in it the note starts and how much of it plays, as shares, and how. Modulation moves
+    /// the start and the length, and the play mode is chosen.
+    pub fn sample_cut(&self) -> Cut {
+        let share = |id| f64::from(self.sampler_value(id)) / 255.0;
+        Cut {
+            start: share(SettingId::SAMPLE_START),
+            length: share(SettingId::SAMPLE_LENGTH),
+            mode: PlayMode::from_index(self.held_sampler[SettingId::PLAY.owner().1].round() as u8),
+        }
+    }
+
+    /// One of the sampler's held settings, with what modulation adds, on the `00` to `FF` scale.
+    fn sampler_value(&self, id: SettingId) -> f32 {
+        let held = self.held_sampler[id.owner().1];
+        (held + self.offsets[id.index()] * 255.0).clamp(0.0, 255.0)
     }
 
     /// How far either way a groove's humanise moves a step, at random, in ticks.
@@ -1456,8 +1482,8 @@ impl TrackState {
                 _ => return,
             },
             // Read as a note starts, which keeps what it chose until it ends.
-            (Owner::Sampler, _) => {
-                self.held_sample = value;
+            (Owner::Sampler, at) => {
+                self.held_sampler[at] = value;
                 return;
             }
             // Heard as the slots are next given their settings, where it fades in or out.

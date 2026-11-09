@@ -104,7 +104,10 @@ impl SettingId {
             (Owner::Lfo(lfo), 0) => format!("How far LFO {} swings", lfo + 1),
             (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
-            (Owner::Sampler, _) => "Which of the bank's samples plays".to_owned(),
+            (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
+            (Owner::Sampler, 1) => "Where in the sample a note starts".to_owned(),
+            (Owner::Sampler, 2) => "How much of the sample a note plays".to_owned(),
+            (Owner::Sampler, _) => "Once through, round its loop, or ping-pong".to_owned(),
         }
     }
 
@@ -133,7 +136,7 @@ impl SettingId {
                 .extend((0..voice_entries(voice).len()).filter_map(|at| Self::voice(voice, at)));
         }
         if Self::SAMPLE.exists_on(track) {
-            settings.push(Self::SAMPLE);
+            settings.extend((0..).map_while(Self::sampler));
         }
         for slot in 0..INSERTS {
             if let Some(effect) = Effect::of(track.inserts[slot]) {
@@ -166,12 +169,20 @@ impl SettingId {
 
     /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
     /// `Gate`, which modulation already moves up or down from each note's own length, and so are
-    /// `GRV`, `RATE` and a slot's bypass, as a groove, a speed and whether a slot's in are chosen
-    /// rather than moved through, and `GLD`, which is read only as a tie comes.
+    /// `GRV`, `RATE`, `PLY` and a slot's bypass, as a groove, a speed, a way of playing and whether
+    /// a slot's in are chosen rather than moved through, and `GLD`, which is read only as a tie
+    /// comes.
     fn to_modulate(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
         settings.retain(|id| {
-            ![Self::GATE_DELTA, Self::GROOVE, Self::SPEED, Self::GLIDE].contains(id)
+            ![
+                Self::GATE_DELTA,
+                Self::GROOVE,
+                Self::SPEED,
+                Self::GLIDE,
+                Self::PLAY,
+            ]
+            .contains(id)
                 && !matches!(id.owner().0, Owner::Bypass(_))
         });
         settings

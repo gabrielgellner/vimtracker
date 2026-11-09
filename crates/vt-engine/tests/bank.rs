@@ -195,6 +195,7 @@ fn an_entrys_gain_and_tune_are_its_own_on_any_track() {
             play: PlayParams {
                 gain_db: -6.0,
                 tune: 12,
+                ..PlayParams::default()
             },
             ..tuned.bank.get(4).unwrap().edit.clone()
         },

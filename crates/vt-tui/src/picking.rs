@@ -40,6 +40,7 @@ fn kit_item(entry: &KitEntry) -> Item {
             play: PlayParams {
                 gain_db: entry.gain,
                 tune: entry.tune,
+                ..PlayParams::default()
             },
             choke: entry.choke,
         },

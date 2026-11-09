@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use vt_model::bank::{BankEntry, ContentHash, PlayParams};
+use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points};
 use vt_model::constants::FORMAT_VERSION;
 use vt_model::project::{
     ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
@@ -81,6 +81,19 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
     kick.edit.play = PlayParams {
         gain_db: -3.5,
         tune: -2,
+        cents: 30,
+        reverse: true,
+        fade_in: 480,
+        fade_out: 4800,
+    };
+    kick.edit.points = Points {
+        start: 100,
+        end: Some(40_000),
+        loop_: Some(Loop {
+            start: 2000,
+            end: 30_000,
+            crossfade: 960,
+        }),
     };
     song.bank.set(0x01, Some(kick));
     song.bank.set(
@@ -92,11 +105,15 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
     );
     song.tracks[0].set_setting(SettingId::SAMPLE, 0x01);
     song.tracks[1].set_setting(SettingId::SAMPLE, 0xFF);
+    song.tracks[1].set_setting(SettingId::SAMPLE_START, 0x40);
+    song.tracks[1].set_setting(SettingId::PLAY, 2);
     let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
     *phrase.step_mut(1).unwrap() = "C-4 -- sampler.sample:FF --- ---".parse().unwrap();
     save_song(&dir, &song).unwrap();
     let text = fs::read_to_string(dir.join("song.ron")).unwrap();
     assert!(text.contains("sampler.sample"), "the setting by its key");
+    assert!(text.contains("sampler.start") && text.contains("sampler.play"));
+    assert!(text.contains("loop: Some("), "the loop under its own name");
     assert!(
         text.contains(&ContentHash::of(b"kick").to_string()),
         "the hash in hex"
@@ -108,6 +125,22 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
         loaded.samples_in_use().into_iter().collect::<Vec<_>>(),
         [0x01, 0xFF]
     );
+}
+
+#[test]
+fn points_in_a_44k_files_frames_land_on_the_same_sound_at_48k() {
+    use vt_model::playable::Playable;
+    let dir = folder();
+    let path = dir.join("loop.wav");
+    wav(&path, 1, 16, 44_100, 44_100);
+    let mut pool = SamplePool::default();
+    pool.load("loop.wav", &path, 48_000).unwrap();
+    let mut entry = BankEntry::of_file("loop.wav", ContentHash::UNKNOWN);
+    entry.edit.points.start = 4410;
+    entry.edit.points.end = Some(22_050);
+    let span = Playable::of(&entry, &pool).unwrap().span();
+    assert_eq!((span.start, span.end), (4800, 24_000));
+    assert!(span.frames.abs_diff(48_000) <= 2, "{}", span.frames);
 }
 
 #[test]
