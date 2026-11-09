@@ -1,16 +1,19 @@
 //! Opening the file explorer, what it previews, the file it plays as its cursor moves, and the
 //! name line that saving and rendering go on to.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use vt_engine::link::Command;
+use vt_model::names::numbered;
 use vt_model::project;
 
 use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::{Purpose, place_name};
+use crate::input::command;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker, Preview, Root, Shown};
 use crate::loading::Read;
@@ -24,8 +27,6 @@ pub struct Naming {
     pub command: &'static str,
     /// What follows the name, such as `:render`'s flags.
     pub after: String,
-    /// The name to start from, which can be typed over.
-    pub name: String,
 }
 
 /// How long ago something was, roughly, as a file browser says it.
@@ -70,6 +71,66 @@ fn name_of(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string())
+}
+
+/// The names in a folder, without their extensions and in lower case, which a new name mustn't
+/// be. A folder that can't be read has none.
+pub fn taken_in(folder: &Path) -> HashSet<String> {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| {
+            let path = entry.path();
+            let stem = path
+                .file_stem()
+                .unwrap_or(entry.file_name().as_os_str())
+                .to_owned();
+            stem.to_string_lossy().to_lowercase()
+        })
+        .collect()
+}
+
+/// The commands whose line ends in a name, which `C-r` can roll.
+const NAMED_BY: [&str; 3] = ["w", "new", "render"];
+
+/// A name line with a new name from `name_in`, given the folder as typed, in place of the last
+/// part of its path. The folder, an extension and `:render`'s flags are kept, and a render with no
+/// name yet gets `.wav`, or nothing for `--stems`. Any other line gives nothing.
+pub fn rolled_line(line: &str, name_in: impl FnOnce(&str) -> String) -> Option<String> {
+    let (command, argument) = command::split(line);
+    if !NAMED_BY.contains(&command) {
+        return None;
+    }
+    // `:render`'s flags come after its path.
+    let flags_at = if command == "render" {
+        argument
+            .match_indices("--")
+            .map(|(at, _)| at)
+            .find(|at| *at == 0 || argument[..*at].ends_with(char::is_whitespace))
+            .unwrap_or(argument.len())
+    } else {
+        argument.len()
+    };
+    let (path, flags) = argument.split_at(flags_at);
+    let (path, flags) = (path.trim(), flags.trim());
+    let (folder, last) = match path.rfind('/') {
+        Some(at) => path.split_at(at + 1),
+        None => ("", path),
+    };
+    let extension = match last.rfind('.') {
+        Some(at) if at > 0 => &last[at..],
+        _ if last.is_empty() && command == "render" && !flags.contains("--stems") => ".wav",
+        _ => "",
+    };
+    let name = name_in(folder);
+    let mut rolled = format!("{command} {folder}{name}{extension}");
+    if !flags.is_empty() {
+        rolled.push(' ');
+        rolled.push_str(flags);
+    }
+    Some(rolled)
 }
 
 /// What a sample's preview shows: its name, then its length, rate and channels and its waveform
@@ -203,25 +264,10 @@ impl App {
         command: &'static str,
         after: String,
     ) {
-        let name = match purpose {
-            Purpose::Render => {
-                let stem = self
-                    .folder
-                    .as_deref()
-                    .map_or_else(|| "loop".to_owned(), name_of);
-                if after.contains("--stems") {
-                    stem
-                } else {
-                    format!("{stem}.wav")
-                }
-            }
-            _ => self.suggested_name(),
-        };
         self.naming = Some(Naming {
             purpose,
             command,
             after,
-            name,
         });
         let roots = self.places(purpose);
         // A project is saved beside this one, and a render goes in it.
@@ -233,10 +279,54 @@ impl App {
         self.open_explorer(purpose, roots, on.as_deref());
     }
 
-    /// The name a new project starts with on its name line. The random names of #224 go here;
-    /// until then it's empty, to be typed.
-    pub(crate) fn suggested_name(&self) -> String {
-        String::new()
+    /// The name a name line starts with in a folder. Saving a project with no folder yet starts
+    /// with the name it was given when it was made, and `:new` with a new one, either rolled again
+    /// if it's taken there. A render starts with the project's name, with a number after it if
+    /// that's taken, so an earlier render isn't written over.
+    pub(crate) fn suggested_name(&mut self, naming: &Naming, folder: &Path) -> String {
+        let taken = taken_in(folder);
+        let is_taken = |name: &str| taken.contains(name);
+        match naming.purpose {
+            Purpose::Render => {
+                let stem = numbered(&self.project_name(), is_taken);
+                if naming.after.contains("--stems") {
+                    stem
+                } else {
+                    format!("{stem}.wav")
+                }
+            }
+            _ if naming.command == "w" && !is_taken(&self.unsaved_name) => {
+                self.unsaved_name.clone()
+            }
+            _ => self.names.fresh(is_taken),
+        }
+    }
+
+    /// The project's name: its folder's, or before it has one, the random name it was given.
+    pub fn project_name(&self) -> String {
+        self.folder
+            .as_deref()
+            .map_or_else(|| self.unsaved_name.clone(), name_of)
+    }
+
+    /// `C-r` on a name line: put a new random name in place of the one there, keeping the folder,
+    /// the extension and any flags, and not one already in that folder.
+    pub(crate) fn roll_name(&mut self) {
+        let names = &mut self.names;
+        let rolled = rolled_line(&self.command_line, |folder| {
+            let folder = if folder.is_empty() {
+                PathBuf::from(".")
+            } else {
+                crate::config::expand_home(folder)
+            };
+            let taken = taken_in(&folder);
+            names.fresh(|name| taken.contains(name))
+        });
+        if let Some(line) = rolled {
+            self.command_line = line;
+            self.command_menu = None;
+            self.command_history.stop();
+        }
     }
 
     /// Choose a kit, from the kit folders, on the kit in use.
@@ -252,16 +342,14 @@ impl App {
             return;
         };
         self.note_place(naming.purpose, folder);
+        let name = self.suggested_name(&naming, folder);
         let home = home_folder();
         let folder = place_name(folder, home.as_deref());
         let folder = folder.trim_end_matches('/');
-        self.command_line = format!(
-            "{} {folder}/{}{}",
-            naming.command, naming.name, naming.after
-        );
+        self.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
         self.command_menu = None;
         self.mode = Mode::Command;
-        self.status = "Type the name, then Enter".to_owned();
+        self.status = "Type a name, or C-r for another, then Enter".to_owned();
     }
 
     /// Remember a folder something was chosen in, for the top of the explorer next time.
@@ -435,6 +523,60 @@ impl App {
 mod tests {
     use super::*;
     use vt_model::sample::SampleInfo;
+
+    #[test]
+    fn rolling_a_name_keeps_the_folder_extension_and_flags() {
+        let roll = |line: &str| {
+            let mut folder_seen = String::new();
+            let rolled = rolled_line(line, |folder| {
+                folder_seen = folder.to_owned();
+                "dusty-breakdown".to_owned()
+            });
+            rolled.map(|rolled| (rolled, folder_seen))
+        };
+        let rolled = |line: &str, folder: &str| Some((line.to_owned(), folder.to_owned()));
+        assert_eq!(
+            roll("w ~/songs/typed"),
+            rolled("w ~/songs/dusty-breakdown", "~/songs/")
+        );
+        assert_eq!(
+            roll("w ~/songs/"),
+            rolled("w ~/songs/dusty-breakdown", "~/songs/")
+        );
+        assert_eq!(roll("w"), rolled("w dusty-breakdown", ""));
+        assert_eq!(roll("new a/b"), rolled("new a/dusty-breakdown", "a/"));
+        assert_eq!(
+            roll("render ~/one/one.wav --rows 16 --tail"),
+            rolled(
+                "render ~/one/dusty-breakdown.wav --rows 16 --tail",
+                "~/one/"
+            )
+        );
+        assert_eq!(
+            roll("render --tail"),
+            rolled("render dusty-breakdown.wav --tail", "")
+        );
+        assert_eq!(
+            roll("render out/ --stems"),
+            rolled("render out/dusty-breakdown --stems", "out/")
+        );
+        assert_eq!(roll("bpm 120"), None, "only a name line has a name");
+        assert_eq!(roll("e ~/songs/one"), None, "opening names nothing new");
+    }
+
+    #[test]
+    fn a_folders_names_are_taken_without_their_extensions() {
+        let folder = std::env::temp_dir().join(format!("vt-taken-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(folder.join("Quiet-Harbor")).unwrap();
+        std::fs::write(folder.join("dusty-breakdown.wav"), "").unwrap();
+        let taken = taken_in(&folder);
+        assert!(taken.contains("quiet-harbor"), "{taken:?}");
+        assert!(taken.contains("dusty-breakdown"), "{taken:?}");
+        assert_eq!(taken.len(), 2);
+        assert!(taken_in(&folder.join("missing")).is_empty());
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
 
     #[test]
     fn times_are_rough() {

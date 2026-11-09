@@ -27,6 +27,7 @@ use vt_model::constants::{
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::lfo::LFOS_PER_TRACK;
+use vt_model::names::Names;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
@@ -333,6 +334,10 @@ pub struct App {
     pub recent_places: RecentPlaces,
     /// The command line a folder chosen in the explorer goes on to.
     pub naming: Option<Naming>,
+    /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
+    pub(crate) names: Names,
+    /// The name the project was given when it was made, which saving it starts with.
+    pub(crate) unsaved_name: String,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -358,6 +363,8 @@ impl App {
         let levels = live_from(&song);
         let scale = song.scale;
         let auto_jump = song.auto_jump;
+        let mut names = Names::from_clock();
+        let unsaved_name = names.name();
         let mut app = Self {
             history: History::new(Arc::new(song)),
             folder,
@@ -462,6 +469,8 @@ impl App {
             file_playing: None,
             recent_places: RecentPlaces::default(),
             naming: None,
+            names,
+            unsaved_name,
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,

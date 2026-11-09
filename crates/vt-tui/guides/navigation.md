@@ -118,6 +118,7 @@ folder.
 | `Enter` | Take the match from the list, or run the line |
 | `Esc` | Close the list and keep what's typed, or leave the line |
 | `Up` `Down` | Earlier commands, those starting with what is typed |
+| `C-r` | A new random name, on a `:w`, `:new` or `:render` line |
 
 The commands you run are kept for next time in `history.ron`, beside `settings.ron`,
 the last 100, with one run again moved to the end.
