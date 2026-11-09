@@ -25,3 +25,5 @@ nucleo-matcher.workspace = true
 hound.workspace = true
 serde.workspace = true
 ron.workspace = true
+flate2.workspace = true
+roxmltree.workspace = true

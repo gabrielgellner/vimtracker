@@ -2229,6 +2229,35 @@ fn only_ron_files_count_as_kits() {
 }
 
 #[test]
+fn kits_in_folders_are_listed_and_named_by_their_path() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let root = kit.parent().unwrap();
+    let deeper = root.join("Ableton/Drum Machines");
+    std::fs::create_dir_all(&deeper).unwrap();
+    let text = std::fs::read_to_string(&kit)
+        .unwrap()
+        .replace("drums/", "../../drums/");
+    std::fs::write(deeper.join("808 Core Kit.ron"), text).unwrap();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    command(&mut app, "kit");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .shown()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["909", "Ableton/Drum Machines/808 Core Kit"]);
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "kit Ableton/Drum Machines/808 Core Kit all");
+    assert_eq!(app.status, "Kit 808 Core Kit: 3 tracks");
+}
+
+#[test]
 fn a_sample_is_referred_to_rather_than_copied() {
     let project = folder();
     let (mut app, _realtime) = app();
