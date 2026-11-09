@@ -1291,7 +1291,7 @@ impl App {
     fn fx_column(&self) -> Option<usize> {
         match self.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => Some(slot),
-            Field::Note | Field::Velocity | Field::Gate => None,
+            Field::Note | Field::Velocity | Field::Gate | Field::GateLength => None,
         }
     }
 
@@ -1616,6 +1616,7 @@ impl App {
                 Field::Note => self.insert_note(key),
                 Field::Velocity | Field::FxValue(_) => self.insert_value(key),
                 Field::Gate => self.insert_gate(key),
+                Field::GateLength => self.insert_length(key),
                 Field::FxCommand(slot) => self.insert_command(key, slot),
                 Field::FxFine(slot) => self.insert_fine(key, slot),
             },
@@ -1676,6 +1677,7 @@ impl App {
             Field::Note => self.insert_note(key),
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
             Field::Gate => self.insert_gate(key),
+            Field::GateLength => self.insert_length(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
             Field::FxFine(slot) => self.insert_fine(key, slot),
         }
@@ -2027,7 +2029,8 @@ impl App {
     }
 
     /// A gate's three letters then its pulses, like `HLD3`. A digit on its own keeps the gate type
-    /// that's there, or `SGL` in an empty cell, and changes only the length.
+    /// that's there, or `SGL` in an empty cell, and changes only the pulses. The note's length
+    /// stays.
     fn insert_gate(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
@@ -2057,7 +2060,12 @@ impl App {
                         }
                     },
                 };
-                self.set_field(FieldValue::Gate(Some(Gate { kind, pulses })));
+                let length = self.current_gate().and_then(|gate| gate.length);
+                self.set_field(FieldValue::Gate(Some(Gate {
+                    kind,
+                    pulses,
+                    length,
+                })));
                 self.advance();
             }
             KeyCode::Char(c)
@@ -2071,6 +2079,46 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Two hex digits set how much of its last pulse the row's note lasts, and auto-jump moves on
+    /// by the grid.
+    fn insert_length(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
+                    self.set_length(None);
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
+                self.entry.text.push(c.to_ascii_uppercase());
+                if self.entry.text.len() == 2 {
+                    let text = std::mem::take(&mut self.entry.text);
+                    if let Ok(length) = u8::from_str_radix(&text, 16) {
+                        self.set_length(Some(length));
+                    }
+                    self.advance();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Give the gate cell under the cursor a length of its own, keeping its gate and pulses, or
+    /// take it away so the note plays at the track's `Gate`. An empty cell gets one pulse of `SGL`
+    /// to hold a length, which is how it played.
+    pub(crate) fn set_length(&mut self, length: Option<u8>) {
+        let gate = match self.current_gate() {
+            Some(gate) => Some(Gate { length, ..gate }),
+            None if length.is_some() => Some(Gate {
+                length,
+                ..Gate::default()
+            }),
+            None => None,
+        };
+        self.set_field(FieldValue::Gate(gate));
     }
 
     /// The gate cell under the cursor.

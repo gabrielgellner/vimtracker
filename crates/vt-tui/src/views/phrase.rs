@@ -36,18 +36,24 @@ const FINE_WIDTH: usize = 2;
 const MARK_WIDTH: usize = 2;
 /// How an empty gate cell shows, which plays as one pulse of `SGL`.
 const GATE_EMPTY: &str = "----";
-/// Where the first FX slot starts: after the note, velocity and gate cell.
-const FX_START: usize = 12;
+/// How a gate cell shows with no length of its own, which plays at the track's `Gate`.
+const LENGTH_EMPTY: &str = "--";
+/// Where the first FX slot starts: after the note, velocity and gate cell with its length.
+const FX_START: usize = 15;
 
 /// A step's text on screen, naming a slot's settings from what's on this track.
 fn step_text(step: &Step, track: Option<&Track>) -> String {
     let velocity = step
         .velocity
         .map_or("--".to_owned(), |v| format!("{v:02X}"));
-    let gate = step
-        .gate
-        .map_or_else(|| GATE_EMPTY.to_owned(), |gate| gate.to_string());
-    let mut text = format!("{} {velocity} {gate}", step.note);
+    let gate = step.gate.map_or_else(
+        || GATE_EMPTY.to_owned(),
+        |gate| format!("{}{}", gate.kind.name(), gate.pulses),
+    );
+    let length = step
+        .length()
+        .map_or_else(|| LENGTH_EMPTY.to_owned(), |length| format!("{length:02X}"));
+    let mut text = format!("{} {velocity} {gate} {length}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
             (Some(command), Some(_)) => command.name(),
@@ -109,6 +115,7 @@ fn field_range(field: Field) -> (usize, usize) {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
         Field::Gate => (7, 11),
+        Field::GateLength => (12, 14),
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + COMMAND_WIDTH),
         Field::FxValue(slot) => (
             fx_start(slot) + COMMAND_WIDTH,
@@ -131,6 +138,7 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
     let (start, _) = field_range(Field::of_group(scope.first.min(last)));
     let end = match Field::of_group(last) {
         Field::FxCommand(slot) => field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH,
+        Field::Gate => field_range(Field::GateLength).1,
         field => field_range(field).1,
     };
     (start.min(length), end.min(length))
@@ -440,7 +448,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         if typing
             && matches!(
                 app.cursor.field,
-                Field::FxValue(_) | Field::FxFine(_) | Field::Velocity
+                Field::FxValue(_) | Field::FxFine(_) | Field::Velocity | Field::GateLength
             )
             && app.entry.text.len() == 1
         {
@@ -493,6 +501,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         if step.gate.is_none() {
             empty.push(field_range(Field::Gate));
         }
+        if step.length().is_none() {
+            empty.push(field_range(Field::GateLength));
+        }
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.command.is_none() {
                 empty.push(slot_columns(slot));
@@ -502,6 +513,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             for style in &mut styles[start..end.min(text.len())] {
                 if style.fg.is_none() {
                     *style = style.patch(theme::faint());
+                }
+            }
+        }
+        // A row's own length is dim, so its gate and pulses, which are the row's time, stand out.
+        if step.length().is_some() {
+            let (start, end) = field_range(Field::GateLength);
+            for style in &mut styles[start..end] {
+                if style.fg.is_none() {
+                    *style = style.patch(theme::dim());
                 }
             }
         }

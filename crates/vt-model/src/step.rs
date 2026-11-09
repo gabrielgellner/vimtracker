@@ -249,12 +249,16 @@ impl GateKind {
     }
 }
 
-/// A row's gate cell: what its note does, and how many pulses, or steps, the row lasts. Every
-/// gate command's argument is its length, and `0` skips the row.
+/// A row's gate cell: what its note does, how many pulses, or steps, the row lasts, and how much
+/// of its last pulse the note lasts. Every gate command's argument is its length, and `0` skips
+/// the row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Gate {
     pub kind: GateKind,
     pub pulses: u8,
+    /// How much of its last pulse the row's note lasts, on the `00` to `FF` scale, or `None` for
+    /// the track's `Gate`. What moves `Gate` moves this up or down from where it is.
+    pub length: Option<u8>,
 }
 
 /// The most pulses a row can last.
@@ -265,6 +269,7 @@ impl Default for Gate {
         Self {
             kind: GateKind::Single,
             pulses: 1,
+            length: None,
         }
     }
 }
@@ -289,6 +294,11 @@ impl Step {
     /// What its note does over its pulses.
     pub fn gate_kind(&self) -> GateKind {
         self.gate.map_or(GateKind::Single, |gate| gate.kind)
+    }
+
+    /// How much of its last pulse its note lasts, if the row says, rather than the track's `Gate`.
+    pub fn length(&self) -> Option<u8> {
+        self.gate.and_then(|gate| gate.length)
     }
 }
 

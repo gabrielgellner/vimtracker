@@ -9,7 +9,7 @@ use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 9] = [
+const TRACK_MEANINGS: [&str; 10] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -19,11 +19,12 @@ const TRACK_MEANINGS: [&str; 9] = [
     "Pitch, with depth in semitones",
     "Filter mode: its slope or response",
     "Gate: how much of its last pulse a note lasts",
+    "Gate length, up or down from the note's own",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch
 /// and gate.
-const TRACK_ORDER: [SettingId; 9] = [
+const TRACK_ORDER: [SettingId; 10] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -33,6 +34,7 @@ const TRACK_ORDER: [SettingId; 9] = [
     SettingId::SEND_B,
     SettingId::PITCH,
     SettingId::GATE_LENGTH,
+    SettingId::GATE_DELTA,
 ];
 
 impl SettingId {
@@ -115,7 +117,7 @@ impl SettingId {
     /// What an envelope can move: what's on the track, and either LFO's settings, as envelopes run
     /// first.
     pub fn for_envelope(track: &Track) -> Vec<Self> {
-        let mut settings = Self::on_track(track);
+        let mut settings = Self::to_modulate(track);
         settings.extend(lfo_settings());
         settings
     }
@@ -123,8 +125,16 @@ impl SettingId {
     /// What an LFO can move: what's on the track, and the settings of the LFOs after it, as each
     /// runs in order, so there's never a way back round.
     pub fn for_lfo(track: &Track, lfo: usize) -> Vec<Self> {
-        let mut settings = Self::on_track(track);
+        let mut settings = Self::to_modulate(track);
         settings.extend(lfo_settings().skip((lfo + 1) * 2));
+        settings
+    }
+
+    /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
+    /// `Gate`, which modulation already moves up or down from each note's own length.
+    fn to_modulate(track: &Track) -> Vec<Self> {
+        let mut settings = Self::on_track(track);
+        settings.retain(|id| *id != Self::GATE_DELTA);
         settings
     }
 }
@@ -202,6 +212,21 @@ mod tests {
             offered[own + 4],
             SettingId::slot(1, Effect::Delay, 0).unwrap()
         );
+    }
+
+    #[test]
+    fn a_step_can_move_a_notes_length_but_modulation_moves_gate_itself() {
+        let track = Track::default();
+        let delta = FxCommand::Set(SettingId::GATE_DELTA);
+        assert!(FxCommand::on_track(&track).contains(&delta));
+        assert_eq!(delta.name(), "LDLT");
+        for offered in [
+            SettingId::for_lfo(&track, 0),
+            SettingId::for_envelope(&track),
+        ] {
+            assert!(offered.contains(&SettingId::GATE_LENGTH));
+            assert!(!offered.contains(&SettingId::GATE_DELTA));
+        }
     }
 
     #[test]

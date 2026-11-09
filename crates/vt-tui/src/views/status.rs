@@ -69,6 +69,10 @@ pub fn column_name(app: &App) -> String {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
             Field::Gate => "Gate".to_owned(),
+            Field::GateLength if app.current_gate().and_then(|gate| gate.length).is_some() => {
+                "Gate length".to_owned()
+            }
+            Field::GateLength => "Gate length, the track's".to_owned(),
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 fx_name(app, slot)
             }
@@ -115,6 +119,12 @@ pub fn value_shown(app: &App) -> Option<String> {
                 let cell = app.current_slot(slot)?;
                 let id = cell.command?.setting()?;
                 (id, cell.value)
+            }
+            // With none of its own, the length is the track's `Gate`.
+            Field::GateLength => {
+                let length = app.current_gate().and_then(|gate| gate.length);
+                let length = length.unwrap_or_else(|| track.gate_length());
+                (SettingId::GATE_LENGTH, u16::from(length) << 8)
             }
             _ => return None,
         },

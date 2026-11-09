@@ -90,6 +90,9 @@ pub enum Units {
     AcidDrive,
     /// How much of its last pulse a note lasts, as [`gate_share`] gives it.
     GateLength,
+    /// How far a note's length is moved up or down, as a share of its last pulse, as
+    /// [`gate_delta`] gives it.
+    GateDelta,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, as Open303 measured a TB-303's.
@@ -135,6 +138,12 @@ pub fn gate_percent(value: u8) -> u8 {
 /// The `Gate` value nearest a percentage, which is kept from 1 to 100.
 pub fn gate_value(percent: u8) -> u8 {
     (f32::from(percent.clamp(1, 100)) * 2.55).round() as u8
+}
+
+/// How far an `LDLT` value moves a note's length, on `Gate`'s `00` to `FF` scale, so a step of one
+/// is a step of the other: `80` leaves it, `00` takes half a pulse off and `FF` adds half.
+pub fn gate_delta(value: f32) -> f32 {
+    value - 128.0
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -233,6 +242,7 @@ impl Kind {
                 Units::Slide => milliseconds(slide_ms(coarse as f32)),
                 Units::AcidDrive => format!("+{:.1} dB", acid_drive_db(coarse as f32)),
                 Units::GateLength => format!("{:.0} %", gate_share(coarse as f32) * 100.0),
+                Units::GateDelta => format!("{:+.0} %", gate_delta(coarse as f32) / 2.55),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -365,7 +375,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 9] = [
+const TRACK: [Entry; 10] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -418,10 +428,24 @@ const TRACK: [Entry; 9] = [
         },
         default: FULL_GATE,
     },
+    // Its value is never heard alone: it's added to each note's length as it starts, so a lane
+    // of it moves notes' lengths against their own.
+    Entry {
+        key: "gatedelta",
+        name: "Gate up or down",
+        label: Some("LDLT"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::GateDelta,
+        },
+        default: 0x80,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 9] = [
+const TRACK_GROUPS: [&str; 10] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
+    "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1120,6 +1144,8 @@ impl SettingId {
     pub const FILTER_MODE: Self = Self(7);
     /// How much of its last pulse a note lasts, as [`gate_share`] gives it.
     pub const GATE_LENGTH: Self = Self(8);
+    /// How far a note's length is moved up or down from its own, as [`gate_delta`] gives it.
+    pub const GATE_DELTA: Self = Self(9);
 
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
@@ -1427,6 +1453,10 @@ mod tests {
         assert_eq!(shown(SettingId::PITCH, 0x8700), "+7 st");
         assert_eq!(shown(SettingId::PITCH, 0x8780), "+7 st +50 ct");
         assert_eq!(shown(SettingId::PITCH, 0x7F80), "+0 st -50 ct");
+        assert_eq!(shown(SettingId::GATE_DELTA, 0x8000), "+0 %");
+        assert_eq!(shown(SettingId::GATE_DELTA, 0x0000), "-50 %");
+        assert_eq!(shown(SettingId::GATE_DELTA, 0xC000), "+25 %");
+        assert_eq!(SettingId::GATE_DELTA.label(), Some("LDLT".into()));
         assert_eq!(
             (depth.label(), phase.label(), SettingId::PITCH.label()),
             (

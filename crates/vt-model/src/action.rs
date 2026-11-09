@@ -45,6 +45,9 @@ pub enum Fill {
     Velocity(Option<u8>),
     /// A gate cell, which goes on every row, as a row without a note still takes its time.
     Gate(Option<Gate>),
+    /// A gate cell's length, which only goes on rows with a note, as it's how long the note lasts.
+    /// A row without a gate cell gets one pulse of `SGL` to hold it.
+    GateLength(Option<u8>),
     Slot(usize, FxSlot),
     /// An FX value's coarse digits, keeping its fine part.
     SlotValue(usize, u8),
@@ -552,6 +555,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
                     Fill::Velocity(_) => {}
                     Fill::Gate(gate) => target.gate = *gate,
+                    Fill::GateLength(length) if has_note => {
+                        if length.is_some() || target.gate.is_some() {
+                            target.gate = Some(Gate {
+                                length: *length,
+                                ..target.gate.unwrap_or_default()
+                            });
+                        }
+                    }
+                    Fill::GateLength(_) => {}
                     Fill::Slot(slot, value) => {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);
@@ -608,6 +620,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             kind,
             scale,
         } => {
+            // An empty length moves from the track's `Gate`, as that's what it plays at.
+            let gate = next
+                .tracks
+                .get(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .gate_length();
             for index in range.first..=range.last {
                 shift_step(
                     step_mut(&mut next, *track, *phrase, index)?,
@@ -615,6 +633,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     *by,
                     *kind,
                     *scale,
+                    gate,
                 );
             }
         }

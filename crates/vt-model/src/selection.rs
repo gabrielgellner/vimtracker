@@ -13,6 +13,8 @@ pub enum Field {
     Velocity,
     /// The gate cell: a gate type and the row's length in pulses.
     Gate,
+    /// The gate cell's length: how much of its last pulse the row's note lasts.
+    GateLength,
     FxCommand(usize),
     /// An FX value's coarse digits.
     FxValue(usize),
@@ -24,6 +26,9 @@ pub enum Field {
 pub const GATE_GROUP: usize = 2;
 /// The column group of the first FX slot. Each slot after it is one more.
 pub const FX_GROUP: usize = 3;
+/// Where the first FX slot's command is in `h l` order, after the note, velocity and the gate
+/// cell's two parts. Each slot takes three places: its command, value and fine digits.
+pub const FIRST_FX_ORDER: usize = 4;
 
 impl Field {
     /// The column group this field belongs to: note, velocity, gate, then each FX slot.
@@ -31,7 +36,7 @@ impl Field {
         match self {
             Self::Note => 0,
             Self::Velocity => 1,
-            Self::Gate => GATE_GROUP,
+            Self::Gate | Self::GateLength => GATE_GROUP,
             Self::FxCommand(slot) | Self::FxValue(slot) | Self::FxFine(slot) => FX_GROUP + slot,
         }
     }
@@ -52,9 +57,10 @@ impl Field {
             Self::Note => 0,
             Self::Velocity => 1,
             Self::Gate => 2,
-            Self::FxCommand(slot) => 3 + slot * 3,
-            Self::FxValue(slot) => 4 + slot * 3,
-            Self::FxFine(slot) => 5 + slot * 3,
+            Self::GateLength => 3,
+            Self::FxCommand(slot) => FIRST_FX_ORDER + slot * 3,
+            Self::FxValue(slot) => FIRST_FX_ORDER + 1 + slot * 3,
+            Self::FxFine(slot) => FIRST_FX_ORDER + 2 + slot * 3,
         }
     }
 
@@ -64,11 +70,15 @@ impl Field {
             0 => Self::Note,
             1 => Self::Velocity,
             2 => Self::Gate,
-            n => match (n - 3) % 3 {
-                0 => Self::FxCommand((n - 3) / 3),
-                1 => Self::FxValue((n - 3) / 3),
-                _ => Self::FxFine((n - 3) / 3),
-            },
+            3 => Self::GateLength,
+            n => {
+                let (slot, part) = ((n - FIRST_FX_ORDER) / 3, (n - FIRST_FX_ORDER) % 3);
+                match part {
+                    0 => Self::FxCommand(slot),
+                    1 => Self::FxValue(slot),
+                    _ => Self::FxFine(slot),
+                }
+            }
         }
     }
 }
@@ -346,6 +356,11 @@ pub enum Shift {
     Fine,
     /// `+` and `_` on a value's fine digits, by 16.
     FineLarge,
+    /// `=` and `-` on a gate's length, by one. Only lengths move, and an empty one starts from the
+    /// track's `Gate`, on a row with a note.
+    Length,
+    /// `+` and `_` on a gate's length, by 16.
+    LengthLarge,
 }
 
 /// How much one large step is for a value in hex.
@@ -381,9 +396,39 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
 }
 
 /// Move the covered values of a step, clamping to each field's range. With a scale, a note moves
-/// through it, except by a large step, as an octave stays in key, or a chromatic one.
-pub fn shift_step(step: &mut Step, scope: Scope, by: i32, kind: Shift, scale: Option<Scale>) {
+/// through it, except by a large step, as an octave stays in key, or a chromatic one. `gate` is the
+/// track's `Gate`, where a length that's empty starts.
+pub fn shift_step(
+    step: &mut Step,
+    scope: Scope,
+    by: i32,
+    kind: Shift,
+    scale: Option<Scale>,
+    gate: u8,
+) {
     let by = by.clamp(-0xFFFF, 0xFFFF);
+    if matches!(kind, Shift::Length | Shift::LengthLarge) {
+        if !scope.covers(GATE_GROUP) {
+            return;
+        }
+        let by = if kind == Shift::LengthLarge {
+            by * LARGE_HEX
+        } else {
+            by
+        };
+        // A length belongs to a note, so a row without one gets none, though one it has moves.
+        let cell = step.gate.unwrap_or_default();
+        let from = match cell.length {
+            Some(length) => length,
+            None if matches!(step.note, Note::On(_)) => gate,
+            None => return,
+        };
+        step.gate = Some(Gate {
+            length: Some((i32::from(from) + by).clamp(0, 0xFF) as u8),
+            ..cell
+        });
+        return;
+    }
     if matches!(kind, Shift::Fine | Shift::FineLarge) {
         let by = if kind == Shift::FineLarge {
             by * LARGE_HEX
@@ -609,8 +654,48 @@ mod tests {
 
     fn shifted(text: &str, by: i32, kind: Shift) -> String {
         let mut step: Step = text.parse().unwrap();
-        shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None);
+        shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None, 0xFF);
         step.to_string()
+    }
+
+    fn lengthened(text: &str, by: i32, kind: Shift, gate: u8) -> String {
+        let mut step: Step = text.parse().unwrap();
+        shift_step(&mut step, Scope::column(GATE_GROUP), by, kind, None, gate);
+        step.to_string()
+    }
+
+    #[test]
+    fn a_length_moves_alone_and_an_empty_one_starts_from_the_tracks_gate() {
+        assert_eq!(
+            lengthened("C-4 -- SGL2 80", 1, Shift::Length, 0xFF),
+            "C-4 -- SGL2 81"
+        );
+        assert_eq!(
+            lengthened("C-4 -- SGL2 80", -1, Shift::LengthLarge, 0xFF),
+            "C-4 -- SGL2 70"
+        );
+        assert_eq!(
+            lengthened("C-4 --", -1, Shift::Length, 0x80),
+            "C-4 -- SGL1 7F"
+        );
+        assert_eq!(
+            lengthened("C-4 -- SGL1 FF", 1, Shift::LengthLarge, 0x80),
+            "C-4 -- SGL1 FF"
+        );
+        assert_eq!(
+            lengthened("C-4 -- SGL1 05", -1, Shift::LengthLarge, 0x80),
+            "C-4 -- SGL1 00"
+        );
+        assert_eq!(
+            lengthened("--- -- RST4", 1, Shift::Length, 0x80),
+            "--- -- RST4",
+            "a row with no note gets no length"
+        );
+        // The pulses move on the gate's own part, and keep the length.
+        assert_eq!(
+            lengthened("C-4 -- SGL2 80", 1, Shift::Increment, 0xFF),
+            "C-4 -- SGL3 80"
+        );
     }
 
     #[test]
@@ -682,8 +767,10 @@ mod tests {
         for order in 0..12 {
             assert_eq!(Field::from_order(order).order(), order);
         }
-        assert_eq!(Field::from_order(5), Field::FxFine(0));
-        assert_eq!(Field::from_order(6), Field::FxCommand(1));
+        assert_eq!(Field::from_order(3), Field::GateLength);
+        assert_eq!(Field::GateLength.group(), GATE_GROUP);
+        assert_eq!(Field::from_order(6), Field::FxFine(0));
+        assert_eq!(Field::from_order(7), Field::FxCommand(1));
         assert_eq!(Field::FxFine(1).group(), 4);
         assert_eq!(Field::FxValue(1).group(), 4);
         assert_eq!(Field::of_group(4), Field::FxCommand(1));

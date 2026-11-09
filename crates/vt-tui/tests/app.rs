@@ -1435,22 +1435,22 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     let (mut app, _realtime) = app();
     press(&mut app, "W");
     let buffer = screen(&app);
-    let title: String = (61..80).map(|x| buffer[(x, 0)].symbol()).collect();
+    let title: String = (64..80).map(|x| buffer[(x, 0)].symbol()).collect();
     assert_eq!(
         title.trim_end(),
         " 01  02",
         "the returns and master are left out"
     );
     assert_eq!(
-        buffer[(66, 0)].bg,
+        buffer[(69, 0)].bg,
         vt_tui::theme::GREEN,
         "track 02 is marked"
     );
-    assert_ne!(buffer[(62, 0)].bg, vt_tui::theme::GREEN);
+    assert_ne!(buffer[(65, 0)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
-    assert_eq!(headings.trim_end(), "         Note        FX");
+    assert_eq!(headings.trim_end(), "         Note           FX");
     assert_eq!(
-        buffer[(21, 2)].bg,
+        buffer[(24, 2)].bg,
         vt_tui::theme::FX_BAND,
         "the FX sit on a band"
     );
@@ -2882,7 +2882,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (66..69).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (69..72).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2970,7 +2970,7 @@ fn tracks_of_different_lengths() -> (App, Realtime) {
 /// Another track's column on one row of steps: its marker and note, and its colour.
 /// A column of the overview past the track being edited, which is the overview's first here.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 65 + column * 4;
+    let x = 68 + column * 4;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -3053,7 +3053,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..59)
+        (0..62)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -3507,7 +3507,7 @@ fn the_track_page_sets_how_long_notes_last() {
 fn a_step_locks_the_gate_by_its_label() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, "llli");
+    press(&mut app, "lllli");
     press(&mut app, "len");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
@@ -4078,7 +4078,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
         (0..80).map(|x| buffer[(x, 2)].symbol()).collect()
     };
     // From K on an empty cell, as from typing, the command waits for its value.
-    press(&mut app, "lllK");
+    press(&mut app, "llllK");
     press(&mut app, "CUT");
     special(&mut app, KeyCode::Enter);
     assert!(row(&app).contains("CUT   00"), "{}", row(&app));
@@ -4191,6 +4191,8 @@ fn the_status_line_names_the_column() {
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Gate");
     press(&mut app, "l");
+    assert_eq!(column_name(&app), "Gate length, the track's");
+    press(&mut app, "l");
     assert_eq!(column_name(&app), "FX1 command");
     press(&mut app, "l");
     assert_eq!(column_name(&app), "FX1 value");
@@ -4217,7 +4219,7 @@ fn app_with_a_lock_for_another_voice() -> (App, Realtime) {
 fn the_status_line_names_the_setting_a_cell_locks() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app_with_a_lock_for_another_voice();
-    press(&mut app, "lll");
+    press(&mut app, "llll");
     assert_eq!(column_name(&app), "Filter: Cut");
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Filter: Cut", "on its value too");
@@ -4233,7 +4235,15 @@ fn the_status_line_names_the_setting_a_cell_locks() {
 fn the_status_line_shows_a_value_in_its_units() {
     use vt_tui::views::status::value_shown;
     let (mut app, _realtime) = app_with_a_lock_for_another_voice();
-    press(&mut app, "lll");
+    press(&mut app, "ll");
+    assert_eq!(value_shown(&app), None, "a gate has no units");
+    press(&mut app, "l");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("100 %"),
+        "the track's Gate"
+    );
+    press(&mut app, "l");
     // `cut:40` is a quarter of the way up ten octaves from 20 Hz.
     assert_eq!(value_shown(&app).as_deref(), Some("113 Hz"));
     press(&mut app, "lll");
@@ -4281,10 +4291,58 @@ fn each_kind_of_cell_has_its_own_colours() {
 }
 
 #[test]
+fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dashes() {
+    use vt_tui::theme;
+    use vt_tui::views::status::{column_name, value_shown};
+    let mut song = Song::new(1);
+    let steps = [
+        "C-4 40 SGL1 80 cut:40 --- ---",
+        "C-4 40 HLD2 --- --- ---",
+        "C-4 40 --- --- ---",
+    ]
+    .iter()
+    .map(|text| text.parse().unwrap())
+    .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    let buffer = screen(&app);
+    let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
+    assert!(
+        row(2).starts_with("C-4 40 SGL1 80 CUT   4000"),
+        "{}",
+        row(2)
+    );
+    assert!(row(3).starts_with("C-4 40 HLD2 -- ---"), "{}", row(3));
+    assert!(row(4).starts_with("C-4 40 ---- -- ---"), "{}", row(4));
+    // The length is the cell's third part, after the gate and its pulses.
+    let length = 9 + 12;
+    assert_eq!(Some(buffer[(length, 2)].fg), theme::dim().fg);
+    assert_ne!(
+        Some(buffer[(length - 3, 2)].fg),
+        theme::dim().fg,
+        "the gate isn't dim"
+    );
+    assert_eq!(Some(buffer[(length, 3)].fg), theme::faint().fg);
+    assert_eq!(Some(buffer[(length, 4)].fg), theme::faint().fg);
+
+    press(&mut app, "lll");
+    assert_eq!(column_name(&app), "Gate length");
+    assert_eq!(value_shown(&app).as_deref(), Some("50 %"));
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Gate length, the track's");
+    assert_eq!(value_shown(&app).as_deref(), Some("100 %"));
+}
+
+#[test]
 fn k_lists_commands_by_category_and_opens_searching() {
     use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
-    press(&mut app, "lllK");
+    press(&mut app, "llllK");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.focus, Focus::Search);
     assert!(picker.query.is_empty());
@@ -6586,7 +6644,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     let setting = |at| FxCommand::Set(SettingId::slot(0, Effect::Distort, at).unwrap());
 
     // The list has what's on the track, by label and then by group and name.
-    press(&mut app, "lllK");
+    press(&mut app, "llllK");
     let labels: Vec<String> = app
         .picker
         .as_ref()
@@ -6616,14 +6674,14 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
 
     // Typed, a slot's label needs its digit, and `Enter` takes it to the value.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "ggj0llli1mix");
+    press(&mut app, "ggj0lllli1mix");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
     assert_eq!(command(&app, 1), Some(setting(4)));
 
     // A label that isn't there says so, and opens the list searching for it.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "ggjj0llliamnt");
+    press(&mut app, "ggjj0lllliamnt");
     special(&mut app, KeyCode::Enter);
     assert_eq!(command(&app, 2), None);
     assert!(app.status.contains("isn't a label"), "{}", app.status);
@@ -6641,7 +6699,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
 #[test]
 fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LL= 3lllK1amnt");
+    press(&mut app, " 4LL= 3llllK1amnt");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "80");
     special(&mut app, KeyCode::Esc);
@@ -6711,7 +6769,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     // A sample track has no synth settings, in Dest or for a step.
     let dest = labels(&mut app, " 4LjjK/");
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
-    let steps = labels(&mut app, " 3lllK");
+    let steps = labels(&mut app, " 3llllK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
 
     // On a synth they're there under their names on this voice.
@@ -7023,7 +7081,7 @@ fn lane_of(app: &App, slot: usize) -> Option<vt_model::song::Lane> {
 fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
-    press(&mut app, "llljj");
+    press(&mut app, "lllljj");
     assert_eq!(app.cursor.field, vt_tui::app::Field::FxCommand(0));
     command(&mut app, "lane 3");
     assert_eq!(
@@ -7082,7 +7140,7 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
 #[test]
 fn the_loop_keys_on_an_fx_column_without_a_lane_set_the_phrases_loop() {
     let (mut app, _realtime) = app();
-    press(&mut app, "lll7jge");
+    press(&mut app, "llll7jge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 8);
     command(&mut app, "len 6");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 6);
@@ -7096,7 +7154,7 @@ fn the_loop_keys_on_an_fx_column_without_a_lane_set_the_phrases_loop() {
 #[test]
 fn a_lane_shows_its_length_and_where_it_is_playing() {
     let (mut app, _realtime) = app();
-    press(&mut app, "llljrSNA");
+    press(&mut app, "lllljrSNA");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "20gg");
     command(&mut app, "lane 3");
@@ -7125,7 +7183,7 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
 fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     let (mut app, _realtime) = app();
     // FX 1's lane is steps 4 to 6 of the phrase's 16.
-    press(&mut app, "lll4j");
+    press(&mut app, "llll4j");
     command(&mut app, "lane 3");
     press(&mut app, "G");
     assert_eq!(app.cursor.step, 6, "the lane's last step");
@@ -7171,7 +7229,7 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
 fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, "llli");
+    press(&mut app, "lllli");
     press(&mut app, "dep1");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "9F");
@@ -7846,12 +7904,15 @@ fn rows_of(app: &App, track: usize) -> Vec<Step> {
     app.song().tracks[track].phrases[&0].steps().to_vec()
 }
 
-/// The `OFF` a recorded note's length is in, in units of a sixth of a step.
-fn length_of(step: &Step) -> Option<u8> {
-    step.fx
-        .iter()
-        .find(|slot| slot.command == Some(vt_model::step::FxCommand::Off))
-        .map(|slot| slot.coarse())
+/// A recorded note's gate cell, as its pulses and its length.
+fn length_of(step: &Step) -> Option<(u8, Option<u8>)> {
+    step.gate.map(|gate| (gate.pulses, gate.length))
+}
+
+/// Whether a recorded note's length is near this share of its last pulse, as the clock the app
+/// goes by runs on a little between the engine's reports.
+fn near(length: Option<u8>, value: u8) -> bool {
+    length.is_some_and(|length| length.abs_diff(value) <= 4)
 }
 
 fn status_line(app: &App) -> String {
@@ -7915,14 +7976,28 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
     assert_eq!(rows[1].velocity, Some(app.note_velocity));
     assert_eq!(app.cursor.step, 0, "the cursor stays");
-    // Until it's let go, it's as long as it can be: until its row comes round again.
-    assert_eq!(length_of(&rows[1]), Some(24));
+    // Until it's let go, it holds on the row's pulse until something ends it.
+    assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))));
 
-    // Held for two steps.
+    // Held for two steps, past its row's end, so it rings on, and the row keeps its pulse.
     play_to(&mut app, &mut rt, &mut at, 11.25);
     app.key_released(a, Instant::now());
     let rows = rows_of(&app, 1);
-    assert_eq!(length_of(&rows[1]), Some(12), "{rows:?}");
+    assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))), "{rows:?}");
+    assert!(
+        rows[1].to_string().starts_with("C-4 64 SGL1 FF "),
+        "{}",
+        rows[1]
+    );
+    assert!(
+        rows[1].fx.iter().all(|slot| slot.command.is_none()),
+        "no OFF"
+    );
+    assert_eq!(
+        rows.iter().map(Step::pulses).sum::<usize>(),
+        4,
+        "the loop keeps its length"
+    );
     assert_eq!(
         rows.iter().filter(|step| step.note != Note::Empty).count(),
         1
@@ -7951,7 +8026,10 @@ fn a_note_played_late_in_a_step_waits_for_the_next_row() {
     play_to(&mut app, &mut rt, &mut at, 10.1);
     let rows = rows_of(&app, 1);
     assert_eq!(rows[2].note, Note::On(62), "{rows:?}");
-    assert_eq!(length_of(&rows[2]), Some(1), "the shortest a length can be");
+    // Held for 0.15 of a step.
+    let (pulses, length) = length_of(&rows[2]).unwrap();
+    assert_eq!(pulses, 1);
+    assert!(near(length, 0x26), "{length:?}");
 }
 
 #[test]
@@ -7969,7 +8047,41 @@ fn a_note_held_until_its_row_comes_round_ends_there() {
     app.key_released(a, Instant::now());
     let rows = rows_of(&app, 1);
     assert_eq!(rows[1].note, Note::On(60));
-    assert_eq!(length_of(&rows[1]), Some(24), "4 steps, the whole loop");
+    assert_eq!(
+        length_of(&rows[1]),
+        Some((1, Some(0xFF))),
+        "held past its row, it rings on"
+    );
+}
+
+#[test]
+fn a_recorded_note_on_a_long_row_keeps_its_pulses_and_lasts_into_the_last() {
+    let rows: Vec<Step> = ["--- -- SGL2", "--- --", "--- --"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    let (mut app, mut rt) = recording_app(rows);
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    // Step 8 starts the 4-step loop's row 0, which lasts two.
+    let a = Key::char('a');
+    play_to(&mut app, &mut rt, &mut at, 8.0);
+    app.key(a, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 9.5);
+    app.key_released(a, Instant::now());
+    let (pulses, length) = length_of(&rows_of(&app, 1)[0]).unwrap();
+    assert_eq!(pulses, 2);
+    assert!(near(length, 0x80), "half of its second pulse: {length:?}");
+
+    // A tap lasts into its last pulse as little as the cell says, and the row stays as long.
+    play_to(&mut app, &mut rt, &mut at, 12.0);
+    app.key(a, Instant::now());
+    play_to(&mut app, &mut rt, &mut at, 12.25);
+    app.key_released(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(length_of(&rows[0]), Some((2, Some(0x00))), "{rows:?}");
+    assert_eq!(rows.iter().map(Step::pulses).sum::<usize>(), 4);
 }
 
 #[test]
@@ -7998,9 +8110,13 @@ fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo()
         vt_model::step::GateKind::Single,
         "a rest would silence it"
     );
-    assert_eq!(written[1].pulses(), 1, "the row lasts as long as it did");
-    assert_eq!(written[1].fx[0], rows[1].fx[0], "its FX stay");
-    assert_eq!(length_of(&written[1]), Some(3));
+    assert_eq!(
+        written[1].pulses(),
+        1,
+        "held for half a step, the row lasts as long as it did"
+    );
+    assert_eq!(written[1].fx, rows[1].fx, "its FX stay");
+    assert!(near(written[1].length(), 0x80), "{:?}", written[1].length());
     assert_eq!(written[3].note, Note::On(64));
     assert_eq!(app.history.undo_depth(), depth + 1, "one step for the pass");
 
@@ -8018,11 +8134,13 @@ fn a_held_note_when_recording_stops_keeps_its_length_so_far() {
     tap(&mut app, "i");
     play_to(&mut app, &mut rt, &mut at, 8.0);
     app.key(Key::char('a'), Instant::now());
-    play_to(&mut app, &mut rt, &mut at, 10.0);
+    play_to(&mut app, &mut rt, &mut at, 8.5);
     special(&mut app, KeyCode::Esc);
     press(&mut app, " r");
     assert!(!app.recording());
-    assert_eq!(length_of(&rows_of(&app, 1)[0]), Some(12));
+    let (pulses, length) = length_of(&rows_of(&app, 1)[0]).unwrap();
+    assert_eq!(pulses, 1);
+    assert!(near(length, 0x80), "half a step so far: {length:?}");
 }
 
 #[test]

@@ -515,7 +515,9 @@ to `16`, or `Off`: a note on it cuts off what's sounding on the other tracks in
 the group, as a closed hat cuts an open one. A kit sets both, with the level.
 
 `Gate` is how much of its last pulse each note lasts before it's let go, from
-`1%` to `100%`, as `LEN` on a step sets it for one row. `=` and `-` move it a
+`1%` to `100%`, unless its row has a length of its own in its gate cell. `LEN` on
+a step sets it for the rows that don't, and an LFO on it moves every note's
+length up or down, a row's own too. `=` and `-` move it a
 percent, `+` and `_` ten, and `i` takes a percent. Dimmed, it's the machine's
 own: `100%`, which holds a note until the next, or `50%` on `Acid`, as a 303's
 gate closes halfway through each step. `x` goes back to that. See **Note entry**
