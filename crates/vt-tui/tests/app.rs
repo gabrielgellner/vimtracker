@@ -1485,7 +1485,7 @@ fn other_tracks_light_the_step_they_are_playing() {
         buffer[(68, row + 2)].fg
     };
     on_the_row_being_edited(&mut app);
-    app.playhead = 2;
+    app.set_playhead(2);
     assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
     app.transport = Transport::Playing;
     assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
@@ -2909,7 +2909,7 @@ fn the_playhead_marks_where_the_loop_is_playing() {
     press(&mut app, "2]L");
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
-    app.playhead = 1;
+    app.set_playhead(1);
     app.top = 0;
     let buffer = screen(&app);
     // The loop starts at stored step 8, so row 01 is on the screen's row 11.
@@ -3002,7 +3002,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
     on_the_row_being_edited(&mut app);
     // Each track marks where it is in its own loop.
     app.transport = Transport::Playing;
-    app.playhead = 5;
+    app.set_playhead(5);
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 0, 1), note(">C#4", green));
     assert_eq!(beside(&buffer, 0, 3).0, "    ");
@@ -3051,7 +3051,7 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
 
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
-    app.playhead = 2;
+    app.set_playhead(2);
     assert_eq!(beside(&screen(&app), 0, 0).0, ">E-4");
 }
 
@@ -7256,7 +7256,7 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     // Place 4 is the notes' row 4, and the lane's row 4 % 3 = 1.
-    app.playhead = 4;
+    app.set_playhead(4);
     app.top = 0;
     let buffer = screen(&app);
     let line = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
@@ -9682,4 +9682,114 @@ fn a_recorded_note_goes_on_the_row_nearest_where_the_groove_lands_it() {
         -2,
         "a tenth of a step before it lands"
     );
+}
+
+#[test]
+fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
+    use vt_model::speed::Speed;
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let speed = |app: &App| app.song().tracks[0].speed;
+    let line = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.contains("Speed"))
+            .unwrap_or_default()
+    };
+    assert!(line(&app).contains("1/16"), "{}", line(&app));
+    press(&mut app, "gg$jjjjjjjj");
+    assert_eq!(app.track_control(), Control::Speed);
+    assert_eq!(value_shown(&app).as_deref(), Some("1/16"));
+    press(&mut app, "=");
+    assert_eq!(speed(&app), Speed::EighthTriplet);
+    press(&mut app, "==");
+    assert_eq!(speed(&app), Speed::QuarterTriplet);
+    press(&mut app, "====");
+    assert_eq!(speed(&app), Speed::Quarter, "it stops at the end");
+    assert!(line(&app).contains("1/4"), "{}", line(&app));
+    press(&mut app, "x");
+    assert_eq!(speed(&app), Speed::Sixteenth);
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "/1/8t");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(speed(&app), Speed::EighthTriplet);
+    press(&mut app, "u");
+    assert_eq!(speed(&app), Speed::Sixteenth);
+}
+
+#[test]
+fn a_step_locks_the_speed_by_its_label() {
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, "llllli");
+    press(&mut app, "rate");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "04");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("speed:04"), "{step}");
+    assert_eq!(column_name(&app), "Machine: Speed");
+    assert_eq!(value_shown(&app).as_deref(), Some("1/8"));
+}
+
+#[test]
+fn a_track_at_an_eighth_has_its_own_playhead() {
+    let mut song = Song::new(2);
+    song.tracks[0].phrases.insert(0, Arc::new(Phrase::new(16)));
+    song.tracks[1].phrases.insert(0, Arc::new(Phrase::new(4)));
+    song.tracks[1].speed = vt_model::speed::Speed::Eighth;
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    on_the_row_being_edited(&mut app);
+    app.transport = Transport::Playing;
+    app.set_playhead(6);
+    assert_eq!(app.chain_playhead(0, 0), Some(6));
+    assert_eq!(app.chain_playhead(1, 0), Some(3));
+    app.set_playhead(9);
+    assert_eq!(
+        app.chain_playhead(1, 0),
+        Some(0),
+        "its fifth eighth is its first row again"
+    );
+}
+
+#[test]
+fn a_recorded_note_goes_on_the_row_of_its_tracks_own_speed() {
+    let mut song = Song::new(2);
+    song.tracks[0].phrases.insert(0, Arc::new(Phrase::new(16)));
+    song.tracks[1]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![Step::default(); 4])));
+    song.tracks[1].speed = vt_model::speed::Speed::Eighth;
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, mut rt) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "W");
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    // Song step 9.5 is the eighth track's step 4.75, so row 1's start, at its step 5, is nearer
+    // than row 0's, and the note is a quarter of an eighth early.
+    play_to(&mut app, &mut rt, &mut at, 9.5);
+    let a = Key::char('a');
+    app.key(a, Instant::now());
+    assert!(
+        rows_of(&app, 1).iter().all(|step| step.note == Note::Empty),
+        "not before its row lands"
+    );
+    // Let go half an eighth later, at its step 5.25, so it lasts half its row's step.
+    play_to(&mut app, &mut rt, &mut at, 10.5);
+    app.key_released(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
+    assert_eq!(rows[1].nudge, -6);
+    let (pulses, length) = length_of(&rows[1]).unwrap();
+    assert_eq!(pulses, 1);
+    assert!(near(length, 0x80), "{length:?}");
 }

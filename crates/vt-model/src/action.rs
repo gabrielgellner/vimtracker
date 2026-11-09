@@ -24,6 +24,7 @@ use crate::song::{
     Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
     SectionStart, Song, Track, lowest_unused,
 };
+use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Gate, MAX_NUDGE, Mark, Note, Step};
 
 /// A new value for one field.
@@ -262,6 +263,11 @@ pub enum Action {
     SetTrackGateLength {
         track: usize,
         gate_length: Option<u8>,
+    },
+    /// Set how long each of a track's steps is.
+    SetTrackSpeed {
+        track: usize,
+        speed: Speed,
     },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
@@ -868,6 +874,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .gate_length = *gate_length;
+        }
+        Action::SetTrackSpeed { track, speed } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .speed = *speed;
         }
         Action::SetLength {
             track,

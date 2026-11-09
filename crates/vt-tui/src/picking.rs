@@ -587,6 +587,9 @@ impl App {
             Pick::FilterMode { track, mode } => {
                 self.apply(&Action::SetFilterMode { track, mode });
             }
+            Pick::Speed { track, speed } => {
+                self.apply(&Action::SetTrackSpeed { track, speed });
+            }
             Pick::Envelope {
                 track,
                 slot,

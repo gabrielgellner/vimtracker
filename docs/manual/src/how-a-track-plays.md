@@ -44,7 +44,8 @@ loop:                  [03 ............. 08]     only these play
 
 The engine has one clock, the **step**, a sixteenth note at normal speed. Each track
 keeps a **count**: how many steps since its chain started. Everything on the track
-works out where it is from that one number.
+works out where it is from that one number. A track's step is a sixteenth unless its
+`Speed` makes it longer or shorter: see **Speed: a track's own step** below.
 
 ```text
 count:   0   1   2   3   4   5   6   7   8 …      one for each step
@@ -174,6 +175,9 @@ The count, and with it every lane, starts over on:
 - a launch;
 - realigning with `:reset`.
 
+Each of those also lines the track's steps up again, so a track at a slower speed
+starts its next step there, even if that cuts the one before short.
+
 Edits while playing don't start it over. Changing `:len`, a gate's pulses, a chain, a
 lane's length, or undoing one of them, leaves the track on the row it was about to
 play, and on the pulse within that row, and a lane on its step. If that row has gone,
@@ -186,8 +190,9 @@ count out in the same way.
 
 A groove (see **Groove** in the FX guide) moves where each step lands, a little late
 or early, but never the count: each step is still the step it was, it only sounds a
-few ticks from its place on the grid. The groove counts the song's steps from its
-start or its last reset, so every track swings on the same steps whatever its length:
+few ticks from its place on the grid. The groove counts each track's own steps from
+the song's start or its last reset, so every track swings on the same steps whatever
+its length, and a track at `1/8` swings its eighths:
 
 ```text
 steps:     0    1    2    3          Swing 66: every other step 77 ticks late
@@ -223,6 +228,41 @@ and the lane's change comes in on the grid.
 A track's notes always play in order. A nudge can't take a row's note past the
 next row's on the grid, but a groove's pushes on top of nudges can: then the later
 row waits for the earlier one, and is the note left sounding.
+
+## Speed: a track's own step
+
+A track's `Speed` is how long its step is, as a note division: `1/32`, `1/16T`,
+`1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`. Everything on the track counts its own
+steps, so at `1/8` it moves down its rows half as fast, and its playhead is drawn
+where it is:
+
+```text
+sixteenths:  0   1   2   3   4   5   6   7   8
+1/16 track:  00  01  02  03  04  05  06  07  08
+1/8 track:   00      01      02      03      04
+1/16T track: 00 01  02 03  04 05  06 …           three to every two sixteenths
+```
+
+What's a share of a step is a share of the track's: each pulse of a gate, a lane's
+step, `DEL`'s sixths, a nudge's 24ths, a groove's pushes and a note's `Gate`. The
+LFOs keep to the song's time.
+
+The song itself counts sixteenths. A section lasts its longest chain at that chain's
+speed, so 16 rows at `1/8` take 32 sixteenths, and a triplet chain that doesn't end on
+a sixteenth rounds up to the next. Resets, launches, `:reset` and renders count
+sixteenths too. Inside a section a triplet track runs on, on its own grid, and lines
+up again where its chain next starts.
+
+`RATE` on a step changes the speed for that step and the rest of its note, or from
+there on if it's held with `h`. A step at a new speed lasts until the next of that
+speed's steps, counted from where the track last lined up, so the track keeps to the
+grid of whatever speed it's at:
+
+```text
+sixteenths:  0   1   2   3   4   5   6
+rows:        00  01  02      03      04       RATE 04h, 1/8, on row 01
+                 └ lasts to the next eighth
+```
 
 ## The keys, by column
 

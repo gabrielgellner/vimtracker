@@ -43,6 +43,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
+| `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
 | `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 
@@ -103,9 +104,10 @@ These have no mark.
 | `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 
-A unit is a sixth of a step, so `DEL03` delays by half a step. They count from
-where the note starts, after the groove and the row's nudge, and so does `CHA`,
-which goes with the note whichever column it's in.
+A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
+track's own, so on a track at `1/8` it's half an eighth. They count from where
+the note starts, after the groove and the row's nudge, and so does `CHA`, which
+goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder. Use `:seed 7` to choose which results `CHA` gives.
@@ -138,9 +140,11 @@ The grooves that come with vimtracker:
 | Pull | Laid back: the backbeats late |
 | Custom 1 to 8 | The project's own, from the project page |
 
-A groove counts the song's steps from its start or the last reset, not each
-track's own loop, so tracks of different lengths swing together and stay on the
-beat, and a track with an odd length swings different rows each time round.
+A groove counts each track's own steps from the song's start or the last reset,
+not each track's own loop, so tracks of different lengths swing together and stay
+on the beat, and a track with an odd length swings different rows each time
+round. A track at `1/8` counts its eighths, so it swings its eighths, and its
+pushes are shares of its own step, twice as long as a sixteenth's.
 Every pulse of a row is a step, so `MLT4` is grooved on each pulse, and lanes
 play on the grooved steps too. `DEL` adds to where the groove lands a step. A
 note's `Gate` is a share of its last pulse as the groove makes it, so the long
@@ -155,3 +159,22 @@ the note there is nudged. See **Note entry**.
 worked out before the step lands, so `GRV 01`, Straight, on a fill's rows plays
 them straight. Held with `h`, it stays until another `GRV` changes it, and `00`
 is the project's. `K` lists them by name.
+
+## Speed
+
+A track's `Speed`, on its Sound page, is how long each of its steps is: `1/32`,
+`1/16T`, `1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`, the song's `1/16` unless
+changed. A track at `1/8` plays its rows half as fast, and everything on it
+follows its step: its pulses, its lanes, `DEL`, `KIL`, `OFF` and `RET`, its
+nudges, its groove's pushes and its notes' `Gate`. Sections, `:reset`, launches
+and renders count the song's sixteenths, so a section lasts its longest chain
+at that chain's speed: 16 rows at `1/8` are 32 sixteenths.
+
+`RATE` on a step sets the speed of that step and the rest of its note, worked
+out before the step plays, as `GRV` is, and held with `h` it stays. A step at a
+new speed lasts until the next of that speed's steps, counted from where the
+track last lined up, so the track keeps to its new speed's grid: an eighth on
+the second sixteenth lasts one sixteenth, and the track then plays on the
+eighths. A track lines up again wherever its chain starts: at the song's start,
+a reset, a section that gives it a new chain, or a launch. LFOs keep to the
+song's time whatever the speed.

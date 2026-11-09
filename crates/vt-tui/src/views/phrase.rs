@@ -171,7 +171,7 @@ fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
     let Some(jam) = playhead_step(app).and(app.jam.get(app.cursor.track)) else {
         return playheads;
     };
-    let count = app.playhead as i64 - jam.started;
+    let count = app.places[app.cursor.track].count - jam.started;
     for (slot, playhead) in playheads.iter_mut().enumerate() {
         *playhead = phrase
             .lane(slot)
@@ -228,7 +228,7 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
     let moving = app.chain_playhead(track, chain);
-    let place = moving.unwrap_or_else(|| app.section_step());
+    let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
     let position = owner.chain_position(chain, place)?;
     Some(Column {
         steps: owner.phrases.get(&position.phrase)?.loop_steps(),

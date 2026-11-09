@@ -74,7 +74,8 @@ Notes sound as you play them, chords too.
   playing. Each track loops at its own length, so a 4-row phrase against a
   16-row one gets its own row. A key pressed past halfway through a row goes on
   the next one. How early or late it was goes in the row's nudge, to the nearest
-  24th of a step, so it plays back as you played it.
+  24th of a step, so it plays back as you played it. A track at another `Speed`
+  is recorded on its own rows, as long as its speed makes them.
 - **How long.** The note's length goes in its gate cell, and its row keeps its
   pulses, so recording never changes how long a row or the loop is. The length is
   how much of the row's last pulse you held it for: half a step on a one-pulse row
@@ -180,7 +181,8 @@ that starts on a beat, however long the rows before it.
 ## Nudging a note off the grid
 
 A row's nudge moves its note a little early or late, in 24ths of a step, up to
-`B`, just under half a step, either way, as Elektron's micro-timing does. It sits
+`B`, just under half a step, either way, as Elektron's micro-timing does. The
+step is the track's own, so on a track at `1/8` a 24th is twice as long. It sits
 between the velocity and the gate, drawn dim, and is blank on a row that's on
 the grid: `C-4 40 -3 SGL1` plays three 24ths early.
 

@@ -13,6 +13,7 @@ use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
 use vt_model::song::Track;
+use vt_model::speed::Speed;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -288,6 +289,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             theme::cursor(app.mode)
         } else if *control == Control::Groove && track.groove.is_none()
             || *control == Control::GateLength && track.gate_length.is_none()
+            || *control == Control::Speed && track.speed == Speed::Sixteenth
             || *control == Control::FilterMode && !track.filter.has_modes()
         {
             theme::dim()
@@ -356,6 +358,7 @@ pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -
             .choke
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
         Control::GateLength => format!("{}%", gate_percent(track.gate_length())),
+        Control::Speed => track.speed.name().to_owned(),
         Control::Sample => track.sample.as_deref().map_or_else(
             || "---".to_owned(),
             |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),

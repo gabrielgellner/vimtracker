@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
-use vt_engine::engine::Transport;
+use vt_engine::engine::{TrackPlace, Transport};
 use vt_model::action::Action;
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::groove::Groove;
@@ -32,7 +32,7 @@ pub struct Recording {
     depth: Option<usize>,
     /// Notes still held, or waiting for their row to start.
     takes: Vec<Take>,
-    /// Where the playhead was last seen, to notice it jumping back.
+    /// Where the song's playhead was last seen, to notice it jumping back.
     last: f64,
 }
 
@@ -46,10 +46,11 @@ struct Take {
     step: usize,
     note: u8,
     velocity: u8,
-    /// When its key went down, and when its row starts, in steps of the running count the
-    /// engine reports.
+    /// When its key went down, and when its row starts, in steps of its track's running count,
+    /// which the engine reports, and where its track was last seen.
     pressed: f64,
     starts: f64,
+    seen: f64,
     /// How long it can last: until its row comes round again.
     longest: f64,
     /// How far the groove moves the row's last pulse from its first, and how long it makes that
@@ -88,7 +89,7 @@ impl App {
             self.status = "Recording arms while playing".to_owned();
         } else {
             self.recording = Some(Recording {
-                last: self.heard_steps(),
+                last: self.heard_song(),
                 ..Recording::default()
             });
             self.status = "Recording: notes played in Insert go in at the playhead".to_owned();
@@ -100,12 +101,13 @@ impl App {
         let Some(mut recording) = self.recording.take() else {
             return;
         };
-        let now = if self.transport == Transport::Playing {
-            self.heard_steps()
-        } else {
-            recording.last
-        };
+        let playing = self.transport == Transport::Playing;
         for take in std::mem::take(&mut recording.takes) {
+            let now = if playing {
+                self.heard_steps(take.track)
+            } else {
+                take.seen
+            };
             let held = take.held.unwrap_or(now - take.pressed);
             self.write_take(&take, Some(held), &mut recording.depth);
         }
@@ -114,7 +116,7 @@ impl App {
     /// Record a note on the row the cursor's track is playing, or the next if it's nearer.
     pub(crate) fn record_note(&mut self, key: Key, note: u8) {
         let track = self.cursor.track;
-        let now = self.heard_steps();
+        let now = self.heard_steps(track);
         let Some(row) = self.row_to_record(track, now) else {
             self.status = "This track isn't playing".to_owned();
             return;
@@ -136,6 +138,7 @@ impl App {
             velocity,
             pressed: now,
             starts: row.starts,
+            seen: now,
             longest: row.longest,
             moved: row.moved,
             last_pulse: row.last_pulse,
@@ -147,7 +150,13 @@ impl App {
 
     /// A key holding a recorded note was let go, so its length is known.
     pub(crate) fn end_take(&mut self, key: KeyCode) {
-        let now = self.heard_steps();
+        let Some(track) = self.recording.as_ref().and_then(|recording| {
+            let take = recording.takes.iter().find(|t| t.key == key)?;
+            Some(take.track)
+        }) else {
+            return;
+        };
+        let now = self.heard_steps(track);
         let Some(recording) = self.recording.as_mut() else {
             return;
         };
@@ -168,22 +177,23 @@ impl App {
             self.stop_recording();
             return;
         }
-        let now = self.heard_steps();
         let Some(mut recording) = self.recording.take() else {
             return;
         };
         // A jump back, as playing from the start or a new section makes, ends every note where
         // it was.
-        let jumped = now < recording.last - 0.5;
-        let last = recording.last;
-        recording.last = now;
+        let song_now = self.heard_song();
+        let jumped = song_now < recording.last - 0.5;
+        recording.last = song_now;
         let mut kept = Vec::new();
         for mut take in std::mem::take(&mut recording.takes) {
+            let now = self.heard_steps(take.track);
             let ended = jumped || now >= take.starts + take.longest;
             if ended && take.held.is_none() {
-                let at = if jumped { last } else { now };
+                let at = if jumped { take.seen } else { now };
                 take.held = Some(at - take.pressed);
             }
+            take.seen = now;
             if !ended && !take.written && now < take.starts {
                 kept.push(take);
                 continue;
@@ -202,22 +212,39 @@ impl App {
         self.recording = Some(recording);
     }
 
-    /// Where the song is as it's heard, in steps of the running count the engine reports: its
-    /// last report, carried on by the clock since, less the output's latency.
-    fn heard_steps(&self) -> f64 {
+    /// Where the song is as it's heard, in its own steps: the engine's last report, carried on by
+    /// the clock since, less the output's latency.
+    fn heard_song(&self) -> f64 {
+        let place = TrackPlace {
+            count: self.playhead as i64,
+            progress: self.progress,
+            ticks: TICKS_PER_STEP as u32,
+        };
+        self.carried_on(place)
+    }
+
+    /// Where a track is as it's heard, in steps of its own running count, which the engine
+    /// reports, as long as its speed makes them.
+    fn heard_steps(&self, track: usize) -> f64 {
+        self.carried_on(self.places.get(track).copied().unwrap_or_default())
+    }
+
+    /// Where a place the engine last reported has got to by now, less the output's latency.
+    fn carried_on(&self, place: TrackPlace) -> f64 {
         let elapsed = Instant::now()
             .saturating_duration_since(self.report_at)
             .min(MOST_ELAPSED);
         let latency = Duration::from_micros(self.audio.latency_us);
-        let steps_per_quarter = (TICKS_PER_QUARTER / TICKS_PER_STEP) as f64;
+        let steps_per_quarter = TICKS_PER_QUARTER as f64 / f64::from(place.ticks.max(1));
         let steps_per_second = f64::from(self.song().millibpm) / 60_000.0 * steps_per_quarter;
         let since = elapsed.as_secs_f64() - latency.as_secs_f64();
-        self.playhead as f64 + f64::from(self.progress) + since * steps_per_second
+        place.count as f64 + f64::from(place.progress) + since * steps_per_second
     }
 
     /// The row a track is playing at this point, or the next one if its start is nearer, with
     /// each start where the track's groove lands it. Each track loops at its own length, so it's
-    /// found in the track's own chain, and the groove counts the running count, as playing does.
+    /// found in the track's own chain, and the groove counts the track's own steps, as playing
+    /// does. Everything here is in the track's steps, which its pushes and nudges are shares of.
     fn row_to_record(&self, track: usize, now: f64) -> Option<Row> {
         let jam = self.jam.get(track)?;
         let chain = jam.chain?;

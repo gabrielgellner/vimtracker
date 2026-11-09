@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
-use vt_model::constants::NUDGE_TICKS;
+use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
 use vt_model::samples::{SampleId, SamplePool};
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
+use vt_model::speed::Speed;
 use vt_model::step::FxCommand;
 
 /// A song version, its samples, and which sample each track plays.
@@ -17,15 +18,22 @@ pub struct Published {
     pub track_samples: Vec<Option<SampleId>>,
     /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
     /// nudge can play it early: as early as any groove the song can play lands a step, and further
-    /// by the earliest nudge in the song. With neither, it's 0, and steps are worked out on the
-    /// grid as they always were.
+    /// by the earliest nudge in the song, as shares of the longest step any track can play. With
+    /// neither, it's 0, and steps are worked out on the grid as they always were. Every track
+    /// works its steps out this far ahead, so they're all worked out in the order they fall.
     pub lead: u64,
-    /// How early any groove the song can play lands a step, which a step's push is kept within.
+    /// How early any groove the song can play lands a step, in ticks of a sixteenth, which a step's
+    /// push is kept within.
     pub groove_lead: u64,
     /// Whether any row has a nudge, without which a step's row needn't be looked up for one.
     pub nudges: bool,
     /// Whether any step has a `GRV`, without which a step's groove needn't be looked for on it.
     pub groove_steps: bool,
+    /// Whether any step has a `RATE`, without which a step's speed needn't be looked for on it.
+    pub speed_steps: bool,
+    /// Whether any track can play at another speed than a sixteenth, so a fast track's steps can
+    /// be worked out before the one before has landed.
+    pub speeds: bool,
 }
 
 impl Published {
@@ -39,16 +47,47 @@ impl Published {
             .collect();
         let (groove_lead, groove_steps) = lead(&song);
         let earliest = earliest_nudge(&song);
+        let (longest, speed_steps) = longest_step(&song);
+        let early = groove_lead + earliest.map_or(0, |early| early.unsigned_abs());
         Self {
             track_samples,
-            lead: groove_lead + earliest.map_or(0, |early| early.unsigned_abs()),
+            lead: early * longest / TICKS_PER_STEP,
             groove_lead,
             nudges: earliest.is_some(),
             groove_steps,
+            speed_steps,
+            speeds: speed_steps
+                || song
+                    .tracks
+                    .iter()
+                    .any(|track| track.speed != Speed::Sixteenth),
             song,
             samples,
         }
     }
+}
+
+/// The longest step any track can play, in ticks: its own speed, or one a step's `RATE` chooses,
+/// and whether any step has one.
+fn longest_step(song: &Song) -> (u64, bool) {
+    let mut longest = TICKS_PER_STEP;
+    let mut speed_steps = false;
+    for track in &song.tracks {
+        longest = longest.max(track.speed.ticks());
+        let slots = track
+            .phrases
+            .values()
+            .flat_map(|phrase| phrase.steps())
+            .flat_map(|step| step.fx.iter());
+        for slot in slots {
+            if slot.command == Some(FxCommand::Set(SettingId::SPEED)) {
+                speed_steps = true;
+                let speed = Speed::from_index(usize::from(slot.coarse()));
+                longest = longest.max(speed.ticks());
+            }
+        }
+    }
+    (longest, speed_steps)
 }
 
 /// How far the earliest nudge in the song moves its row, in ticks, if any row has one: 0 when every
