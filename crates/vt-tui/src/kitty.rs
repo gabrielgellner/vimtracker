@@ -9,6 +9,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::dsp::compressor::curve_db;
@@ -41,12 +43,309 @@ use crate::waveform;
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
-/// The marks that give a placeholder's row and column, from kitty's `rowcolumn-diacritics.txt`.
-pub(crate) const POSITIONS: [char; 28] = [
-    '\u{305}', '\u{30D}', '\u{30E}', '\u{310}', '\u{312}', '\u{33D}', '\u{33E}', '\u{33F}',
-    '\u{346}', '\u{34A}', '\u{34B}', '\u{34C}', '\u{350}', '\u{351}', '\u{352}', '\u{357}',
-    '\u{35B}', '\u{363}', '\u{364}', '\u{365}', '\u{366}', '\u{367}', '\u{368}', '\u{369}',
-    '\u{36A}', '\u{36B}', '\u{36C}', '\u{36D}',
+/// The most characters an image can cover across or down: one for each mark that numbers a row or a
+/// column.
+pub const MOST_CELLS: usize = 297;
+/// The marks that give a placeholder's row and column, all of kitty's `rowcolumn-diacritics.txt`,
+/// which Ghostty's `graphics_unicode.zig` has in the same order.
+pub(crate) const POSITIONS: [char; MOST_CELLS] = [
+    '\u{305}',
+    '\u{30D}',
+    '\u{30E}',
+    '\u{310}',
+    '\u{312}',
+    '\u{33D}',
+    '\u{33E}',
+    '\u{33F}',
+    '\u{346}',
+    '\u{34A}',
+    '\u{34B}',
+    '\u{34C}',
+    '\u{350}',
+    '\u{351}',
+    '\u{352}',
+    '\u{357}',
+    '\u{35B}',
+    '\u{363}',
+    '\u{364}',
+    '\u{365}',
+    '\u{366}',
+    '\u{367}',
+    '\u{368}',
+    '\u{369}',
+    '\u{36A}',
+    '\u{36B}',
+    '\u{36C}',
+    '\u{36D}',
+    '\u{36E}',
+    '\u{36F}',
+    '\u{483}',
+    '\u{484}',
+    '\u{485}',
+    '\u{486}',
+    '\u{487}',
+    '\u{592}',
+    '\u{593}',
+    '\u{594}',
+    '\u{595}',
+    '\u{597}',
+    '\u{598}',
+    '\u{599}',
+    '\u{59C}',
+    '\u{59D}',
+    '\u{59E}',
+    '\u{59F}',
+    '\u{5A0}',
+    '\u{5A1}',
+    '\u{5A8}',
+    '\u{5A9}',
+    '\u{5AB}',
+    '\u{5AC}',
+    '\u{5AF}',
+    '\u{5C4}',
+    '\u{610}',
+    '\u{611}',
+    '\u{612}',
+    '\u{613}',
+    '\u{614}',
+    '\u{615}',
+    '\u{616}',
+    '\u{617}',
+    '\u{657}',
+    '\u{658}',
+    '\u{659}',
+    '\u{65A}',
+    '\u{65B}',
+    '\u{65D}',
+    '\u{65E}',
+    '\u{6D6}',
+    '\u{6D7}',
+    '\u{6D8}',
+    '\u{6D9}',
+    '\u{6DA}',
+    '\u{6DB}',
+    '\u{6DC}',
+    '\u{6DF}',
+    '\u{6E0}',
+    '\u{6E1}',
+    '\u{6E2}',
+    '\u{6E4}',
+    '\u{6E7}',
+    '\u{6E8}',
+    '\u{6EB}',
+    '\u{6EC}',
+    '\u{730}',
+    '\u{732}',
+    '\u{733}',
+    '\u{735}',
+    '\u{736}',
+    '\u{73A}',
+    '\u{73D}',
+    '\u{73F}',
+    '\u{740}',
+    '\u{741}',
+    '\u{743}',
+    '\u{745}',
+    '\u{747}',
+    '\u{749}',
+    '\u{74A}',
+    '\u{7EB}',
+    '\u{7EC}',
+    '\u{7ED}',
+    '\u{7EE}',
+    '\u{7EF}',
+    '\u{7F0}',
+    '\u{7F1}',
+    '\u{7F3}',
+    '\u{816}',
+    '\u{817}',
+    '\u{818}',
+    '\u{819}',
+    '\u{81B}',
+    '\u{81C}',
+    '\u{81D}',
+    '\u{81E}',
+    '\u{81F}',
+    '\u{820}',
+    '\u{821}',
+    '\u{822}',
+    '\u{823}',
+    '\u{825}',
+    '\u{826}',
+    '\u{827}',
+    '\u{829}',
+    '\u{82A}',
+    '\u{82B}',
+    '\u{82C}',
+    '\u{82D}',
+    '\u{951}',
+    '\u{953}',
+    '\u{954}',
+    '\u{F82}',
+    '\u{F83}',
+    '\u{F86}',
+    '\u{F87}',
+    '\u{135D}',
+    '\u{135E}',
+    '\u{135F}',
+    '\u{17DD}',
+    '\u{193A}',
+    '\u{1A17}',
+    '\u{1A75}',
+    '\u{1A76}',
+    '\u{1A77}',
+    '\u{1A78}',
+    '\u{1A79}',
+    '\u{1A7A}',
+    '\u{1A7B}',
+    '\u{1A7C}',
+    '\u{1B6B}',
+    '\u{1B6D}',
+    '\u{1B6E}',
+    '\u{1B6F}',
+    '\u{1B70}',
+    '\u{1B71}',
+    '\u{1B72}',
+    '\u{1B73}',
+    '\u{1CD0}',
+    '\u{1CD1}',
+    '\u{1CD2}',
+    '\u{1CDA}',
+    '\u{1CDB}',
+    '\u{1CE0}',
+    '\u{1DC0}',
+    '\u{1DC1}',
+    '\u{1DC3}',
+    '\u{1DC4}',
+    '\u{1DC5}',
+    '\u{1DC6}',
+    '\u{1DC7}',
+    '\u{1DC8}',
+    '\u{1DC9}',
+    '\u{1DCB}',
+    '\u{1DCC}',
+    '\u{1DD1}',
+    '\u{1DD2}',
+    '\u{1DD3}',
+    '\u{1DD4}',
+    '\u{1DD5}',
+    '\u{1DD6}',
+    '\u{1DD7}',
+    '\u{1DD8}',
+    '\u{1DD9}',
+    '\u{1DDA}',
+    '\u{1DDB}',
+    '\u{1DDC}',
+    '\u{1DDD}',
+    '\u{1DDE}',
+    '\u{1DDF}',
+    '\u{1DE0}',
+    '\u{1DE1}',
+    '\u{1DE2}',
+    '\u{1DE3}',
+    '\u{1DE4}',
+    '\u{1DE5}',
+    '\u{1DE6}',
+    '\u{1DFE}',
+    '\u{20D0}',
+    '\u{20D1}',
+    '\u{20D4}',
+    '\u{20D5}',
+    '\u{20D6}',
+    '\u{20D7}',
+    '\u{20DB}',
+    '\u{20DC}',
+    '\u{20E1}',
+    '\u{20E7}',
+    '\u{20E9}',
+    '\u{20F0}',
+    '\u{2CEF}',
+    '\u{2CF0}',
+    '\u{2CF1}',
+    '\u{2DE0}',
+    '\u{2DE1}',
+    '\u{2DE2}',
+    '\u{2DE3}',
+    '\u{2DE4}',
+    '\u{2DE5}',
+    '\u{2DE6}',
+    '\u{2DE7}',
+    '\u{2DE8}',
+    '\u{2DE9}',
+    '\u{2DEA}',
+    '\u{2DEB}',
+    '\u{2DEC}',
+    '\u{2DED}',
+    '\u{2DEE}',
+    '\u{2DEF}',
+    '\u{2DF0}',
+    '\u{2DF1}',
+    '\u{2DF2}',
+    '\u{2DF3}',
+    '\u{2DF4}',
+    '\u{2DF5}',
+    '\u{2DF6}',
+    '\u{2DF7}',
+    '\u{2DF8}',
+    '\u{2DF9}',
+    '\u{2DFA}',
+    '\u{2DFB}',
+    '\u{2DFC}',
+    '\u{2DFD}',
+    '\u{2DFE}',
+    '\u{2DFF}',
+    '\u{A66F}',
+    '\u{A67C}',
+    '\u{A67D}',
+    '\u{A6F0}',
+    '\u{A6F1}',
+    '\u{A8E0}',
+    '\u{A8E1}',
+    '\u{A8E2}',
+    '\u{A8E3}',
+    '\u{A8E4}',
+    '\u{A8E5}',
+    '\u{A8E6}',
+    '\u{A8E7}',
+    '\u{A8E8}',
+    '\u{A8E9}',
+    '\u{A8EA}',
+    '\u{A8EB}',
+    '\u{A8EC}',
+    '\u{A8ED}',
+    '\u{A8EE}',
+    '\u{A8EF}',
+    '\u{A8F0}',
+    '\u{A8F1}',
+    '\u{AAB0}',
+    '\u{AAB2}',
+    '\u{AAB3}',
+    '\u{AAB7}',
+    '\u{AAB8}',
+    '\u{AABE}',
+    '\u{AABF}',
+    '\u{AAC1}',
+    '\u{FE20}',
+    '\u{FE21}',
+    '\u{FE22}',
+    '\u{FE23}',
+    '\u{FE24}',
+    '\u{FE25}',
+    '\u{FE26}',
+    '\u{10A0F}',
+    '\u{10A38}',
+    '\u{1D185}',
+    '\u{1D186}',
+    '\u{1D187}',
+    '\u{1D188}',
+    '\u{1D189}',
+    '\u{1D1AA}',
+    '\u{1D1AB}',
+    '\u{1D1AC}',
+    '\u{1D1AD}',
+    '\u{1D242}',
+    '\u{1D243}',
+    '\u{1D244}',
 ];
 /// The scope is brought up to date once in this many frames, about 15 times a second. Each new
 /// picture is a new image, which costs the terminal more than the program: at every frame, kitty
@@ -79,7 +378,7 @@ const DYNAMICS_RANGE_DB: f32 = 60.0;
 /// How far up and down an EQ's curve goes, in dB.
 const EQ_RANGE_DB: f32 = 18.0;
 
-/// Lines of placeholders for an image of this size.
+/// Lines of placeholders for an image of this size, up to [`MOST_CELLS`] across and down.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
     (0..height)
         .map(|row| {
@@ -120,21 +419,13 @@ fn adler32(data: &[u8]) -> u32 {
     (b << 16) | a
 }
 
-/// A PNG of solid dots in one colour on nothing. With one bit for each pixel it's small enough
-/// without compressing it, so its data is stored as it is.
-fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
-    let (width, height) = (dots[0].len(), dots.len());
-    let mut lines = Vec::with_capacity((width.div_ceil(8) + 1) * height);
-    for row in dots {
-        lines.push(0);
-        lines.extend(row.chunks(8).map(|bits| {
-            bits.iter().enumerate().fold(0_u8, |byte, (index, bit)| {
-                byte | (u8::from(*bit) << (7 - index))
-            })
-        }));
-    }
+/// The most a stored block of zlib data holds.
+const STORED_BLOCK: usize = u16::MAX as usize;
+
+/// Data as zlib data that isn't compressed, in stored blocks.
+fn stored(data: &[u8]) -> Vec<u8> {
     let mut stored = vec![0x78, 0x01];
-    let mut blocks = lines.chunks(usize::from(u16::MAX)).peekable();
+    let mut blocks = data.chunks(STORED_BLOCK).peekable();
     while let Some(block) = blocks.next() {
         let length = block.len() as u16;
         stored.push(u8::from(blocks.peek().is_none()));
@@ -142,31 +433,101 @@ fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
         stored.extend((!length).to_le_bytes());
         stored.extend(block);
     }
-    stored.extend(adler32(&lines).to_be_bytes());
+    stored.extend(adler32(data).to_be_bytes());
+    stored
+}
 
-    let mut header = Vec::new();
-    header.extend((width as u32).to_be_bytes());
-    header.extend((height as u32).to_be_bytes());
-    // One bit deep, with colours from a palette, and the usual settings for the rest.
-    header.extend([1, 3, 0, 0, 0]);
-    let mut palette = vec![0; 3];
-    palette.extend(color);
-    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
-    let chunks: [(&[u8; 4], &[u8]); 5] = [
-        (b"IHDR", &header),
-        (b"PLTE", &palette),
-        // The first colour is see-through.
-        (b"tRNS", &[0]),
-        (b"IDAT", &stored),
-        (b"IEND", &[]),
-    ];
-    for (name, data) in chunks {
-        out.extend((data.len() as u32).to_be_bytes());
-        out.extend(*name);
-        out.extend(data);
-        out.extend(crc32(&[name, data]).to_be_bytes());
+/// A PNG of solid dots in one colour on nothing.
+fn png(dots: &[Vec<bool>], color: [u8; 3]) -> Vec<u8> {
+    Picture {
+        width: dots[0].len(),
+        height: dots.len(),
+        pixels: dots.iter().flatten().map(|dot| u8::from(*dot)).collect(),
+        colors: vec![color],
     }
-    out
+    .png()
+}
+
+/// A drawing in a few colours, each with a meaning. A pixel is `0` for nothing, which lets the
+/// cell's background show through, or `n` for the nth of its colours.
+pub struct Picture {
+    pub width: usize,
+    pub height: usize,
+    /// Row by row, from the top left.
+    pub pixels: Vec<u8>,
+    pub colors: Vec<[u8; 3]>,
+}
+
+impl Picture {
+    /// Nothing but nothing, ready to draw on.
+    pub fn new(width: usize, height: usize, colors: Vec<[u8; 3]>) -> Self {
+        Self {
+            width,
+            height,
+            pixels: vec![0; width * height],
+            colors,
+        }
+    }
+
+    /// As a PNG with a palette, using as few bits for each pixel as its colours need: one for a
+    /// single colour, two for up to 3, and four for up to 15.
+    ///
+    /// Pixels that fit in one stored block, as every small drawing's do, are stored as they are,
+    /// which costs a few kilobytes at most. Bigger ones are compressed: a waveform the width of the
+    /// screen, 2400 by 546 pixels in four colours, goes from 876 KB sent to 16 KB, so writing it
+    /// never waits on the terminal to read it.
+    pub fn png(&self) -> Vec<u8> {
+        assert!(self.colors.len() < 16, "a picture has a few colours");
+        let depth = match self.colors.len() {
+            1 => 1,
+            2..=3 => 2,
+            _ => 4,
+        };
+        let per_byte = 8 / depth;
+        let mut lines = Vec::with_capacity((self.width.div_ceil(per_byte) + 1) * self.height);
+        for row in self.pixels.chunks(self.width) {
+            lines.push(0);
+            lines.extend(row.chunks(per_byte).map(|pixels| {
+                pixels
+                    .iter()
+                    .enumerate()
+                    .fold(0_u8, |byte, (index, pixel)| {
+                        byte | (pixel << (8 - depth * (index + 1)))
+                    })
+            }));
+        }
+        let data = if lines.len() <= STORED_BLOCK {
+            stored(&lines)
+        } else {
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(&lines).expect("writing to memory");
+            encoder.finish().expect("writing to memory")
+        };
+
+        let mut header = Vec::new();
+        header.extend((self.width as u32).to_be_bytes());
+        header.extend((self.height as u32).to_be_bytes());
+        // Colours from a palette, and the usual settings for the rest.
+        header.extend([depth as u8, 3, 0, 0, 0]);
+        let mut palette = vec![0; 3];
+        palette.extend(self.colors.iter().flatten());
+        let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+        let chunks: [(&[u8; 4], &[u8]); 5] = [
+            (b"IHDR", &header),
+            (b"PLTE", &palette),
+            // The first colour is see-through.
+            (b"tRNS", &[0]),
+            (b"IDAT", &data),
+            (b"IEND", &[]),
+        ];
+        for (name, data) in chunks {
+            out.extend((data.len() as u32).to_be_bytes());
+            out.extend(*name);
+            out.extend(data);
+            out.extend(crc32(&[name, data]).to_be_bytes());
+        }
+        out
+    }
 }
 
 /// A line as a PNG of solid dots, with each dot a block of pixels.
@@ -830,8 +1191,9 @@ mod tests {
 
     type Chunks = Vec<(String, Vec<u8>)>;
 
-    /// A PNG's chunks, having checked their CRCs, and its pixels.
-    fn decode(png: &[u8]) -> (Chunks, Vec<Vec<bool>>) {
+    /// A PNG's chunks, having checked their CRCs, and its pixels, each as the number of its colour
+    /// in the palette.
+    fn decode_colors(png: &[u8]) -> (Chunks, Vec<Vec<u8>>) {
         assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
         let mut chunks = Vec::new();
         let mut at = 8;
@@ -846,30 +1208,36 @@ mod tests {
         }
         let header = &chunks[0].1;
         let width = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let depth = usize::from(header[8]);
         let idat = &chunks.iter().find(|(name, _)| name == "IDAT").unwrap().1;
+        // The decoder checks the zlib data's own checksum, and what's stored or compressed.
         let mut lines = Vec::new();
-        let mut at = 2;
-        loop {
-            let last = idat[at] == 1;
-            let length = usize::from(u16::from_le_bytes([idat[at + 1], idat[at + 2]]));
-            let check = u16::from_le_bytes([idat[at + 3], idat[at + 4]]);
-            assert_eq!(check, !(length as u16));
-            lines.extend(&idat[at + 5..at + 5 + length]);
-            at += 5 + length;
-            if last {
-                break;
-            }
-        }
-        assert_eq!(&idat[at..], adler32(&lines).to_be_bytes());
-        let stride = width.div_ceil(8) + 1;
+        flate2::read::ZlibDecoder::new(&idat[..])
+            .read_to_end(&mut lines)
+            .unwrap();
+        let stride = (width * depth).div_ceil(8) + 1;
+        assert_eq!(lines.len() % stride, 0);
         let pixels = lines
             .chunks(stride)
             .map(|line| {
                 assert_eq!(line[0], 0);
                 (0..width)
-                    .map(|x| line[1 + x / 8] & (0x80 >> (x % 8)) != 0)
+                    .map(|x| {
+                        let bit = x * depth;
+                        (line[1 + bit / 8] >> (8 - depth - bit % 8)) & ((1 << depth) - 1) as u8
+                    })
                     .collect()
             })
+            .collect();
+        (chunks, pixels)
+    }
+
+    /// A PNG's chunks and which of its pixels are drawn.
+    fn decode(png: &[u8]) -> (Chunks, Vec<Vec<bool>>) {
+        let (chunks, colors) = decode_colors(png);
+        let pixels = colors
+            .iter()
+            .map(|row| row.iter().map(|color| *color != 0).collect())
             .collect();
         (chunks, pixels)
     }
@@ -1188,5 +1556,132 @@ mod tests {
             data.push_str(chunk);
         }
         assert_eq!(STANDARD.decode(data).unwrap(), pixels);
+    }
+
+    #[test]
+    fn the_marks_are_all_of_kittys_and_ghosttys_in_order() {
+        // From kitty's `rowcolumn-diacritics.txt`, whose list Ghostty's `graphics_unicode.zig` has
+        // too: 297 marks in rising order.
+        assert_eq!(POSITIONS.len(), 297);
+        assert!(POSITIONS.windows(2).all(|pair| pair[0] < pair[1]));
+        for (index, mark) in [
+            (0, '\u{305}'),
+            (27, '\u{36D}'),
+            (28, '\u{36E}'),
+            (30, '\u{483}'),
+            (100, '\u{7EB}'),
+            (159, '\u{1CD1}'),
+            (200, '\u{20D4}'),
+            (296, '\u{1D244}'),
+        ] {
+            assert_eq!(POSITIONS[index], mark, "mark {index}");
+        }
+    }
+
+    #[test]
+    fn placeholders_past_28_cells_say_where_they_are() {
+        let (width, height) = (160, 40);
+        let lines = placeholder_lines(width, height);
+        assert_eq!(lines.len(), height);
+        for (row, line) in lines.iter().enumerate() {
+            let chars: Vec<char> = line.chars().collect();
+            for (column, cell) in chars.chunks(3).enumerate() {
+                assert_eq!(cell, [PLACEHOLDER, POSITIONS[row], POSITIONS[column]]);
+            }
+            assert_eq!(ratatui::text::Line::raw(line.as_str()).width(), width);
+        }
+        let corner: Vec<char> = lines[30].chars().skip(159 * 3).collect();
+        assert_eq!(corner, [PLACEHOLDER, '\u{483}', '\u{1CD1}']);
+        let last = placeholder_lines(MOST_CELLS, MOST_CELLS);
+        let corner: Vec<char> = last[MOST_CELLS - 1]
+            .chars()
+            .skip((MOST_CELLS - 1) * 3)
+            .collect();
+        assert_eq!(corner, [PLACEHOLDER, '\u{1D244}', '\u{1D244}']);
+    }
+
+    /// A picture with a stripe of each of its colours, under a wave.
+    fn striped(width: usize, height: usize, colors: usize) -> Picture {
+        let palette = (0..colors).map(|color| [color as u8, 100, 200]).collect();
+        let mut picture = Picture::new(width, height, palette);
+        for x in 0..width {
+            let level = (x as f32 * 0.02).sin() * 0.5 + 0.5;
+            let top = (level * (height - 1) as f32) as usize;
+            for y in top..height {
+                picture.pixels[y * width + x] = (1 + x * colors / width) as u8;
+            }
+        }
+        picture
+    }
+
+    #[test]
+    fn a_picture_takes_as_few_bits_as_its_colours_need() {
+        for (colors, depth) in [(1, 1), (2, 2), (3, 2), (4, 4), (15, 4)] {
+            let picture = striped(90, 20, colors);
+            let (chunks, pixels) = decode_colors(&picture.png());
+            assert_eq!(chunks[0].1[8], depth, "{colors} colours");
+            assert_eq!(chunks[1].1.len(), 3 * (colors + 1));
+            assert_eq!(chunks[2], ("tRNS".to_string(), vec![0]));
+            assert_eq!(pixels.concat(), picture.pixels, "{colors} colours");
+        }
+    }
+
+    #[test]
+    fn a_big_picture_is_compressed_and_has_the_same_pixels() {
+        // The sample page's waveform: 160 by 14 characters of 15 by 39 pixels, in four colours.
+        let picture = striped(2400, 546, 4);
+        let png = picture.png();
+        let stored = (2400 / 2 + 1) * 546;
+        assert!(png.len() < stored / 10, "{} of {stored}", png.len());
+        let (_, pixels) = decode_colors(&png);
+        assert_eq!(pixels.concat(), picture.pixels);
+
+        // Lines of 64 bytes, a filter byte and 63 of pixels: 1023 of them fit in one stored block,
+        // which says it's the last and isn't compressed, and 1024 don't.
+        for (height, is_stored) in [(1023, true), (1024, false)] {
+            let picture = striped(504, height, 1);
+            let (chunks, pixels) = decode_colors(&picture.png());
+            let idat = &chunks.iter().find(|(name, _)| name == "IDAT").unwrap().1;
+            assert_eq!(idat[..3] == [0x78, 0x01, 1], is_stored, "{height} lines");
+            assert_eq!(idat.len() > 64 * height, is_stored, "{height} lines");
+            assert_eq!(pixels.concat(), picture.pixels);
+        }
+    }
+
+    #[test]
+    fn the_existing_drawings_are_unchanged() {
+        // Each PNG's size and CRC, as they were before pictures could have more colours or be
+        // compressed: the Sound page's waveform, the explorer's preview, the kit picker's and an
+        // envelope.
+        let frames: Vec<[f32; 2]> = (0..3000)
+            .map(|frame| {
+                let level = (frame as f32 * 0.05).sin() * (-(frame as f32) / 900.0).exp();
+                [level, -level * 0.5]
+            })
+            .collect();
+        let color = [200, 120, 40];
+        let drawings = [
+            waveform_png(&frames, color, WAVEFORM_WIDTH, WAVEFORM_HEIGHT),
+            spans_png(
+                &waveform_spans(&frames, PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT),
+                PREVIEW_SAMPLE_HEIGHT,
+                color,
+            ),
+            spans_png(
+                &waveform_spans(&frames, PREVIEW_WAVE_WIDTH, PREVIEW_WAVE_HEIGHT),
+                PREVIEW_WAVE_HEIGHT,
+                color,
+            ),
+            envelope_png(&adsr(1, 200, 0, 50), color, 28, 4),
+        ];
+        let before = [
+            (6039, 0x5bff_5631),
+            (9315, 0xf14b_3760),
+            (783, 0x143f_a841),
+            (9315, 0x8dc2_50f9),
+        ];
+        for (png, (length, crc)) in drawings.iter().zip(before) {
+            assert_eq!((png.len(), crc32(&[png])), (length, crc));
+        }
     }
 }

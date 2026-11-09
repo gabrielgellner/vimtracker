@@ -101,15 +101,57 @@ What `kitty.rs` uses of the protocol:
 | Part | Used as |
 |---|---|
 | Transmit and place | `a=T,U=1,f=100,i=<id>,c=<columns>,r=<rows>,q=2`, a virtual placement of a PNG |
-| PNG | 1 bit deep, with a palette of two colours and the first see-through (`tRNS`) |
+| PNG | 1, 2 or 4 bits deep, as a picture's colours need, with a palette whose first entry is see-through (`tRNS`); the small drawings are 1 bit with one colour. Pixels that fit in one stored zlib block, as every small drawing's do, are stored; bigger ones are compressed inside the PNG |
 | Chunking | Base64 in pieces of at most 4096 bytes, `m=1` on all but the last |
-| Unicode placeholders | `U+10EEEE` with row and column diacritics, the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
+| Unicode placeholders | `U+10EEEE` with row and column diacritics, all 297 of them, so an image covers up to 297 characters across and down; the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
 | Delete | `a=d,d=I,i=<id>,q=2`, by id, freeing the data, when an image is replaced and on quitting |
 | Query | `a=q,i=31,f=100` at start, as above |
 
 In kitty 0.50 on 2026-11-08, `scripts/live.sh` with the program run under `script` to record what
 it wrote showed the query, then the filter curve, envelope and LFO images sent as above on the
 track page, and the replaced ones deleted by id.
+
+### Big images
+
+The sample page's waveform is to be 160 characters by 14, which at the author's 15 by 39 pixels a
+character (kitty full screen on a MacBook, 163 by 42 characters at 2560×1664) is 2400 by 546
+pixels. `cargo run --release -p vt-tui --example big_image` draws one, in four colours, sends it
+ten times each way the protocol offers, and times each from starting to write it to the terminal's
+`OK`, so the time counts the terminal's decoding too. In kitty 0.50 on macOS, on 2026-11-09, with
+the median of ten (other runs agreed within about a millisecond, apart from one on a busy machine
+up to 3 ms slower):
+
+| Way | Bytes sent | Encode ms | Round trip ms |
+|---|---|---|---|
+| PNG, stored, as the small drawings are | 876,556 | 1.7 | 13.2 |
+| The stored PNG with `o=z`, zlib level 1 | 47,923 | 1.9 | 12.2 |
+| The stored PNG with `o=z`, level 6 | 15,827 | 3.2 | 11.9 |
+| PNG compressing its own data, level 1 | 47,346 | 0.9 | 11.3 |
+| PNG compressing its own data, level 6, which `Picture::png` makes | 15,518 | 2.2 | 10.8 |
+| Raw RGBA with `o=z`, level 1 | 270,400 | 2.8 | 20.8 |
+| The stored PNG through shared memory, `t=s` | 64 | 1.6 | 6.2 |
+| Raw RGBA through shared memory | 81 | 0.8 | 4.9 |
+
+*   A PNG with `o=z` needs `S=`, the PNG's size before compressing, in kitty, as its docs say;
+    without it kitty refused every one. Ghostty's source decompresses first and needs no size.
+*   The program compresses inside the PNG instead: the same bytes as `o=z` for a little less time,
+    no key that kitty and Ghostty treat differently, and a PNG that any reader, and `just
+    screenshots`, takes as it is.
+*   Shared memory is the fastest, at half the round trip, but needs `shm_open` and `mmap` through
+    `unsafe` code, and an object the terminal never reads stays until the machine restarts. At
+    11 ms a send, and only on zoom, scroll or edit, compressing is enough for now.
+*   kitty fits an image to the characters its placement covers keeping its aspect ratio, so a big
+    image should be drawn at the terminal's own character size in pixels
+    (`crossterm::terminal::window_size`) to fill them with no scaling. Remote control's window here
+    had characters of 14 by 25.
+
+**Cell backgrounds under an image.** kitty's docs say of a placeholder: "The background color is
+interpreted as the background color, visible if the image is transparent." The example draws the
+image over cells whose background is a selection, a cursor, and a playhead that moves every frame,
+to check by eye. The author checked it full screen on 2026-11-09, in kitty 0.50.0 and Ghostty
+1.4.0: the waveform fills its cells past the 28th column, the selection, cursor and playhead show
+through it, and the playhead moves smoothly with nothing left behind. A cell background fills whole
+cells, so the playhead is a character wide; a finer one is an idea for the sample page (#274).
 
 ### Ghostty
 
@@ -127,6 +169,9 @@ tried:
     refuse `f=100`, and so the query, which then stops the program rather than drawing nothing.
 *   Ghostty doesn't answer the protocol's newer feature queries (issue #14843), which the program
     doesn't use.
+*   Read on 2026-11-09: `graphics_unicode.zig` has the same 297 row and column marks as kitty's
+    `rowcolumn-diacritics.txt`, in the same order. `graphics_image.zig` decompresses `o=z` before
+    decoding a PNG, and reads shared memory where its limits allow it.
 
 ## Still to check by hand
 
