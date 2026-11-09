@@ -8,6 +8,7 @@ use ratatui::style::Color;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::groove::GrooveId;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
 use vt_model::settings::{SettingId, gate_value};
@@ -795,23 +796,32 @@ fn muted_and_soloed_tracks_change_what_sounds() {
 }
 
 #[test]
-fn swing_commands_set_the_project_and_the_cursors_track_and_undo() {
+fn groove_commands_set_the_project_and_the_cursors_track_and_undo() {
     let (mut app, _realtime) = app();
-    command(&mut app, "swing 66.7");
-    assert_eq!(app.song().swing, 667);
-    command(&mut app, "swing 80");
-    assert_eq!(app.song().swing, 667, "out of range is refused");
-    assert!(app.status.contains("50 to 75"), "{}", app.status);
-    command(&mut app, "tswing 60");
-    assert_eq!(app.song().tracks[0].swing, Some(600));
-    assert_eq!(app.song().tracks[1].swing, None);
-    command(&mut app, "tswing off");
-    assert_eq!(app.song().tracks[0].swing, None);
+    let groove = |name: &str| GrooveId::named(name).unwrap();
+    command(&mut app, "swing 66");
+    assert_eq!(app.song().groove, groove("Swing 66"));
+    command(&mut app, "swing 67");
+    assert_eq!(
+        app.song().groove,
+        groove("Swing 66"),
+        "only a swing groove's percent"
+    );
+    assert!(app.status.contains("52, 54"), "{}", app.status);
+    command(&mut app, "groove mpc-58");
+    assert_eq!(app.song().groove, groove("MPC 58"));
+    command(&mut app, "tgroove pull");
+    assert_eq!(app.song().tracks[0].groove, Some(groove("Pull")));
+    assert_eq!(app.song().tracks[1].groove, None);
+    command(&mut app, "tgroove off");
+    assert_eq!(app.song().tracks[0].groove, None);
     press(&mut app, "uu");
-    assert_eq!(app.song().swing, 667);
-    assert_eq!(app.song().tracks[0].swing, None);
+    assert_eq!(app.song().groove, groove("MPC 58"));
+    assert_eq!(app.song().tracks[0].groove, None);
     press(&mut app, "u");
-    assert_eq!(app.song().swing, 500);
+    assert_eq!(app.song().groove, groove("Swing 66"));
+    press(&mut app, "u");
+    assert_eq!(app.song().groove, GrooveId::STRAIGHT);
 }
 
 fn wav(path: &std::path::Path) {
@@ -1856,7 +1866,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         "{text:?}"
     );
     assert!(
-        text[6].contains("Swing"),
+        text[6].contains("Groove"),
         "a voice of three settings: {text:?}"
     );
     assert!(
@@ -1878,7 +1888,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, "kll");
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "jjj");
-    assert_eq!(column_name(&app), "Swing", "the row with only swing");
+    assert_eq!(column_name(&app), "Groove", "the row with only its groove");
     press(&mut app, "ggh-");
     assert_eq!(
         app.song().tracks[0].machine,
@@ -3812,10 +3822,12 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     press(&mut app, "ggl");
     press(&mut app, "+");
     assert_eq!(track(&app).level, 0xF0);
-    press(&mut app, "jjjj");
-    typed(&mut app, "60");
-    press(&mut app, "+");
-    assert_eq!(track(&app).swing, Some(650));
+    press(&mut app, "jjjj+");
+    assert_eq!(
+        track(&app).groove,
+        GrooveId::from_index(1),
+        "a groove moves one at a time"
+    );
     press(&mut app, "Ljj0ll");
     press(&mut app, "+");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
@@ -3920,10 +3932,10 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
 }
 
 #[test]
-fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() {
+fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that() {
     let (mut app, _realtime) = on_track_page();
     command(&mut app, "swing 60");
-    let swing_cell = |app: &App| {
+    let groove_cell = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(80, 16);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
@@ -3931,26 +3943,27 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 7)].symbol() == "S")
+            .position(|x| buffer[(x, 7)].symbol() == "G")
             .unwrap() as u16
             + 10;
-        let text: String = (at..at + 2).map(|x| buffer[(x, 7)].symbol()).collect();
+        let text: String = (at..at + 8).map(|x| buffer[(x, 7)].symbol()).collect();
         (text, buffer[(at, 7)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
-    assert_eq!(app.song().tracks[0].swing, None);
-    assert_eq!(swing_cell(&app), ("60".to_owned(), vt_tui::theme::OVERLAY2));
+    assert_eq!(app.song().tracks[0].groove, None);
+    let dim = vt_tui::theme::OVERLAY2;
+    assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
     press(&mut app, "$=");
-    assert_eq!(app.song().tracks[0].swing, Some(610));
+    assert_eq!(app.song().tracks[0].groove, GrooveId::swing(62));
     press(&mut app, "k");
-    assert_eq!(swing_cell(&app), ("61".to_owned(), Color::Reset));
+    assert_eq!(groove_cell(&app), ("Swing 62".to_owned(), Color::Reset));
 
     press(&mut app, "j$x");
-    assert_eq!(app.song().tracks[0].swing, None);
+    assert_eq!(app.song().tracks[0].groove, None);
     press(&mut app, "k");
-    assert_eq!(swing_cell(&app), ("60".to_owned(), vt_tui::theme::OVERLAY2));
+    assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 }
 
 #[test]
@@ -3994,23 +4007,31 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[6].starts_with("Mode") && lines[6].contains("12 dB"));
     assert!(lines[6].contains("Send B"));
     assert!(lines[7].starts_with("Cut") && lines[7].contains("FF00 ▕█████████▏"));
-    assert!(lines[7].contains("Swing"));
+    assert!(lines[7].contains("Groove") && lines[7].contains("Straight"));
     assert!(lines[8].starts_with("Res") && lines[8].contains("Pitch"));
 }
 
 #[test]
-fn track_swing_on_the_page_matches_its_command() {
+fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
+    use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "$");
-    typed(&mut app, "60");
-    assert_eq!(app.song().tracks[0].swing, Some(600));
+    let groove = |name: &str| GrooveId::named(name);
+    press(&mut app, "gg$jjjj");
+    assert_eq!(app.track_control(), Control::Groove);
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    press(&mut app, "/pull");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].groove, groove("Pull"));
     press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].swing, Some(610));
-    typed(&mut app, "off");
-    assert_eq!(app.song().tracks[0].swing, None);
-    typed(&mut app, "90");
-    assert_eq!(app.song().tracks[0].swing, None);
-    assert!(app.status.contains("50 to 75"), "{}", app.status);
+    assert_eq!(app.song().tracks[0].groove, groove("Custom 1"));
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].groove, None, "back to the project's");
+    // `i` chooses from the list too, which starts with following the project's.
+    press(&mut app, "i");
+    assert_eq!(app.mode, Mode::Picker);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].groove, None);
 }
 
 #[test]
@@ -7855,10 +7876,10 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "HHlgg");
     assert_eq!(app.track_control(), Control::Level);
     press(&mut app, "jjjj");
-    assert_eq!(app.track_control(), Control::Swing);
+    assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "jjj");
     press(&mut app, "kkk");
-    assert_eq!(app.track_control(), Control::Swing);
+    assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "Ggg");
     assert_eq!(app.track_control(), Control::Level, "G and gg keep it too");
 }
@@ -9119,16 +9140,22 @@ fn the_project_page_edits_the_values_its_commands_set() {
     use vt_tui::project_page::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
 
-    project_cursor_on(&mut app, ProjectControl::Swing);
+    project_cursor_on(&mut app, ProjectControl::Groove);
     tap(&mut app, "=");
-    assert_eq!(app.song().swing, 510);
-    tap(&mut app, "i66.7");
+    assert_eq!(app.song().groove, GrooveId::swing(52).unwrap());
+    tap(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    tap(&mut app, "/mpc 66");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().swing, 667);
+    assert_eq!(app.song().groove, GrooveId::named("MPC 66").unwrap());
     tap(&mut app, "x");
-    assert_eq!(app.song().swing, 500);
+    assert_eq!(app.song().groove, GrooveId::STRAIGHT);
     tap(&mut app, "u");
-    assert_eq!(app.song().swing, 667, "undo, as :swing has");
+    assert_eq!(
+        app.song().groove,
+        GrooveId::named("MPC 66").unwrap(),
+        "undo, as :groove has"
+    );
 
     project_cursor_on(&mut app, ProjectControl::Launch);
     assert_eq!(app.song().launch, Launch::named("1bar").unwrap());
@@ -9394,13 +9421,15 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     tap(&mut app, "j");
     assert_eq!(app.project_control(), ProjectControl::Seed, "a row of one");
     tap(&mut app, "jj");
-    assert_eq!(app.project_control(), ProjectControl::Audio);
-    tap(&mut app, "kkk");
+    assert_eq!(app.project_control(), ProjectControl::GrooveShown);
+    tap(&mut app, "j");
     assert_eq!(
         app.project_control(),
-        ProjectControl::AutoJump,
+        ProjectControl::Humanise,
         "back in the right column"
     );
+    tap(&mut app, "kkkk");
+    assert_eq!(app.project_control(), ProjectControl::AutoJump);
     // A count goes further, and gg and G go to the ends, keeping it too.
     tap(&mut app, "2k");
     assert_eq!(app.project_control(), ProjectControl::Root);
@@ -9421,4 +9450,150 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     assert!(app.project_fine);
     // The status line names the row.
     assert_eq!(vt_tui::views::status::column_name(&app), "BPM");
+}
+
+/// The project page as text, a line a row.
+fn project_page_lines(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(120, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::project::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..40)
+        .map(|y| {
+            (0..120)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect()
+}
+
+#[test]
+fn the_project_page_draws_the_projects_groove_as_ticks_by_its_pushes() {
+    let (mut app, _realtime) = on_the_project_page();
+    command(&mut app, "swing 66");
+    let lines = project_page_lines(&app);
+    let at = |start: &str| {
+        lines
+            .iter()
+            .position(|line| line.starts_with(start))
+            .unwrap_or_else(|| panic!("{start}: {lines:#?}"))
+    };
+    let edit = at("Edit");
+    assert!(lines[edit].contains("Swing 66"), "{}", lines[edit]);
+    let steps = at("Steps");
+    assert!(lines[steps].contains("Steps     2 "), "{}", lines[steps]);
+    assert!(lines[steps].contains("Humanise  0 ticks"));
+    let push = at("Push");
+    assert!(lines[push].contains("    0  +77  ticks"), "{}", lines[push]);
+    assert!(lines[at("Velocity")].contains("  100  100  %"));
+    // A tick above the line over the late step, and none under it.
+    assert!(
+        lines[push - 3].trim_end().ends_with('▆'),
+        "{}",
+        lines[push - 3]
+    );
+    assert!(lines[push - 2].contains("──────────"));
+    assert!(lines[push - 1].trim().is_empty());
+}
+
+#[test]
+fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _realtime) = on_the_project_page();
+    command(&mut app, "swing 66");
+    let custom = GrooveId::custom(0).unwrap();
+    project_cursor_on(&mut app, ProjectControl::Push(1));
+    tap(&mut app, "=");
+    assert_eq!(app.song().groove, custom, "the project plays the copy");
+    assert_eq!(app.song().grooves[0].pushes(), &[0, 78]);
+    assert_eq!(app.groove_shown, Some(custom));
+    assert!(app.status.contains("copied to Custom 1"), "{}", app.status);
+    tap(&mut app, "u");
+    assert_eq!(
+        app.song().groove,
+        GrooveId::swing(66).unwrap(),
+        "one undo step"
+    );
+    assert!(app.song().grooves.is_empty());
+    // Its own changes in place.
+    command(&mut app, "groove custom-1");
+    assert_eq!(app.project_control(), ProjectControl::Push(1));
+    tap(&mut app, "i-12");
+    special(&mut app, KeyCode::Enter);
+    let own = |app: &App| app.song().groove(custom);
+    assert_eq!(own(&app).push(1), -12);
+    tap(&mut app, "+");
+    assert_eq!(own(&app).push(1), -2);
+    tap(&mut app, "x");
+    assert_eq!(own(&app).push(1), 0, "back on the grid");
+    tap(&mut app, "i200");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(own(&app).push(1), 0, "past half a step is refused");
+    assert!(app.status.contains("-120 to 120"), "{}", app.status);
+    // The first step stays on the grid.
+    tap(&mut app, "0=");
+    assert_eq!(own(&app).push(0), 0);
+    assert!(app.status.contains("first step"), "{}", app.status);
+
+    project_cursor_on(&mut app, ProjectControl::GrooveSteps);
+    tap(&mut app, "i16");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(own(&app).steps(), 16);
+    tap(&mut app, "-");
+    assert_eq!(own(&app).steps(), 15);
+    project_cursor_on(&mut app, ProjectControl::Humanise);
+    tap(&mut app, "+");
+    assert_eq!(own(&app).humanise(), 4);
+    project_cursor_on(&mut app, ProjectControl::Velocity(3));
+    tap(&mut app, "_");
+    assert_eq!(own(&app).velocity(3), 90);
+    tap(&mut app, "i150");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(own(&app).velocity(3), 150);
+
+    // Edit chooses which is drawn, and x goes back to the project's.
+    project_cursor_on(&mut app, ProjectControl::GrooveShown);
+    tap(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    tap(&mut app, "/pull");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.shown_groove().0, GrooveId::named("Pull").unwrap());
+    assert_eq!(app.song().groove, custom, "only what's drawn changes");
+    tap(&mut app, "x");
+    assert_eq!(app.shown_groove().0, custom);
+}
+
+#[test]
+fn a_recorded_note_goes_on_the_row_nearest_where_the_groove_lands_it() {
+    let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
+    // Every other step lands 96 ticks late, 0.4 of a step.
+    command(&mut app, "swing 70");
+    let mut at = play_from_the_top(&mut app, &mut rt);
+    press(&mut app, " r");
+    tap(&mut app, "i");
+    // Step 9 of the song is row 1, which lands at 9.4. At 9.65 it's nearer than row 2, at 10,
+    // though on the grid row 2 would be.
+    play_to(&mut app, &mut rt, &mut at, 9.65);
+    let a = Key::char('a');
+    app.key(a, Instant::now());
+    let rows = rows_of(&app, 1);
+    assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
+    assert_eq!(rows[2].note, Note::Empty);
+    // Let go at 9.8, which is a quarter of row 1's step as the groove makes it, 0.6 long.
+    play_to(&mut app, &mut rt, &mut at, 9.8);
+    app.key_released(a, Instant::now());
+    let (pulses, length) = length_of(&rows_of(&app, 1)[1]).unwrap();
+    assert_eq!(pulses, 1);
+    assert!(near(length, 0x40), "{length:?}");
+
+    // A note just before a late row's landing goes on it, and waits for it to land.
+    play_to(&mut app, &mut rt, &mut at, 11.3);
+    let s = Key::char('s');
+    app.key(s, Instant::now());
+    assert_eq!(rows_of(&app, 1)[3].note, Note::Empty, "not before it lands");
+    play_to(&mut app, &mut rt, &mut at, 11.5);
+    app.key_released(s, Instant::now());
+    assert_eq!(rows_of(&app, 1)[3].note, Note::On(62));
 }

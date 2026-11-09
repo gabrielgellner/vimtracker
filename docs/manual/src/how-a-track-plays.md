@@ -180,6 +180,23 @@ the track starts its chain again on its next step.
 So playing from a step hears exactly what playing up to it would, since both work the
 count out in the same way.
 
+## The groove moves steps, not the count
+
+A groove (see **Groove** in the FX guide) moves where each step lands, a little late
+or early, but never the count: each step is still the step it was, it only sounds a
+few ticks from its place on the grid. The groove counts the song's steps from its
+start or its last reset, so every track swings on the same steps whatever its length:
+
+```text
+steps:     0    1    2    3          Swing 66: every other step 77 ticks late
+grid:      |    |    |    |
+heard:     |     |   |     |
+```
+
+Everything on a step moves with it: each pulse of a `MLT`, a lane's value, `DEL`
+counting from where the step lands, and a note's `Gate`, which is a share of its
+step as the groove makes it. A step's `GRV` chooses its groove before it lands.
+
 ## The keys, by column
 
 | Cursor on | `gs`, `ge`, `:len` | `:lane 3` |

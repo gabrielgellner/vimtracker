@@ -28,6 +28,8 @@ const STEP: usize = 6000;
 /// The screen's size in cells.
 const WIDTH: u16 = 120;
 const HEIGHT: u16 = 24;
+/// The project page's, which is taller, with its groove under its settings.
+const PROJECT_HEIGHT: u16 = 32;
 
 /// One picture for the manual.
 struct Shot {
@@ -109,7 +111,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "project",
         rows: GATES,
-        keys: " 9jj=l+++:set scale=dorian<Enter>",
+        keys: " 9jj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
         play: 0,
         voice: None,
         kick: false,
@@ -222,7 +224,12 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let now = play(&mut app, &mut realtime, shot.play, start);
     let mut sent = Vec::new();
     Graphics::new().sync(&mut app, &mut sent)?;
-    let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, HEIGHT));
+    let height = if shot.name == "project" {
+        PROJECT_HEIGHT
+    } else {
+        HEIGHT
+    };
+    let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, height));
     let Ok(_) = terminal.draw(|frame| draw_screen(frame, &mut app, None, now));
     let path = folder.join(format!("{}.svg", shot.name));
     std::fs::write(

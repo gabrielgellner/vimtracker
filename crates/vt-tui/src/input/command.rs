@@ -5,6 +5,7 @@ use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
 use vt_model::constants::MAX_LABEL_CHARS;
+use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::label::is_name;
 use vt_model::song::{LAUNCH_WORDS, Launch};
 
@@ -50,7 +51,12 @@ pub enum Line {
     /// Move this phrase's notes to the nearest in the scale.
     FitToScale,
     Seed(u64),
-    Swing(u16),
+    /// The groove every track plays with unless it has its own.
+    Groove(GrooveId),
+    /// Choose the project's groove from a list, or the track's.
+    PickGroove {
+        track: bool,
+    },
     Chain(u32),
     /// Render the loop, into a file the explorer chooses the folder of if there's no path.
     Render {
@@ -60,7 +66,8 @@ pub enum Line {
         /// Write one file per track into the path, as a folder.
         stems: bool,
     },
-    TrackSwing(Option<u16>),
+    /// This track's own groove, or none to follow the project's.
+    TrackGroove(Option<GrooveId>),
     TrackLevel(u8),
     Reset(Option<usize>),
     /// Set when launched chains start, or show it.
@@ -94,10 +101,12 @@ pub enum LineError {
     Render,
     #[error(":seed takes a number")]
     Seed,
-    #[error(":swing takes a percent from 50 to 75, to one decimal")]
+    #[error(":groove takes a groove's name, such as swing-66, or nothing to choose from a list")]
+    Groove,
+    #[error(":tgroove takes a groove's name, such as mpc-58, off, or nothing to choose")]
+    TrackGroove,
+    #[error(":swing takes 50, 52, 54, 56, 58, 60, 62, 64, 66 or 70, a swing groove's percent")]
     Swing,
-    #[error(":tswing takes a percent from 50 to 75, or off")]
-    TrackSwing,
     #[error(":tvol takes a level in hex, from 00 to FF")]
     TrackLevel,
     #[error(":reset takes a number of steps, 1 or more, with 0x for hex, or off")]
@@ -142,13 +151,17 @@ fn steps(text: &str) -> Option<usize> {
     parsed.filter(|steps| *steps > 0)
 }
 
-/// Read a swing percent as tenths, so `66.7` is 667.
-pub(crate) fn swing(text: &str) -> Option<u16> {
-    let thousandths = millibpm(text)?;
-    if !thousandths.is_multiple_of(100) {
-        return None;
-    }
-    u16::try_from(thousandths / 100).ok()
+/// The swing groove at a percent, which `:swing` is a shorthand for: 50 is straight.
+pub(crate) fn swing(text: &str) -> Option<GrooveId> {
+    let percent: u16 = text.trim_end_matches('%').parse().ok()?;
+    debug_assert!(SWING_PERCENTS.contains(&66));
+    GrooveId::swing(percent)
+}
+
+/// A groove's name as the command line writes it: lower case, with a hyphen for each space, so
+/// `Swing 66` is `swing-66`.
+pub fn groove_word(id: GrooveId) -> String {
+    id.name().to_lowercase().replace(' ', "-")
 }
 
 /// `:render`'s flags, which its parser reads and Tab completes.
@@ -204,6 +217,8 @@ pub enum Takes {
     Scale,
     /// A root note.
     Root,
+    /// A groove's name, and for some commands `off`.
+    Groove { off: bool },
 }
 
 /// A command: its name, what it does, what it takes, and how its argument is read.
@@ -270,7 +285,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 27] = [
+pub const COMMANDS: [Command; 28] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -353,21 +368,33 @@ pub const COMMANDS: [Command; 27] = [
         parse: |argument| millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
     },
     Command {
-        name: "swing",
-        meaning: "The song's swing",
-        takes: Takes::Nothing,
-        parse: |argument| swing(argument).map(Line::Swing).ok_or(LineError::Swing),
+        name: "groove",
+        meaning: "The project's groove, or choose one",
+        takes: Takes::Groove { off: false },
+        parse: |argument| match argument {
+            "" => Ok(Line::PickGroove { track: false }),
+            _ => GrooveId::named(argument)
+                .map(Line::Groove)
+                .ok_or(LineError::Groove),
+        },
     },
     Command {
-        name: "tswing",
-        meaning: "This track's swing, or off",
-        takes: Takes::Words(&["off"]),
+        name: "tgroove",
+        meaning: "This track's groove, or off to follow the project's",
+        takes: Takes::Groove { off: true },
         parse: |argument| match argument {
-            "off" => Ok(Line::TrackSwing(None)),
-            _ => swing(argument)
-                .map(|value| Line::TrackSwing(Some(value)))
-                .ok_or(LineError::TrackSwing),
+            "" => Ok(Line::PickGroove { track: true }),
+            "off" => Ok(Line::TrackGroove(None)),
+            _ => GrooveId::named(argument)
+                .map(|groove| Line::TrackGroove(Some(groove)))
+                .ok_or(LineError::TrackGroove),
         },
+    },
+    Command {
+        name: "swing",
+        meaning: "The project's groove, as a swing percent",
+        takes: Takes::Nothing,
+        parse: |argument| swing(argument).map(Line::Groove).ok_or(LineError::Swing),
     },
     Command {
         name: "tvol",
@@ -614,11 +641,23 @@ mod tests {
         );
         assert!(parse("render a.wav --rows 0").is_err());
         assert!(parse("seed x").is_err());
-        assert_eq!(parse("swing 66.7"), Ok(Line::Swing(667)));
-        assert_eq!(parse("swing 50"), Ok(Line::Swing(500)));
-        assert!(parse("swing 66.75").is_err());
-        assert_eq!(parse("tswing 60"), Ok(Line::TrackSwing(Some(600))));
-        assert_eq!(parse("tswing off"), Ok(Line::TrackSwing(None)));
+        let groove = |name: &str| GrooveId::named(name).unwrap();
+        assert_eq!(parse("swing 66"), Ok(Line::Groove(groove("Swing 66"))));
+        assert_eq!(parse("swing 50"), Ok(Line::Groove(GrooveId::STRAIGHT)));
+        assert_eq!(parse("swing 66.7"), Err(LineError::Swing));
+        assert_eq!(parse("swing 68"), Err(LineError::Swing));
+        assert_eq!(parse("groove mpc-58"), Ok(Line::Groove(groove("MPC 58"))));
+        assert_eq!(
+            parse("groove Swing 66"),
+            Ok(Line::Groove(groove("swing66")))
+        );
+        assert_eq!(parse("groove"), Ok(Line::PickGroove { track: false }));
+        assert_eq!(parse("groove fast"), Err(LineError::Groove));
+        let custom = Line::TrackGroove(Some(groove("Custom 2")));
+        assert_eq!(parse("tgroove custom-2"), Ok(custom));
+        assert_eq!(parse("tgroove off"), Ok(Line::TrackGroove(None)));
+        assert_eq!(parse("tgroove"), Ok(Line::PickGroove { track: true }));
+        assert!(parse("tswing 60").is_err(), "a groove replaces it");
         assert_eq!(parse("reset 64"), Ok(Line::Reset(Some(64))));
         assert_eq!(parse("reset off"), Ok(Line::Reset(None)));
         assert!(parse("reset 0").is_err());

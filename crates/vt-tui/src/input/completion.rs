@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use vt_model::groove::GrooveId;
 use vt_model::sample::is_sample_file;
 use vt_model::scale::{ROOTS, ScaleKind};
 
@@ -239,6 +240,12 @@ fn value_of(
             words(start, title, typed, all)
         }
         Takes::Root => words(start, title, typed, ROOTS),
+        Takes::Groove { off } => {
+            let names: Vec<String> = GrooveId::all().map(command::groove_word).collect();
+            let off = off.then_some("off");
+            let all = off.into_iter().chain(names.iter().map(String::as_str));
+            words(start, title, typed, all)
+        }
         Takes::Folder => paths(start, typed, places.home, Files::Folders),
         Takes::Sample => paths(start, typed, places.home, Files::Samples),
         Takes::Render => paths(start, typed, places.home, Files::Wav),
@@ -678,7 +685,10 @@ mod tests {
                         .collect()
                 }
             };
-            if matches!(command.takes, Takes::Words(_) | Takes::Setting) {
+            if matches!(
+                command.takes,
+                Takes::Words(_) | Takes::Setting | Takes::Groove { .. }
+            ) {
                 assert!(!lines.is_empty(), "{} completes something", command.name);
             }
             for line in lines {

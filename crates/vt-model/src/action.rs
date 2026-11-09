@@ -6,9 +6,10 @@ use thiserror::Error;
 
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
-    MAX_SOUND_TRACKS, MAX_SWING, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_SWING, MIN_TRANSPOSE,
+    MAX_SOUND_TRACKS, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
+use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
 use crate::lfo::Lfo;
@@ -169,12 +170,17 @@ pub enum Action {
         chain: u32,
         label: String,
     },
-    /// Set the project's swing, in tenths of a percent.
-    SetSwing(u16),
-    /// Give a track its own swing, or `None` to follow the project.
-    SetTrackSwing {
+    /// Set the groove every track plays with unless it has its own.
+    SetGroove(GrooveId),
+    /// Give a track its own groove, or `None` to follow the project.
+    SetTrackGroove {
         track: usize,
-        swing: Option<u16>,
+        groove: Option<GrooveId>,
+    },
+    /// Make or change one of the project's own grooves, counted from 0.
+    SetCustomGroove {
+        custom: usize,
+        groove: Groove,
     },
     /// Set where one of a track's held values starts.
     SetTrackBase {
@@ -461,8 +467,8 @@ pub enum EditError {
     LastRow,
     #[error("transpose goes from {MIN_TRANSPOSE} to {MAX_TRANSPOSE}")]
     Transpose,
-    #[error("swing must be from 50 to 75")]
-    Swing,
+    #[error("a project has {CUSTOM_GROOVES} grooves of its own")]
+    CustomGroove,
     #[error("no track {0}")]
     NoTrack(usize),
     #[error("a reset needs at least 1 step")]
@@ -699,20 +705,22 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             labelled.label.clone_from(label);
             owner.chains.insert(*chain, Arc::new(labelled));
         }
-        Action::SetSwing(swing) => {
-            if !(MIN_SWING..=MAX_SWING).contains(swing) {
-                return Err(EditError::Swing);
-            }
-            next.swing = *swing;
-        }
-        Action::SetTrackSwing { track, swing } => {
-            if swing.is_some_and(|swing| !(MIN_SWING..=MAX_SWING).contains(&swing)) {
-                return Err(EditError::Swing);
-            }
+        Action::SetGroove(groove) => next.groove = *groove,
+        Action::SetTrackGroove { track, groove } => {
             next.tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
-                .swing = *swing;
+                .groove = *groove;
+        }
+        Action::SetCustomGroove { custom, groove } => {
+            if *custom >= CUSTOM_GROOVES {
+                return Err(EditError::CustomGroove);
+            }
+            // The ones before it are made too, on the grid, as they'd have played.
+            if next.grooves.len() <= *custom {
+                next.grooves.resize(*custom + 1, Groove::default());
+            }
+            next.grooves[*custom] = *groove;
         }
         Action::SetTrackBase {
             track,

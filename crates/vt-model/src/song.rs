@@ -12,6 +12,7 @@ use crate::constants::{
     FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
+use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::scale::Scale;
@@ -279,8 +280,9 @@ pub struct Track {
     pub fine: BTreeMap<SettingId, u8>,
     pub mute: bool,
     pub solo: bool,
-    /// This track's own swing, in tenths of a percent, instead of the project's.
-    pub swing: Option<u16>,
+    /// This track's own groove, instead of the project's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub groove: Option<GrooveId>,
     /// The track's level, set outside its patterns. It also scales what the track sends to the
     /// returns.
     #[serde(default = "unity_level")]
@@ -544,7 +546,7 @@ impl Default for Track {
             fine: BTreeMap::new(),
             mute: false,
             solo: false,
-            swing: None,
+            groove: None,
             level: unity_level(),
             cutoff: open_cutoff(),
             resonance: 0,
@@ -1285,8 +1287,12 @@ pub struct Song {
     /// Whether the main output clips at full level. Off, a render keeps levels above it.
     #[serde(default = "default_limiter")]
     pub limiter: bool,
-    /// Project swing, in tenths of a percent.
-    pub swing: u16,
+    /// The groove every track plays with unless it has its own.
+    #[serde(default)]
+    pub groove: GrooveId,
+    /// The project's own grooves, `Custom 1` first. One not made yet plays on the grid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grooves: Vec<Groove>,
     /// When launched chains start.
     #[serde(default)]
     pub launch: Launch,
@@ -1306,7 +1312,8 @@ impl Song {
             skip: default_skip(),
             scale: Scale::default(),
             limiter: default_limiter(),
-            swing: 500,
+            groove: GrooveId::STRAIGHT,
+            grooves: Vec::new(),
             launch: Launch::default(),
             tracks: Vec::new(),
             sections: vec![Section::default()],
@@ -1331,6 +1338,23 @@ impl Song {
     /// How many tracks play sounds. They come first, and then the fixed tracks.
     pub fn sound_tracks(&self) -> usize {
         self.tracks.len().saturating_sub(FIXED_TRACKS)
+    }
+
+    /// A groove's pushes: one that comes with the program, or the project's own, which is a bar
+    /// on the grid until it's made.
+    pub fn groove(&self, id: GrooveId) -> Groove {
+        match id.custom_number() {
+            Some(number) => self.grooves.get(number).copied().unwrap_or_default(),
+            None => id.preset().unwrap_or_default(),
+        }
+    }
+
+    /// The groove a track plays with when no step changes it: its own, or the project's.
+    pub fn track_groove(&self, track: usize) -> GrooveId {
+        self.tracks
+            .get(track)
+            .and_then(|track| track.groove)
+            .unwrap_or(self.groove)
     }
 
     /// Add a track after the last that plays sounds, with a new chain and phrase in the first
@@ -1559,7 +1583,7 @@ mod tests {
 
     #[test]
     fn a_track_saved_without_a_level_loads_at_0_db() {
-        let track: Track = ron::from_str("(mute: false, solo: true, swing: None)").unwrap();
+        let track: Track = ron::from_str("(mute: false, solo: true)").unwrap();
         assert_eq!(track.level, UNITY_LEVEL);
         assert!(track.solo);
     }
@@ -1850,7 +1874,7 @@ mod tests {
 
     #[test]
     fn a_track_saved_before_its_page_loads_with_the_old_sound() {
-        let track: Track = ron::from_str("(mute: false, solo: false, swing: None)").unwrap();
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
         assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);

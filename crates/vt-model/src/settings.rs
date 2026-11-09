@@ -4,6 +4,7 @@
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
+use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
     EQ_PARAMS, FLANGER_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS,
@@ -375,7 +376,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 10] = [
+const TRACK: [Entry; 11] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -441,11 +442,23 @@ const TRACK: [Entry; 10] = [
         },
         default: 0x80,
     },
+    // A step's own groove, read before the step is played, as it says when the step lands. `00`
+    // is the project's, and a track with its own holds that.
+    Entry {
+        key: "groove",
+        name: "Groove",
+        label: Some("GRV"),
+        kind: Kind::Stepped {
+            choices: &GROOVE_CHOICES,
+            wraps: false,
+        },
+        default: 0,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 10] = [
+const TRACK_GROUPS: [&str; 11] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine",
+    "Machine", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1146,6 +1159,9 @@ impl SettingId {
     pub const GATE_LENGTH: Self = Self(8);
     /// How far a note's length is moved up or down from its own, as [`gate_delta`] gives it.
     pub const GATE_DELTA: Self = Self(9);
+    /// The groove a step plays with: `0` for the project's, then a place in
+    /// [`GROOVE_NAMES`](crate::groove::GROOVE_NAMES) after it.
+    pub const GROOVE: Self = Self(10);
 
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();

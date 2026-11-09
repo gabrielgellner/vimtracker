@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
+use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
 use vt_model::sample::load_sample;
@@ -16,6 +17,7 @@ use vt_model::step::{FxCommand, FxSlot, Gate, GateKind};
 use crate::app::{App, Entry, Field};
 use crate::explorer::Purpose;
 use crate::guides::GUIDES;
+use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
@@ -161,6 +163,51 @@ impl App {
         if let Some(picker) = self.picker.as_mut() {
             picker.preview = shown.map(Arc::new);
         }
+    }
+
+    /// Open the list of grooves for the project, or for the cursor's track, which can also
+    /// follow the project's, with the one playing highlighted.
+    pub(crate) fn open_groove_picker(&mut self, track: bool) {
+        self.count = None;
+        let song = self.song();
+        let own = song.tracks.get(self.cursor.track).and_then(|t| t.groove);
+        let mut items = Vec::new();
+        if track {
+            let follow = format!("Project's, {}", song.groove);
+            items.push(
+                Item::new(follow, Pick::Line(Line::TrackGroove(None)))
+                    .meaning("The groove the project plays with"),
+            );
+        }
+        for id in GrooveId::all() {
+            let line = if track {
+                Line::TrackGroove(Some(id))
+            } else {
+                Line::Groove(id)
+            };
+            items.push(Item::new(id.name(), Pick::Line(line)).meaning(id.meaning()));
+        }
+        let (title, at) = if track {
+            let at = own.map_or(0, |id| id.index() + 1);
+            ("This track's groove", at)
+        } else {
+            ("The project's groove", song.groove.index())
+        };
+        self.show_picker(Picker::new(title, items).opened_on(Some(at)));
+    }
+
+    /// Give the cursor's track its own groove, or have it follow the project's again.
+    pub(crate) fn set_track_groove(&mut self, groove: Option<GrooveId>) {
+        let track = self.cursor.track;
+        if !self.song().tracks.get(track).is_some_and(|t| t.is_sound()) {
+            self.status = "Only a track with notes has a groove of its own".to_owned();
+            return;
+        }
+        self.apply(&Action::SetTrackGroove { track, groove });
+        self.status = match groove {
+            Some(groove) => format!("This track plays with {groove}"),
+            None => format!("This track follows the project's {}", self.song().groove),
+        };
     }
 
     /// Open the list of scales, with this one highlighted.
@@ -564,6 +611,7 @@ impl App {
             }),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
+            Pick::ShowGroove(groove) => self.groove_shown = Some(groove),
             Pick::Scale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,

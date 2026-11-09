@@ -1,5 +1,7 @@
 //! Live recording: armed with `Space r` while the song plays, notes played in Insert go in where
-//! the cursor's track is playing, each with how long its key was held in its gate cell.
+//! the cursor's track is playing, each with how long its key was held in its gate cell. Rows are
+//! where the track's groove lands them, so a note goes on the row it was played nearest to as it's
+//! heard.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,6 +10,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_model::action::Action;
 use vt_model::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
+use vt_model::groove::Groove;
 use vt_model::step::{Gate, GateKind, Note};
 
 use crate::app::App;
@@ -49,6 +52,10 @@ struct Take {
     starts: f64,
     /// How long it can last: until its row comes round again.
     longest: f64,
+    /// How far the groove moves the row's last pulse from its first, and how long it makes that
+    /// pulse, in steps, so its length is a share of the pulse as it's heard.
+    moved: f64,
+    last_pulse: f64,
     written: bool,
     /// How long its key was held, once it's let go or the note has run as long as it can.
     held: Option<f64>,
@@ -60,6 +67,8 @@ struct Row {
     step: usize,
     starts: f64,
     longest: f64,
+    moved: f64,
+    last_pulse: f64,
 }
 
 impl App {
@@ -128,6 +137,8 @@ impl App {
             pressed: now,
             starts: row.starts,
             longest: row.longest,
+            moved: row.moved,
+            last_pulse: row.last_pulse,
             written: false,
             held: None,
         });
@@ -204,31 +215,45 @@ impl App {
         self.playhead as f64 + f64::from(self.progress) + since * steps_per_second
     }
 
-    /// The row a track is playing at this point, or the next one if its start is nearer. Each
-    /// track loops at its own length, so it's found in the track's own chain.
+    /// The row a track is playing at this point, or the next one if its start is nearer, with
+    /// each start where the track's groove lands it. Each track loops at its own length, so it's
+    /// found in the track's own chain, and the groove counts the running count, as playing does.
     fn row_to_record(&self, track: usize, now: f64) -> Option<Row> {
         let jam = self.jam.get(track)?;
         let chain = jam.chain?;
-        let owner = self.song().tracks.get(track)?;
+        let song = self.song();
+        let owner = song.tracks.get(track)?;
         let length = owner.chain_steps(chain);
         if length == 0 {
             return None;
         }
+        let groove = song.groove(song.track_groove(track));
         let into = (now - jam.started as f64).rem_euclid(length as f64);
         let position = owner.chain_position(chain, into as usize)?;
         let start = (into as usize).saturating_sub(position.pulse) as f64;
         let end = start + owner.step_at(position)?.pulses() as f64;
-        let (position, start) = if end - into < into - start {
+        // Where a place in the chain lands as it's heard, on the running count.
+        let heard = |at: f64| {
+            let count = now - into + at;
+            count + pushed(&groove, count)
+        };
+        let (position, start) = if (heard(end) - now).abs() < (now - heard(start)).abs() {
             (owner.chain_position(chain, end as usize)?, end)
         } else {
             (position, start)
         };
         let phrase = owner.phrases.get(&position.phrase)?;
+        let pulses = owner.step_at(position)?.pulses().max(1) as f64;
+        let first = now - into + start;
+        let last = first + pulses - 1.0;
+        let steps = TICKS_PER_STEP as f64;
         Some(Row {
             phrase: position.phrase,
             step: phrase.start() + position.step,
-            starts: now + start - into,
+            starts: heard(start),
             longest: length as f64,
+            moved: pushed(&groove, last) - pushed(&groove, first),
+            last_pulse: groove.length(running(last)) as f64 / steps,
         })
     }
 
@@ -255,7 +280,8 @@ impl App {
         // it's let go, it holds on until something ends it.
         let pulses = step.gate.map_or(1, |gate| gate.pulses);
         let length = held.map_or(u8::MAX, |held| {
-            recorded_length(held.min(take.longest), pulses)
+            let held = held.min(take.longest) - take.moved;
+            recorded_length(held, pulses, take.last_pulse)
         });
         step.gate = Some(Gate {
             kind: GateKind::Single,
@@ -280,13 +306,23 @@ impl App {
     }
 }
 
+/// The step of the running count a place falls in.
+fn running(count: f64) -> usize {
+    count.round().max(0.0) as usize
+}
+
+/// How far the groove moves the step at a place on the running count, in steps.
+fn pushed(groove: &Groove, count: f64) -> f64 {
+    f64::from(groove.push(running(count))) / TICKS_PER_STEP as f64
+}
+
 /// The length a note held this many steps is written with on a row of so many pulses, which stay
-/// as they are: what was held of the row's last pulse, up to just under all of it, or `FF` if it
-/// was held past the row's end, so it rings on until the next note or something else ends it, as a
-/// held note does. One let go before the row's last pulse lasts into it as little as the cell can
-/// say, `00`.
-fn recorded_length(held: f64, pulses: u8) -> u8 {
-    let last = held - f64::from(pulses.max(1) - 1);
+/// as they are: what was held of the row's last pulse, as long as the groove makes it, up to just
+/// under all of it, or `FF` if it was held past the row's end, so it rings on until the next note
+/// or something else ends it, as a held note does. One let go before the row's last pulse lasts
+/// into it as little as the cell can say, `00`.
+fn recorded_length(held: f64, pulses: u8, last_pulse: f64) -> u8 {
+    let last = (held - f64::from(pulses.max(1) - 1)) / last_pulse.max(f64::EPSILON);
     if last > 1.0 {
         return u8::MAX;
     }
@@ -301,21 +337,32 @@ mod tests {
 
     #[test]
     fn a_hold_is_what_was_held_of_the_rows_last_pulse_and_past_it_holds_on() {
-        assert_eq!(recorded_length(0.5, 1), 0x80);
-        assert_eq!(recorded_length(0.0, 1), 0x00, "00 still sounds, at 1%");
+        assert_eq!(recorded_length(0.5, 1, 1.0), 0x80);
+        assert_eq!(recorded_length(0.0, 1, 1.0), 0x00, "00 still sounds, at 1%");
         assert_eq!(
-            recorded_length(1.0, 1),
+            recorded_length(1.0, 1, 1.0),
             LONGEST_LENGTH,
             "let go at the row's end"
         );
-        assert_eq!(recorded_length(1.3, 1), 0xFF, "held past it, it rings on");
-        // On a row of several pulses, it's the share of the last.
-        assert_eq!(recorded_length(3.5, 4), 0x80);
         assert_eq!(
-            recorded_length(0.25, 4),
+            recorded_length(1.3, 1, 1.0),
+            0xFF,
+            "held past it, it rings on"
+        );
+        // On a row of several pulses, it's the share of the last.
+        assert_eq!(recorded_length(3.5, 4, 1.0), 0x80);
+        assert_eq!(
+            recorded_length(0.25, 4, 1.0),
             0x00,
             "a tap lasts into the last pulse"
         );
-        assert_eq!(recorded_length(4.5, 4), 0xFF);
+        assert_eq!(recorded_length(4.5, 4, 1.0), 0xFF);
+    }
+
+    #[test]
+    fn a_hold_is_a_share_of_the_pulse_as_the_groove_makes_it() {
+        // Swing at 66% makes the first of a pair 1.32 steps long, so half of it is 0.66.
+        assert_eq!(recorded_length(0.66, 1, 1.32), 0x80);
+        assert_eq!(recorded_length(0.34, 1, 0.68), 0x80);
     }
 }

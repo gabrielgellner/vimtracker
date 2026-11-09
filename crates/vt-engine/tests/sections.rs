@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
+use vt_model::groove::GrooveId;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, SectionStart, Song};
@@ -169,9 +170,9 @@ fn the_song_wrapping_starts_every_chain_from_its_top() {
 }
 
 #[test]
-fn a_wrap_keeps_the_running_count_so_swing_doesnt_change() {
+fn a_wrap_keeps_the_running_count_so_a_groove_doesnt_change() {
     let mut wrap = song(&[&[A, A, A], &[B, B]]);
-    wrap.swing = 667;
+    wrap.groove = GrooveId::swing(66).unwrap();
     let frames = |wrap: Song| {
         let mut engine = Engine::new(RATE, version(wrap));
         engine.play_from(0);

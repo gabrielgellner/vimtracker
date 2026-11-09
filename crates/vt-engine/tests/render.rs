@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, Stem, render_loop, render_stems, write_wav};
+use vt_model::groove::{Groove, GrooveId};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
@@ -99,8 +100,10 @@ fn golden_renders_stay_the_same() {
         "plain",
         &render(song(&["C-4 -- --- --- ---"]), RenderOptions::default()),
     );
+    // Swing at 66.7%, as a groove of the project's own, plays as swing did.
     let mut swung = song(&FX_LOOP);
-    swung.swing = 667;
+    swung.grooves = vec![Groove::swing(667)];
+    swung.groove = GrooveId::custom(0).unwrap();
     swung.seed = 7;
     golden("fx", &render(swung, RenderOptions::default()));
 }

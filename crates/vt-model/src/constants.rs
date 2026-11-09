@@ -20,7 +20,7 @@ pub const DEFAULT_TRACKS: usize = 8;
 pub const TICKS_PER_STEP: u64 = 240;
 /// Clock ticks per quarter note.
 pub const TICKS_PER_QUARTER: u64 = 960;
-/// One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step.
+/// One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step. A groove's pushes are in ticks.
 pub const GROOVE_UNIT_TICKS: u64 = 40;
 /// Steps in a new phrase.
 pub const DEFAULT_PHRASE_STEPS: usize = 16;
@@ -78,12 +78,6 @@ pub const PREVIEW_MS: u32 = 250;
 pub const PREVIEW_VOICES: usize = 8;
 /// Tuning: time between redraws.
 pub const FRAME_MS: u64 = 33;
-
-/// The lowest swing, in tenths of a percent, which is straight time.
-pub const MIN_SWING: u16 = 500;
-
-/// The highest swing, in tenths of a percent.
-pub const MAX_SWING: u16 = 750;
 
 /// The longest attack or release, in milliseconds.
 pub const MAX_ENVELOPE_MS: u16 = 8000;

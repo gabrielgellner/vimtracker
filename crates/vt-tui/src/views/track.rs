@@ -8,6 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
+use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
@@ -21,7 +22,6 @@ use crate::track_page::{
     Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
 use crate::views::meter::{hanging_cell, hanging_eighths};
-use crate::views::status::format_swing;
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
@@ -279,14 +279,14 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         let mut text = if typing && !on_fine {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().swing)
+            value(*control, track, app.song().groove)
         };
         if *control == Control::Sample {
             text = text.chars().take(FILE_WIDTH).collect();
         }
         let style = if here && !on_fine {
             theme::cursor(app.mode)
-        } else if *control == Control::Swing && track.swing.is_none()
+        } else if *control == Control::Groove && track.groove.is_none()
             || *control == Control::GateLength && track.gate_length.is_none()
             || *control == Control::FilterMode && !track.filter.has_modes()
         {
@@ -336,7 +336,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
 }
 
 /// A setting's value as text.
-pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> String {
+pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -> String {
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Machine => track.machine.name().to_owned(),
@@ -366,7 +366,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
         Control::FilterMode => track.filter.plays(track.filter_mode).name().to_owned(),
         Control::Level => hex(track.level),
-        Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
+        Control::Groove => track.groove.unwrap_or(project_groove).name().to_owned(),
         Control::Envelope(slot, field) => {
             let envelope = &track.envelopes[slot];
             let ms = |value: u16| format!("{value} ms");
@@ -462,12 +462,12 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let text = if typing {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().swing)
+            value(*control, track, app.song().groove)
         };
-        // A track following the project's swing shows what it plays, dimmed as it isn't its own.
+        // A track following the project's groove shows what it plays, dimmed as it isn't its own.
         let style = if *control == current {
             theme::cursor(app.mode)
-        } else if *control == Control::Swing && track.swing.is_none() {
+        } else if *control == Control::Groove && track.groove.is_none() {
             theme::dim()
         } else {
             Style::new()
@@ -609,7 +609,7 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
         let text = if selected && app.mode == Mode::Insert {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().swing)
+            value(*control, track, app.song().groove)
         };
         let style = if selected {
             theme::cursor(app.mode)

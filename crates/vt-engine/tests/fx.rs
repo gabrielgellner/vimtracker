@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vt_engine::engine::{Engine, Transport, swing_ticks};
+use vt_engine::engine::{Engine, Transport};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::insert::{Distort, DistortType, Insert};
@@ -356,70 +356,6 @@ fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     engine.play_from(0);
     engine.process(&mut out);
     assert!(out[2 * 3999].abs() > 0.1, "the top resets it");
-}
-
-/// Where notes begin in one channel, for songs of short hits.
-fn hits(song: Song, channel: usize) -> Vec<usize> {
-    let out = render(song, pool(vec![[1.0, 1.0]; 10]), STEP * 4);
-    let on = |index: usize| out[index][channel].abs() > 0.001;
-    (0..out.len())
-        .filter(|&index| on(index) && (index == 0 || !on(index - 1)))
-        .collect()
-}
-
-const FOUR: [&str; 4] = [
-    "C-4 -- --- --- ---",
-    "C-4 -- --- --- ---",
-    "C-4 -- --- --- ---",
-    "C-4 -- --- --- ---",
-];
-
-#[test]
-fn swing_delays_only_odd_steps_by_the_design_amount() {
-    assert_eq!(swing_ticks(500), 0);
-    assert_eq!(swing_ticks(667), 80);
-    assert_eq!(swing_ticks(750), 120);
-    let mut swung = song(&FOUR);
-    swung.swing = 667;
-    // 80 ticks is 2000 frames at 120 BPM.
-    assert_eq!(hits(swung, 0), [0, STEP + 2000, STEP * 2, STEP * 3 + 2000]);
-    let mut straight = song(&FOUR);
-    straight.swing = 500;
-    assert_eq!(hits(straight, 0), [0, STEP, STEP * 2, STEP * 3]);
-}
-
-#[test]
-fn a_tracks_swing_replaces_the_projects_and_leaves_others_alone() {
-    let mut own = song(&FOUR);
-    own.swing = 750;
-    own.tracks[0].swing = Some(500);
-    assert_eq!(hits(own, 0), [0, STEP, STEP * 2, STEP * 3]);
-
-    // Pan the tracks apart, so each channel shows one track's timing.
-    let mut two = Song::new(2);
-    for track in &mut two.tracks {
-        track.sample = Some("s".to_owned());
-        track.envelopes[0].attack_ms = 0;
-    }
-    for (id, pan) in [(0, "pan:00"), (1, "pan:FF")] {
-        let phrase = Arc::make_mut(two.tracks[id as usize].phrases.get_mut(&0).unwrap());
-        for step in 0..4 {
-            *phrase.step_mut(step).unwrap() = format!("C-4 -- {pan} --- ---").parse().unwrap();
-        }
-    }
-    two.tracks[1].swing = Some(750);
-    assert_eq!(hits(two.clone(), 0), [0, STEP, STEP * 2, STEP * 3]);
-    assert_eq!(hits(two, 1), [0, STEP + 3000, STEP * 2, STEP * 3 + 3000]);
-}
-
-#[test]
-fn a_swung_steps_fx_move_with_its_note() {
-    let mut swung = song(&["C-4 -- --- --- ---", "--- -- vol:00 --- ---"]);
-    swung.swing = 750;
-    let out = render(swung, flat(0.5), STEP * 3);
-    // 120 ticks is 3000 frames: vol:00 hasn't started just before then.
-    assert!(level_at(&out, STEP + 2999) > 0.1);
-    assert!(level_at(&out, STEP + 3000 + 4000) < 0.001);
 }
 
 #[test]

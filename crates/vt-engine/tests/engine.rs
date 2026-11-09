@@ -4,6 +4,7 @@ use vt_engine::engine::{Engine, Transport, sample_of_tick};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_frames, render_loop};
 use vt_model::constants::TICKS_PER_STEP;
+use vt_model::groove::{Groove, GrooveId};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Phrase, Song};
@@ -245,10 +246,11 @@ fn changing_the_reset_live_keeps_the_beat_and_turning_it_off_keeps_the_place() {
 }
 
 #[test]
-fn swing_stays_on_the_grid_across_an_odd_length() {
+fn a_groove_stays_on_the_grid_across_an_odd_length() {
     let mut song = song_with_notes(1, &[0]);
     Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).set_len(3);
-    song.swing = 750;
+    song.grooves = vec![Groove::swing(750)];
+    song.groove = GrooveId::custom(0).unwrap();
     let samples = pool(&[("flat", flat(10, 1.0))]);
     let out = render_frames(version(song, samples), 48_000, 6000 * 8);
     // Step 3 is an odd step of the song, though it's the first of the track's second pass.

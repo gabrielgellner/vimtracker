@@ -79,7 +79,8 @@ sample gathered into it, ready to move or share.
 | Command | What it does |
 |---|---|
 | `:bpm 137.63` | Tempo |
-| `:swing 66.7`, `:tswing 60`, `:tswing off` | Project swing, this track's swing, follow the project |
+| `:groove swing-66`, `:tgroove mpc-58`, `:tgroove off` | Project groove, this track's groove, follow the project |
+| `:swing 66` | The project's swing groove at a percent |
 | `:tvol C0` | This track's level, separate from each note's velocity |
 | `:name BD`, `:name`, `:chain 2` | Name this track or clear its name, and which chain it plays |
 | `:len 32`, `:double` | Phrase length, and repeat the phrase to double it |
