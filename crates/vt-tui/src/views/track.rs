@@ -10,7 +10,7 @@ use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
-use vt_model::settings::{Kind, SettingId};
+use vt_model::settings::{Kind, SettingId, gate_percent};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -287,6 +287,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         let style = if here && !on_fine {
             theme::cursor(app.mode)
         } else if *control == Control::Swing && track.swing.is_none()
+            || *control == Control::GateLength && track.gate_length.is_none()
             || *control == Control::FilterMode && !track.filter.has_modes()
         {
             theme::dim()
@@ -354,6 +355,7 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         Control::Choke => track
             .choke
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
+        Control::GateLength => format!("{}%", gate_percent(track.gate_length())),
         Control::Sample => track.sample.as_deref().map_or_else(
             || "---".to_owned(),
             |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),

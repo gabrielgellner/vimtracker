@@ -69,6 +69,21 @@ loop, and when it ends, the chain moves on to its next phrase.
 
 Any gate with `0` pulses skips its row.
 
+How long each note sounds within its row is the track's `Gate`, a share of the note's
+last pulse. At `100%`, the default, a note holds until something ends it. Below that,
+its gate closes that far through its last pulse and its release starts, as with `OFF`:
+
+```text
+Gate 50%:
+rows:     00 SGL3                 01 MLT2         02 HLD1 03 SGL1
+steps:    0       1       2       3       4       5       6
+gate:     ━━━━━━━━━━━━━━━━━━━━────━━━━────━━━━────━━━━━━━━━━━━────
+```
+
+A `SGL` holds through its row and closes halfway through its last pulse, each of a
+`MLT`'s notes lasts half its pulse, and a `HLD` ties on into the next row's note,
+which closes its own gate. `Acid` starts at `50%`, as a 303 does.
+
 Here's a phrase with gates. Row 00 holds for 3 steps, then ties into row 01. Row 02
 plays twice, row 03 is skipped, and row 04 rests for 2 steps. The yellow numbers are
 beats, and they fall on the rows that start on a beat, however long the rows before

@@ -15,7 +15,7 @@ use crate::insert::{
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
-use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, SynthVoice};
+use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
@@ -88,6 +88,8 @@ pub enum Units {
     AcidDecay,
     Slide,
     AcidDrive,
+    /// How much of its last pulse a note lasts, as [`gate_share`] gives it.
+    GateLength,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, as Open303 measured a TB-303's.
@@ -114,6 +116,25 @@ pub fn slide_ms(value: f32) -> f32 {
 /// How much the acid voice drives its filter, in dB over a TB-303's level.
 pub fn acid_drive_db(value: f32) -> f32 {
     24.0 * value / 255.0
+}
+
+/// The shortest a note's gate can be, as a share of its last pulse, so `00` still sounds.
+pub const SHORTEST_GATE: f32 = 0.01;
+
+/// How much of its last pulse a note lasts for a `Gate` value on the `00` to `FF` scale: from
+/// `SHORTEST_GATE` up to all of it at `FF`, which holds it to the next note as before.
+pub fn gate_share(value: f32) -> f32 {
+    (value / 255.0).clamp(SHORTEST_GATE, 1.0)
+}
+
+/// A `Gate` value as the whole percentage it's nearest, from 1 to 100.
+pub fn gate_percent(value: u8) -> u8 {
+    (gate_share(f32::from(value)) * 100.0).round() as u8
+}
+
+/// The `Gate` value nearest a percentage, which is kept from 1 to 100.
+pub fn gate_value(percent: u8) -> u8 {
+    (f32::from(percent.clamp(1, 100)) * 2.55).round() as u8
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -211,6 +232,7 @@ impl Kind {
                 Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
                 Units::Slide => milliseconds(slide_ms(coarse as f32)),
                 Units::AcidDrive => format!("+{:.1} dB", acid_drive_db(coarse as f32)),
+                Units::GateLength => format!("{:.0} %", gate_share(coarse as f32) * 100.0),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -343,7 +365,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 8] = [
+const TRACK: [Entry; 9] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -385,10 +407,21 @@ const TRACK: [Entry; 8] = [
         },
         default: 0,
     },
+    Entry {
+        key: "gate",
+        name: "Gate",
+        label: Some("LEN"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::GateLength,
+        },
+        default: FULL_GATE,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 8] = [
-    "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter",
+const TRACK_GROUPS: [&str; 9] = [
+    "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1085,6 +1118,8 @@ impl SettingId {
     pub const PITCH: Self = Self(6);
     /// The filter's mode, a place in [`FilterMode::ALL`](crate::song::FilterMode::ALL).
     pub const FILTER_MODE: Self = Self(7);
+    /// How much of its last pulse a note lasts, as [`gate_share`] gives it.
+    pub const GATE_LENGTH: Self = Self(8);
 
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();

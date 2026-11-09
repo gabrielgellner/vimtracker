@@ -9,7 +9,7 @@ use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 8] = [
+const TRACK_MEANINGS: [&str; 9] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -18,10 +18,12 @@ const TRACK_MEANINGS: [&str; 8] = [
     "Send to return B",
     "Pitch, with depth in semitones",
     "Filter mode: its slope or response",
+    "Gate: how much of its last pulse a note lasts",
 ];
 
-/// The track's own settings in the order lists show them: the filter, then output, then pitch.
-const TRACK_ORDER: [SettingId; 8] = [
+/// The track's own settings in the order lists show them: the filter, then output, then pitch
+/// and gate.
+const TRACK_ORDER: [SettingId; 9] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -30,6 +32,7 @@ const TRACK_ORDER: [SettingId; 8] = [
     SettingId::SEND_A,
     SettingId::SEND_B,
     SettingId::PITCH,
+    SettingId::GATE_LENGTH,
 ];
 
 impl SettingId {
@@ -185,13 +188,20 @@ mod tests {
             ..Track::default()
         };
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered[..8], TRACK_ORDER);
-        assert_eq!(offered.len(), 8 + 4);
-        assert_eq!(offered[8], SettingId::voice(SynthVoice::String, 0).unwrap());
+        let own = TRACK_ORDER.len();
+        assert_eq!(offered[..own], TRACK_ORDER);
+        assert_eq!(offered.len(), own + 4);
+        assert_eq!(
+            offered[own],
+            SettingId::voice(SynthVoice::String, 0).unwrap()
+        );
         track.inserts[1] = Insert::ALL[2];
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered.len(), 8 + 4 + 9);
-        assert_eq!(offered[12], SettingId::slot(1, Effect::Delay, 0).unwrap());
+        assert_eq!(offered.len(), own + 4 + 9);
+        assert_eq!(
+            offered[own + 4],
+            SettingId::slot(1, Effect::Delay, 0).unwrap()
+        );
     }
 
     #[test]

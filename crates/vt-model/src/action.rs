@@ -245,6 +245,11 @@ pub enum Action {
         track: usize,
         choke: Option<u8>,
     },
+    /// Give a track its own `Gate`, on the `00` to `FF` scale, or `None` for its machine's.
+    SetTrackGateLength {
+        track: usize,
+        gate_length: Option<u8>,
+    },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         track: usize,
@@ -821,6 +826,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .choke = *choke;
+        }
+        Action::SetTrackGateLength { track, gate_length } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .gate_length = *gate_length;
         }
         Action::SetLength {
             track,

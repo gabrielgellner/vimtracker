@@ -327,6 +327,10 @@ pub struct Track {
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub choke: Option<u8>,
+    /// Where held `LEN` starts, its `Gate`: how much of its last pulse a note lasts, or `None`
+    /// for its machine's own, which [`Track::gate_length`] gives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_length: Option<u8>,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -370,6 +374,13 @@ impl Track {
             Machine::Plaits(voice) if self.is_sound() => Some(voice),
             _ => None,
         }
+    }
+
+    /// How much of its last pulse a note lasts, on the `00` to `FF` scale: its own `Gate`, or its
+    /// machine's if it hasn't one.
+    pub fn gate_length(&self) -> u8 {
+        self.gate_length
+            .unwrap_or_else(|| self.machine.gate_length())
     }
 
     /// One of its machine's settings, by its place among them.
@@ -549,6 +560,7 @@ impl Default for Track {
             send_b: 0,
             pitch: centre(),
             choke: None,
+            gate_length: None,
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),
@@ -573,6 +585,11 @@ fn centre() -> u8 {
 /// level.
 pub const DEFAULT_ACCENT: u8 = 0xCC;
 
+/// A `Gate` that holds each note to the next, as every machine but `Acid` starts with.
+pub const FULL_GATE: u8 = 0xFF;
+/// `Acid`'s `Gate`, 50%, as a TB-303's gate closes about halfway through each step.
+pub const ACID_GATE: u8 = 0x80;
+
 /// What a section does to the tracks when it starts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SectionStart {
@@ -594,6 +611,14 @@ pub enum Machine {
 }
 
 impl Machine {
+    /// How much of its last pulse a note lasts until a track sets its own `Gate`.
+    pub fn gate_length(self) -> u8 {
+        match self {
+            Self::Plaits(SynthVoice::Acid) => ACID_GATE,
+            _ => FULL_GATE,
+        }
+    }
+
     /// Every machine, in the order a list shows them: Sample, then each Plaits voice.
     pub const ALL: [Self; 1 + SynthVoice::ALL.len()] = {
         let mut all = [Self::Sample; 1 + SynthVoice::ALL.len()];
