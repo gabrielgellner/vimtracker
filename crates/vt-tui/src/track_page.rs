@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl, edit};
+use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
 use vt_model::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
@@ -69,6 +70,15 @@ pub enum AccumulatorField {
     Reset,
 }
 
+/// One of the track's arpeggio settings, which its `ARP`s share.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArpField {
+    Rate,
+    Mode,
+    Octaves,
+    Retrig,
+}
+
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
@@ -96,6 +106,7 @@ pub enum Control {
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
     Accumulator(AccumulatorField),
+    Arpeggio(ArpField),
     /// What's in one of the track's slots.
     Insert(usize),
     /// One of the settings declared by what's in a slot.
@@ -138,6 +149,13 @@ pub const ACCUMULATOR: [Control; 6] = [
     Control::Accumulator(AccumulatorField::AtLimit),
     Control::Accumulator(AccumulatorField::Adds),
     Control::Accumulator(AccumulatorField::Reset),
+];
+/// The arpeggio's row, under the accumulator's, as both play a row's note on from what's written.
+pub const ARPEGGIO: [Control; 4] = [
+    Control::Arpeggio(ArpField::Rate),
+    Control::Arpeggio(ArpField::Mode),
+    Control::Arpeggio(ArpField::Octaves),
+    Control::Arpeggio(ArpField::Retrig),
 ];
 
 /// The mixer's columns.
@@ -266,14 +284,16 @@ pub const RETURN_ROWS: [&[Control]; 2] = [&[Control::Level], &[base(TrackControl
 /// The Sound page of the master.
 pub const MASTER_ROWS: [&[Control]; 1] = [&[Control::Level]];
 /// The Mod page's rows, top to bottom.
-pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 1] = [
+pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] = [
     &ENVELOPES[0],
     &ENVELOPES[1],
     &LFOS[0],
     &LFOS[1],
     &ACCUMULATOR,
+    &ARPEGGIO,
 ];
-/// The Mod page of a return or the master, which have no notes for an accumulator to move.
+/// The Mod page of a return or the master, which have no notes for an accumulator or an arpeggio
+/// to play.
 pub const FIXED_MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
     [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
 
@@ -372,6 +392,10 @@ impl Control {
             Self::Accumulator(AccumulatorField::AtLimit) => "Limit",
             Self::Accumulator(AccumulatorField::Adds) => "Adds",
             Self::Accumulator(AccumulatorField::Reset) => "Reset",
+            Self::Arpeggio(ArpField::Rate) => "Rate",
+            Self::Arpeggio(ArpField::Mode) => "Mode",
+            Self::Arpeggio(ArpField::Octaves) => "Oct",
+            Self::Arpeggio(ArpField::Retrig) => "Retrig",
             Self::Insert(_) => "Effect",
             Self::InsertParam(..) => "Setting",
         }
@@ -388,6 +412,12 @@ impl Control {
                 AccumulatorField::AtLimit => "Accumulator at its limit",
                 AccumulatorField::Adds => "Accumulator adds",
                 AccumulatorField::Reset => "Accumulator starts again",
+            },
+            Self::Arpeggio(field) => match field {
+                ArpField::Rate => "Arp rate",
+                ArpField::Mode => "Arp mode",
+                ArpField::Octaves => "Arp octaves",
+                ArpField::Retrig => "Arp retrig",
             },
             Self::InsertParam(slot, param) => track.inserts[slot]
                 .params()
@@ -486,7 +516,8 @@ impl Control {
             | Self::Choke
             | Self::GateLength
             | Self::Speed
-            | Self::Accumulator(_) => track.is_sound(),
+            | Self::Accumulator(_)
+            | Self::Arpeggio(_) => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -539,6 +570,7 @@ impl Control {
                         | AccumulatorField::Adds
                         | AccumulatorField::Reset
                 )
+                | Self::Arpeggio(ArpField::Rate | ArpField::Mode | ArpField::Retrig)
         )
     }
 }
@@ -844,6 +876,13 @@ impl App {
                 }
                 self.set_accumulation(accumulation);
             }
+            Control::Arpeggio(field) => {
+                let mut arpeggio = track.arpeggio;
+                for _ in 0..count.min(0x10) {
+                    adjust_arpeggio(&mut arpeggio, field, up);
+                }
+                self.set_arpeggio(arpeggio);
+            }
         }
     }
 
@@ -852,6 +891,15 @@ impl App {
             self.apply(&Action::SetAccumulation {
                 track: self.cursor.track,
                 accumulation,
+            });
+        }
+    }
+
+    fn set_arpeggio(&mut self, arpeggio: Arpeggio) {
+        if arpeggio != self.page_track().arpeggio {
+            self.apply(&Action::SetArpeggio {
+                track: self.cursor.track,
+                arpeggio,
             });
         }
     }
@@ -1397,6 +1445,28 @@ impl App {
                 };
                 self.set_accumulation(reset);
             }
+            Control::Arpeggio(field) => {
+                let (now, default) = (track.arpeggio, Arpeggio::default());
+                let reset = match field {
+                    ArpField::Rate => Arpeggio {
+                        rate: default.rate,
+                        ..now
+                    },
+                    ArpField::Mode => Arpeggio {
+                        mode: default.mode,
+                        ..now
+                    },
+                    ArpField::Octaves => Arpeggio {
+                        octaves: default.octaves,
+                        ..now
+                    },
+                    ArpField::Retrig => Arpeggio {
+                        retrig: default.retrig,
+                        ..now
+                    },
+                };
+                self.set_arpeggio(reset);
+            }
         }
     }
 
@@ -1460,6 +1530,10 @@ impl App {
         }
         if let Control::Accumulator(field) = self.track_control() {
             self.open_accumulator_picker(field);
+            return;
+        }
+        if let Control::Arpeggio(field) = self.track_control() {
+            self.open_arpeggio_picker(field);
             return;
         }
         let Control::Lfo(slot, field) = self.track_control() else {
@@ -1650,6 +1724,52 @@ impl App {
                             .meaning(reset.meaning())
                     })
                     .collect(),
+            ),
+        };
+        let position = items.iter().position(|item| item.pick == pick(now));
+        self.show_picker(Picker::new(title, items).opened_on(position));
+    }
+
+    /// List what one of the arpeggio's settings can be, with what each does and the one it has
+    /// highlighted. Its octaves are a number, typed or moved instead.
+    fn open_arpeggio_picker(&mut self, field: ArpField) {
+        let track = self.cursor.track;
+        let now = self.page_track().arpeggio;
+        let pick = |arpeggio| Pick::Arpeggio { track, arpeggio };
+        let (title, items): (&str, Vec<Item>) = match field {
+            ArpField::Octaves => {
+                self.status = format!(
+                    "Octaves is a number from 1 to {MOST_OCTAVES}: i types it, = and - move it"
+                );
+                return;
+            }
+            ArpField::Rate => (
+                "Arp rate",
+                ArpRate::ALL
+                    .map(|rate| {
+                        Item::new(rate.name(), pick(Arpeggio { rate, ..now }))
+                            .meaning(rate.meaning())
+                    })
+                    .to_vec(),
+            ),
+            ArpField::Mode => (
+                "Arp mode",
+                ArpMode::ALL
+                    .map(|mode| {
+                        Item::new(mode.name(), pick(Arpeggio { mode, ..now }))
+                            .meaning(mode.meaning())
+                    })
+                    .to_vec(),
+            ),
+            ArpField::Retrig => (
+                "Arp retrig",
+                [false, true]
+                    .map(|retrig| {
+                        let name = if retrig { "on" } else { "off" };
+                        Item::new(name, pick(Arpeggio { retrig, ..now }))
+                            .meaning(retrig_meaning(retrig))
+                    })
+                    .to_vec(),
             ),
         };
         let position = items.iter().position(|item| item.pick == pick(now));
@@ -1912,6 +2032,16 @@ impl App {
                 }
             }
             Control::Accumulator(_) => {}
+            Control::Arpeggio(ArpField::Octaves) => match text.trim().parse::<u8>() {
+                Ok(octaves) if (1..=MOST_OCTAVES).contains(&octaves) => {
+                    self.set_arpeggio(Arpeggio {
+                        octaves,
+                        ..track.arpeggio
+                    });
+                }
+                _ => self.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
+            },
+            Control::Arpeggio(_) => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
@@ -2071,6 +2201,36 @@ fn adjust_accumulation(
             };
             accumulation.reset = resets[to];
         }
+    }
+}
+
+/// Move one of the arpeggio's settings one notch. The rates stop at either end, as they run from
+/// the shortest note to the longest, and so do the octaves, while the modes go round.
+fn adjust_arpeggio(arpeggio: &mut Arpeggio, field: ArpField, up: bool) {
+    match field {
+        ArpField::Rate => {
+            let rates = ArpRate::ALL;
+            let at = rates
+                .iter()
+                .position(|rate| *rate == arpeggio.rate)
+                .unwrap_or(0);
+            let to = if up {
+                (at + 1).min(rates.len() - 1)
+            } else {
+                at.saturating_sub(1)
+            };
+            arpeggio.rate = rates[to];
+        }
+        ArpField::Mode => arpeggio.mode = next_in(&ArpMode::ALL, arpeggio.mode, up),
+        ArpField::Octaves => {
+            let moved = if up {
+                arpeggio.octaves.saturating_add(1)
+            } else {
+                arpeggio.octaves.saturating_sub(1)
+            };
+            arpeggio.octaves = moved.clamp(1, MOST_OCTAVES);
+        }
+        ArpField::Retrig => arpeggio.retrig = !arpeggio.retrig,
     }
 }
 

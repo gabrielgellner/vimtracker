@@ -14,6 +14,7 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::accumulator::Accumulation;
+use vt_model::arpeggio::Arpeggio;
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
@@ -62,6 +63,11 @@ pub enum Pick {
     Accumulation {
         track: usize,
         accumulation: Accumulation,
+    },
+    /// Give a track these arpeggio settings.
+    Arpeggio {
+        track: usize,
+        arpeggio: Arpeggio,
     },
     /// Replace one of a track's LFOs.
     Lfo {

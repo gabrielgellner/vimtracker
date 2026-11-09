@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::accumulator::{Accumulation, MOST_DEGREES, Moves, amount, amount_text};
+use vt_model::arpeggio::{Arpeggio, arp_text, octaves_text, retrig_meaning};
 use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
@@ -19,7 +20,7 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
-use crate::track_page::{AccumulatorField, Control};
+use crate::track_page::{AccumulatorField, ArpField, Control};
 use crate::tree::ChainColumn;
 use crate::views::phrase::{heard_note, playhead_step};
 
@@ -124,12 +125,20 @@ pub fn value_shown(app: &App) -> Option<String> {
     {
         return Some(accumulator_shown(field, track.accumulation, app.scale.on));
     }
+    if app.view == View::Track
+        && let Control::Arpeggio(field) = app.track_control()
+    {
+        return Some(arpeggio_shown(field, track.arpeggio));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 let cell = app.current_slot(slot)?;
                 if cell.command == Some(FxCommand::Cnd) {
                     return Some(condition_shown(cell.coarse()));
+                }
+                if cell.command == Some(FxCommand::Arp) {
+                    return Some(arp_shown(cell.coarse(), track.arpeggio, app.scale.on));
                 }
                 if cell.command == Some(FxCommand::Acu) {
                     return Some(amount_shown(
@@ -201,6 +210,34 @@ fn accumulator_shown(
         AccumulatorField::AtLimit => lowered(accumulation.at_limit.meaning()),
         AccumulatorField::Adds => lowered(accumulation.adds.meaning()),
         AccumulatorField::Reset => lowered(&accumulation.reset.meaning()),
+    }
+}
+
+/// What an `ARP` goes round, and how the track plays it.
+fn arp_shown(value: u8, arpeggio: Arpeggio, scale_on: bool) -> String {
+    format!(
+        "{}, {} at {}, {}, {}",
+        arp_text(value, scale_on),
+        arpeggio.mode.name(),
+        arpeggio.rate.name(),
+        octaves_text(arpeggio.octaves),
+        if arpeggio.retrig { "retrig" } else { "legato" }
+    )
+}
+
+/// What one of the track's arpeggio settings does, as it's set.
+fn arpeggio_shown(field: ArpField, arpeggio: Arpeggio) -> String {
+    match field {
+        ArpField::Rate => lowered(arpeggio.rate.meaning()),
+        ArpField::Mode => lowered(arpeggio.mode.meaning()),
+        ArpField::Octaves if arpeggio.octaves == 1 => {
+            "1 octave: the notes alone, not climbing".to_owned()
+        }
+        ArpField::Octaves => format!(
+            "{}: the notes climb that many before it starts again",
+            octaves_text(arpeggio.octaves)
+        ),
+        ArpField::Retrig => lowered(retrig_meaning(arpeggio.retrig)),
     }
 }
 

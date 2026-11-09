@@ -388,19 +388,21 @@ const LARGE_HEX: i32 = 0x10;
 const LARGE_NOTE: i32 = 12;
 
 /// Move an FX value's coarse digits, within what its command takes, keeping its fine part. `RET`'s
-/// two digits mean separate things, a fade and a rate, so each moves alone and never carries into
-/// the other, `CND`'s moves through its conditions, and `ACU`'s is signed.
+/// two digits mean separate things, a fade and a rate, and `ARP`'s are two notes, so each moves
+/// alone and never carries into the other, `CND`'s moves through its conditions, and `ACU`'s is
+/// signed.
 fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
     let large = kind == Shift::Large;
     let coarse = slot.coarse();
-    if command == FxCommand::Ret {
-        let (fade, rate) = (i32::from(coarse >> 4), i32::from(coarse & 0x0F));
-        let (fade, rate) = if large {
-            ((fade + by).clamp(0, 0x0F), rate)
+    if matches!(command, FxCommand::Ret | FxCommand::Arp) {
+        // A large step moves the first digit, and a small one the second.
+        let (first, second) = (i32::from(coarse >> 4), i32::from(coarse & 0x0F));
+        let (first, second) = if large {
+            ((first + by).clamp(0, 0x0F), second)
         } else {
-            (fade, (rate + by).clamp(0, 0x0F))
+            (first, (second + by).clamp(0, 0x0F))
         };
-        return ((fade << 4 | rate) as u16) << 8;
+        return ((first << 4 | second) as u16) << 8;
     }
     // A condition moves through the list of them, so it never lands on a value that isn't one.
     if command == FxCommand::Cnd {

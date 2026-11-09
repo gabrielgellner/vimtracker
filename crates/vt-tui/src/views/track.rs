@@ -20,8 +20,8 @@ use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
 use crate::track_page::{
-    ACCUMULATOR, AccumulatorField, Control, ENVELOPES, EnvelopeField, FX_COLUMNS, FX_ROWS, LFOS,
-    LfoField, Page, SLOT_ROWS,
+    ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, ENVELOPES, EnvelopeField,
+    FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
 use crate::views::meter::{hanging_cell, hanging_eighths};
 
@@ -403,6 +403,15 @@ pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -
                 AccumulatorField::Reset => accumulation.reset.name(),
             }
         }
+        Control::Arpeggio(field) => {
+            let arpeggio = track.arpeggio;
+            match field {
+                ArpField::Rate => arpeggio.rate.name().to_owned(),
+                ArpField::Mode => arpeggio.mode.name().to_owned(),
+                ArpField::Octaves => arpeggio.octaves.to_string(),
+                ArpField::Retrig => if arpeggio.retrig { "on" } else { "off" }.to_owned(),
+            }
+        }
         Control::Insert(slot) => track.inserts[slot].name().to_owned(),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
@@ -441,6 +450,8 @@ fn width(control: Control) -> usize {
         Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 8,
         // Room for `16 loops`.
         Control::Accumulator(AccumulatorField::Reset) => 9,
+        // Room for `Up-down`.
+        Control::Arpeggio(ArpField::Mode) => 9,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
         Control::Envelope(
             _,
@@ -852,11 +863,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             for (slot, controls) in LFOS.iter().enumerate() {
                 lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
             }
-            // A track with no note to move has no accumulator.
+            // A track with no note to move has no accumulator or arpeggio.
             if track.is_sound() {
                 lines.push(Line::raw(""));
                 lines.push(heading(app, &[ACCUMULATOR]));
                 lines.push(row(app, track, "Acc", &ACCUMULATOR));
+                lines.push(Line::raw(""));
+                lines.push(heading(app, &[ARPEGGIO]));
+                lines.push(row(app, track, "Arp", &ARPEGGIO));
             }
             lines.push(Line::raw(""));
             lines.extend(diagrams(app, track));

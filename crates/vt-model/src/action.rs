@@ -5,6 +5,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
+use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
     MAX_SOUND_TRACKS, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
@@ -275,6 +276,11 @@ pub enum Action {
         track: usize,
         accumulation: Accumulation,
     },
+    /// Set how a track's `ARP`s play.
+    SetArpeggio {
+        track: usize,
+        arpeggio: Arpeggio,
+    },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         track: usize,
@@ -497,6 +503,8 @@ pub enum EditError {
         "an accumulator's limits go from 1 to {MOST_DEGREES}, and its loops from 1 to {MOST_LOOPS}"
     )]
     Accumulation,
+    #[error("an arpeggio climbs from 1 to {MOST_OCTAVES} octaves")]
+    Arpeggio,
     #[error(
         "a project's name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
     )]
@@ -902,6 +910,15 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .accumulation = *accumulation;
+        }
+        Action::SetArpeggio { track, arpeggio } => {
+            if !arpeggio.in_range() {
+                return Err(EditError::Arpeggio);
+            }
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .arpeggio = *arpeggio;
         }
         Action::SetLength {
             track,

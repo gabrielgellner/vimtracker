@@ -4,7 +4,7 @@ Press `Space 4` for what a track holds apart from its steps, on three pages: Sou
 has its machine, filter and output, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
 plays it, with a dim mark left where it's set, Mod its envelopes,
-LFOs and accumulator, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
+LFOs, accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -632,6 +632,15 @@ the scale on and semitones with it off; `Moves`, `Row` for only the row with the
 row, on each `MLT` pulse or on each `RET` hit; and `Reset`, when it goes back to
 the notes as written. `=` and `-` move each, `+` and `_` move a limit by 7, `i`
 types a limit and `K` lists the others. See **FX commands**.
+
+## The arpeggio
+
+The `Arp` row under it says how the track's `ARP`s play: `Rate`, how long each note
+is, `Tick` or a note division from `1/128` to `1/8`, as a share of the track's step;
+`Mode`, `Up` `Down` `Up-down` or `Random`; `Oct`, how many octaves it climbs, 1 to 4;
+and `Retrig`, `off` to only change the pitch, sliding on `Acid`, or `on` to start
+each note again. `=` and `-` move each, `i` types the octaves and `K` lists the
+others. See **FX commands**.
 
 ## The mixer
 

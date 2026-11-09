@@ -693,6 +693,9 @@ impl App {
                     accumulation,
                 });
             }
+            Pick::Arpeggio { track, arpeggio } => {
+                self.apply(&Action::SetArpeggio { track, arpeggio });
+            }
             Pick::Lfo { track, slot, lfo } => {
                 self.apply(&Action::SetLfo { track, slot, lfo });
             }
