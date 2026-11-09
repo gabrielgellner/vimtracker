@@ -24,12 +24,14 @@ use crate::song::{
     Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
     SectionStart, Song, Track, lowest_unused,
 };
-use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
+use crate::step::{FxCommand, FxSlot, Gate, MAX_NUDGE, Mark, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldValue {
     Velocity(Option<u8>),
+    /// A row's nudge, in 24ths of a step.
+    Nudge(i8),
     Gate(Option<Gate>),
     Slot(usize, FxSlot),
 }
@@ -49,6 +51,8 @@ pub enum Fill {
     /// A gate cell's length, which only goes on rows with a note, as it's how long the note lasts.
     /// A row without a gate cell gets one pulse of `SGL` to hold it.
     GateLength(Option<u8>),
+    /// A nudge, which only goes on rows with a note, as velocity does. 0 takes it away anywhere.
+    Nudge(i8),
     Slot(usize, FxSlot),
     /// An FX value's coarse digits, keeping its fine part.
     SlotValue(usize, u8),
@@ -520,6 +524,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             let target = step_mut(&mut next, *track, *phrase, *step)?;
             match value {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
+                FieldValue::Nudge(nudge) => target.nudge = (*nudge).clamp(-MAX_NUDGE, MAX_NUDGE),
                 FieldValue::Gate(gate) => target.gate = *gate,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
@@ -570,6 +575,10 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                         }
                     }
                     Fill::GateLength(_) => {}
+                    Fill::Nudge(nudge) if has_note || *nudge == 0 => {
+                        target.nudge = (*nudge).clamp(-MAX_NUDGE, MAX_NUDGE);
+                    }
+                    Fill::Nudge(_) => {}
                     Fill::Slot(slot, value) => {
                         *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? =
                             snapped(*value);

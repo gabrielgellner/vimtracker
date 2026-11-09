@@ -2,7 +2,8 @@
 //!
 //! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
 //! leaves it out, as every row did before gates: `C-4 64 cut:40 --- ret:14`. A gate with a length
-//! of its own has it after the pulses, as the grid shows it: `C-4 64 SGL1 80 cut:40`.
+//! of its own has it after the pulses, as the grid shows it: `C-4 64 SGL1 80 cut:40`. A row with
+//! a nudge has it after the velocity, a sign and a hex digit in 24ths of a step: `C-4 64 -3 SGL1`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -10,8 +11,8 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::step::{
-    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
-    Step,
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
+    Mark, Note, Step,
 };
 
 /// Why a step's text could not be read.
@@ -27,6 +28,8 @@ pub enum StepTextError {
     Slot(String),
     #[error("unknown FX command: {0:?}")]
     Command(String),
+    #[error("not a nudge: {0:?}, which is + or - and 1 to B 24ths of a step, like -3")]
+    Nudge(String),
     #[error("not a gate: {0:?}, which is a gate, 0 to 8 pulses and perhaps a length, like SGL1 80")]
     Gate(String),
 }
@@ -75,6 +78,25 @@ fn hex_byte(text: &str) -> Option<u8> {
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b));
     upper.then(|| u8::from_str_radix(text, 16).ok()).flatten()
+}
+
+/// Read a nudge: `+` or `-`, then one uppercase hex digit from 1 to the most a nudge goes.
+fn nudge(text: &str) -> Result<i8, StepTextError> {
+    let bad = || StepTextError::Nudge(text.to_owned());
+    let (sign, digit) = match text.as_bytes() {
+        [b'+', digit] => (1, *digit),
+        [b'-', digit] => (-1, *digit),
+        _ => return Err(bad()),
+    };
+    let amount: i8 = match digit {
+        b'0'..=b'9' => (digit - b'0') as i8,
+        b'A'..=b'F' => (digit - b'A' + 10) as i8,
+        _ => return Err(bad()),
+    };
+    (1..=MAX_NUDGE)
+        .contains(&amount)
+        .then_some(sign * amount)
+        .ok_or_else(bad)
 }
 
 impl FromStr for Note {
@@ -200,6 +222,13 @@ impl FromStr for Step {
             ),
         };
         let mut fields = fields.peekable();
+        // A nudge is a sign and one digit, which neither a gate nor an FX slot is.
+        let is_nudge =
+            |field: &&str| field.len() == 2 && (field.starts_with('+') || field.starts_with('-'));
+        let nudge = match fields.next_if(is_nudge) {
+            Some(field) => self::nudge(field)?,
+            None => 0,
+        };
         // A gate cell is a gate's name and one digit, where an FX slot is five or six characters.
         let is_gate = |field: &&str| {
             field.len() == 4 && field.get(..3).and_then(GateKind::from_name).is_some()
@@ -220,6 +249,7 @@ impl FromStr for Step {
         Ok(Self {
             note,
             velocity,
+            nudge,
             gate,
             fx,
         })
@@ -232,6 +262,10 @@ impl fmt::Display for Step {
         match self.velocity {
             Some(velocity) => write!(f, " {velocity:02X}")?,
             None => f.write_str(" --")?,
+        }
+        if self.nudge != 0 {
+            let sign = if self.nudge > 0 { '+' } else { '-' };
+            write!(f, " {sign}{:X}", self.nudge.unsigned_abs())?;
         }
         if let Some(gate) = self.gate {
             write!(f, " {gate}")?;
@@ -264,6 +298,9 @@ mod tests {
             "C-4 64 SGL1 80 cut:40 --- ---",
             "--- -- HLD3 FF",
             "E-4 -- MLT2 00 ---",
+            "C-4 64 -3 SGL1 80 cut:40",
+            "C-4 -- +B",
+            "OFF -- -1 --- ---",
         ] {
             let step: Step = text.parse().unwrap();
             assert_eq!(step.to_string(), text);
@@ -305,6 +342,26 @@ mod tests {
         let step: Step = "C-4 64 --- --- ---".parse().unwrap();
         assert_eq!(step.gate, None, "a row from before gates has none");
         assert_eq!(step.pulses(), 1);
+    }
+
+    #[test]
+    fn a_nudge_is_a_sign_and_up_to_b_24ths() {
+        let nudge = |text: &str| text.parse::<Step>().map(|step| step.nudge);
+        assert_eq!(nudge("C-4 64 -3 SGL1"), Ok(-3));
+        assert_eq!(nudge("C-4 -- +B cut:40"), Ok(11));
+        assert_eq!(
+            nudge("C-4 64 SGL1"),
+            Ok(0),
+            "a row without one is on the grid"
+        );
+        for text in ["C-4 -- +C", "C-4 -- -0", "C-4 -- +b", "C-4 -- ++"] {
+            let field = text.split(' ').nth(2).unwrap();
+            assert_eq!(
+                text.parse::<Step>(),
+                Err(StepTextError::Nudge(field.into())),
+                "{text}"
+            );
+        }
     }
 
     #[test]

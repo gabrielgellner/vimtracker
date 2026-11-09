@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
-    MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
+    MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS, TICKS_PER_QUARTER,
+    TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
@@ -24,7 +25,7 @@ use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{
-    DelayedNote, Keys, LiveValues, PendingStep, Retrigger, SongTime, TrackState, base_of,
+    DelayedNote, Keys, LiveValues, Part, PendingStep, Retrigger, SongTime, TrackState, base_of,
 };
 use crate::voice::NoteOn;
 
@@ -444,7 +445,7 @@ impl Engine {
         if self.worked_out_early(true) {
             self.next_step -= 1;
             for track in self.tracks.iter_mut() {
-                track.pending = None;
+                track.forget_step(self.next_step);
             }
         }
         self.section = 0;
@@ -1167,8 +1168,10 @@ impl Engine {
     fn frames_until_track_event(&self) -> u64 {
         let mut soonest = u64::MAX;
         for track in self.tracks.iter() {
+            for part in track.pending.iter().flatten() {
+                soonest = soonest.min(part.at.saturating_sub(self.clock));
+            }
             let events = [
-                track.pending.map(|step| step.at),
                 track.delayed.map(|d| d.at),
                 track.kill_at,
                 track.off_at,
@@ -1225,11 +1228,8 @@ impl Engine {
     fn fire_due_events(&mut self) {
         let clock = self.clock;
         for index in 0..MAX_TRACKS {
-            if let Some(step) = self.tracks[index].pending
-                && step.at <= clock
-            {
-                self.tracks[index].pending = None;
-                self.fire_track(index, step);
+            while let Some(part) = self.tracks[index].take_due(clock) {
+                self.fire_track(index, part);
             }
             if let Some(delayed) = self.tracks[index].delayed
                 && delayed.at <= clock
@@ -1303,7 +1303,8 @@ impl Engine {
         });
     }
 
-    /// Work out every track's next step, and play each now or when its groove lands it.
+    /// Work out every track's next step, and play each now or when its groove lands it. A row with
+    /// a nudge lands its note part that much off where the groove lands its lanes.
     fn fire_step(&mut self) {
         // The step last worked out, which is still the one heard until this one's place comes.
         self.heard_place = self.place.saturating_sub(1);
@@ -1315,12 +1316,15 @@ impl Engine {
         }
         let section_step = self.place as usize;
         let grid = self.next_step * TICKS_PER_STEP;
-        let lead = self.current.lead as i64;
+        let (lead, groove_lead) = (self.current.lead as i64, self.current.groove_lead as i64);
+        let nudges = self.current.nudges;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
-            // A big tempo jump can bring this step before the last one landed.
-            if let Some(pending) = self.tracks[index].pending.take() {
-                self.fire_track(index, pending);
+            // A big tempo jump can bring this step before the last one landed. With nudges, a row
+            // nudged late can land after the next step is worked out, so only what's due goes now.
+            let by = if nudges { self.clock } else { u64::MAX };
+            while let Some(part) = self.tracks[index].take_due(by) {
+                self.fire_track(index, part);
             }
             self.start_cued(index, section_step);
             self.tracks[index].playing = self.track_chain(index);
@@ -1328,19 +1332,70 @@ impl Engine {
             // reset, not each track's own loop, so an odd length stays on the beat.
             let groove = self.step_groove(index, section_step);
             let humanise = self.tracks[index].humanise(groove.humanise());
-            let push =
-                (i64::from(groove.push(section_step)) + humanise).clamp(-lead, i64::from(MAX_PUSH));
+            let push = (i64::from(groove.push(section_step)) + humanise)
+                .clamp(-groove_lead, i64::from(MAX_PUSH));
+            let place = self.track_place(index, section_step);
             let step = PendingStep {
                 at: self.landing(grid, push),
                 section_step,
                 groove,
+                part: Part::Whole,
+                step: self.next_step,
+                leads: true,
+                place,
+                count: section_step as i64 - self.tracks[index].started,
+                plays: None,
             };
-            if step.at > self.clock {
-                self.tracks[index].pending = Some(step);
+            // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
+            // never lands before the last row's.
+            let row_at = if nudges {
+                let nudge = self.row_nudge(index, place);
+                let at = self.landing(grid, (push + nudge).max(-lead));
+                self.tracks[index]
+                    .last_row_at()
+                    .map_or(at, |last| at.max(last))
             } else {
-                self.fire_track(index, step);
+                step.at
+            };
+            let parts = if row_at == step.at {
+                [Some(step), None]
+            } else {
+                let lanes = PendingStep {
+                    part: Part::Lanes,
+                    leads: step.at < row_at,
+                    ..step
+                };
+                let row = PendingStep {
+                    at: row_at,
+                    part: Part::Row,
+                    leads: row_at < step.at,
+                    ..step
+                };
+                [Some(lanes), Some(row)]
+            };
+            for part in parts.into_iter().flatten() {
+                if let Some(earliest) = self.tracks[index].wait_for(part) {
+                    self.fire_track(index, earliest);
+                }
+            }
+            while let Some(part) = self.tracks[index].take_due(self.clock) {
+                self.fire_track(index, part);
             }
         }
+    }
+
+    /// How far a row's nudge moves its note part, in ticks.
+    fn row_nudge(&self, index: usize, place: Option<(u32, usize)>) -> i64 {
+        let Some((chain, place)) = place else {
+            return 0;
+        };
+        let Some(owner) = self.current.song.tracks.get(index) else {
+            return 0;
+        };
+        owner
+            .chain_position(chain, place)
+            .and_then(|position| owner.step_at(position))
+            .map_or(0, |step| i64::from(step.nudge) * NUDGE_TICKS as i64)
     }
 
     /// The groove a track's step plays with, worked out before it's played, as it says when the
@@ -1389,13 +1444,17 @@ impl Engine {
         song.groove(id)
     }
 
-    /// Start or stop a track's note for a step, and run its FX left to right.
+    /// Start or stop a track's note for a step, and run its FX left to right: all of it, or the
+    /// part a nudge has it land apart, its lanes' values or its row's note part.
     fn fire_track(&mut self, index: usize, pending: PendingStep) {
         let section_step = pending.section_step;
-        self.tracks[index].retrigger = None;
+        let row = pending.part.plays_row();
+        if row {
+            self.tracks[index].retrigger = None;
+        }
         let current = Arc::clone(&self.current);
         let song = &current.song;
-        let Some((chain, place)) = self.track_place(index, section_step) else {
+        let Some((chain, place)) = pending.place else {
             return;
         };
         let Some(owner) = song.tracks.get(index) else {
@@ -1420,7 +1479,7 @@ impl Engine {
         };
         // Each FX column reads its own lane's step if it has one, and the note's row if not.
         let phrase = owner.phrases.get(&position.phrase);
-        let count = section_step as i64 - self.tracks[index].started;
+        let count = pending.count;
         let mut lane_steps = [None; FX_SLOTS];
         let mut fx = [FxSlot::default(); FX_SLOTS];
         for (number, read) in fx.iter_mut().enumerate() {
@@ -1440,14 +1499,23 @@ impl Engine {
         let mut off_units = None;
         let mut retrigger = None;
         // `CHA` goes first, as whether the note plays decides whether locks end. A row's own is
-        // rolled once, on its first pulse.
-        let mut plays = first || self.tracks[index].row_plays;
-        for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
-            plays &= self.tracks[index].rng.chance(slot.coarse());
-        }
-        if first {
-            self.tracks[index].row_plays = plays;
-        }
+        // rolled once, on its first pulse, by the step's first part to land.
+        let plays = match pending.plays {
+            Some(plays) => plays,
+            None => {
+                let mut plays = first || self.tracks[index].row_plays;
+                for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
+                    plays &= self.tracks[index].rng.chance(slot.coarse());
+                }
+                if first {
+                    self.tracks[index].row_plays = plays;
+                }
+                if pending.part != Part::Whole {
+                    self.tracks[index].decide(pending.step, plays);
+                }
+                plays
+            }
+        };
         // What the row's note does on this pulse.
         let event = match (step.note, gate) {
             (Note::On(_), GateKind::Rest) if first => Note::Off,
@@ -1457,11 +1525,21 @@ impl Engine {
             _ => Note::Empty,
         };
         let tying = first && self.tracks[index].tied && self.tracks[index].voice.active();
-        if plays && first && matches!(event, Note::On(_)) && !tying {
+        // The last note's locks end where the step's first part lands, so a lane's lock on a step
+        // whose note is nudged late lasts that note.
+        if pending.leads && plays && first && matches!(event, Note::On(_)) && !tying {
             self.tracks[index].end_locks();
         }
+        // A lane's values stay where the groove lands the step. What times the note goes with it,
+        // wherever it's written.
+        let runs = |number: usize, slot: &FxSlot| match slot.command {
+            Some(FxCommand::Del | FxCommand::Kil | FxCommand::Off | FxCommand::Ret)
+            | Some(FxCommand::Cha) => row,
+            _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
+            _ => row,
+        };
         for (number, slot) in fx.iter().enumerate() {
-            let Some(command) = slot.command else {
+            let Some(command) = slot.command.filter(|_| runs(number, slot)) else {
                 continue;
             };
             match command {
@@ -1486,6 +1564,12 @@ impl Engine {
                 }
                 FxCommand::Set(id) => self.tracks[index].set_value(id, slot.value, slot.mark),
             }
+        }
+        if !row {
+            if !self.tracks[index].sounding() {
+                self.tracks[index].settle();
+            }
+            return;
         }
         let tie = tying && plays && delay_units.is_none() && matches!(event, Note::On(_));
         if plays && delay_units.is_none() && matches!(event, Note::On(_)) && !tie {

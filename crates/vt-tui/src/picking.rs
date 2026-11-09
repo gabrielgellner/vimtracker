@@ -372,7 +372,7 @@ impl App {
                 self.open_fx_picker(slot, "");
             }
             Field::Gate | Field::GateLength => self.open_gate_picker(),
-            Field::Note | Field::Velocity => {
+            Field::Note | Field::Velocity | Field::Nudge => {
                 self.status = "K chooses on the gate and FX columns".to_owned();
             }
         }

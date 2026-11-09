@@ -52,7 +52,7 @@ const GATES: &[&str] = &[
     "G-4 50 MLT2 80 --- --- ---",
     "C-5 64 SGL0 --- --- ---",
     "--- -- RST2 --- --- ---",
-    "A-3 64 --- --- ---",
+    "A-3 64 -2 --- --- ---",
 ];
 
 const LANE: &[&str] = &[
@@ -71,7 +71,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "gates",
         rows: GATES,
-        keys: "ll",
+        keys: "lll",
         play: 0,
         voice: None,
         kick: false,
@@ -79,7 +79,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "gate-list",
         rows: GATES,
-        keys: "llK",
+        keys: "lllK",
         play: 0,
         voice: None,
         kick: false,
@@ -87,7 +87,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "lane",
         rows: LANE,
-        keys: "llll:lane 3<Enter><Tab>",
+        keys: "lllll:lane 3<Enter><Tab>",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,

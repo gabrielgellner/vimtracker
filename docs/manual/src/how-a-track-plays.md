@@ -25,13 +25,15 @@ loop:                  [03 ............. 08]     only these play
 ## One row has four parts
 
 ```text
- Note  Vel  Gate      FX1         FX2         FX3
- C-4   40   HLD3 --   CUT   40 .  ---   00    ---   00
- └─ what sounds       └─ what changes while it plays
-           └─ how long it lasts
+ Note  Vel     Gate      FX1         FX2         FX3
+ C-4   40 -3   HLD3 --   CUT   40 .  ---   00    ---   00
+ └─ what sounds          └─ what changes while it plays
+              └─ how long it lasts
 ```
 
-- **Note and velocity** are what sounds.
+- **Note and velocity** are what sounds. The dim pair after the velocity is the row's
+  **nudge**, how far early or late its note plays, in 24ths of a step, and it's blank
+  on a row on the grid.
 - **Gate** is how long the row lasts, in **pulses**, which are steps, from `0` to `8`,
   and what the note does over that time. An empty cell, `----`, is one pulse of `SGL`,
   as every row was before gates. The dim pair after it is how long the note lasts, and
@@ -196,6 +198,31 @@ heard:     |     |   |     |
 Everything on a step moves with it: each pulse of a `MLT`, a lane's value, `DEL`
 counting from where the step lands, and a note's `Gate`, which is a share of its
 step as the groove makes it. A step's `GRV` chooses its groove before it lands.
+
+## A nudge moves a row's note, not its lanes
+
+A row's nudge moves its note part off where the groove lands its step, up to `B`
+24ths, just under half a step, either way. The order is grid, then groove, then
+nudge:
+
+```text
+steps:     0    1    2    3          Swing 66, with step 3's row nudged -B
+grid:      |    |    |    |
+groove:    |     |   |     |
+heard:     |     |   |   |            a little early, as -B is more than 77 ticks
+```
+
+What moves with it is what belongs to the note: the note with its velocity and
+length, so its end moves with its start; the row's own FX columns, the ones without
+a lane; `DEL`, `KIL`, `OFF`, `RET` and `CHA` from any column, which count from where
+the note now starts; the envelopes; and every pulse of a `MLT`. What stays is what
+keeps time on its own: a column with a lane, the LFOs and the groove. So a note
+nudged early on a step where a lane changes a value starts with the value before,
+and the lane's change comes in on the grid.
+
+A track's notes always play in order. A nudge can't take a row's note past the
+next row's on the grid, but a groove's pushes on top of nudges can: then the later
+row waits for the earlier one, and is the note left sounding.
 
 ## The keys, by column
 

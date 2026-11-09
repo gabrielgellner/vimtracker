@@ -22,6 +22,8 @@ pub const TICKS_PER_STEP: u64 = 240;
 pub const TICKS_PER_QUARTER: u64 = 960;
 /// One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step. A groove's pushes are in ticks.
 pub const GROOVE_UNIT_TICKS: u64 = 40;
+/// One unit of a row's nudge, a 24th of a step, finer than `DEL`'s sixths.
+pub const NUDGE_TICKS: u64 = TICKS_PER_STEP / 24;
 /// Steps in a new phrase.
 pub const DEFAULT_PHRASE_STEPS: usize = 16;
 /// The most steps a phrase keeps, so a big count on a paste or a slide can't use up memory.
