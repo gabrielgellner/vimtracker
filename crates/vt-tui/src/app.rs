@@ -7,7 +7,12 @@ use std::time::{Duration, Instant};
 
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::config::Settings;
+use crate::explorer::Purpose;
+use crate::exploring::Naming;
+use crate::loading::Loader;
 use crate::meter::Meter;
+use crate::places::RecentPlaces;
+use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use vt_engine::engine::Transport;
 use vt_engine::link::{Command, Handle, JamState};
@@ -316,6 +321,18 @@ pub struct App {
     pub kit: Vec<KitEntry>,
     /// The file of the kit in use, which the kit picker opens on.
     pub kit_file: Option<PathBuf>,
+    /// Reads the files the explorer previews and plays, off this thread.
+    pub loader: Loader,
+    /// Whether the explorer plays the sample its cursor moves onto, which `A` switches and the
+    /// next one opened keeps.
+    pub audition_files: bool,
+    /// The sample the explorer's cursor is on, to play once it's read, and the one playing.
+    pub file_wanted: Option<PathBuf>,
+    pub file_playing: Option<PathBuf>,
+    /// The folders the explorer was last used in.
+    pub recent_places: RecentPlaces,
+    /// The command line a folder chosen in the explorer goes on to.
+    pub naming: Option<Naming>,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -439,6 +456,12 @@ impl App {
             shape_seed: 0,
             kit: Vec::new(),
             kit_file: None,
+            loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
+            audition_files: true,
+            file_wanted: None,
+            file_playing: None,
+            recent_places: RecentPlaces::default(),
+            naming: None,
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,
@@ -454,6 +477,8 @@ impl App {
         self.handle = handle;
         self.samples = samples;
         self.rate = rate;
+        self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
+        self.file_playing = None;
         self.scope = crate::scope::Scope::new(rate);
         self.transport = Transport::Stopped;
         self.playhead = 0;
@@ -667,6 +692,7 @@ impl App {
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;
         }
+        self.take_loaded();
         self.follow_recording();
     }
 
@@ -2097,10 +2123,19 @@ impl App {
         self.status.clear();
         match line {
             Line::Quit { force } => self.quit(force),
+            Line::Write(None) if self.folder.is_none() => {
+                self.open_naming_explorer(Purpose::Save, "w", String::new());
+            }
             Line::Write(path) => self.write(path),
-            Line::Edit(path) => self.open(&path),
-            Line::New(path) => self.new_project(&path),
-            Line::Sample(path) => self.sample(&path),
+            Line::Edit(Some(path)) => self.open(&path),
+            Line::Edit(None) => self.open_project_explorer(),
+            Line::New(Some(path)) => self.new_project(&path),
+            Line::New(None) if self.dirty => {
+                self.status = "Unsaved changes: use :w to save first".to_owned();
+            }
+            Line::New(None) => self.open_naming_explorer(Purpose::Save, "new", String::new()),
+            Line::Sample(Some(path)) => self.sample(&path),
+            Line::Sample(None) => self.open_default_sample_picker(),
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
@@ -2133,13 +2168,35 @@ impl App {
             }
             Line::Chain(chain) => self.set_track_chain(chain),
             Line::Render {
-                path,
+                path: None,
+                rows,
+                tail,
+                stems,
+            } => {
+                // The flags are kept, after the name.
+                let mut after = String::new();
+                if let Some(rows) = rows {
+                    after.push_str(&format!(" --rows {rows}"));
+                }
+                if tail {
+                    after.push_str(" --tail");
+                }
+                if stems {
+                    after.push_str(" --stems");
+                }
+                self.open_naming_explorer(Purpose::Render, "render", after);
+            }
+            Line::Render {
+                path: Some(path),
                 rows,
                 tail,
                 stems: true,
             } => self.render_stems(&path, rows, tail),
             Line::Render {
-                path, rows, tail, ..
+                path: Some(path),
+                rows,
+                tail,
+                ..
             } => self.render(&path, rows, tail),
             Line::Double => self.double(),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
@@ -2380,7 +2437,7 @@ impl App {
     /// Put a sample on the current track, with other changes to the track, as one undo step.
     pub(crate) fn sample_with(&mut self, source: &Path, more: Vec<Action>) {
         if source.is_dir() {
-            self.open_sample_picker(&[source.to_path_buf()]);
+            self.open_sample_folder(source);
             return;
         }
         let stored = match self.store_sample(source) {

@@ -7,13 +7,14 @@ use std::sync::Arc;
 use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
-use vt_model::sample::{is_sample_file, load_sample};
+use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind};
 
 use crate::app::{App, Entry, Field};
+use crate::explorer::Purpose;
 use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -22,98 +23,8 @@ use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 
-/// How many files the sample browser lists, and how many folders deep it looks.
-const MAX_SAMPLES: usize = 2000;
-const MAX_DEPTH: usize = 4;
-
-/// Find WAV, AIFF and FLAC files under a folder, skipping hidden ones, in a stable order.
-pub fn find_samples(folder: &Path) -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    walk(folder, 0, &mut found);
-    found
-}
-
-fn walk(folder: &Path, depth: usize, found: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
-    paths.sort();
-    for path in paths {
-        if found.len() >= MAX_SAMPLES {
-            return;
-        }
-        if !is_visible(&path) {
-            continue;
-        }
-        if path.is_dir() {
-            // A Rust build folder holds no samples, and takes a noticeable time to walk.
-            if depth < MAX_DEPTH && !path.ends_with("target") {
-                walk(&path, depth + 1, found);
-            }
-        } else if is_sample_file(&path) {
-            found.push(path);
-        }
-    }
-}
-
-/// The kits in a folder and the folders in it, as the importer writes them: its RON files, by
-/// path, those in the folder itself first.
-pub fn kits_in(root: &Path) -> Vec<PathBuf> {
-    let mut kits = Vec::new();
-    walk_kits(root, 0, &mut kits);
-    kits
-}
-
-fn walk_kits(folder: &Path, depth: usize, kits: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| is_visible(path))
-        .collect();
-    paths.sort();
-    let (folders, files): (Vec<PathBuf>, Vec<PathBuf>) =
-        paths.into_iter().partition(|path| path.is_dir());
-    kits.extend(files.into_iter().filter(|path| {
-        path.extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("ron"))
-    }));
-    if depth < MAX_DEPTH {
-        for folder in folders {
-            walk_kits(&folder, depth + 1, kits);
-        }
-    }
-}
-
-fn is_visible(path: &Path) -> bool {
-    path.file_name()
-        .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
-}
-
-/// A kit as `:kit` takes it: its path in its kit folder, without the extension.
-fn kit_name(folder: &Path, path: &Path) -> String {
-    path.strip_prefix(folder)
-        .unwrap_or(path)
-        .with_extension("")
-        .to_string_lossy()
-        .into_owned()
-}
-
-/// The folder a file is in, under the folder it was found from, which is the category the picker
-/// lists it under, or empty for the folder itself.
-fn folder_in(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .parent()
-        .map(|parent| parent.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-/// A row for a kit's sound: its label, and its name beside it, under the kit's name.
-fn kit_item(entry: &KitEntry, kit: &str) -> Item {
+/// A row for a kit's sound: its label, and its name beside it.
+fn kit_item(entry: &KitEntry) -> Item {
     Item::new(
         entry.label.clone(),
         Pick::KitSound {
@@ -125,7 +36,6 @@ fn kit_item(entry: &KitEntry, kit: &str) -> Item {
         },
     )
     .meaning(entry.name.clone())
-    .category(format!("Kit {kit}"))
 }
 
 /// What a kit's preview shows: its name, how many sounds it has and where it came from, and each
@@ -139,15 +49,11 @@ fn kit_preview(
     let kit = match load_kit(path) {
         Ok(kit) => kit,
         Err(error) => {
-            return Shown {
-                item,
-                heading: path
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                note: error.to_string(),
-                lines: Vec::new(),
-            };
+            let heading = path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            return Shown::new(item, heading, error.to_string());
         }
     };
     let count = match kit.sounds.len() {
@@ -180,10 +86,8 @@ fn kit_preview(
         })
         .collect();
     Shown {
-        item,
-        heading: kit.name,
-        note,
         lines,
+        ..Shown::new(item, kit.name, note)
     }
 }
 
@@ -229,7 +133,7 @@ impl App {
     }
 
     /// Load the preview of the item under the picker's cursor, if it has one and it isn't already
-    /// shown.
+    /// shown. A sample's is read in the background, and shows it's loading until it's in.
     pub(crate) fn refresh_preview(&mut self) {
         let rate = self.rate;
         let Some(picker) = self.picker.as_mut() else {
@@ -237,14 +141,26 @@ impl App {
         };
         let wanted = picker
             .current_index()
-            .filter(|item| picker.item(*item).preview.is_some());
+            .filter(|item| picker.has_previews() && picker.item(*item).preview.is_some());
         if picker.preview.as_ref().map(|shown| shown.item) == wanted {
             return;
         }
         picker.preview_images.clear();
-        picker.preview = wanted.and_then(|item| match picker.item(item).preview.clone()? {
-            Preview::Kit(path) => Some(Arc::new(kit_preview(item, &path, rate, &mut picker.waves))),
-        });
+        picker.preview_wave = None;
+        let Some(item) = wanted else {
+            picker.preview = None;
+            return;
+        };
+        let Some(preview) = picker.item(item).preview.clone() else {
+            return;
+        };
+        let shown = match &preview {
+            Preview::Kit(path) => Some(kit_preview(item, path, rate, &mut picker.waves)),
+            _ => self.explorer_preview(item, &preview),
+        };
+        if let Some(picker) = self.picker.as_mut() {
+            picker.preview = shown.map(Arc::new);
+        }
     }
 
     /// Open the list of scales, with this one highlighted.
@@ -312,42 +228,10 @@ impl App {
         self.show_picker(Picker::new("Guides", items));
     }
 
-    /// Choose a kit from those in the settings' kit folders, under the folders they're in, such as
-    /// `Ableton/Drum Machines`, with each kit's sounds beside the list. `Enter` makes it the kit
-    /// `Space 5` lists first, and `L` puts its sounds on tracks.
+    /// Choose a kit in the explorer, from the kit folders, with each kit's sounds beside the list.
+    /// `Enter` makes it the kit `Space 5` lists first, and `L` puts its sounds on tracks.
     pub(crate) fn open_kit_picker(&mut self) {
-        let items: Vec<Item> = self
-            .settings
-            .kit_folders()
-            .iter()
-            .flat_map(|folder| {
-                kits_in(folder).into_iter().map(move |path| {
-                    let name = kit_name(folder, &path);
-                    let label = name.rsplit('/').next().unwrap_or(&name).to_owned();
-                    Item::new(label, Pick::Kit(path.clone()))
-                        .category(folder_in(folder, &path))
-                        .wider(Pick::KitTracks(path.clone()))
-                        .preview(Preview::Kit(path))
-                })
-            })
-            .collect();
-        if items.is_empty() {
-            self.status = match self.settings.kits.first() {
-                Some(folder) => format!("No kits yet: add a kit file to {folder}, such as 909.ron"),
-                None => "No kit folders: add one to kits in settings.ron".to_owned(),
-            };
-            return;
-        }
-        let current = self.kit_file.as_ref().and_then(|file| {
-            items
-                .iter()
-                .position(|item| item.pick == Pick::Kit(file.clone()))
-        });
-        self.show_picker(
-            Picker::new("Kits", items)
-                .opened_on(current)
-                .hinted("Enter use   L on tracks"),
-        );
+        self.open_kit_explorer();
     }
 
     /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
@@ -547,99 +431,16 @@ impl App {
         self.mode = Mode::Replace;
     }
 
-    /// Choose this track's sample from the usual places.
+    /// Choose this track's sample in the explorer, with the kit's sounds first.
     pub(crate) fn open_default_sample_picker(&mut self) {
-        let roots = self.sample_roots();
-        self.open_samples(&roots, true);
-    }
-
-    /// Open the sample browser on a folder. If nothing is there, offer a typed path instead.
-    pub(crate) fn open_sample_picker(&mut self, roots: &[PathBuf]) {
-        self.open_samples(roots, false);
-    }
-
-    /// Open the sample browser, with the kit's sounds first if asked.
-    fn open_samples(&mut self, roots: &[PathBuf], with_kit: bool) {
         let kit_name = self
             .kit_file
             .as_deref()
             .and_then(Path::file_stem)
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let kit = self
-            .kit
-            .iter()
-            .filter(|_| with_kit)
-            .map(|entry| kit_item(entry, &kit_name));
-        let files = roots.iter().flat_map(|root| {
-            find_samples(root).into_iter().map(move |path| {
-                let name = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let category = folder_in(root, &path);
-                Item::new(name, Pick::Sample(path)).category(category)
-            })
-        });
-        let items: Vec<Item> = kit.chain(files).collect();
-        if items.is_empty() {
-            self.status = "No samples found here: type a path, or a folder of them".to_owned();
-            self.command_line = "sample ".to_owned();
-            self.mode = Mode::Command;
-            return;
-        }
-        // On the track's own sample, or else the kit's first sound. Only files of the same name
-        // are looked at closely, as a path can be written more than one way.
-        let sample = self
-            .song()
-            .tracks
-            .get(self.cursor.track)
-            .and_then(|track| track.sample.as_deref())
-            .map(|sample| project::resolve_sample(self.folder.as_deref(), sample));
-        let same = |path: &Path| {
-            sample.as_deref().is_some_and(|sample| {
-                path.file_name() == sample.file_name()
-                    && (path == sample
-                        || path
-                            .canonicalize()
-                            .is_ok_and(|path| sample.canonicalize().is_ok_and(|s| s == path)))
-            })
-        };
-        let current = items.iter().position(|item| match &item.pick {
-            Pick::Sample(path) | Pick::KitSound { path, .. } => same(path),
-            _ => false,
-        });
-        let first_sound = (current.is_none() && !self.kit.is_empty() && with_kit).then_some(0);
-        // Files are found by name, whatever letter it starts with, so it opens on the search.
-        self.show_picker(
-            Picker::new("Samples", items)
-                .opened_on(current)
-                .revealing(first_sound)
-                .searching(""),
-        );
-    }
-
-    /// The folders the sample browser starts from: the project's samples, the settings' sample
-    /// folders, then where we ran.
-    pub(crate) fn sample_roots(&self) -> Vec<PathBuf> {
-        let mut roots = Vec::new();
-        if let Some(folder) = &self.folder {
-            roots.push(folder.join("samples"));
-        }
-        for folder in self.settings.sample_folders() {
-            if !roots.contains(&folder) {
-                roots.push(folder);
-            }
-        }
-        if let Ok(current) = std::env::current_dir()
-            && !self
-                .folder
-                .as_deref()
-                .is_some_and(|f| current.starts_with(f))
-        {
-            roots.push(current);
-        }
-        roots
+            .map(|stem| format!("Kit {}", stem.to_string_lossy()))
+            .unwrap_or_else(|| "Kit".to_owned());
+        let kit = self.kit.iter().map(kit_item).collect();
+        self.open_sample_explorer(kit, kit_name);
     }
 
     pub(crate) fn picker_key(&mut self, key: Key) {
@@ -648,14 +449,21 @@ impl App {
             return;
         };
         match picker.key(key) {
-            Outcome::Stay => self.refresh_preview(),
+            Outcome::Stay => {
+                self.refresh_preview();
+                self.follow_file();
+            }
             Outcome::Close => {
                 self.picker = None;
                 self.mode = self.mode_after_picker();
+                self.leave_explorer();
             }
             Outcome::Choose(pick) => {
+                let naming = self.naming.take();
                 self.picker = None;
                 self.mode = self.mode_after_picker();
+                self.leave_explorer();
+                self.naming = naming;
                 self.choose(pick);
             }
         }
@@ -670,8 +478,19 @@ impl App {
                 track,
                 slot,
             } => self.open_use(section, track, slot),
-            Pick::Sample(path) => self.sample(&path),
-            Pick::Kit(path) => self.use_kit(&path),
+            Pick::Sample(path) => {
+                self.note_place_of(Purpose::Sample, &path);
+                self.sample(&path);
+            }
+            Pick::Kit(path) => {
+                self.note_place_of(Purpose::Kit, &path);
+                self.use_kit(&path);
+            }
+            Pick::Folder(folder) => self.name_in(&folder),
+            Pick::Project(folder) => {
+                self.note_place_of(Purpose::Project, &folder);
+                self.line(crate::input::command::Line::Edit(Some(folder)));
+            }
             Pick::KitSound {
                 path,
                 label,
@@ -759,7 +578,17 @@ impl App {
                 self.guide_scroll = 0;
                 self.mode = Mode::Guide;
             }
-            Pick::KitTracks(path) => self.load_kit(&path),
+            Pick::KitTracks(path) => {
+                self.note_place_of(Purpose::Kit, &path);
+                self.load_kit(&path);
+            }
+        }
+    }
+
+    /// Remember the folder a file chosen in the explorer is in.
+    fn note_place_of(&mut self, purpose: Purpose, path: &Path) {
+        if let Some(folder) = path.parent() {
+            self.note_place(purpose, folder);
         }
     }
 

@@ -5,6 +5,7 @@
 | `:w` | Save |
 | `:w path` | Save to a new folder, with a copy of every sample |
 | `:e path` | Open a project |
+| `:e` | Choose a project to open |
 | `:new path` | Start a new project |
 | `:q` | Quit, or refuse if there are unsaved changes |
 | `:q!` | Quit and discard changes |
@@ -12,6 +13,12 @@
 
 `Tab` completes a path, one folder at a time, and `Up` brings back an earlier
 command. **Navigation** has the rest of the command line.
+
+`:e` on its own lists projects and folders as a tree, starting beside this project,
+and shows the one under the cursor: its tempo, its tracks and when it was saved.
+`:w` before the project has a folder, and `:new` on its own, list folders: `l` opens
+one, and `Enter` chooses it and puts the command on the command line with the folder
+filled in, for you to type the name and press `Enter`.
 
 ## Samples and moving projects
 
@@ -42,6 +49,9 @@ end, and gives a synth that would otherwise hold its note a short blip.
 
 `:render loop.wav` writes the loop, ready to drop into Ableton. It uses what
 is on screen now, including mutes, and the screen waits until it finishes.
+`:render` with no path lists folders, starting with the project's: `Enter` chooses
+one, and the command line is filled in with a name after the project, which you can
+change, and any options you gave.
 
 | Option | Does |
 |---|---|

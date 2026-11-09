@@ -1,9 +1,13 @@
 //! The picker's state, keys and matching: one list for every choice, after snacks.nvim's picker.
 //! Items can sit in categories, a tree one level deep that folds as snacks' explorer does, and
 //! typing searches across them all. `rank` is adapted from gmuse's `src/ui/picker.rs`.
+//!
+//! In tree mode it's the file explorer, after snacks' explorer: folders that open and close, read
+//! as they're opened, with `Backspace` going up, `H` for hidden files, `P` for the preview and an
+//! exact search across what's been opened. `explorer.rs` says what each purpose lists.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
@@ -19,6 +23,7 @@ use vt_model::song::{FilterMode, FilterType, Machine};
 use vt_model::step::{FxCommand, GateKind};
 
 use crate::audio::AudioChoice;
+use crate::explorer::{self, Purpose};
 use crate::guides::Guide;
 use crate::input::keys::Key;
 use crate::input::mode::View;
@@ -113,6 +118,10 @@ pub enum Pick {
     Audio(AudioChoice),
     /// Put this in the command line in place of the word being completed.
     Completion(String),
+    /// A folder in the file explorer, which opens, or is chosen to save or render in.
+    Folder(PathBuf),
+    /// A project's folder, to open.
+    Project(PathBuf),
 }
 
 /// Something to show beside the list for the item under the cursor.
@@ -120,6 +129,10 @@ pub enum Pick {
 pub enum Preview {
     /// A kit's sounds, each with its waveform.
     Kit(PathBuf),
+    /// A sample's waveform, length, rate and channels.
+    Sample(PathBuf),
+    /// A project's name, tempo, tracks and when it was saved.
+    Project(PathBuf),
 }
 
 /// One choice: its name, what it means, drawn dim beside it, and the category it's listed under,
@@ -202,6 +215,82 @@ struct Category {
     open: bool,
 }
 
+/// The top of the explorer's tree: a folder it starts from, with why it's there dim beside it, or
+/// items given up front under a name, such as the kit's sounds.
+#[derive(Debug, Clone)]
+pub enum Root {
+    Place { path: PathBuf, meaning: String },
+    Group { label: String, items: Vec<Item> },
+}
+
+/// A file or folder in the explorer's tree, beside its item.
+#[derive(Debug, Clone)]
+struct Node {
+    /// None for a group, and for what's in one.
+    path: Option<PathBuf>,
+    parent: Option<usize>,
+    depth: usize,
+    /// A folder's or a group's: whether it's open, and what's in it once it's been read.
+    folder: Option<Folder>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct Folder {
+    open: bool,
+    children: Option<Vec<usize>>,
+}
+
+/// The explorer's tree, beside the picker's items, and its switches.
+#[derive(Debug, Clone)]
+pub struct Tree {
+    pub purpose: Purpose,
+    /// Whether hidden files are listed.
+    pub hidden: bool,
+    /// Whether the preview is shown.
+    pub preview: bool,
+    /// Whether moving onto a sample plays it.
+    pub audition: bool,
+    roots: Vec<Root>,
+    home: Option<PathBuf>,
+    nodes: Vec<Node>,
+    /// The roots' nodes, in order.
+    top: Vec<usize>,
+}
+
+/// Where the cursor was and which folders were open, kept while the tree is read again.
+struct Remembered {
+    open: Vec<PathBuf>,
+    closed_groups: Vec<usize>,
+    cursor: Option<PathBuf>,
+    cursor_item: Option<usize>,
+}
+
+/// A path as it is on disk, so `/tmp` and `/private/tmp` are the same place, as far as it's there.
+fn real(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => real(parent).join(name),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// Where a search's letters are in a name, matched exactly but ignoring case, as the explorer's
+/// search is, counted in characters.
+fn exact(label: &str, query: &str) -> Option<Vec<u32>> {
+    let label: Vec<char> = label.chars().collect();
+    let query: Vec<char> = query.trim().chars().collect();
+    let same = |a: char, b: char| a.to_lowercase().eq(b.to_lowercase());
+    let start = (0..=label.len().checked_sub(query.len())?).find(|start| {
+        label[*start..start + query.len()]
+            .iter()
+            .zip(&query)
+            .all(|(a, b)| same(*a, *b))
+    })?;
+    Some((start..start + query.len()).map(|at| at as u32).collect())
+}
+
 /// Where keys go. In the list, `j` `k` `h` `l` move and any other letter starts a search with
 /// itself. In the search, every letter types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,7 +315,26 @@ pub struct Shown {
     pub heading: String,
     /// Dim, under the heading, such as where a kit came from.
     pub note: String,
+    /// Plain lines under the note, such as when a project was saved.
+    pub details: Vec<String>,
+    /// A waveform across the preview, as the rows it covers in each column of dots, such as a
+    /// sample's.
+    pub wave: Option<Vec<(usize, usize)>>,
     pub lines: Vec<PreviewLine>,
+}
+
+impl Shown {
+    /// A heading and a note, with nothing else yet.
+    pub fn new(item: usize, heading: impl Into<String>, note: impl Into<String>) -> Self {
+        Self {
+            item,
+            heading: heading.into(),
+            note: note.into(),
+            details: Vec::new(),
+            wave: None,
+            lines: Vec::new(),
+        }
+    }
 }
 
 /// One line of a preview, such as a sound in a kit.
@@ -268,6 +376,10 @@ pub struct Picker {
     pub preview_images: Vec<Option<u32>>,
     /// Waveforms already worked out, by file, so moving back to a kit loads nothing again.
     pub waves: HashMap<PathBuf, Option<Vec<(usize, usize)>>>,
+    /// The image of the preview's own waveform, once sent.
+    pub preview_wave: Option<u32>,
+    /// In tree mode, the explorer's tree.
+    tree: Option<Tree>,
 }
 
 impl Picker {
@@ -324,9 +436,491 @@ impl Picker {
             preview: None,
             preview_images: Vec::new(),
             waves: HashMap::new(),
+            preview_wave: None,
+            tree: None,
         };
         picker.rebuild();
         picker
+    }
+
+    /// The file explorer for a purpose, over these roots, every folder folded and every group
+    /// open, with the cursor on the first row. `home` is the folder named `~`.
+    pub fn explorer(purpose: Purpose, roots: Vec<Root>, home: Option<PathBuf>) -> Self {
+        let mut picker = Self::new(purpose.title(), Vec::new());
+        picker.tree = Some(Tree {
+            purpose,
+            hidden: false,
+            preview: purpose.previews(),
+            audition: purpose.auditions(),
+            roots,
+            home,
+            nodes: Vec::new(),
+            top: Vec::new(),
+        });
+        picker.build();
+        picker.rebuild();
+        picker
+    }
+
+    /// Open on a file or folder, opening the folders down to it, and mark it. A folder is opened
+    /// too, to show what's in it. Where it isn't listed, the cursor goes as near as it can.
+    pub fn following(mut self, path: Option<&Path>) -> Self {
+        if let Some(path) = path
+            && let Some(at) = self.find(path)
+        {
+            let found = self.node(at).and_then(|node| node.path.as_deref());
+            if found.is_some_and(|found| real(found) == real(path)) {
+                self.current = Some(at);
+                self.set_open(at, true);
+            }
+            self.reveal(at);
+        }
+        self
+    }
+
+    /// With the first folder at the top of the explorer's tree open, and the cursor on the first
+    /// thing in it, unless a folder is open already, so there's something to see straight away.
+    pub fn opening_first(mut self) -> Self {
+        let Some(tree) = &self.tree else {
+            return self;
+        };
+        let open = |node: &Node| node.folder.as_ref().is_some_and(|folder| folder.open);
+        if tree
+            .nodes
+            .iter()
+            .any(|node| node.path.is_some() && open(node))
+        {
+            return self;
+        }
+        let Some(first) = tree
+            .top
+            .iter()
+            .copied()
+            .find(|at| tree.nodes[*at].path.is_some())
+        else {
+            return self;
+        };
+        self.set_open(first, true);
+        self.rebuild();
+        if let Some(child) = self.children(first).first().copied() {
+            self.reveal(child);
+        }
+        self
+    }
+
+    /// With every folder at the top of the explorer's tree open.
+    pub fn opening_roots(mut self) -> Self {
+        let top = self
+            .tree
+            .as_ref()
+            .map(|tree| tree.top.clone())
+            .unwrap_or_default();
+        for root in top {
+            self.set_open(root, true);
+        }
+        self.rebuild();
+        self
+    }
+
+    /// The explorer's tree, in tree mode.
+    pub fn tree(&self) -> Option<&Tree> {
+        self.tree.as_ref()
+    }
+
+    pub fn tree_mut(&mut self) -> Option<&mut Tree> {
+        self.tree.as_mut()
+    }
+
+    fn node(&self, item: usize) -> Option<&Node> {
+        self.tree.as_ref()?.nodes.get(item)
+    }
+
+    fn node_mut(&mut self, item: usize) -> Option<&mut Node> {
+        self.tree.as_mut()?.nodes.get_mut(item)
+    }
+
+    /// How deep an item is in the explorer's tree, from 0 for a root.
+    pub fn depth(&self, item: usize) -> usize {
+        self.node(item).map_or(0, |node| node.depth)
+    }
+
+    /// Whether an item in the explorer is a folder, and if so whether it's open.
+    pub fn folder_open(&self, item: usize) -> Option<bool> {
+        self.node(item)?.folder.as_ref().map(|folder| folder.open)
+    }
+
+    /// The file or folder an item in the explorer is.
+    pub fn path(&self, item: usize) -> Option<&Path> {
+        self.node(item)?.path.as_deref()
+    }
+
+    /// Add an item, and its node in the tree.
+    fn push(&mut self, item: Item, node: Node) -> usize {
+        self.items.push(item);
+        self.item_categories.push(None);
+        if let Some(tree) = self.tree.as_mut() {
+            tree.nodes.push(node);
+        }
+        self.items.len() - 1
+    }
+
+    /// Make the tree's roots again, with nothing read.
+    fn build(&mut self) {
+        let Some(tree) = self.tree.as_mut() else {
+            return;
+        };
+        tree.nodes.clear();
+        tree.top.clear();
+        let roots = tree.roots.clone();
+        let home = tree.home.clone();
+        self.items.clear();
+        self.item_categories.clear();
+        for root in roots {
+            let at = match root {
+                Root::Place { path, meaning } => {
+                    let label = explorer::place_name(&path, home.as_deref());
+                    let item = Item::new(label, Pick::Folder(path.clone())).meaning(meaning);
+                    self.push(
+                        item,
+                        Node {
+                            path: Some(path),
+                            parent: None,
+                            depth: 0,
+                            folder: Some(Folder::default()),
+                        },
+                    )
+                }
+                Root::Group { label, items } => {
+                    let group = self.push(
+                        Item::new(label, Pick::Folder(PathBuf::new())),
+                        Node {
+                            path: None,
+                            parent: None,
+                            depth: 0,
+                            folder: Some(Folder {
+                                open: true,
+                                children: Some(Vec::new()),
+                            }),
+                        },
+                    );
+                    let children = items
+                        .into_iter()
+                        .map(|item| {
+                            self.push(
+                                item,
+                                Node {
+                                    path: None,
+                                    parent: Some(group),
+                                    depth: 1,
+                                    folder: None,
+                                },
+                            )
+                        })
+                        .collect();
+                    if let Some(folder) = self.node_mut(group).and_then(|node| node.folder.as_mut())
+                    {
+                        folder.children = Some(children);
+                    }
+                    group
+                }
+            };
+            if let Some(tree) = self.tree.as_mut() {
+                tree.top.push(at);
+            }
+        }
+    }
+
+    /// Read what's in a folder, if it hasn't been read.
+    fn load(&mut self, at: usize) {
+        let Some(tree) = self.tree.as_ref() else {
+            return;
+        };
+        let node = &tree.nodes[at];
+        let (Some(folder), Some(path)) = (&node.folder, &node.path) else {
+            return;
+        };
+        if folder.children.is_some() {
+            return;
+        }
+        let depth = node.depth + 1;
+        let entries = explorer::list(path, tree.purpose, tree.hidden);
+        let children = entries
+            .into_iter()
+            .map(|(path, kind)| {
+                let folder = (kind == explorer::Kind::Folder).then(Folder::default);
+                self.push(
+                    explorer::item(&path, kind),
+                    Node {
+                        path: Some(path),
+                        parent: Some(at),
+                        depth,
+                        folder,
+                    },
+                )
+            })
+            .collect();
+        if let Some(folder) = self.node_mut(at).and_then(|node| node.folder.as_mut()) {
+            folder.children = Some(children);
+        }
+    }
+
+    /// What's in a folder or group, as far as it's been read.
+    fn children(&self, at: usize) -> &[usize] {
+        self.node(at)
+            .and_then(|node| node.folder.as_ref()?.children.as_deref())
+            .unwrap_or(&[])
+    }
+
+    /// Open or close a folder.
+    fn set_open(&mut self, at: usize, open: bool) {
+        if open {
+            self.load(at);
+        }
+        if let Some(folder) = self.node_mut(at).and_then(|node| node.folder.as_mut()) {
+            folder.open = open;
+        }
+    }
+
+    /// The node a path is at, or the deepest folder on the way to it that's listed, reading the
+    /// folders down to it from the root that holds it most closely.
+    fn find(&mut self, path: &Path) -> Option<usize> {
+        let target = real(path);
+        let top = self.tree.as_ref()?.top.clone();
+        let (mut at, rest) = top
+            .into_iter()
+            .filter_map(|root| {
+                let place = real(self.path(root)?);
+                let rest = target.strip_prefix(&place).ok()?.to_path_buf();
+                Some((root, rest))
+            })
+            .min_by_key(|(_, rest)| rest.components().count())?;
+        for part in rest.components() {
+            self.load(at);
+            let next = self.children(at).iter().copied().find(|child| {
+                self.path(*child)
+                    .and_then(Path::file_name)
+                    .is_some_and(|name| name == part.as_os_str())
+            });
+            match next {
+                Some(next) => at = next,
+                None => break,
+            }
+        }
+        Some(at)
+    }
+
+    /// The rows of the tree, from its roots: every open folder's contents, or while searching,
+    /// what's been read that matches and the folders it's in, open or not.
+    fn tree_rows(&self) -> (Vec<Row>, Vec<Vec<u32>>) {
+        let mut rows = Vec::new();
+        let mut matched = Vec::new();
+        let query = self.query.trim().to_owned();
+        if let Some(tree) = &self.tree {
+            for root in &tree.top {
+                self.visit(*root, &query, &mut rows, &mut matched);
+            }
+        }
+        (rows, matched)
+    }
+
+    /// Add a node's row and those under it, and say whether any were kept.
+    fn visit(
+        &self,
+        at: usize,
+        query: &str,
+        rows: &mut Vec<Row>,
+        matched: &mut Vec<Vec<u32>>,
+    ) -> bool {
+        let searching = !query.is_empty();
+        let found = if searching {
+            exact(&self.items[at].label, query)
+        } else {
+            Some(Vec::new())
+        };
+        let mark = rows.len();
+        rows.push(Row::Item(at));
+        matched.push(found.clone().unwrap_or_default());
+        let mut kept = found.is_some();
+        let open = self
+            .node(at)
+            .and_then(|node| node.folder.as_ref())
+            .is_some_and(|folder| folder.open);
+        if open || searching {
+            for child in self.children(at).to_vec() {
+                kept |= self.visit(child, query, rows, matched);
+            }
+        }
+        if !kept {
+            rows.truncate(mark);
+            matched.truncate(mark);
+        }
+        kept
+    }
+
+    /// Which folders are open and where the cursor is, to put back once it's read again.
+    fn remember(&self) -> Remembered {
+        let tree = self.tree.as_ref();
+        let nodes = tree.map_or(&[][..], |tree| tree.nodes.as_slice());
+        let open = |node: &Node| node.folder.as_ref().is_some_and(|folder| folder.open);
+        Remembered {
+            open: nodes
+                .iter()
+                .filter(|node| open(node))
+                .filter_map(|node| node.path.clone())
+                .collect(),
+            closed_groups: nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, node)| node.path.is_none() && node.folder.is_some() && !open(node))
+                .map(|(at, _)| at)
+                .collect(),
+            cursor: self
+                .current_index()
+                .and_then(|item| self.path(item).map(Path::to_path_buf)),
+            cursor_item: self.current_index(),
+        }
+    }
+
+    /// Read the tree again from its roots, with these folders open and the cursor back.
+    fn restore(&mut self, remembered: Remembered) {
+        let marked = self
+            .current
+            .and_then(|item| self.path(item).map(Path::to_path_buf));
+        self.build();
+        for group in remembered.closed_groups {
+            self.set_open(group, false);
+        }
+        for path in &remembered.open {
+            if let Some(at) = self.find(path)
+                && self.path(at) == Some(path.as_path())
+            {
+                self.set_open(at, true);
+            }
+        }
+        self.current = None;
+        if let Some(marked) = marked
+            && let Some(at) = self.find(&marked)
+            && self.path(at) == Some(marked.as_path())
+        {
+            self.current = Some(at);
+        }
+        let cursor = match remembered.cursor {
+            Some(path) => self.find(&path),
+            None => remembered
+                .cursor_item
+                .filter(|item| *item < self.items.len()),
+        };
+        self.rebuild();
+        match cursor {
+            Some(at) => self.reveal(at),
+            None => self.selected = 0,
+        }
+    }
+
+    /// `Backspace`: make the root the cursor is under its own parent folder, with it open inside,
+    /// as snacks' explorer goes up a level.
+    fn up(&mut self) {
+        let Some(mut root) = self.current_index() else {
+            return;
+        };
+        while let Some(parent) = self.node(root).and_then(|node| node.parent) {
+            root = parent;
+        }
+        let Some(tree) = self.tree.as_ref() else {
+            return;
+        };
+        let Some(place) = tree.top.iter().position(|at| *at == root) else {
+            return;
+        };
+        let Root::Place { path, meaning } = tree.roots[place].clone() else {
+            return;
+        };
+        let Some(parent) = path.parent().map(Path::to_path_buf) else {
+            return;
+        };
+        let mut remembered = self.remember();
+        remembered.open.insert(0, path.clone());
+        remembered.cursor.get_or_insert(path);
+        if let Some(tree) = self.tree.as_mut() {
+            tree.roots[place] = Root::Place {
+                path: parent.clone(),
+                meaning,
+            };
+            // The parent may already be another root, which this one now stands for.
+            let mut index = 0;
+            tree.roots.retain(|root| {
+                let keep =
+                    index == place || !matches!(root, Root::Place { path, .. } if *path == parent);
+                index += 1;
+                keep
+            });
+        }
+        self.restore(remembered);
+    }
+
+    /// `H`: list hidden files or stop.
+    fn toggle_hidden(&mut self) {
+        let remembered = self.remember();
+        if let Some(tree) = self.tree.as_mut() {
+            tree.hidden = !tree.hidden;
+        }
+        self.restore(remembered);
+    }
+
+    /// `l` and `Enter` in the explorer: open a folder and go into it, or choose a file. `Enter`
+    /// chooses a folder where that's what's being chosen.
+    fn enter_tree(&mut self, wider: bool, confirm: bool) -> Outcome {
+        let Some(at) = self.current_index() else {
+            return Outcome::Stay;
+        };
+        let Some(tree) = self.tree.as_ref() else {
+            return Outcome::Stay;
+        };
+        let node = &tree.nodes[at];
+        if node.folder.is_none() {
+            let item = &self.items[at];
+            let pick = if wider { item.wider.as_ref() } else { None };
+            return Outcome::Choose(pick.unwrap_or(&item.pick).clone());
+        }
+        if confirm
+            && tree.purpose.chooses_folder()
+            && let Some(path) = node.path.clone()
+        {
+            return Outcome::Choose(Pick::Folder(path));
+        }
+        self.set_open(at, true);
+        self.rebuild();
+        if let Some(row) = self.rows.iter().position(|row| *row == Row::Item(at)) {
+            self.selected = row;
+            if self
+                .children(at)
+                .first()
+                .is_some_and(|first| self.rows.get(row + 1) == Some(&Row::Item(*first)))
+            {
+                self.selected = row + 1;
+            }
+        }
+        Outcome::Stay
+    }
+
+    /// `h` in the explorer: close the folder the cursor is on, or the one it's in, going up to it.
+    fn close_tree(&mut self) {
+        let Some(at) = self.current_index() else {
+            return;
+        };
+        let target = if self.folder_open(at) == Some(true) {
+            at
+        } else {
+            match self.node(at).and_then(|node| node.parent) {
+                Some(parent) => parent,
+                None => return,
+            }
+        };
+        self.set_open(target, false);
+        self.rebuild();
+        if let Some(row) = self.rows.iter().position(|row| *row == Row::Item(target)) {
+            self.selected = row;
+        }
     }
 
     /// Open on the item already chosen, unfolding its category, and mark it.
@@ -368,9 +962,13 @@ impl Picker {
         !self.categories.is_empty()
     }
 
-    /// Whether any item has a preview.
+    /// Whether there's a preview beside the list: in the explorer, while `P` has it on, and
+    /// elsewhere where any item has one.
     pub fn has_previews(&self) -> bool {
-        self.items.iter().any(|item| item.preview.is_some())
+        match &self.tree {
+            Some(tree) => tree.preview,
+            None => self.items.iter().any(|item| item.preview.is_some()),
+        }
     }
 
     pub fn items(&self) -> &[Item] {
@@ -400,7 +998,10 @@ impl Picker {
 
     /// Whether an item sits inside an open category, rather than at the top.
     pub fn is_nested(&self, item: usize) -> bool {
-        self.item_categories[item].is_some()
+        match &self.tree {
+            Some(tree) => tree.nodes[item].depth > 0,
+            None => self.item_categories[item].is_some(),
+        }
     }
 
     /// The item already chosen.
@@ -423,7 +1024,12 @@ impl Picker {
 
     /// How many items match the search, which is all of them before typing.
     pub fn matching(&self) -> usize {
-        if self.is_searching() {
+        if self.tree.is_some() && self.is_searching() {
+            self.matched
+                .iter()
+                .filter(|found| !found.is_empty())
+                .count()
+        } else if self.is_searching() {
             self.rows.len()
         } else {
             self.items.len()
@@ -461,13 +1067,23 @@ impl Picker {
         self.rebuild();
         match kept {
             Some(item) if !self.is_searching() => self.reveal(item),
+            // In the explorer, the first match rather than a folder it's in.
+            _ if self.tree.is_some() => {
+                self.selected = self
+                    .matched
+                    .iter()
+                    .position(|found| !found.is_empty())
+                    .unwrap_or(0);
+            }
             _ => self.selected = 0,
         }
     }
 
     /// Work out the rows again.
     fn rebuild(&mut self) {
-        if self.is_searching() {
+        if self.tree.is_some() {
+            (self.rows, self.matched) = self.tree_rows();
+        } else if self.is_searching() {
             let haystacks: Vec<String> = self.items.iter().map(Item::haystack).collect();
             let haystacks: Vec<&str> = haystacks.iter().map(String::as_str).collect();
             let (rows, matched) = rank_with_positions(&haystacks, &self.query)
@@ -497,7 +1113,13 @@ impl Picker {
 
     /// Show an item in the tree, opening its category, with the cursor on it.
     fn reveal(&mut self, item: usize) {
-        if let Some(category) = self.item_categories[item] {
+        if self.tree.is_some() {
+            let mut parent = self.node(item).and_then(|node| node.parent);
+            while let Some(at) = parent {
+                self.set_open(at, true);
+                parent = self.node(at).and_then(|node| node.parent);
+            }
+        } else if let Some(category) = self.item_categories[item] {
             self.categories[category].open = true;
         }
         self.rebuild();
@@ -507,7 +1129,10 @@ impl Picker {
     }
 
     /// `l` and `Enter`: open a category and go into it, or choose an item.
-    fn enter(&mut self, wider: bool) -> Outcome {
+    fn enter(&mut self, wider: bool, confirm: bool) -> Outcome {
+        if self.tree.is_some() {
+            return self.enter_tree(wider, confirm);
+        }
         match self.rows.get(self.selected).copied() {
             Some(Row::Category(category)) => {
                 self.categories[category].open = true;
@@ -526,6 +1151,10 @@ impl Picker {
 
     /// `h`: close the category the cursor is in, going up to it, or the one it's on.
     fn close_category(&mut self) {
+        if self.tree.is_some() {
+            self.close_tree();
+            return;
+        }
         let category = match self.rows.get(self.selected).copied() {
             Some(Row::Category(category)) => category,
             Some(Row::Item(item)) => match self.item_categories[item] {
@@ -580,12 +1209,27 @@ impl Picker {
             // Digits then `Enter` choose by number, as a search for them.
             KeyCode::Enter if !digits.is_empty() => {
                 self.set_query(digits);
-                return self.enter(false);
+                return self.enter(false, true);
             }
-            KeyCode::Char('l') | KeyCode::Enter => return self.enter(false),
+            KeyCode::Char('l') => return self.enter(false, false),
+            KeyCode::Enter => return self.enter(false, true),
             // Only a list with a wider choice keeps `L` from the search.
             KeyCode::Char('L') if self.items.iter().any(|item| item.wider.is_some()) => {
-                return self.enter(true);
+                return self.enter(true, true);
+            }
+            // The explorer's own keys, after snacks' explorer.
+            KeyCode::Right if self.tree.is_some() => return self.enter(false, false),
+            KeyCode::Left if self.tree.is_some() => self.close_tree(),
+            KeyCode::Backspace if self.tree.is_some() => self.up(),
+            KeyCode::Char('H') if self.tree.is_some() => self.toggle_hidden(),
+            KeyCode::Char('P') if let Some(tree) = self.tree.as_mut() => {
+                tree.preview = !tree.preview;
+            }
+            KeyCode::Char('A')
+                if let Some(tree) = self.tree.as_mut()
+                    && tree.purpose.auditions() =>
+            {
+                tree.audition = !tree.audition;
             }
             KeyCode::Char('h') => self.close_category(),
             KeyCode::Char('/') => self.focus = Focus::Search,
@@ -607,7 +1251,7 @@ impl Picker {
             KeyCode::Char('p') if key.ctrl => self.move_highlight(-1),
             KeyCode::Down => self.move_highlight(1),
             KeyCode::Up => self.move_highlight(-1),
-            KeyCode::Enter => return self.enter(false),
+            KeyCode::Enter => return self.enter(false, true),
             // Clearing the search goes back to the list, on what was found.
             KeyCode::Esc if !self.query.is_empty() => {
                 self.set_query(String::new());
@@ -705,6 +1349,260 @@ mod tests {
         .map(|(label, category)| Item::new(label, Pick::Track(0)).category(category))
         .to_vec();
         Picker::new("Dest", items)
+    }
+
+    /// A sample library: two folders of WAVs, a hidden one, and a file that isn't a sample.
+    fn library(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("vt-tree-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for folder in ["drums/kicks", "drums/hats", "loops", ".cache"] {
+            std::fs::create_dir_all(root.join(folder)).unwrap();
+        }
+        for file in [
+            "drums/kicks/deep.wav",
+            "drums/kicks/short.wav",
+            "drums/hats/closed.wav",
+            "loops/break.wav",
+            "notes.txt",
+            ".cache/old.wav",
+        ] {
+            std::fs::write(root.join(file), "").unwrap();
+        }
+        root
+    }
+
+    fn explorer(root: &Path) -> Picker {
+        let roots = vec![Root::Place {
+            path: root.to_path_buf(),
+            meaning: "samples".to_owned(),
+        }];
+        Picker::explorer(Purpose::Sample, roots, None)
+    }
+
+    /// The rows as they're shown: each indented by its depth, a folder with its arrow.
+    fn shown_rows(picker: &Picker) -> Vec<String> {
+        picker
+            .rows()
+            .iter()
+            .map(|row| {
+                let Row::Item(item) = row else {
+                    return String::new();
+                };
+                let arrow = match picker.folder_open(*item) {
+                    Some(true) => "v ",
+                    Some(false) => "> ",
+                    None => "",
+                };
+                let indent = "  ".repeat(picker.depth(*item));
+                let label = &picker.item(*item).label;
+                if picker.depth(*item) == 0 {
+                    format!("{arrow}root")
+                } else {
+                    format!("{indent}{arrow}{label}")
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_explorer_opens_folders_with_l_and_closes_them_with_h() {
+        let root = library("keys");
+        let mut picker = explorer(&root);
+        assert_eq!(shown_rows(&picker), ["> root"], "folded, nothing read");
+        assert_eq!(picker.items().len(), 1);
+        press(&mut picker, "l");
+        assert_eq!(
+            shown_rows(&picker),
+            ["v root", "  > drums", "  > loops"],
+            "folders first, and only samples, with hidden ones left out"
+        );
+        assert_eq!(label(&picker), "drums", "into the folder");
+        press(&mut picker, "l");
+        press(&mut picker, "l");
+        assert_eq!(label(&picker), "closed.wav");
+        assert_eq!(picker.depth(picker.current_index().unwrap()), 3);
+        // h on a file closes the folder it's in, going up to it, and on an open folder closes it.
+        press(&mut picker, "h");
+        assert_eq!(label(&picker), "hats");
+        assert_eq!(
+            picker.folder_open(picker.current_index().unwrap()),
+            Some(false)
+        );
+        press(&mut picker, "kh");
+        assert_eq!(label(&picker), "drums");
+        assert_eq!(shown_rows(&picker), ["v root", "  > drums", "  > loops"]);
+        // l on a file chooses it, and Enter does too.
+        press(&mut picker, "jl");
+        assert_eq!(
+            press(&mut picker, "l"),
+            Outcome::Choose(Pick::Sample(root.join("loops/break.wav")))
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn h_lists_hidden_files_and_keeps_the_tree_as_it_was() {
+        let root = library("hidden");
+        let mut picker = explorer(&root);
+        press(&mut picker, "ljl");
+        assert_eq!(label(&picker), "break.wav");
+        press(&mut picker, "H");
+        assert!(picker.tree().unwrap().hidden);
+        assert_eq!(
+            shown_rows(&picker),
+            [
+                "v root",
+                "  > .cache",
+                "  > drums",
+                "  v loops",
+                "    break.wav"
+            ],
+            "the hidden folder, with what was open still open"
+        );
+        assert_eq!(label(&picker), "break.wav", "the cursor where it was");
+        press(&mut picker, "H");
+        assert_eq!(shown_rows(&picker).len(), 4);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn backspace_makes_the_root_its_parent_with_it_open_inside() {
+        let root = library("up");
+        let mut picker = explorer(&root.join("drums"));
+        press(&mut picker, "l");
+        assert_eq!(label(&picker), "hats");
+        press(&mut picker, "<Backspace>");
+        let top = picker.current_index().unwrap();
+        assert_eq!(label(&picker), "hats", "the cursor stays");
+        assert_eq!(picker.depth(top), 2, "a level deeper now");
+        assert_eq!(
+            shown_rows(&picker),
+            [
+                "v root",
+                "  v drums",
+                "    > hats",
+                "    > kicks",
+                "  > loops"
+            ]
+        );
+        assert_eq!(picker.item(0).meaning, "samples", "it keeps why it's there");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_explorers_search_is_exact_across_what_has_been_read() {
+        let root = library("search");
+        let mut picker = explorer(&root);
+        press(&mut picker, "lllhh");
+        assert_eq!(label(&picker), "drums");
+        // `drums/hats` has been read, `drums/kicks` and `loops` haven't.
+        press(&mut picker, "/cl");
+        assert_eq!(
+            shown_rows(&picker),
+            ["v root", "  > drums", "    > hats", "      closed.wav"],
+            "a match, under the folders it's in, open or not"
+        );
+        assert_eq!(
+            label(&picker),
+            "closed.wav",
+            "on the match, not its folders"
+        );
+        assert_eq!(picker.matched(3), [0, 1]);
+        press(&mut picker, "<Backspace><Backspace>csd");
+        assert!(
+            picker.rows().is_empty(),
+            "not fuzzy: no c, s and d in a row"
+        );
+        press(&mut picker, "<Esc>/eep");
+        assert!(picker.rows().is_empty(), "kicks hasn't been read");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn it_follows_a_file_opening_the_folders_down_to_it() {
+        let root = library("follow");
+        let picker = explorer(&root).following(Some(&root.join("drums/kicks/short.wav")));
+        assert_eq!(label(&picker), "short.wav");
+        assert_eq!(picker.marked(), picker.current_index(), "marked as chosen");
+        assert_eq!(
+            shown_rows(&picker),
+            [
+                "v root",
+                "  v drums",
+                "    > hats",
+                "    v kicks",
+                "      deep.wav",
+                "      short.wav",
+                "  > loops"
+            ]
+        );
+        // A file that isn't listed goes as near as it can.
+        let picker = explorer(&root).following(Some(&root.join("drums/gone.wav")));
+        assert_eq!(label(&picker), "drums");
+        assert_eq!(picker.marked(), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn p_and_a_switch_the_preview_and_playing_and_enter_chooses_a_folder_to_save_in() {
+        let root = library("switches");
+        let mut picker = explorer(&root);
+        assert!(picker.has_previews(), "a sample has one");
+        assert!(
+            picker.tree().unwrap().audition,
+            "and plays as it's moved onto"
+        );
+        press(&mut picker, "PA");
+        assert!(!picker.has_previews());
+        assert!(!picker.tree().unwrap().audition);
+        assert!(picker.query.is_empty(), "neither searches");
+
+        let roots = vec![Root::Place {
+            path: root.clone(),
+            meaning: String::new(),
+        }];
+        let mut picker = Picker::explorer(Purpose::Save, roots, None);
+        assert!(!picker.has_previews(), "a folder has nothing to show");
+        press(&mut picker, "l");
+        assert_eq!(label(&picker), "drums", "l opens");
+        press(&mut picker, "A");
+        assert_eq!(picker.query, "A", "nothing plays, so A searches");
+        press(&mut picker, "<Esc>l");
+        assert_eq!(
+            press(&mut picker, "<Enter>"),
+            Outcome::Choose(Pick::Folder(root.join("drums"))),
+            "and Enter chooses"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_group_of_items_given_up_front_starts_open() {
+        let root = library("group");
+        let items = vec![
+            Item::new("BD", Pick::Track(0)),
+            Item::new("SD", Pick::Track(1)),
+        ];
+        let roots = vec![
+            Root::Group {
+                label: "Kit 909".to_owned(),
+                items,
+            },
+            Root::Place {
+                path: root.clone(),
+                meaning: String::new(),
+            },
+        ];
+        let mut picker = Picker::explorer(Purpose::Sample, roots, None).revealing(Some(1));
+        assert_eq!(label(&picker), "BD");
+        assert_eq!(shown_rows(&picker), ["v root", "  BD", "  SD", "> root"]);
+        assert_eq!(
+            press(&mut picker, "j<Enter>"),
+            Outcome::Choose(Pick::Track(1))
+        );
+        press(&mut picker, "h");
+        assert_eq!(shown_rows(&picker), ["> root", "> root"]);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

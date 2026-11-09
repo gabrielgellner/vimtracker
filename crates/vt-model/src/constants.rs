@@ -52,6 +52,9 @@ pub const MEMORY_QUEUE: usize = 256;
 pub const RETURN_QUEUE: usize = 16;
 /// Transport, preview and mute messages.
 pub const COMMAND_QUEUE: usize = 64;
+/// One-off files on their way to the callback to be heard, as the sample browser sends them, and
+/// on their way back to be freed.
+pub const FILE_QUEUE: usize = 4;
 /// Playhead and load messages. New ones are dropped when it is full.
 pub const TELEMETRY_QUEUE: usize = 64;
 /// Samples of the main output on their way to the scope, about a third of a second at 48 kHz. New

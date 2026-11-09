@@ -55,10 +55,34 @@ struct Decoded {
     rate: u32,
 }
 
+/// What a sample file holds, as it was before it was made stereo at the program's rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SampleInfo {
+    /// Frames a second.
+    pub rate: u32,
+    pub channels: u16,
+    pub frames: usize,
+}
+
+impl SampleInfo {
+    /// How long it plays, in seconds.
+    pub fn seconds(&self) -> f64 {
+        self.frames as f64 / f64::from(self.rate.max(1))
+    }
+}
+
 /// Read a WAV, AIFF or FLAC file and convert it to stereo at `rate`. AIFF and FLAC are told
 /// apart by their extension, and anything else is read as a WAV: by `hound`, as it always has
 /// been, or by `symphonia` if `hound` can't read it.
 pub fn load_sample(path: &Path, rate: u32) -> Result<SampleData, SampleError> {
+    load_sample_with_info(path, rate).map(|(sample, _)| sample)
+}
+
+/// [`load_sample`], with what the file held: its own rate, its channels and its length.
+pub fn load_sample_with_info(
+    path: &Path,
+    rate: u32,
+) -> Result<(SampleData, SampleInfo), SampleError> {
     let name = || path.display().to_string();
     let extension = path
         .extension()
@@ -77,6 +101,11 @@ pub fn load_sample(path: &Path, rate: u32) -> Result<SampleData, SampleError> {
         channels,
         rate: file_rate,
     } = decoded;
+    let info = SampleInfo {
+        rate: file_rate,
+        channels,
+        frames: samples.len() / usize::from(channels.max(1)),
+    };
     let stereo: Vec<f32> = if channels == 1 {
         samples.iter().flat_map(|s| [*s, *s]).collect()
     } else {
@@ -90,9 +119,10 @@ pub fn load_sample(path: &Path, rate: u32) -> Result<SampleData, SampleError> {
             detail,
         })?
     };
-    Ok(SampleData {
+    let sample = SampleData {
         frames: converted.as_chunks::<2>().0.to_vec(),
-    })
+    };
+    Ok((sample, info))
 }
 
 /// Read a WAV file with `hound`.

@@ -3,11 +3,13 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_SWING,
-    MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
+    DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
+    MAX_SOUND_TRACKS, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
+    TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
 use vt_model::insert::Insert;
+use vt_model::sample::SampleData;
 use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Section, SectionStart, Song, Track, level_gain};
 use vt_model::step::{
@@ -19,7 +21,7 @@ use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
 use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
-use crate::preview::{LetGo, Previews};
+use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{DelayedNote, Keys, LiveValues, Retrigger, SongTime, TrackState, base_of};
 use crate::voice::NoteOn;
@@ -59,6 +61,10 @@ pub struct Engine {
     previews: Previews,
     /// The tracks the last audition started a note on, for letting go of them when its key is.
     auditioned: [bool; MAX_TRACKS],
+    /// One-off files the preview voices play, such as the one the sample browser's cursor is on,
+    /// and the place the newest went in.
+    files: Files,
+    file_place: usize,
     /// Each track's sound after its slots, for compressors and Warps that hear another track.
     keys: Keys,
     /// Which tracks a compressor or Warps somewhere hears, which keep playing while muted so it
@@ -140,6 +146,8 @@ impl Engine {
                 .unwrap_or_else(|_| unreachable!("one state for each track")),
             previews: Previews::default(),
             auditioned: [false; MAX_TRACKS],
+            files: [None, None],
+            file_place: 0,
             keys: Keys::default(),
             listened: [false; MAX_TRACKS],
             transport: Transport::Stopped,
@@ -949,6 +957,54 @@ impl Engine {
             .let_go(track, note, LetGo::OnceSounded(frames));
     }
 
+    /// Play a one-off file through a track on a preview voice, to its end or until another is
+    /// played or it's stopped, as a sample browser plays the file its cursor moves onto. It's
+    /// handed over whole, so nothing is loaded or freed here. What's given back is for the edit
+    /// thread to free: the file it replaces, or this one if the track can't play it.
+    pub fn play_file(&mut self, track: usize, file: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        let plays = self
+            .current
+            .song
+            .tracks
+            .get(track)
+            .is_some_and(Track::is_sound);
+        if !plays {
+            return Some(file);
+        }
+        for id in FILE_SAMPLES {
+            self.previews.fade_sample(id);
+        }
+        // The other place, as the last file may still be fading out of this one.
+        let place = 1 - self.file_place;
+        self.file_place = place;
+        let old = self.files[place].replace(file);
+        let on = NoteOn {
+            sample: FILE_SAMPLES[place],
+            synth: None,
+            note: 60,
+            gain: velocity_gain(DEFAULT_NOTE_VELOCITY),
+            accent: false,
+            shape: Envelope::note_shape(),
+            release_after: None,
+        };
+        let sounding = self.previews.sounding();
+        let previewing = self.previews.on_track(&sounding, track);
+        let state = &mut self.tracks[track];
+        if !state.sounding() && !previewing {
+            state.settle();
+        }
+        self.previews
+            .start(track, on, state.synth_settings(), self.rate);
+        old
+    }
+
+    /// Let go of any one-off file playing.
+    pub fn stop_file(&mut self) {
+        for id in FILE_SAMPLES {
+            self.previews.release_sample(id);
+        }
+    }
+
     /// How many preview voices are sounding.
     pub fn previews_sounding(&self) -> usize {
         self.previews.count()
@@ -1481,7 +1537,7 @@ impl Engine {
             let mut send_b = [0.0_f32; 2];
             for &index in &playing[..count] {
                 let track = &mut self.tracks[index];
-                let preview = self.previews.next(&previews, index, &samples);
+                let preview = self.previews.next(&previews, index, &samples, &self.files);
                 if !track.sounding() && preview.is_none() && !track.ringing(self.rate) {
                     self.keys.frames[index] = [0.0; 2];
                     continue;

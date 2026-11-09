@@ -4,12 +4,31 @@
 //! Each voice is tied to the note whose key started it, so letting go of one key ends only its
 //! note. They're all made up front, and starting a note only overwrites one.
 
+use std::sync::Arc;
+
 use vt_model::constants::PREVIEW_VOICES;
-use vt_model::samples::SamplePool;
+use vt_model::sample::SampleData;
+use vt_model::samples::{SampleId, SamplePool};
 use vt_model::song::SynthVoice;
 
 use crate::dsp::virtual_analog::Settings;
 use crate::voice::{NoteOn, Voice};
+
+/// The ids a one-off file plays under, which no sample in the pool has. There are two places, so a
+/// file fading out keeps its own sound while the next one starts.
+pub const FILE_SAMPLES: [SampleId; 2] = [SampleId::MAX, SampleId::MAX - 1];
+
+/// The one-off files the preview voices can play, in the places [`FILE_SAMPLES`] names.
+pub type Files = [Option<Arc<SampleData>>; 2];
+
+/// A sample's sound, from the pool or from the one-off files.
+#[inline]
+fn data<'a>(samples: &'a SamplePool, files: &'a Files, id: SampleId) -> Option<&'a SampleData> {
+    match FILE_SAMPLES.iter().position(|file| *file == id) {
+        Some(place) => files[place].as_deref(),
+        None => samples.get(id),
+    }
+}
 
 /// The voices, and one more for fading out a voice that's taken over, so it doesn't click.
 const PLACES: usize = PREVIEW_VOICES + 1;
@@ -217,6 +236,26 @@ impl Previews {
         }
     }
 
+    /// Fade out every voice playing this sample, so it can be replaced.
+    pub fn fade_sample(&mut self, id: SampleId) {
+        for preview in self.voices.iter_mut() {
+            if preview.voice.active() && preview.voice.sample() == id {
+                preview.voice.fade();
+                preview.playing = None;
+            }
+        }
+    }
+
+    /// Let go of every voice playing this sample.
+    pub fn release_sample(&mut self, id: SampleId) {
+        for preview in self.voices.iter_mut() {
+            if preview.voice.active() && preview.voice.sample() == id {
+                preview.voice.release();
+                preview.playing = None;
+            }
+        }
+    }
+
     /// How many voices are sounding, a fading one included.
     pub fn count(&self) -> usize {
         self.voices
@@ -256,6 +295,7 @@ impl Previews {
         sounding: &Sounding,
         track: usize,
         samples: &SamplePool,
+        files: &Files,
     ) -> Option<[f32; 2]> {
         let mut frame: Option<[f32; 2]> = None;
         for &place in sounding.places() {
@@ -263,7 +303,9 @@ impl Previews {
             if preview.track != track || !preview.voice.active() {
                 continue;
             }
-            let next = preview.voice.next(samples.get(preview.voice.sample()));
+            let next = preview
+                .voice
+                .next(data(samples, files, preview.voice.sample()));
             let sum = frame.get_or_insert([0.0; 2]);
             sum[0] += next[0];
             sum[1] += next[1];

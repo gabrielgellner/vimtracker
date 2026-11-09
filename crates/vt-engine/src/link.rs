@@ -7,9 +7,11 @@ use std::sync::Arc;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, SCOPE_QUEUE,
-    TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE,
+    SCOPE_QUEUE, TELEMETRY_QUEUE,
 };
+
+use vt_model::sample::SampleData;
 
 use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, Transport};
@@ -69,6 +71,10 @@ pub enum Command {
     ContinueIn { section: usize, length: usize },
     /// Send this many long buffers back to be freed, as they come free.
     ReleaseMemory(MemoryCount),
+    /// Play the next one-off file sent with [`Handle::play_file`] through a track.
+    PlayFile { track: usize },
+    /// Let go of any one-off file playing.
+    StopFile,
 }
 
 /// What one track is doing while jamming. The outer `None`s mean it's following its section and
@@ -113,6 +119,9 @@ pub struct Handle {
     pending: Option<Arc<Published>>,
     memories: Producer<Memory>,
     freed: Consumer<Memory>,
+    /// One-off files to hear, and those the callback is done with, to be freed here.
+    files: Producer<Arc<SampleData>>,
+    heard: Consumer<Arc<SampleData>>,
     /// Long buffers that can't go until there's room in the queue. A version waits for them.
     unsent: Vec<Memory>,
     /// How many long buffers the callback has or is getting, beyond any it's been told to release.
@@ -131,6 +140,8 @@ pub struct Realtime {
     jam: Producer<(usize, JamState)>,
     memories: Consumer<Memory>,
     freed: Producer<Memory>,
+    files: Consumer<Arc<SampleData>>,
+    heard: Producer<Arc<SampleData>>,
     /// What the edit thread has been told about each track.
     reported: [JamState; MAX_TRACKS],
     /// The track whose live values are reported.
@@ -147,6 +158,9 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
     let (memory_tx, memory_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (freed_tx, freed_rx) = RingBuffer::new(MEMORY_QUEUE);
+    let (file_tx, file_rx) = RingBuffer::new(FILE_QUEUE);
+    // Room for every file that can be queued, and one playing, so one always fits.
+    let (heard_tx, heard_rx) = RingBuffer::new(FILE_QUEUE + 1);
     let held = MemoryCount::of(&engine.current().song);
     let rate = engine.rate();
     (
@@ -160,6 +174,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             pending: None,
             memories: memory_tx,
             freed: freed_rx,
+            files: file_tx,
+            heard: heard_rx,
             unsent: Vec::new(),
             held,
             rate,
@@ -174,6 +190,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             jam: jam_tx,
             memories: memory_rx,
             freed: freed_tx,
+            files: file_rx,
+            heard: heard_tx,
             reported: [JamState::default(); MAX_TRACKS],
             watched: 0,
         },
@@ -252,6 +270,7 @@ impl Handle {
     pub fn pump(&mut self) {
         while self.returned.pop().is_ok() {}
         while self.freed.pop().is_ok() {}
+        while self.heard.pop().is_ok() {}
         while let Some(memory) = self.unsent.pop() {
             if let Err(rtrb::PushError::Full(memory)) = self.memories.push(memory) {
                 self.unsent.push(memory);
@@ -268,6 +287,14 @@ impl Handle {
     /// Send a command. If the queue is full, which means audio has stopped, it is dropped.
     pub fn send(&mut self, command: Command) -> bool {
         self.commands.push(command).is_ok()
+    }
+
+    /// Play a one-off file through a track, loaded on this thread, as the sample browser plays
+    /// the file its cursor is on. The callback only plays it, and gives it back to be freed here.
+    /// If the queue is full, which means audio has stopped, it's dropped here.
+    pub fn play_file(&mut self, track: usize, file: Arc<SampleData>) -> bool {
+        self.pump();
+        self.files.push(file).is_ok() && self.send(Command::PlayFile { track })
     }
 
     /// The newest report from the callback, if there is one. Its reading covers every report
@@ -363,6 +390,16 @@ impl Realtime {
                 Command::ContinueIn { section, length } => {
                     self.engine.continue_in(section, length);
                 }
+                // Taken only when what it replaces can be sent back, so nothing is freed here.
+                Command::PlayFile { track } => {
+                    if !self.heard.is_full()
+                        && let Ok(file) = self.files.pop()
+                        && let Some(done) = self.engine.play_file(track, file)
+                    {
+                        let _ = self.heard.push(done);
+                    }
+                }
+                Command::StopFile => self.engine.stop_file(),
             }
         }
         while !self.freed.is_full()

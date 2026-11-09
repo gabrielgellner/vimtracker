@@ -3,6 +3,9 @@
 //!
 //! It's one colour, as the rest is: categories are dim headings with a count, items are plain with
 //! their meaning dim beside them, and the letters a search matched are in the picker's colour.
+//!
+//! The file explorer is the same box, a fixed size as its tree grows, with relative line numbers
+//! dim down the left, as the author's snacks explorer has, so `12j` can be read off the screen.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -29,8 +32,16 @@ pub const PREVIEW_ROWS: usize = 18;
 /// The size of each waveform in a kit's preview, in characters.
 pub const PREVIEW_WAVE_WIDTH: usize = 8;
 pub const PREVIEW_WAVE_HEIGHT: usize = 1;
+/// The size of a sample's waveform in its preview, in characters: as wide as kitty's placeholders
+/// can number.
+pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
+pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
 const PREVIEW_LABEL_WIDTH: usize = 4;
+/// The explorer's list's width, inside its border, as its tree grows and shrinks.
+const EXPLORER_WIDTH: usize = 52;
+/// Room for a relative line number in the explorer, and the space after it.
+const NUMBER_WIDTH: usize = 3;
 /// Where an item's name starts: after a category's arrow, or the mark on the item already chosen.
 const GUTTER: usize = 2;
 /// How far an item in a category is indented.
@@ -42,9 +53,14 @@ const GAP: usize = 2;
 pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
     let columns = Columns::of(picker);
     let preview = picker.has_previews();
-    let list_width = (GUTTER + columns.indent + columns.label + columns.meaning + columns.category)
-        .clamp(MIN_LIST_WIDTH, MAX_LIST_WIDTH);
-    let rows = if preview {
+    let explorer = picker.tree().is_some();
+    let list_width = if explorer {
+        EXPLORER_WIDTH
+    } else {
+        (GUTTER + columns.indent + columns.label + columns.meaning + columns.category)
+            .clamp(MIN_LIST_WIDTH, MAX_LIST_WIDTH)
+    };
+    let rows = if preview || explorer {
         PREVIEW_ROWS
     } else {
         picker.items().len().clamp(1, MAX_ROWS)
@@ -59,19 +75,21 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
         width,
         height,
     };
+    let mut title = vec![Span::styled(
+        format!(" {} ", picker.title),
+        Style::new().add_modifier(Modifier::BOLD),
+    )];
+    // The explorer's count would only be what's been read so far.
+    if !explorer {
+        title.push(Span::styled(
+            format!("{}/{} ", picker.matching(), picker.items().len()),
+            theme::dim(),
+        ));
+    }
     let mut block = Block::new()
         .style(theme::window())
         .borders(Borders::ALL)
-        .title(Line::from(vec![
-            Span::styled(
-                format!(" {} ", picker.title),
-                Style::new().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("{}/{} ", picker.matching(), picker.items().len()),
-                theme::dim(),
-            ),
-        ]));
+        .title(Line::from(title));
     if let Some(hint) = picker.hint {
         block = block.title_bottom(Span::styled(format!(" {hint} "), theme::dim()));
     }
@@ -191,6 +209,7 @@ fn rows(picker: &Picker, columns: &Columns, width: usize, room: usize) -> Vec<Li
     let mut lines = Vec::new();
     for (at, row) in picker.rows().iter().enumerate().skip(first).take(room) {
         let spans = match row {
+            Row::Item(item) if picker.tree().is_some() => tree_spans(picker, at, *item, width),
             Row::Category(category) => {
                 let (name, count, open) = picker.category(*category);
                 let arrow = if open { '▾' } else { '▸' };
@@ -257,6 +276,55 @@ fn item_spans(
     spans
 }
 
+/// A line of the explorer: its distance from the cursor's, or its own number on the cursor's, as
+/// Vim's `relativenumber` with `number` shows them, then the file or folder indented by its
+/// depth, a folder with its arrow, the item already chosen with its mark, and its meaning dim.
+fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Span<'static>> {
+    let item = picker.item(index);
+    let number = if row == picker.selected {
+        row + 1
+    } else {
+        row.abs_diff(picker.selected)
+    };
+    let mark = match picker.folder_open(index) {
+        Some(true) => "▾ ",
+        Some(false) => "▸ ",
+        None if picker.marked() == Some(index) => "• ",
+        None => "  ",
+    };
+    let indent = INDENT * picker.depth(index);
+    let mut spans = vec![
+        Span::styled(format!("{number:>NUMBER_WIDTH$} "), theme::faint()),
+        Span::raw(format!("{}{mark}", " ".repeat(indent))),
+    ];
+    let meaning = if item.meaning.is_empty() {
+        0
+    } else {
+        GAP + item.meaning.chars().count()
+    };
+    let room = width.saturating_sub(NUMBER_WIDTH + 1 + indent + GUTTER + meaning);
+    let length = item.label.chars().count();
+    if length > room {
+        // A long path keeps its end, which says most about where it is.
+        let kept: String = item.label.chars().skip(length + 1 - room.max(1)).collect();
+        spans.push(Span::raw(format!("…{kept}")));
+    } else {
+        spans.extend(matched_spans(
+            &item.label,
+            0,
+            picker.matched(row),
+            Style::new(),
+        ));
+    }
+    if !item.meaning.is_empty() {
+        spans.push(Span::styled(
+            format!("{}{}", " ".repeat(GAP), item.meaning),
+            theme::dim(),
+        ));
+    }
+    spans
+}
+
 /// Text in a style, with the characters at these positions, counted from `start`, in the
 /// picker's colour.
 fn matched_spans(text: &str, start: u32, matched: &[u32], style: Style) -> Vec<Span<'static>> {
@@ -306,8 +374,22 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::raw(format!(" {}", shown.heading)),
         Line::styled(format!(" {}", shown.note), theme::dim()),
-        Line::raw(""),
     ];
+    lines.extend(
+        shown
+            .details
+            .iter()
+            .map(|detail| Line::raw(format!(" {detail}"))),
+    );
+    lines.push(Line::raw(""));
+    if shown.wave.is_some()
+        && let Some(id) = picker.preview_wave
+    {
+        let style = Style::new().fg(kitty::id_color(id));
+        for row in kitty::placeholder_lines(PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT) {
+            lines.push(Line::from(vec![Span::raw(" "), Span::styled(row, style)]));
+        }
+    }
     let room = usize::from(area.height).saturating_sub(lines.len());
     let more = shown.lines.len().saturating_sub(room);
     let fits = if more > 0 {
