@@ -7,10 +7,10 @@ fine part, for dialling in between two values. A list's value, like `1BITS`,
 and an event's, like `DEL`, are only two digits. Events are in their own colour,
 a lock the track doesn't have is grey, and empty cells are faint.
 
-`K` on a slot lists the commands this track has, grouped as an LFO's `Dest` is:
-the filter, the output, the voice, each slot's effect, then the events. It opens
-searching, so `send b` or `decay` finds its command, and `Enter` takes it. Type
-the value next.
+`K` on a slot lists the commands this track has, in categories as an LFO's `Dest`
+is: the filter, the output, the voice, each slot's effect, then the events. It opens
+searching, so `send b` or `decay` finds its command, and `Enter` takes it. `Esc`
+goes to the list, to browse the categories. Type the value next.
 
 To type one instead, press `i` on the slot, type its label, such as `CUT` or
 `2FDBK`, and press `Enter`, then type the value, such as `40`. A label that isn't

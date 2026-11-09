@@ -308,6 +308,8 @@ pub struct App {
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
     pub kit: Vec<KitEntry>,
+    /// The file of the kit in use, which the kit picker opens on.
+    pub kit_file: Option<PathBuf>,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
     pub(crate) selection_scope: Option<Scope>,
@@ -428,6 +430,7 @@ impl App {
             taken_insert: None,
             shape_seed: 0,
             kit: Vec::new(),
+            kit_file: None,
             replacing_selection: None,
             selection_scope: None,
             last_selection: None,
@@ -1089,6 +1092,7 @@ impl App {
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
             Cmd::PickSample => self.open_default_sample_picker(),
+            Cmd::PickKit => self.open_kit_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {

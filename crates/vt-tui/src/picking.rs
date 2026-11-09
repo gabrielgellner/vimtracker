@@ -1,9 +1,9 @@
 //! Opening the picker and acting on what it chooses.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project;
@@ -17,8 +17,10 @@ use crate::app::{App, Entry, Field};
 use crate::guides::GUIDES;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::picker::{Focus, Item, Pick, Picker};
+use crate::input::picker::{Item, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
+use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
+use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 
 /// How many files the sample browser lists, and how many folders deep it looks.
 const MAX_SAMPLES: usize = 2000;
@@ -100,17 +102,88 @@ fn kit_name(folder: &Path, path: &Path) -> String {
         .into_owned()
 }
 
-/// A row for a kit's sound: its label and its name.
-fn kit_item(entry: &KitEntry) -> Item {
-    Item {
-        label: format!("{:<4}{}", entry.label, entry.name),
-        pick: Pick::KitSound {
+/// The folder a file is in, under the folder it was found from, which is the category the picker
+/// lists it under, or empty for the folder itself.
+fn folder_in(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// A row for a kit's sound: its label, and its name beside it, under the kit's name.
+fn kit_item(entry: &KitEntry, kit: &str) -> Item {
+    Item::new(
+        entry.label.clone(),
+        Pick::KitSound {
             path: entry.path.clone(),
             label: entry.label.clone(),
             level: entry.level(),
             pitch: entry.pitch(),
             choke: entry.choke,
         },
+    )
+    .meaning(entry.name.clone())
+    .category(format!("Kit {kit}"))
+}
+
+/// What a kit's preview shows: its name, how many sounds it has and where it came from, and each
+/// sound with its label, its name and its waveform. Waveforms already worked out are used again.
+fn kit_preview(
+    item: usize,
+    path: &Path,
+    rate: u32,
+    waves: &mut HashMap<PathBuf, Option<Vec<(usize, usize)>>>,
+) -> Shown {
+    let kit = match load_kit(path) {
+        Ok(kit) => kit,
+        Err(error) => {
+            return Shown {
+                item,
+                heading: path
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                note: error.to_string(),
+                lines: Vec::new(),
+            };
+        }
+    };
+    let count = match kit.sounds.len() {
+        1 => "1 sound".to_owned(),
+        count => format!("{count} sounds"),
+    };
+    let note = if kit.source.is_empty() {
+        count
+    } else {
+        format!("{count} from {}", kit.source)
+    };
+    let lines = kit
+        .sounds
+        .iter()
+        .map(|sound| PreviewLine {
+            label: sound.label.clone(),
+            name: sound.name.clone(),
+            wave: waves
+                .entry(sound.path.clone())
+                .or_insert_with(|| {
+                    load_sample(&sound.path, rate).ok().map(|sample| {
+                        kitty::waveform_spans(
+                            &sample.frames,
+                            PREVIEW_WAVE_WIDTH,
+                            PREVIEW_WAVE_HEIGHT,
+                        )
+                    })
+                })
+                .clone(),
+        })
+        .collect();
+    Shown {
+        item,
+        heading: kit.name,
+        note,
+        lines,
     }
 }
 
@@ -138,37 +211,52 @@ impl App {
     /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
     pub(crate) fn open_view_picker(&mut self) {
         self.count = None;
-        let items = self
+        let items: Vec<Item> = self
             .recent_views
             .iter()
-            .map(|view| Item {
-                label: view.name().to_owned(),
-                pick: Pick::View(*view),
-            })
+            .map(|view| Item::new(view.name(), Pick::View(*view)))
             .collect();
-        let mut picker = Picker::new("Views", items);
+        let mut picker = Picker::new("Views", items).opened_on(Some(0));
         picker.move_highlight(1);
+        self.show_picker(picker);
+    }
+
+    /// Show a picker, and its preview if it has one.
+    pub(crate) fn show_picker(&mut self, picker: Picker) {
         self.picker = Some(picker);
         self.mode = Mode::Picker;
+        self.refresh_preview();
+    }
+
+    /// Load the preview of the item under the picker's cursor, if it has one and it isn't already
+    /// shown.
+    pub(crate) fn refresh_preview(&mut self) {
+        let rate = self.rate;
+        let Some(picker) = self.picker.as_mut() else {
+            return;
+        };
+        let wanted = picker
+            .current_index()
+            .filter(|item| picker.item(*item).preview.is_some());
+        if picker.preview.as_ref().map(|shown| shown.item) == wanted {
+            return;
+        }
+        picker.preview_images.clear();
+        picker.preview = wanted.and_then(|item| match picker.item(item).preview.clone()? {
+            Preview::Kit(path) => Some(Arc::new(kit_preview(item, &path, rate, &mut picker.waves))),
+        });
     }
 
     /// Open the list of scales, with this one highlighted.
     pub(crate) fn open_scale_picker(&mut self) {
         self.count = None;
         let items = ScaleKind::ALL
-            .map(|kind| Item {
-                label: kind.name().to_owned(),
-                pick: Pick::Scale(kind),
-            })
+            .map(|kind| Item::new(kind.name(), Pick::Scale(kind)))
             .to_vec();
         let at = ScaleKind::ALL
             .iter()
-            .position(|kind| *kind == self.scale.kind)
-            .unwrap_or(0);
-        let mut picker = Picker::new("Scales", items);
-        picker.move_highlight(at as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+            .position(|kind| *kind == self.scale.kind);
+        self.show_picker(Picker::new("Scales", items).opened_on(at));
     }
 
     /// Open the list of tracks, like Vim's buffers, with this one highlighted.
@@ -193,16 +281,19 @@ impl App {
                 } else {
                     String::new()
                 };
-                Item {
-                    label: format!("{number:<2}  {:<4}{sound}", state.name),
-                    pick: Pick::Track(track),
-                }
+                Item::new(
+                    format!("{number:<2}  {}", state.name).trim_end(),
+                    Pick::Track(track),
+                )
+                .meaning(sound)
             })
             .collect();
-        let mut picker = Picker::new("Tracks", items);
-        picker.move_highlight(self.cursor.track as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        // Found by name or number, as Vim's buffers are, so it opens on the search.
+        self.show_picker(
+            Picker::new("Tracks", items)
+                .opened_on(Some(self.cursor.track))
+                .searching(""),
+        );
     }
 
     /// Go to a track chosen from the list, which `C-o` comes back from.
@@ -216,25 +307,27 @@ impl App {
     pub(crate) fn open_guide_picker(&mut self) {
         let items = GUIDES
             .iter()
-            .map(|guide| Item {
-                label: guide.title().to_owned(),
-                pick: Pick::Guide(*guide),
-            })
+            .map(|guide| Item::new(guide.title(), Pick::Guide(*guide)))
             .collect();
-        self.picker = Some(Picker::new("Guides", items));
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Guides", items));
     }
 
-    /// Choose a kit from those in the settings' kit folders, folder by folder.
+    /// Choose a kit from those in the settings' kit folders, under the folders they're in, such as
+    /// `Ableton/Drum Machines`, with each kit's sounds beside the list. `Enter` makes it the kit
+    /// `Space 5` lists first, and `L` puts its sounds on tracks.
     pub(crate) fn open_kit_picker(&mut self) {
         let items: Vec<Item> = self
             .settings
             .kit_folders()
             .iter()
             .flat_map(|folder| {
-                kits_in(folder).into_iter().map(move |path| Item {
-                    label: kit_name(folder, &path),
-                    pick: Pick::Kit(path),
+                kits_in(folder).into_iter().map(move |path| {
+                    let name = kit_name(folder, &path);
+                    let label = name.rsplit('/').next().unwrap_or(&name).to_owned();
+                    Item::new(label, Pick::Kit(path.clone()))
+                        .category(folder_in(folder, &path))
+                        .wider(Pick::KitTracks(path.clone()))
+                        .preview(Preview::Kit(path))
                 })
             })
             .collect();
@@ -245,8 +338,16 @@ impl App {
             };
             return;
         }
-        self.picker = Some(Picker::new("Kits", items));
-        self.mode = Mode::Picker;
+        let current = self.kit_file.as_ref().and_then(|file| {
+            items
+                .iter()
+                .position(|item| item.pick == Pick::Kit(file.clone()))
+        });
+        self.show_picker(
+            Picker::new("Kits", items)
+                .opened_on(current)
+                .hinted("Enter use   L on tracks"),
+        );
     }
 
     /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
@@ -262,6 +363,7 @@ impl App {
                     kit.sounds.len()
                 );
                 self.kit = kit.sounds;
+                self.kit_file = Some(path.to_path_buf());
             }
             Err(error) => self.status = error.to_string(),
         }
@@ -321,6 +423,7 @@ impl App {
         self.samples = Arc::new(pool);
         self.apply(&Action::LoadKit(sounds));
         self.fit_levels();
+        self.kit_file = Some(path.to_path_buf());
         self.status = format!("Kit {}: {count} tracks", kit.name);
         if !replaced.is_empty() {
             self.status = format!(
@@ -347,24 +450,17 @@ impl App {
     /// List the gate types, with what each does and the cell's current one highlighted.
     fn open_gate_picker(&mut self) {
         let current = self.current_gate().map(|gate| gate.kind);
-        let empty = Item {
-            label: "---  Empty, one pulse of SGL".to_owned(),
-            pick: Pick::Gate(None),
-        };
+        let empty = Item::new("---", Pick::Gate(None)).meaning("Empty, one pulse of SGL");
         let items = std::iter::once(empty)
-            .chain(GateKind::ALL.iter().map(|kind| Item {
-                label: format!("{}  {}", kind.name(), kind.meaning()),
-                pick: Pick::Gate(Some(*kind)),
+            .chain(GateKind::ALL.iter().map(|kind| {
+                Item::new(kind.name(), Pick::Gate(Some(*kind))).meaning(kind.meaning())
             }))
             .collect();
         let position = GateKind::ALL
             .iter()
             .position(|kind| Some(*kind) == current)
             .map_or(0, |position| position + 1);
-        let mut picker = Picker::new("Gates", items);
-        picker.move_highlight(position as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Gates", items).opened_on(Some(position)));
     }
 
     /// Put a chosen gate type in the cell, keeping its pulses, or empty it.
@@ -376,54 +472,50 @@ impl App {
         self.set_field(FieldValue::Gate(gate));
     }
 
-    /// List the FX commands this track has, grouped as `Dest` is: the filter, output, the voice,
-    /// each slot's effect, then the events. It opens on its search, so typing finds a label or a
-    /// name at once, and `/` goes to the groups. A query starts it searching for that.
+    /// List the FX commands this track has, in categories as `Dest` is: the filter, output, the
+    /// voice, each slot's effect, then the events. It opens on its search, so typing finds a label or
+    /// a name at once, and `Esc` goes to the list. A query starts it searching for that.
     pub(crate) fn open_fx_picker(&mut self, slot: usize, query: &str) {
         let current = self.current_slot(slot).and_then(|s| s.command);
         let track = self.song().tracks.get(self.cursor.track);
         // Only what this track has, from its machine and its slots.
         let commands: Vec<FxCommand> =
             track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
-        let empty = Item {
-            label: "---   Empty".to_owned(),
-            pick: Pick::FxCommand {
+        let empty = Item::new(
+            "---",
+            Pick::FxCommand {
                 slot,
                 command: None,
             },
-        };
+        )
+        .meaning("Empty");
         let items = std::iter::once(empty)
             .chain(commands.iter().map(|command| {
-                let name = match (command, track) {
-                    (FxCommand::Set(id), Some(track)) => id.name_on(track),
-                    _ => command.meaning(),
+                let (name, category) = match (command, track) {
+                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group()),
+                    (FxCommand::Set(id), None) => (command.meaning(), id.group()),
+                    _ => (command.meaning(), "Events".to_owned()),
                 };
-                Item {
-                    label: format!("{:<6}{name}", command.name()),
-                    pick: Pick::FxCommand {
+                Item::new(
+                    command.name(),
+                    Pick::FxCommand {
                         slot,
                         command: Some(*command),
                     },
-                }
-            }))
-            .collect();
-        let groups = std::iter::once("---".to_owned())
-            .chain(commands.iter().map(|command| match command {
-                FxCommand::Set(id) => id.group(),
-                _ => "Events".to_owned(),
+                )
+                .meaning(name)
+                .category(category)
             }))
             .collect();
         let position = commands
             .iter()
             .position(|command| Some(*command) == current)
             .map_or(0, |position| position + 1);
-        let mut picker = Picker::grouped("FX commands", items, groups, position);
-        picker.toggle_search();
-        if !query.is_empty() {
-            picker.set_query(query.to_owned());
-        }
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(
+            Picker::new("FX commands", items)
+                .opened_on(Some(position))
+                .searching(query),
+        );
     }
 
     /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
@@ -468,15 +560,25 @@ impl App {
 
     /// Open the sample browser, with the kit's sounds first if asked.
     fn open_samples(&mut self, roots: &[PathBuf], with_kit: bool) {
-        let kit = self.kit.iter().filter(|_| with_kit).map(kit_item);
+        let kit_name = self
+            .kit_file
+            .as_deref()
+            .and_then(Path::file_stem)
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let kit = self
+            .kit
+            .iter()
+            .filter(|_| with_kit)
+            .map(|entry| kit_item(entry, &kit_name));
         let files = roots.iter().flat_map(|root| {
-            find_samples(root).into_iter().map(move |path| Item {
-                label: path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string(),
-                pick: Pick::Sample(path),
+            find_samples(root).into_iter().map(move |path| {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let category = folder_in(root, &path);
+                Item::new(name, Pick::Sample(path)).category(category)
             })
         });
         let items: Vec<Item> = kit.chain(files).collect();
@@ -486,8 +588,35 @@ impl App {
             self.mode = Mode::Command;
             return;
         }
-        self.picker = Some(Picker::new("Samples", items));
-        self.mode = Mode::Picker;
+        // On the track's own sample, or else the kit's first sound. Only files of the same name
+        // are looked at closely, as a path can be written more than one way.
+        let sample = self
+            .song()
+            .tracks
+            .get(self.cursor.track)
+            .and_then(|track| track.sample.as_deref())
+            .map(|sample| project::resolve_sample(self.folder.as_deref(), sample));
+        let same = |path: &Path| {
+            sample.as_deref().is_some_and(|sample| {
+                path.file_name() == sample.file_name()
+                    && (path == sample
+                        || path
+                            .canonicalize()
+                            .is_ok_and(|path| sample.canonicalize().is_ok_and(|s| s == path)))
+            })
+        };
+        let current = items.iter().position(|item| match &item.pick {
+            Pick::Sample(path) | Pick::KitSound { path, .. } => same(path),
+            _ => false,
+        });
+        let first_sound = (current.is_none() && !self.kit.is_empty() && with_kit).then_some(0);
+        // Files are found by name, whatever letter it starts with, so it opens on the search.
+        self.show_picker(
+            Picker::new("Samples", items)
+                .opened_on(current)
+                .revealing(first_sound)
+                .searching(""),
+        );
     }
 
     /// The folders the sample browser starts from: the project's samples, the settings' sample
@@ -518,151 +647,117 @@ impl App {
             self.mode = Mode::Normal;
             return;
         };
-        if picker.has_groups() {
-            match (picker.focus, key.code) {
-                (_, KeyCode::Char('/')) => return picker.toggle_search(),
-                (Focus::List, KeyCode::Char('j')) => return picker.move_highlight(1),
-                (Focus::List, KeyCode::Char('k')) => return picker.move_highlight(-1),
-                (Focus::List, KeyCode::Char('h')) => {
-                    picker.focus = Focus::Groups;
-                    return;
-                }
-                (Focus::Groups, KeyCode::Char('j')) => return picker.move_group(1),
-                (Focus::Groups, KeyCode::Char('k')) => return picker.move_group(-1),
-                (Focus::Groups, KeyCode::Char('l')) => {
-                    picker.focus = Focus::List;
-                    return;
-                }
-                // Into a group of more than one, and a lone item is chosen below.
-                (Focus::Groups, KeyCode::Enter) if picker.in_group() > 1 => {
-                    picker.focus = Focus::List;
-                    return;
-                }
-                // Browsing doesn't type.
-                (Focus::List | Focus::Groups, KeyCode::Char(_)) => return,
-                _ => {}
+        match picker.key(key) {
+            Outcome::Stay => self.refresh_preview(),
+            Outcome::Close => {
+                self.picker = None;
+                self.mode = self.mode_after_picker();
+            }
+            Outcome::Choose(pick) => {
+                self.picker = None;
+                self.mode = self.mode_after_picker();
+                self.choose(pick);
             }
         }
-        match key.code {
-            KeyCode::Esc => {
-                self.picker = None;
-                self.mode = self.mode_after_picker();
-            }
-            KeyCode::Enter => {
-                let pick = picker.current().map(|item| item.pick.clone());
-                self.picker = None;
-                self.mode = self.mode_after_picker();
-                match pick {
-                    Some(Pick::View(view)) => self.jump_to_view(view),
-                    Some(Pick::Use {
-                        section,
+    }
+
+    /// Do what a picker's choice says.
+    fn choose(&mut self, pick: Pick) {
+        match pick {
+            Pick::View(view) => self.jump_to_view(view),
+            Pick::Use {
+                section,
+                track,
+                slot,
+            } => self.open_use(section, track, slot),
+            Pick::Sample(path) => self.sample(&path),
+            Pick::Kit(path) => self.use_kit(&path),
+            Pick::KitSound {
+                path,
+                label,
+                level,
+                pitch,
+                choke,
+            } => {
+                let track = self.cursor.track;
+                let mut more = vec![
+                    Action::SetTrackLevel { track, level },
+                    Action::SetTrackBase {
                         track,
-                        slot,
-                    }) => self.open_use(section, track, slot),
-                    Some(Pick::Sample(path)) => self.sample(&path),
-                    Some(Pick::Kit(path)) => self.use_kit(&path),
-                    Some(Pick::KitSound {
-                        path,
-                        label,
-                        level,
-                        pitch,
-                        choke,
-                    }) => {
-                        let track = self.cursor.track;
-                        let mut more = vec![
-                            Action::SetTrackLevel { track, level },
-                            Action::SetTrackBase {
-                                track,
-                                control: TrackControl::Pitch,
-                                value: pitch,
-                            },
-                            Action::SetTrackChoke { track, choke },
-                        ];
-                        if !label.is_empty() {
-                            more.push(Action::SetTrackName { track, name: label });
-                        }
-                        self.sample_with(&path, more);
-                    }
-                    Some(Pick::Track(track)) => self.go_to_track(track),
-                    Some(Pick::Audio(choice)) => self.pick_audio(choice),
-                    Some(Pick::FxCommand { slot, command }) => self.pick_fx_command(slot, command),
-                    Some(Pick::Gate(kind)) => self.pick_gate(kind),
-                    Some(Pick::Lfo { track, slot, lfo }) => {
-                        self.apply(&Action::SetLfo { track, slot, lfo });
-                    }
-                    Some(Pick::Machine { track, machine }) => {
-                        self.apply(&Action::SetTrackMachine { track, machine });
-                    }
-                    Some(Pick::Setting {
-                        track,
-                        setting,
-                        value,
-                    }) => {
-                        self.apply(&Action::SetTrackSetting {
-                            track,
-                            setting,
-                            value,
-                        });
-                    }
-                    Some(Pick::FilterType { track, filter }) => {
-                        self.apply(&Action::SetFilterType { track, filter });
-                    }
-                    Some(Pick::FilterMode { track, mode }) => {
-                        self.apply(&Action::SetFilterMode { track, mode });
-                    }
-                    Some(Pick::Envelope {
-                        track,
-                        slot,
-                        envelope,
-                    }) => {
-                        self.apply(&Action::SetEnvelope {
-                            track,
-                            slot,
-                            envelope,
-                        });
-                    }
-                    Some(Pick::RowPhrase(phrase)) => self.pick_row_phrase(phrase),
-                    Some(Pick::SectionChain(chain)) => self.pick_section_chain(chain),
-                    Some(Pick::Insert {
-                        track,
-                        slot,
-                        insert,
-                    }) => self.apply(&Action::SetInsert {
-                        track,
-                        slot,
-                        insert,
-                    }),
-                    Some(Pick::Scale(kind)) => self.set_scale(Scale {
-                        on: true,
-                        kind,
-                        ..self.scale
-                    }),
-                    Some(Pick::ShapeFill(kind)) => self.pick_shape_fill(kind),
-                    Some(Pick::ShapeWave(wave)) => self.pick_shape_wave(wave),
-                    Some(Pick::ShapeRate(rate)) => self.pick_shape_rate(rate),
-                    Some(Pick::ShapeWhere(place)) => self.pick_shape_where(place),
-                    Some(Pick::Guide(guide)) => {
-                        self.guide = Some(guide);
-                        self.guide_scroll = 0;
-                        self.mode = Mode::Guide;
-                    }
-                    None => {}
+                        control: TrackControl::Pitch,
+                        value: pitch,
+                    },
+                    Action::SetTrackChoke { track, choke },
+                ];
+                if !label.is_empty() {
+                    more.push(Action::SetTrackName { track, name: label });
                 }
+                self.sample_with(&path, more);
             }
-            KeyCode::Down => picker.move_highlight(1),
-            KeyCode::Up => picker.move_highlight(-1),
-            KeyCode::Char('n') if key.ctrl => picker.move_highlight(1),
-            KeyCode::Char('p') if key.ctrl => picker.move_highlight(-1),
-            KeyCode::Backspace => {
-                let mut query = picker.query.clone();
-                query.pop();
-                picker.set_query(query);
+            Pick::Track(track) => self.go_to_track(track),
+            Pick::Audio(choice) => self.pick_audio(choice),
+            Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),
+            Pick::Gate(kind) => self.pick_gate(kind),
+            Pick::Lfo { track, slot, lfo } => {
+                self.apply(&Action::SetLfo { track, slot, lfo });
             }
-            KeyCode::Char(c) if !key.ctrl => {
-                let query = format!("{}{c}", picker.query);
-                picker.set_query(query);
+            Pick::Machine { track, machine } => {
+                self.apply(&Action::SetTrackMachine { track, machine });
             }
-            _ => {}
+            Pick::Setting {
+                track,
+                setting,
+                value,
+            } => {
+                self.apply(&Action::SetTrackSetting {
+                    track,
+                    setting,
+                    value,
+                });
+            }
+            Pick::FilterType { track, filter } => {
+                self.apply(&Action::SetFilterType { track, filter });
+            }
+            Pick::FilterMode { track, mode } => {
+                self.apply(&Action::SetFilterMode { track, mode });
+            }
+            Pick::Envelope {
+                track,
+                slot,
+                envelope,
+            } => {
+                self.apply(&Action::SetEnvelope {
+                    track,
+                    slot,
+                    envelope,
+                });
+            }
+            Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
+            Pick::SectionChain(chain) => self.pick_section_chain(chain),
+            Pick::Insert {
+                track,
+                slot,
+                insert,
+            } => self.apply(&Action::SetInsert {
+                track,
+                slot,
+                insert,
+            }),
+            Pick::Scale(kind) => self.set_scale(Scale {
+                on: true,
+                kind,
+                ..self.scale
+            }),
+            Pick::ShapeFill(kind) => self.pick_shape_fill(kind),
+            Pick::ShapeWave(wave) => self.pick_shape_wave(wave),
+            Pick::ShapeRate(rate) => self.pick_shape_rate(rate),
+            Pick::ShapeWhere(place) => self.pick_shape_where(place),
+            Pick::Guide(guide) => {
+                self.guide = Some(guide);
+                self.guide_scroll = 0;
+                self.mode = Mode::Guide;
+            }
+            Pick::KitTracks(path) => self.load_kit(&path),
         }
     }
 
