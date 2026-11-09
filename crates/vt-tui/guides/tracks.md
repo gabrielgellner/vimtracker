@@ -43,6 +43,7 @@ digits keep it, and at the top there's none. An effect's settings are whole.
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` |
+| Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
 Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
@@ -69,10 +70,36 @@ in, less so as `Res` rises so the peak isn't swamped, and adds a little
 resonance. These five cost more than the others, which matters only for tracks
 using them.
 
+`Mode` gives a type its other responses, made from what it already has, and `K`
+on it lists the ones the type offers:
+
+| Filter | Modes |
+|---|---|
+| `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
+| `Ladder` `Dirty` | `LP24` `LP12` `BP` `HP12` `HP24` `Notch` |
+| `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
+
+At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
+band-pass is narrower and a notch wider. `Ladder` and `Dirty` mix their stages
+as Vital does, so whichever mode they're in, their resonance still sings at
+`Cut` and they still saturate. Their `BP` peaks as loud as `LP24` is at its
+loudest. The ladder's `Notch` takes out the very pitch it sings at, so it
+hardly sings at all, where `Dirty`'s still does. `Diode` at `Full` has all its
+bass, as in `Acid`. The others cut the bass before the ladder, from that many
+octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
+MS-20's have no modes, and show `--`.
+
+A track keeps its mode when its type changes, and a type that doesn't offer it
+plays its own first, so going to another type and back finds it again. A step
+can lock `MODE` to any mode, by its place in this list, which the status line
+names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP`, `05`
+`HP12`, `06` `HP24`, `07` `Notch`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
+`0B` `-1 oct`. Changing mode glides over about 10 ms, so a lock doesn't click.
+
 A curve in a box under the filter's rows shows what the filter and utility filter
-let through, from 20 Hz on the left to 20 kHz on the right. It moves with what's
-playing `Cut` and `Res`, including step commands, LFOs and envelopes, but it
-doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
+let through, from 20 Hz on the left to 20 kHz on the right, in the track's
+`Mode`. It moves with what's playing `Cut` and `Res`, including step commands,
+LFOs and envelopes, but it doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
 adds.
 
 ## Jumping to a setting

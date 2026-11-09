@@ -7,7 +7,7 @@ use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{FilterType, Song};
+use vt_model::song::{FilterMode, FilterType, Song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -284,6 +284,51 @@ fn a_tracks_filter_type_and_drive_change_what_it_sounds_like() {
     let ladder = with(FilterType::Ladder, 0xFF);
     assert_eq!(ladder, with(FilterType::Ladder, 0xFF));
     assert!(ladder.iter().all(|sample| sample.is_finite()));
+}
+
+#[test]
+fn a_tracks_filter_mode_and_a_lock_on_it_are_heard() {
+    let with = |rows: &[&str], filter, mode| {
+        let mut note = song(rows, adsr(0, 0, 100, 0));
+        note.tracks[0].filter = filter;
+        note.tracks[0].filter_mode = mode;
+        note.tracks[0].cutoff = 0x80;
+        render(note, buzz(), STEP)
+    };
+    let level = |out: &[f32]| -> f32 {
+        (1000..5000)
+            .map(|frame| left(out, frame).abs())
+            .sum::<f32>()
+            / 4000.0
+    };
+    let low = with(&[NOTE], FilterType::Ladder, FilterMode::LowPass24);
+    let high = with(&[NOTE], FilterType::Ladder, FilterMode::HighPass24);
+    assert!(level(&high) > level(&low) * 20.0, "a buzz is all highs");
+    // A step's lock plays its mode for the step, gliding there from the track's.
+    let locked = with(
+        &["C-4 -- mode:06 --- ---"],
+        FilterType::Ladder,
+        FilterMode::LowPass24,
+    );
+    assert!(
+        (level(&locked) / level(&high) - 1.0).abs() < 0.05,
+        "{} and {}",
+        level(&locked),
+        level(&high)
+    );
+    // A type that doesn't offer the track's mode plays its first, and one with none plays as ever.
+    assert_eq!(
+        with(&[NOTE], FilterType::LowPass, FilterMode::HighPass24),
+        with(&[NOTE], FilterType::LowPass, FilterMode::Slope12)
+    );
+    assert_eq!(
+        with(&[NOTE], FilterType::Ms20LowPass, FilterMode::Slope24),
+        with(&[NOTE], FilterType::Ms20LowPass, FilterMode::Slope12)
+    );
+    assert_ne!(
+        with(&[NOTE], FilterType::LowPass, FilterMode::Slope24),
+        with(&[NOTE], FilterType::LowPass, FilterMode::Slope12)
+    );
 }
 
 #[test]

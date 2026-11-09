@@ -1,7 +1,8 @@
 //! A diode ladder low-pass filter, the kind in Roland's TB-303, from Vital's `DiodeFilter`. Ported
 //! to Rust from `src/synthesis/filters/diode_filter.{h,cpp}` and the one-pole filter it's built
 //! from, `one_pole_filter.h`, with the `tanh` of `futils.h`, taken out of Vital's SIMD and processor types. It has Vital's 24 dB
-//! style with its blend at none, so the high-pass at its input sits nine octaves under the cutoff.
+//! style, whose blend moves the high-pass at its input from nine octaves under the cutoff, where
+//! `Acid` keeps it, up to one under, so less bass reaches the ladder.
 //!
 //! Its first stage saturates, its last is clipped, and a high-pass sits in its feedback loop, which
 //! is part of how a 303 sounds as the resonance rises: the resonance thins the bass rather than
@@ -30,7 +31,7 @@ const FEEDBACK_HIGH_PASS: f32 = 20.0;
 /// resonance peaks at about this share of it.
 pub const RESONANT_SHARE: f32 = 0.6;
 /// How far under the cutoff the input's high-pass sits, as a ratio: Vital's lowest, `2^-9`.
-const HIGH_PASS_RATIO: f32 = 1.0 / 512.0;
+pub const HIGH_PASS_RATIO: f32 = 1.0 / 512.0;
 
 /// A one-pole low-pass in trapezoidal form, whose state can be saturated as it goes. Vital's
 /// `Dirty` filter is built from it too.
@@ -110,8 +111,9 @@ pub struct DiodeFilter {
 
 impl DiodeFilter {
     /// One sample, at a cutoff as a fraction of its rate, with resonance from 0 to 1, a drive as a
-    /// gain of at least 1, and the [`feedback_coefficient`] for its rate. The output stays within
-    /// ±1.
+    /// gain of at least 1, the [`feedback_coefficient`] for its rate, and where the input's
+    /// high-pass sits as a share of the cutoff, [`HIGH_PASS_RATIO`] as Vital has it at its lowest.
+    /// The output stays within ±1.
     #[inline]
     pub fn next(
         &mut self,
@@ -120,6 +122,7 @@ impl DiodeFilter {
         resonance: f32,
         drive: f32,
         feedback_coefficient: f32,
+        low_cut: f32,
     ) -> f32 {
         let resonance = resonance.clamp(0.0, 1.0);
         let resonance = LEAST_RESONANCE + (MOST_RESONANCE - LEAST_RESONANCE) * resonance.powi(3);
@@ -128,8 +131,8 @@ impl DiodeFilter {
         let post = 1.0 / drive_gain.sqrt();
         let coefficient = coefficient(cutoff.clamp(0.0, 1.0));
 
-        // A two-pole high-pass far under the cutoff.
-        let high = coefficient * HIGH_PASS_RATIO;
+        // A two-pole high-pass under the cutoff.
+        let high = coefficient * low_cut;
         let high_squared = high * high;
         let feedback_mult = high * 2.0 - high_squared - 1.0;
         let normalizer = 1.0 / (high_squared - high + 1.0);
@@ -199,11 +202,17 @@ impl Complex {
 }
 
 /// How much the filter lets through at a frequency, as a power, for a quiet signal with no drive.
-/// The cutoff and frequency are fractions of its rate, and the feedback coefficient is the one it
-/// runs with. Its saturations do nothing to a quiet signal, so it's four one-poles, each fed half
-/// of its neighbours, with the last fed back through the high-pass. The high-pass at its input is
-/// too low to matter.
-pub fn response(cutoff: f32, resonance: f32, feedback_coefficient: f32, frequency: f32) -> f32 {
+/// The cutoff and frequency are fractions of its rate, and the feedback coefficient and low cut are
+/// the ones it runs with. Its saturations do nothing to a quiet signal, so it's the high-pass at its
+/// input, then four one-poles, each fed half of its neighbours, with the last fed back through the
+/// feedback's high-pass.
+pub fn response(
+    cutoff: f32,
+    resonance: f32,
+    feedback_coefficient: f32,
+    low_cut: f32,
+    frequency: f32,
+) -> f32 {
     // A trapezoidal one-pole with Vital's coefficient `c` is an analog one with a cutoff of
     // `c / (1 - c)`, on a frequency axis warped as the bilinear transform warps it.
     let analog = |coefficient: f32| coefficient / (1.0 - coefficient);
@@ -212,8 +221,9 @@ pub fn response(cutoff: f32, resonance: f32, feedback_coefficient: f32, frequenc
     let resonance = LEAST_RESONANCE + (MOST_RESONANCE - LEAST_RESONANCE) * resonance.powi(3);
     let drive = resonance * 0.5 + 1.0;
     let one = Complex(1.0, 0.0);
+    let coefficient = coefficient(cutoff.clamp(0.0, 1.0));
     // Each stage's `1 + s / w`, and the feedback high-pass's `s / (s + w)`.
-    let stage = Complex(1.0, along / analog(coefficient(cutoff.clamp(0.0, 1.0))));
+    let stage = Complex(1.0, along / analog(coefficient));
     let q = Complex(0.0, along / analog(feedback_coefficient));
     let high_pass = q.over(one.add(q));
     // Working back from the last stage, the out over the in is
@@ -229,7 +239,32 @@ pub fn response(cutoff: f32, resonance: f32, feedback_coefficient: f32, frequenc
                 .scale(-1.0),
         )
         .add(high_pass.scale(resonance * 0.5));
-    high_pass.scale(drive * 0.5).over(below).power()
+    let ladder = high_pass.scale(drive * 0.5).over(below).power();
+    ladder * input_high_pass(coefficient * low_cut, frequency)
+}
+
+/// What the high-pass at the input lets through at a frequency, as a power, from its one-poles'
+/// coefficient `h`. Each is `L = h (1 + z^-1) / (1 - (1 - 2h) z^-1)`, and it hears its own states a
+/// sample late, so it's `n (1 - L)^2 / (1 + n z^-1 p (f + (1 - h) L))`, with `p = 2h / (1 - (1 - 2h)
+/// z^-1)`, `n` its normaliser and `f` its first state's feedback.
+fn input_high_pass(h: f32, frequency: f32) -> f32 {
+    let turn = std::f32::consts::TAU * frequency.min(0.499);
+    let back = Complex(turn.cos(), -turn.sin());
+    let one = Complex(1.0, 0.0);
+    let pole = one.add(back.scale(-(1.0 - 2.0 * h)));
+    let p = Complex(2.0 * h, 0.0).over(pole);
+    let low = one.add(back).scale(h).over(pole);
+    let normalizer = 1.0 / (h * h - h + 1.0);
+    let feedback = -(1.0 - h) * (1.0 - h);
+    let rest = one.add(low.scale(-1.0));
+    let loop_gain = back
+        .times(p)
+        .times(Complex(feedback, 0.0).add(low.scale(1.0 - h)))
+        .scale(normalizer);
+    rest.times(rest)
+        .scale(normalizer)
+        .over(one.add(loop_gain))
+        .power()
 }
 
 #[cfg(test)]
@@ -247,7 +282,14 @@ mod tests {
         let mut input_peak = 0.0_f32;
         for frame in 0..frames {
             let input = 0.01 * (std::f32::consts::TAU * hertz * frame as f32 / rate).sin();
-            let output = filter.next(input, cutoff / rate, resonance, 1.0, feedback);
+            let output = filter.next(
+                input,
+                cutoff / rate,
+                resonance,
+                1.0,
+                feedback,
+                HIGH_PASS_RATIO,
+            );
             if frame > frames / 2 {
                 peak = peak.max(output.abs());
                 input_peak = input_peak.max(input.abs());
@@ -298,7 +340,7 @@ mod tests {
             let out: Vec<f32> = (0..frames)
                 .map(|frame| {
                     let kick = if frame < 10 { 0.5 } else { 0.0 };
-                    filter.next(kick, 1_000.0 / rate, 1.0, 1.0, feedback)
+                    filter.next(kick, 1_000.0 / rate, 1.0, 1.0, feedback, HIGH_PASS_RATIO)
                 })
                 .collect();
             let tail = &out[frames / 2..];
@@ -329,7 +371,14 @@ mod tests {
                         } else {
                             0.0
                         };
-                        let output = filter.next(input, cutoff / rate, 1.0, drive, feedback);
+                        let output = filter.next(
+                            input,
+                            cutoff / rate,
+                            1.0,
+                            drive,
+                            feedback,
+                            HIGH_PASS_RATIO,
+                        );
                         assert!(
                             output.is_finite() && output.abs() <= 1.0,
                             "{output} at {cutoff} Hz, {rate}"
@@ -352,7 +401,7 @@ mod tests {
                 let sweep = (along * 8.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5;
                 let cutoff = 20.0 * 1_000_f32.powf(sweep);
                 let input = (along * 55.0).fract() * 2.0 - 1.0;
-                let output = filter.next(input, cutoff / rate, 1.0, 1.0, feedback);
+                let output = filter.next(input, cutoff / rate, 1.0, 1.0, feedback, HIGH_PASS_RATIO);
                 assert!(output.is_finite() && output.abs() <= 1.0, "{output}");
             }
         }
@@ -365,10 +414,14 @@ mod tests {
             let feedback = feedback_coefficient(rate);
             for frame in 0..(rate as usize) {
                 let input = if frame < 1000 { 0.5 } else { 0.0 };
-                filter.next(input, 500.0 / rate, 0.5, 1.0, feedback);
+                filter.next(input, 500.0 / rate, 0.5, 1.0, feedback, HIGH_PASS_RATIO);
             }
             let tail: f32 = (0..100)
-                .map(|_| filter.next(0.0, 500.0 / rate, 0.5, 1.0, feedback).abs())
+                .map(|_| {
+                    filter
+                        .next(0.0, 500.0 / rate, 0.5, 1.0, feedback, HIGH_PASS_RATIO)
+                        .abs()
+                })
                 .fold(0.0, f32::max);
             assert!(tail < 1e-3, "{tail} at {rate}");
         }

@@ -2829,7 +2829,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
 fn on_track_page() -> (App, Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
     // On Cut, as the rows above it aren't all values.
-    press(&mut app, " 4jjj");
+    press(&mut app, " 4jjjj");
     assert_eq!(app.view, View::Track);
     (app, realtime)
 }
@@ -2975,7 +2975,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.shown().count(),
-        8,
+        9,
         "what a sample track has, and none"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
@@ -3035,7 +3035,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     press(&mut app, "x");
     assert_eq!(track(&app).drive, 0);
 
-    press(&mut app, "kkk");
+    press(&mut app, "kkkk");
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "=");
     assert_eq!(track(&app).filter, FilterType::HighPass);
@@ -3071,10 +3071,70 @@ fn the_track_page_sets_the_filters_type_and_drive() {
 }
 
 #[test]
+fn the_track_page_sets_the_filters_mode_for_its_type() {
+    use vt_model::song::FilterMode;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    press(&mut app, "k");
+    assert_eq!(column_name(&app), "Mode");
+    assert!(track_page_text(&app)[6].contains("12 dB"));
+    press(&mut app, "=");
+    assert_eq!(track(&app).filter_mode, FilterMode::Slope24);
+    press(&mut app, "=");
+    assert_eq!(
+        track(&app).filter_mode,
+        FilterMode::Slope12,
+        "round the two"
+    );
+
+    // The ladder lists its six, and starts on its own first.
+    press(&mut app, "kK");
+    press(&mut app, "ladder");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    assert!(track_page_text(&app)[6].contains("LP24"));
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 6);
+    press(&mut app, "hp24");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
+
+    // Another type that offers it keeps it, and one that doesn't plays its first, until it's back.
+    press(&mut app, "kK");
+    press(&mut app, "dirty");
+    special(&mut app, KeyCode::Enter);
+    assert!(track_page_text(&app)[6].contains("HP24"));
+    // Round from the last type to `LP`.
+    press(&mut app, "=");
+    assert_eq!(track(&app).filter, FilterType::LowPass);
+    assert!(track_page_text(&app)[6].contains("12 dB"));
+    assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
+    press(&mut app, "K");
+    press(&mut app, "ms20 lp");
+    special(&mut app, KeyCode::Enter);
+    assert!(track_page_text(&app)[6].contains("--"));
+    press(&mut app, "j=");
+    assert!(app.status.contains("no modes"), "{}", app.status);
+    press(&mut app, "K");
+    assert_ne!(app.mode, Mode::Picker);
+    press(&mut app, "kK");
+    press(&mut app, "ladder");
+    special(&mut app, KeyCode::Enter);
+    assert!(track_page_text(&app)[6].contains("HP24"));
+
+    // `x` puts it back to the first.
+    press(&mut app, "jx");
+    assert_eq!(track(&app).filter_mode, FilterMode::default());
+    assert!(track_page_text(&app)[6].contains("LP24"));
+}
+
+#[test]
 fn the_gap_above_the_filter_is_only_on_screen() {
     use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "kk");
+    press(&mut app, "kkk");
     assert_eq!(app.track_control(), Control::Sample);
     press(&mut app, "j");
     assert_eq!(app.track_control(), Control::FilterType);
@@ -3106,7 +3166,8 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
         lines[9]
     );
 
-    press(&mut app, "jjl");
+    // Past Res's fine digits.
+    press(&mut app, "jll");
     assert_eq!(app.track_control().label(), "Pitch");
     press(&mut app, "i8C");
     assert_eq!(track(&app).pitch, 0x8C);
@@ -3179,8 +3240,8 @@ fn the_track_page_sets_the_utility_filter() {
     let track = |app: &App| app.song().tracks[0].clone();
     assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
     let lines = track_page_text(&app);
-    assert!(lines[9].contains("Low cut") && lines[9].contains("00"));
-    assert!(lines[10].contains("High cut") && lines[10].contains("FF"));
+    assert!(lines[10].contains("Low cut") && lines[10].contains("00"));
+    assert!(lines[11].contains("High cut") && lines[11].contains("FF"));
 
     press(&mut app, "jjj");
     press(&mut app, "i40");
@@ -3560,7 +3621,7 @@ fn a_track_following_the_project_shows_its_swing_dimmed_and_x_returns_to_that() 
     assert_eq!(swing_cell(&app), ("60".to_owned(), vt_tui::theme::OVERLAY2));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
-    press(&mut app, "j$=");
+    press(&mut app, "$=");
     assert_eq!(app.song().tracks[0].swing, Some(610));
     press(&mut app, "k");
     assert_eq!(swing_cell(&app), ("61".to_owned(), Color::Reset));
@@ -3609,14 +3670,17 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
     assert!(lines[4].trim().is_empty(), "{}", lines[4]);
     assert!(lines[5].starts_with("Filter") && lines[5].contains("Send A"));
-    assert!(lines[6].starts_with("Cut") && lines[6].contains("FF00 ▕█████████▏"));
-    assert!(lines[7].starts_with("Res") && lines[7].contains("Swing"));
+    assert!(lines[6].starts_with("Mode") && lines[6].contains("12 dB"));
+    assert!(lines[6].contains("Send B"));
+    assert!(lines[7].starts_with("Cut") && lines[7].contains("FF00 ▕█████████▏"));
+    assert!(lines[7].contains("Swing"));
+    assert!(lines[8].starts_with("Res") && lines[8].contains("Pitch"));
 }
 
 #[test]
 fn track_swing_on_the_page_matches_its_command() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "j$");
+    press(&mut app, "$");
     typed(&mut app, "60");
     assert_eq!(app.song().tracks[0].swing, Some(600));
     press(&mut app, "=");
@@ -4082,7 +4146,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
 #[test]
 fn the_file_setting_chooses_a_sample_and_x_clears_it() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "kk");
+    press(&mut app, "kkk");
     assert_eq!(app.track_control(), vt_tui::track_page::Control::Sample);
     press(&mut app, "K");
     assert_ne!(app.mode, Mode::Normal);
@@ -5084,11 +5148,18 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
     assert_eq!(app.filter_image.unwrap(), plain);
 
     // A new setting draws it again.
-    press(&mut app, "jj");
+    press(&mut app, "jjj");
     assert_eq!(column_name(&app), "Cut");
     press(&mut app, "-");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     assert_ne!(app.filter_image.unwrap(), picked);
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+
+    // And so does a new mode.
+    press(&mut app, "k");
+    assert_eq!(column_name(&app), "Mode");
+    press(&mut app, "=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
     assert_eq!(sync(&mut app, &mut graphics), 0);
 }
 
@@ -5254,9 +5325,9 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
     // Machine takes `a` for the `c`, and goes when the search narrows, leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["f Low cut", "j High cut", "s Cut"]);
+    assert_eq!(jump_labels(&app), ["g Low cut", "j High cut", "s Cut"]);
 
-    press(&mut app, "f");
+    press(&mut app, "g");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -5397,7 +5468,7 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     };
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cus").starts_with("Cus       sF00 ▕"));
-    assert!(line(&app, "Low cuf").starts_with("Low cuf   f0   ▕"));
+    assert!(line(&app, "Low cug").starts_with("Low cug   g0   ▕"));
     assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
@@ -6167,8 +6238,8 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, "jj");
-    // Past the seven a sample track has, as a synth's settings aren't on it.
-    for _ in 0..8 {
+    // Past the eight a sample track has, as a synth's settings aren't on it.
+    for _ in 0..9 {
         press(&mut app, "=");
     }
     assert_eq!(

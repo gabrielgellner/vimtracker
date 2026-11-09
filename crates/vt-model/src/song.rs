@@ -81,15 +81,15 @@ impl FilterType {
     /// What it does, for a list to show.
     pub fn meaning(self) -> &'static str {
         match self {
-            Self::LowPass => "Low-pass, clean, 12 dB",
-            Self::HighPass => "High-pass, clean, 12 dB",
+            Self::LowPass => "Low-pass, clean, 12 or 24 dB",
+            Self::HighPass => "High-pass, clean, 12 or 24 dB",
             Self::BandPass => "Band-pass, clean",
             Self::Notch => "Notch, clean",
-            Self::Ladder => "Saturating low-pass, 24 dB, self-oscillates",
+            Self::Ladder => "Saturating ladder, low-pass and more, self-oscillates",
             Self::Diode => "Diode ladder low-pass, 303 style, self-oscillates",
             Self::Ms20LowPass => "Korg 35 low-pass, MS-20 style, 12 dB, screams",
             Self::Ms20HighPass => "Korg 35 high-pass, MS-20 style, 6 dB, screams",
-            Self::Dirty => "Vital's low-pass, 24 dB, saturating resonance",
+            Self::Dirty => "Vital's low-pass and more, saturating resonance",
         }
     }
 
@@ -100,7 +100,121 @@ impl FilterType {
             Self::Ladder | Self::Diode | Self::Ms20LowPass | Self::Ms20HighPass | Self::Dirty
         )
     }
+
+    /// The modes it offers, the one it starts in first. The MS-20's offer none.
+    pub fn modes(self) -> &'static [FilterMode] {
+        use FilterMode::{
+            BandPass, Full, HighPass12, HighPass24, LowCut1, LowCut2, LowCut3, LowPass12,
+            LowPass24, Notch, Slope12, Slope24,
+        };
+        match self {
+            Self::LowPass | Self::HighPass | Self::BandPass | Self::Notch => &[Slope12, Slope24],
+            Self::Ladder | Self::Dirty => &[
+                LowPass24, LowPass12, BandPass, HighPass12, HighPass24, Notch,
+            ],
+            Self::Diode => &[Full, LowCut3, LowCut2, LowCut1],
+            Self::Ms20LowPass | Self::Ms20HighPass => &[],
+        }
+    }
+
+    /// Whether it has more than one mode, so `Mode` means something on it.
+    pub fn has_modes(self) -> bool {
+        !self.modes().is_empty()
+    }
+
+    /// The mode it plays for a track set to this one: the same, if it offers it, or its first. A
+    /// type with no modes plays as it always does, whatever this is.
+    pub fn plays(self, mode: FilterMode) -> FilterMode {
+        let modes = self.modes();
+        if modes.contains(&mode) {
+            mode
+        } else {
+            modes.first().copied().unwrap_or(mode)
+        }
+    }
 }
+
+/// How a track's filter type responds: how steep the clean types are, which of their responses the
+/// ladder and `Dirty` give out, or where the diode's low cut sits. Each type offers some of these.
+/// A track keeps its mode when its type changes, and a type that doesn't offer it plays its own
+/// first, so going to another type and back finds the mode again.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FilterMode {
+    /// The clean types as they are, and with a second filter after them, for twice the slope.
+    #[default]
+    Slope12,
+    Slope24,
+    /// The ladder's and `Dirty`'s responses, mixed from the stages they already have.
+    LowPass24,
+    LowPass12,
+    BandPass,
+    HighPass12,
+    HighPass24,
+    Notch,
+    /// Where the diode's input high-pass sits: far under, as `Acid` has it, or 3, 2 or 1 octaves
+    /// under `Cut`, so less bass reaches the ladder.
+    Full,
+    LowCut3,
+    LowCut2,
+    LowCut1,
+}
+
+impl FilterMode {
+    /// Every mode, in the order a step's value counts them.
+    pub const ALL: [Self; 12] = [
+        Self::Slope12,
+        Self::Slope24,
+        Self::LowPass24,
+        Self::LowPass12,
+        Self::BandPass,
+        Self::HighPass12,
+        Self::HighPass24,
+        Self::Notch,
+        Self::Full,
+        Self::LowCut3,
+        Self::LowCut2,
+        Self::LowCut1,
+    ];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        FILTER_MODE_NAMES[usize::from(self.index())]
+    }
+
+    /// What it does, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Slope12 => "12 dB an octave, one filter",
+            Self::Slope24 => "24 dB an octave, a second filter after the first",
+            Self::LowPass24 => "Low-pass, 24 dB",
+            Self::LowPass12 => "Low-pass, 12 dB",
+            Self::BandPass => "Band-pass, 12 dB either side",
+            Self::HighPass12 => "High-pass, 12 dB",
+            Self::HighPass24 => "High-pass, 24 dB",
+            Self::Notch => "Notch, 24 dB",
+            Self::Full => "All the bass goes in, as in Acid",
+            Self::LowCut3 => "Low cut 3 octaves under Cut",
+            Self::LowCut2 => "Low cut 2 octaves under Cut",
+            Self::LowCut1 => "Low cut 1 octave under Cut",
+        }
+    }
+
+    /// Its place in the list, which is a step's value for it.
+    pub fn index(self) -> u8 {
+        Self::ALL.iter().position(|mode| *mode == self).unwrap_or(0) as u8
+    }
+
+    /// The mode at a place in the list, if there's one there.
+    pub fn at(index: u8) -> Option<Self> {
+        Self::ALL.get(usize::from(index)).copied()
+    }
+}
+
+/// Each mode's name, in the list's order, for a step's value to show.
+pub const FILTER_MODE_NAMES: [&str; 12] = [
+    "12 dB", "24 dB", "LP24", "LP12", "BP", "HP12", "HP24", "Notch", "Full", "-3 oct", "-2 oct",
+    "-1 oct",
+];
 
 /// What a track is. Only `Sound` tracks have a machine, and the rest are fixed, after them, in this
 /// order.
@@ -179,6 +293,9 @@ pub struct Track {
     pub resonance: u8,
     #[serde(default)]
     pub filter: FilterType,
+    /// Where held `MODE` starts: how its filter type responds.
+    #[serde(default)]
+    pub filter_mode: FilterMode,
     /// How hard the filter is driven.
     #[serde(default)]
     pub drive: u8,
@@ -421,6 +538,7 @@ impl Default for Track {
             cutoff: open_cutoff(),
             resonance: 0,
             filter: FilterType::default(),
+            filter_mode: FilterMode::default(),
             drive: 0,
             low_cut: 0,
             high_cut: open_cutoff(),
@@ -1651,6 +1769,39 @@ mod tests {
             Some(3),
             "moved, not overwritten"
         );
+    }
+
+    #[test]
+    fn each_filter_type_plays_a_mode_it_offers_and_keeps_its_own() {
+        for kind in FilterType::ALL {
+            for mode in FilterMode::ALL {
+                let played = kind.plays(mode);
+                match kind.modes() {
+                    [] => assert_eq!(played, mode, "{kind:?} has none to fall back on"),
+                    modes if modes.contains(&mode) => assert_eq!(played, mode),
+                    modes => assert_eq!(played, modes[0], "{kind:?} {mode:?}"),
+                }
+            }
+        }
+        for mode in FilterMode::ALL {
+            assert_eq!(FilterMode::at(mode.index()), Some(mode));
+        }
+        let mut names = FILTER_MODE_NAMES.to_vec();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), FilterMode::ALL.len(), "each name says which");
+    }
+
+    #[test]
+    fn a_tracks_filter_mode_saves_and_loads() {
+        let track = Track {
+            filter: FilterType::Ladder,
+            filter_mode: FilterMode::HighPass24,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("filter_mode:HighPass24"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap(), track);
     }
 
     #[test]

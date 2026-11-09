@@ -286,7 +286,9 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         }
         let style = if here && !on_fine {
             theme::cursor(app.mode)
-        } else if *control == Control::Swing && track.swing.is_none() {
+        } else if *control == Control::Swing && track.swing.is_none()
+            || *control == Control::FilterMode && !track.filter.has_modes()
+        {
             theme::dim()
         } else {
             Style::new()
@@ -358,6 +360,9 @@ pub(crate) fn value(control: Control, track: &Track, project_swing: u16) -> Stri
         ),
         Control::Mute | Control::Solo => String::new(),
         Control::FilterType => track.filter.name().to_owned(),
+        // The MS-20's have none, so it doesn't apply.
+        Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
+        Control::FilterMode => track.filter.plays(track.filter_mode).name().to_owned(),
         Control::Level => hex(track.level),
         Control::Swing => format_swing(track.swing.unwrap_or(project_swing)),
         Control::Envelope(slot, field) => {
@@ -498,6 +503,7 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
     matches!(
         app.track_control(),
         Control::FilterType
+            | Control::FilterMode
             | Control::Base(
                 TrackControl::Cutoff
                     | TrackControl::Resonance

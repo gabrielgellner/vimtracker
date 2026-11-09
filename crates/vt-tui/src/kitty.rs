@@ -19,7 +19,7 @@ use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
 use vt_model::sample::SampleData;
-use vt_model::song::{FilterType, Machine, Track};
+use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
 use crate::input::mode::View;
@@ -347,7 +347,7 @@ pub fn supports_graphics() -> io::Result<bool> {
 }
 
 /// The settings a filter curve is drawn from.
-type FilterSettings = (FilterType, u8, u8, u8, u8, u8);
+type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
 
 /// What an FX slot's drawing shows, which is all that's compared to tell if it's changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -519,6 +519,7 @@ impl Graphics {
         });
         let settings = (
             track.filter,
+            track.filter.plays(track.filter_mode),
             cutoff,
             resonance,
             track.drive,
