@@ -6,7 +6,7 @@ use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{
-    DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
+    BAR_STEPS, DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
     MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS, TICKS_PER_QUARTER,
     TICKS_PER_STEP,
 };
@@ -126,6 +126,9 @@ pub struct Engine {
     fill: bool,
     /// The scale an `ACU` moves notes through, a live control as it's outside undo.
     scale: Scale,
+    /// Whether every track goes back to its start at the next line of the realign grid, as a
+    /// key asks while playing.
+    realign_waiting: bool,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -198,6 +201,7 @@ impl Engine {
             lfo_countdown: 0,
             fill: false,
             scale,
+            realign_waiting: false,
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -312,6 +316,36 @@ impl Engine {
     /// Send every track back to its start from the next step, leaving the beat where it is.
     pub fn realign(&mut self) {
         self.realign_at(self.next_step * TICKS_PER_STEP);
+    }
+
+    /// Send every track back to its start at the next line of the realign grid, or take back a
+    /// realign waiting for it. Only while playing, as playing starts every track at its start.
+    pub fn toggle_realign(&mut self) {
+        self.realign_waiting = self.transport == Transport::Playing && !self.realign_waiting;
+    }
+
+    /// Whether a realign is waiting for its line of the grid.
+    pub fn realign_waiting(&self) -> bool {
+        self.realign_waiting
+    }
+
+    /// How many steps apart the lines are that a realign waits for: the launch grid's, or a bar's
+    /// when launches wait for a chain's end, as every track's chain ends at a different place.
+    fn realign_grid(&self) -> u64 {
+        match self.current.song.launch {
+            Launch::Every(steps) => u64::from(steps.get()),
+            Launch::ChainEnd => BAR_STEPS as u64,
+        }
+    }
+
+    /// Whether the song's step about to fire is a line of a grid this many steps apart. Each
+    /// repeat of a section starts the grid again, so a section shorter than the grid has a line
+    /// only at its start.
+    fn on_grid_line(&self, steps: u64) -> bool {
+        let length = self
+            .playing_section()
+            .map_or(0, |s| self.current.song.section_length(s));
+        (self.section_place % (length as u64).max(1)).is_multiple_of(steps.max(1))
     }
 
     /// Send every track back to its start at this place on the grid, counting its steps again
@@ -514,15 +548,7 @@ impl Engine {
             return;
         }
         let due = match self.current.song.launch {
-            Launch::Every(steps) => {
-                // Each repeat of a section starts the grid again.
-                let length = self
-                    .playing_section()
-                    .map_or(0, |s| self.current.song.section_length(s));
-                song_step
-                    && (self.section_place % (length as u64).max(1))
-                        .is_multiple_of(u64::from(steps.get()))
-            }
+            Launch::Every(steps) => song_step && self.on_grid_line(u64::from(steps.get())),
             Launch::ChainEnd => {
                 let state = &self.tracks[index];
                 state.clock.beat == at
@@ -1056,6 +1082,7 @@ impl Engine {
             track.stop();
         }
         self.transport = to;
+        self.realign_waiting = false;
     }
 
     /// Turn fill on or off, which `CND`'s `FILL` and `!FILL` read as each row is decided.
@@ -1587,6 +1614,11 @@ impl Engine {
             return;
         }
         if self.past_reset(self.place) {
+            self.realign();
+        }
+        // A realign asked for lands here as a reset would, after the section has moved on.
+        if self.realign_waiting && self.on_grid_line(self.realign_grid()) {
+            self.realign_waiting = false;
             self.realign();
         }
         let grid = self.next_step * TICKS_PER_STEP;

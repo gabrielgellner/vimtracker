@@ -10719,3 +10719,84 @@ fn a_step_locks_the_glide_by_its_label() {
     assert_eq!(column_name(&app), "Machine: Glide");
     assert_eq!(value_shown(&app).as_deref(), Some("63 ms"));
 }
+
+#[test]
+fn space_a_realigns_every_track_on_the_launch_grid_while_playing() {
+    let (mut app, mut rt) = app();
+    tap(&mut app, " A");
+    assert_eq!(app.status, "Realign works while playing");
+
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    tap(&mut app, " A");
+    assert_eq!(
+        app.status,
+        "Every track realigns on the 1bar grid; Space A again takes it back"
+    );
+    block(&mut rt, &mut app);
+    assert!(rt.engine().realign_waiting());
+    assert!(app.realigning);
+    assert!(status_line(&app).contains("playing REALIGN"));
+    assert!(!app.dirty, "it moves playback, not the song");
+
+    // Again, it's taken back.
+    tap(&mut app, " A");
+    assert_eq!(app.status, "Realign taken back");
+    block(&mut rt, &mut app);
+    assert!(!rt.engine().realign_waiting());
+    assert!(!status_line(&app).contains("REALIGN"));
+
+    // Asked for again, it lands on the bar and is done.
+    tap(&mut app, " A");
+    block(&mut rt, &mut app);
+    assert!(app.realigning);
+    for _ in 0..400 {
+        block(&mut rt, &mut app);
+    }
+    assert!(!app.realigning, "landed on the bar");
+    assert_eq!(app.transport, Transport::Playing);
+
+    // Nothing to undo.
+    press(&mut app, "u");
+    assert!(!app.dirty);
+}
+
+#[test]
+fn a_realign_says_it_waits_for_the_bar_when_launches_wait_for_a_chain() {
+    let (mut app, mut rt) = app();
+    command(&mut app, "launch chain");
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    tap(&mut app, " A");
+    assert_eq!(
+        app.status,
+        "Every track realigns on the next bar; Space A again takes it back"
+    );
+}
+
+#[test]
+fn space_a_works_in_every_view_and_space_k_lists_it() {
+    let (mut app, mut rt) = app();
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    for view in ["1", "2", "3", "4", "6", "7", "9"] {
+        press(&mut app, &format!(" {view}"));
+        tap(&mut app, " A");
+        assert!(
+            app.status.starts_with("Every track realigns"),
+            "{view}: {}",
+            app.status
+        );
+        // The engine says it's waiting in its next report, which the second press reads.
+        block(&mut rt, &mut app);
+        tap(&mut app, " A");
+        assert_eq!(app.status, "Realign taken back", "{view}");
+        block(&mut rt, &mut app);
+    }
+    let rows = app.help_rows();
+    let listed = rows
+        .iter()
+        .filter(|row| row.trim_start().starts_with("Space A "))
+        .count();
+    assert_eq!(listed, 7, "{rows:?}");
+}

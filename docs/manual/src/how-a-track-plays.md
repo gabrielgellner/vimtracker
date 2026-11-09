@@ -197,7 +197,9 @@ The count, and with it every lane, starts over on:
 - playing from the top, or from a step;
 - a section bringing in a new chain, or a section that resets;
 - a launch;
-- realigning with `:reset`.
+- realigning with `:reset`, or by hand with `Space A`, which waits for the next line
+  of the launch grid, a bar unless `:launch` changes it, and which a second press
+  takes back.
 
 Each of those also lines the track's steps up again, so a track at a slower speed
 starts its next step there, even if that cuts the one before short.
@@ -382,10 +384,10 @@ pedal:         1  2  1  3 | 1  4  1  2 | 1  3  1  4 | 1 ...    a round of 6
 
 `reverse`, `odd-even`, `converge` and `diverge` visit each row once a round, so each
 pass plays the same. The walk starts again where the chain does: from the top, at a
-section that brings the chain in or resets, a launch, or `:reset`, which is where a
-condition's passes and the accumulators start again too. It's worked out from the
-count, as everything else is, so playing from a step hears what playing up to it
-would.
+section that brings the chain in or resets, a launch, `:reset` or `Space A`, which
+is where a condition's passes and the accumulators start again too. It's worked out
+from the count, as everything else is, so playing from a step hears what playing up
+to it would.
 
 The note column walks the rows as it walks them forward, so a row's pulses stay
 together and a skipped row takes no time. A row whose pulses run past the end of a

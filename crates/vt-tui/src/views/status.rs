@@ -299,12 +299,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Transport::Playing => "playing",
         Transport::Paused => "paused",
     };
-    // Fill changes what the conditions play, so it's shown while it's on.
-    let transport = if app.fill {
-        format!("{transport} FILL")
-    } else {
-        transport.to_owned()
-    };
+    // Fill changes what the conditions play, so it's shown while it's on, and a realign while
+    // it waits for the grid.
+    let mut transport = transport.to_owned();
+    if app.fill {
+        transport.push_str(" FILL");
+    }
+    if app.realigning {
+        transport.push_str(" REALIGN");
+    }
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {

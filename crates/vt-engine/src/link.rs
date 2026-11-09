@@ -74,6 +74,9 @@ pub enum Command {
     SetSolo { track: usize, solo: bool },
     /// Turn fill on or off, for `CND`'s `FILL` and `!FILL`.
     SetFill { on: bool },
+    /// `Space A`: send every track back to its start at the next line of the launch grid, or
+    /// take back a realign waiting for it.
+    Realign,
     /// Set the scale an `ACU` moves notes through.
     SetScale { scale: Scale },
     /// Play a chain on one track when its launch timing allows, or stop it then.
@@ -112,6 +115,8 @@ pub struct Telemetry {
     /// Where each track is heard, as its own steps count.
     pub places: [TrackPlace; MAX_TRACKS],
     pub transport: Transport,
+    /// Whether a realign is waiting for its line of the grid.
+    pub realigning: bool,
     pub reading: Reading,
     /// Each track's levels.
     pub tracks: [Reading; MAX_TRACKS],
@@ -395,6 +400,7 @@ impl Realtime {
                 }
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetFill { on } => self.engine.set_fill(on),
+                Command::Realign => self.engine.toggle_realign(),
                 Command::SetScale { scale } => self.engine.set_scale(scale),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
@@ -435,6 +441,7 @@ impl Realtime {
             progress: self.engine.step_progress(),
             places: std::array::from_fn(|track| self.engine.track_heard(track)),
             transport: self.engine.transport(),
+            realigning: self.engine.realign_waiting(),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,
