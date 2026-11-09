@@ -238,17 +238,18 @@ impl App {
         let items = self
             .phrase_uses(phrase)
             .into_iter()
-            .map(|(section, slot)| Item {
-                label: format!("Section {:02} slot {slot:02X}", section + 1),
-                pick: Pick::Use {
-                    section,
-                    track,
-                    slot,
-                },
+            .map(|(section, slot)| {
+                Item::new(
+                    format!("Section {:02} slot {slot:02X}", section + 1),
+                    Pick::Use {
+                        section,
+                        track,
+                        slot,
+                    },
+                )
             })
             .collect();
-        self.picker = Some(Picker::new("Uses", items));
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Uses", items));
     }
 
     /// Go to a slot from the picker.
@@ -383,16 +384,11 @@ impl App {
                 } else {
                     ""
                 };
-                Item {
-                    label: format!("{id:02X}{shared}  {length} steps"),
-                    pick: Pick::RowPhrase(*id),
-                }
+                Item::new(format!("{id:02X}{shared}"), Pick::RowPhrase(*id))
+                    .meaning(format!("{length} steps"))
             })
             .collect();
-        let mut picker = Picker::new("Phrases", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Phrases", items).opened_on(position));
     }
 
     /// Play a chosen phrase on this row, or on a new one if the cursor is past the last.

@@ -1288,7 +1288,7 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     keys(&mut app, "lllK");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
-        app.picker.as_ref().unwrap().shown().count(),
+        app.picker.as_ref().unwrap().items().len(),
         18,
         "on a sample track with nothing in its slots: empty, its own 8, the LFOs' 4 and 5 events"
     );
@@ -1308,9 +1308,13 @@ fn k_keeps_a_value_when_changing_the_command() {
     // On the command or the value, and it opens on what is there.
     keys(&mut app, "llllK");
     assert_eq!(
-        app.picker.as_ref().unwrap().selected,
-        1,
-        "CUT, after the empty row"
+        app.picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .map(|item| item.label.as_str()),
+        Some("CUT"),
+        "inside Filter, which opens"
     );
     keys(&mut app, "res<Enter>");
     assert_eq!(steps(&app)[0], "C-4 40 res:20 --- ---");

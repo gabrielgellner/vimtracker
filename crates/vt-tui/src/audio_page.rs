@@ -6,7 +6,6 @@ use vt_model::selection::Motion;
 use crate::app::App;
 use crate::audio::{AudioChoice, DeviceInfo};
 use crate::input::bindings::Cmd;
-use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
 
 /// The page's rows, in order.
@@ -196,15 +195,9 @@ impl App {
         }
         let items = options
             .into_iter()
-            .map(|(label, choice)| Item {
-                label,
-                pick: Pick::Audio(choice),
-            })
+            .map(|(label, choice)| Item::new(label, Pick::Audio(choice)))
             .collect();
-        let mut picker = Picker::new(row.name(), items);
-        picker.move_highlight(current.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new(row.name(), items).opened_on(current));
     }
 
     /// A choice from the audio page's list.

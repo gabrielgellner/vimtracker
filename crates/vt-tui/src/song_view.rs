@@ -267,21 +267,18 @@ impl App {
         let position = chains.iter().position(|chain| *chain == current);
         let items = chains
             .iter()
-            .map(|chain| Item {
-                label: chain.map_or_else(
-                    || "--".to_owned(),
+            .map(|chain| {
+                let (label, meaning) = chain.map_or_else(
+                    || ("--".to_owned(), String::new()),
                     |id| {
                         let label = &self.song().tracks[track].chains[&id].label;
-                        format!("{id:02X}  {label}")
+                        (format!("{id:02X}"), label.clone())
                     },
-                ),
-                pick: Pick::SectionChain(*chain),
+                );
+                Item::new(label, Pick::SectionChain(*chain)).meaning(meaning)
             })
             .collect();
-        let mut picker = Picker::new("Chains", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Chains", items).opened_on(position));
     }
 
     /// Put a chosen chain in the cell under the cursor.

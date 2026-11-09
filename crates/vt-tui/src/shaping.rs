@@ -434,9 +434,8 @@ impl App {
             ShapeRow::Fill => (
                 "Fill",
                 FillKind::ALL
-                    .map(|kind| Item {
-                        label: format!("{}  {}", kind.name(), kind.description()),
-                        pick: Pick::ShapeFill(kind),
+                    .map(|kind| {
+                        Item::new(kind.name(), Pick::ShapeFill(kind)).meaning(kind.description())
                     })
                     .to_vec(),
                 FillKind::ALL
@@ -447,10 +446,7 @@ impl App {
             ShapeRow::Wave => (
                 "Shape",
                 WAVES
-                    .map(|wave| Item {
-                        label: wave.name().to_owned(),
-                        pick: Pick::ShapeWave(wave),
-                    })
+                    .map(|wave| Item::new(wave.name(), Pick::ShapeWave(wave)))
                     .to_vec(),
                 WAVES
                     .iter()
@@ -465,10 +461,7 @@ impl App {
                     .unwrap_or(0);
                 let items = rates
                     .into_iter()
-                    .map(|rate| Item {
-                        label: rate.to_string(),
-                        pick: Pick::ShapeRate(rate),
-                    })
+                    .map(|rate| Item::new(rate.to_string(), Pick::ShapeRate(rate)))
                     .collect();
                 ("Rate", items, position)
             }
@@ -480,10 +473,7 @@ impl App {
                 let position = choices.iter().position(same).unwrap_or(0);
                 let items = choices
                     .into_iter()
-                    .map(|place| Item {
-                        label: place.name().to_owned(),
-                        pick: Pick::ShapeWhere(place),
-                    })
+                    .map(|place| Item::new(place.name(), Pick::ShapeWhere(place)))
                     .collect();
                 ("Where", items, position)
             }
@@ -492,10 +482,7 @@ impl App {
                 return;
             }
         };
-        let mut picker = Picker::new(title, items);
-        picker.move_highlight(position as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new(title, items).opened_on(Some(position)));
     }
 
     pub(crate) fn pick_shape_fill(&mut self, kind: FillKind) {

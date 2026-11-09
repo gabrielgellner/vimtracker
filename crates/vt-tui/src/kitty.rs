@@ -23,10 +23,12 @@ use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
 use crate::input::mode::View;
+use crate::input::picker::Shown;
 use crate::theme;
 use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
+use crate::views::picker::{PREVIEW_ROWS, PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
@@ -258,6 +260,22 @@ pub fn waveform_png(frames: &[[f32; 2]], color: [u8; 3], columns: usize, rows: u
     line_png(&waveform::spans(frames, &[], across, down), down, color)
 }
 
+/// The rows a waveform covers in each column of dots, for a drawing this many characters across
+/// and down, to keep in place of the sample and draw later with [`spans_png`].
+pub fn waveform_spans(frames: &[[f32; 2]], columns: usize, rows: usize) -> Vec<(usize, usize)> {
+    waveform::spans(
+        frames,
+        &[],
+        columns * CELL_DOTS_ACROSS,
+        rows * CELL_DOTS_DOWN,
+    )
+}
+
+/// A drawing worked out by [`waveform_spans`] as a PNG, `rows` characters down.
+pub fn spans_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
+    line_png(spans, rows * CELL_DOTS_DOWN, color)
+}
+
 /// Write one command.
 fn command(out: &mut impl Write, controls: &str, data: &[u8]) -> io::Result<()> {
     out.write_all(b"\x1b_G")?;
@@ -433,6 +451,8 @@ pub struct Graphics {
     slots: [[Option<(SlotDrawing, u32)>; 2]; INSERTS],
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
+    /// The picker's preview, and the images of its waveforms, a line each.
+    preview: Option<(Arc<Shown>, Vec<Option<u32>>)>,
     /// How many times the screen has been brought up to date, for how often the scope is.
     frames: usize,
     /// Images to forget once the screen has moved on from them.
@@ -451,6 +471,7 @@ impl Graphics {
             waveform: [None, None],
             slots: [[None; 2]; INSERTS],
             scope: None,
+            preview: None,
             frames: 0,
             retired: Vec::new(),
         }
@@ -482,6 +503,11 @@ impl Graphics {
                     .flatten()
                     .any(|image| image.1 == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
+                || self
+                    .preview
+                    .iter()
+                    .flat_map(|(_, ids)| ids.iter().flatten())
+                    .any(|image| *image == id)
                 || self.retired.contains(&id);
             if !in_use {
                 return id;
@@ -504,11 +530,49 @@ impl Graphics {
                 Page::Fx => self.sync_fx(app, &track, out)?,
             }
         }
+        self.sync_preview(app, out)?;
         if app.scope_shown && self.frames.is_multiple_of(SCOPE_FRAMES) {
             self.sync_scope(app, out)?;
         }
         self.frames = self.frames.wrapping_add(1);
         out.flush()
+    }
+
+    /// Send the waveforms in the picker's preview, if the terminal lacks them, and forget those of a
+    /// preview it has moved on from. Only as many as the preview has room for are sent.
+    fn sync_preview(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
+        let shown = app
+            .picker
+            .as_ref()
+            .and_then(|picker| picker.preview.clone());
+        let same = match (&self.preview, &shown) {
+            (Some((held, _)), Some(shown)) => Arc::ptr_eq(held, shown),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            if let Some((_, ids)) = self.preview.take() {
+                self.retired.extend(ids.into_iter().flatten());
+            }
+            if let Some(shown) = shown {
+                let mut ids = Vec::new();
+                for line in shown.lines.iter().take(PREVIEW_ROWS) {
+                    let Some(spans) = &line.wave else {
+                        ids.push(None);
+                        continue;
+                    };
+                    let id = self.new_id();
+                    let png = spans_png(spans, PREVIEW_WAVE_HEIGHT, color(false));
+                    self.send(out, id, &png, PREVIEW_WAVE_WIDTH, PREVIEW_WAVE_HEIGHT)?;
+                    ids.push(Some(id));
+                }
+                self.preview = Some((shown, ids));
+            }
+        }
+        if let (Some(picker), Some((_, ids))) = (app.picker.as_mut(), &self.preview) {
+            picker.preview_images.clone_from(ids);
+        }
+        Ok(())
     }
 
     /// Send the Sound page's filter curve, if the terminal lacks it.

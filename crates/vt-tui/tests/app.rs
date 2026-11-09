@@ -45,6 +45,15 @@ fn tap(app: &mut App, keys: &str) {
     }
 }
 
+/// An item as a list shows it: its name, and its meaning beside it.
+fn listed(item: &vt_tui::input::picker::Item) -> String {
+    if item.meaning.is_empty() {
+        item.label.clone()
+    } else {
+        format!("{}  {}", item.label, item.meaning)
+    }
+}
+
 fn special(app: &mut App, code: KeyCode) {
     app.key(Key::new(code), Instant::now());
 }
@@ -788,10 +797,16 @@ fn a_folder_opens_the_sample_browser_and_choosing_loads_the_sample() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
-    assert_eq!(labels, ["kit/kick.wav", "kit/snare.WAV"]);
+    assert_eq!(labels, ["kick.wav", "snare.WAV"]);
+    let picker = app.picker.as_ref().unwrap();
+    assert!(
+        picker.items().iter().all(|item| item.category == "kit"),
+        "under the folder they're in"
+    );
     press(&mut app, "sn");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
@@ -818,8 +833,9 @@ fn the_sample_browser_lists_and_loads_aiff_and_flac() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert_eq!(labels, ["hat.aif", "kick.wav", "ride.aiff", "tom.flac"]);
     press(&mut app, "tom");
@@ -948,8 +964,9 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert_eq!(uses, ["Section 01 slot 00", "Section 01 slot 01"]);
     special(&mut app, KeyCode::Enter);
@@ -1694,12 +1711,13 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert_eq!(
         labels[..2],
-        ["SD  Snare 909", "    hat"],
+        ["SD  Snare 909", "  hat"],
         "the kit first, by name or the file's"
     );
     special(&mut app, KeyCode::Enter);
@@ -2200,6 +2218,171 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
     );
 }
 
+/// A kit folder with a kit of three labelled sounds at its top, and one of Ableton's under its
+/// category, returning the folder.
+fn kit_folders() -> PathBuf {
+    let kit = labelled_kit();
+    let root = kit.parent().unwrap().to_path_buf();
+    let deeper = root.join("Ableton/Drum Machines");
+    std::fs::create_dir_all(&deeper).unwrap();
+    std::fs::write(
+        deeper.join("808 Core Kit.ron"),
+        r#"(source: "Ableton Core Library", category: "Drum Machines", sounds: [
+            (label: "BD", name: "Kick 808", path: "../../drums/kick.wav"),
+            (label: "SD", name: "Snare 808", path: "../../drums/snare.wav"),
+        ])"#,
+    )
+    .unwrap();
+    std::fs::write(
+        deeper.join("909 Core Kit.ron"),
+        r#"(sounds: [(path: "../../drums/hat.wav")])"#,
+    )
+    .unwrap();
+    root
+}
+
+#[test]
+fn space_8_lists_kits_by_folder_with_each_kits_sounds_beside_them() {
+    use vt_tui::input::picker::Row;
+    let (mut app, _realtime) = app();
+    let root = kit_folders();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    press(&mut app, " 8");
+    assert_eq!(app.mode, Mode::Picker);
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.title, "Kits");
+    assert!(picker.hint.unwrap().contains("L on tracks"));
+    assert_eq!(picker.rows(), [Row::Item(0), Row::Category(0)], "folded");
+    assert_eq!(picker.category(0), ("Ableton/Drum Machines", 2, false));
+    // The kit under the cursor is shown beside the list, each sound with its waveform.
+    let shown = picker.preview.as_deref().unwrap();
+    assert_eq!(shown.heading, "909");
+    assert_eq!(shown.note, "3 sounds");
+    let labels: Vec<&str> = shown.lines.iter().map(|line| line.label.as_str()).collect();
+    assert_eq!(labels, ["BD", "CH", ""]);
+    assert!(shown.lines.iter().all(|line| line.wave.is_some()));
+
+    // Into the folder, and the preview follows.
+    press(&mut app, "jl");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "808 Core Kit");
+    let shown = picker.preview.as_deref().unwrap();
+    assert_eq!(shown.heading, "808 Core Kit");
+    assert_eq!(shown.note, "2 sounds from Ableton Core Library");
+    assert_eq!(shown.lines[1].name, "Snare 808");
+
+    // Enter makes it the kit Space 5 lists first, and adds nothing.
+    let depth = app.history.undo_depth();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.kit.len(), 2);
+    assert_eq!(app.history.undo_depth(), depth);
+    assert!(
+        app.status.starts_with("Kit 808 Core Kit: 2 sounds"),
+        "{}",
+        app.status
+    );
+
+    // It opens on the kit in use, and L puts its sounds on tracks, as one undo step.
+    command(&mut app, "kit");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(
+        picker.current().unwrap().label,
+        "808 Core Kit",
+        "opens on it"
+    );
+    assert_eq!(picker.marked(), Some(1));
+    press(&mut app, "L");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(sample_of(&app, 0).unwrap().ends_with("kick.wav"));
+    assert!(sample_of(&app, 1).unwrap().ends_with("snare.wav"));
+    assert_eq!(app.song().tracks[1].name, "SD");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 0), None);
+}
+
+#[test]
+fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
+    let (mut app, _realtime) = app();
+    let root = kit_folders();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    press(&mut app, " 8");
+    // The terminal is sent a waveform for each sound.
+    let mut sent = Vec::new();
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    graphics.sync(&mut app, &mut sent).unwrap();
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.preview_images.len(), 3);
+    assert!(picker.preview_images.iter().all(Option::is_some));
+    let backend = ratatui::backend::TestBackend::new(120, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: String = (0..24)
+        .map(|y| {
+            (0..120)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(text.contains("Kits 3/3"), "{text}");
+    assert!(text.contains("Enter use   L on tracks"), "{text}");
+    assert!(text.contains("│ 909"), "{text}");
+    let bd = text.lines().find(|line| line.contains(" BD  ")).unwrap();
+    assert!(bd.contains('\u{10EEEE}'), "its waveform beside it: {bd}");
+    // Moving to another kit sends that kit's, and lets the old ones go.
+    press(&mut app, "jl");
+    sent.clear();
+    graphics.sync(&mut app, &mut sent).unwrap();
+    let sent = String::from_utf8_lossy(&sent);
+    assert_eq!(sent.matches("a=T").count(), 2, "one for each of its sounds");
+}
+
+#[test]
+fn space_5_lists_samples_under_their_folders_and_opens_on_the_tracks_own() {
+    use vt_tui::input::picker::Focus;
+    let (mut app, _realtime) = app();
+    let library = folder();
+    std::fs::create_dir_all(library.join("hats")).unwrap();
+    std::fs::create_dir_all(library.join("kicks")).unwrap();
+    wav(&library.join("hats/closed.wav"));
+    wav(&library.join("hats/open.wav"));
+    wav(&library.join("kicks/deep.wav"));
+    wav(&library.join("kicks/short.wav"));
+    app.settings = Settings {
+        kits: Vec::new(),
+        samples: vec![library.display().to_string()],
+    };
+    press(&mut app, " 5");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.focus, Focus::Search, "files are found by name");
+    assert_eq!(picker.shown().count(), 0, "both folders folded");
+    press(&mut app, "short");
+    special(&mut app, KeyCode::Enter);
+    assert!(sample_of(&app, 0).unwrap().ends_with("kicks/short.wav"));
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " 5");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(
+        picker.current().unwrap().label,
+        "short.wav",
+        "on the track's own"
+    );
+    assert!(picker.category(1).2, "its folder open");
+    assert!(!picker.category(0).2, "the other folded");
+    std::fs::remove_dir_all(&library).unwrap();
+}
+
 #[test]
 fn the_sample_browser_lists_the_settings_sample_folders() {
     let (mut app, _realtime) = app();
@@ -2213,7 +2396,10 @@ fn the_sample_browser_lists_the_settings_sample_folders() {
     press(&mut app, " 5");
     assert_eq!(app.mode, Mode::Picker);
     let first = app.picker.as_ref().unwrap().shown().next().unwrap().clone();
-    assert_eq!(first.label, "hats/closed.wav");
+    assert_eq!(
+        (first.label.as_str(), first.category.as_str()),
+        ("closed.wav", "hats")
+    );
     assert_eq!(first.pick, Pick::Sample(library.join("hats/closed.wav")));
     std::fs::remove_dir_all(&library).unwrap();
 }
@@ -2248,10 +2434,24 @@ fn kits_in_folders_are_listed_and_named_by_their_path() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
-    assert_eq!(labels, ["909", "Ableton/Drum Machines/808 Core Kit"]);
+    assert_eq!(labels, ["909", "808 Core Kit"]);
+    let categories: Vec<&str> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(|item| item.category.as_str())
+        .collect();
+    assert_eq!(
+        categories,
+        ["", "Ableton/Drum Machines"],
+        "under its folder"
+    );
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit Ableton/Drum Machines/808 Core Kit all");
     assert_eq!(app.status, "Kit 808 Core Kit: 3 tracks");
@@ -2973,11 +3173,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "Ljjj0K/");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
-    assert_eq!(
-        picker.shown().count(),
-        9,
-        "what a sample track has, and none"
-    );
+    assert_eq!(picker.items().len(), 9, "what a sample track has, and none");
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
     special(&mut app, KeyCode::Enter);
@@ -2994,7 +3190,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     typed_rate_on_second_lfo(&mut app);
     press(&mut app, "0K");
     assert_eq!(
-        app.picker.as_ref().unwrap().current().unwrap().label,
+        listed(app.picker.as_ref().unwrap().current().unwrap()),
         "Res  Filter resonance"
     );
     special(&mut app, KeyCode::Esc);
@@ -3044,7 +3240,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 9);
-    press(&mut app, "ladder");
+    press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Ladder);
     press(&mut app, "i");
@@ -3090,14 +3286,14 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
 
     // The ladder lists its six, and starts on its own first.
     press(&mut app, "kK");
-    press(&mut app, "ladder");
+    press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "j");
     assert!(track_page_text(&app)[6].contains("LP24"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 6);
-    press(&mut app, "hp24");
+    press(&mut app, "/hp24");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
 
@@ -3120,7 +3316,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     press(&mut app, "K");
     assert_ne!(app.mode, Mode::Picker);
     press(&mut app, "kK");
-    press(&mut app, "ladder");
+    press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
     assert!(track_page_text(&app)[6].contains("HP24"));
 
@@ -3141,7 +3337,7 @@ fn the_gap_above_the_filter_is_only_on_screen() {
 
     // A synth has more above its filter, and the gap stays just above it.
     press(&mut app, "kkK");
-    press(&mut app, "kick");
+    press(&mut app, "/kick");
     special(&mut app, KeyCode::Enter);
     let lines = track_page_text(&app);
     assert!(lines[5].starts_with("Decay"), "{}", lines[5]);
@@ -3369,7 +3565,7 @@ fn the_track_page_sets_envelopes() {
     press(&mut app, "j0K");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
-        app.picker.as_ref().unwrap().current().unwrap().label,
+        listed(app.picker.as_ref().unwrap().current().unwrap()),
         "Cut  Filter cutoff",
         "opens on what's chosen"
     );
@@ -3823,6 +4019,9 @@ fn the_view_picker_flips_back_and_escape_changes_nothing() {
     // Keys that would edit in other modes only search here.
     press(&mut app, "x");
     assert_eq!(app.view, View::Track);
+    // Esc clears the search, then closes.
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Picker);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.view, View::Track);
@@ -3957,29 +4156,30 @@ fn each_kind_of_cell_has_its_own_colours() {
 }
 
 #[test]
-fn k_lists_commands_by_group_and_opens_searching() {
-    use vt_tui::input::picker::Focus;
+fn k_lists_commands_by_category_and_opens_searching() {
+    use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     press(&mut app, "lllK");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.focus, Focus::Search);
     assert!(picker.query.is_empty());
-    let mut names = picker.group_names();
-    names.dedup();
-    assert_eq!(
-        names[..3],
-        ["---".to_owned(), "Filter".into(), "Output".into()]
-    );
-    assert_eq!(names.last().map(String::as_str), Some("Events"));
+    let names: Vec<&str> = picker
+        .rows()
+        .iter()
+        .filter_map(|row| match row {
+            Row::Category(category) => Some(picker.category(*category).0),
+            Row::Item(_) => None,
+        })
+        .collect();
+    assert_eq!(names[..2], ["Filter", "Output"]);
+    assert_eq!(names.last().copied(), Some("Events"));
+    assert_eq!(picker.current().unwrap().label, "---", "on the empty slot");
     // Typing searches long names as well as labels.
     press(&mut app, "send b");
+    let current = app.picker.as_ref().unwrap().current().unwrap();
     assert_eq!(
-        app.picker
-            .as_ref()
-            .unwrap()
-            .current()
-            .map(|item| item.label.as_str()),
-        Some("SNB   Send B")
+        (current.label.as_str(), current.meaning.as_str()),
+        ("SNB", "Send B")
     );
 }
 
@@ -4744,7 +4944,8 @@ fn k_chooses_a_cells_chain_by_number_or_label() {
             .as_ref()
             .unwrap()
             .current()
-            .map(|i| i.label.as_str()),
+            .map(listed)
+            .as_deref(),
         Some("01  bass"),
         "the cell's own is highlighted"
     );
@@ -5282,8 +5483,9 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert!(labels[0].ends_with(voice), "{labels:?}");
     assert!(!labels[1].ends_with(voice), "{labels:?}");
@@ -6195,8 +6397,9 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
             .picker
             .as_ref()
             .unwrap()
-            .shown()
-            .map(|item| item.label.clone())
+            .items()
+            .iter()
+            .map(listed)
             .collect();
         special(app, KeyCode::Esc);
         labels
@@ -6263,8 +6466,9 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert!(
         labels.iter().any(|label| label.starts_with("1MIX  1 Mix")),
@@ -6301,8 +6505,8 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.query, "amnt");
     assert_eq!(
-        picker.current().map(|item| item.label.as_str()),
-        Some("1AMNT 1 Amount")
+        picker.current().map(listed).as_deref(),
+        Some("1AMNT  1 Amount")
     );
     special(&mut app, KeyCode::Enter);
     press(&mut app, "20");
@@ -6367,8 +6571,9 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .picker
             .as_ref()
             .unwrap()
-            .shown()
-            .map(|item| item.label.clone())
+            .items()
+            .iter()
+            .map(listed)
             .collect();
         special(app, KeyCode::Esc);
         found
@@ -6427,8 +6632,9 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .picker
             .as_ref()
             .unwrap()
-            .shown()
-            .map(|item| item.label.clone())
+            .items()
+            .iter()
+            .map(listed)
             .collect();
         special(app, KeyCode::Esc);
         found
@@ -6469,8 +6675,8 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
 }
 
 #[test]
-fn dest_can_be_browsed_by_group_as_well_as_searched() {
-    use vt_tui::input::picker::Focus;
+fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
+    use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     // Distort in slot 1, then LFO 1's Dest.
     press(&mut app, " 4LL=HjjK");
@@ -6482,45 +6688,48 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
             .map(|item| item.label.clone())
             .unwrap_or_default()
     };
-    let focus = |app: &App| app.picker.as_ref().unwrap().focus;
-    assert_eq!(focus(&app), Focus::List);
-    assert!(current(&app).starts_with("---"), "{}", current(&app));
+    let picker = |app: &App| app.picker.as_ref().unwrap().clone();
+    assert_eq!(picker(&app).focus, Focus::List);
+    assert_eq!(current(&app), "---", "on what's chosen: nothing");
+    assert!(
+        picker(&app).rows().iter().all(|row| match row {
+            Row::Category(category) => !picker(&app).category(*category).2,
+            Row::Item(item) => !picker(&app).is_nested(*item),
+        }),
+        "every category folded, as none holds what's chosen"
+    );
 
-    // h to the groups, down to Filter, which shows its own.
-    press(&mut app, "hj");
-    assert_eq!(focus(&app), Focus::Groups);
-    assert!(current(&app).starts_with("Cut"), "{}", current(&app));
+    // Down to Filter's heading, l into it, and down its list.
+    press(&mut app, "jl");
+    assert_eq!(current(&app), "Cut");
+    press(&mut app, "j");
+    assert_eq!(current(&app), "Res");
+    assert_eq!(app.mode, Mode::Picker, "moving doesn't choose");
 
-    // l into it, and down the list.
-    press(&mut app, "lj");
-    assert_eq!(focus(&app), Focus::List);
-    assert!(current(&app).starts_with("Res"), "{}", current(&app));
-    assert_eq!(app.mode, Mode::Picker, "browsing doesn't type or choose");
-    press(&mut app, "x");
-    assert!(app.picker.as_ref().unwrap().query.is_empty());
+    // h closes it and goes up to it.
+    press(&mut app, "h");
+    assert_eq!(current(&app), "", "on the heading");
+    let heading = picker(&app).rows()[picker(&app).selected];
+    assert!(matches!(heading, Row::Category(_)));
 
-    // Enter on a group goes in, and Enter in the list chooses.
-    press(&mut app, "hj");
-    special(&mut app, KeyCode::Enter);
-    assert_eq!(focus(&app), Focus::List);
-    assert!(current(&app).starts_with("Pan"), "{}", current(&app));
-
-    // The search reaches everything, and / comes back.
-    press(&mut app, "/1 mi");
-    assert_eq!(focus(&app), Focus::Search);
-    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
-    press(&mut app, "/");
-    assert_eq!(focus(&app), Focus::List);
-    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
+    // A letter that isn't a key starts a search, which reaches every category.
+    press(&mut app, "1 mi");
+    assert_eq!(picker(&app).focus, Focus::Search);
+    assert_eq!(current(&app), "1 Mix");
+    // Esc clears it and goes back to the tree, on what it found.
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(picker(&app).focus, Focus::List);
+    assert!(picker(&app).query.is_empty());
+    assert_eq!(current(&app), "1 Mix");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap())
     );
 
-    // It opens on what's chosen, and Esc leaves it.
+    // It opens on what's chosen, inside its category, and Esc leaves it.
     press(&mut app, "K");
-    assert!(current(&app).starts_with("1 Mix"), "{}", current(&app));
+    assert_eq!(current(&app), "1 Mix");
     press(&mut app, "hk");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
@@ -6530,17 +6739,15 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
         "changing nothing"
     );
 
-    // A lone item in the groups is chosen right there. On a sample track, Machine holds Pitch.
-    press(&mut app, "Kh");
-    let picker = app.picker.as_ref().unwrap();
-    let at = picker
-        .group_names()
+    // A category of one is the item itself. On a sample track, Machine holds Pitch.
+    press(&mut app, "Kgg");
+    let at = picker(&app)
+        .rows()
         .iter()
-        .position(|name| name == "Pitch")
+        .position(|row| matches!(row, Row::Item(item) if picker(&app).item(*item).label == "Pitch"))
         .unwrap();
-    let by = at as isize - picker.group as isize;
-    for _ in 0..by.unsigned_abs() {
-        press(&mut app, if by > 0 { "j" } else { "k" });
+    for _ in 0..at {
+        press(&mut app, "j");
     }
     special(&mut app, KeyCode::Enter);
     assert_eq!(
@@ -6550,9 +6757,9 @@ fn dest_can_be_browsed_by_group_as_well_as_searched() {
 }
 
 #[test]
-fn dests_window_draws_groups_beside_the_list() {
+fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LjjKhj");
+    press(&mut app, " 4LjjKjl");
     let picker = app.picker.as_ref().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -6568,21 +6775,40 @@ fn dests_window_draws_groups_beside_the_list() {
                 + "\n"
         })
         .collect();
-    assert!(text.contains("  ---       Cut  Filter cutoff"), "{text}");
-    assert!(text.contains("> Filter    Res  Filter resonance"), "{text}");
-    assert!(text.contains("  Output"), "{text}");
-    assert!(text.contains("/ search"), "{text}");
+    let total = picker.items().len();
+    assert!(
+        text.contains(&format!("LFO destination {total}/{total}")),
+        "{text}"
+    );
+    assert!(text.contains("│• ---"), "the chosen one is marked: {text}");
+    assert!(text.contains("│▾ Filter  3"), "{text}");
+    assert!(
+        text.lines()
+            .any(|line| line.contains("│    Cut ") && line.contains(" Filter cutoff")),
+        "in its category, with its meaning: {text}"
+    );
+    assert!(text.contains("▸ Output  "), "{text}");
+    let dim = vt_tui::theme::dim().fg;
+    let heading = text
+        .lines()
+        .position(|line| line.contains("▸ Output"))
+        .unwrap();
+    let column = text.lines().nth(heading).unwrap().find('▸').unwrap();
+    let column = text.lines().nth(heading).unwrap()[..column].chars().count();
+    assert_eq!(buffer[(column as u16, heading as u16)].fg, dim.unwrap());
 }
 
 #[test]
-fn a_plain_list_still_opens_on_its_search() {
-    // `K` then typing on Machine, and / is just a letter.
+fn a_plain_list_opens_on_the_list_and_typing_searches() {
+    // `K` then typing on Machine, and `/` goes to the search.
     let (mut app, _realtime) = app();
     press(&mut app, " 4Kpl");
     assert_eq!(app.picker.as_ref().unwrap().query, "pl");
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "K/");
-    assert_eq!(app.picker.as_ref().unwrap().query, "/");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.mode, Mode::Normal, "Esc clears the search, then closes");
+    press(&mut app, "K/j");
+    assert_eq!(app.picker.as_ref().unwrap().query, "j");
 }
 
 #[test]
@@ -6789,7 +7015,8 @@ fn k_on_the_gate_column_chooses_a_gate_and_keeps_its_pulses() {
     let (mut app, _realtime) = app();
     press(&mut app, "llrMLT3ggK");
     assert_eq!(app.mode, Mode::Picker);
-    press(&mut app, "hld");
+    // `h` is a key in the list, so `/` starts the search.
+    press(&mut app, "/hld");
     special(&mut app, KeyCode::Enter);
     let gate = app.song().tracks[0].phrases[&0].steps()[0].gate.unwrap();
     assert_eq!(
@@ -7300,8 +7527,9 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
         .picker
         .as_ref()
         .unwrap()
-        .shown()
-        .map(|item| item.label.clone())
+        .items()
+        .iter()
+        .map(listed)
         .collect();
     assert_eq!(labels[0], "64 frames, 1.3 ms", "{labels:?}");
     assert_eq!(

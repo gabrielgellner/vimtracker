@@ -49,9 +49,36 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 4` | Track page: filter, output, envelopes and LFOs |
 | `Space 5` | Choose this track's sample |
 | `Space 6` | Mixer |
+| `Space 8` | Choose a kit |
 | `Space Space` | Pick a view. `Enter` flips back to the last one |
 | `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
+
+## Lists
+
+`K`, `Space Space`, `Space 5` and the others open the same list, in a box over the page,
+with a search line above it. It opens on what's chosen now, marked with a `•`. Long
+lists, such as `Dest` and the samples, keep their items in categories: dim headings with
+a count, which open and close. The one with what's chosen in it starts open, and the
+rest closed. The title shows how many items match, out of how many there are.
+
+| Keys | Does |
+|---|---|
+| `j` `k` | Down or up. A count goes further, as in `3j` |
+| `gg` `G` | The first row or the last. `5G` goes to the fifth |
+| `C-n` `C-p` | Down or up, in the search too |
+| `l` `Enter` | Open a category and go into it, or choose |
+| `h` | Close the category, from inside it or on it |
+| `/` | Search |
+| `Esc` | Clear the search, then close |
+
+Any other letter starts a search with itself: on Machine, `K` then `pl` finds `Plaits`.
+A name that starts with one of the keys above, such as `ladder`, needs `/` first. A
+search looks through every category, ranks the best match first, shows each match's
+category beside it, and picks out the letters it matched. Digits then `Enter` choose by
+number, as for a chain or a phrase. The samples, the tracks and the FX commands open on
+their search instead, as they're usually found by name, and `Esc` goes from the search
+to the list.
 
 ## When you forget
 

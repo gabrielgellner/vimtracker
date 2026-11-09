@@ -101,6 +101,8 @@ pub enum Cmd {
     Shape,
     /// Choose this track's sample from a list.
     PickSample,
+    /// Choose a kit from a list.
+    PickKit,
     /// Add a section after this one.
     AddSection,
     /// Copy this section after itself.
@@ -202,6 +204,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 4", Cmd::ShowView(View::Track), "Track page"),
     ("Space 5", Cmd::PickSample, "Choose this track's sample"),
     ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
+    ("Space 8", Cmd::PickKit, "Choose a kit"),
     (
         "Space 7",
         Cmd::ShowView(View::Audio),

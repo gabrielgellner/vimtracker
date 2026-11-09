@@ -1313,44 +1313,48 @@ impl App {
         let track = self.cursor.track;
         let page = self.page_track();
         let lfo = page.lfos[slot];
-        let (title, choices): (&'static str, Vec<(String, Lfo)>) = match field {
+        let pick = |lfo| Pick::Lfo { track, slot, lfo };
+        let (title, items): (&'static str, Vec<Item>) = match field {
             LfoField::Destination => {
-                let off = (
-                    "---  Off".to_owned(),
-                    Lfo {
+                let off = Item::new(
+                    "---",
+                    pick(Lfo {
                         destination: None,
                         ..lfo
-                    },
-                );
+                    }),
+                )
+                .meaning("Off");
                 let on = SettingId::for_lfo(&page, slot)
                     .into_iter()
                     .map(|destination| {
-                        (
-                            format!("{}  {}", destination.name_on(&page), destination.meaning()),
-                            Lfo {
+                        Item::new(
+                            destination.name_on(&page),
+                            pick(Lfo {
                                 destination: Some(destination),
                                 ..lfo
-                            },
+                            }),
                         )
+                        .meaning(destination.meaning())
+                        .category(destination.group())
                     });
                 ("LFO destination", std::iter::once(off).chain(on).collect())
             }
             LfoField::Shape => {
                 let shapes =
-                    Shape::ALL.map(|shape| (shape.name().to_owned(), Lfo { shape, ..lfo }));
+                    Shape::ALL.map(|shape| Item::new(shape.name(), pick(Lfo { shape, ..lfo })));
                 ("LFO shape", shapes.to_vec())
             }
             LfoField::Rate => {
                 let rates = note_rates()
                     .into_iter()
-                    .map(|rate| (rate.to_string(), Lfo { rate, ..lfo }))
+                    .map(|rate| Item::new(rate.to_string(), pick(Lfo { rate, ..lfo })))
                     .collect();
                 ("LFO rate. i types any other", rates)
             }
             LfoField::Retrig => {
                 let choices = [false, true].map(|retrig| {
                     let name = if retrig { "on" } else { "off" };
-                    (name.to_owned(), Lfo { retrig, ..lfo })
+                    Item::new(name, pick(Lfo { retrig, ..lfo }))
                 });
                 ("LFO retrig", choices.to_vec())
             }
@@ -1360,30 +1364,8 @@ impl App {
                 return;
             }
         };
-        let position = choices.iter().position(|(_, choice)| *choice == lfo);
-        let items = choices
-            .into_iter()
-            .map(|(label, lfo)| Item {
-                label,
-                pick: Pick::Lfo { track, slot, lfo },
-            })
-            .collect();
-        let picker = if field == LfoField::Destination {
-            let groups = std::iter::once("---".to_owned())
-                .chain(
-                    SettingId::for_lfo(&page, slot)
-                        .into_iter()
-                        .map(SettingId::group),
-                )
-                .collect();
-            Picker::grouped(title, items, groups, position.unwrap_or(0))
-        } else {
-            let mut picker = Picker::new(title, items);
-            picker.move_highlight(position.unwrap_or(0) as isize);
-            picker
-        };
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        let position = items.iter().position(|item| item.pick == pick(lfo));
+        self.show_picker(Picker::new(title, items).opened_on(position));
     }
 
     /// List the filter types, with what each does and the current one highlighted.
@@ -1392,27 +1374,27 @@ impl App {
         let track = self.cursor.track;
         let current = self.page_track().inserts[slot];
         let items = Insert::ALL
-            .map(|insert| Item {
-                label: format!("{}  {}", insert.name(), insert.meaning()),
-                pick: Pick::Insert {
-                    track,
-                    slot,
-                    // Choosing what's already there keeps its settings.
-                    insert: if insert.name() == current.name() {
-                        current
-                    } else {
-                        insert
+            .map(|insert| {
+                Item::new(
+                    insert.name(),
+                    Pick::Insert {
+                        track,
+                        slot,
+                        // Choosing what's already there keeps its settings.
+                        insert: if insert.name() == current.name() {
+                            current
+                        } else {
+                            insert
+                        },
                     },
-                },
+                )
+                .meaning(insert.meaning())
             })
             .to_vec();
         let position = Insert::ALL
             .iter()
             .position(|insert| insert.name() == current.name());
-        let mut picker = Picker::new("Effect", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Effect", items).opened_on(position));
     }
 
     /// List the choices of a slot's setting, with the current one highlighted.
@@ -1431,35 +1413,32 @@ impl App {
             .choices
             .iter()
             .enumerate()
-            .map(|(index, choice)| Item {
-                label: (*choice).to_owned(),
-                pick: Pick::Insert {
-                    track,
-                    slot,
-                    insert: current.with_value(param, index as u8),
-                },
+            .map(|(index, choice)| {
+                Item::new(
+                    *choice,
+                    Pick::Insert {
+                        track,
+                        slot,
+                        insert: current.with_value(param, index as u8),
+                    },
+                )
             })
             .collect();
-        let mut picker = Picker::new(found.name, items);
-        picker.move_highlight(isize::from(current.value(param) as i8));
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        let position = usize::from(current.value(param));
+        self.show_picker(Picker::new(found.name, items).opened_on(Some(position)));
     }
 
     fn open_filter_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().filter;
         let items = FilterType::ALL
-            .map(|filter| Item {
-                label: format!("{}  {}", filter.name(), filter.meaning()),
-                pick: Pick::FilterType { track, filter },
+            .map(|filter| {
+                Item::new(filter.name(), Pick::FilterType { track, filter })
+                    .meaning(filter.meaning())
             })
             .to_vec();
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
-        let mut picker = Picker::new("Filter type", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Filter type", items).opened_on(position));
     }
 
     /// List the modes the track's filter type offers, with what each does and the one it plays
@@ -1474,17 +1453,14 @@ impl App {
         }
         let items = modes
             .iter()
-            .map(|mode| Item {
-                label: format!("{:<7}{}", mode.name(), mode.meaning()),
-                pick: Pick::FilterMode { track, mode: *mode },
+            .map(|mode| {
+                Item::new(mode.name(), Pick::FilterMode { track, mode: *mode })
+                    .meaning(mode.meaning())
             })
             .collect();
         let playing = page.filter.plays(page.filter_mode);
         let position = modes.iter().position(|mode| *mode == playing);
-        let mut picker = Picker::new("Filter mode", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Filter mode", items).opened_on(position));
     }
 
     /// List the machines, with what each does and the current one highlighted.
@@ -1492,16 +1468,13 @@ impl App {
         let track = self.cursor.track;
         let current = self.page_track().machine;
         let items = Machine::ALL
-            .map(|machine| Item {
-                label: format!("{:<9}{}", machine.name(), machine.meaning()),
-                pick: Pick::Machine { track, machine },
+            .map(|machine| {
+                Item::new(machine.name(), Pick::Machine { track, machine })
+                    .meaning(machine.meaning())
             })
             .to_vec();
         let position = Machine::ALL.iter().position(|machine| *machine == current);
-        let mut picker = Picker::new("Machine", items);
-        picker.move_highlight(position.unwrap_or(0) as isize);
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new("Machine", items).opened_on(position));
     }
 
     /// List what a machine's setting can be, such as 6-op's patches, with the current one
@@ -1510,19 +1483,18 @@ impl App {
         let track = self.cursor.track;
         let current = self.page_track().setting(setting);
         let items = (0..choices.len().min(0x100))
-            .map(|at| Item {
-                label: format!("{at:02X}  {}", choices[at]),
-                pick: Pick::Setting {
-                    track,
-                    setting,
-                    value: at as u8,
-                },
+            .map(|at| {
+                Item::new(
+                    format!("{at:02X}  {}", choices[at]),
+                    Pick::Setting {
+                        track,
+                        setting,
+                        value: at as u8,
+                    },
+                )
             })
             .collect();
-        let mut picker = Picker::new(setting.name(), items);
-        picker.move_highlight(isize::from(current));
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.show_picker(Picker::new(setting.name(), items).opened_on(Some(usize::from(current))));
     }
 
     /// List what an envelope's setting can be, with the current one highlighted.
@@ -1530,25 +1502,33 @@ impl App {
         let track = self.cursor.track;
         let page = self.page_track();
         let envelope = self.page_track().envelopes[slot];
-        let (title, choices): (&'static str, Vec<(String, Envelope)>) = match field {
+        let pick = |envelope| Pick::Envelope {
+            track,
+            slot,
+            envelope,
+        };
+        let (title, items): (&'static str, Vec<Item>) = match field {
             EnvelopeField::Destination => {
-                let off = (
-                    "---  Off".to_owned(),
-                    Envelope {
+                let off = Item::new(
+                    "---",
+                    pick(Envelope {
                         destination: None,
                         ..envelope
-                    },
-                );
+                    }),
+                )
+                .meaning("Off");
                 let on = SettingId::for_envelope(&page)
                     .into_iter()
                     .map(|destination| {
-                        (
-                            format!("{}  {}", destination.name_on(&page), destination.meaning()),
-                            Envelope {
+                        Item::new(
+                            destination.name_on(&page),
+                            pick(Envelope {
                                 destination: Some(destination),
                                 ..envelope
-                            },
+                            }),
                         )
+                        .meaning(destination.meaning())
+                        .category(destination.group())
                     });
                 (
                     "Envelope destination",
@@ -1557,12 +1537,12 @@ impl App {
             }
             EnvelopeField::Reset => {
                 let choices = [true, false].map(|reset| {
-                    let name = if reset {
-                        "on  Each note starts it from zero"
+                    let (name, meaning) = if reset {
+                        ("on", "Each note starts it from zero")
                     } else {
-                        "off  Each note goes on from where it is"
+                        ("off", "Each note goes on from where it is")
                     };
-                    (name.to_owned(), Envelope { reset, ..envelope })
+                    Item::new(name, pick(Envelope { reset, ..envelope })).meaning(meaning)
                 });
                 ("Envelope reset", choices.to_vec())
             }
@@ -1571,34 +1551,8 @@ impl App {
                 return;
             }
         };
-        let position = choices.iter().position(|(_, choice)| *choice == envelope);
-        let items = choices
-            .into_iter()
-            .map(|(label, envelope)| Item {
-                label,
-                pick: Pick::Envelope {
-                    track,
-                    slot,
-                    envelope,
-                },
-            })
-            .collect();
-        let picker = if field == EnvelopeField::Destination {
-            let groups = std::iter::once("---".to_owned())
-                .chain(
-                    SettingId::for_envelope(&page)
-                        .into_iter()
-                        .map(SettingId::group),
-                )
-                .collect();
-            Picker::grouped(title, items, groups, position.unwrap_or(0))
-        } else {
-            let mut picker = Picker::new(title, items);
-            picker.move_highlight(position.unwrap_or(0) as isize);
-            picker
-        };
-        self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        let position = items.iter().position(|item| item.pick == pick(envelope));
+        self.show_picker(Picker::new(title, items).opened_on(position));
     }
 
     /// Type a value: two hex digits for levels, and anything else then `Enter`.
