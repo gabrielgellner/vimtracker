@@ -19,8 +19,8 @@ use crate::selection::{
 use crate::settings::SettingId;
 use crate::shape::{Shape, ShapeColumn, exact_values};
 use crate::song::{
-    Chain, ChainEntry, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section, SectionStart,
-    Song, Track, lowest_unused,
+    Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
+    SectionStart, Song, Track, lowest_unused,
 };
 use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
 
@@ -306,6 +306,11 @@ pub enum Action {
     SetFilterType {
         track: usize,
         filter: FilterType,
+    },
+    /// Choose how a track's filter responds.
+    SetFilterMode {
+        track: usize,
+        mode: FilterMode,
     },
     /// Replace one of a track's envelopes.
     SetEnvelope {
@@ -1026,6 +1031,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .filter = *filter;
+        }
+        Action::SetFilterMode { track, mode } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .filter_mode = *mode;
         }
         Action::SetEnvelope {
             track,

@@ -9,7 +9,7 @@ use crate::song::{Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 7] = [
+const TRACK_MEANINGS: [&str; 8] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -17,12 +17,14 @@ const TRACK_MEANINGS: [&str; 7] = [
     "Send to return A",
     "Send to return B",
     "Pitch, with depth in semitones",
+    "Filter mode: its slope or response",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch.
-const TRACK_ORDER: [SettingId; 7] = [
+const TRACK_ORDER: [SettingId; 8] = [
     SettingId::CUT,
     SettingId::RES,
+    SettingId::FILTER_MODE,
     SettingId::PAN,
     SettingId::VOL,
     SettingId::SEND_A,
@@ -38,6 +40,10 @@ impl SettingId {
         match self.owner() {
             (Owner::Track, _) if self == Self::VOL => true,
             (Owner::Track, _) if self == Self::PAN => track.kind != TrackKind::Master,
+            // The MS-20's filters have no modes.
+            (Owner::Track, _) if self == Self::FILTER_MODE => {
+                track.is_sound() && track.filter.has_modes()
+            }
             (Owner::Track, _) => track.is_sound(),
             (Owner::Voice(voice), _) => track.voice() == Some(voice),
             (Owner::Slot { slot, effect }, at) => track.inserts.get(slot).is_some_and(|insert| {
@@ -179,13 +185,13 @@ mod tests {
             ..Track::default()
         };
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered[..7], TRACK_ORDER);
-        assert_eq!(offered.len(), 7 + 4);
-        assert_eq!(offered[7], SettingId::voice(SynthVoice::String, 0).unwrap());
+        assert_eq!(offered[..8], TRACK_ORDER);
+        assert_eq!(offered.len(), 8 + 4);
+        assert_eq!(offered[8], SettingId::voice(SynthVoice::String, 0).unwrap());
         track.inserts[1] = Insert::ALL[2];
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered.len(), 7 + 4 + 9);
-        assert_eq!(offered[11], SettingId::slot(1, Effect::Delay, 0).unwrap());
+        assert_eq!(offered.len(), 8 + 4 + 9);
+        assert_eq!(offered[12], SettingId::slot(1, Effect::Delay, 0).unwrap());
     }
 
     #[test]

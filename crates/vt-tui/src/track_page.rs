@@ -74,6 +74,8 @@ pub enum Control {
     /// The choke group it's in, or none.
     Choke,
     FilterType,
+    /// How the filter's type responds, which a step can lock too.
+    FilterMode,
     Lfo(usize, LfoField),
     Envelope(usize, EnvelopeField),
     /// What's in one of the track's slots.
@@ -170,33 +172,35 @@ const fn base(control: TrackControl) -> Control {
 }
 
 /// The Sound page of a track playing a sample, top to bottom, with output on the right.
-pub const SAMPLE_ROWS: [&[Control]; 8] = [
+pub const SAMPLE_ROWS: [&[Control]; 9] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::FilterType, base(TrackControl::SendA)],
-    &[base(TrackControl::Cutoff), base(TrackControl::SendB)],
-    &[base(TrackControl::Resonance), Control::Swing],
-    &[base(TrackControl::Drive), base(TrackControl::Pitch)],
-    &[base(TrackControl::LowCut), Control::Choke],
+    &[Control::FilterMode, base(TrackControl::SendB)],
+    &[base(TrackControl::Cutoff), Control::Swing],
+    &[base(TrackControl::Resonance), base(TrackControl::Pitch)],
+    &[base(TrackControl::Drive), Control::Choke],
+    &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
 /// output on the right.
-pub const SYNTH_ROWS: [&[Control]; 11] = [
+pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Setting(3), Control::Swing],
     &[Control::FilterType, base(TrackControl::Pitch)],
-    &[base(TrackControl::Cutoff), Control::Choke],
+    &[Control::FilterMode, Control::Choke],
+    &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
 /// The same for a synth with more than four, whose later settings carry on down the left.
-pub const SYNTH8_ROWS: [&[Control]; 15] = [
+pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Machine, Control::Level],
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
@@ -207,6 +211,7 @@ pub const SYNTH8_ROWS: [&[Control]; 15] = [
     &[Control::Setting(6)],
     &[Control::Setting(7)],
     &[Control::FilterType],
+    &[Control::FilterMode],
     &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
@@ -214,14 +219,15 @@ pub const SYNTH8_ROWS: [&[Control]; 15] = [
     &[base(TrackControl::HighCut)],
 ];
 /// The same for a synth with three, whose last row has only its swing, on the right.
-pub const SYNTH3_ROWS: [&[Control]; 11] = [
+pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Swing],
     &[Control::FilterType, base(TrackControl::Pitch)],
-    &[base(TrackControl::Cutoff), Control::Choke],
+    &[Control::FilterMode, Control::Choke],
+    &[base(TrackControl::Cutoff)],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -306,6 +312,7 @@ impl Control {
             Self::Mute => "Mute",
             Self::Solo => "Solo",
             Self::FilterType => "Filter",
+            Self::FilterMode => "Mode",
             Self::Level => "Level",
             Self::Swing => "Swing",
             Self::Lfo(_, LfoField::Destination) => "Dest",
@@ -373,6 +380,11 @@ impl Control {
             Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
             Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
             Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
+            // What it plays, which is its type's first where its type doesn't offer the track's.
+            Self::FilterMode if track.filter.has_modes() => Some((
+                SettingId::FILTER_MODE,
+                u16::from(track.filter.plays(track.filter_mode).index()) << 8,
+            )),
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
                 let setting = insert.params().get(param)?.setting;
@@ -453,6 +465,7 @@ impl Control {
                 | Self::Mute
                 | Self::Solo
                 | Self::FilterType
+                | Self::FilterMode
                 | Self::Lfo(
                     _,
                     LfoField::Destination | LfoField::Shape | LfoField::Retrig
@@ -460,6 +473,11 @@ impl Control {
                 | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
         )
     }
+}
+
+/// What the status line says for `Mode` on a type that has none.
+fn no_modes(filter: FilterType) -> String {
+    format!("{} has no modes", filter.name())
 }
 
 /// The next item in a list, going round.
@@ -681,6 +699,18 @@ impl App {
                 self.apply(&Action::SetFilterType {
                     track: self.cursor.track,
                     filter,
+                });
+            }
+            Control::FilterMode => {
+                let modes = track.filter.modes();
+                if modes.is_empty() {
+                    self.status = no_modes(track.filter);
+                    return;
+                }
+                let mode = next_in(modes, track.filter.plays(track.filter_mode), up);
+                self.apply(&Action::SetFilterMode {
+                    track: self.cursor.track,
+                    mode,
                 });
             }
             Control::Choke => {
@@ -1145,6 +1175,14 @@ impl App {
                     });
                 }
             }
+            Control::FilterMode => {
+                if track.filter_mode != fresh.filter_mode {
+                    self.apply(&Action::SetFilterMode {
+                        track: self.cursor.track,
+                        mode: fresh.filter_mode,
+                    });
+                }
+            }
             Control::Lfo(slot, field) => {
                 let (lfo, default) = (track.lfos[slot], Lfo::default());
                 let reset = match field {
@@ -1246,6 +1284,10 @@ impl App {
         }
         if self.track_control() == Control::FilterType {
             self.open_filter_picker();
+            return;
+        }
+        if self.track_control() == Control::FilterMode {
+            self.open_filter_mode_picker();
             return;
         }
         if self.track_control() == Control::Machine {
@@ -1415,6 +1457,31 @@ impl App {
             .to_vec();
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
         let mut picker = Picker::new("Filter type", items);
+        picker.move_highlight(position.unwrap_or(0) as isize);
+        self.picker = Some(picker);
+        self.mode = Mode::Picker;
+    }
+
+    /// List the modes the track's filter type offers, with what each does and the one it plays
+    /// highlighted.
+    fn open_filter_mode_picker(&mut self) {
+        let track = self.cursor.track;
+        let page = self.page_track();
+        let modes = page.filter.modes();
+        if modes.is_empty() {
+            self.status = no_modes(page.filter);
+            return;
+        }
+        let items = modes
+            .iter()
+            .map(|mode| Item {
+                label: format!("{:<7}{}", mode.name(), mode.meaning()),
+                pick: Pick::FilterMode { track, mode: *mode },
+            })
+            .collect();
+        let playing = page.filter.plays(page.filter_mode);
+        let position = modes.iter().position(|mode| *mode == playing);
+        let mut picker = Picker::new("Filter mode", items);
         picker.move_highlight(position.unwrap_or(0) as isize);
         self.picker = Some(picker);
         self.mode = Mode::Picker;
@@ -1648,7 +1715,7 @@ impl App {
                 }
                 _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
             },
-            Control::Lfo(..) | Control::FilterType | Control::Machine => {}
+            Control::Lfo(..) | Control::FilterType | Control::FilterMode | Control::Machine => {}
             Control::Envelope(slot, field) => {
                 let current = track.envelopes[slot];
                 let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);

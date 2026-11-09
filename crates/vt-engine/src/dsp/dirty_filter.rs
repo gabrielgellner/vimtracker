@@ -1,7 +1,8 @@
 //! Vital's `Dirty` filter, a Sallen-Key low-pass with saturating integrators in its feedback loop.
 //! Ported to Rust from `src/synthesis/filters/dirty_filter.{h,cpp}`, with the one-pole filter and
 //! `tanh` it shares with the diode ladder, taken out of Vital's SIMD and processor types. It has
-//! Vital's 24 dB style with its blend all the way to low-pass. Its one-poles take the exact
+//! Vital's 24 dB and 12 dB styles, with each two-pole's low-pass, band-pass and high-pass mixed as
+//! the track's mode asks, rather than blended by a knob. Its one-poles take the exact
 //! trapezoidal coefficient, `g / (1 + g)`, in place of Vital's cheaper warp of it, which runs flat
 //! at high cutoffs.
 //!
@@ -150,17 +151,35 @@ pub struct DirtyFilter {
     band: OnePole,
 }
 
+/// What a two-pole gives out: its input, its first one-pole and its second, `1`, `L` and `L^2`,
+/// weighted as a mode has them.
+#[inline]
+fn mixed(weights: &[f32; 3], input: f32, first: f32, second: f32) -> f32 {
+    weights[0] * input + weights[1] * first + weights[2] * second
+}
+
 impl DirtyFilter {
-    /// One sample. A quiet sound with no resonance or drive comes out at the level it went in, and
-    /// the output stays within ±0.8.
+    /// One sample, with the two-pole before the loop and the one where it goes in each mixed by
+    /// its weights. A quiet sound with no resonance or drive comes out at the level it went in
+    /// through the low-pass, and the output stays within ±0.8 there.
     #[inline]
-    pub fn next(&mut self, input: f32, settings: &Settings) -> f32 {
+    pub fn next(
+        &mut self,
+        input: f32,
+        settings: &Settings,
+        before: &[f32; 3],
+        entry: &[f32; 3],
+    ) -> f32 {
         let g = settings.coefficient;
         let [first, second] = &mut self.before;
-        let before = second.tick_plain(first.tick_plain(input, g), g);
+        let one = first.tick_plain(input, g);
+        let two = second.tick_plain(one, g);
+        let before = mixed(before, input, one, two);
         let [first, second] = &mut self.entry;
         let entered = settings.entry * before;
-        let passed = second.tick_plain(first.tick_plain(entered, g), g);
+        let one = first.tick_plain(entered, g);
+        let two = second.tick_plain(one, g);
+        let passed = mixed(entry, entered, one, two);
         // What comes round, from the loop's states, and what's known of this sample's input.
         let g = settings.loop_coefficient;
         let round = self.band.saturated + passed + g * (passed - self.low.saturated);
@@ -172,12 +191,13 @@ impl DirtyFilter {
 }
 
 /// How much it lets through at a frequency, as a power, for a quiet signal, from its settings with
-/// no drive's gain, and the frequency as a fraction of the filter's rate. Its saturations do
-/// nothing to a quiet signal, so it's four trapezoidal one-poles, `G (z + 1) / (z - a)` with
-/// `a = 1 - 2G`, into a loop that hears its states a sample late:
+/// no drive's gain, its two-poles' weights, and the frequency as a fraction of the filter's rate.
+/// Its saturations do nothing to a quiet signal, so it's two two-poles of trapezoidal one-poles,
+/// `L = G (z + 1) / (z - a)` with `a = 1 - 2G`, each mixed from `1`, `L` and `L^2`, into a loop
+/// that hears its states a sample late:
 /// `A (z - a)^2 / ((z - a)^2 - 2 G B ((1 - 2G) z - (1 - 2G + 2G^2)))`, with `B` what comes round
 /// and `A` what comes straight in, both through the slope of the sum's `tanh`.
-pub fn response(settings: &Settings, frequency: f32) -> f32 {
+pub fn response(settings: &Settings, before: &[f32; 3], entry: &[f32; 3], frequency: f32) -> f32 {
     let turn = std::f32::consts::TAU * frequency.min(0.499);
     let z = Complex(turn.cos(), turn.sin());
     let one_pole = |g: f32| {
@@ -186,6 +206,12 @@ pub fn response(settings: &Settings, frequency: f32) -> f32 {
     };
     let (passed, _) = one_pole(settings.coefficient);
     let squared = passed.times(passed);
+    let two_pole = |weights: &[f32; 3]| {
+        Complex(weights[0], 0.0)
+            .add(passed.scale(weights[1]))
+            .add(squared.scale(weights[2]))
+    };
+    let stages = two_pole(before).times(two_pole(entry));
     let g = settings.loop_coefficient;
     let (_, z_less_a) = one_pole(g);
     let (drive, feedback) = (settings.drive * TANH_SLOPE, settings.feedback * TANH_SLOPE);
@@ -197,12 +223,26 @@ pub fn response(settings: &Settings, frequency: f32) -> f32 {
     let around = z_less_a.times(z_less_a);
     let looped = around.scale(straight).over(around.add(back.scale(-1.0)));
     let gain = settings.entry / (SATURATION_BOOST * QUIET_LEVEL);
-    squared.times(squared).times(looped).scale(gain).power()
+    stages.times(looped).scale(gain).power()
+}
+
+/// How much louder its low-pass is in its bass than at its cutoff, with no drive, where a
+/// band-pass's peak is. Each of its four one-poles passes 0.71 at the cutoff.
+pub fn band_makeup(tuning: &Tuning) -> f32 {
+    let settings = Settings::new(tuning, 0.0, 1.0);
+    let at_cutoff = tuning.analog.atan() / std::f32::consts::PI;
+    let through = [1.0, 0.0, 0.0];
+    let bass = response(&settings, &through, &through, 0.0);
+    let peak = response(&settings, &through, &through, at_cutoff);
+    4.0 * (bass / peak.max(1e-12)).sqrt()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each two-pole's low-pass, as Vital's 24 dB low-pass has it.
+    const LOW: [f32; 3] = [0.0, 0.0, 1.0];
 
     #[test]
     fn a_quiet_signal_meets_the_worked_out_response() {
@@ -220,14 +260,14 @@ mod tests {
                     for frame in 0..frames {
                         let input =
                             0.001 * (std::f32::consts::TAU * hertz * frame as f32 / rate).sin();
-                        let output = filter.next(input, &settings);
+                        let output = filter.next(input, &settings, &LOW, &LOW);
                         if frame > frames / 2 {
                             power_in += f64::from(input * input);
                             power_out += f64::from(output * output);
                         }
                     }
                     let measured = 10.0 * (power_out / power_in).log10() as f32;
-                    let worked_out = 10.0 * response(&settings, hertz / rate).log10();
+                    let worked_out = 10.0 * response(&settings, &LOW, &LOW, hertz / rate).log10();
                     assert!(
                         (measured - worked_out).abs() < 0.1,
                         "{cutoff} {res} {hertz}: {measured} and {worked_out}"
@@ -242,7 +282,7 @@ mod tests {
         let g = (std::f32::consts::PI * 1_000.0 / 96_000.0).tan();
         let coefficient = g / (1.0 + g);
         let settings = Settings::new(&Tuning::new(coefficient, 0.0), 0.0, 1.0);
-        let low = response(&settings, 10.0 / 96_000.0);
+        let low = response(&settings, &LOW, &LOW, 10.0 / 96_000.0);
         assert!((10.0 * low.log10()).abs() < 0.05, "{low}");
     }
 }

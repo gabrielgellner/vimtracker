@@ -26,7 +26,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::diode_filter::{DiodeFilter, RESONANT_SHARE, feedback_coefficient};
+use super::diode_filter::{DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE, feedback_coefficient};
 use super::drums::soft_clip;
 use super::oversampler::Oversampler;
 use super::smoother::{Smoothed, coefficient as smoothing_coefficient};
@@ -358,7 +358,7 @@ impl Acid {
         let cutoff = self.cutoff / RESONANT_SHARE / (self.rate * 2.0);
         let (filter, feedback) = (&mut self.filter, self.feedback);
         let filtered = self.oversampler.process(input, |sample| {
-            filter.next(sample, cutoff, resonance, drive, feedback)
+            filter.next(sample, cutoff, resonance, drive, feedback, HIGH_PASS_RATIO)
         });
         soft_clip(filtered * self.amplitude * LEVEL)
     }

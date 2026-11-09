@@ -15,7 +15,7 @@ use crate::insert::{
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
-use crate::song::{DEFAULT_ACCENT, SynthVoice};
+use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, SynthVoice};
 use crate::step::FxCommand;
 
 /// The most settings a machine has.
@@ -343,7 +343,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 7] = [
+const TRACK: [Entry; 8] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -375,10 +375,20 @@ const TRACK: [Entry; 7] = [
         },
         default: 0x80,
     },
+    Entry {
+        key: "mode",
+        name: "Mode",
+        label: Some("MODE"),
+        kind: Kind::Stepped {
+            choices: &FILTER_MODE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 7] = [
-    "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine",
+const TRACK_GROUPS: [&str; 8] = [
+    "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1073,6 +1083,8 @@ impl SettingId {
     pub const SEND_B: Self = Self(5);
     /// In semitones, from the track's own pitch.
     pub const PITCH: Self = Self(6);
+    /// The filter's mode, a place in [`FilterMode::ALL`](crate::song::FilterMode::ALL).
+    pub const FILTER_MODE: Self = Self(7);
 
     /// How many settings there are.
     pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();

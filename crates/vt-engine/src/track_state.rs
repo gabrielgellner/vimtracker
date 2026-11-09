@@ -7,7 +7,7 @@ use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
 use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId};
-use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track, level_gain};
+use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
 use crate::dsp::distort::InsertState;
@@ -229,6 +229,8 @@ pub struct TrackState {
     send_b_gain: Smoothed,
     filter: [Channel; 2],
     filter_type: FilterType,
+    /// Held `MODE`, a place in the list of modes, which the filter's type may not offer.
+    filter_mode: f32,
     drive: Smoothed,
     trim: [Trim; 2],
     low_cut: Smoothed,
@@ -315,6 +317,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::SEND_A => track.send_a,
             SettingId::SEND_B => track.send_b,
             SettingId::PITCH => track.pitch,
+            SettingId::FILTER_MODE => track.filter_mode.index(),
             _ => id.entry().default,
         },
         (Owner::Voice(_), _) => track.setting(id),
@@ -387,6 +390,7 @@ impl TrackState {
             send_b_gain: Smoothed::at(0.0),
             filter: [Channel::default(); 2],
             filter_type: FilterType::LowPass,
+            filter_mode: 0.0,
             drive: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
@@ -881,6 +885,10 @@ impl TrackState {
                 SettingId::RES => self.resonance.target = value / 255.0,
                 SettingId::SEND_A => self.send_a = value,
                 SettingId::SEND_B => self.send_b = value,
+                SettingId::FILTER_MODE => {
+                    self.filter_mode = value;
+                    return;
+                }
                 _ => return,
             },
             (Owner::Voice(voice), at) if self.loaded_voice == Some(voice) => {
@@ -937,6 +945,7 @@ impl TrackState {
         self.drive.settle();
         self.low_cut.settle();
         self.high_cut.settle();
+        self.filter.iter_mut().for_each(Channel::settle);
         self.coefficients = None;
         self.filter_countdown = 0;
     }
@@ -993,6 +1002,15 @@ impl TrackState {
         output
     }
 
+    /// The mode the filter plays: held `MODE` and what modulation adds, as a whole place in the
+    /// list, or its type's first if its type doesn't offer that.
+    fn playing_mode(&self) -> FilterMode {
+        let moved = self.filter_mode + self.offsets[SettingId::FILTER_MODE.index()] * 255.0;
+        let place = moved.round().clamp(0.0, f32::from(u8::MAX)) as u8;
+        self.filter_type
+            .plays(FilterMode::at(place).unwrap_or_default())
+    }
+
     /// Filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
     pub fn shape(
@@ -1025,7 +1043,8 @@ impl TrackState {
             input
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
-                self.coefficients = Some(Coefficients::new(cutoff, resonance, rate));
+                let mode = self.playing_mode();
+                self.coefficients = Some(Coefficients::with_mode(cutoff, resonance, mode, rate));
                 self.filter_countdown = FILTER_UPDATE_FRAMES;
             }
             self.filter_countdown -= 1;

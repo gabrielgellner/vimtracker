@@ -607,6 +607,9 @@ impl App {
                     Some(Pick::FilterType { track, filter }) => {
                         self.apply(&Action::SetFilterType { track, filter });
                     }
+                    Some(Pick::FilterMode { track, mode }) => {
+                        self.apply(&Action::SetFilterMode { track, mode });
+                    }
                     Some(Pick::Envelope {
                         track,
                         slot,

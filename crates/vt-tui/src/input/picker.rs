@@ -10,7 +10,7 @@ use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::scale::ScaleKind;
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Where};
-use vt_model::song::{FilterType, Machine};
+use vt_model::song::{FilterMode, FilterType, Machine};
 use vt_model::step::{FxCommand, GateKind};
 
 use crate::audio::AudioChoice;
@@ -40,6 +40,11 @@ pub enum Pick {
     FilterType {
         track: usize,
         filter: FilterType,
+    },
+    /// Choose how a track's filter responds.
+    FilterMode {
+        track: usize,
+        mode: FilterMode,
     },
     /// Replace one of a track's envelopes.
     Envelope {
