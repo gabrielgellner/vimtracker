@@ -44,8 +44,8 @@ fn song(tracks: &[&[&str]]) -> Song {
     song.limiter = false;
     song.sections[0].length = Some(64);
     for (index, rows) in tracks.iter().enumerate() {
+        song.sample_on(index, "s");
         let track = &mut song.tracks[index];
-        track.sample = Some("s".to_owned());
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
         let steps = rows.iter().map(|text| text.parse().unwrap()).collect();

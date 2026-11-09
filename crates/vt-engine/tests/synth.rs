@@ -62,7 +62,7 @@ fn it_sounds_with_no_sample_and_holds_until_the_next_note() {
 #[test]
 fn a_sample_track_with_no_sample_is_still_silent() {
     let mut silent = song(&[NOTE, REST]);
-    silent.tracks[0].machine = Machine::Sample;
+    silent.tracks[0].machine = Machine::Sampler;
     assert!(play(silent, 2).iter().all(|sample| *sample == 0.0));
 }
 

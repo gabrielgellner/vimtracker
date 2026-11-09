@@ -34,7 +34,6 @@ use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::project::{self, ProjectError};
-use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
@@ -2431,6 +2430,8 @@ impl App {
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
+            Line::Bank => self.open_bank_picker(),
+            Line::BankClean => self.clean_bank(),
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.apply(&Action::SetTrackName {
@@ -2685,6 +2686,7 @@ impl App {
     /// Replace the song and undo history, loading any samples it needs.
     pub(crate) fn replace_song(&mut self, mut song: Song, folder: Option<PathBuf>) {
         name_song(&mut song, folder.as_deref(), &mut self.names);
+        let notes = project::find_sources(folder.as_deref(), &mut song);
         let mut pool = SamplePool::clone(&self.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
         self.samples = Arc::new(pool);
@@ -2703,6 +2705,9 @@ impl App {
             self.cursor.slot = 0;
         }
         self.clamp_cursor();
+        if let Some(first) = notes.first() {
+            self.status = first.clone();
+        }
         if let Some(first) = errors.first() {
             self.status = first.to_string();
         }
@@ -2721,12 +2726,13 @@ impl App {
         Ok(inside.unwrap_or(&full).display().to_string())
     }
 
+    /// Put a file in the bank and have the current track play it.
     pub(crate) fn sample(&mut self, source: &Path) {
         self.sample_named(source, None);
     }
 
-    /// Put a sample on the current track and name the track after it, if there's a name, as one
-    /// undo step.
+    /// Put a file in the bank, have the current track play it, and name the track after it, if
+    /// there's a name, as one undo step.
     pub(crate) fn sample_named(&mut self, source: &Path, name: Option<&str>) {
         let track = self.cursor.track;
         let more = name
@@ -2736,41 +2742,7 @@ impl App {
             })
             .into_iter()
             .collect();
-        self.sample_with(source, more);
-    }
-
-    /// Put a sample on the current track, with other changes to the track, as one undo step.
-    pub(crate) fn sample_with(&mut self, source: &Path, more: Vec<Action>) {
-        if source.is_dir() {
-            self.open_sample_folder(source);
-            return;
-        }
-        let stored = match self.store_sample(source) {
-            Ok(stored) => stored,
-            Err(error) => {
-                self.status = error.to_string();
-                return;
-            }
-        };
-        let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-        match load_sample(&resolved, self.rate) {
-            Ok(data) => {
-                let mut pool = SamplePool::clone(&self.samples);
-                pool.insert(&stored, data);
-                self.samples = Arc::new(pool);
-                let track = self.cursor.track;
-                let mut actions = vec![Action::SetTrackSample {
-                    track,
-                    sample: Some(stored),
-                }];
-                actions.extend(more);
-                self.apply(&Action::Batch(actions));
-                if self.status.is_empty() {
-                    self.status = format!("Track {:02} sample loaded", self.cursor.track + 1);
-                }
-            }
-            Err(error) => self.status = error.to_string(),
-        }
+        self.sample_with(source, None, more);
     }
 }
 

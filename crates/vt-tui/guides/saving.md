@@ -97,7 +97,8 @@ ten, and `x` puts it back to 100.
 
 A project refers to its samples where they are, so it is small, but it needs
 them to stay put. `:w path` gathers everything into a new folder that can be
-moved or shared, and you carry on working in that folder.
+moved or shared, copying each of the bank's files into its `samples` folder
+once, and you carry on working in that folder.
 
 ## Playing
 

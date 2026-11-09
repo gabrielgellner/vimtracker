@@ -63,9 +63,9 @@ fn pool() -> Arc<SamplePool> {
 fn song(rows: &[&str], machine: Machine, glide_ms: Option<f32>) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
+    song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
     track.machine = machine;
-    track.sample = Some("ramp".to_owned());
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     track.gate_length = Some(FULL_GATE);
@@ -104,7 +104,7 @@ fn hertz_between(out: &[f32], from: usize, to: usize) -> f64 {
 
 #[test]
 fn a_tie_glides_a_sample_an_octave_up_in_its_time() {
-    let out = render(&song(&TIE, Machine::Sample, Some(100.0)), 4);
+    let out = render(&song(&TIE, Machine::Sampler, Some(100.0)), 4);
     // It starts from the note it ties from, is halfway in pitch at the time constant's share,
     // nearly there when its time is up, and lands on the note.
     assert!(semitones_at(&out, 12).abs() < 0.01, "C-4 before it");
@@ -121,7 +121,7 @@ fn a_tie_glides_a_sample_an_octave_up_in_its_time() {
 #[test]
 fn a_longer_glide_takes_longer_in_proportion() {
     for ms in [20.0, 400.0] {
-        let out = render(&song(&TIE, Machine::Sample, Some(ms)), 4);
+        let out = render(&song(&TIE, Machine::Sampler, Some(ms)), 4);
         let halfway = STEP + (f64::from(ms) * HALFWAY * MS as f64) as usize;
         let at_halfway = semitones_at(&out, halfway);
         assert!((at_halfway - 6.0).abs() < 0.3, "{ms} ms: {at_halfway}");
@@ -130,12 +130,12 @@ fn a_longer_glide_takes_longer_in_proportion() {
 
 #[test]
 fn with_glide_off_a_tie_jumps_as_before() {
-    let out = render(&song(&TIE, Machine::Sample, None), 2);
+    let out = render(&song(&TIE, Machine::Sampler, None), 2);
     let next = semitones_at(&out, STEP + 12);
     assert!((next - 12.0).abs() < 0.01, "{next}");
     // A note that isn't tied doesn't glide whatever the setting.
     let struck = render(
-        &song(&["C-4 --", "C-5 --"], Machine::Sample, Some(400.0)),
+        &song(&["C-4 --", "C-5 --"], Machine::Sampler, Some(400.0)),
         2,
     );
     // Past the note before's fade, which a new note's start cuts it with.
@@ -160,7 +160,7 @@ fn a_lock_on_either_row_of_a_tie_sets_its_glide() {
     ];
     for rows in [on_the_tie, on_the_next] {
         let rows: Vec<&str> = rows.iter().map(|row| row.as_ref()).collect();
-        let out = render(&song(&rows, Machine::Sample, None), 3);
+        let out = render(&song(&rows, Machine::Sampler, None), 3);
         let at_halfway = semitones_at(&out, halfway);
         assert!((at_halfway - 6.0).abs() < 0.3, "{rows:?}: {at_halfway}");
     }

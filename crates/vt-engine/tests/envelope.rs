@@ -47,8 +47,8 @@ fn ramp() -> Arc<SamplePool> {
 
 fn song(texts: &[&str], shape: Envelope) -> Song {
     let mut song = Song::new(1);
-    for track in &mut song.tracks {
-        track.sample = Some("s".to_owned());
+    for track in 0..song.sound_tracks() {
+        song.sample_on(track, "s");
     }
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {

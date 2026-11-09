@@ -30,8 +30,10 @@ fn pool(entries: &[(&str, SampleData)]) -> Arc<SamplePool> {
 /// A song with one sample, and notes at these steps on the first track.
 fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
     let mut song = Song::new(tracks);
+    for track in 0..song.sound_tracks() {
+        song.sample_on(track, "flat");
+    }
     for track in &mut song.tracks {
-        track.sample = Some("flat".to_owned());
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
     }
@@ -318,7 +320,7 @@ fn replacing_a_sample_doesnt_move_a_playing_voice() {
     let mut first = vec![0.0; 2000];
     engine.process(&mut first);
     let mut changed = song;
-    changed.tracks[0].sample = Some("other".to_owned());
+    changed.sample_on(0, "other");
     engine.swap(version(changed, samples));
     let mut second = vec![0.0; 2000];
     engine.process(&mut second);

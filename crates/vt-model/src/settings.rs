@@ -974,6 +974,45 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// What a slot's bypass can be: heard, at `00`, or switched out, at `01`.
 pub const BYPASS_CHOICES: [&str; 2] = ["In", "Bypassed"];
 
+/// Each choice's two hex digits, for [`BANK_CHOICES`] to point into.
+static BANK_DIGITS: [[u8; 2]; 256] = {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut digits = [[0; 2]; 256];
+    let mut at = 0;
+    while at < 256 {
+        digits[at] = [HEX[at >> 4], HEX[at & 0x0F]];
+        at += 1;
+    }
+    digits
+};
+
+/// What a sampler's `Sample` can be: `Off`, no sample, then a bank entry's number, `01` to `FF`.
+/// What each entry is called is the song's, so it's shown from the bank where there's a song.
+pub const BANK_CHOICES: [&str; 256] = {
+    let mut choices = ["Off"; 256];
+    let mut at = 1;
+    while at < 256 {
+        choices[at] = match std::str::from_utf8(&BANK_DIGITS[at]) {
+            Ok(digits) => digits,
+            Err(_) => panic!("hex digits are text"),
+        };
+        at += 1;
+    }
+    choices
+};
+
+/// The sampler's own, which it keeps whatever it plays.
+const SAMPLER: [Entry; 1] = [Entry {
+    key: "sample",
+    name: "Sample",
+    label: Some("SMP"),
+    kind: Kind::Stepped {
+        choices: &BANK_CHOICES,
+        wraps: false,
+    },
+    default: 0,
+}];
+
 const fn voices_size() -> usize {
     let mut total = 0;
     let mut at = 0;
@@ -1202,6 +1241,7 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + VOWEL_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
+const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1215,6 +1255,8 @@ pub enum Owner {
     Lfo(usize),
     /// A slot's bypass, which is the slot's whatever effect is in it.
     Bypass(usize),
+    /// The sampler machine's.
+    Sampler,
 }
 
 /// A setting's place in the table.
@@ -1243,9 +1285,11 @@ impl SettingId {
     pub const SPEED: Self = Self(11);
     /// How long a tie glides into the next note, as [`glide_ms`] gives it.
     pub const GLIDE: Self = Self(12);
+    /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
+    pub const SAMPLE: Self = Self(SAMPLER_START as u16);
 
     /// How many settings there are.
-    pub const COUNT: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
+    pub const COUNT: usize = SAMPLER_START + SAMPLER.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -1307,6 +1351,9 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= SAMPLER_START {
+            return (Owner::Sampler, at - SAMPLER_START);
+        }
         if at >= BYPASS_START {
             let within = at - BYPASS_START;
             return (
@@ -1348,6 +1395,7 @@ impl SettingId {
             (Owner::Slot { effect, .. }, at) => param_entry(&effect.params()[at]),
             (Owner::Lfo(_), at) => LFO[at],
             (Owner::Bypass(_), at) => SLOT_OWN[at],
+            (Owner::Sampler, at) => SAMPLER[at],
         }
     }
 
@@ -1361,6 +1409,7 @@ impl SettingId {
             Owner::Slot { slot, effect } => format!("{}.{}.{key}", slot + 1, effect.key()),
             Owner::Lfo(lfo) => format!("lfo{}.{key}", lfo + 1),
             Owner::Bypass(slot) => format!("{}.{key}", slot + 1),
+            Owner::Sampler => format!("sampler.{key}"),
         }
     }
 
@@ -1393,6 +1442,7 @@ impl SettingId {
             (Owner::Slot { slot, effect }, _) => format!("FX {} {}", slot + 1, effect.name()),
             (Owner::Lfo(lfo), _) => format!("LFO {}", lfo + 1),
             (Owner::Bypass(slot), _) => format!("FX {}", slot + 1),
+            (Owner::Sampler, _) => "Sampler".to_owned(),
         }
     }
 }
@@ -1444,6 +1494,7 @@ mod tests {
                 (Owner::Slot { slot, effect }, at) => SettingId::slot(slot, effect, at),
                 (Owner::Lfo(lfo), at) => SettingId::lfo(lfo, at),
                 (Owner::Bypass(slot), _) => SettingId::bypass(slot),
+                (Owner::Sampler, _) => Some(SettingId::SAMPLE),
             };
             assert_eq!(back, Some(id), "{}", id.key());
         }
@@ -1518,6 +1569,10 @@ mod tests {
             for label in track_and_events().chain(voice_labels) {
                 assert!(seen.insert(label.clone()), "{label} twice on {voice:?}");
             }
+        }
+        let mut seen = HashSet::new();
+        for label in track_and_events().chain(SettingId::SAMPLE.label()) {
+            assert!(seen.insert(label.clone()), "{label} twice on the sampler");
         }
         for effect in Effect::ALL {
             let mut seen = HashSet::from([SettingId::bypass(0).unwrap().label().unwrap()]);

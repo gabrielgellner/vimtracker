@@ -595,6 +595,8 @@ pub struct TrackState {
     held_gate_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
     held_glide: f32,
+    /// Held `SMP`, the bank entry a sampler's next note plays, by number.
+    held_sample: f32,
     /// Whether each slot is switched out as it's heard: its own bypass, or a step's lock of it.
     bypassed: [bool; INSERTS],
     /// The loaded voice's held settings, in its order, on `0..=1`.
@@ -652,7 +654,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             _ => id.entry().default,
         },
         (Owner::Bypass(slot), _) => u8::from(track.bypassed[slot]),
-        (Owner::Voice(_), _) => track.setting(id),
+        (Owner::Voice(_) | Owner::Sampler, _) => track.setting(id),
         (Owner::Slot { slot, effect }, at) => {
             let insert = track.inserts[slot];
             // A distortion keeps every mode's settings, so one its mode doesn't show still reads.
@@ -781,6 +783,7 @@ impl TrackState {
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
+            held_sample: 0.0,
             bypassed: [false; INSERTS],
             filter_moving: false,
             key: [0.0; 2],
@@ -1176,6 +1179,13 @@ impl TrackState {
         (value >> 8) as u8
     }
 
+    /// The bank entry a sampler's note starting now plays, by number: the held `SMP`, or a lock
+    /// over it, moved by what modulation adds, in whole entries.
+    pub fn sample_number(&self) -> u8 {
+        let moved = self.held_sample + self.offsets[SettingId::SAMPLE.index()] * 255.0;
+        moved.round().clamp(0.0, 255.0) as u8
+    }
+
     /// How far either way a groove's humanise moves a step, at random, in ticks.
     pub fn humanise(&mut self, ticks: u8) -> i64 {
         if ticks == 0 {
@@ -1441,6 +1451,11 @@ impl TrackState {
                 }
                 _ => return,
             },
+            // Read as a note starts, which keeps what it chose until it ends.
+            (Owner::Sampler, _) => {
+                self.held_sample = value;
+                return;
+            }
             // Heard as the slots are next given their settings, where it fades in or out.
             (Owner::Bypass(slot), _) => {
                 self.bypassed[slot] = value >= 0.5;

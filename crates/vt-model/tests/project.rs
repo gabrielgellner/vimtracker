@@ -3,12 +3,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use vt_model::bank::{BankEntry, ContentHash, PlayParams};
 use vt_model::constants::FORMAT_VERSION;
 use vt_model::project::{
-    ProjectError, create_project, import_sample, load_samples, load_song, save_as, save_song,
+    ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
+    save_song,
 };
 use vt_model::sample::{SampleError, load_sample};
 use vt_model::samples::SamplePool;
+use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice};
 
 fn folder() -> PathBuf {
@@ -66,6 +69,98 @@ fn a_song_round_trips() {
     *phrase.step_mut(2).unwrap() = "C-4 64 cut:40 --- ret:14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
+}
+
+#[test]
+fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
+    let dir = folder();
+    let mut song = Song::new(2);
+    let mut kick = BankEntry::of_file("samples/kick.wav", ContentHash::of(b"kick"));
+    kick.label = "BD".to_owned();
+    kick.name = "Bass Drum 909".to_owned();
+    kick.edit.play = PlayParams {
+        gain_db: -3.5,
+        tune: -2,
+    };
+    song.bank.set(0x01, Some(kick));
+    song.bank.set(
+        0xFF,
+        Some(BankEntry::of_file(
+            "/elsewhere/hat.aif",
+            ContentHash::UNKNOWN,
+        )),
+    );
+    song.tracks[0].set_setting(SettingId::SAMPLE, 0x01);
+    song.tracks[1].set_setting(SettingId::SAMPLE, 0xFF);
+    let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
+    *phrase.step_mut(1).unwrap() = "C-4 -- sampler.sample:FF --- ---".parse().unwrap();
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert!(text.contains("sampler.sample"), "the setting by its key");
+    assert!(
+        text.contains(&ContentHash::of(b"kick").to_string()),
+        "the hash in hex"
+    );
+    let loaded = load_song(&dir).unwrap();
+    assert_eq!(loaded, song);
+    assert_eq!(loaded.bank.get(0xFF).unwrap().name, "hat");
+    assert_eq!(
+        loaded.samples_in_use().into_iter().collect::<Vec<_>>(),
+        [0x01, 0xFF]
+    );
+}
+
+#[test]
+fn a_moved_file_is_found_by_its_content_and_a_changed_one_is_noticed() {
+    let dir = folder();
+    fs::create_dir_all(dir.join("samples")).unwrap();
+    wav(&dir.join("samples/renamed.wav"), 1, 16, 48_000, 10);
+    wav(&dir.join("samples/changed.wav"), 1, 16, 48_000, 20);
+    let moved = ContentHash::of_file(&dir.join("samples/renamed.wav")).unwrap();
+    let mut song = Song::new(1);
+    song.bank
+        .set(1, Some(BankEntry::of_file("samples/kick.wav", moved)));
+    song.bank.set(
+        2,
+        Some(BankEntry::of_file(
+            "samples/changed.wav",
+            ContentHash::of(b"what it was"),
+        )),
+    );
+    song.bank.set(
+        3,
+        Some(BankEntry::of_file("gone.wav", ContentHash::of(b"nowhere"))),
+    );
+    let notes = find_sources(Some(&dir), &mut song);
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert!(
+        notes[0].contains("found at samples/renamed.wav"),
+        "{notes:?}"
+    );
+    assert!(notes[1].contains("has changed"), "{notes:?}");
+    assert_eq!(
+        song.bank.get(1).unwrap().source().unwrap().path,
+        "samples/renamed.wav"
+    );
+    assert_eq!(
+        song.bank.get(3).unwrap().source().unwrap().path,
+        "gone.wav",
+        "what's nowhere is left for loading to report"
+    );
+}
+
+#[test]
+fn the_pool_loads_a_file_once_however_many_tracks_play_it() {
+    let dir = folder();
+    wav(&dir.join("kick.wav"), 1, 16, 48_000, 10);
+    let mut song = Song::new(4);
+    for track in 0..4 {
+        song.sample_on(track, "kick.wav");
+    }
+    assert_eq!(song.bank.len(), 1);
+    let mut pool = SamplePool::default();
+    assert!(load_samples(Some(&dir), &song, 48_000, &mut pool).is_empty());
+    assert_eq!(pool.len(), 1);
 }
 
 #[test]
@@ -183,8 +278,8 @@ fn a_missing_sample_names_its_path_and_the_rest_load() {
     let dir = folder();
     wav(&dir.join("here.wav"), 1, 16, 48_000, 10);
     let mut song = Song::new(2);
-    song.tracks[0].sample = Some("gone.wav".into());
-    song.tracks[1].sample = Some("here.wav".into());
+    song.sample_on(0, "gone.wav");
+    song.sample_on(1, "here.wav");
     let mut pool = SamplePool::default();
     let errors = load_samples(Some(&dir), &song, 48_000, &mut pool);
     assert_eq!(errors.len(), 1);
@@ -213,12 +308,40 @@ fn save_as_copies_samples_and_rewrites_paths() {
     let source = folder();
     let absolute = source.join("snare.wav");
     wav(&absolute, 1, 16, 48_000, 10);
+    let copy = folder().join("snare copy.wav");
+    fs::copy(&absolute, &copy).unwrap();
+    let hash = ContentHash::of_file(&absolute).unwrap();
     let mut song = Song::new(1);
-    song.tracks[0].sample = Some(absolute.display().to_string());
+    song.bank.set(
+        1,
+        Some(BankEntry::of_file(absolute.display().to_string(), hash)),
+    );
+    song.bank.set(
+        2,
+        Some(BankEntry::of_file(copy.display().to_string(), hash)),
+    );
+    song.tracks[0].set_setting(SettingId::SAMPLE, 1);
     let target = folder();
     let saved = save_as(None, &target, &song).unwrap();
-    assert_eq!(saved.tracks[0].sample.as_deref(), Some("samples/snare.wav"));
+    let path = |number| {
+        saved
+            .bank
+            .get(number)
+            .unwrap()
+            .source()
+            .unwrap()
+            .path
+            .clone()
+    };
+    assert_eq!(path(1), "samples/snare.wav");
+    assert_eq!(
+        path(2),
+        "samples/snare.wav",
+        "the same content is copied once"
+    );
     assert!(target.join("samples/snare.wav").exists());
+    assert!(!target.join("samples/snare copy.wav").exists());
+    assert_eq!(saved.tracks[0].sample(), 1);
     assert_eq!(load_song(&target).unwrap(), saved);
     assert!(matches!(
         save_as(None, &target, &song),

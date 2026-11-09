@@ -28,8 +28,8 @@ fn pool() -> Arc<SamplePool> {
 
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(2);
-    for track in &mut song.tracks {
-        track.sample = Some("tone".to_owned());
+    for track in 0..song.sound_tracks() {
+        song.sample_on(track, "tone");
     }
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
@@ -179,10 +179,9 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
 #[test]
 fn with_the_limiter_off_a_render_keeps_levels_over_full() {
     // The same tone on eight tracks at once adds up to well past full level.
-    let sample = song(&[]).tracks[0].sample.clone();
     let mut loud = Song::new(8);
-    for track in &mut loud.tracks {
-        track.sample = sample.clone();
+    for track in 0..8 {
+        loud.sample_on(track, "tone");
     }
     for id in 0..8 {
         let phrase = Arc::make_mut(loud.tracks[id as usize].phrases.get_mut(&0).unwrap());
@@ -225,9 +224,10 @@ fn a_render_writes_float_stereo_and_replaces_the_file() {
 fn three_tracks() -> Song {
     let mut mix = song(&FX_LOOP);
     mix.add_track();
-    let sample = mix.tracks[0].sample.clone();
+    for track in 0..mix.sound_tracks() {
+        mix.sample_on(track, "tone");
+    }
     for track in &mut mix.tracks {
-        track.sample = sample.clone();
         track.send_a = 0x60;
         track.send_b = 0x60;
     }

@@ -6,6 +6,7 @@ pub mod app;
 pub mod audio;
 pub mod audio_page;
 pub mod autosave;
+pub mod banking;
 pub mod command_line;
 pub mod config;
 pub mod explorer;

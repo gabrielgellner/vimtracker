@@ -21,12 +21,9 @@ fn flat(frames: usize, level: f32) -> SampleData {
 /// a quieter one from step 2.
 fn hats(open: Option<u8>, closed: Option<u8>) -> Vec<f32> {
     let mut song = Song::new(2);
-    for (track, (sample, choke)) in song
-        .tracks
-        .iter_mut()
-        .zip([("open", open), ("closed", closed)])
-    {
-        track.sample = Some(sample.to_owned());
+    song.sample_on(0, "open");
+    song.sample_on(1, "closed");
+    for (track, choke) in song.tracks.iter_mut().zip([open, closed]) {
         track.choke = choke;
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
@@ -92,8 +89,8 @@ fn tracks_in_no_group_or_another_play_on() {
 #[test]
 fn a_tracks_own_pitch_moves_its_notes() {
     let mut song = Song::new(1);
+    song.sample_on(0, "flat");
     let track = &mut song.tracks[0];
-    track.sample = Some("flat".to_owned());
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     track.pitch = 0x8C;

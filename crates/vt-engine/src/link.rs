@@ -512,8 +512,8 @@ mod tests {
 
     fn song(tracks: usize, steps: usize) -> Song {
         let mut song = Song::new(tracks);
-        for track in &mut song.tracks {
-            track.sample = Some("flat".to_owned());
+        for track in 0..song.sound_tracks() {
+            song.sample_on(track, "flat");
         }
         for id in 0..tracks as u32 {
             let phrase = Arc::make_mut(song.tracks[id as usize].phrases.get_mut(&0).unwrap());
@@ -869,8 +869,8 @@ mod tests {
     fn every_fx_command_stays_off_the_allocator() {
         let pool = samples();
         let mut fx = Song::new(2);
-        for track in &mut fx.tracks {
-            track.sample = Some("flat".to_owned());
+        for track in 0..fx.sound_tracks() {
+            fx.sample_on(track, "flat");
         }
         let texts = [
             "C-4 01 vol:80 pan:20 cut:40",
@@ -895,8 +895,10 @@ mod tests {
     fn launching_on_the_grid_and_across_rows_stays_off_the_allocator() {
         let pool = samples();
         let mut played = Song::new(2);
+        for track in 0..played.sound_tracks() {
+            played.sample_on(track, "flat");
+        }
         for track in &mut played.tracks {
-            track.sample = Some("flat".to_owned());
             track.add_chain(1);
         }
         played.launch = vt_model::song::Launch::every(2).unwrap();
@@ -920,8 +922,10 @@ mod tests {
     fn playing_from_a_row_and_wrapping_stay_off_the_allocator() {
         let pool = samples();
         let mut played = Song::new(2);
+        for track in 0..played.sound_tracks() {
+            played.sample_on(track, "flat");
+        }
         for track in &mut played.tracks {
-            track.sample = Some("flat".to_owned());
             track.add_chain(1);
         }
         played.sections[0].length = Some(2);
@@ -982,8 +986,8 @@ mod tests {
     fn audition_stays_off_the_allocator() {
         let pool = samples();
         let mut played = Song::new(2);
-        for track in &mut played.tracks {
-            track.sample = Some("flat".to_owned());
+        for track in 0..played.sound_tracks() {
+            played.sample_on(track, "flat");
         }
         for id in 0..2 {
             let phrase = Arc::make_mut(played.tracks[id as usize].phrases.get_mut(&0).unwrap());

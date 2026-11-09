@@ -31,7 +31,7 @@ fn pool() -> Arc<SamplePool> {
 /// One track playing these rows, with notes that start and stop at once.
 fn song(rows: &[&str]) -> Song {
     let mut song = Song::new(1);
-    song.tracks[0].sample = Some("ramp".to_owned());
+    song.sample_on(0, "ramp");
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();

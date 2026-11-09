@@ -108,6 +108,9 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
     if let Some(seed) = request.seed {
         song.seed = seed;
     }
+    for note in project::find_sources(Some(&request.project), &mut song) {
+        eprintln!("{note}");
+    }
     let mut pool = SamplePool::default();
     let errors = project::load_samples(Some(&request.project), &song, request.rate, &mut pool);
     if let Some(first) = errors.first() {
@@ -190,7 +193,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let output = Output::open(&choice).or_else(|_| Output::open(&AudioChoice::default()))?;
     let rate = output.rate();
     let mut status = output.note.clone().unwrap_or_default();
-    let song = match &path {
+    let mut song = match &path {
         Some(folder) if folder.join("song.ron").exists() => project::load_song(folder)?,
         Some(folder) => {
             status = format!("New project: {} is created on :w", folder.display());
@@ -198,6 +201,9 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         }
         None => Song::new(DEFAULT_TRACKS),
     };
+    if let Some(first) = project::find_sources(path.as_deref(), &mut song).first() {
+        status = first.clone();
+    }
     let mut pool = SamplePool::default();
     let errors = project::load_samples(path.as_deref(), &song, rate, &mut pool);
     if let Some(first) = errors.first() {

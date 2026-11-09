@@ -6,6 +6,7 @@ use thiserror::Error;
 
 use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
+use crate::bank::BankEntry;
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
     MAX_SOUND_TRACKS, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
@@ -64,13 +65,12 @@ pub enum Fill {
     SlotFine(usize, u8),
 }
 
-/// A sound from a kit going on a track, with the level, pitch and choke group its track takes.
+/// A sound from a kit going on a track: the bank entry it plays, and the name and choke group its
+/// track takes. Its gain and tune are the entry's own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KitSound {
-    pub sample: String,
+    pub sample: u8,
     pub name: String,
-    pub level: u8,
-    pub pitch: u8,
     pub choke: Option<u8>,
 }
 
@@ -325,10 +325,15 @@ pub enum Action {
     AddTracks(usize),
     /// Remove the last track and its chains and phrases, keeping at least one.
     RemoveLastTrack,
-    /// Set a track's sample, or leave it with none.
+    /// Choose the bank entry a track's sampler plays, or `00` for none.
     SetTrackSample {
         track: usize,
-        sample: Option<String>,
+        sample: u8,
+    },
+    /// Put an entry in the bank at a number, replacing any there, or empty the number.
+    SetBankEntry {
+        number: u8,
+        entry: Option<BankEntry>,
     },
     /// Name a track, or leave it with no name.
     SetTrackName {
@@ -992,11 +997,14 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?;
-            owner.sample = sample.clone();
+            owner.set_setting(SettingId::SAMPLE, *sample);
             // Choosing a sample means wanting to hear it.
-            if sample.is_some() {
-                owner.machine = Machine::Sample;
+            if *sample != 0 {
+                owner.machine = Machine::Sampler;
             }
+        }
+        Action::SetBankEntry { number, entry } => {
+            next.bank.set(*number, entry.clone());
         }
         Action::SetTrackName { track, name } => {
             let owner = next
@@ -1019,11 +1027,9 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             }
             for (track, sound) in next.tracks.iter_mut().zip(sounds) {
                 check_choke(sound.choke)?;
-                track.sample = Some(sound.sample.clone());
-                track.machine = Machine::Sample;
+                track.set_setting(SettingId::SAMPLE, sound.sample);
+                track.machine = Machine::Sampler;
                 track.name = sound.name.clone();
-                track.level = sound.level.min(MAX_LEVEL);
-                track.pitch = sound.pitch;
                 track.choke = sound.choke;
             }
         }

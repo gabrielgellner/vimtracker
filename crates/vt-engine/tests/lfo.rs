@@ -53,8 +53,8 @@ fn buzz() -> Arc<SamplePool> {
 
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(1);
-    for track in &mut song.tracks {
-        track.sample = Some("s".to_owned());
+    for track in 0..song.sound_tracks() {
+        song.sample_on(track, "s");
     }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;

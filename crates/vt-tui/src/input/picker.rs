@@ -15,6 +15,7 @@ use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::accumulator::Accumulation;
 use vt_model::arpeggio::Arpeggio;
+use vt_model::bank::PlayParams;
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
@@ -96,14 +97,24 @@ pub enum Pick {
         slot: usize,
         envelope: Envelope,
     },
-    /// A sound from the current kit, for this track, and the label the track takes as its name,
-    /// its level, its pitch and its choke group.
+    /// A sound from the current kit, for this track: what its bank entry is called and how it
+    /// plays, and the label the track takes as its name and its choke group.
     KitSound {
         path: PathBuf,
         label: String,
-        level: u8,
-        pitch: u8,
+        name: String,
+        play: PlayParams,
         choke: Option<u8>,
+    },
+    /// A bank entry for a track's sampler to play, or `00` for none.
+    BankSample {
+        track: usize,
+        number: u8,
+    },
+    /// A bank entry for a step's `SMP` to lock, in this FX column.
+    SampleLock {
+        slot: usize,
+        number: u8,
     },
     /// Go to this track.
     Track(usize),

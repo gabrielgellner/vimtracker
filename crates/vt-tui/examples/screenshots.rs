@@ -209,7 +209,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let mut pool = SamplePool::default();
     if shot.kick {
         pool.insert(KICK, kick());
-        song.tracks[0].sample = Some(KICK.to_owned());
+        song.sample_on(0, KICK);
     }
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));

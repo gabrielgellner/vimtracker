@@ -6,7 +6,7 @@ and LFOs**.
 
 ## The synths
 
-`K` on Machine, at the top of the Sound page, chooses `Sample` or one of the synths, by
+`K` on Machine, at the top of the Sound page, chooses `Sampler` or one of the synths, by
 typing its name. They come from Mutable Instruments' Plaits, and each has its own
 settings, named on the page below Machine. A track keeps each synth's settings, so
 trying another and coming back finds the first as you left it. One you haven't played on
@@ -254,8 +254,8 @@ note on the track rings out, or lock it on a step for one hard hit.
 Press `Space 5`, or type `:sample`, to choose a WAV, AIFF or FLAC file from a tree of
 folders: the last few you chose from, the project's folder, your sample folders, where
 you ran the program from and your home folder. It opens on the track's own sample.
-`l` opens a folder, `h` closes it, and `l` or `Enter` on a file puts it on the current
-track. **Navigation** has the rest of the keys.
+`l` opens a folder, `h` closes it, and `l` or `Enter` on a file puts it in the project's
+bank and has the current track play it. **Navigation** has the rest of the keys.
 
 Moving onto a sample plays it through the current track, as an Elektron's or the M8's
 browser does, and `A` stops that or starts it again. Beside the list is its waveform,
@@ -264,17 +264,49 @@ background, so the list doesn't wait for it, and the last few are kept.
 
 | Command | Does |
 |---|---|
-| `:sample path/kick.wav` | Put one file on this track |
+| `:sample path/kick.wav` | Put one file in the bank and on this track |
 | `:sample path/drums` | Choose from one folder |
 
 Samples stay where they are, and the project refers to them, so moving a
-file breaks the projects that use it. To gather every sample into one
-folder, ready to move or share, save a copy with `:w path`.
+file can break the projects that use it. To gather every sample into one
+folder, ready to move or share, save a copy with `:w path`. A file is known
+by what's in it as well as where it is: when a project opens, one that's gone
+is looked for in the project's `samples` folder, and one that's changed since
+it joined the bank is reported on the status line.
 
 Press `;` in a phrase to hear the row. Notes you play while editing and
 auditions go through this track's filter, levels and sends.
 
-On the Sound page, `Space 4`, `K` on File chooses a sample too, and `x` clears it.
+## The bank
+
+A project keeps its samples in a bank, numbered `01` to `FF`, as an Elektron's
+project keeps its samples in slots. A file joins it once, however many tracks
+and steps play it, and is loaded once. The sampler's `Sample`, on the Sound
+page, says which one a track plays, and `00`, `Off`, plays nothing, as a new
+track does.
+
+`Sample` is a setting like any other, so a step can lock it: `SMP 03` plays
+sample `03` for that step's note, and the next note goes back to the track's
+own, as an Elektron's sample lock does. One drum track can play a whole kit
+this way. `h` holds it until playing next starts from the top, a lane of it
+plays a pattern of samples, and an LFO or an envelope can move it, a whole
+sample for each step of depth, as each note starts with the one it's on.
+
+Each sample keeps how it plays, its gain and its tune, so a kit's sound plays
+the same on any track. The track's own `Level` and `Pitch` come on top.
+
+| Keys | Does |
+|---|---|
+| `K` on `Sample` | List the bank, with waveforms, then `Add a file` |
+| `=` `-` on `Sample` | The next or previous sample in the bank |
+| `x` on `Sample` | Off: no sample |
+| `K` on an `SMP`'s value | List the bank to lock one |
+| `:bank` | List the bank, to choose what this track plays |
+| `:bank clean` | Remove the samples nothing plays or locks |
+
+The status line says which sample a `Sample` or an `SMP` is on, and its file.
+Numbers stay where they are, so removing one never changes what a step plays.
+A full bank, 255 samples, takes no more until `:bank clean` makes room.
 
 ## Names
 
@@ -305,7 +337,8 @@ A kit fills tracks in one go. It is a file in a kit folder, such as
 
 A kit is a list of sounds to choose from, so it adds no tracks of its own. Use one
 with `:kit 909`, or choose it from `Space 8`, then `Space 5` on a track lists its
-sounds first, by label and name, under the kit's name. Choosing one puts it on this track, and its label becomes the track's name.
+sounds first, by label and name, under the kit's name. Choosing one puts it in the bank
+and on this track, and its label becomes the track's name.
 Paths are relative to the kit file, or absolute, or start with `~/`.
 
 Only `sounds`, and each sound's `path`, are needed. A kit's `name` is its file's
@@ -321,9 +354,12 @@ where it came from and what kind it is. For each sound:
 | `gain` | In dB |
 | `tune` | In semitones, up to 48 either way |
 
-A sound's track takes its choke group, its gain as its `Level` and its tune
-as its `Pitch`, whether `:kit 909 all` puts it there or `Space 5` chooses it.
-Variants and layers are kept for now, and don't yet change what you hear.
+A sound joins the bank with its label, its name, its gain and its tune, which
+it keeps on whatever track plays it, and its track takes its choke group,
+whether `:kit 909 all` puts it there or `Space 5` chooses it. A sound already
+in the bank, the same file played the same way, isn't added twice, while one
+file tuned two ways, as a kit's toms can be, is two samples. Variants and
+layers are kept for now, and don't yet change what you hear.
 
 | Command | Does |
 |---|---|
@@ -332,8 +368,8 @@ Variants and layers are kept for now, and don't yet change what you hear.
 | `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
 | `:kit 909 all` | Put every sound on tracks from the first, in order |
 
-`all` keeps a track's other settings, leaves later tracks alone, and adds tracks
-if it has more sounds than you have. If it replaces a different sample, the
+`all` puts each sound in the bank, keeps a track's other settings, leaves later
+tracks alone, and adds tracks if it has more sounds than you have. If it replaces a different sample, the
 status line says which, and `u` undoes the whole load.
 
 ## Kit and sample folders

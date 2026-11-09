@@ -13,3 +13,4 @@ hound.workspace = true
 symphonia.workspace = true
 rubato.workspace = true
 thiserror.workspace = true
+xxhash-rust.workspace = true

@@ -30,7 +30,7 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
-use crate::published::Published;
+use crate::published::{Playable, Published};
 use crate::track_state::{
     Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part,
     PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
@@ -1199,6 +1199,8 @@ impl Engine {
             synth: None,
             note: 60,
             gain: velocity_gain(DEFAULT_NOTE_VELOCITY),
+            sample_gain: 1.0,
+            speed: 1.0,
             accent: false,
             shape: Envelope::note_shape(),
             release_after: None,
@@ -1247,21 +1249,34 @@ impl Engine {
             .start(track, on, state.synth_settings(), self.rate);
     }
 
-    /// A note at a velocity, which sets its level and whether it's accented.
+    /// A note at a velocity, which sets its level and whether it's accented. A sampler plays the
+    /// bank entry its `SMP` is on as the note starts, and has nothing to play with none.
     fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;
         }
-        let (sample, synth) = match owner.machine {
-            Machine::Sample => ((*self.current.track_samples.get(track)?)?, None),
-            Machine::Plaits(voice) => (0, Some(voice)),
+        let (playable, synth) = match owner.machine {
+            Machine::Sampler => {
+                let number = self.tracks.get(track)?.sample_number();
+                (self.current.bank[usize::from(number)]?, None)
+            }
+            Machine::Plaits(voice) => (
+                Playable {
+                    sample: 0,
+                    gain: 1.0,
+                    speed: 1.0,
+                },
+                Some(voice),
+            ),
         };
         Some(NoteOn {
-            sample,
+            sample: playable.sample,
             synth,
             note,
             gain: velocity_gain(velocity),
+            sample_gain: playable.gain,
+            speed: playable.speed,
             accent: velocity >= ACCENT_VELOCITY,
             shape,
             release_after: None,

@@ -69,8 +69,8 @@ fn song(rows: &[&str], order: Order) -> Song {
         root: 0,
         kind: ScaleKind::Major,
     };
+    song.sample_on(0, "s");
     let track = &mut song.tracks[0];
-    track.sample = Some("s".to_owned());
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();

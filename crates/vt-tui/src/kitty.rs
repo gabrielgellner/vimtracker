@@ -16,6 +16,7 @@ use ratatui::style::Color;
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
+use vt_model::bank::BankEntry;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
@@ -993,7 +994,7 @@ impl Graphics {
         };
         app.filter_image = Some(id);
         app.waveform_image = None;
-        if track.machine == Machine::Sample {
+        if track.machine == Machine::Sampler {
             self.sync_waveform(app, track, out)?;
         }
         Ok(())
@@ -1008,10 +1009,12 @@ impl Graphics {
         out: &mut impl Write,
     ) -> io::Result<()> {
         let samples = Arc::clone(&app.samples);
-        let Some(sample) = track
-            .sample
-            .as_deref()
-            .and_then(|path| samples.shared(samples.id_of(path)?))
+        let song = Arc::clone(app.song());
+        let Some(sample) = song
+            .bank
+            .get(track.sample())
+            .and_then(BankEntry::source)
+            .and_then(|source| samples.shared(samples.id_of(&source.path)?))
         else {
             return Ok(());
         };

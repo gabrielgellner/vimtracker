@@ -1,6 +1,6 @@
 //! The song and everything it refers to by ID.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::num::{NonZeroU16, NonZeroU32};
 use std::sync::Arc;
@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::accumulator::Accumulation;
 use crate::arpeggio::Arpeggio;
+use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
     FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
@@ -271,9 +272,6 @@ pub struct Track {
     /// What makes its sound.
     #[serde(default)]
     pub machine: Machine,
-    /// What it plays, relative to the project folder.
-    #[serde(default)]
-    pub sample: Option<String>,
     /// The machines' settings it has changed from their defaults, by setting. A track keeps every
     /// voice's, so switching voice and back finds the first as it was.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -421,6 +419,11 @@ impl Track {
             .unwrap_or_else(|| self.machine.gate_length())
     }
 
+    /// The bank entry its sampler plays, before any step chooses another: `00` for none.
+    pub fn sample(&self) -> u8 {
+        self.setting(SettingId::SAMPLE)
+    }
+
     /// One of its machine's settings, by its place among them.
     pub fn machine_setting(&self, setting: usize) -> Option<SettingId> {
         SettingId::voice(self.voice()?, setting)
@@ -476,7 +479,7 @@ impl Track {
     /// The coarse value of one of its own settings or its machines', which a fine part goes with.
     pub fn coarse(&self, id: SettingId) -> Option<u8> {
         match id.owner().0 {
-            Owner::Voice(_) => Some(self.setting(id)),
+            Owner::Voice(_) | Owner::Sampler => Some(self.setting(id)),
             Owner::Track => match id {
                 SettingId::CUT => Some(self.cutoff),
                 SettingId::RES => Some(self.resonance),
@@ -597,7 +600,6 @@ impl Default for Track {
             kind: TrackKind::default(),
             name: String::new(),
             machine: Machine::default(),
-            sample: None,
             settings: BTreeMap::new(),
             fine: BTreeMap::new(),
             mute: false,
@@ -665,9 +667,9 @@ pub enum SectionStart {
 /// What makes a track's sound.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Machine {
-    /// Plays its sample, once, at the note's speed.
+    /// Plays one of the bank's samples, once, at the note's speed.
     #[default]
-    Sample,
+    Sampler,
     /// One of the synth voices, after Mutable Instruments' Plaits, each with its own settings.
     Plaits(SynthVoice),
 }
@@ -681,9 +683,9 @@ impl Machine {
         }
     }
 
-    /// Every machine, in the order a list shows them: Sample, then each Plaits voice.
+    /// Every machine, in the order a list shows them: Sampler, then each Plaits voice.
     pub const ALL: [Self; 1 + SynthVoice::ALL.len()] = {
-        let mut all = [Self::Sample; 1 + SynthVoice::ALL.len()];
+        let mut all = [Self::Sampler; 1 + SynthVoice::ALL.len()];
         let mut at = 0;
         while at < SynthVoice::ALL.len() {
             all[at + 1] = Self::Plaits(SynthVoice::ALL[at]);
@@ -695,7 +697,7 @@ impl Machine {
     /// The name on screen.
     pub fn name(self) -> &'static str {
         match self {
-            Self::Sample => "Sample",
+            Self::Sampler => "Sampler",
             Self::Plaits(voice) => voice.name(),
         }
     }
@@ -703,7 +705,7 @@ impl Machine {
     /// What it does, for a list to show.
     pub fn meaning(self) -> &'static str {
         match self {
-            Self::Sample => "One file, at the speed of its note",
+            Self::Sampler => "A sample from the bank, at the speed of its note",
             Self::Plaits(voice) => voice.meaning(),
         }
     }
@@ -1492,6 +1494,9 @@ pub struct Song {
     /// When launched chains start.
     #[serde(default)]
     pub launch: Launch,
+    /// The project's samples, which a sampler track's `Sample` picks from by number.
+    #[serde(default, skip_serializing_if = "Bank::is_empty")]
+    pub bank: Bank,
     pub tracks: Vec<Track>,
     pub sections: Vec<Section>,
 }
@@ -1511,6 +1516,7 @@ impl Song {
             groove: GrooveId::STRAIGHT,
             grooves: Vec::new(),
             launch: Launch::default(),
+            bank: Bank::default(),
             tracks: Vec::new(),
             sections: vec![Section::default()],
         };
@@ -1529,6 +1535,37 @@ impl Song {
                 section.chains.resize(self.tracks.len(), None);
             }
         }
+    }
+
+    /// Put a file in the bank, unless it's in it already, and have a track's sampler play it,
+    /// giving the entry's number. Its hash is left unknown, for songs built in code, such as tests',
+    /// whose samples are put in the pool by name. A full bank, or no such track, changes nothing.
+    pub fn sample_on(&mut self, track: usize, path: &str) -> Option<u8> {
+        let number = self
+            .bank
+            .add(BankEntry::of_file(path, ContentHash::UNKNOWN))?;
+        let track = self.tracks.get_mut(track)?;
+        track.machine = Machine::Sampler;
+        track.set_setting(SettingId::SAMPLE, number);
+        Some(number)
+    }
+
+    /// The bank entries something names: a track's own `Sample`, or a step's `SMP`. An LFO or
+    /// an envelope that moves `Sample` can reach others, which aren't counted.
+    pub fn samples_in_use(&self) -> BTreeSet<u8> {
+        let mut used = BTreeSet::new();
+        for track in &self.tracks {
+            used.insert(track.sample());
+            let locks = track
+                .phrases
+                .values()
+                .flat_map(|phrase| phrase.steps())
+                .flat_map(|step| step.fx.iter())
+                .filter(|slot| slot.command == Some(FxCommand::Set(SettingId::SAMPLE)));
+            used.extend(locks.map(|slot| slot.coarse()));
+        }
+        used.remove(&0);
+        used
     }
 
     /// How many tracks play sounds. They come first, and then the fixed tracks.

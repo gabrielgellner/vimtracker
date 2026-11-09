@@ -29,7 +29,7 @@ fn samples() -> Arc<SamplePool> {
 /// which chain and step is playing.
 fn song(chains: &[&[&str]]) -> Song {
     let mut song = Song::new(1);
-    song.tracks[0].sample = Some("s".to_owned());
+    song.sample_on(0, "s");
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     song.limiter = false;
@@ -282,8 +282,8 @@ fn a_track_can_be_placed_past_where_the_row_has_got_to() {
 #[test]
 fn one_section_that_wraps_keeps_its_tracks_free_running() {
     let mut two = Song::new(2);
-    two.tracks[0].sample = Some("s".to_owned());
-    two.tracks[1].sample = Some("s".to_owned());
+    two.sample_on(0, "s");
+    two.sample_on(1, "s");
     two.tracks[1].phrases.insert(
         0,
         Arc::new(Phrase::from_steps(

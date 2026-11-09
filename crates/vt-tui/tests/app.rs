@@ -824,6 +824,8 @@ fn groove_commands_set_the_project_and_the_cursors_track_and_undo() {
     assert_eq!(app.song().groove, GrooveId::STRAIGHT);
 }
 
+/// A one-frame WAV, whose value comes from its name, so files of different names are different
+/// files to the bank, which knows a file by its content.
 fn wav(path: &std::path::Path) {
     let spec = hound::WavSpec {
         channels: 1,
@@ -831,8 +833,12 @@ fn wav(path: &std::path::Path) {
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
+    let name = path.file_name().unwrap().to_string_lossy();
+    let value = name.bytes().fold(1000_i16, |value, byte| {
+        value.wrapping_mul(31).wrapping_add(i16::from(byte))
+    });
     let mut writer = hound::WavWriter::create(path, spec).unwrap();
-    writer.write_sample(1000_i16).unwrap();
+    writer.write_sample(value).unwrap();
     writer.finalize().unwrap();
 }
 
@@ -860,7 +866,7 @@ fn a_folder_opens_the_sample_explorer_and_choosing_loads_the_sample() {
     press(&mut app, "/sn");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
-    let chosen = app.song().tracks[0].sample.clone().unwrap();
+    let chosen = sample_of(&app, 0).unwrap();
     assert!(chosen.ends_with("snare.WAV"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
 }
@@ -890,8 +896,8 @@ fn the_sample_explorer_lists_and_loads_aiff_and_flac() {
     );
     press(&mut app, "/tom");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "Track 01 sample loaded");
-    let chosen = app.song().tracks[0].sample.clone().unwrap();
+    assert_eq!(app.status, "Track 01 plays 01 tom, loaded into the bank");
+    let chosen = sample_of(&app, 0).unwrap();
     assert!(chosen.ends_with("tom.flac"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
 }
@@ -1678,8 +1684,15 @@ fn kit_file() -> PathBuf {
     kit
 }
 
+/// The file a track's sampler plays, through the bank.
+fn file_of(song: &Song, track: usize) -> Option<String> {
+    let number = song.tracks.get(track)?.sample();
+    let entry = song.bank.get(number)?;
+    Some(entry.source()?.path.clone())
+}
+
 fn sample_of(app: &App, track: usize) -> Option<String> {
-    app.song().tracks.get(track)?.sample.clone()
+    file_of(app.song(), track)
 }
 
 #[test]
@@ -1723,7 +1736,7 @@ fn a_kit_is_referred_to_and_saving_elsewhere_gathers_its_sounds() {
     command(&mut app, "w");
     let reopened = vt_model::project::load_song(&project).unwrap();
     assert_eq!(
-        reopened.tracks[0].sample.as_deref(),
+        file_of(&reopened, 0).as_deref(),
         Some(snare.canonicalize().unwrap().to_str().unwrap())
     );
 
@@ -1831,7 +1844,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, " 4");
     assert_eq!(column_name(&app), "Machine");
     assert!(
-        track_text(&app)[3].contains("File"),
+        track_text(&app)[3].contains("Sample"),
         "{:?}",
         track_text(&app)
     );
@@ -1872,7 +1885,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     assert!(
         !text
             .iter()
-            .any(|line| line.contains("File") || line.contains("Voice"))
+            .any(|line| line.starts_with("Sample ") || line.contains("Voice"))
     );
 
     press(&mut app, "j");
@@ -1892,12 +1905,12 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, "ggh-");
     assert_eq!(
         app.song().tracks[0].machine,
-        Machine::Sample,
+        Machine::Sampler,
         "VA comes after Sample"
     );
     assert!(track_text(&app)[2].contains("Sample"));
     press(&mut app, "=x");
-    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+    assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
 }
 
 #[test]
@@ -1937,7 +1950,7 @@ fn each_voice_keeps_its_own_settings() {
     press(&mut app, "gg--");
     assert_eq!(machine_value(&app, 1), 0x40);
     choose_machine(&mut app, "Sample");
-    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+    assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
     choose_machine(&mut app, "Fold");
     assert_eq!(machine_value(&app, 1), 0x20);
 }
@@ -2012,7 +2025,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
     choose_machine(&mut app, "VA");
     press(&mut app, " 5");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().tracks[0].machine, Machine::Sample);
+    assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
     assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
 }
 
@@ -2569,7 +2582,7 @@ fn a_bundle_keeps_working_after_its_sources_are_gone() {
     let mut pool = SamplePool::default();
     let errors = vt_model::project::load_samples(Some(&bundle), &song, 48_000, &mut pool);
     assert!(errors.is_empty());
-    assert_eq!(song.tracks[0].sample.as_deref(), Some("samples/tone.wav"));
+    assert_eq!(file_of(&song, 0).as_deref(), Some("samples/tone.wav"));
 }
 
 /// Run the audio side long enough to act on what was sent, and return the loudest sample.
@@ -3233,8 +3246,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        10,
-        "what a sample track has, and none"
+        11,
+        "what a sample track has, its Sample, and none"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -3531,39 +3544,222 @@ fn a_step_locks_the_gate_by_its_label() {
 }
 
 #[test]
-fn a_kit_sound_sets_its_tracks_level_pitch_and_choke_group() {
+fn a_kit_sound_is_a_bank_entry_with_its_gain_and_tune_and_its_track_takes_the_choke_group() {
+    use vt_model::bank::PlayParams;
     let (mut app, _realtime) = app();
     let kit = kit_file();
     let hats = kit.parent().unwrap().join("hats.ron");
     std::fs::write(
         &hats,
         r#"(sounds: [
-            (label: "CH", path: "drums/hat.wav", choke: Some(1), gain: -6.0, tune: 3),
+            (label: "CH", name: "Closed", path: "drums/hat.wav", choke: Some(1), gain: -6.0,
+             tune: 3),
             (label: "OH", path: "drums/snare.wav", choke: Some(1)),
         ])"#,
     )
     .unwrap();
     let track = |app: &App, index: usize| {
         let track = &app.song().tracks[index];
-        (track.level, track.pitch, track.choke)
+        (track.sample(), track.level, track.pitch, track.choke)
     };
     command(&mut app, &format!("kit {} all", hats.display()));
-    assert_eq!(track(&app, 0), (0xC8, 0x83, Some(1)), "6 dB down, 3 up");
-    assert_eq!(track(&app, 1), (0xE0, 0x80, Some(1)));
+    assert_eq!(
+        track(&app, 0),
+        (1, 0xE0, 0x80, Some(1)),
+        "the track's own stay"
+    );
+    assert_eq!(track(&app, 1), (2, 0xE0, 0x80, Some(1)));
+    let closed = app.song().bank.get(1).unwrap();
+    assert_eq!(
+        (closed.label.as_str(), closed.name.as_str()),
+        ("CH", "Closed")
+    );
+    assert_eq!(
+        closed.edit.play,
+        PlayParams {
+            gain_db: -6.0,
+            tune: 3
+        }
+    );
+    assert_eq!(app.song().bank.get(2).unwrap().title(), "OH snare");
 
-    // Choosing one for a track sets them all with the sample, as one step to undo.
+    // Choosing one for a track puts it in the bank with the track's choke group and name, as
+    // one step to undo.
     press(&mut app, "u");
-    assert_eq!(track(&app, 0), (0xE0, 0x80, None));
+    assert!(app.song().bank.is_empty());
+    assert_eq!(track(&app, 0), (0, 0xE0, 0x80, None));
     command(&mut app, &format!("kit {}", hats.display()));
     let depth = app.history.undo_depth();
     press(&mut app, " 5");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(track(&app, 0), (0xC8, 0x83, Some(1)));
+    assert_eq!(track(&app, 0), (1, 0xE0, 0x80, Some(1)));
+    assert_eq!(app.song().bank.get(1).unwrap().edit.play.tune, 3);
     assert_eq!(app.song().tracks[0].name, "CH");
     assert_eq!(app.history.undo_depth(), depth + 1);
     press(&mut app, "u");
-    assert_eq!(track(&app, 0), (0xE0, 0x80, None));
-    assert_eq!(app.song().tracks[0].sample, None);
+    assert_eq!(track(&app, 0), (0, 0xE0, 0x80, None));
+    assert_eq!(sample_of(&app, 0), None);
+    assert!(app.song().bank.is_empty());
+}
+
+#[test]
+fn a_kit_fills_the_bank_once_and_a_file_tuned_twice_is_two_entries() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let toms = kit.parent().unwrap().join("toms.ron");
+    std::fs::write(
+        &toms,
+        r#"(sounds: [
+            (label: "LT", path: "drums/kick.wav", tune: -5),
+            (label: "HT", path: "drums/kick.wav", tune: 5),
+            (label: "BD", path: "drums/kick.wav", tune: 5),
+        ])"#,
+    )
+    .unwrap();
+    command(&mut app, &format!("kit {} all", toms.display()));
+    let numbers: Vec<u8> = (0..3).map(|at| app.song().tracks[at].sample()).collect();
+    assert_eq!(
+        numbers,
+        [1, 2, 2],
+        "the same file played the same way is one entry"
+    );
+    assert_eq!(app.song().bank.len(), 2);
+    assert_eq!(app.samples.len(), 1, "and the file is loaded once");
+
+    // Loading it again adds nothing.
+    command(&mut app, &format!("kit {} all", toms.display()));
+    assert_eq!(app.song().bank.len(), 2);
+
+    // Nor does choosing the file from the explorer, which finds the entry it's in.
+    let kick = kit.parent().unwrap().join("drums/kick.wav");
+    press(&mut app, "W");
+    command(&mut app, &format!("sample {}", kick.display()));
+    assert_eq!(app.song().bank.len(), 2);
+    assert!(app.status.contains("from the bank"), "{}", app.status);
+}
+
+#[test]
+fn the_sample_row_lists_the_bank_steps_through_it_and_clears() {
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let track = |app: &App| app.song().tracks[0].clone();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {} all", kit.display()));
+    press(&mut app, "gg");
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Sample);
+    let lines = track_page_text(&app);
+    assert!(
+        lines[3].starts_with("Sample") && lines[3].contains("01 snare"),
+        "{}",
+        lines[3]
+    );
+    assert_eq!(value_shown(&app).as_deref(), Some("01 snare: snare.wav"));
+
+    press(&mut app, "=");
+    assert_eq!(track(&app).sample(), 2);
+    press(&mut app, "2=");
+    assert_eq!(track(&app).sample(), 3, "it stops at the last");
+    press(&mut app, "x");
+    assert_eq!(track(&app).sample(), 0);
+    assert_eq!(value_shown(&app).as_deref(), Some("Off: no sample"));
+    press(&mut app, "-");
+    assert_eq!(track(&app).sample(), 0);
+
+    press(&mut app, "K");
+    assert_eq!(app.mode, Mode::Picker);
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(
+        labels,
+        ["00  Off", "01  snare", "02  kick", "03  hat", "Add a file"]
+    );
+    press(&mut app, "/hat");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).sample(), 3);
+}
+
+#[test]
+fn a_step_locks_a_sample_from_the_bank() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {} all", kit.display()));
+    press(&mut app, " 3");
+    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    press(&mut app, "lllllK");
+    press(&mut app, "smp");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.mode,
+        Mode::Picker,
+        "an SMP with no value lists the bank"
+    );
+    press(&mut app, "/kick");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(slot(&app).command, Some(FxCommand::Set(SettingId::SAMPLE)));
+    assert_eq!(slot(&app).coarse(), 2);
+    assert_eq!(value_shown(&app).as_deref(), Some("02 kick: kick.wav"));
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("sampler.sample:02"), "{step}");
+
+    // K on its value lists the bank again, on the one it locks.
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "02  kick");
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).coarse(), 1);
+    // And it's on the list to lock, and for an LFO or an envelope to move.
+    let track = &app.song().tracks[0];
+    let sample = FxCommand::Set(SettingId::SAMPLE);
+    assert!(FxCommand::on_track(track).contains(&sample));
+    assert!(SettingId::for_lfo(track, 0).contains(&SettingId::SAMPLE));
+    assert!(SettingId::for_envelope(track).contains(&SettingId::SAMPLE));
+    assert_eq!(FxCommand::typed("smp", track), Some(sample));
+}
+
+#[test]
+fn cleaning_the_bank_removes_what_nothing_plays_and_keeps_the_numbers() {
+    use vt_model::action::Action;
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    command(&mut app, &format!("kit {} all", kit.display()));
+    assert_eq!(app.song().bank.len(), 3);
+    // Track 2 plays nothing now, but a step on track 1 locks the hat.
+    let phrase = app.song().tracks[0].chains[&0].entries[0].phrase;
+    app.apply(&Action::SetTrackSample {
+        track: 1,
+        sample: 0,
+    });
+    app.apply(&Action::SetTrackSample {
+        track: 2,
+        sample: 0,
+    });
+    let step: Step = "C-4 -- sampler.sample:03 --- ---".parse().unwrap();
+    app.apply(&Action::SetStep {
+        track: 0,
+        phrase,
+        step: 4,
+        value: step,
+    });
+    command(&mut app, "bank clean");
+    let left: Vec<u8> = app.song().bank.iter().map(|(number, _)| number).collect();
+    assert_eq!(left, [1, 3]);
+    assert!(app.status.contains("Removed 1 sample"), "{}", app.status);
+    command(&mut app, "bank clean");
+    assert_eq!(app.status, "Every sample in the bank is played");
+    press(&mut app, "u");
+    assert_eq!(app.song().bank.len(), 3);
 }
 
 #[test]
@@ -4002,7 +4198,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     press(&mut app, "H");
     let lines = track_page_text(&app);
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
-    assert!(lines[3].starts_with("File") && lines[3].contains("Pan"));
+    assert!(lines[3].starts_with("Sample") && lines[3].contains("Pan"));
     assert!(lines[4].trim().is_empty(), "{}", lines[4]);
     assert!(lines[5].starts_with("Filter") && lines[5].contains("Send A"));
     assert!(lines[6].starts_with("Mode") && lines[6].contains("12 dB"));
@@ -4623,15 +4819,16 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
 }
 
 #[test]
-fn the_file_setting_chooses_a_sample_and_x_clears_it() {
+fn the_sample_setting_chooses_from_the_bank_and_x_clears_it() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "kkk");
     assert_eq!(app.track_control(), vt_tui::track_page::Control::Sample);
+    // With nothing in the bank, K opens the explorer to add a file.
     press(&mut app, "K");
     assert_ne!(app.mode, Mode::Normal);
     special(&mut app, KeyCode::Esc);
     press(&mut app, "=");
-    assert!(app.status.contains("K chooses"), "{}", app.status);
+    assert_eq!(app.song().tracks[0].sample(), 0, "nothing to step to");
     command(&mut app, "name bd");
     let dir = folder();
     std::fs::create_dir_all(&dir).unwrap();
@@ -4639,7 +4836,7 @@ fn the_file_setting_chooses_a_sample_and_x_clears_it() {
     wav(&tone);
     command(&mut app, &format!("sample {}", tone.display()));
     let drawn = page_text(&app);
-    assert!(drawn.contains("tone.wav"), "{drawn}");
+    assert!(drawn.contains("01 tone"), "{drawn}");
     assert!(drawn.contains("BD"), "{drawn}");
     assert!(!drawn.contains(dir.to_str().unwrap()), "{drawn}");
     press(&mut app, "x");
@@ -6722,8 +6919,8 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, "jj");
-    // Past the nine a sample track has, as a synth's settings aren't on it.
-    for _ in 0..10 {
+    // Past the ten a sample track has, as a synth's settings aren't on it.
+    for _ in 0..11 {
         press(&mut app, "=");
     }
     assert_eq!(
@@ -8368,7 +8565,7 @@ fn app_with_samples() -> (App, Realtime) {
                 frames: vec![[*level; 2]; 100],
             },
         );
-        song.tracks[track].sample = Some((*path).to_owned());
+        song.sample_on(track, path);
     }
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -8415,7 +8612,7 @@ fn a_samples_waveform_is_sent_once_and_follows_the_cursor_and_the_track() {
     // A synth has none either, whatever file it still names.
     app.cursor.track = 0;
     press(&mut app, "=");
-    assert_ne!(app.song().tracks[0].machine, Machine::Sample);
+    assert_ne!(app.song().tracks[0].machine, Machine::Sampler);
     sync(&mut app, &mut graphics);
     assert_eq!(app.waveform_image, None);
 }
@@ -8898,10 +9095,7 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     assert_eq!(app.file_playing, Some(library.join("loops/break.wav")));
     assert!(heard(&mut realtime, &mut app) > 0.01, "it plays");
     assert_eq!(realtime.engine().previews_sounding(), 1);
-    assert!(
-        app.song().tracks[0].sample.is_none(),
-        "and isn't put on the track"
-    );
+    assert!(sample_of(&app, 0).is_none(), "and isn't put on the track");
 
     // The next one takes over.
     press(&mut app, "j");
