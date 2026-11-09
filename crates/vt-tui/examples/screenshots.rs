@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -178,13 +178,18 @@ fn press(app: &mut App, keys: &str) {
 }
 
 /// Play some steps, so the playhead and the engine's reports reach the screen.
-fn play(app: &mut App, realtime: &mut Realtime, steps: usize) {
+/// The clock moves on by exactly one step's audio each frame, so the meters fall the same on every run.
+fn play(app: &mut App, realtime: &mut Realtime, steps: usize, start: Instant) -> Instant {
     let mut out = vec![0.0; STEP * 2];
-    app.tick();
+    let step = Duration::from_secs_f64(STEP as f64 / f64::from(RATE));
+    let mut now = start;
+    app.tick_at(now);
     for _ in 0..steps {
         realtime.process(&mut out);
-        app.tick();
+        now += step;
+        app.tick_at(now);
     }
+    now
 }
 
 fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
@@ -196,14 +201,16 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     }
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    // Taken before the app, so its first frame measures no time since the app began.
+    let start = Instant::now();
     let (handle, mut realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     press(&mut app, shot.keys);
-    play(&mut app, &mut realtime, shot.play);
+    let now = play(&mut app, &mut realtime, shot.play, start);
     let mut sent = Vec::new();
     Graphics::new().sync(&mut app, &mut sent)?;
     let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, HEIGHT));
-    let Ok(_) = terminal.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()));
+    let Ok(_) = terminal.draw(|frame| draw_screen(frame, &mut app, None, now));
     let path = folder.join(format!("{}.svg", shot.name));
     std::fs::write(
         &path,
@@ -221,4 +228,24 @@ fn main() -> std::io::Result<()> {
         println!("{}", take(shot, &folder)?.display());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each screenshot comes out the same twice, so `just screenshots` changes nothing without a code change.
+    #[test]
+    fn screenshots_are_the_same_on_every_run() {
+        let base = std::env::temp_dir().join(format!("vt-screenshots-{}", std::process::id()));
+        let (first, second) = (base.join("first"), base.join("second"));
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        for shot in SHOTS {
+            let a = std::fs::read(take(shot, &first).unwrap()).unwrap();
+            let b = std::fs::read(take(shot, &second).unwrap()).unwrap();
+            assert!(a == b, "{} differs between runs", shot.name);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

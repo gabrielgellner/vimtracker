@@ -625,8 +625,12 @@ impl App {
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
     pub fn tick(&mut self) {
+        self.tick_at(Instant::now());
+    }
+
+    /// Do a frame's work as if it's `now`, so the screenshots can step the meters by a fixed time.
+    pub fn tick_at(&mut self, now: Instant) {
         self.handle.pump();
-        let now = Instant::now();
         let seconds = now.saturating_duration_since(self.last_tick).as_secs_f32();
         self.last_tick = now;
         let track = self.cursor.track;
