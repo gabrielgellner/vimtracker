@@ -148,9 +148,10 @@ up to 3 ms slower):
 **Cell backgrounds under an image.** kitty's docs say of a placeholder: "The background color is
 interpreted as the background color, visible if the image is transparent." The example draws the
 image over cells whose background is a selection, a cursor, and a playhead that moves every frame,
-to check by eye. It wasn't seen here: the window ran under remote control, but this session can't
-take a screenshot (macOS refused both `screencapture` of the window and of the screen), and
-`get-text` only gives what was written, not what's drawn. So it's in the list below.
+to check by eye. The author checked it full screen on 2026-11-09, in kitty 0.50.0 and Ghostty
+1.4.0: the waveform fills its cells past the 28th column, the selection, cursor and playhead show
+through it, and the playhead moves smoothly with nothing left behind. A cell background fills whole
+cells, so the playhead is a character wide; a finer one is an idea for the sample page (#274).
 
 ### Ghostty
 
@@ -181,18 +182,6 @@ tried:
 *   In Ghostty, that the program starts, so its answer to the image query is `OK`, and that the
     track page's filter curve, envelopes and LFO shapes show, change with their settings and the
     cursor, and leave nothing behind when another view is drawn over them.
-*   Big images, with `cargo run --release -p vt-tui --example big_image` in a full-screen window,
-    first in kitty and then in Ghostty:
-    1.  The 160 by 14 waveform fills its rows edge to edge, in grey with an orange slice line at
-        each beat, a blue mark on every fourth and a brighter loop toward the right, with no gaps
-        or repeated pieces past the 28th column.
-    2.  The selection's blue, the cursor's yellow and the playhead's red show through the image
-        where it's see-through, and the red moves smoothly along every frame, with nothing left
-        behind it.
-    3.  The table the example prints on the way out: in Ghostty, that no row says anything but a
-        time, and how its times compare with kitty's above. A failed `t=s` row means Ghostty's
-        limits refuse shared memory there, which the program doesn't use.
-    4.  Then note which terminal and version, and what was seen, in "Big images" above.
 *   Whether a real keyboard in kitty sends the shifted key as well, and whether a non-US layout's
     shifted characters read right.
 *   A key held while the window loses focus: whether its release still comes, as a held note on the
