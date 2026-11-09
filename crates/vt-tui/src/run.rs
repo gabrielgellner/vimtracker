@@ -18,6 +18,7 @@ use vt_engine::engine::Engine;
 use vt_engine::link::connect;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
+use vt_model::analysis;
 use vt_model::constants::{DEFAULT_TRACKS, FRAME_MS};
 use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
@@ -101,6 +102,16 @@ pub fn write_stems(
     Ok(stems.len())
 }
 
+/// Read or work out the bank's analyses before playing, with no terminal, so a normalised sample
+/// plays at its level from the first frame. A file that can't be analysed is said on stderr, and
+/// plays as it is.
+fn analyse_now(folder: Option<&Path>, song: &Song, pool: &mut SamplePool) {
+    let cache = analysis::cache_folder();
+    for error in project::analyse_samples(folder, song, cache.as_deref(), pool) {
+        eprintln!("{error}");
+    }
+}
+
 /// Render a saved project to a file, with no terminal or sound device. A sample that won't load
 /// stops it, since a file that quietly lacks a part is worse than no file.
 pub fn render(request: &RenderRequest) -> Result<(), RunError> {
@@ -116,6 +127,7 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
     if let Some(first) = errors.first() {
         return Err(RunError::MissingSample(first.to_string()));
     }
+    analyse_now(Some(&request.project), &song, &mut pool);
     let version = Published::new(Arc::new(song), Arc::new(pool));
     let options = RenderOptions {
         rows: request.rows,
@@ -147,6 +159,7 @@ pub fn bench(folder: &Path, rate: u32, block: usize, seconds: u32) -> Result<(),
     if let Some(first) = errors.first() {
         return Err(RunError::MissingSample(first.to_string()));
     }
+    analyse_now(Some(folder), &song, &mut pool);
     let version = Arc::new(Published::new(Arc::new(song), Arc::new(pool)));
     let block = block.max(1);
     let blocks = (seconds as usize * rate as usize).div_ceil(block);
@@ -217,6 +230,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let (stream, buffer) = output.start(realtime, Arc::clone(&stats))?;
     let mut stream = Some(stream);
     let mut app = App::new(song, path, samples, handle, rate);
+    app.use_analysis_cache(analysis::cache_folder());
     app.audio = crate::app::AudioState {
         device,
         buffer,

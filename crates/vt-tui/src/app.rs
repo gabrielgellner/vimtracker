@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::accent_slide::{HeldFlag, Written, slid};
+use crate::analysing::Analyst;
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::config::Settings;
 use crate::explorer::Purpose;
@@ -360,6 +361,8 @@ pub struct App {
     pub kit_file: Option<PathBuf>,
     /// Reads the files the explorer previews and plays, off this thread.
     pub loader: Loader,
+    /// Analyses the bank's files, off this thread, for normalising, `:trim` and the waveform.
+    pub analyst: Analyst,
     /// Whether the explorer plays the sample its cursor moves onto, which `A` switches and the
     /// next one opened keeps.
     pub audition_files: bool,
@@ -512,6 +515,7 @@ impl App {
             kit: Vec::new(),
             kit_file: None,
             loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
+            analyst: Analyst::new(None),
             audition_files: true,
             file_wanted: None,
             file_playing: None,
@@ -531,7 +535,10 @@ impl App {
     /// solos stay, and the transport is stopped, as the new engine starts that way.
     pub fn reconnect(&mut self, handle: Handle, samples: Arc<SamplePool>, rate: u32) {
         self.handle = handle;
-        self.samples = samples;
+        // An analysis is of the file at its own rate, so it's the same at the new one.
+        let mut samples = SamplePool::clone(&samples);
+        samples.keep_analyses(&self.samples);
+        self.samples = Arc::new(samples);
         self.rate = rate;
         self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
         self.file_playing = None;
@@ -544,6 +551,8 @@ impl App {
         // Sent again when the next frame finds it differs.
         self.watched = usize::MAX;
         self.send_live();
+        // The new engine's first version was built before the analyses were kept.
+        self.publish();
     }
 
     /// Tell the engine every track's live controls, and the scale `ACU` moves notes through, after
@@ -765,6 +774,7 @@ impl App {
         ));
         self.published = Some(Arc::clone(&version));
         self.handle.publish(version);
+        self.analyse_bank();
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -805,6 +815,7 @@ impl App {
             self.jam[track] = state;
         }
         self.take_loaded();
+        self.take_analyses();
         self.follow_recording();
     }
 
@@ -2482,6 +2493,8 @@ impl App {
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),
+            Line::Normalize(level) => self.normalize_sample(level),
+            Line::Trim => self.trim_sample(),
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.apply(&Action::SetTrackName {
@@ -2622,8 +2635,10 @@ impl App {
     }
 
     /// Render what is in memory, with the live mutes and at the device's rate. The screen waits,
-    /// and audio keeps playing on its own thread.
+    /// and audio keeps playing on its own thread. It waits for the bank's analyses, so a
+    /// normalised sample renders the same however far they'd got.
     fn render(&mut self, path: &Path, rows: Option<usize>, tail: bool) {
+        self.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
         let samples = render_loop(Arc::new(version), self.rate, RenderOptions { rows, tail });
         self.status = match write_wav(path, self.rate, &samples) {
@@ -2638,6 +2653,7 @@ impl App {
 
     /// Render one file per track that would be heard, into a folder.
     fn render_stems(&mut self, folder: &Path, rows: Option<usize>, tail: bool) {
+        self.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
         let options = RenderOptions { rows, tail };
         self.status = match crate::run::write_stems(&version, folder, self.rate, options) {

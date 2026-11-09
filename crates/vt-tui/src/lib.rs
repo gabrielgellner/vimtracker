@@ -2,6 +2,7 @@
 
 pub mod ableton;
 pub mod accent_slide;
+pub mod analysing;
 pub mod app;
 pub mod audio;
 pub mod audio_page;

@@ -85,6 +85,7 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
         reverse: true,
         fade_in: 480,
         fade_out: 4800,
+        normalize: Some(-0.5),
     };
     kick.edit.points = Points {
         start: 100,

@@ -1,5 +1,6 @@
 //! What the audio thread plays for one of the bank's entries: its sound at the program's rate and
-//! the spans it can play, each with its points, loop, gain, tune, reverse and fades worked out.
+//! the spans it can play, each with its points, loop, gain, tune, reverse and fades worked out. Its
+//! gain takes in what normalising it needs, once its file's analysis is in.
 //!
 //! It's built from an entry's [`SampleEdit`](crate::bank::SampleEdit) on the edit thread, so the
 //! engine never reads an edit: a new field there changes how a span is worked out here, and the
@@ -106,7 +107,7 @@ impl Playable {
             reverse: play.reverse,
             fade_in: at(u64::from(play.fade_in)) as u32,
             fade_out: at(u64::from(play.fade_out)) as u32,
-            gain: play.gain(),
+            gain: play.gain() * play.normalize_gain(normalize_peak(entry, samples)),
             speed: play.speed(),
         };
         Some(Self {
@@ -120,6 +121,14 @@ impl Playable {
     pub fn span(&self) -> Span {
         self.spans[0]
     }
+}
+
+/// The peak normalising an entry works from, if it asks to be normalised and its file's analysis
+/// is in. A [`Playable`] worked out before its analysis came in is out of date once it has.
+pub fn normalize_peak(entry: &BankEntry, samples: &SamplePool) -> Option<f32> {
+    entry.edit.play.normalize?;
+    let source = entry.source()?;
+    samples.analysis(source.hash).map(|analysis| analysis.peak)
 }
 
 #[cfg(test)]

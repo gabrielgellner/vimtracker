@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
-use vt_model::bank::MAX_CENTS;
+use vt_model::bank::{MAX_CENTS, MIN_NORMALIZE};
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
@@ -34,6 +34,10 @@ pub enum Line {
     Bank,
     /// Remove the bank's samples nothing plays.
     BankClean,
+    /// Bring this track's sample to a peak level, in hundredths of a dBFS, or stop normalising it.
+    Normalize(Option<i16>),
+    /// Start and end this track's sample where its sound does.
+    Trim,
     /// Put a kit's sounds on tracks, by name or path.
     KitTracks(PathBuf),
     /// Name this track, or clear its name.
@@ -200,6 +204,8 @@ pub enum LineError {
         ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB or tune st [ct], with times as 1.5 or 250ms"
     )]
     SampleChange,
+    #[error(":normalize takes a peak level in dBFS from -60 to 0, such as -0.3, or off")]
+    Normalize,
     #[error(":track takes add [n] or del")]
     Track,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
@@ -396,7 +402,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 30] = [
+pub const COMMANDS: [Command; 32] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -459,6 +465,27 @@ pub const COMMANDS: [Command; 30] = [
             "clean" => Ok(Line::BankClean),
             _ => Err(LineError::Bank),
         },
+    },
+    Command {
+        name: "normalize",
+        meaning: "Bring this track's sample to a peak level in dBFS, 0 if none, or off",
+        takes: Takes::Words(&["off"]),
+        parse: |argument| match argument {
+            "" => Ok(Line::Normalize(Some(0))),
+            "off" => Ok(Line::Normalize(None)),
+            _ => argument
+                .parse::<f32>()
+                .ok()
+                .filter(|level| (MIN_NORMALIZE..=0.0).contains(level))
+                .map(|level| Line::Normalize(Some((level * 100.0).round() as i16)))
+                .ok_or(LineError::Normalize),
+        },
+    },
+    Command {
+        name: "trim",
+        meaning: "Start and end this track's sample where its sound does",
+        takes: Takes::Nothing,
+        parse: |_| Ok(Line::Trim),
     },
     Command {
         name: "set",
@@ -864,6 +891,13 @@ mod tests {
         assert_eq!(parse("bank"), Ok(Line::Bank));
         assert_eq!(parse("bank clean"), Ok(Line::BankClean));
         assert_eq!(parse("bank all"), Err(LineError::Bank));
+        assert_eq!(parse("normalize -0.3"), Ok(Line::Normalize(Some(-30))));
+        assert_eq!(parse("normalize"), Ok(Line::Normalize(Some(0))));
+        assert_eq!(parse("normalize off"), Ok(Line::Normalize(None)));
+        assert_eq!(parse("normalize 1"), Err(LineError::Normalize));
+        assert_eq!(parse("normalize -61"), Err(LineError::Normalize));
+        assert_eq!(parse("normalize loud"), Err(LineError::Normalize));
+        assert_eq!(parse("trim"), Ok(Line::Trim));
     }
 
     #[test]

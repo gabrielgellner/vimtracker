@@ -49,10 +49,24 @@ pub fn is_sample_file(path: &Path) -> bool {
 }
 
 /// Interleaved samples as a file holds them, before they are made stereo at the program's rate.
-struct Decoded {
-    samples: Vec<f32>,
-    channels: u16,
-    rate: u32,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Decoded {
+    pub samples: Vec<f32>,
+    /// One or two.
+    pub channels: u16,
+    /// The file's own frames a second.
+    pub rate: u32,
+}
+
+impl Decoded {
+    /// What the file held: its rate, its channels and its length.
+    pub fn info(&self) -> SampleInfo {
+        SampleInfo {
+            rate: self.rate,
+            channels: self.channels,
+            frames: self.samples.len() / usize::from(self.channels.max(1)),
+        }
+    }
 }
 
 /// What a sample file holds, as it was before it was made stereo at the program's rate.
@@ -84,28 +98,13 @@ pub fn load_sample_with_info(
     rate: u32,
 ) -> Result<(SampleData, SampleInfo), SampleError> {
     let name = || path.display().to_string();
-    let extension = path
-        .extension()
-        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
-    let decoded = match extension.as_deref() {
-        Some(other @ ("aif" | "aiff" | "flac")) => decode_other(path, other),
-        // `hound` doesn't skip the pad byte after a chunk of odd length before the data, as
-        // eight of Ableton's WAVs have, and `symphonia` does.
-        _ => decode_wav(path).or_else(|error| match error {
-            SampleError::Read { .. } => decode_other(path, "wav").map_err(|_| error),
-            error => Err(error),
-        }),
-    }?;
+    let decoded = decode_sample(path)?;
+    let info = decoded.info();
     let Decoded {
         samples,
         channels,
         rate: file_rate,
     } = decoded;
-    let info = SampleInfo {
-        rate: file_rate,
-        channels,
-        frames: samples.len() / usize::from(channels.max(1)),
-    };
     let stereo: Vec<f32> = if channels == 1 {
         samples.iter().flat_map(|s| [*s, *s]).collect()
     } else {
@@ -123,6 +122,23 @@ pub fn load_sample_with_info(
         frames: converted.as_chunks::<2>().0.to_vec(),
     };
     Ok((sample, info))
+}
+
+/// Read a WAV, AIFF or FLAC file as it is, at its own rate and with its own channels, as
+/// [`load_sample`] reads it before making it stereo at the program's rate.
+pub fn decode_sample(path: &Path) -> Result<Decoded, SampleError> {
+    let extension = path
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase());
+    match extension.as_deref() {
+        Some(other @ ("aif" | "aiff" | "flac")) => decode_other(path, other),
+        // `hound` doesn't skip the pad byte after a chunk of odd length before the data, as
+        // eight of Ableton's WAVs have, and `symphonia` does.
+        _ => decode_wav(path).or_else(|error| match error {
+            SampleError::Read { .. } => decode_other(path, "wav").map_err(|_| error),
+            error => Err(error),
+        }),
+    }
 }
 
 /// Read a WAV file with `hound`.

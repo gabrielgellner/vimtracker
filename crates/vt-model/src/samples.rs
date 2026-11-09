@@ -2,11 +2,15 @@
 //!
 //! The pool only grows during a session and IDs stay stable, so a playing voice can keep its
 //! sample until it ends. Replaced samples stay in memory until the project reloads.
+//!
+//! It also keeps each file's analysis, by content, once it's read or worked out.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::analysis::Analysis;
+use crate::bank::ContentHash;
 use crate::sample::{SampleData, SampleError, load_sample_with_info};
 
 /// A sample's stable place in the pool.
@@ -47,6 +51,29 @@ pub struct SamplePool {
     /// Each sample's rates, in the same order.
     rates: Vec<Rates>,
     by_path: HashMap<String, SampleId>,
+    analyses: HashMap<ContentHash, Arc<Analysis>>,
+}
+
+impl SamplePool {
+    /// The analysis of a file's content, once it's in.
+    pub fn analysis(&self, hash: ContentHash) -> Option<&Arc<Analysis>> {
+        self.analyses.get(&hash)
+    }
+
+    /// Keep an analysis, by the content it's of.
+    pub fn insert_analysis(&mut self, analysis: Arc<Analysis>) {
+        self.analyses.insert(analysis.hash, analysis);
+    }
+
+    /// Keep every analysis another pool has, as one loaded again at another rate can, since an
+    /// analysis is of the file at its own rate.
+    pub fn keep_analyses(&mut self, other: &SamplePool) {
+        for analysis in other.analyses.values() {
+            self.analyses
+                .entry(analysis.hash)
+                .or_insert_with(|| Arc::clone(analysis));
+        }
+    }
 }
 
 impl SamplePool {
