@@ -313,6 +313,28 @@ starts again wherever the count does; at `Play`, only when playing starts; and
 every so many loops of the chain, counted from where it started. It adds once a
 row, or with `Adds` set, on each pulse of a `MLT` or each hit of a `RET`.
 
+## An arpeggio lasts its note
+
+An `ARP xy` goes round its row's note, `x` up and `y` up, in scale degrees with the
+scale on, at the track's `Rate`, in its `Mode` and over its octaves. Like a lock, it
+belongs to the note: it starts where the note does, after the groove, the nudge and
+any `DEL`, and lasts as long as the note does, through the row's pulses and the
+empty rows after, until the next note, an `OFF`, `KIL` or rest, or the gate closing.
+A `MLT`'s pulses are each a new note, so each starts it again; a `HLD` ties it into
+the next row's note, where it goes on round from that note:
+
+```text
+rows:        C-4 ARP 40 HLD    D-4            Rate 1/32T, three to a step
+heard:       C  E  C           F# D  F#
+```
+
+Its notes are worked out from the note as it's heard, after an `ACU`, and the
+chain's transpose goes on after, so both move it. `Rate` is a share of the track's
+step, so a track at `1/8` arpeggiates half as fast. With `Retrig` off, each note
+only changes the pitch, as a tie does; on, each starts again, as a `RET`'s does.
+`Random` draws from a stream of the track's own, so `CHA` rolls as it would
+without it, and a render repeats.
+
 ## The keys, by column
 
 | Cursor on | `gs`, `ge`, `:len` | `:lane 3` |

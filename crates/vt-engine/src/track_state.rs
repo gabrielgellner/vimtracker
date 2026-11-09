@@ -1,6 +1,7 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
 use vt_model::accumulator::{Accumulation, Moves, Walk};
+use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
@@ -323,6 +324,29 @@ pub struct Retrigger {
     pub accumulates: Option<Accumulating>,
 }
 
+/// A note's arpeggio, going round its notes at its rate for as long as the note lasts.
+#[derive(Debug, Clone, Copy)]
+pub struct Arpeggiating {
+    pub cycle: Cycle,
+    /// Its `ARP`'s value, which a `HLD` carries into the note it ties into, unless that row has
+    /// one of its own.
+    pub value: u8,
+    pub mode: ArpMode,
+    /// Whether each note starts the envelopes again, rather than only changing the pitch.
+    pub retrig: bool,
+    /// Where its first note started, which each later one is counted from, so they don't drift.
+    pub from: u64,
+    /// How many of its notes have started, the first among them.
+    pub played: u64,
+    /// Which of the cycle's notes is sounding.
+    pub place: usize,
+    /// How long each note is, in ticks of a step 240 long, and how long the track's step is, in
+    /// ticks, so a note is that share of it.
+    pub note_ticks: u64,
+    pub step_ticks: u64,
+    pub next_at: u64,
+}
+
 /// A row whose accumulator moves its note on each time its retrigger hits.
 #[derive(Debug, Clone, Copy)]
 pub struct Accumulating {
@@ -480,6 +504,10 @@ pub struct TrackState {
     /// When the note's gate closes, `Gate` of the way through its last pulse.
     pub gate_at: Option<u64>,
     pub retrigger: Option<Retrigger>,
+    /// The sounding note's arpeggio, if it has one.
+    pub arp: Option<Arpeggiating>,
+    /// The rolls an arpeggio in `Random` takes, apart from `rng` so `CHA` rolls as it did.
+    pub arp_rng: Pcg32,
     /// Steps, or parts of them, waiting for where their groove and nudge land them, and when the
     /// soonest lands, so a track with none waiting isn't looked through.
     pub pending: [Option<PendingStep>; PENDING_PARTS],
@@ -633,6 +661,11 @@ fn groove_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (MAX_TRACKS + index) as u64)
 }
 
+/// The generator for a track's random arpeggios, on streams after every track's humanise.
+fn arp_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(seed, (2 * MAX_TRACKS + index) as u64)
+}
+
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
 /// On the `00` to `FF` scale, with the fine part as the fraction.
 fn heard(layers: &ValueLayers) -> f32 {
@@ -673,6 +706,8 @@ impl TrackState {
             off_at: None,
             gate_at: None,
             retrigger: None,
+            arp: None,
+            arp_rng: arp_rng(seed, index),
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
                 for id in SettingId::all() {
@@ -791,6 +826,8 @@ impl TrackState {
         self.forget_conditions();
         self.forget_accumulators();
         self.groove_rng = groove_rng(seed, index);
+        self.arp_rng = arp_rng(seed, index);
+        self.arp = None;
         self.last_note = None;
         self.load(track);
         for id in SettingId::all() {
@@ -1061,6 +1098,16 @@ impl TrackState {
 
     /// Start a new note, cancelling anything pending for the old one.
     pub fn start(&mut self, note: NoteOn, rate: u32) {
+        self.begin(note, rate, false);
+    }
+
+    /// Start an arpeggio's next note again, as `start` does, with any noise its synth draws taken
+    /// from the arpeggio's own random stream, so `CHA` rolls as it would without it.
+    pub fn restrike(&mut self, note: NoteOn, rate: u32) {
+        self.begin(note, rate, true);
+    }
+
+    fn begin(&mut self, note: NoteOn, rate: u32, arpeggio: bool) {
         let from = if note.shape.reset {
             0.0
         } else {
@@ -1084,7 +1131,12 @@ impl TrackState {
         }
         self.voice.set_synth(self.synth_settings());
         if self.voice.uses_noise() {
-            self.voice.seed_noise(self.rng.next_u32());
+            let rng = if arpeggio {
+                &mut self.arp_rng
+            } else {
+                &mut self.rng
+            };
+            self.voice.seed_noise(rng.next_u32());
         }
     }
 
@@ -1239,6 +1291,7 @@ impl TrackState {
         self.off_at = None;
         self.gate_at = None;
         self.retrigger = None;
+        self.arp = None;
         self.pending = [None; PENDING_PARTS];
         self.soonest = u64::MAX;
         self.tied = false;

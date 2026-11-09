@@ -10182,7 +10182,7 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     use vt_model::accumulator::{Accumulation, AtLimit, Moves, Reset};
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LG");
+    press(&mut app, " 4LGk");
     let text = track_text(&app).join("\n");
     assert!(
         text.contains("Up     Down   Moves  Limit  Adds   Reset"),
@@ -10292,4 +10292,169 @@ fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
     play_to(&mut app, &mut rt, &mut at, 3.5);
     assert!(row_text(&app, 1).contains("D-4"), "{}", row_text(&app, 1));
     assert_eq!(value_shown(&app), None);
+}
+
+#[test]
+fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    press(&mut app, "lllllK");
+    press(&mut app, "ARP");
+    let picker = app.picker.as_ref().expect("the commands are listed");
+    assert_eq!(
+        listed(picker.current().unwrap()),
+        "ARP  Arpeggio: the note, x up and y up"
+    );
+    special(&mut app, KeyCode::Enter);
+    // As `RET`'s, its two digits are typed, and nothing goes in until they are.
+    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(slot(&app).command, None);
+    let depth = app.history.undo_depth();
+    press(&mut app, "47");
+    assert_eq!(slot(&app).command, Some(FxCommand::Arp));
+    assert_eq!(slot(&app).coarse(), 0x47);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(column_name(&app), "Arpeggio: the note, x up and y up");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("the note, 4 and 7 semitones up, Up at Tick, 1 octave, legato")
+    );
+
+    // `=` and `-` move the second note and `+` and `_` the first, neither carrying into the other.
+    press(&mut app, "===");
+    assert_eq!(slot(&app).coarse(), 0x4A);
+    press(&mut app, "______");
+    assert_eq!(slot(&app).coarse(), 0x0A, "it stops at 0");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("the note and 10 semitones up, Up at Tick, 1 octave, legato")
+    );
+    press(&mut app, "r00");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("only the note's octaves, Up at Tick, 1 octave, legato")
+    );
+
+    // With the scale on, they're degrees.
+    press(&mut app, "r24");
+    command(&mut app, "set scale=on");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("the note, 2 and 4 scale degrees up, Up at Tick, 1 octave, legato")
+    );
+}
+
+#[test]
+fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
+    use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LG");
+    let text = track_text(&app).join("\n");
+    assert!(text.contains("Rate   Mode     Oct    Retrig"), "{text}");
+    assert!(
+        text.contains("Arp       Tick   Up       1      off"),
+        "{text}"
+    );
+    assert_eq!(column_name(&app), "Arp rate");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("six notes to a step, a tick, as DEL counts")
+    );
+    let arpeggio = |app: &App| app.song().tracks[0].arpeggio;
+
+    // The rates go from the shortest note to the longest, and stop at either end.
+    press(&mut app, "=");
+    assert_eq!(arpeggio(&app).rate, ArpRate::SixtyFourth);
+    press(&mut app, "---");
+    assert_eq!(arpeggio(&app).rate, ArpRate::HundredTwentyEighth);
+    press(&mut app, "x");
+    assert_eq!(arpeggio(&app), Arpeggio::default());
+    // `K` lists them with how many notes each plays to a step.
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().expect("the rates are listed");
+    assert_eq!(picker.title, "Arp rate");
+    assert_eq!(picker.current().unwrap().label, "Tick");
+    let items: Vec<String> = picker.items().iter().map(listed).collect();
+    assert_eq!(items[4], "1/32  Two notes to a step");
+    assert_eq!(items.len(), 9);
+    press(&mut app, "jjj");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(arpeggio(&app).rate, ArpRate::ThirtySecond);
+
+    // The modes go round, and `K` lists them.
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Arp mode");
+    press(&mut app, "-");
+    assert_eq!(arpeggio(&app).mode, ArpMode::Random);
+    press(&mut app, "K");
+    let items: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(listed)
+        .collect();
+    assert_eq!(items[2], "Up-down  Up and back down, the ends played once");
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(arpeggio(&app).mode, ArpMode::UpDown);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("up and back down, the ends played once")
+    );
+
+    // The octaves are a number from 1 to 4.
+    press(&mut app, "l====");
+    assert_eq!(arpeggio(&app).octaves, 4);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("4 octaves: the notes climb that many before it starts again")
+    );
+    press(&mut app, "i2");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(arpeggio(&app).octaves, 2);
+    press(&mut app, "i5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(arpeggio(&app).octaves, 2);
+    assert!(app.status.contains("from 1 to 4"), "{}", app.status);
+
+    // Retrig is on or off.
+    press(&mut app, "l=");
+    assert!(arpeggio(&app).retrig);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("each note starts again, with its envelopes")
+    );
+    let text = track_text(&app).join("\n");
+    assert!(
+        text.contains("Arp       1/32   Up-down  2      on"),
+        "{text}"
+    );
+    press(&mut app, "x");
+    assert!(!arpeggio(&app).retrig);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("legato: each note only changes the pitch, and Acid slides")
+    );
+}
+
+#[test]
+fn a_return_has_no_arpeggio() {
+    let (mut app, _realtime) = app();
+    let returns = app
+        .song()
+        .tracks
+        .iter()
+        .position(|track| !track.is_sound())
+        .unwrap();
+    for _ in 0..returns {
+        press(&mut app, "W");
+    }
+    press(&mut app, " 4LG");
+    let text = track_text(&app).join("\n");
+    assert!(!text.contains("Arp "), "{text}");
 }

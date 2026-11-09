@@ -105,6 +105,7 @@ These have no mark.
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
+| `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
 track's own, so on a track at `1/8` it's half an eighth. They count from where
@@ -196,6 +197,44 @@ in its chain moves on each time.
 The grid shows notes as written. While playing, the row under the playhead shows
 the note heard, before the chain's transpose, and the status line says it on the
 Note column.
+
+## Arpeggios
+
+`ARP xy` goes round its row's note, the note `x` up and the note `y` up, as
+Renoise's `-Axy` and the M8's `ARP` do, so `ARP 47` on a `C-4` plays C, E and G
+over and over. With the scale on, `x` and `y` are scale degrees, as the home row
+is, so `ARP 24` plays a triad in any scale; with it off they're semitones. A `0`
+leaves that one out, for a two-note arpeggio: `ARP 70` and `ARP 07` both go
+between the note and its fifth. Type its two digits after choosing it with `K`;
+`=` and `-` move `y`, and `+` and `_` move `x`.
+
+The track's arpeggio settings are the `Arp` row on the Mod page:
+
+| Setting | Does |
+|---|---|
+| `Rate` | How long each note is: `Tick`, a sixth of a step, or `1/128` to `1/8` |
+| `Mode` | `Up`, `Down`, `Up-down` or `Random` |
+| `Oct` | How many octaves it climbs before it starts again, 1 to 4 |
+| `Retrig` | `off` only changes the pitch, `on` starts each note again |
+
+`Tick` is the default, six notes to a step, the tracker feel. A division is as
+long against the track's step as on a track at `1/16`, so on a track at `1/8`
+each note is twice as long, as everything that's a share of a step is. `Up` plays
+the note, `x` then `y`, then the same an octave up for each octave; `Down` plays
+that backwards from the top, `Up-down` goes up and back without playing the ends
+twice, and `Random` picks any of them each time, the same in every render. With
+`Oct` at 2, `ARP 00` goes between the note and its octave. With `Retrig` off each
+note only changes the pitch, and on `Acid` it slides; on, each note starts again
+with its envelopes, as a `RET` does.
+
+It lasts as long as its note: through the row's pulses and any empty rows after,
+until the next note, an `OFF`, a `KIL`, a rest or the note's gate closing. A
+`HLD` carries it on into the note it ties into, going round from that note where
+it was, with that row's own `ARP` if it has one. Any other note starts again with
+its own `ARP`, or none. Each pulse of a `MLT` is a new note, so it starts again on
+each. It starts where the note does, after the groove, the nudge and any `DEL`, and
+an `ACU` or the chain's transpose moves it with the note. One voice plays it, a
+note at a time, so it isn't a chord.
 
 ## Groove
 

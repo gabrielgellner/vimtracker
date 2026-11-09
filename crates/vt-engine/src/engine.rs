@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
+use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
@@ -31,8 +32,8 @@ use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
 use crate::track_state::{
-    Accumulating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part, PendingStep,
-    Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
+    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part,
+    PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
 };
 use crate::voice::NoteOn;
 
@@ -1377,6 +1378,7 @@ impl Engine {
                 track.off_at,
                 track.gate_at,
                 track.retrigger.map(|r| r.next_at),
+                track.arp.map(|arp| arp.next_at),
             ];
             for at in events.into_iter().flatten() {
                 soonest = soonest.min(at.saturating_sub(self.clock));
@@ -1448,13 +1450,16 @@ impl Engine {
                     t.retrigger = retrigger;
                 }
             }
+            // Whatever ends the note ends its arpeggio.
             if self.tracks[index].kill_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].kill_at = None;
+                self.tracks[index].arp = None;
                 self.release_modulation(index);
                 self.tracks[index].cut_to_tail();
             }
             if self.tracks[index].off_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].off_at = None;
+                self.tracks[index].arp = None;
                 self.release_modulation(index);
                 self.tracks[index].voice.release();
             }
@@ -1463,8 +1468,15 @@ impl Engine {
             if self.tracks[index].gate_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].gate_at = None;
                 self.tracks[index].retrigger = None;
+                self.tracks[index].arp = None;
                 self.release_modulation(index);
                 self.tracks[index].voice.release();
+            }
+            // An arpeggio's note goes before a ratchet due with it, so the ratchet strikes it.
+            if let Some(arp) = self.tracks[index].arp
+                && arp.next_at <= clock
+            {
+                self.fire_arp(index, arp);
             }
             if let Some(retrigger) = self.tracks[index].retrigger
                 && retrigger.next_at <= clock
@@ -1514,6 +1526,50 @@ impl Engine {
         track.retrigger = Some(Retrigger {
             next_at: retrigger.next_at + retrigger.interval,
             ..retrigger
+        });
+    }
+
+    /// Play an arpeggio's next note: as a tie, which changes only the pitch, or with `Retrig` on,
+    /// starting the note and its envelopes again. Each note is counted from the first, so a long
+    /// note's don't drift.
+    fn fire_arp(&mut self, index: usize, arp: Arpeggiating) {
+        let rate = self.rate;
+        let audible = self.plays(index);
+        let Some(note) = self.tracks[index].last_note else {
+            self.tracks[index].arp = None;
+            return;
+        };
+        let roll = if arp.mode == ArpMode::Random {
+            self.tracks[index].arp_rng.next_u32()
+        } else {
+            0
+        };
+        let place = arp.cycle.place(arp.mode, arp.played, roll);
+        let next = NoteOn {
+            note: arp.cycle.note(place),
+            ..note
+        };
+        if arp.retrig {
+            self.start_modulation(index);
+            let track = &mut self.tracks[index];
+            let (kill, off, gate) = (track.kill_at, track.off_at, track.gate_at);
+            if audible {
+                track.restrike(next, rate);
+            }
+            track.kill_at = kill;
+            track.off_at = off;
+            track.gate_at = gate;
+            track.last_note = Some(next);
+        } else {
+            self.tracks[index].tie(next);
+        }
+        let played = arp.played + 1;
+        let next_at = arp.from + self.frames_of(played * arp.note_ticks, arp.step_ticks);
+        self.tracks[index].arp = Some(Arpeggiating {
+            played,
+            place,
+            next_at,
+            ..arp
         });
     }
 
@@ -1735,6 +1791,7 @@ impl Engine {
                                 | FxCommand::Off
                                 | FxCommand::Ret
                                 | FxCommand::Acu
+                                | FxCommand::Arp
                         )
                     )
         };
@@ -1760,6 +1817,7 @@ impl Engine {
         let mut off_units = None;
         let mut retrigger = None;
         let mut accumulates: Option<i8> = None;
+        let mut arpeggiates = None;
         // `CHA` and `CND` go first, as whether the note plays decides whether locks end. A row's
         // own are decided once, on its first pulse, by the step's first part to land. Every `CHA`
         // is rolled whatever the conditions say, so its rolls are the same with or without them.
@@ -1818,7 +1876,8 @@ impl Engine {
                 | FxCommand::Ret
                 | FxCommand::Cha
                 | FxCommand::Cnd
-                | FxCommand::Acu,
+                | FxCommand::Acu
+                | FxCommand::Arp,
             ) => row && decided.fx,
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
             _ => row && decided.fx,
@@ -1842,6 +1901,8 @@ impl Engine {
                         accumulates = Some(sum.clamp(-most, most));
                     }
                 }
+                // The last column's wins, as they run left to right.
+                FxCommand::Arp => arpeggiates = Some(slot.coarse()),
                 FxCommand::Set(id) if slot.mark == Mark::Glide => {
                     let value = command;
                     let to = phrase.and_then(|phrase| {
@@ -1895,6 +1956,7 @@ impl Engine {
                 self.release_modulation(index);
                 self.tracks[index].voice.release();
                 self.tracks[index].retrigger = None;
+                self.tracks[index].arp = None;
             }
             Note::Off => {}
             Note::On(_) if !plays => {}
@@ -1912,6 +1974,10 @@ impl Engine {
                 let note = (i16::from(heard) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
+                let played = (heard, position.transpose);
+                let arp = self.arpeggiate(index, &pending, arpeggiates, played, tie, start_at);
+                self.tracks[index].arp = arp;
+                let note = arp.map_or(note, |arp| arp.cycle.note(arp.place));
                 // The groove's velocity for the step scales the note's own.
                 let own = u32::from(step.velocity.unwrap_or(MAX_VELOCITY));
                 let percent = u32::from(pending.groove.velocity(running));
@@ -1976,6 +2042,54 @@ impl Engine {
                 });
             }
         }
+    }
+
+    /// The arpeggio a note starting now plays, from the note as it's heard before its chain's
+    /// transpose, which goes on after, an accumulator's move included, so the arpeggio moves with
+    /// it. A `HLD` carries the one sounding into the note it ties into, keeping its place and its
+    /// time, with that row's own `ARP` if it has one. Any other note starts one of its own, or has
+    /// none.
+    fn arpeggiate(
+        &mut self,
+        index: usize,
+        pending: &PendingStep,
+        value: Option<u8>,
+        (heard, transpose): (u8, i8),
+        tie: bool,
+        start_at: u64,
+    ) -> Option<Arpeggiating> {
+        let carried = self.tracks[index].arp.filter(|_| tie);
+        let value = value.or(carried.map(|arp| arp.value))?;
+        let settings = self.current.song.tracks.get(index)?.arpeggio;
+        let cycle = Cycle::new(heard, value, settings.octaves, self.scale, transpose);
+        if !cycle.moves() {
+            return None;
+        }
+        if let Some(carried) = carried {
+            return Some(Arpeggiating {
+                cycle,
+                value,
+                ..carried
+            });
+        }
+        let roll = if settings.mode == ArpMode::Random {
+            self.tracks[index].arp_rng.next_u32()
+        } else {
+            0
+        };
+        let note_ticks = settings.rate.ticks();
+        Some(Arpeggiating {
+            cycle,
+            value,
+            mode: settings.mode,
+            retrig: settings.retrig,
+            from: start_at,
+            played: 1,
+            place: cycle.place(settings.mode, 0, roll),
+            note_ticks,
+            step_ticks: pending.ticks,
+            next_at: start_at + self.frames_of(note_ticks, pending.ticks),
+        })
     }
 
     /// Which epoch a step's accumulators count in: the start of its chain it was worked out after,

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::accumulator::Accumulation;
+use crate::arpeggio::Arpeggio;
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
     FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, TRACK_ENVELOPES, UNITY_LEVEL,
@@ -342,6 +343,10 @@ pub struct Track {
     /// again.
     #[serde(default, skip_serializing_if = "is_default_accumulation")]
     pub accumulation: Accumulation,
+    /// How its `ARP`s play: how fast, in what order, over how many octaves, and whether each note
+    /// starts again.
+    #[serde(default, skip_serializing_if = "is_default_arpeggio")]
+    pub arpeggio: Arpeggio,
     #[serde(default)]
     pub lfos: [Lfo; LFOS_PER_TRACK],
     #[serde(default = "default_envelopes")]
@@ -360,6 +365,10 @@ fn is_sixteenth(speed: &Speed) -> bool {
 
 fn is_default_accumulation(accumulation: &Accumulation) -> bool {
     *accumulation == Accumulation::default()
+}
+
+fn is_default_arpeggio(arpeggio: &Arpeggio) -> bool {
+    *arpeggio == Arpeggio::default()
 }
 
 fn none_bypassed(bypassed: &[bool; INSERTS]) -> bool {
@@ -582,6 +591,7 @@ impl Default for Track {
             gate_length: None,
             speed: Speed::Sixteenth,
             accumulation: Accumulation::default(),
+            arpeggio: Arpeggio::default(),
             lfos: Default::default(),
             envelopes: default_envelopes(),
             chains: BTreeMap::new(),
