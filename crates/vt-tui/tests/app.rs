@@ -10458,3 +10458,54 @@ fn a_return_has_no_arpeggio() {
     let text = track_text(&app).join("\n");
     assert!(!text.contains("Arp "), "{text}");
 }
+
+#[test]
+fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
+    use vt_model::order::Order;
+    use vt_tui::input::command::Line;
+    let (mut app, _realtime) = app();
+    let order = |app: &App| app.phrase_here().unwrap().order();
+    let heading = |app: &App| -> String {
+        let buffer = screen(app);
+        (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    assert!(!heading(&app).contains("Forward"), "forward isn't named");
+    command(&mut app, "order pendulum");
+    assert_eq!(order(&app), Order::Pendulum);
+    assert!(app.status.contains("end rows once"), "{}", app.status);
+    assert!(heading(&app).contains("Pendulum"), "{}", heading(&app));
+    command(&mut app, "order sideways");
+    assert_eq!(order(&app), Order::Pendulum);
+    assert!(app.status.contains(":order takes"), "{}", app.status);
+    // With nothing after it, a list opens on the order it plays in.
+    command(&mut app, "order");
+    let picker = app.picker.as_ref().expect("the list is open");
+    assert_eq!(
+        picker.current().map(|item| item.pick.clone()),
+        Some(Pick::Line(Line::Order(Some(Order::Pendulum))))
+    );
+    assert_eq!(picker.shown().count(), Order::ALL.len());
+    press(&mut app, "shuf");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(order(&app), Order::Shuffle);
+    assert_eq!(
+        app.song().tracks[1].phrases[&0].order(),
+        Order::Forward,
+        "only this phrase's"
+    );
+    press(&mut app, "u");
+    assert_eq!(order(&app), Order::Pendulum);
+    press(&mut app, "u");
+    assert_eq!(order(&app), Order::Forward);
+}
+
+#[test]
+fn playing_from_a_row_starts_where_the_order_first_plays_it() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 4");
+    command(&mut app, "order reverse");
+    // The top row plays last in reverse, after the other three.
+    assert_eq!(app.section_step(), 3);
+    press(&mut app, "j");
+    assert_eq!(app.section_step(), 2);
+}

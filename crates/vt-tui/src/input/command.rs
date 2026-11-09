@@ -7,6 +7,7 @@ use thiserror::Error;
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::label::is_name;
+use vt_model::order::{ORDER_WORDS, Order};
 use vt_model::song::{LAUNCH_WORDS, Launch};
 
 /// A parsed command.
@@ -36,6 +37,8 @@ pub enum Line {
     Len(usize),
     /// Give the cursor's FX column a lane this long, or none to follow the notes again.
     Lane(Option<usize>),
+    /// Play this phrase's rows in an order, or choose one from a list.
+    Order(Option<Order>),
     TrackAdd(usize),
     TrackDel,
     Mute,
@@ -89,6 +92,10 @@ pub enum LineError {
     Len,
     #[error(":lane takes a number of steps, 1 or more, or nothing to follow the notes again")]
     Lane,
+    #[error(
+        ":order takes forward, reverse, pendulum, ping-pong, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
+    )]
+    Order,
     #[error(":track takes add [n] or del")]
     Track,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
@@ -285,7 +292,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 28] = [
+pub const COMMANDS: [Command; 29] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -421,6 +428,17 @@ pub const COMMANDS: [Command; 28] = [
             _ => steps(argument)
                 .map(|length| Line::Lane(Some(length)))
                 .ok_or(LineError::Lane),
+        },
+    },
+    Command {
+        name: "order",
+        meaning: "The order this phrase's rows play in",
+        takes: Takes::Words(&ORDER_WORDS),
+        parse: |argument| match argument {
+            "" => Ok(Line::Order(None)),
+            _ => Order::named(argument)
+                .map(|order| Line::Order(Some(order)))
+                .ok_or(LineError::Order),
         },
     },
     Command {
@@ -738,6 +756,12 @@ mod tests {
         assert_eq!(parse("lane"), Ok(Line::Lane(None)));
         assert_eq!(parse("lane 3"), Ok(Line::Lane(Some(3))));
         assert_eq!(parse("lane 0"), Err(LineError::Lane));
+        assert_eq!(parse("order"), Ok(Line::Order(None)));
+        assert_eq!(
+            parse("order Ping-Pong"),
+            Ok(Line::Order(Some(Order::PingPong)))
+        );
+        assert_eq!(parse("order sideways"), Err(LineError::Order));
         assert_eq!(parse("nope"), Err(LineError::Unknown("nope".into())));
     }
 }

@@ -2,8 +2,8 @@
 
 This chapter explains how a track turns its rows into sound over time. Most of the
 time you won't need it, as a track plays its rows in order, one step each, as in any
-tracker. It matters once rows have gates of different lengths, or FX columns loop on
-their own.
+tracker. It matters once rows have gates of different lengths, FX columns loop on
+their own, or a phrase plays its rows in another order.
 
 ## What a track plays
 
@@ -179,8 +179,8 @@ Each of those also lines the track's steps up again, so a track at a slower spee
 starts its next step there, even if that cuts the one before short.
 
 Edits while playing don't start it over. Changing `:len`, a gate's pulses, a chain, a
-lane's length, or undoing one of them, leaves the track on the row it was about to
-play, and on the pulse within that row, and a lane on its step. If that row has gone,
+lane's length, a phrase's order, or undoing one of them, leaves the track on the row it
+was about to play, and on the pulse within that row, and a lane on its step. If that row has gone,
 the track starts its chain again on its next step.
 
 So playing from a step hears exactly what playing up to it would, since both work the
@@ -334,6 +334,56 @@ step, so a track at `1/8` arpeggiates half as fast. With `Retrig` off, each note
 only changes the pitch, as a tie does; on, each starts again, as a `RET`'s does.
 `Random` draws from a stream of the track's own, so `CHA` rolls as it would
 without it, and a render repeats.
+
+## A phrase's order
+
+A phrase's rows play top to bottom unless `:order` gives it another order, after
+the Metropolix's ORDER. A **pass** of the phrase is one time round its order, and
+the note column walks it as it walks rows forward, so a row's pulses stay together
+and a skipped row takes no time:
+
+```text
+rows:        00 SGL1   01 MLT2   02 SGL1
+forward:     00  01 01  02                  4 steps
+reverse:     02  01 01  00                  4 steps
+pendulum:    00  01 01  02  01 01           6 steps: the middle row twice
+```
+
+`pendulum`, `ping-pong` and `pedal` play some rows twice, so a pass lasts longer
+than the rows do, and the chain, and a section it sets the length of, with it.
+Every other order plays each row once a pass, except `random`, which picks a row
+each time until the pass has lasted as long as the rows would forward, cutting its
+last pick short if it has to, so the length never depends on what it picks.
+
+What plays next is the next row in the order, so a `HLD` ties into it, and a
+glide goes to the next value in the order the rows play. A column with a lane
+keeps its own forward loop, as it counts steps rather than rows. The groove pushes
+each step by its place in the count, not by its row, and a row's nudge goes with
+its row.
+
+A condition's pass is a time round the order, still worked out from the count, so
+a row that a pendulum plays twice is in the same pass both times, and a `1:2`
+plays both or neither. An accumulator adds each time its row plays, so the same
+row moves on twice:
+
+```text
+rows:        00 -  01 C  02 -  03 -        ACU 01 on row 01's C, pendulum
+plays:       00 01 02 03 02 01 | 00 01 02 03 02 01
+heard:          C           D  |    E           F
+```
+
+`shuffle` deals each pass a new order with every row in it once; `random` picks
+any row each time, so rows repeat and some are left out. Both are dealt from the
+project's `:seed`, the track and which time round its chain this is, counted from
+where the chain started. That's a hash rather than the track's generator, so
+`CHA`, a groove's humanise and a `Random` arpeggio roll as they would without it,
+a render repeats, and playing from a step hears what playing up to it would. A
+chain that starts again deals again from its first time round, as its conditions'
+passes start again.
+
+The playhead and the other tracks' columns show the row playing. Playing from a
+row starts the phrase where its order first plays that row: a reverse phrase's
+top row is its last.
 
 ## The keys, by column
 

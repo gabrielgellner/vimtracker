@@ -16,6 +16,7 @@ use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
 use crate::lfo::Lfo;
 use crate::names::is_project_name;
+use crate::order::Order;
 use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
@@ -286,6 +287,12 @@ pub enum Action {
         track: usize,
         phrase: u32,
         length: usize,
+    },
+    /// Play a phrase's rows in another order.
+    SetOrder {
+        track: usize,
+        phrase: u32,
+        order: Order,
     },
     /// Give an FX column of a phrase a lane of its own, or none to follow the phrase's loop.
     SetLane {
@@ -929,6 +936,13 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
         Action::SlideLoop { track, phrase, by } => {
             phrase_mut(&mut next, *track, *phrase)?.slide(*by);
+        }
+        Action::SetOrder {
+            track,
+            phrase,
+            order,
+        } => {
+            phrase_mut(&mut next, *track, *phrase)?.set_order(*order);
         }
         Action::SetLane {
             track,

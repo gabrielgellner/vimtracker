@@ -158,8 +158,8 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 pub(crate) fn playhead_step(app: &App) -> Option<usize> {
     let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
-    let playhead = app.chain_playhead(app.cursor.track, chain)?;
-    let position = owner.chain_position(chain, playhead)?;
+    let playhead = app.playing_place(app.cursor.track, chain)?;
+    let position = owner.chain_position(chain, playhead, app.dealer(app.cursor.track))?;
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some(start + position.step)
@@ -233,9 +233,9 @@ struct Column<'a> {
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
-    let moving = app.chain_playhead(track, chain);
+    let moving = app.playing_place(track, chain);
     let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
-    let position = owner.chain_position(chain, place)?;
+    let position = owner.chain_position(chain, place, app.dealer(track))?;
     Some(Column {
         steps: owner.phrases.get(&position.phrase)?.loop_steps(),
         playing: moving.map(|_| position.step),
@@ -368,6 +368,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         app.cursor.slot + 1,
         app.chain_entries().len(),
     );
+    // An order other than forward is named, as a lane's length is.
+    if !phrase.order().is_forward() {
+        heading.push_str(&format!(" {}", phrase.order()));
+    }
     for slot in 0..FX_SLOTS {
         if let Some(lane) = phrase.lane(slot) {
             heading.push_str(&format!(" FX{}:{}", slot + 1, lane.length));

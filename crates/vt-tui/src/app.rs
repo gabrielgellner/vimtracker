@@ -32,6 +32,7 @@ use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::names::Names;
+use vt_model::order::Dealer;
 use vt_model::project::{self, ProjectError};
 use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
@@ -589,14 +590,27 @@ impl App {
 
     /// How far a track is through this chain, if it's playing it.
     pub fn chain_playhead(&self, track: usize, chain: u32) -> Option<usize> {
+        let length = (self.song().tracks.get(track)?.chain_steps(chain)).max(1);
+        Some(self.playing_place(track, chain)? % length)
+    }
+
+    /// How far a track is through this chain, if it's playing it, counting every time round it
+    /// since it started, as the engine does to deal a dealt order, for finding the row playing.
+    pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
         let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
         let jam = self.jam.get(track)?;
         if !moving || jam.chain != Some(chain) {
             return None;
         }
-        let length = self.song().tracks.get(track)?.chain_steps(chain) as i64;
-        let place = (self.places.get(track)?.count - jam.started).rem_euclid(length.max(1));
-        Some(place as usize)
+        let length = (self.song().tracks.get(track)?.chain_steps(chain) as i64).max(1);
+        let place = self.places.get(track)?.count - jam.started;
+        let laps = place.div_euclid(length).max(0);
+        Some((laps * length + place.rem_euclid(length)) as usize)
+    }
+
+    /// What a track's dealt orders are dealt from, as the engine deals them.
+    pub fn dealer(&self, track: usize) -> Dealer {
+        Dealer::new(self.song().seed, track)
     }
 
     /// Put the playhead at a step of the song's, with each track at the step of its own playing
@@ -714,8 +728,12 @@ impl App {
         } else {
             0
         };
-        // Rows before it last their pulses.
-        let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
+        // Rows before it last their pulses, in the phrase's order, up to where its first time
+        // round first plays the row.
+        let deal = self.dealer(self.cursor.track).deal(0, self.cursor.slot);
+        let time = self
+            .phrase_here()
+            .map_or(row, |phrase| phrase.time_to(row, deal));
         self.slot_start() + time
     }
 
@@ -1598,7 +1616,7 @@ impl App {
             .and_then(|s| s.chains.get(track).copied().flatten())
             .and_then(|chain| {
                 let place = self.step_on(track, from, section_step);
-                song.tracks[track].chain_position(chain, place)
+                song.tracks[track].chain_position(chain, place, self.dealer(track))
             });
         match position {
             Some(position) => {
@@ -2499,6 +2517,8 @@ impl App {
                 }
                 None => self.status = ":lane works on an FX column".to_owned(),
             },
+            Line::Order(Some(order)) => self.set_order(order),
+            Line::Order(None) => self.open_order_picker(),
             Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength {
