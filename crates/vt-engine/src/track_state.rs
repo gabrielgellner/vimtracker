@@ -2,6 +2,7 @@
 
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
+use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
@@ -161,6 +162,17 @@ pub struct DelayedNote {
     pub note: NoteOn,
 }
 
+/// A step worked out but not yet played, as its groove lands it later than now.
+#[derive(Debug, Clone, Copy)]
+pub struct PendingStep {
+    /// When it lands, on the track's clock.
+    pub at: u64,
+    /// Its place in the section's running count.
+    pub section_step: usize,
+    /// The groove it was worked out with, which its velocity and length follow.
+    pub groove: Groove,
+}
+
 /// Retriggering the current note.
 #[derive(Debug, Clone, Copy)]
 pub struct Retrigger {
@@ -206,8 +218,10 @@ pub struct TrackState {
     /// When the note's gate closes, `Gate` of the way through its last pulse.
     pub gate_at: Option<u64>,
     pub retrigger: Option<Retrigger>,
-    /// A step waiting for its swing delay.
-    pub swung: Option<(u64, usize)>,
+    /// A step waiting for where its groove lands it.
+    pub pending: Option<PendingStep>,
+    /// The random timing a groove's humanise adds, apart from `rng` so `CHA` rolls as it did.
+    pub groove_rng: Pcg32,
     /// What each setting is set to, by its place in the registry. The fields below it are what's
     /// heard: a voice's or an effect's settings only reach them while it's the one loaded.
     values: [ValueLayers; SettingId::COUNT],
@@ -325,6 +339,9 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::PITCH => track.pitch,
             SettingId::FILTER_MODE => track.filter_mode.index(),
             SettingId::GATE_LENGTH => track.gate_length(),
+            SettingId::GROOVE => track
+                .groove
+                .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
             _ => id.entry().default,
         },
         (Owner::Voice(_), _) => track.setting(id),
@@ -339,6 +356,11 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
         }
     };
     u16::from(whole) << 8 | u16::from(track.fine(id))
+}
+
+/// The generator for a track's humanise, on streams after every track's own for `CHA`.
+fn groove_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(seed, (MAX_TRACKS + index) as u64)
 }
 
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
@@ -370,6 +392,7 @@ impl TrackState {
             solo: false,
             heard: Smoothed::at(1.0),
             rng: Pcg32::new(seed, index as u64),
+            groove_rng: groove_rng(seed, index),
             last_note: None,
             delayed: None,
             kill_at: None,
@@ -385,7 +408,7 @@ impl TrackState {
             },
             loaded_voice: None,
             loaded_effects: [None; INSERTS],
-            swung: None,
+            pending: None,
             vol: f32::from(UNITY_LEVEL),
             send_a: 0.0,
             send_b: 0.0,
@@ -467,6 +490,7 @@ impl TrackState {
     /// glide back, so anything still sounding doesn't click.
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.rng = Pcg32::new(seed, index as u64);
+        self.groove_rng = groove_rng(seed, index);
         self.last_note = None;
         self.load(track);
         for id in SettingId::all() {
@@ -774,6 +798,26 @@ impl TrackState {
         gate_share(base + moved)
     }
 
+    /// The groove a step chooses, on `GRV`'s scale: a lock over the held value, or the held value
+    /// alone once a new note has ended the locks.
+    pub fn held_groove(&self, locks_end: bool) -> u8 {
+        let layers = &self.values[SettingId::GROOVE.index()];
+        let value = match layers.lock {
+            Some(lock) if !locks_end => lock,
+            _ => layers.base,
+        };
+        (value >> 8) as u8
+    }
+
+    /// How far either way a groove's humanise moves a step, at random, in ticks.
+    pub fn humanise(&mut self, ticks: u8) -> i64 {
+        if ticks == 0 {
+            return 0;
+        }
+        let spread = u32::from(ticks) * 2 + 1;
+        i64::from(self.groove_rng.next_u32() % spread) - i64::from(ticks)
+    }
+
     /// Fade the playing note.
     pub fn cut_to_tail(&mut self) {
         if self.voice.active() {
@@ -791,7 +835,7 @@ impl TrackState {
         self.off_at = None;
         self.gate_at = None;
         self.retrigger = None;
-        self.swung = None;
+        self.pending = None;
         self.tied = false;
         self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }

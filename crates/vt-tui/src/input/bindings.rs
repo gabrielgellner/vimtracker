@@ -213,7 +213,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     (
         "Space 9",
         Cmd::ShowView(View::Project),
-        "Project: tempo, scale, saving and rendering",
+        "Project: tempo, grooves, scale, saving and rendering",
     ),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),

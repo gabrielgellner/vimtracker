@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
-    MAX_SOUND_TRACKS, MAX_SWING, MAX_TRACKS, MIN_MILLIBPM, MIN_SWING, PREVIEW_MS,
-    TICKS_PER_QUARTER, TICKS_PER_STEP,
+    MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, PREVIEW_MS, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
+use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
 use vt_model::sample::SampleData;
 use vt_model::settings::SettingId;
@@ -23,7 +23,9 @@ use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::Published;
-use crate::track_state::{DelayedNote, Keys, LiveValues, Retrigger, SongTime, TrackState, base_of};
+use crate::track_state::{
+    DelayedNote, Keys, LiveValues, PendingStep, Retrigger, SongTime, TrackState, base_of,
+};
 use crate::voice::NoteOn;
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
@@ -44,12 +46,6 @@ pub fn sample_of_tick(tick_from_origin: u64, rate: u32, millibpm: u32) -> u64 {
     let numerator = u128::from(tick_from_origin) * 60 * u128::from(rate) * 1000;
     let denominator = u128::from(TICKS_PER_QUARTER) * u128::from(millibpm);
     (numerator / denominator) as u64
-}
-
-/// How many ticks swing delays odd steps by, for a swing in tenths of a percent.
-pub fn swing_ticks(swing: u16) -> u64 {
-    let swing = u64::from(swing.clamp(MIN_SWING, MAX_SWING));
-    (TICKS_PER_STEP * 2 * swing + 500) / 1000 - TICKS_PER_STEP
 }
 
 /// Sequencer and voices. It owns all its state ahead of time, and `process` doesn't allocate.
@@ -81,6 +77,9 @@ pub struct Engine {
     /// Where the next step falls for the tracks, which each loop at their own length. Separate from
     /// `next_step` so a reset moves the tracks but not the beat.
     place: u64,
+    /// Where the step before the last one worked out fell, which is still the one heard while a
+    /// groove's lead has worked the next out early.
+    heard_place: u64,
     /// The tick the tempo began at.
     origin_tick: u64,
     /// Frames played since `origin_tick`.
@@ -156,6 +155,7 @@ impl Engine {
             loop_section: None,
             next_step: 0,
             place: 0,
+            heard_place: 0,
             origin_tick: 0,
             frames_since_origin: 0,
             clock: 0,
@@ -204,7 +204,11 @@ impl Engine {
             return 0;
         }
         let fired = self.transport == Transport::Playing && self.frames_since_origin > 0;
-        let place = self.place.saturating_sub(u64::from(fired));
+        let place = if fired && self.worked_out_early(false) {
+            self.heard_place
+        } else {
+            self.place.saturating_sub(u64::from(fired))
+        };
         if self.past_reset(place) {
             0
         } else {
@@ -219,9 +223,22 @@ impl Engine {
         if !self.has_steps() || !fired || self.next_step == 0 {
             return 0.0;
         }
-        let last = ((self.next_step - 1) * TICKS_PER_STEP) as f64;
-        let progress = (self.song_time().tick - last) / TICKS_PER_STEP as f64;
+        let back = if self.worked_out_early(false) { 2 } else { 1 };
+        let last = self.next_step.saturating_sub(back);
+        let progress =
+            (self.song_time().tick - (last * TICKS_PER_STEP) as f64) / TICKS_PER_STEP as f64;
         progress.clamp(0.0, 1.0) as f32
+    }
+
+    /// Whether the last step worked out has its place on the grid still to come, or just here
+    /// if `or_now`, as a groove that lands steps early has them worked out before their place.
+    fn worked_out_early(&self, or_now: bool) -> bool {
+        if self.current.lead == 0 || self.next_step == 0 {
+            return false;
+        }
+        let place = ((self.next_step - 1) * TICKS_PER_STEP).saturating_sub(self.origin_tick);
+        let at = sample_of_tick(place, self.rate, self.millibpm);
+        self.frames_since_origin < at || or_now && self.frames_since_origin == at
     }
 
     /// Whether a place is one the section's reset would already have sent back to the start.
@@ -421,8 +438,15 @@ impl Engine {
         self.loop_section = section;
     }
 
-    /// Go back to the first section's start without touching anything sounding, for a render.
+    /// Go back to the first section's start without touching anything sounding, for a render. A
+    /// step a groove's lead worked out early is worked out again from the top.
     pub fn rewind(&mut self) {
+        if self.worked_out_early(true) {
+            self.next_step -= 1;
+            for track in self.tracks.iter_mut() {
+                track.pending = None;
+            }
+        }
         self.section = 0;
         self.section_place = 0;
         self.realign();
@@ -1109,13 +1133,34 @@ impl Engine {
         }
     }
 
-    /// Frames until the next step fires.
+    /// Frames until the next step is worked out: its place on the grid, or as far before it as
+    /// a groove can land a step early.
     fn frames_until_next_step(&self) -> u64 {
         if !self.has_steps() {
             return u64::MAX;
         }
-        let tick = (self.next_step * TICKS_PER_STEP).saturating_sub(self.origin_tick);
+        let tick = (self.next_step * TICKS_PER_STEP)
+            .saturating_sub(self.current.lead)
+            .saturating_sub(self.origin_tick);
         sample_of_tick(tick, self.rate, self.millibpm).saturating_sub(self.frames_since_origin)
+    }
+
+    /// Where on the clock a step lands: its place on the grid, moved by its push in ticks. Each
+    /// part is worked out from the tempo's origin, so a step on the grid lands where it always
+    /// did, and swing's delay is what it always was.
+    fn landing(&self, grid: u64, push: i64) -> u64 {
+        let on_grid = sample_of_tick(
+            grid.saturating_sub(self.origin_tick),
+            self.rate,
+            self.millibpm,
+        );
+        let moved = sample_of_tick(push.unsigned_abs(), self.rate, self.millibpm);
+        let lands = if push >= 0 {
+            on_grid + moved
+        } else {
+            on_grid.saturating_sub(moved)
+        };
+        (self.clock + lands).saturating_sub(self.frames_since_origin)
     }
 
     /// Frames until a track's delayed, cut, release or retrigger event.
@@ -1123,7 +1168,7 @@ impl Engine {
         let mut soonest = u64::MAX;
         for track in self.tracks.iter() {
             let events = [
-                track.swung.map(|(at, _)| at),
+                track.pending.map(|step| step.at),
                 track.delayed.map(|d| d.at),
                 track.kill_at,
                 track.off_at,
@@ -1139,13 +1184,25 @@ impl Engine {
 
     /// How long a note of so many pulses is held for, from its start, at its row's own length or
     /// else the track's `Gate`, or `None` at 100%, which holds it until something ends it, as
-    /// before there was a `Gate`.
-    fn gate_frames(&self, index: usize, pulses: usize, own: Option<u8>) -> Option<u64> {
+    /// before there was a `Gate`. Its pulses are steps as the groove lands them, so it runs to
+    /// where its last pulse lands, and then its share of how long the groove makes that pulse.
+    fn gate_frames(
+        &self,
+        index: usize,
+        pulses: usize,
+        own: Option<u8>,
+        step: &PendingStep,
+    ) -> Option<u64> {
         let share = self.tracks[index].gate_share(own);
         if share >= 1.0 {
             return None;
         }
-        let pulses = pulses.saturating_sub(1) as f64 + f64::from(share);
+        let (groove, first) = (&step.groove, step.section_step);
+        let last = first + pulses.saturating_sub(1);
+        let ticks = TICKS_PER_STEP as f64;
+        let moved = f64::from(groove.push(last)) - f64::from(groove.push(first));
+        let length = groove.length(last) as f64 / ticks;
+        let pulses = pulses.saturating_sub(1) as f64 + moved / ticks + f64::from(share) * length;
         let step = TICKS_PER_STEP as f64 * 60.0 * f64::from(self.rate) * 1000.0
             / (TICKS_PER_QUARTER as f64 * f64::from(self.millibpm));
         Some((pulses * step).round() as u64)
@@ -1168,11 +1225,11 @@ impl Engine {
     fn fire_due_events(&mut self) {
         let clock = self.clock;
         for index in 0..MAX_TRACKS {
-            if let Some((at, section_step)) = self.tracks[index].swung
-                && at <= clock
+            if let Some(step) = self.tracks[index].pending
+                && step.at <= clock
             {
-                self.tracks[index].swung = None;
-                self.fire_track(index, section_step);
+                self.tracks[index].pending = None;
+                self.fire_track(index, step);
             }
             if let Some(delayed) = self.tracks[index].delayed
                 && delayed.at <= clock
@@ -1246,8 +1303,10 @@ impl Engine {
         });
     }
 
-    /// Fire every track for the next step.
+    /// Work out every track's next step, and play each now or when its groove lands it.
     fn fire_step(&mut self) {
+        // The step last worked out, which is still the one heard until this one's place comes.
+        self.heard_place = self.place.saturating_sub(1);
         if !self.enter_section_if_due() {
             return;
         }
@@ -1255,36 +1314,84 @@ impl Engine {
             self.realign();
         }
         let section_step = self.place as usize;
+        let grid = self.next_step * TICKS_PER_STEP;
+        let lead = self.current.lead as i64;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
         for index in 0..tracks {
-            // A big tempo jump can bring this step before the last one's swing delay ended.
-            if let Some((_, pending)) = self.tracks[index].swung.take() {
+            // A big tempo jump can bring this step before the last one landed.
+            if let Some(pending) = self.tracks[index].pending.take() {
                 self.fire_track(index, pending);
             }
             self.start_cued(index, section_step);
             self.tracks[index].playing = self.track_chain(index);
-            let delay = self.swing_frames(index, section_step);
-            if delay > 0 {
-                self.tracks[index].swung = Some((self.clock + delay, section_step));
+            // The groove counts the running count every track shares, from the start or the last
+            // reset, not each track's own loop, so an odd length stays on the beat.
+            let groove = self.step_groove(index, section_step);
+            let humanise = self.tracks[index].humanise(groove.humanise());
+            let push =
+                (i64::from(groove.push(section_step)) + humanise).clamp(-lead, i64::from(MAX_PUSH));
+            let step = PendingStep {
+                at: self.landing(grid, push),
+                section_step,
+                groove,
+            };
+            if step.at > self.clock {
+                self.tracks[index].pending = Some(step);
             } else {
-                self.fire_track(index, section_step);
+                self.fire_track(index, step);
             }
         }
     }
 
-    /// How long a track's step waits for swing. Pairs count from the start or the last reset, not
-    /// from each track's own loop, so an odd length stays on the same grid as everything else.
-    fn swing_frames(&self, index: usize, section_step: usize) -> u64 {
-        if section_step.is_multiple_of(2) {
-            return 0;
-        }
+    /// The groove a track's step plays with, worked out before it's played, as it says when the
+    /// step lands: a `GRV` on its row or in a lane at it, or else what the track holds, which a
+    /// note on the row's first pulse ends any lock of, as playing it will. `00` is the project's.
+    fn step_groove(&self, index: usize, section_step: usize) -> Groove {
         let song = &self.current.song;
-        let swing = song.tracks[index].swing.unwrap_or(song.swing);
-        sample_of_tick(swing_ticks(swing), self.rate, self.millibpm)
+        let state = &self.tracks[index];
+        // With no `GRV` in the song, there's no row to look on, and the track holds its own.
+        let row = self
+            .track_place(index, section_step)
+            .filter(|_| self.current.groove_steps)
+            .and_then(|(chain, place)| {
+                let owner = song.tracks.get(index)?;
+                let position = owner.chain_position(chain, place)?;
+                let phrase = owner.phrases.get(&position.phrase)?;
+                Some((position, owner.step_at(position)?, phrase))
+            });
+        let value = match row {
+            Some((position, step, phrase)) => {
+                let first = position.pulse == 0;
+                let count = section_step as i64 - state.started;
+                // The last column's wins, as they run left to right.
+                let chosen = (0..FX_SLOTS)
+                    .rev()
+                    .filter_map(|number| match phrase.lane(number) {
+                        Some(lane) => {
+                            let at = lane.step_at(count + state.lane_offsets[number]);
+                            phrase.steps().get(at)?.fx.get(number)
+                        }
+                        None if first => step.fx.get(number),
+                        None => None,
+                    })
+                    .find(|slot| slot.command == Some(FxCommand::Set(SettingId::GROOVE)))
+                    .map(|slot| slot.coarse());
+                let note =
+                    first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
+                chosen.unwrap_or_else(|| state.held_groove(note))
+            }
+            None => state.held_groove(false),
+        };
+        let id = match usize::from(value).checked_sub(1) {
+            Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
+            None => song.groove,
+        };
+        song.groove(id)
     }
 
     /// Start or stop a track's note for a step, and run its FX left to right.
-    fn fire_track(&mut self, index: usize, section_step: usize) {
+    fn fire_track(&mut self, index: usize, pending: PendingStep) {
+        let section_step = pending.section_step;
         self.tracks[index].retrigger = None;
         let current = Arc::clone(&self.current);
         let song = &current.song;
@@ -1406,7 +1513,15 @@ impl Engine {
                 let note = (i16::from(midi) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
-                let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
+                // The groove's velocity for the step scales the note's own.
+                let own = u32::from(step.velocity.unwrap_or(MAX_VELOCITY));
+                let percent = u32::from(pending.groove.velocity(section_step));
+                let velocity = if percent == u32::from(FULL_VELOCITY) {
+                    own
+                } else {
+                    (own * percent + 50) / 100
+                };
+                let velocity = velocity.min(u32::from(MAX_VELOCITY)) as u8;
                 let on = self.note_on(index, note, velocity, self.note_shape(index));
                 match on {
                     // A `Hold` before it ties into this note, with no new attack.
@@ -1441,7 +1556,7 @@ impl Engine {
                 step.pulses()
             };
             self.tracks[index].gate_at = self
-                .gate_frames(index, pulses, step.length())
+                .gate_frames(index, pulses, step.length(), &pending)
                 .map(|frames| start_at + frames);
         }
         if let Some(units) = kill_units {

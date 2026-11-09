@@ -4,8 +4,9 @@ use ratatui::crossterm::event::KeyCode;
 use std::sync::Arc;
 
 use vt_model::action::{Action, TrackControl, edit};
-use vt_model::constants::{MAX_ENVELOPE_MS, MAX_SWING, MIN_SWING, TRACK_ENVELOPES};
+use vt_model::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
 use vt_model::envelope::Envelope;
+use vt_model::groove::GrooveId;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{
@@ -17,16 +18,12 @@ use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
-use crate::input::command::swing;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 
 /// How far a small and a large step move a phase, in degrees.
 const PHASE_NUDGE: i32 = 15;
 const PHASE_JUMP: i32 = 90;
-/// How far a small and a large step move a swing, in tenths of a percent.
-const SWING_NUDGE: i32 = 10;
-const SWING_JUMP: i32 = 50;
 /// How far a large step moves `Gate`, in percent.
 const GATE_JUMP: i32 = 10;
 /// How many small steps a large one is for a value in hex.
@@ -72,7 +69,8 @@ pub enum Control {
     Solo,
     Base(TrackControl),
     Level,
-    Swing,
+    /// Its own groove, or the project's.
+    Groove,
     /// The choke group it's in, or none.
     Choke,
     /// How much of its last pulse a note lasts, as a percentage.
@@ -181,7 +179,7 @@ pub const SAMPLE_ROWS: [&[Control]; 9] = [
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::FilterType, base(TrackControl::SendA)],
     &[Control::FilterMode, base(TrackControl::SendB)],
-    &[base(TrackControl::Cutoff), Control::Swing],
+    &[base(TrackControl::Cutoff), Control::Groove],
     &[base(TrackControl::Resonance), base(TrackControl::Pitch)],
     &[base(TrackControl::Drive), Control::Choke],
     &[base(TrackControl::LowCut), Control::GateLength],
@@ -194,7 +192,7 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), Control::Swing],
+    &[Control::Setting(3), Control::Groove],
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
@@ -209,7 +207,7 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), Control::Swing],
+    &[Control::Setting(3), Control::Groove],
     &[Control::Setting(4), base(TrackControl::Pitch)],
     &[Control::Setting(5), Control::Choke],
     &[Control::Setting(6), Control::GateLength],
@@ -222,13 +220,13 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
-/// The same for a synth with three, whose last row has only its swing, on the right.
+/// The same for a synth with three, whose last row has only its groove, on the right.
 pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Swing],
+    &[Control::Groove],
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
     &[base(TrackControl::Cutoff), Control::GateLength],
@@ -319,7 +317,7 @@ impl Control {
             Self::FilterType => "Filter",
             Self::FilterMode => "Mode",
             Self::Level => "Level",
-            Self::Swing => "Swing",
+            Self::Groove => "Groove",
             Self::Lfo(_, LfoField::Destination) => "Dest",
             Self::Lfo(_, LfoField::Shape) => "Shape",
             Self::Lfo(_, LfoField::Rate) => "Rate",
@@ -353,7 +351,7 @@ impl Control {
     pub fn column(self) -> usize {
         match self {
             Self::Level
-            | Self::Swing
+            | Self::Groove
             | Self::Choke
             | Self::GateLength
             | Self::Base(
@@ -474,6 +472,7 @@ impl Control {
                 | Self::Solo
                 | Self::FilterType
                 | Self::FilterMode
+                | Self::Groove
                 | Self::Lfo(
                     _,
                     LfoField::Destination | LfoField::Shape | LfoField::Retrig
@@ -740,15 +739,18 @@ impl App {
                     gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
                 });
             }
-            Control::Swing => {
-                let from = track.swing.unwrap_or(self.song().swing);
-                let size = if large { SWING_JUMP } else { SWING_NUDGE };
-                let by = size * count.min(usize::from(MAX_SWING)) as i32;
-                let moved = i32::from(from) + if up { by } else { -by };
-                self.apply(&Action::SetTrackSwing {
-                    track: self.cursor.track,
-                    swing: Some(moved.clamp(i32::from(MIN_SWING), i32::from(MAX_SWING)) as u16),
-                });
+            Control::Groove => {
+                // One at a time, from what it plays, as a large step would skip through the list.
+                let from = track.groove.unwrap_or(self.song().groove).index();
+                let last = GrooveId::all().count() - 1;
+                let to = if up {
+                    (from + 1).min(last)
+                } else {
+                    from.saturating_sub(1)
+                };
+                if track.groove.is_none() || to != from {
+                    self.set_track_groove(GrooveId::from_index(to));
+                }
             }
             Control::Lfo(slot, field) => {
                 let mut lfo = track.lfos[slot];
@@ -1171,13 +1173,8 @@ impl App {
             }
             Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
             Control::Level => {}
-            Control::Swing if track.swing.is_some() => {
-                self.apply(&Action::SetTrackSwing {
-                    track: self.cursor.track,
-                    swing: None,
-                });
-            }
-            Control::Swing => {}
+            Control::Groove if track.groove.is_some() => self.set_track_groove(None),
+            Control::Groove => {}
             Control::Choke if track.choke.is_some() => {
                 self.apply(&Action::SetTrackChoke {
                     track: self.cursor.track,
@@ -1319,6 +1316,10 @@ impl App {
             self.open_machine_picker();
             return;
         }
+        if self.track_control() == Control::Groove {
+            self.open_groove_picker(true);
+            return;
+        }
         if let Some(id) = self.track_control().setting_on(&self.page_track())
             && let Kind::Stepped { choices, .. } = id.entry().kind
         {
@@ -1331,7 +1332,7 @@ impl App {
         }
         let Control::Lfo(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Machine, Voice, Patch, File, Type, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, Voice, Patch, File, Type, Groove, Dest, Shape, Rate, Retrig and Reset"
                     .to_owned();
             return;
         };
@@ -1660,19 +1661,7 @@ impl App {
                 }
                 _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
             },
-            Control::Swing if text.eq_ignore_ascii_case("off") => {
-                self.apply(&Action::SetTrackSwing {
-                    track: self.cursor.track,
-                    swing: None,
-                });
-            }
-            Control::Swing => match swing(text) {
-                Some(value) => self.apply(&Action::SetTrackSwing {
-                    track: self.cursor.track,
-                    swing: Some(value),
-                }),
-                None => self.status = "Swing is a percent from 50 to 75, or off".to_owned(),
-            },
+            Control::Groove => {}
             Control::Lfo(slot, LfoField::Rate) => match text.parse::<Rate>() {
                 Ok(rate) => {
                     let lfo = Lfo {

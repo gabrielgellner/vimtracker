@@ -1,14 +1,17 @@
-//! What keys do on the project page: the song's own settings, a row for the audio page, and the
-//! actions that save, render and open projects. Each row changes its value as its `:` command
-//! does, through the same parser, so the two can't disagree.
+//! What keys do on the project page: the song's own settings, its grooves, a row for the audio
+//! page, and the actions that save, render and open projects. Each row changes its value as its
+//! `:` command does, through the same parser, so the two can't disagree.
 
 use ratatui::crossterm::event::KeyCode;
 use std::sync::Arc;
 
 use vt_model::action::Action;
 use vt_model::constants::{
-    BAR_STEPS, BEAT_STEPS, DEFAULT_MILLIBPM, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS, MAX_SWING,
-    MIN_MILLIBPM, MIN_SWING,
+    BAR_STEPS, BEAT_STEPS, DEFAULT_MILLIBPM, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS, MIN_MILLIBPM,
+};
+use vt_model::groove::{
+    CUSTOM_GROOVES, FULL_VELOCITY, Groove, GrooveId, MAX_GROOVE_STEPS, MAX_GROOVE_VELOCITY,
+    MAX_HUMANISE, MAX_PUSH,
 };
 use vt_model::names::is_project_name;
 use vt_model::scale::{ROOTS, Scale, ScaleKind, parse_root};
@@ -29,13 +32,12 @@ const BPM_NUDGE: i64 = 1000;
 const BPM_JUMP: i64 = 10_000;
 const FINE_NUDGE: i64 = 10;
 const FINE_JUMP: i64 = 100;
-/// How far a small and a large step move the swing, in tenths of a percent.
-const SWING_NUDGE: i64 = 10;
-const SWING_JUMP: i64 = 50;
 /// How far a large step moves the seed.
 const SEED_JUMP: u64 = 10;
-/// The swing a new project starts with, which `x` goes back to.
-const DEFAULT_SWING: u16 = 500;
+/// How far a large step moves a push, in ticks, a humanise, in ticks, and a velocity, in percent.
+const PUSH_JUMP: i64 = 10;
+const HUMANISE_JUMP: i64 = 4;
+const VELOCITY_JUMP: i64 = 10;
 /// The longest value typed on the page other than a name.
 const LONGEST_TYPED: usize = 12;
 
@@ -46,7 +48,8 @@ pub enum ProjectControl {
     /// Where it's saved, and whether there are changes since. It only shows.
     Folder,
     Bpm,
-    Swing,
+    /// The groove every track plays with unless it has its own.
+    Groove,
     Launch,
     /// When every track starts again, in the section the cursor is in.
     Reset,
@@ -56,6 +59,14 @@ pub enum ProjectControl {
     Root,
     Grid,
     AutoJump,
+    /// The groove drawn below, to look at or change: the project's unless another is chosen.
+    GrooveShown,
+    /// How many steps it has, and how far either way its humanise moves them.
+    GrooveSteps,
+    Humanise,
+    /// One step's push and velocity.
+    Push(u8),
+    Velocity(u8),
     /// The output playing, which opens the audio page.
     Audio,
     Save,
@@ -65,16 +76,41 @@ pub enum ProjectControl {
     New,
 }
 
-/// The page's rows, top to bottom: how it plays on the left, and how notes go in on the right.
-pub const PROJECT_ROWS: [&[ProjectControl]; 14] = [
+/// A field for each of a groove's steps, of which as many as it has are used.
+const PUSHES: [ProjectControl; MAX_GROOVE_STEPS] = {
+    let mut row = [ProjectControl::Audio; MAX_GROOVE_STEPS];
+    let mut at = 0;
+    while at < MAX_GROOVE_STEPS {
+        row[at] = ProjectControl::Push(at as u8);
+        at += 1;
+    }
+    row
+};
+const VELOCITIES: [ProjectControl; MAX_GROOVE_STEPS] = {
+    let mut row = [ProjectControl::Audio; MAX_GROOVE_STEPS];
+    let mut at = 0;
+    while at < MAX_GROOVE_STEPS {
+        row[at] = ProjectControl::Velocity(at as u8);
+        at += 1;
+    }
+    row
+};
+
+/// The page's rows, top to bottom: how it plays on the left, and how notes go in on the right,
+/// then the groove drawn and changed.
+pub const PROJECT_ROWS: [&[ProjectControl]; 18] = [
     &[ProjectControl::Name],
     &[ProjectControl::Folder],
     &[ProjectControl::Bpm, ProjectControl::Scale],
-    &[ProjectControl::Swing, ProjectControl::Root],
+    &[ProjectControl::Groove, ProjectControl::Root],
     &[ProjectControl::Launch, ProjectControl::Grid],
     &[ProjectControl::Reset, ProjectControl::AutoJump],
     &[ProjectControl::Seed],
     &[ProjectControl::Limiter],
+    &[ProjectControl::GrooveShown],
+    &[ProjectControl::GrooveSteps, ProjectControl::Humanise],
+    &PUSHES,
+    &VELOCITIES,
     &[ProjectControl::Audio],
     &[ProjectControl::Save],
     &[ProjectControl::SaveAs],
@@ -90,7 +126,7 @@ impl ProjectControl {
             Self::Name => "Name",
             Self::Folder => "Folder",
             Self::Bpm => "BPM",
-            Self::Swing => "Swing",
+            Self::Groove => "Groove",
             Self::Launch => "Launch",
             Self::Reset => "Reset",
             Self::Seed => "Seed",
@@ -99,6 +135,11 @@ impl ProjectControl {
             Self::Root => "Root",
             Self::Grid => "Grid",
             Self::AutoJump => "Auto-jump",
+            Self::GrooveShown => "Edit",
+            Self::GrooveSteps => "Steps",
+            Self::Humanise => "Humanise",
+            Self::Push(_) => "Push",
+            Self::Velocity(_) => "Velocity",
             Self::Audio => "Audio",
             Self::Save => "Save",
             Self::SaveAs => "Save as",
@@ -129,13 +170,21 @@ impl ProjectControl {
     pub fn column(self) -> usize {
         usize::from(matches!(
             self,
-            Self::Scale | Self::Root | Self::Grid | Self::AutoJump
+            Self::Scale | Self::Root | Self::Grid | Self::AutoJump | Self::Humanise
         ))
     }
 
     /// Whether `i` and `K` choose this from a list rather than typing it.
     fn is_choice(self) -> bool {
-        matches!(self, Self::Scale)
+        matches!(self, Self::Scale | Self::Groove | Self::GrooveShown)
+    }
+
+    /// Whether it's part of the groove drawn below, which changing makes a groove of its own.
+    fn shapes_groove(self) -> bool {
+        matches!(
+            self,
+            Self::GrooveSteps | Self::Humanise | Self::Push(_) | Self::Velocity(_)
+        )
     }
 }
 
@@ -199,14 +248,33 @@ fn with_fraction(millibpm: u32, digits: &str) -> Option<u32> {
 impl App {
     /// What the cursor is on.
     pub fn project_control(&self) -> ProjectControl {
-        let row = PROJECT_ROWS[self.project_row.min(PROJECT_ROWS.len() - 1)];
-        row[self.project_field.min(row.len() - 1)]
+        let row = self.project_row.min(PROJECT_ROWS.len() - 1);
+        PROJECT_ROWS[row][self.project_field.min(self.project_row_length(row) - 1)]
     }
 
-    /// Put the cursor on a row and a field of it, as near as there is.
+    /// How many fields a row has: a groove's rows have one for each of its steps.
+    fn project_row_length(&self, row: usize) -> usize {
+        let fields = PROJECT_ROWS[row];
+        match fields.first() {
+            Some(ProjectControl::Push(_) | ProjectControl::Velocity(_)) => {
+                self.shown_groove().1.steps().min(fields.len())
+            }
+            _ => fields.len(),
+        }
+    }
+
+    /// The groove the page draws, and its pushes.
+    pub fn shown_groove(&self) -> (GrooveId, Groove) {
+        let id = self.groove_shown.unwrap_or(self.song().groove);
+        (id, self.song().groove(id))
+    }
+
+    /// Put the cursor on a row and a field of it, as near as there is. The field `j` and `k` aim
+    /// for is this one from now on, as Vim's `0` and `l` set the column `j` keeps.
     fn move_project(&mut self, row: usize, field: usize) {
+        self.project_wanted = None;
         self.project_row = row.min(PROJECT_ROWS.len() - 1);
-        self.project_field = field.min(PROJECT_ROWS[self.project_row].len() - 1);
+        self.project_field = field.min(self.project_row_length(self.project_row) - 1);
         self.project_fine = false;
     }
 
@@ -313,11 +381,61 @@ impl App {
                     .clamp(i64::from(MIN_MILLIBPM), i64::from(MAX_MILLIBPM));
                 self.line(Line::Bpm(moved as u32));
             }
-            ProjectControl::Swing => {
-                let size = if large { SWING_JUMP } else { SWING_NUDGE };
-                let moved = (i64::from(song.swing) + sign * size * count)
-                    .clamp(i64::from(MIN_SWING), i64::from(MAX_SWING));
-                self.line(Line::Swing(moved as u16));
+            ProjectControl::Groove => {
+                // One at a time, as a large step would skip through the list.
+                let ids: Vec<GrooveId> = GrooveId::all().collect();
+                let at = song.groove.index();
+                let to = if up {
+                    (at + 1).min(ids.len() - 1)
+                } else {
+                    at.saturating_sub(1)
+                };
+                if to != at {
+                    self.line(Line::Groove(ids[to]));
+                }
+            }
+            ProjectControl::GrooveShown => {
+                let (id, _) = self.shown_groove();
+                let last = GrooveId::all().count() - 1;
+                let to = if up {
+                    (id.index() + 1).min(last)
+                } else {
+                    id.index().saturating_sub(1)
+                };
+                self.groove_shown = GrooveId::from_index(to);
+            }
+            control @ (ProjectControl::GrooveSteps
+            | ProjectControl::Humanise
+            | ProjectControl::Push(_)
+            | ProjectControl::Velocity(_)) => {
+                let (_, groove) = self.shown_groove();
+                let by = |small: i64, jump: i64| sign * if large { jump } else { small } * count;
+                let shaped = match control {
+                    ProjectControl::GrooveSteps => {
+                        let size = if large { BEAT_STEPS as i64 } else { 1 };
+                        let steps = (groove.steps() as i64 + sign * size * count)
+                            .clamp(1, MAX_GROOVE_STEPS as i64);
+                        groove.with_steps(steps as usize)
+                    }
+                    ProjectControl::Humanise => {
+                        let ticks = i64::from(groove.humanise()) + by(1, HUMANISE_JUMP);
+                        groove.with_humanise(ticks.clamp(0, i64::from(MAX_HUMANISE)) as u8)
+                    }
+                    ProjectControl::Push(step) => {
+                        let step = usize::from(step);
+                        let push = i64::from(groove.push(step)) + by(1, PUSH_JUMP);
+                        let push = push.clamp(-i64::from(MAX_PUSH), i64::from(MAX_PUSH));
+                        groove.with_push(step, push as i16)
+                    }
+                    ProjectControl::Velocity(step) => {
+                        let step = usize::from(step);
+                        let velocity = i64::from(groove.velocity(step)) + by(1, VELOCITY_JUMP);
+                        let velocity = velocity.clamp(0, i64::from(MAX_GROOVE_VELOCITY));
+                        groove.with_velocity(step, velocity as u8)
+                    }
+                    _ => groove,
+                };
+                self.shape_groove(control, shaped);
             }
             ProjectControl::Launch => {
                 // One way at a time, as a large step would skip through a short list. A grid with
@@ -430,8 +548,22 @@ impl App {
             ProjectControl::Bpm if song.millibpm != DEFAULT_MILLIBPM => {
                 self.line(Line::Bpm(DEFAULT_MILLIBPM));
             }
-            ProjectControl::Swing if song.swing != DEFAULT_SWING => {
-                self.line(Line::Swing(DEFAULT_SWING));
+            ProjectControl::Groove if song.groove != GrooveId::STRAIGHT => {
+                self.line(Line::Groove(GrooveId::STRAIGHT));
+            }
+            ProjectControl::GrooveShown => self.groove_shown = None,
+            control if control.shapes_groove() => {
+                let (_, groove) = self.shown_groove();
+                let shaped = match control {
+                    ProjectControl::GrooveSteps => groove.with_steps(MAX_GROOVE_STEPS),
+                    ProjectControl::Humanise => groove.with_humanise(0),
+                    ProjectControl::Push(step) => groove.with_push(usize::from(step), 0),
+                    ProjectControl::Velocity(step) => {
+                        groove.with_velocity(usize::from(step), FULL_VELOCITY)
+                    }
+                    _ => groove,
+                };
+                self.shape_groove(control, shaped);
             }
             ProjectControl::Launch if song.launch != Launch::default() => {
                 self.line(Line::Launch(Some(Launch::default())));
@@ -512,6 +644,14 @@ impl App {
                 let at = GRID_SIZES.iter().position(|size| *size == skip);
                 ("Grid. i types any number of steps", at)
             }
+            ProjectControl::Groove => return self.open_groove_picker(false),
+            ProjectControl::GrooveShown => {
+                let shown = self.shown_groove().0;
+                items = GrooveId::all()
+                    .map(|id| Item::new(id.name(), Pick::ShowGroove(id)).meaning(id.meaning()))
+                    .collect();
+                ("The groove to draw and change", Some(shown.index()))
+            }
             ProjectControl::Limiter => {
                 let on = !self.song().limiter;
                 return self.line(Line::SetLimiter(on));
@@ -535,11 +675,14 @@ impl App {
             ProjectControl::Name
             | ProjectControl::Folder
             | ProjectControl::Bpm
-            | ProjectControl::Swing
             | ProjectControl::Reset
-            | ProjectControl::Seed => {
+            | ProjectControl::Seed
+            | ProjectControl::GrooveSteps
+            | ProjectControl::Humanise
+            | ProjectControl::Push(_)
+            | ProjectControl::Velocity(_) => {
                 self.status =
-                    "K lists the choices on Launch, Scale, Root and Grid; i types the rest"
+                    "K lists the choices on Groove, Edit, Launch, Scale, Root and Grid; i types the rest"
                         .to_owned();
                 return;
             }
@@ -555,12 +698,15 @@ impl App {
             control,
             ProjectControl::Name
                 | ProjectControl::Bpm
-                | ProjectControl::Swing
                 | ProjectControl::Launch
                 | ProjectControl::Reset
                 | ProjectControl::Seed
                 | ProjectControl::Root
                 | ProjectControl::Grid
+                | ProjectControl::GrooveSteps
+                | ProjectControl::Humanise
+                | ProjectControl::Push(_)
+                | ProjectControl::Velocity(_)
         );
         if control.is_choice() || !typed {
             if control == ProjectControl::Folder {
@@ -643,7 +789,7 @@ impl App {
                 }
             }
             ProjectControl::Bpm => self.project_line(&format!("bpm {text}")),
-            ProjectControl::Swing => self.project_line(&format!("swing {text}")),
+            control if control.shapes_groove() => self.commit_groove(control, text),
             ProjectControl::Launch => self.project_line(&format!("launch {text}")),
             ProjectControl::Reset => self.project_line(&format!("reset {text}")),
             ProjectControl::Seed => self.project_line(&format!("seed {text}")),
@@ -654,5 +800,98 @@ impl App {
             },
             _ => {}
         }
+    }
+
+    /// Set a number typed into the groove drawn: its steps, its humanise in ticks, a push in
+    /// ticks either way, or a velocity in percent.
+    fn commit_groove(&mut self, control: ProjectControl, text: &str) {
+        let (_, groove) = self.shown_groove();
+        let number: Option<i64> = text
+            .trim_start_matches('+')
+            .trim_end_matches('%')
+            .parse()
+            .ok();
+        let shaped = match (control, number) {
+            (ProjectControl::GrooveSteps, Some(steps))
+                if (1..=MAX_GROOVE_STEPS as i64).contains(&steps) =>
+            {
+                Some(groove.with_steps(steps as usize))
+            }
+            (ProjectControl::Humanise, Some(ticks))
+                if (0..=i64::from(MAX_HUMANISE)).contains(&ticks) =>
+            {
+                Some(groove.with_humanise(ticks as u8))
+            }
+            (ProjectControl::Push(step), Some(push)) if push.abs() <= i64::from(MAX_PUSH) => {
+                Some(groove.with_push(usize::from(step), push as i16))
+            }
+            (ProjectControl::Velocity(step), Some(velocity))
+                if (0..=i64::from(MAX_GROOVE_VELOCITY)).contains(&velocity) =>
+            {
+                Some(groove.with_velocity(usize::from(step), velocity as u8))
+            }
+            _ => None,
+        };
+        match shaped {
+            Some(shaped) => self.shape_groove(control, shaped),
+            None => {
+                self.status = match control {
+                    ProjectControl::GrooveSteps => {
+                        format!("A groove has 1 to {MAX_GROOVE_STEPS} steps")
+                    }
+                    ProjectControl::Humanise => format!("Humanise is 0 to {MAX_HUMANISE} ticks"),
+                    ProjectControl::Push(_) => {
+                        format!("A push is -{MAX_PUSH} to {MAX_PUSH} ticks, 240 to a step")
+                    }
+                    _ => format!("A velocity is 0 to {MAX_GROOVE_VELOCITY}%"),
+                };
+            }
+        }
+    }
+
+    /// Keep a change to the groove drawn. One of the project's own changes in place. One that
+    /// comes with the program is copied into the first of the project's not yet made, which the
+    /// page then shows, and the project plays it if it played the one it came from, all as one
+    /// undo step.
+    fn shape_groove(&mut self, control: ProjectControl, shaped: Groove) {
+        let (id, groove) = self.shown_groove();
+        if control == ProjectControl::Push(0) {
+            self.status =
+                "The first step stays on the grid: the others are pushed from it".to_owned();
+            return;
+        }
+        if shaped == groove {
+            return;
+        }
+        if let Some(custom) = id.custom_number() {
+            self.apply(&Action::SetCustomGroove {
+                custom,
+                groove: shaped,
+            });
+            return;
+        }
+        let custom = self.song().grooves.len();
+        let Some(copy) = GrooveId::custom(custom) else {
+            self.status = format!(
+                "The project's {CUSTOM_GROOVES} grooves are all made: change one of them instead"
+            );
+            return;
+        };
+        let depth = self.history.undo_depth();
+        self.apply(&Action::SetCustomGroove {
+            custom,
+            groove: shaped,
+        });
+        let plays = self.song().groove == id;
+        if plays {
+            self.apply(&Action::SetGroove(copy));
+            self.history.squash_to(depth);
+        }
+        self.groove_shown = Some(copy);
+        self.status = if plays {
+            format!("{id} copied to {copy} to change it, which the project now plays")
+        } else {
+            format!("{id} copied to {copy} to change it")
+        };
     }
 }

@@ -32,15 +32,6 @@ pub fn format_bpm(millibpm: u32) -> String {
     }
 }
 
-/// Show a swing in tenths of a percent without a trailing zero.
-pub fn format_swing(swing: u16) -> String {
-    if swing.is_multiple_of(10) {
-        (swing / 10).to_string()
-    } else {
-        format!("{}.{}", swing / 10, swing % 10)
-    }
-}
-
 /// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
 /// which part of an empty cell the cursor is on.
 fn fx_name(app: &App, slot: usize) -> String {
@@ -188,15 +179,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         format!("  typed {}", app.entry.text)
     };
-    // The cursor's track shows its own swing, marked so it isn't mistaken for the project's.
-    let swing = match app
+    // The cursor's track shows its own groove, marked so it isn't mistaken for the project's.
+    let groove = match app
         .song()
         .tracks
         .get(app.cursor.track)
-        .and_then(|t| t.swing)
+        .and_then(|t| t.groove)
     {
-        Some(own) => format!("{} (track)", format_swing(own)),
-        None => format_swing(app.song().swing),
+        Some(own) => format!("{own} (track)"),
+        None => app.song().groove.to_string(),
     };
     let level = app
         .song()
@@ -253,7 +244,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::selected(),
         ),
         Span::raw(format!(
-            " {transport}  {} BPM  Swing {swing}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
+            " {transport}  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
             format_bpm(app.song().millibpm),
             app.octave,
             app.note_velocity,

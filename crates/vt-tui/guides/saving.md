@@ -46,7 +46,7 @@ command changes, with undo where the command has it:
 | Name | The project's name | |
 | Folder | Where it's saved, and if it has changes | |
 | BPM | The tempo, and its fine part | `:bpm` |
-| Swing | The project's swing | `:swing` |
+| Groove | The groove for tracks without their own | `:groove` |
 | Launch | When launched chains start | `:launch` |
 | Reset | When this section starts tracks again | `:reset` |
 | Seed | The seed chance FX play from | `:seed` |
@@ -54,6 +54,9 @@ command changes, with undo where the command has it:
 | Scale, Root | The scale for entering notes | `:set scale`, `root` |
 | Grid | How far the arrows move in Insert | `:set skip` |
 | Auto-jump | Whether entering moves on | `;` in Insert |
+| Edit | The groove drawn below, to change | |
+| Steps, Humanise | Its length, and its random timing | |
+| Push, Velocity | Each step's push and velocity | |
 | Audio | The device and rate | `Space 7` |
 
 `i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
@@ -61,12 +64,34 @@ part, the digits after the point. `Enter` on Audio opens the audio page.
 
 It moves as the track page does: `j` `k` go between rows and keep their column,
 `h` `l` between settings, `=` `-` `+` `_` change a value, `i` types one, as its
-command takes it, `K` lists the choices on Launch, Scale, Root and Grid, and switches
-the Limiter and Auto-jump, and `x` puts one back as a new project has it.
+command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
+and switches the Limiter and Auto-jump, and `x` puts one back as a new project has it.
 
 At the bottom are Save, Save as, Render, Open and New, which `Enter` does: they are
 `:w`, `:w` to a new folder, `:render`, `:e` and `:new`, and open the file explorer
 and the name line as those do.
+
+## The project's grooves
+
+On the project page, under the settings, is a groove drawn as its pushes: a tick
+above the line for a step that lands late and below it for one that lands early,
+as tall as its push, with the push in ticks under it, 240 to a step, and the
+step's velocity under that, in percent of each note's own. See **Groove** in the FX guide for what a
+groove does.
+
+`Edit` chooses which groove is drawn, the project's until you choose another, and
+`K` there lists them. Changing one that comes with vimtracker copies it into the
+first of the project's own not yet made, `Custom 1` to `Custom 8`, and the project
+plays the copy if it played the one copied, all as one undo step. The project's
+own are kept in the song.
+
+`Steps` is how many it has, from 1 to 16, and `Humanise` how far either way each
+step may land at random, up to 24 ticks, the same each time it plays from the
+project's seed. On `Push`, `=` and `-` move a step a tick, `+` and `_` ten, `i`
+types a push such as `-12`, and `x` puts it back on the grid. The first step
+stays on the grid: the others are pushed from it, which is what keeps a groove
+from changing the tempo. On `Velocity`, `=` and `-` move a percent, `+` and `_`
+ten, and `x` puts it back to 100.
 
 ## Samples and moving projects
 

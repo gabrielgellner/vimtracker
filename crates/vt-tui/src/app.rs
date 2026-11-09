@@ -24,6 +24,7 @@ use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
     TRACK_ENVELOPES,
 };
+use vt_model::groove::GrooveId;
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::lfo::LFOS_PER_TRACK;
@@ -236,6 +237,8 @@ pub struct App {
     pub project_field: usize,
     pub project_fine: bool,
     pub(crate) project_wanted: Option<(usize, usize, usize)>,
+    /// The groove the project page draws and changes, or the project's if none was chosen.
+    pub groove_shown: Option<GrooveId>,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
@@ -399,6 +402,7 @@ impl App {
             project_field: 0,
             project_fine: false,
             project_wanted: None,
+            groove_shown: None,
             audio: AudioState::default(),
             audio_request: None,
             settings: Settings::none(),
@@ -2287,11 +2291,12 @@ impl App {
                 };
             }
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
-            Line::Swing(swing) => self.apply(&Action::SetSwing(swing)),
-            Line::TrackSwing(swing) => self.apply(&Action::SetTrackSwing {
-                track: self.cursor.track,
-                swing,
-            }),
+            Line::Groove(groove) => {
+                self.apply(&Action::SetGroove(groove));
+                self.status = format!("The project plays with {groove}");
+            }
+            Line::TrackGroove(groove) => self.set_track_groove(groove),
+            Line::PickGroove { track } => self.open_groove_picker(track),
             Line::Reset(reset) => self.apply(&Action::SetReset {
                 section: self.cursor.section,
                 reset,

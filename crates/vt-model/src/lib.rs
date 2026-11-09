@@ -3,6 +3,7 @@
 pub mod action;
 pub mod constants;
 pub mod envelope;
+pub mod groove;
 pub mod history;
 pub mod insert;
 pub mod kit;

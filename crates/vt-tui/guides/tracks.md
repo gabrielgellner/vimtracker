@@ -506,8 +506,9 @@ follow what's playing. A setting that's whole values, like `Bits`, just steps.
 `Pan`, `Send A` and `Send B` are where those values start when
 playback starts from the top. A step's `h` value changes them until the next start,
 and changing one here is heard straight away unless a lock or glide is on top. `Level` scales the whole track.
-Dimmed `Swing` is the project's, which this track follows. Changing it gives the
-track its own, and `x` follows the project again.
+Dimmed `Groove` is the project's, which this track follows. Choosing one with `K`,
+or moving through them with `=` and `-`, gives the track its own, and `x` follows
+the project again.
 
 `Pitch` moves every note on the track, a semitone a step either side of `80`,
 as `PTCH` on a step does for that step. `Choke` puts the track in a group, `1`
@@ -599,7 +600,7 @@ from one to the next, which suits a slow drift on `Cut`.
 | `7st` | A number of steps, to slide against the bar |
 | `2.5hz` | Free of the tempo, from `0.01hz` to `100hz` |
 
-A large step is `10` in hex, 5% of swing, or 90° of phase. On a rate it skips
+A large step is `10` in hex, or 90° of phase. On a rate it skips
 dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 
 `i` on Dest, Shape or Retrig opens the list too. `K` on Rate lists the note

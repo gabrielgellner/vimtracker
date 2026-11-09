@@ -42,6 +42,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
+| `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
 | `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 
@@ -107,13 +108,43 @@ A unit is a sixth of a step, so `DEL03` delays by half a step.
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder. Use `:seed 7` to choose which results `CHA` gives.
 
-## Swing
+## Groove
+
+A groove is a track's feel: a short pattern of pushes, how late or early each
+step lands, with a velocity for each and a little random timing if you like. It
+moves steps about the grid and never the grid itself, so the tempo and every
+loop's length stay as they are, and the pattern's first step is always on the
+grid. Swing is a groove of two steps.
 
 | Command | Does |
 |---|---|
-| `:swing 66.7` | Swing for the project, from 50 to 75 |
-| `:tswing 60` | Swing for the cursor's track |
-| `:tswing off` | That track follows the project again |
+| `:groove swing-66` | The project's groove, for tracks without their own |
+| `:groove` | Choose the project's groove from a list |
+| `:swing 66` | The same as `:groove swing-66`, for 50 to 70 |
+| `:tgroove mpc-58` | The cursor's track's own, or `:tgroove` to choose |
+| `:tgroove off` | That track follows the project's again |
 
-Swing follows the song's grid rather than each track's loop, so a track with
-an odd length swings different steps each time round.
+The grooves that come with vimtracker:
+
+| Groove | Feel |
+|---|---|
+| Straight | Every step on the grid |
+| Swing 52 to Swing 70 | Every other step late, as swing was |
+| MPC 54 to MPC 71 | An MPC 60's sixteenth swing, on its own clock |
+| Late last | A bar's last step a sixth of a step late |
+| Push | Ahead of the beat: the off-beat eighths early |
+| Pull | Laid back: the backbeats late |
+| Custom 1 to 8 | The project's own, from the project page |
+
+A groove counts the song's steps from its start or the last reset, not each
+track's own loop, so tracks of different lengths swing together and stay on the
+beat, and a track with an odd length swings different rows each time round.
+Every pulse of a row is a step, so `MLT4` is grooved on each pulse, and lanes
+play on the grooved steps too. `DEL` adds to where the groove lands a step. A
+note's `Gate` is a share of its last pulse as the groove makes it, so the long
+first step of a swung pair holds its note longer.
+
+`GRV` on a step chooses the groove that step and the rest of its note play with,
+worked out before the step lands, so `GRV 01`, Straight, on a fill's rows plays
+them straight. Held with `h`, it stays until another `GRV` changes it, and `00`
+is the project's. `K` lists them by name.

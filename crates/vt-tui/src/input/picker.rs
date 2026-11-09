@@ -14,6 +14,7 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::envelope::Envelope;
+use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::scale::{Scale, ScaleKind};
@@ -127,6 +128,8 @@ pub enum Pick {
     Line(Line),
     /// The scale as a whole: its root, its kind and whether it's on.
     ScaleTo(Scale),
+    /// The groove the project page draws and changes.
+    ShowGroove(GrooveId),
 }
 
 /// Something to show beside the list for the item under the cursor.
