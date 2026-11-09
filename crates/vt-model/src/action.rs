@@ -9,7 +9,7 @@ use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
 use crate::bank::BankEntry;
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
-    MAX_SOUND_TRACKS, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
+    MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
@@ -272,6 +272,12 @@ pub enum Action {
         track: usize,
         speed: Speed,
     },
+    /// Set how many of the song's steps a track's chain plays before starting again, from 1 to
+    /// `MAX_TRACK_RESET`, or `None` to play on.
+    SetTrackReset {
+        track: usize,
+        reset: Option<u16>,
+    },
     /// Set how long a track's ties glide into the next note, on the `00` to `FF` scale of
     /// [`glide_ms`](crate::settings::glide_ms), where `00` is off.
     SetTrackGlide {
@@ -513,6 +519,8 @@ pub enum EditError {
     NoTrack(usize),
     #[error("a reset needs at least 1 step")]
     Reset,
+    #[error("a track's reset is from 1 to {MAX_TRACK_RESET} steps, or off")]
+    TrackReset,
     #[error("an LFO's rate, depth or phase is out of range")]
     Lfo,
     #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
@@ -916,6 +924,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .speed = *speed;
+        }
+        Action::SetTrackReset { track, reset } => {
+            if reset.is_some_and(|steps| !(1..=MAX_TRACK_RESET).contains(&steps)) {
+                return Err(EditError::TrackReset);
+            }
+            track_mut(&mut next, *track)?.reset = *reset;
         }
         Action::SetTrackGlide { track, glide } => {
             next.tracks

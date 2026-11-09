@@ -57,7 +57,7 @@ pub enum Adds {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Reset {
     /// Wherever the track's chain starts, as a condition's passes start again: the top, a section
-    /// that brings the chain in or resets, a launch and `:reset`.
+    /// that brings the chain in or resets, a launch, `:reset` and the track's own `Reset`.
     #[default]
     Chain,
     /// Only when playing starts, so it carries on across sections and chains.

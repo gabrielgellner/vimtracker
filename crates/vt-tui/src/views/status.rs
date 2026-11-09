@@ -9,7 +9,7 @@ use vt_engine::engine::Transport;
 use vt_model::accumulator::{Accumulation, MOST_DEGREES, Moves, amount, amount_text};
 use vt_model::arpeggio::{Arpeggio, arp_text, octaves_text, retrig_meaning};
 use vt_model::condition::Condition;
-use vt_model::constants::TICKS_PER_STEP;
+use vt_model::constants::{BAR_STEPS, TICKS_PER_STEP};
 use vt_model::lfo::{Rate, note_rates};
 
 use vt_model::settings::{SettingId, glide_ms};
@@ -138,6 +138,9 @@ pub fn value_shown(app: &App) -> Option<String> {
     if app.view == View::Track && app.track_control() == Control::Sample {
         return Some(sample_shown(app.song(), track.sample()));
     }
+    if app.view == View::Track && app.track_control() == Control::Reset {
+        return Some(reset_shown(track.reset));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
@@ -237,6 +240,20 @@ fn arp_shown(value: u8, arpeggio: Arpeggio, scale_on: bool) -> String {
 }
 
 /// How long a track's ties glide, and what off does on its voice.
+/// What a track's own `Reset` does, as it's set.
+fn reset_shown(reset: Option<u16>) -> String {
+    let Some(steps) = reset else {
+        return "Off: its chain plays on".to_owned();
+    };
+    let bars = usize::from(steps) / BAR_STEPS;
+    let length = match bars {
+        _ if !usize::from(steps).is_multiple_of(BAR_STEPS) => format!("{steps} steps"),
+        1 => "bar".to_owned(),
+        _ => format!("{bars} bars"),
+    };
+    format!("its chain starts again every {length} of the song")
+}
+
 fn glide_shown(track: &Track) -> String {
     match glide_ms(f32::from(track.glide)) {
         Some(_) => SettingId::GLIDE
@@ -312,7 +329,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if app.fill {
         transport.push_str(" FILL");
     }
-    if app.realigning {
+    if app.realigning || app.realigning_tracks.contains(&true) {
         transport.push_str(" REALIGN");
     }
     let mode_style = Style::new()

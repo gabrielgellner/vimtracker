@@ -12,7 +12,7 @@ use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
-use vt_model::song::{Song, SynthVoice, Track};
+use vt_model::song::{Song, SynthVoice, Track, reset_name};
 use vt_model::speed::Speed;
 
 use crate::app::App;
@@ -292,6 +292,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         } else if *control == Control::Groove && track.groove.is_none()
             || *control == Control::GateLength && track.gate_length.is_none()
             || *control == Control::Speed && track.speed == Speed::Sixteenth
+            || *control == Control::Reset && track.reset.is_none()
             || *control == Control::Glide && track.glide == 0
             || *control == Control::FilterMode && !track.filter.has_modes()
         {
@@ -362,6 +363,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
         Control::GateLength => format!("{}%", gate_percent(track.gate_length())),
         Control::Speed => track.speed.name().to_owned(),
+        Control::Reset => reset_name(track.reset),
         // Off, `Acid` slides by its own `Slide`, as a 303 does.
         Control::Glide if track.glide == 0 && track.voice() == Some(SynthVoice::Acid) => {
             "Slide".to_owned()
