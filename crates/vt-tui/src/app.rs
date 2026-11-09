@@ -39,7 +39,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
-use vt_model::song::{ChainEntry, Lane, Phrase, Section, Song, Track, TrackKind};
+use vt_model::song::{ChainEntry, Lane, Launch, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{
     FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
     Mark, Note, Step,
@@ -303,6 +303,8 @@ pub struct App {
     pub auto_jump: bool,
     /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
     pub fill: bool,
+    /// Whether a realign is waiting for the launch grid, as the engine last said.
+    pub realigning: bool,
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
@@ -470,6 +472,7 @@ impl App {
             scale,
             auto_jump,
             fill: false,
+            realigning: false,
             key_down: None,
             repeats_ignored: false,
             held_notes: Vec::new(),
@@ -782,6 +785,7 @@ impl App {
             self.report_at = now;
             self.playing_section = report.section;
             self.transport = report.transport;
+            self.realigning = report.realigning;
             self.live = (report.watched == track).then_some(report.live);
         }
         while let Some((track, state)) = self.handle.jam_change() {
@@ -1309,6 +1313,10 @@ impl App {
                 self.set_fill(!was);
                 self.started = Some(Momentary::Fill { was });
             }
+            Cmd::Realign => {
+                self.realign();
+                self.repeats_ignored = true;
+            }
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
                 if self.momentary.is_some_and(|held| {
@@ -1659,6 +1667,29 @@ impl App {
             self.handle.send(Command::SetMute { track, mute });
             self.dirty = true;
         }
+    }
+
+    /// Send every track back to its start at the next line of the launch grid, or take back a
+    /// realign waiting for it. It moves where playback is rather than the song, so it isn't an
+    /// undo step.
+    pub(crate) fn realign(&mut self) {
+        if self.transport != Transport::Playing {
+            self.status = "Realign works while playing".to_owned();
+            return;
+        }
+        if !self.handle.send(Command::Realign) {
+            return;
+        }
+        // The engine decides, and the transport shows it from its next report.
+        self.status = if self.realigning {
+            "Realign taken back".to_owned()
+        } else {
+            let when = match self.song().launch {
+                Launch::ChainEnd => "on the next bar".to_owned(),
+                every => every.when(),
+            };
+            format!("Every track realigns {when}; Space A again takes it back")
+        };
     }
 
     /// Turn fill on or off, saying which.

@@ -62,6 +62,9 @@ pub enum Cmd {
     ClearMutes,
     /// Turn fill on or off, for the conditions that play only with it or without it.
     ToggleFill,
+    /// Send every track back to its start at the next line of the launch grid, or take back a
+    /// realign waiting for it.
+    Realign,
     /// Arm or disarm live recording.
     ToggleRecord,
     Double,
@@ -209,6 +212,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Space l",
         Cmd::ToggleFill,
         "Fill on or off; held, until let go",
+    ),
+    (
+        "Space A",
+        Cmd::Realign,
+        "Realign every track on the launch grid, or take it back",
     ),
     ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
