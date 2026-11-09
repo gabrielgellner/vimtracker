@@ -32,3 +32,7 @@ serde.workspace = true
 ron.workspace = true
 flate2.workspace = true
 roxmltree.workspace = true
+
+# For the big image example, which tries sending through shared memory.
+[dev-dependencies]
+libc.workspace = true

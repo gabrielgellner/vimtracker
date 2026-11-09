@@ -32,8 +32,8 @@ pub const PREVIEW_ROWS: usize = 18;
 /// The size of each waveform in a kit's preview, in characters.
 pub const PREVIEW_WAVE_WIDTH: usize = 8;
 pub const PREVIEW_WAVE_HEIGHT: usize = 1;
-/// The size of a sample's waveform in its preview, in characters: as wide as kitty's placeholders
-/// can number.
+/// The size of a sample's waveform in its preview, in characters. It was as wide as the program's
+/// placeholders could number at first; they now number 297, and it stays 28 to fit the preview.
 pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
 pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
