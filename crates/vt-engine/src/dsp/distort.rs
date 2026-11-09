@@ -27,6 +27,9 @@ const MOST_DRIVE_DB: f32 = 30.0;
 const LONGEST_HOLD: f32 = 0.01;
 /// The note a slot's oscillator plays before the track has played one: middle C.
 const DEFAULT_NOTE: f32 = 60.0;
+/// How long switching a slot out or back in takes, in ms: long enough not to click, and short
+/// enough that a step's lock of its bypass lands with the step.
+pub const BYPASS_FADE_MS: f32 = 5.0;
 
 /// What a track keeps for one of its slots. Nothing here allocates.
 #[derive(Debug, Clone)]
@@ -53,7 +56,8 @@ pub struct InsertState {
     gate: Gate,
     /// A vowel filter's formants, small enough as well.
     vowel: Formants,
-    /// How far the slot is switched in: `1` in, `0` bypassed. It fades so switching doesn't click.
+    /// How far the slot is switched in: `1` in, `0` bypassed. It crossfades in a straight line
+    /// over [`BYPASS_FADE_MS`], so switching doesn't click.
     on: Smoothed,
     /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator or resonator to
     /// follow.
@@ -425,10 +429,15 @@ impl InsertState {
         if self.on.value == self.on.target {
             return if self.on.target > 0.0 { wet } else { input };
         }
-        let on = self.on.next(smoothing);
-        if (on - self.on.target).abs() < 1e-4 {
-            self.on.settle();
-        }
+        // A straight line rather than a smoother's curve, so a step's lock is done within a few
+        // ms of its step, however long it lasts.
+        let by = 1000.0 / (BYPASS_FADE_MS * rate as f32);
+        let on = if self.on.target > self.on.value {
+            (self.on.value + by).min(self.on.target)
+        } else {
+            (self.on.value - by).max(self.on.target)
+        };
+        self.on.value = on;
         [
             input[0] + (wet[0] - input[0]) * on,
             input[1] + (wet[1] - input[1]) * on,

@@ -9,7 +9,9 @@ use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
-use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_delta, gate_share};
+use vt_model::settings::{
+    Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_delta, gate_share, glide_ms,
+};
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
@@ -127,6 +129,8 @@ pub struct LiveValues {
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
     /// How far each slot's compressor or limiter is turning down, in dB, for a meter.
     pub reduction: [f32; INSERTS],
+    /// Whether each slot is switched out as it's heard, a step's lock of it included.
+    pub bypassed: [bool; INSERTS],
 }
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
@@ -589,6 +593,10 @@ pub struct TrackState {
     held_gate: f32,
     /// Held `LDLT`, which moves each note's length up or down from its own, with `80` as none.
     held_gate_delta: f32,
+    /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
+    held_glide: f32,
+    /// Whether each slot is switched out as it's heard: its own bypass, or a step's lock of it.
+    bypassed: [bool; INSERTS],
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -640,8 +648,10 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
                 .groove
                 .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
             SettingId::SPEED => track.speed.index(),
+            SettingId::GLIDE => track.glide,
             _ => id.entry().default,
         },
+        (Owner::Bypass(slot), _) => u8::from(track.bypassed[slot]),
         (Owner::Voice(_), _) => track.setting(id),
         (Owner::Slot { slot, effect }, at) => {
             let insert = track.inserts[slot];
@@ -770,6 +780,8 @@ impl TrackState {
             held_pitch: 128.0,
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
+            held_glide: f32::from(SettingId::GLIDE.entry().default),
+            bypassed: [false; INSERTS],
             filter_moving: false,
             key: [0.0; 2],
         }
@@ -802,10 +814,11 @@ impl TrackState {
         self.accumulated = None;
     }
 
-    /// Carry the sounding note on as this one, with no new attack.
+    /// Carry the sounding note on as this one, with no new attack, gliding there for as long as
+    /// `GLD` says as it's heard now.
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
-        self.voice.tie(note);
+        self.voice.tie(note, glide_ms(self.held_glide));
         self.tell_slots_the_note();
     }
 
@@ -987,7 +1000,7 @@ impl TrackState {
             }
             self.resolved[slot] = resolved;
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
-            self.inserts[slot].bypass(track.bypassed[slot]);
+            self.inserts[slot].bypass(self.bypassed[slot]);
         }
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
         self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
@@ -1038,6 +1051,7 @@ impl TrackState {
                 values
             }),
             reduction: std::array::from_fn(|slot| self.inserts[slot].reduction()),
+            bypassed: self.bypassed,
         }
     }
 
@@ -1421,8 +1435,17 @@ impl TrackState {
                     self.held_gate_delta = value;
                     return;
                 }
+                SettingId::GLIDE => {
+                    self.held_glide = value;
+                    return;
+                }
                 _ => return,
             },
+            // Heard as the slots are next given their settings, where it fades in or out.
+            (Owner::Bypass(slot), _) => {
+                self.bypassed[slot] = value >= 0.5;
+                return;
+            }
             (Owner::Voice(voice), at) if self.loaded_voice == Some(voice) => {
                 self.synth[at] = value / 255.0;
             }

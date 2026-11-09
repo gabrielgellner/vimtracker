@@ -12,7 +12,8 @@ use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 
-use vt_model::settings::SettingId;
+use vt_model::settings::{SettingId, glide_ms};
+use vt_model::song::{SynthVoice, Track};
 use vt_model::step::{FxCommand, Note};
 
 use crate::app::{App, Field};
@@ -130,6 +131,9 @@ pub fn value_shown(app: &App) -> Option<String> {
     {
         return Some(arpeggio_shown(field, track.arpeggio));
     }
+    if app.view == View::Track && app.track_control() == Control::Glide {
+        return Some(glide_shown(track));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
@@ -223,6 +227,20 @@ fn arp_shown(value: u8, arpeggio: Arpeggio, scale_on: bool) -> String {
         octaves_text(arpeggio.octaves),
         if arpeggio.retrig { "retrig" } else { "legato" }
     )
+}
+
+/// How long a track's ties glide, and what off does on its voice.
+fn glide_shown(track: &Track) -> String {
+    match glide_ms(f32::from(track.glide)) {
+        Some(_) => SettingId::GLIDE
+            .entry()
+            .kind
+            .shown(u16::from(track.glide) << 8),
+        None if track.voice() == Some(SynthVoice::Acid) => {
+            "Off: a tie slides by Acid's own Slide".to_owned()
+        }
+        None => "Off: a tie jumps to the next note".to_owned(),
+    }
 }
 
 /// What one of the track's arpeggio settings does, as it's set.

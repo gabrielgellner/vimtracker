@@ -192,7 +192,7 @@ note lasts**.
 |---|---|
 | `SGL` | One note, on the first |
 | `MLT` | A note on each |
-| `HLD` | One note, tied into the next row's note with no new attack |
+| `HLD` | One note, tied into the next row's with no new attack, by `Glide` |
 | `RST` | No note, and it ends one that's sounding |
 
 Any gate with `0` pulses skips the row: it takes no time and plays nothing. A gate on

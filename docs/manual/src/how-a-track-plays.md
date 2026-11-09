@@ -102,6 +102,30 @@ them are.
 
 ![The list of gates](images/gate-list.svg)
 
+## A tie glides as long as `Glide` says
+
+A `HLD` ties its note into the next row's, which carries the same note on at a new
+pitch with no new attack. The track's `Glide`, on its Sound page, is how long the
+pitch takes to get there, in ms. `Off`, the default, jumps, as a tie always has, but
+`Acid` slides by its own `Slide`, as a 303 does. Set, it glides on every voice: a
+synth by its pitch and a sample by its speed, so a sample's pitch and its speed move
+together, as a tape's do.
+
+```text
+rows:     00 C-4 HLD1          01 C-5
+pitch:    C-4 ─────────────────╱‾‾‾‾‾‾‾‾‾‾‾ C-5
+                               ├┤ Glide 60 ms
+```
+
+It's a lag, as a 303's slide is: quick at first and slowing as it nears the note,
+halfway in pitch at about a quarter of its time, nearly there when its time is up,
+whatever the interval. It's in ms rather than a share of the step, so a glide
+sounds the same at any tempo and `Speed`, as a slide does on a synth; a glide that
+has to land on a row is `PTCH`'s glide mark, which goes by rows. `GLD` on a step
+sets it for that tie, on the row tied from or the row tied into, as the tie is
+still the same note. An `ARP`'s notes with `Retrig` off are ties too, so they glide
+as well. A note that isn't tied never glides.
+
 ## An FX column has two modes
 
 ### Without a lane: it follows the notes

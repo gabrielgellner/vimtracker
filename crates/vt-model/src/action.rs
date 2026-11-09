@@ -272,6 +272,12 @@ pub enum Action {
         track: usize,
         speed: Speed,
     },
+    /// Set how long a track's ties glide into the next note, on the `00` to `FF` scale of
+    /// [`glide_ms`](crate::settings::glide_ms), where `00` is off.
+    SetTrackGlide {
+        track: usize,
+        glide: u8,
+    },
     /// Set how a track's `ACU`s move its notes.
     SetAccumulation {
         track: usize,
@@ -905,6 +911,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .speed = *speed;
+        }
+        Action::SetTrackGlide { track, glide } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .glide = *glide;
         }
         Action::SetAccumulation {
             track,

@@ -467,7 +467,7 @@ impl App {
         let items = std::iter::once(empty)
             .chain(commands.iter().map(|command| {
                 let (name, category) = match (command, track) {
-                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group()),
+                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group_on(track)),
                     (FxCommand::Set(id), None) => (command.meaning(), id.group()),
                     _ => (command.meaning(), "Events".to_owned()),
                 };

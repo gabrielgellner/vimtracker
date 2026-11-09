@@ -340,6 +340,11 @@ pub struct Track {
     /// How long each of its steps is, and where held `RATE` starts: a sixteenth unless changed.
     #[serde(default, skip_serializing_if = "is_sixteenth")]
     pub speed: Speed,
+    /// How long a tie glides into the next note, and where held `GLD` starts, on the `00` to `FF`
+    /// scale of [`glide_ms`](crate::settings::glide_ms): `00`, unless changed, jumps, or on `Acid`
+    /// slides by its own `Slide`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub glide: u8,
     /// How its `ACU`s move its notes: how far, what happens at the limits, and when they start
     /// again.
     #[serde(default, skip_serializing_if = "is_default_accumulation")]
@@ -358,6 +363,10 @@ pub struct Track {
     /// The phrases its chains can play, numbered within it.
     #[serde(default)]
     pub phrases: BTreeMap<u32, Arc<Phrase>>,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }
 
 fn is_sixteenth(speed: &Speed) -> bool {
@@ -476,7 +485,7 @@ impl Track {
                 SettingId::SEND_B => Some(self.send_b),
                 _ => None,
             },
-            Owner::Slot { .. } | Owner::Lfo(_) => None,
+            Owner::Slot { .. } | Owner::Lfo(_) | Owner::Bypass(_) => None,
         }
     }
 
@@ -606,6 +615,7 @@ impl Default for Track {
             choke: None,
             gate_length: None,
             speed: Speed::Sixteenth,
+            glide: 0,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
             lfos: Default::default(),

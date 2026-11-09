@@ -49,6 +49,20 @@ enum Stage {
 /// The frequency of `C-4`, in hertz, for a synth.
 const MIDDLE_C: f64 = 261.625_565_3;
 
+/// A glide's time constant, as a share of its time, so it's nearly there when its time is up, as
+/// `Acid`'s slide is.
+const GLIDE_SHARE: f64 = 1.0 / 3.0;
+/// How near its note a glide ends, as a ratio of speeds: well under a hundredth of a cent.
+const GLIDE_DONE: f64 = 1e-6;
+
+/// A tie gliding a note's speed to the next note's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Gliding {
+    to: f64,
+    /// How much of the rest of the way it goes each frame, in pitch.
+    share: f64,
+}
+
 /// A synth playing a note. The audio thread can't allocate, so each voice has room for any of them.
 #[derive(Debug, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
@@ -165,6 +179,8 @@ pub struct Voice {
     sample: SampleId,
     position: f64,
     increment: f64,
+    /// A tie gliding the speed to the next note's, if one is.
+    gliding: Option<Gliding>,
     /// What modulation multiplies the speed by, and where that's heading.
     pitch: f64,
     pitch_target: f64,
@@ -191,6 +207,7 @@ impl Default for Voice {
             sample: 0,
             position: 0.0,
             increment: 1.0,
+            gliding: None,
             pitch: 1.0,
             pitch_target: 1.0,
             pitch_slew: 1.0,
@@ -235,6 +252,7 @@ impl Voice {
             sample: note.sample,
             position: 0.0,
             increment: 2_f64.powf((f64::from(note.note) - 60.0) / 12.0),
+            gliding: None,
             pitch,
             pitch_target: pitch,
             pitch_slew: f64::from(fast_coefficient(rate)),
@@ -320,12 +338,28 @@ impl Voice {
     }
 
     /// Carry on as another note, with no new attack: a sample keeps playing at the new note's
-    /// speed, and a synth changes pitch without starting its envelope again. `Acid` slides there.
-    pub fn tie(&mut self, note: NoteOn) {
-        self.increment = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
+    /// speed, and a synth changes pitch without starting its envelope again. With a glide time,
+    /// it glides there in about that long, on the same lag `Acid` slides on, and without one it
+    /// jumps. `Acid` always slides, for as long as its own `Slide` says unless it's given a time.
+    pub fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
+        let to = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
         self.gain = note.gain;
         if let Some(Synth::Acid(synth)) = &mut self.synth {
-            synth.slide(note.accent);
+            // It lags its pitch itself, so it's given the note at once.
+            self.increment = to;
+            self.gliding = None;
+            synth.slide(note.accent, glide_ms);
+            return;
+        }
+        self.gliding = glide_ms.map(|ms| {
+            let frames = f64::from(ms) / 1000.0 * f64::from(self.rate) * GLIDE_SHARE;
+            Gliding {
+                to,
+                share: 1.0 - (-1.0 / frames.max(1.0)).exp(),
+            }
+        });
+        if self.gliding.is_none() {
+            self.increment = to;
         }
     }
 
@@ -341,6 +375,7 @@ impl Voice {
         self.stage = Stage::Held { from: self.level };
         self.elapsed = 0;
         self.increment = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
+        self.gliding = None;
         self.gain = note.gain;
         self.shape = note.shape;
         self.release_after = note.release_after;
@@ -417,6 +452,13 @@ impl Voice {
         let frame = [source[0] * level, source[1] * level];
         self.pitch += (self.pitch_target - self.pitch) * self.pitch_slew;
         self.position += self.increment * self.pitch;
+        if let Some(gliding) = self.gliding {
+            self.increment *= (gliding.to / self.increment).powf(gliding.share);
+            if (self.increment / gliding.to - 1.0).abs() < GLIDE_DONE {
+                self.increment = gliding.to;
+                self.gliding = None;
+            }
+        }
         if let Some(frames) = &mut self.release_after {
             if *frames == 0 {
                 self.release_after = None;

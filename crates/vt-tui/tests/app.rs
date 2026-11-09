@@ -2138,6 +2138,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
         reduction: Default::default(),
+        bypassed: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -5668,6 +5669,7 @@ fn the_filter_curve_moves_with_what_plays() {
         machine: std::array::from_fn(|setting| track.machine_value(setting)),
         inserts: Default::default(),
         reduction: Default::default(),
+        bypassed: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -5710,7 +5712,8 @@ fn the_filter_curve_sits_in_a_box_under_the_filters_rows() {
             })
             .unwrap()
     };
-    let last = row_of("High cut");
+    // `Glide` is under it, on the right, the page's last row.
+    let last = row_of("High cut") + 1;
     // Without an image, there's no box.
     assert_eq!(plain[(0, last + 1)].symbol(), " ");
 
@@ -6830,6 +6833,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
         inserts: Default::default(),
         reduction: Default::default(),
+        bypassed: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
     app.live = Some(live);
@@ -10540,4 +10544,170 @@ fn playing_from_a_row_starts_where_the_order_first_plays_it() {
     assert_eq!(app.section_step(), 3);
     press(&mut app, "j");
     assert_eq!(app.section_step(), 2);
+}
+
+#[test]
+fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LLK");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, " 3");
+    assert_eq!(app.view, View::Phrase);
+    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    press(&mut app, "lllllK");
+    press(&mut app, "1byp");
+    let picker = app.picker.as_ref().expect("the commands are listed");
+    let item = picker.current().unwrap();
+    assert_eq!(listed(item), "1BYP  1 Bypass");
+    assert_eq!(item.category, "FX 1 Delay", "with the slot's effect");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Replace);
+    press(&mut app, "01");
+    let bypass = SettingId::bypass(0).unwrap();
+    assert_eq!(slot(&app).command, Some(FxCommand::Set(bypass)));
+    assert_eq!(slot(&app).coarse(), 0x01);
+    assert_eq!(column_name(&app), "FX 1: Bypass");
+    assert_eq!(value_shown(&app).as_deref(), Some("Bypassed"));
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("1.bypass:01"), "{step}");
+    // It stops at the last choice, and back down is the slot heard.
+    press(&mut app, "=");
+    assert_eq!(slot(&app).coarse(), 0x01);
+    press(&mut app, "-");
+    assert_eq!(value_shown(&app).as_deref(), Some("In"));
+    // Typed by its label too, and an LFO or envelope can't move it.
+    let track = &app.song().tracks[0];
+    assert_eq!(
+        FxCommand::typed("1byp", track),
+        Some(FxCommand::Set(bypass))
+    );
+    assert!(!SettingId::for_lfo(track, 0).contains(&bypass));
+    assert!(!SettingId::for_envelope(track).contains(&bypass));
+    // With nothing in a slot, there's nothing to bypass.
+    assert!(FxCommand::on_track(track).contains(&FxCommand::Set(bypass)));
+    let empty = FxCommand::Set(SettingId::bypass(1).unwrap());
+    assert!(!FxCommand::on_track(track).contains(&empty));
+}
+
+#[test]
+fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
+    use vt_engine::track_state::LiveValues;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LLK");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    // Off the slot, so the cursor doesn't keep its colour.
+    press(&mut app, "jj");
+    // Whether the slot's effect is drawn faint.
+    let faint = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..buffer.area.height).any(|y| {
+            let row: Vec<&str> = (0..60).map(|x| buffer[(x, y)].symbol()).collect();
+            let at = row.windows(5).position(|cells| cells.concat() == "Delay");
+            at.is_some_and(|x| buffer[(x as u16, y)].fg == vt_tui::theme::faint().fg.unwrap())
+        })
+    };
+    let heard = |bypassed: bool| LiveValues {
+        bypassed: [bypassed, false, false],
+        ..LiveValues::default()
+    };
+    assert!(!faint(&app));
+    app.transport = Transport::Playing;
+    app.live = Some(heard(true));
+    assert!(faint(&app), "a lock switches it out as it plays");
+    app.live = Some(heard(false));
+    assert!(!faint(&app));
+    // Stopped, it shows the slot's own, whatever was last heard.
+    app.transport = Transport::Stopped;
+    app.live = Some(heard(true));
+    assert!(!faint(&app));
+    press(&mut app, "kkb");
+    press(&mut app, "jj");
+    assert!(faint(&app));
+}
+
+#[test]
+fn the_track_page_sets_how_long_a_tie_glides() {
+    use vt_model::settings::glide_value;
+    use vt_tui::track_page::Control;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let glide = |app: &App| app.song().tracks[0].glide;
+    let line = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.contains("Glide"))
+            .unwrap_or_default()
+    };
+    assert!(line(&app).contains("Off"), "{}", line(&app));
+
+    // Past Res's fine digits, and down past Pitch, Choke, Gate and Speed.
+    press(&mut app, "jlljjjj");
+    assert_eq!(app.track_control(), Control::Glide);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("Off: a tie jumps to the next note")
+    );
+    press(&mut app, "=");
+    assert_eq!(glide(&app), 1);
+    assert_eq!(value_shown(&app).as_deref(), Some("2 ms"));
+    press(&mut app, "+");
+    assert_eq!(glide(&app), 0x11, "sixteen more");
+    typed(&mut app, "60");
+    assert_eq!(glide(&app), glide_value(60.0));
+    assert!(line(&app).contains("60 ms"), "{}", line(&app));
+    typed(&mut app, "5000");
+    assert_eq!(glide(&app), glide_value(60.0));
+    assert!(app.status.contains("up to 2000"), "{}", app.status);
+    typed(&mut app, "off");
+    assert_eq!(glide(&app), 0);
+    press(&mut app, "300=");
+    assert_eq!(glide(&app), 0xFF, "it stops at the top");
+    assert!(line(&app).contains("2.00 s"), "{}", line(&app));
+    press(&mut app, "x");
+    assert_eq!(glide(&app), 0, "back to off");
+    press(&mut app, "u");
+    assert_eq!(glide(&app), 0xFF);
+    press(&mut app, "x");
+
+    // Off on `Acid`, a tie slides as a 303's does, by the voice's own `Slide`.
+    press(&mut app, "ggh");
+    press(&mut app, "K");
+    press(&mut app, "/acid");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::Acid)
+    );
+    assert!(line(&app).contains("Slide"), "{}", line(&app));
+    press(&mut app, "gg$jjjjjjjjj");
+    assert_eq!(app.track_control(), Control::Glide);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("Off: a tie slides by Acid's own Slide")
+    );
+}
+
+#[test]
+fn a_step_locks_the_glide_by_its_label() {
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, "llllli");
+    press(&mut app, "gld");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "80");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("glide:80"), "{step}");
+    assert_eq!(column_name(&app), "Machine: Glide");
+    assert_eq!(value_shown(&app).as_deref(), Some("63 ms"));
 }

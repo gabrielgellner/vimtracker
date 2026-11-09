@@ -95,6 +95,8 @@ pub enum Units {
     /// How far a note's length is moved up or down, as a share of its last pulse, as
     /// [`gate_delta`] gives it.
     GateDelta,
+    /// How long a tied note takes to glide to the next, as [`glide_ms`] gives it, or off.
+    Glide,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, as Open303 measured a TB-303's.
@@ -121,6 +123,31 @@ pub fn slide_ms(value: f32) -> f32 {
 /// How much the acid voice drives its filter, in dB over a TB-303's level.
 pub fn acid_drive_db(value: f32) -> f32 {
     24.0 * value / 255.0
+}
+
+/// The shortest and longest a tie's glide can take, in ms, at `01` and `FF`.
+pub const SHORTEST_GLIDE_MS: f32 = 2.0;
+pub const LONGEST_GLIDE_MS: f32 = 2000.0;
+
+/// How long a tied note takes to glide to the next, in ms, for a `Glide` value on the `00` to
+/// `FF` scale: none at `00`, where the pitch jumps, or `Acid` slides by its own `Slide`, then from
+/// `SHORTEST_GLIDE_MS` at `01` to `LONGEST_GLIDE_MS` at `FF`, evenly in ratio, so `80` is about a
+/// TB-303's 60 ms slide.
+pub fn glide_ms(value: f32) -> Option<f32> {
+    (value >= 1.0).then(|| {
+        let along = (value.min(255.0) - 1.0) / 254.0;
+        SHORTEST_GLIDE_MS * (LONGEST_GLIDE_MS / SHORTEST_GLIDE_MS).powf(along)
+    })
+}
+
+/// The `Glide` value whose time is nearest this many ms, with `0` for off.
+pub fn glide_value(ms: f32) -> u8 {
+    if ms <= 0.0 {
+        return 0;
+    }
+    let ratio = LONGEST_GLIDE_MS / SHORTEST_GLIDE_MS;
+    let along = (ms.max(SHORTEST_GLIDE_MS) / SHORTEST_GLIDE_MS).ln() / ratio.ln();
+    (1.0 + along * 254.0).round().clamp(1.0, 255.0) as u8
 }
 
 /// The shortest a note's gate can be, as a share of its last pulse, so `00` still sounds.
@@ -245,6 +272,9 @@ impl Kind {
                 Units::AcidDrive => format!("+{:.1} dB", acid_drive_db(coarse as f32)),
                 Units::GateLength => format!("{:.0} %", gate_share(coarse as f32) * 100.0),
                 Units::GateDelta => format!("{:+.0} %", gate_delta(coarse as f32) / 2.55),
+                Units::Glide => {
+                    glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
+                }
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -377,7 +407,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 12] = [
+const TRACK: [Entry; 13] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -466,11 +496,24 @@ const TRACK: [Entry; 12] = [
         },
         default: Speed::Sixteenth.index(),
     },
+    // How long a tie glides into the next note, read as the tie comes, so a lock on either row
+    // sets it.
+    Entry {
+        key: "glide",
+        name: "Glide",
+        label: Some("GLD"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Glide,
+        },
+        default: 0,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 12] = [
+const TRACK_GROUPS: [&str; 13] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -915,6 +958,22 @@ const LFO: [Entry; 2] = [
     },
 ];
 
+/// A slot's own, whatever effect is in it.
+const SLOT_OWN: [Entry; 1] = [Entry {
+    key: "bypass",
+    name: "Bypass",
+    // With the slot's digit before it, as `1BYP`.
+    label: Some("BYP"),
+    kind: Kind::Stepped {
+        choices: &BYPASS_CHOICES,
+        wraps: false,
+    },
+    default: 0,
+}];
+
+/// What a slot's bypass can be: heard, at `00`, or switched out, at `01`.
+pub const BYPASS_CHOICES: [&str; 2] = ["In", "Bypassed"];
+
 const fn voices_size() -> usize {
     let mut total = 0;
     let mut at = 0;
@@ -1142,14 +1201,20 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + COMB_PARAMS.len()
     + VOWEL_PARAMS.len();
 const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
+const BYPASS_START: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
     Track,
     Voice(SynthVoice),
-    Slot { slot: usize, effect: Effect },
+    Slot {
+        slot: usize,
+        effect: Effect,
+    },
     Lfo(usize),
+    /// A slot's bypass, which is the slot's whatever effect is in it.
+    Bypass(usize),
 }
 
 /// A setting's place in the table.
@@ -1176,9 +1241,11 @@ impl SettingId {
     pub const GROOVE: Self = Self(10);
     /// How long a step is: a place in [`Speed::ALL`].
     pub const SPEED: Self = Self(11);
+    /// How long a tie glides into the next note, as [`glide_ms`] gives it.
+    pub const GLIDE: Self = Self(12);
 
     /// How many settings there are.
-    pub const COUNT: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
+    pub const COUNT: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -1228,9 +1295,25 @@ impl SettingId {
         }
     }
 
+    /// A slot's bypass: `00` heard, `01` switched out.
+    pub const fn bypass(slot: usize) -> Option<Self> {
+        if slot < INSERTS {
+            Some(Self((BYPASS_START + slot * SLOT_OWN.len()) as u16))
+        } else {
+            None
+        }
+    }
+
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= BYPASS_START {
+            let within = at - BYPASS_START;
+            return (
+                Owner::Bypass(within / SLOT_OWN.len()),
+                within % SLOT_OWN.len(),
+            );
+        }
         if at < VOICES_START {
             return (Owner::Track, at);
         }
@@ -1264,6 +1347,7 @@ impl SettingId {
             (Owner::Voice(voice), at) => voice_entries(voice)[at],
             (Owner::Slot { effect, .. }, at) => param_entry(&effect.params()[at]),
             (Owner::Lfo(_), at) => LFO[at],
+            (Owner::Bypass(_), at) => SLOT_OWN[at],
         }
     }
 
@@ -1276,6 +1360,7 @@ impl SettingId {
             Owner::Voice(voice) => format!("{}.{key}", voice_key(voice)),
             Owner::Slot { slot, effect } => format!("{}.{}.{key}", slot + 1, effect.key()),
             Owner::Lfo(lfo) => format!("lfo{}.{key}", lfo + 1),
+            Owner::Bypass(slot) => format!("{}.{key}", slot + 1),
         }
     }
 
@@ -1289,7 +1374,7 @@ impl SettingId {
     pub fn label(self) -> Option<String> {
         let label = self.entry().label?;
         Some(match self.owner().0 {
-            Owner::Slot { slot, .. } => format!("{}{label}", slot + 1),
+            Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
             Owner::Lfo(lfo) => format!("{label}{}", lfo + 1),
             _ => label.to_owned(),
         })
@@ -1307,6 +1392,7 @@ impl SettingId {
             (Owner::Voice(voice), _) => voice.name().to_owned(),
             (Owner::Slot { slot, effect }, _) => format!("FX {} {}", slot + 1, effect.name()),
             (Owner::Lfo(lfo), _) => format!("LFO {}", lfo + 1),
+            (Owner::Bypass(slot), _) => format!("FX {}", slot + 1),
         }
     }
 }
@@ -1357,6 +1443,7 @@ mod tests {
                 (Owner::Voice(voice), at) => SettingId::voice(voice, at),
                 (Owner::Slot { slot, effect }, at) => SettingId::slot(slot, effect, at),
                 (Owner::Lfo(lfo), at) => SettingId::lfo(lfo, at),
+                (Owner::Bypass(slot), _) => SettingId::bypass(slot),
             };
             assert_eq!(back, Some(id), "{}", id.key());
         }
@@ -1385,7 +1472,7 @@ mod tests {
         for id in SettingId::all() {
             let Some(label) = id.label() else { continue };
             let letters = match id.owner().0 {
-                Owner::Slot { slot, .. } => {
+                Owner::Slot { slot, .. } | Owner::Bypass(slot) => {
                     assert!(label.starts_with(&(slot + 1).to_string()), "{label}");
                     &label[1..]
                 }
@@ -1433,7 +1520,7 @@ mod tests {
             }
         }
         for effect in Effect::ALL {
-            let mut seen = HashSet::new();
+            let mut seen = HashSet::from([SettingId::bypass(0).unwrap().label().unwrap()]);
             for at in 0..effect.params().len() {
                 let Some(label) = SettingId::slot(0, effect, at).unwrap().label() else {
                     continue;

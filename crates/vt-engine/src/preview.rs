@@ -164,7 +164,7 @@ impl Previews {
                 {
                     preview.push_under(playing);
                 }
-                preview.voice.tie(on);
+                preview.voice.tie(on, None);
             } else {
                 preview.under = [None; PREVIEW_VOICES];
                 preview.voice.retrigger(on);
@@ -224,7 +224,7 @@ impl Previews {
                 continue;
             }
             if let Some(under) = preview.pop_under() {
-                preview.voice.tie(under);
+                preview.voice.tie(under, None);
                 preview.playing = Some(under);
                 continue;
             }
