@@ -13,6 +13,11 @@ path = "src/lib.rs"
 name = "vimtracker"
 path = "src/main.rs"
 
+# Its test checks every screenshot comes out the same twice.
+[[example]]
+name = "screenshots"
+test = true
+
 [dependencies]
 vt-model.workspace = true
 vt-engine.workspace = true
