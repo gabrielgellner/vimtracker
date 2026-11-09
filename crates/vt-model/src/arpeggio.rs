@@ -105,18 +105,28 @@ pub enum ArpMode {
     Down,
     /// Up and then back down, not playing the top and bottom twice.
     UpDown,
+    /// Up and then back down, playing the top and bottom twice, as a phrase's `Up-down-inc` order
+    /// plays its end rows.
+    UpDownInc,
     /// Any of them each time, from a random stream of the track's own.
     Random,
 }
 
 impl ArpMode {
-    pub const ALL: [Self; 4] = [Self::Up, Self::Down, Self::UpDown, Self::Random];
+    pub const ALL: [Self; 5] = [
+        Self::Up,
+        Self::Down,
+        Self::UpDown,
+        Self::UpDownInc,
+        Self::Random,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Up => "Up",
             Self::Down => "Down",
             Self::UpDown => "Up-down",
+            Self::UpDownInc => "Up-down-inc",
             Self::Random => "Random",
         }
     }
@@ -126,6 +136,7 @@ impl ArpMode {
             Self::Up => "The note, x, then y, and on up each octave",
             Self::Down => "The same backwards, from the top",
             Self::UpDown => "Up and back down, the ends played once",
+            Self::UpDownInc => "Up and back down, the ends played twice",
             Self::Random => "Any of the notes each time",
         }
     }
@@ -234,6 +245,15 @@ impl Cycle {
                 let along = played % round;
                 if along < len { along } else { round - along }
             }
+            ArpMode::UpDownInc => {
+                let round = 2 * len;
+                let along = played % round;
+                if along < len {
+                    along
+                } else {
+                    round - 1 - along
+                }
+            }
             ArpMode::Random => u64::from(roll) % len,
         };
         at as usize
@@ -330,8 +350,18 @@ mod tests {
             played(&cycle, ArpMode::UpDown, 9),
             [60, 64, 67, 64, 60, 64, 67, 64, 60]
         );
+        assert_eq!(
+            played(&cycle, ArpMode::UpDownInc, 9),
+            [60, 64, 67, 67, 64, 60, 60, 64, 67]
+        );
         let two = Cycle::new(60, 0x07, 1, OFF, 0);
         assert_eq!(played(&two, ArpMode::UpDown, 4), [60, 67, 60, 67]);
+        assert_eq!(
+            played(&two, ArpMode::UpDownInc, 6),
+            [60, 67, 67, 60, 60, 67]
+        );
+        let one = Cycle::new(60, 0x00, 1, OFF, 0);
+        assert_eq!(played(&one, ArpMode::UpDownInc, 3), [60, 60, 60]);
         assert_eq!(cycle.place(ArpMode::Random, 5, 7), 1);
     }
 

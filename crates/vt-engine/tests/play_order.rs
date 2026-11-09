@@ -1,17 +1,18 @@
-//! Play orders, after the Metropolix's ORDER: a phrase's rows play forward, reverse, down and back,
-//! out of turn or dealt at random from the project's seed, with each row's pulses together, ties
-//! going into whatever row plays next, and lanes keeping their own forward loops.
+//! Play orders, after the Metropolix's ORDER: a phrase's rows play forward, reverse, up and down,
+//! out of turn or dealt at random from the project's seed. An order is a walk the track keeps
+//! taking while each pass keeps the phrase's length, with each row's pulses together, ties going
+//! into whatever row plays next, and lanes keeping their own forward loops.
 
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::order::{Deal, Order, Pass};
+use vt_model::order::{Deal, Order, Round};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
-use vt_model::song::{Lane, Phrase, Song};
+use vt_model::song::{Chain, ChainEntry, Lane, Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::Step;
 
@@ -152,33 +153,82 @@ fn hits(song: &Song, steps: usize) -> Vec<usize> {
 }
 
 #[test]
-fn reverse_and_pendulum_play_as_the_manual_shows() {
+fn the_up_and_down_orders_walk_on_across_passes_of_the_phrases_length() {
+    // Each pass is eight steps, and the walk carries on from one to the next.
+    let walk = |order| notes(&scale_song(order), 16);
     assert_eq!(
-        notes(&scale_song(Order::Reverse), 16),
+        walk(Order::Reverse),
         named("C5 B A G F E D C  C5 B A G F E D C")
     );
-    // The end rows once each, so a pass of eight rows lasts fourteen steps.
     assert_eq!(
-        notes(&scale_song(Order::Pendulum), 16),
-        named("C D E F G A B C5 B A G F E D  C D")
+        walk(Order::UpDown),
+        named("C D E F G A B C5  B A G F E D C D")
     );
     assert_eq!(
-        notes(&scale_song(Order::PingPong), 17),
-        named("C D E F G A B C5 C5 B A G F E D C  C")
+        walk(Order::UpDownInc),
+        named("C D E F G A B C5  C5 B A G F E D C")
+    );
+    assert_eq!(
+        walk(Order::DownUp),
+        named("C5 B A G F E D C  D E F G A B C5 B")
+    );
+    assert_eq!(
+        walk(Order::DownUpInc),
+        named("C5 B A G F E D C  C D E F G A B C5")
     );
 }
 
 #[test]
-fn every_fixed_order_plays_its_rows_in_turn() {
+fn every_fixed_order_walks_its_round_again_and_again() {
     let scale = named("C D E F G A B C5");
     let rows = vec![Step::default(); 8];
     for order in Order::ALL.into_iter().filter(|order| !order.is_dealt()) {
-        let pass: Vec<Option<i32>> = Pass::new(&rows, order, Deal::default())
+        let round: Vec<Option<i32>> = Round::new(&rows, order, Deal::default())
             .map(|row| scale[row])
             .collect();
-        let twice = [pass.clone(), pass.clone()].concat();
+        let twice = [round.clone(), round.clone()].concat();
         assert_eq!(notes(&scale_song(order), twice.len()), twice, "{order}");
     }
+}
+
+#[test]
+fn a_chain_keeps_its_length_whatever_its_phrases_orders() {
+    // An up-down phrase of four and a forward one of two: the chain is six steps every time
+    // round, and the up-down phrase's walk carries on from where it was the time before.
+    let mut song = song(&["C-4 --", "D-4 --", "E-4 --", "F-4 --"], Order::UpDown);
+    let track = &mut song.tracks[0];
+    let after: Vec<Step> = ["G-4 --", "A-4 --"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    track.phrases.insert(1, Arc::new(Phrase::from_steps(after)));
+    let entry = |phrase| ChainEntry {
+        phrase,
+        transpose: 0,
+    };
+    track.chains.insert(
+        0,
+        Arc::new(Chain {
+            entries: vec![entry(0), entry(1)],
+            label: String::new(),
+        }),
+    );
+    assert_eq!(song.tracks[0].chain_steps(0), 6);
+    assert_eq!(
+        notes(&song, 18),
+        named("C D E F G A  E D C D G A  E F E D G A")
+    );
+}
+
+#[test]
+fn a_rows_pulses_run_on_into_the_next_pass() {
+    // Up-down goes round C D E D, the D two steps each time, so a pass of four steps ends on the
+    // D's first pulse and the next starts on its second.
+    let rows = ["C-4 --", "D-4 -- SGL2", "E-4 --"];
+    assert_eq!(
+        notes(&song(&rows, Order::UpDown), 12),
+        named("C D . E  D . C D  . E D .")
+    );
 }
 
 #[test]
@@ -232,22 +282,23 @@ fn a_lane_keeps_its_own_forward_loop() {
 }
 
 #[test]
-fn a_conditions_pass_is_a_time_round_the_order() {
+fn a_conditions_pass_is_the_phrases_length_whatever_the_order() {
     // Reverse plays the first row last, so its 1:2 is heard at the end of every other pass.
     let first = ["C-4 -- cnd:12", "--- --", "--- --", "--- --"];
     assert_eq!(hits(&song(&first, Order::Reverse), 16), [3, 11]);
-    // Pendulum plays the second row twice a pass, both in the same pass: at 1 and 5 of the first
-    // pass's six steps, neither in the second, and both in the third.
+    // Up-down's passes of four play 1 2 3 4, 3 2 1 2, 3 4 3 2, then round again, so the second
+    // row's 1:2 is heard once in the first pass, not in the second, where it plays twice, once
+    // in the third, and twice in the fifth.
     let second = ["--- --", "C-4 -- cnd:12", "--- --", "--- --"];
-    assert_eq!(hits(&song(&second, Order::Pendulum), 18), [1, 5, 13, 17]);
+    assert_eq!(hits(&song(&second, Order::UpDown), 20), [1, 11, 17, 19]);
 }
 
 #[test]
 fn an_accumulator_adds_each_time_the_order_plays_its_row() {
-    // Pendulum plays the second row at 1 and 5 of each six steps, and each play moves it on.
+    // Up-down plays the second row at 1, 5, 7 and 11, and each play moves it on.
     let rows = ["--- --", "C-4 -- acu:01", "--- --", "--- --"];
     assert_eq!(
-        notes(&song(&rows, Order::Pendulum), 12),
+        notes(&song(&rows, Order::UpDown), 12),
         named(". C . . . D  . E . . . F")
     );
 }
@@ -324,21 +375,23 @@ fn a_chance_rolls_the_same_whatever_the_order() {
 
 #[test]
 fn playing_from_a_step_hears_what_playing_up_to_it_would() {
-    // A longer track makes the section long enough to start in its third pass.
-    let mut song = scale_song(Order::Shuffle);
-    song.seed = 21;
-    song.add_track();
-    song.tracks[1].phrases.insert(0, Arc::new(Phrase::new(64)));
-    let whole = render(&song, ramp_pool(), 24);
-    let mut engine = Engine::new(RATE, version(&song, ramp_pool()));
-    engine.play_from(16);
-    let mut out = vec![0.0; 8 * STEP * 2];
-    engine.process(&mut out);
-    let from: Vec<f32> = out.chunks(2).map(|frame| frame[0]).collect();
-    let started = |out: &[f32], step: usize| note_at(out, step * STEP);
-    let expected: Vec<Option<i32>> = (16..24).map(|step| started(&whole, step)).collect();
-    let heard: Vec<Option<i32>> = (0..8).map(|step| started(&from, step)).collect();
-    assert_eq!(heard, expected);
+    for order in [Order::Shuffle, Order::UpDown, Order::Pedal] {
+        // A longer track makes the section long enough to start in its third pass.
+        let mut song = scale_song(order);
+        song.seed = 21;
+        song.add_track();
+        song.tracks[1].phrases.insert(0, Arc::new(Phrase::new(64)));
+        let whole = render(&song, ramp_pool(), 24);
+        let mut engine = Engine::new(RATE, version(&song, ramp_pool()));
+        engine.play_from(16);
+        let mut out = vec![0.0; 8 * STEP * 2];
+        engine.process(&mut out);
+        let from: Vec<f32> = out.chunks(2).map(|frame| frame[0]).collect();
+        let started = |out: &[f32], step: usize| note_at(out, step * STEP);
+        let expected: Vec<Option<i32>> = (16..24).map(|step| started(&whole, step)).collect();
+        let heard: Vec<Option<i32>> = (0..8).map(|step| started(&from, step)).collect();
+        assert_eq!(heard, expected, "{order}");
+    }
 }
 
 #[test]
@@ -354,4 +407,41 @@ fn changing_the_order_while_playing_keeps_the_row_about_to_play() {
     let left: Vec<f32> = after.chunks(2).map(|frame| frame[0]).collect();
     let heard: Vec<Option<i32>> = (1..5).map(|step| note_at(&left, step * STEP - 1)).collect();
     assert_eq!(heard, named("G F E D"), "on from G, in reverse");
+}
+
+#[test]
+fn an_edit_that_leaves_the_order_alone_keeps_the_walk_where_it_is() {
+    // Ten steps into an up-down of eight, in its second pass, a row that isn't playing is quieter,
+    // and the walk carries on as it would have, on its way back to the top.
+    let song = scale_song(Order::UpDown);
+    let mut engine = Engine::new(RATE, version(&song, ramp_pool()));
+    engine.play_from(0);
+    let mut out = vec![0.0; (9 * STEP + 1) * 2];
+    engine.process(&mut out);
+    let mut edited = song.clone();
+    let phrase = Arc::make_mut(edited.tracks[0].phrases.get_mut(&0).unwrap());
+    phrase.step_mut(7).unwrap().velocity = Some(0x40);
+    engine.swap(version(&edited, ramp_pool()));
+    let mut after = vec![0.0; 7 * STEP * 2];
+    engine.process(&mut after);
+    let left: Vec<f32> = after.chunks(2).map(|frame| frame[0]).collect();
+    let heard: Vec<Option<i32>> = (1..7).map(|step| note_at(&left, step * STEP - 1)).collect();
+    assert_eq!(heard, named("G F E D C D"));
+}
+
+#[test]
+fn changing_an_order_while_playing_finds_the_row_in_the_new_walks_pass() {
+    // Ten steps in, an up-down of eight is in its second pass, about to play G, its fifth row, on
+    // the way back. As a down-up, that pass plays rows 2 3 4 5 6 7 8 7, so the fifth row is a step
+    // on and the track moves there, carrying on up from it.
+    let mut engine = Engine::new(RATE, version(&scale_song(Order::UpDown), ramp_pool()));
+    engine.play_from(0);
+    let mut out = vec![0.0; (9 * STEP + 1) * 2];
+    engine.process(&mut out);
+    engine.swap(version(&scale_song(Order::DownUp), ramp_pool()));
+    let mut after = vec![0.0; 5 * STEP * 2];
+    engine.process(&mut after);
+    let left: Vec<f32> = after.chunks(2).map(|frame| frame[0]).collect();
+    let heard: Vec<Option<i32>> = (1..5).map(|step| note_at(&left, step * STEP - 1)).collect();
+    assert_eq!(heard, named("G A B C5"));
 }

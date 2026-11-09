@@ -10435,7 +10435,11 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
         .map(listed)
         .collect();
     assert_eq!(items[2], "Up-down  Up and back down, the ends played once");
-    press(&mut app, "k");
+    assert_eq!(
+        items[3],
+        "Up-down-inc  Up and back down, the ends played twice"
+    );
+    press(&mut app, "kk");
     special(&mut app, KeyCode::Enter);
     assert_eq!(arpeggio(&app).mode, ArpMode::UpDown);
     assert_eq!(
@@ -10506,19 +10510,22 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
         (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
     };
     assert!(!heading(&app).contains("Forward"), "forward isn't named");
+    command(&mut app, "order up-down");
+    assert_eq!(order(&app), Order::UpDown);
+    assert!(app.status.contains("the ends once"), "{}", app.status);
+    assert!(heading(&app).contains("Up-down"), "{}", heading(&app));
     command(&mut app, "order pendulum");
-    assert_eq!(order(&app), Order::Pendulum);
-    assert!(app.status.contains("end rows once"), "{}", app.status);
-    assert!(heading(&app).contains("Pendulum"), "{}", heading(&app));
+    assert_eq!(order(&app), Order::UpDown, "the old names are gone");
+    assert!(app.status.contains(":order takes"), "{}", app.status);
     command(&mut app, "order sideways");
-    assert_eq!(order(&app), Order::Pendulum);
+    assert_eq!(order(&app), Order::UpDown);
     assert!(app.status.contains(":order takes"), "{}", app.status);
     // With nothing after it, a list opens on the order it plays in.
     command(&mut app, "order");
     let picker = app.picker.as_ref().expect("the list is open");
     assert_eq!(
         picker.current().map(|item| item.pick.clone()),
-        Some(Pick::Line(Line::Order(Some(Order::Pendulum))))
+        Some(Pick::Line(Line::Order(Some(Order::UpDown))))
     );
     assert_eq!(picker.shown().count(), Order::ALL.len());
     press(&mut app, "shuf");
@@ -10530,20 +10537,21 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
         "only this phrase's"
     );
     press(&mut app, "u");
-    assert_eq!(order(&app), Order::Pendulum);
+    assert_eq!(order(&app), Order::UpDown);
     press(&mut app, "u");
     assert_eq!(order(&app), Order::Forward);
 }
 
 #[test]
-fn playing_from_a_row_starts_where_the_order_first_plays_it() {
+fn playing_from_a_row_starts_at_its_step_with_the_walk_where_it_is_then() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");
     command(&mut app, "order reverse");
-    // The top row plays last in reverse, after the other three.
-    assert_eq!(app.section_step(), 3);
+    // A row's step is where it's written, whatever the order, and the walk plays what it plays
+    // there, as it would playing up to it: in reverse, the bottom row first.
+    assert_eq!(app.section_step(), 0);
     press(&mut app, "j");
-    assert_eq!(app.section_step(), 2);
+    assert_eq!(app.section_step(), 1);
 }
 
 #[test]

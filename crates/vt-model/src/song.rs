@@ -17,7 +17,7 @@ use crate::envelope::{Envelope, default_envelopes};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
-use crate::order::{Deal, Dealer, Order, Pass};
+use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
 use crate::selection::Extent;
 use crate::settings::{Owner, SettingId};
@@ -503,14 +503,15 @@ impl Track {
     }
 
     /// Find a step within a chain, counted from where it started, looping the chain if the
-    /// position is past its end. Which time round it is deals any phrase in it whose order is
-    /// dealt, from the track's dealer.
+    /// position is past its end. Which time round it is says how far each phrase's order has
+    /// walked, as each pass of a phrase carries its walk on from the last, and deals any phrase in
+    /// it whose order is dealt, from the track's dealer.
     pub fn chain_position(&self, chain: u32, step: usize, dealer: Dealer) -> Option<ChainPosition> {
         let total = self.chain_steps(chain);
         if total == 0 {
             return None;
         }
-        let lap = (step / total) as i64;
+        let lap = step / total;
         let mut remaining = step % total;
         let chain = self.chains.get(&chain)?;
         for (slot, entry) in chain.entries.iter().enumerate() {
@@ -519,14 +520,15 @@ impl Track {
             };
             let time = phrase.time();
             if remaining < time {
-                let deal = dealer.deal(lap, slot);
-                let visit = phrase.row_at(remaining, deal)?;
+                let deal = dealer.deal(lap as i64, slot);
+                let visit = phrase.walk_at(lap, remaining, deal)?;
                 return Some(ChainPosition {
                     slot,
                     phrase: entry.phrase,
                     step: visit.row,
                     pulse: visit.pulse,
                     transpose: entry.transpose,
+                    time: remaining,
                     visit: visit.visit,
                     deal,
                 });
@@ -536,28 +538,31 @@ impl Track {
         None
     }
 
-    /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them:
-    /// at this visit of its phrase's pass with this deal if the pass plays the row there, and
-    /// where it first plays it if not.
+    /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them,
+    /// on a time round it: where that pass of the phrase's walk plays the row at this pulse,
+    /// nearest to `near` steps into the pass, or `near` itself if the pass doesn't play the row.
     pub fn chain_place(
         &self,
         chain: u32,
-        slot: usize,
-        row: usize,
-        visit: usize,
-        deal: Deal,
+        at: RowPlace,
+        lap: usize,
+        dealer: Dealer,
     ) -> Option<usize> {
         let entries = &self.chains.get(&chain)?.entries;
-        let phrase = self.phrases.get(&entries.get(slot)?.phrase)?;
-        if row >= phrase.len() {
+        let phrase = self.phrases.get(&entries.get(at.slot)?.phrase)?;
+        if at.row >= phrase.len() {
             return None;
         }
-        let before: usize = entries[..slot]
+        let before: usize = entries[..at.slot]
             .iter()
             .filter_map(|entry| self.phrases.get(&entry.phrase))
             .map(|phrase| phrase.time())
             .sum();
-        Some(before + phrase.time_to_visit(row, visit, deal))
+        let deal = dealer.deal(lap as i64, at.slot);
+        let place = phrase
+            .place_in_pass(at.row, at.pulse, lap, at.near, deal)
+            .unwrap_or_else(|| at.near.min(phrase.time().saturating_sub(1)));
+        Some(before + place)
     }
 
     /// The step at a position, once a chain position has been found.
@@ -1127,14 +1132,14 @@ impl Phrase {
         self.order = order;
     }
 
-    /// The rows of its loop one pass visits, in its order, with this deal if it's dealt.
-    pub fn pass(&self, deal: Deal) -> Pass<'_> {
-        Pass::new(self.loop_steps(), self.order, deal)
+    /// The rows of its loop one round of its order visits, in turn, with this deal if it's dealt.
+    pub fn round(&self, deal: Deal) -> Round<'_> {
+        Round::new(self.loop_steps(), self.order, deal)
     }
 
-    /// The next value with this command in a slot, for a glide: looking on from a visit of a pass,
-    /// in the order the rows play and wrapping round the pass, with how many steps there are from
-    /// the start of that visit's row to the row it's on. The row itself doesn't count.
+    /// The next value with this command in a slot, for a glide: looking on from a visit of a
+    /// round, in the order the rows play and wrapping round the round, with how many steps there
+    /// are from the start of that visit's row to the row it's on. The row itself doesn't count.
     pub fn glide_to(
         &self,
         visit: usize,
@@ -1143,9 +1148,15 @@ impl Phrase {
         command: FxCommand,
     ) -> Option<(usize, FxSlot)> {
         let steps = self.loop_steps();
-        let visits = self.pass(deal).count();
+        let visits = self.round(deal).count();
         let mut time = 0;
-        for (distance, row) in self.pass(deal).cycle().skip(visit).take(visits).enumerate() {
+        for (distance, row) in self
+            .round(deal)
+            .cycle()
+            .skip(visit)
+            .take(visits)
+            .enumerate()
+        {
             if distance > 0 {
                 let fx = steps[row].fx.get(slot)?;
                 if fx.command == Some(command) {
@@ -1191,58 +1202,48 @@ impl Phrase {
         })
     }
 
-    /// How many steps a pass of its loop lasts: each row's pulses, so a skipped row takes none, and
-    /// in an order that visits some rows twice, theirs twice.
+    /// How many steps a pass of its loop lasts, whatever its order: each row's pulses, so a skipped
+    /// row takes none.
     pub fn time(&self) -> usize {
-        if self.order.keeps_time() {
-            self.loop_steps().iter().map(Step::pulses).sum()
-        } else {
-            let steps = self.loop_steps();
-            self.pass(Deal::default())
-                .map(|row| steps[row].pulses())
-                .sum()
-        }
+        self.loop_steps().iter().map(Step::pulses).sum()
     }
 
-    /// How many steps into a pass with this deal a row of the loop first plays, or 0 for a row the
-    /// pass doesn't visit, which only `Random`'s can leave out.
-    pub fn time_to(&self, row: usize, deal: Deal) -> usize {
-        let steps = self.loop_steps();
-        let mut time = 0;
-        for visited in self.pass(deal) {
-            if visited == row {
-                return time;
-            }
-            time += steps[visited].pulses();
-        }
-        0
+    /// How many steps into a pass a row of the loop starts, as written, so where it plays forward.
+    pub fn time_to(&self, row: usize) -> usize {
+        self.loop_steps().iter().take(row).map(Step::pulses).sum()
     }
 
-    /// How many steps into a pass with this deal a row plays at this visit, if the pass plays it
-    /// there, or else where it first plays it.
-    pub fn time_to_visit(&self, row: usize, visit: usize, deal: Deal) -> usize {
-        let steps = self.loop_steps();
-        let mut time = 0;
-        for (at, visited) in self.pass(deal).enumerate() {
-            if at == visit {
-                return if visited == row {
-                    time
-                } else {
-                    self.time_to(row, deal)
-                };
-            }
-            time += steps[visited].pulses();
+    /// How many steps a round of its order lasts before its walk repeats: a pass for an order that
+    /// visits each row once, and for a dealt one, whose round is a pass, and longer for one that
+    /// visits some rows twice.
+    pub fn round_time(&self) -> usize {
+        if self.order.is_dealt() {
+            return self.time();
         }
-        self.time_to(row, deal)
+        let steps = self.loop_steps();
+        self.round(Deal::default())
+            .map(|row| steps[row].pulses())
+            .sum()
     }
 
-    /// The visit of a pass with this deal playing this many steps in: its row, which of the row's
-    /// pulses, and which visit of the pass it is. Skipped rows are passed over, and a loop that
-    /// takes no time has none.
-    pub fn row_at(&self, time: usize, deal: Deal) -> Option<Visit> {
+    /// Where a pass starts in the round of its order, for a pass this many since its chain started.
+    fn pass_start(&self, pass: usize, round: usize) -> usize {
+        pass % round * (self.time() % round) % round
+    }
+
+    /// The visit of its order's walk playing this many steps into a pass, this many passes since
+    /// its chain started, with the pass's deal if the order is dealt: its row, which of the row's
+    /// pulses, and which visit of the round it is. The walk carries on from one pass to the next,
+    /// so a row whose pulses run past the end of a pass plays the rest of them at the start of the
+    /// next. Skipped rows are passed over, and a loop that takes no time has none.
+    pub fn walk_at(&self, pass: usize, time: usize, deal: Deal) -> Option<Visit> {
+        let round = self.round_time();
+        if time >= self.time() || round == 0 {
+            return None;
+        }
         let steps = self.loop_steps();
-        let mut left = time;
-        for (visit, row) in self.pass(deal).enumerate() {
+        let mut left = (self.pass_start(pass, round) + time) % round;
+        for (visit, row) in self.round(deal).enumerate() {
             let pulses = steps[row].pulses();
             if left < pulses {
                 return Some(Visit {
@@ -1254,6 +1255,42 @@ impl Phrase {
             left -= pulses;
         }
         None
+    }
+
+    /// Where in a pass, this many since its chain started, the walk plays a row at one of its
+    /// pulses, or its last if it has fewer: the place nearest to `near`, if the pass plays the row
+    /// at all.
+    pub fn place_in_pass(
+        &self,
+        row: usize,
+        pulse: usize,
+        pass: usize,
+        near: usize,
+        deal: Deal,
+    ) -> Option<usize> {
+        let (length, round) = (self.time() as i64, self.round_time() as i64);
+        let steps = self.loop_steps();
+        let pulses = steps.get(row)?.pulses();
+        if pulses == 0 || round == 0 {
+            return None;
+        }
+        let pulse = pulse.min(pulses - 1) as i64;
+        let mut best: Option<i64> = None;
+        // Where each round that plays in the pass starts, from the pass's start.
+        let mut started = -(self.pass_start(pass, round as usize) as i64);
+        while started < length {
+            let mut time = started;
+            for visited in self.round(deal) {
+                let place = time + pulse;
+                let closer = |best: i64| place.abs_diff(near as i64) < best.abs_diff(near as i64);
+                if visited == row && (0..length).contains(&place) && best.is_none_or(closer) {
+                    best = Some(place);
+                }
+                time += steps[visited].pulses() as i64;
+            }
+            started += round;
+        }
+        best.map(|place| place as usize)
     }
 
     /// The number of rows that play.
@@ -1362,16 +1399,25 @@ impl Phrase {
     }
 }
 
-/// A sample and how it plays.
-/// Where a place in a pass of a phrase lands.
+/// Where a place in a pass of a phrase lands, on its order's walk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Visit {
     /// The row of the phrase's loop.
     pub row: usize,
     /// Which of the row's pulses, from 0 for its first.
     pub pulse: usize,
-    /// Which of the pass's visits, which is the row in a phrase played forward.
+    /// Which of the round's visits, which is the row in a phrase played forward.
     pub visit: usize,
+}
+
+/// A row of a chain's slot to find again after a change, with the pulse it was on and how many
+/// steps into its pass it was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowPlace {
+    pub slot: usize,
+    pub row: usize,
+    pub pulse: usize,
+    pub near: usize,
 }
 
 /// Where a position in a chain lands.
@@ -1384,9 +1430,24 @@ pub struct ChainPosition {
     /// Which of the row's pulses, from 0 for its first.
     pub pulse: usize,
     pub transpose: i8,
-    /// Which visit of the phrase's pass it is, and the pass's deal, for looking on in its order.
+    /// How many steps into the phrase's pass it is.
+    pub time: usize,
+    /// Which visit of the round of the phrase's order it is, and the pass's deal, for looking on
+    /// in its order.
     pub visit: usize,
     pub deal: Deal,
+}
+
+impl ChainPosition {
+    /// Its row, to find again after a change.
+    pub fn row_place(&self) -> RowPlace {
+        RowPlace {
+            slot: self.slot,
+            row: self.step,
+            pulse: self.pulse,
+            near: self.time,
+        }
+    }
 }
 
 fn default_limiter() -> bool {
@@ -1790,46 +1851,103 @@ mod tests {
         assert_eq!(phrase.time(), 6);
         let deal = Deal::default();
         let rows: Vec<(usize, usize)> = (0..6)
-            .filter_map(|t| phrase.row_at(t, deal))
+            .filter_map(|t| phrase.walk_at(0, t, deal))
             .map(|visit| (visit.row, visit.pulse))
             .collect();
         assert_eq!(rows, [(0, 0), (1, 0), (1, 1), (1, 2), (3, 0), (3, 1)]);
-        assert_eq!(phrase.row_at(6, deal), None);
-        assert_eq!(phrase.time_to(3, deal), 4, "the skipped row takes no time");
+        assert_eq!(phrase.walk_at(0, 6, deal), None);
+        assert_eq!(phrase.time_to(3), 4, "the skipped row takes no time");
         let skipped = gated(&["SGL0", "HLD0"]);
         assert_eq!(skipped.time(), 0);
         assert_eq!(
-            skipped.row_at(0, deal),
+            skipped.walk_at(0, 0, deal),
             None,
             "nothing to play, and no hang"
         );
     }
 
+    /// The rows a phrase's walk plays, a step at a time, over this many of its passes.
+    fn walked(phrase: &Phrase, passes: usize) -> Vec<usize> {
+        (0..passes)
+            .flat_map(|pass| {
+                (0..phrase.time()).map(move |t| phrase.walk_at(pass, t, Deal::default()).unwrap())
+            })
+            .map(|visit| visit.row + 1)
+            .collect()
+    }
+
     #[test]
-    fn an_order_plays_rows_with_their_pulses_together_and_lasts_its_pass() {
+    fn an_order_is_a_walk_and_a_pass_keeps_the_phrases_length() {
+        // The author's examples: six steps of a phrase of four.
+        let mut phrase = Phrase::new(4);
+        let six = |phrase: &Phrase| walked(phrase, 2)[..6].to_vec();
+        assert_eq!(six(&phrase), [1, 2, 3, 4, 1, 2]);
+        phrase.set_order(Order::UpDown);
+        assert_eq!(phrase.time(), 4);
+        assert_eq!(six(&phrase), [1, 2, 3, 4, 3, 2]);
+        phrase.set_order(Order::UpDownInc);
+        assert_eq!(six(&phrase), [1, 2, 3, 4, 4, 3]);
+        phrase.set_order(Order::Pedal);
+        assert_eq!(six(&phrase), [1, 2, 1, 3, 1, 4]);
+        // And on, each pass the phrase's length, the walk carrying on across them.
+        phrase.set_order(Order::UpDown);
+        assert_eq!(walked(&phrase, 3), [1, 2, 3, 4, 3, 2, 1, 2, 3, 4, 3, 2]);
+        phrase.set_order(Order::DownUp);
+        assert_eq!(walked(&phrase, 3), [4, 3, 2, 1, 2, 3, 4, 3, 2, 1, 2, 3]);
+        phrase.set_order(Order::DownUpInc);
+        assert_eq!(walked(&phrase, 3), [4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1]);
+        phrase.set_order(Order::Pedal);
+        assert_eq!(walked(&phrase, 3), [1, 2, 1, 3, 1, 4, 1, 2, 1, 3, 1, 4]);
+        // An order that visits each row once keeps to its pass.
+        phrase.set_order(Order::Converge);
+        assert_eq!(walked(&phrase, 2), [1, 4, 2, 3, 1, 4, 2, 3]);
+    }
+
+    #[test]
+    fn a_rows_pulses_stay_together_and_run_on_into_the_next_pass() {
         let mut phrase = gated(&["SGL1", "MLT2", "SGL1"]);
         let deal = Deal::default();
-        let rows = |phrase: &Phrase| -> Vec<(usize, usize)> {
+        let rows = |phrase: &Phrase, pass| -> Vec<(usize, usize)> {
             (0..phrase.time())
-                .filter_map(|t| phrase.row_at(t, deal))
+                .filter_map(|t| phrase.walk_at(pass, t, deal))
                 .map(|visit| (visit.row, visit.pulse))
                 .collect()
         };
         phrase.set_order(Order::Reverse);
         assert_eq!(phrase.time(), 4);
-        assert_eq!(rows(&phrase), [(2, 0), (1, 0), (1, 1), (0, 0)]);
-        assert_eq!(phrase.time_to(0, deal), 3);
-        phrase.set_order(Order::Pendulum);
-        assert_eq!(phrase.time(), 6, "the middle row twice");
+        assert_eq!(rows(&phrase, 0), [(2, 0), (1, 0), (1, 1), (0, 0)]);
+        phrase.set_order(Order::UpDown);
+        assert_eq!(phrase.time(), 4, "the pass keeps the rows' length");
         assert_eq!(
-            rows(&phrase),
-            [(0, 0), (1, 0), (1, 1), (2, 0), (1, 0), (1, 1)]
+            phrase.round_time(),
+            6,
+            "while a round plays the middle row twice"
         );
-        assert_eq!(phrase.time_to(1, deal), 1, "where it first plays");
-        assert_eq!(phrase.time_to_visit(1, 3, deal), 4, "on the way back");
-        assert_eq!(phrase.time_to_visit(1, 2, deal), 1, "not at that visit");
-        phrase.set_order(Order::PingPong);
-        assert_eq!(phrase.time(), 8, "every row twice");
+        assert_eq!(rows(&phrase, 0), [(0, 0), (1, 0), (1, 1), (2, 0)]);
+        // The middle row on the way back, then the first, and the middle row's first pulse ends
+        // the pass, so its second starts the next.
+        assert_eq!(rows(&phrase, 1), [(1, 0), (1, 1), (0, 0), (1, 0)]);
+        assert_eq!(rows(&phrase, 2), [(1, 1), (2, 0), (1, 0), (1, 1)]);
+        assert_eq!(
+            rows(&phrase, 3),
+            rows(&phrase, 0),
+            "three passes are two rounds"
+        );
+    }
+
+    #[test]
+    fn a_row_is_found_where_its_pass_plays_it_nearest() {
+        let mut phrase = Phrase::new(4);
+        phrase.set_order(Order::UpDown);
+        let deal = Deal::default();
+        // The second pass plays 3 2 1 2: row 2 is at 1 and 3, and row 4 isn't in it.
+        assert_eq!(phrase.place_in_pass(1, 0, 1, 0, deal), Some(1));
+        assert_eq!(phrase.place_in_pass(1, 0, 1, 3, deal), Some(3));
+        assert_eq!(phrase.place_in_pass(3, 0, 1, 0, deal), None);
+        // A pulse it no longer has is its last.
+        let mut pulses = gated(&["SGL1", "SGL2"]);
+        pulses.set_order(Order::Reverse);
+        assert_eq!(pulses.place_in_pass(1, 5, 0, 0, deal), Some(1));
     }
 
     #[test]
@@ -1850,8 +1968,8 @@ mod tests {
         // Reverse plays rows 3 2 1 0, so from row 2, its visit 1, row 0 is two rows on.
         assert_eq!(found(&phrase, 1), Some((2, 0x10)));
         assert_eq!(found(&phrase, 3), Some((2, 0x30)), "round to row 2 again");
-        phrase.set_order(Order::Pendulum);
-        // Pendulum plays 0 1 2 3 2 1, so from row 2 on the way up, row 2 again is two on.
+        phrase.set_order(Order::UpDown);
+        // Up-down goes round 0 1 2 3 2 1, so from row 2 on the way up, row 2 again is two on.
         assert_eq!(found(&phrase, 2), Some((2, 0x30)));
     }
 
@@ -1859,11 +1977,11 @@ mod tests {
     fn a_phrase_saves_its_order_only_when_it_has_one() {
         let mut phrase = Phrase::new(2);
         assert!(!ron::to_string(&phrase).unwrap().contains("order"));
-        phrase.set_order(Order::PingPong);
+        phrase.set_order(Order::DownUpInc);
         let saved = ron::to_string(&phrase).unwrap();
-        assert!(saved.contains("order:PingPong"), "{saved}");
+        assert!(saved.contains("order:DownUpInc"), "{saved}");
         let loaded: Phrase = ron::from_str(&saved).unwrap();
-        assert_eq!(loaded.order(), Order::PingPong);
+        assert_eq!(loaded.order(), Order::DownUpInc);
     }
 
     #[test]
@@ -1887,8 +2005,14 @@ mod tests {
         assert_ne!(lap(0), lap(1));
         assert_eq!(lap(1), lap(1));
         let row = lap(1)[3];
+        let place = RowPlace {
+            slot: 0,
+            row,
+            pulse: 0,
+            near: 0,
+        };
         assert_eq!(
-            track.chain_place(0, 0, row, 0, dealer.deal(1, 0)),
+            track.chain_place(0, place, 1, dealer),
             Some(3),
             "where the deal plays it"
         );
@@ -1922,8 +2046,20 @@ mod tests {
         assert_eq!(at(3), (0, 1, 0));
         assert_eq!(at(5), (1, 0, 1));
         assert_eq!(at(6), (0, 0, 0), "and round again");
-        assert_eq!(track.chain_place(0, 1, 0, 0, Deal::default()), Some(4));
-        assert_eq!(track.chain_place(0, 0, 1, 0, Deal::default()), Some(3));
+        let place = |slot, row| RowPlace {
+            slot,
+            row,
+            pulse: 0,
+            near: 0,
+        };
+        assert_eq!(
+            track.chain_place(0, place(1, 0), 0, Dealer::default()),
+            Some(4)
+        );
+        assert_eq!(
+            track.chain_place(0, place(0, 1), 0, Dealer::default()),
+            Some(3)
+        );
     }
 
     #[test]
@@ -1942,22 +2078,19 @@ mod tests {
             }),
         );
         let track = &song.tracks[0];
-        assert_eq!(track.chain_place(0, 1, 2, 0, Deal::default()), Some(16 + 2));
-        assert_eq!(
-            track.chain_place(0, 1, 4, 0, Deal::default()),
-            None,
-            "past its loop"
-        );
-        assert_eq!(
-            track.chain_place(0, 2, 0, 0, Deal::default()),
-            None,
-            "no third slot"
-        );
-        assert_eq!(
-            track.chain_place(9, 0, 0, 0, Deal::default()),
-            None,
-            "no such chain"
-        );
+        let found = |chain, slot, row| {
+            let place = RowPlace {
+                slot,
+                row,
+                pulse: 0,
+                near: 0,
+            };
+            track.chain_place(chain, place, 0, Dealer::default())
+        };
+        assert_eq!(found(0, 1, 2), Some(16 + 2));
+        assert_eq!(found(0, 1, 4), None, "past its loop");
+        assert_eq!(found(0, 2, 0), None, "no third slot");
+        assert_eq!(found(9, 0, 0), None, "no such chain");
     }
 
     #[test]

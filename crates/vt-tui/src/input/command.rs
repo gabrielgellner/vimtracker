@@ -93,7 +93,7 @@ pub enum LineError {
     #[error(":lane takes a number of steps, 1 or more, or nothing to follow the notes again")]
     Lane,
     #[error(
-        ":order takes forward, reverse, pendulum, ping-pong, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
+        ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
     )]
     Order,
     #[error(":track takes add [n] or del")]
@@ -758,8 +758,8 @@ mod tests {
         assert_eq!(parse("lane 0"), Err(LineError::Lane));
         assert_eq!(parse("order"), Ok(Line::Order(None)));
         assert_eq!(
-            parse("order Ping-Pong"),
-            Ok(Line::Order(Some(Order::PingPong)))
+            parse("order Up-Down-Inc"),
+            Ok(Line::Order(Some(Order::UpDownInc)))
         );
         assert_eq!(parse("order sideways"), Err(LineError::Order));
         assert_eq!(parse("nope"), Err(LineError::Unknown("nope".into())));
