@@ -73,8 +73,8 @@ Notes sound as you play them, chords too.
 - **Where.** The note goes on the cursor's track, on the row that track is
   playing. Each track loops at its own length, so a 4-row phrase against a
   16-row one gets its own row. A key pressed past halfway through a row goes on
-  the next one. How early or late it was is dropped, as there's no micro-timing
-  yet.
+  the next one. How early or late it was goes in the row's nudge, to the nearest
+  24th of a step, so it plays back as you played it.
 - **How long.** The note's length goes in its gate cell, and its row keeps its
   pulses, so recording never changes how long a row or the loop is. The length is
   how much of the row's last pulse you held it for: half a step on a one-pulse row
@@ -82,7 +82,7 @@ Notes sound as you play them, chords too.
   note, as a held note does. A tap on a row of several pulses gets `00`, so it
   lasts just into the last. A note still held when its row comes round again ends
   there.
-- **What's replaced.** Only the note, its velocity and its gate cell, which
+- **What's replaced.** Only the note, its velocity, its nudge and its gate cell, which
   becomes a `SGL` with the pulses it had. Other columns and rows stay. The velocity is `Vel`, and
   auto-jump doesn't move the cursor.
 - **Undo.** `u` takes back everything recorded since it was armed, at once.
@@ -150,6 +150,7 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`. Auto-jump moves on |
+| Nudge | A digit to `B`, after `-` if early, such as `-3`. `0` is on the grid |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
 | Length | The gate's length, two hex digits: `80` is half the last pulse |
 | FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
@@ -176,6 +177,36 @@ it, length and all. The row's FX run on its first pulse, though a `MLT` runs its
 `OFF` and `RET` on each, and lanes keep running on every step. A beat row is one
 that starts on a beat, however long the rows before it.
 
+## Nudging a note off the grid
+
+A row's nudge moves its note a little early or late, in 24ths of a step, up to
+`B`, just under half a step, either way, as Elektron's micro-timing does. It sits
+between the velocity and the gate, drawn dim, and is blank on a row that's on
+the grid: `C-4 40 -3 SGL1` plays three 24ths early.
+
+| Keys | Does |
+|---|---|
+| `=` `-` | Nudge it a 24th later or earlier |
+| `+` `_` | A sixth of a step, `DEL`'s unit |
+| `i` | `-` for early, then the 24ths as one digit; a digit alone is late |
+| `x` | Back on the grid |
+
+The whole row's note part moves: the note, its velocity and length, its own FX
+columns, and its envelopes. `DEL`, `KIL`, `OFF` and `RET` count from where the
+note now starts, and each pulse of a `MLT` moves together. What stays on the
+grid is what keeps time apart from the note: an FX column with a lane of its own,
+the LFOs and the groove. A note nudged early on a step where a lane changes a
+value starts with the value before, and the lane's change comes in on the grid.
+
+The nudge adds to where the groove lands the step, so a swung step nudged `-2`
+plays a little before its swing. A track's notes always play in order: one
+nudged early never starts before the row before it, which in a groove that
+pushes that row late can mean it waits for it.
+
+It's in the velocity's column group, so a selection of velocities copies, pastes
+and clears their nudges too, while `x` on either clears only that one. `=` and
+`-` on a selection give a nudge only to rows with a note.
+
 ## How long a note lasts
 
 A note lasts so much of its row's last pulse before its gate closes, from `1%` to
@@ -198,8 +229,8 @@ or `-` on it start from there.
 | `RST` | No note, as before |
 
 At `100%`, every voice's default but `Acid`'s, a note holds until something ends
-it. A delayed note's length counts from where it starts, and a `RET` repeats only
-while the gate is open.
+it. A delayed or nudged note's length counts from where it starts, so a nudge
+moves its end with it, and a `RET` repeats only while the gate is open.
 
 What moves `Gate` moves a note's length up or down from where it is, a row's own
 too, as an LFO moves any setting around where a step put it, and it stays from

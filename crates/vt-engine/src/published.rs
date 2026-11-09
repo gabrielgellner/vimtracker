@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use vt_model::constants::NUDGE_TICKS;
 use vt_model::groove::GrooveId;
 use vt_model::samples::{SampleId, SamplePool};
 use vt_model::settings::SettingId;
@@ -14,10 +15,15 @@ pub struct Published {
     pub song: Arc<Song>,
     pub samples: Arc<SamplePool>,
     pub track_samples: Vec<Option<SampleId>>,
-    /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove can
-    /// play it early: as early as any groove the song can play lands a step. With none, it's 0,
-    /// and steps are worked out on the grid as they always were.
+    /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
+    /// nudge can play it early: as early as any groove the song can play lands a step, and further
+    /// by the earliest nudge in the song. With neither, it's 0, and steps are worked out on the
+    /// grid as they always were.
     pub lead: u64,
+    /// How early any groove the song can play lands a step, which a step's push is kept within.
+    pub groove_lead: u64,
+    /// Whether any row has a nudge, without which a step's row needn't be looked up for one.
+    pub nudges: bool,
     /// Whether any step has a `GRV`, without which a step's groove needn't be looked for on it.
     pub groove_steps: bool,
 }
@@ -31,15 +37,30 @@ impl Published {
             .iter()
             .map(|track| samples.id_of(track.sample.as_deref()?))
             .collect();
-        let (lead, groove_steps) = lead(&song);
+        let (groove_lead, groove_steps) = lead(&song);
+        let earliest = earliest_nudge(&song);
         Self {
+            track_samples,
+            lead: groove_lead + earliest.map_or(0, |early| early.unsigned_abs()),
+            groove_lead,
+            nudges: earliest.is_some(),
+            groove_steps,
             song,
             samples,
-            track_samples,
-            lead,
-            groove_steps,
         }
     }
+}
+
+/// How far the earliest nudge in the song moves its row, in ticks, if any row has one: 0 when every
+/// nudge is late.
+fn earliest_nudge(song: &Song) -> Option<i64> {
+    song.tracks
+        .iter()
+        .flat_map(|track| track.phrases.values())
+        .flat_map(|phrase| phrase.steps())
+        .filter(|step| step.nudge != 0)
+        .map(|step| i64::from(step.nudge.min(0)) * NUDGE_TICKS as i64)
+        .min()
 }
 
 /// How early any groove the song can play lands a step: the project's, the tracks' own, and any a

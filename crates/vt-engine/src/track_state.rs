@@ -162,7 +162,37 @@ pub struct DelayedNote {
     pub note: NoteOn,
 }
 
-/// A step worked out but not yet played, as its groove lands it later than now.
+/// Which of a step's parts lands. A nudge moves the row's note part off the grid, while the FX
+/// columns with lanes of their own stay on it, so the two land apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    /// All of it at once, as every step lands without a nudge.
+    Whole,
+    /// The lanes' values, where the groove lands the step.
+    Lanes,
+    /// The note, its own FX columns, and what times the note from any column: `DEL`, `KIL`,
+    /// `OFF`, `RET` and `CHA`.
+    Row,
+}
+
+impl Part {
+    /// Whether it plays the row's note part.
+    pub fn plays_row(self) -> bool {
+        self != Self::Lanes
+    }
+
+    /// Whether it runs the lanes' values.
+    pub fn runs_lanes(self) -> bool {
+        self != Self::Row
+    }
+}
+
+/// How many parts of steps a track can have waiting: two steps' lanes and rows, as a nudged row
+/// can land after the next step is worked out, but never after the one after.
+pub const PENDING_PARTS: usize = 4;
+
+/// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
+/// than now.
 #[derive(Debug, Clone, Copy)]
 pub struct PendingStep {
     /// When it lands, on the track's clock.
@@ -171,6 +201,20 @@ pub struct PendingStep {
     pub section_step: usize,
     /// The groove it was worked out with, which its velocity and length follow.
     pub groove: Groove,
+    /// Which part of the step it is.
+    pub part: Part,
+    /// Which step it is, counted as the engine works them out, which never wraps.
+    pub step: u64,
+    /// Whether it's the step's first part to land, which rolls its `CHA` and ends the last note's
+    /// locks.
+    pub leads: bool,
+    /// The chain the track plays it from and the place in it, found when it's worked out, as a
+    /// part landing after the next step is worked out mustn't look again.
+    pub place: Option<(u32, usize)>,
+    /// The count its lanes read at.
+    pub count: i64,
+    /// Whether the row plays, past its `CHA`, once the step's first part has rolled it.
+    pub plays: Option<bool>,
 }
 
 /// Retriggering the current note.
@@ -218,8 +262,8 @@ pub struct TrackState {
     /// When the note's gate closes, `Gate` of the way through its last pulse.
     pub gate_at: Option<u64>,
     pub retrigger: Option<Retrigger>,
-    /// A step waiting for where its groove lands it.
-    pub pending: Option<PendingStep>,
+    /// Steps, or parts of them, waiting for where their groove and nudge land them.
+    pub pending: [Option<PendingStep>; PENDING_PARTS],
     /// The random timing a groove's humanise adds, apart from `rng` so `CHA` rolls as it did.
     pub groove_rng: Pcg32,
     /// What each setting is set to, by its place in the registry. The fields below it are what's
@@ -408,7 +452,7 @@ impl TrackState {
             },
             loaded_voice: None,
             loaded_effects: [None; INSERTS],
-            pending: None,
+            pending: [None; PENDING_PARTS],
             vol: f32::from(UNITY_LEVEL),
             send_a: 0.0,
             send_b: 0.0,
@@ -818,6 +862,60 @@ impl TrackState {
         i64::from(self.groove_rng.next_u32() % spread) - i64::from(ticks)
     }
 
+    /// Take the part that lands first, if it lands by this time. Parts that land together play in
+    /// the order their steps were worked out, a step's first part before its other.
+    pub fn take_due(&mut self, by: u64) -> Option<PendingStep> {
+        let next = self
+            .pending
+            .iter()
+            .enumerate()
+            .filter_map(|(at, part)| part.map(|part| (at, part)))
+            .filter(|(_, part)| part.at <= by)
+            .min_by_key(|(_, part)| (part.at, part.step, !part.leads))?;
+        self.pending[next.0] = None;
+        Some(next.1)
+    }
+
+    /// Wait for a part to land. With no room, which only a big change of tempo could bring
+    /// about, the earliest waiting is given back to be played now.
+    pub fn wait_for(&mut self, part: PendingStep) -> Option<PendingStep> {
+        let full = self.pending.iter().all(Option::is_some);
+        let earliest = if full { self.take_due(u64::MAX) } else { None };
+        if let Some(free) = self.pending.iter_mut().find(|part| part.is_none()) {
+            *free = Some(part);
+        }
+        earliest
+    }
+
+    /// The latest any waiting part that plays a row's note lands, as the next row's can't land
+    /// before it.
+    pub fn last_row_at(&self) -> Option<u64> {
+        self.pending
+            .iter()
+            .flatten()
+            .filter(|part| part.part.plays_row())
+            .map(|part| part.at)
+            .max()
+    }
+
+    /// Tell a step's other part, still waiting, whether its row plays.
+    pub fn decide(&mut self, step: u64, plays: bool) {
+        for part in self.pending.iter_mut().flatten() {
+            if part.step == step {
+                part.plays = Some(plays);
+            }
+        }
+    }
+
+    /// Forget whatever is waiting of one step, as it's to be worked out again.
+    pub fn forget_step(&mut self, step: u64) {
+        for part in &mut self.pending {
+            if part.is_some_and(|part| part.step == step) {
+                *part = None;
+            }
+        }
+    }
+
     /// Fade the playing note.
     pub fn cut_to_tail(&mut self) {
         if self.voice.active() {
@@ -835,7 +933,7 @@ impl TrackState {
         self.off_at = None;
         self.gate_at = None;
         self.retrigger = None;
-        self.pending = None;
+        self.pending = [None; PENDING_PARTS];
         self.tied = false;
         self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
     }

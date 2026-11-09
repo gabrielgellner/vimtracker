@@ -103,7 +103,9 @@ These have no mark.
 | `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 
-A unit is a sixth of a step, so `DEL03` delays by half a step.
+A unit is a sixth of a step, so `DEL03` delays by half a step. They count from
+where the note starts, after the groove and the row's nudge, and so does `CHA`,
+which goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder. Use `:seed 7` to choose which results `CHA` gives.
@@ -143,6 +145,11 @@ Every pulse of a row is a step, so `MLT4` is grooved on each pulse, and lanes
 play on the grooved steps too. `DEL` adds to where the groove lands a step. A
 note's `Gate` is a share of its last pulse as the groove makes it, so the long
 first step of a swung pair holds its note longer.
+
+A row's nudge goes on top: grid, then groove, then nudge. It moves the row's
+note and its own FX columns, while a column with a lane of its own stays where
+the groove lands the step, so a lane's value on a step comes in on time however
+the note there is nudged. See **Note entry**.
 
 `GRV` on a step chooses the groove that step and the rest of its note play with,
 worked out before the step lands, so `GRV 01`, Straight, on a fill's rows plays

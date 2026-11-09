@@ -59,6 +59,7 @@ pub fn column_name(app: &App) -> String {
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
+            Field::Nudge => "Nudge".to_owned(),
             Field::Gate => "Gate".to_owned(),
             Field::GateLength if app.current_gate().and_then(|gate| gate.length).is_some() => {
                 "Gate length".to_owned()
@@ -104,6 +105,9 @@ pub fn column_name(app: &App) -> String {
 /// track has: a lock in the grid, or a row of the track page.
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.track_here()?;
+    if app.view == View::Phrase && app.cursor.field == Field::Nudge {
+        return Some(nudge_shown(app.current_nudge()));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
@@ -123,6 +127,15 @@ pub fn value_shown(app: &App) -> Option<String> {
         _ => return None,
     };
     id.exists_on(track).then(|| shown(id, value))
+}
+
+/// How far a nudge moves its row, in 24ths of a step.
+fn nudge_shown(nudge: i8) -> String {
+    match nudge {
+        0 => "on the grid".to_owned(),
+        late if late > 0 => format!("{late}/24 of a step late"),
+        early => format!("{}/24 of a step early", early.unsigned_abs()),
+    }
 }
 
 /// A value of a setting in its units.

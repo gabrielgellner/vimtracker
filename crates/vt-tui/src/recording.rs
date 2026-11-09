@@ -1,7 +1,7 @@
 //! Live recording: armed with `Space r` while the song plays, notes played in Insert go in where
 //! the cursor's track is playing, each with how long its key was held in its gate cell. Rows are
 //! where the track's groove lands them, so a note goes on the row it was played nearest to as it's
-//! heard.
+//! heard, with how far from the row it was played as the row's nudge.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -9,9 +9,9 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Transport;
 use vt_model::action::Action;
-use vt_model::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
+use vt_model::constants::{NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::groove::Groove;
-use vt_model::step::{Gate, GateKind, Note};
+use vt_model::step::{Gate, GateKind, MAX_NUDGE, Note};
 
 use crate::app::App;
 use crate::input::keys::Key;
@@ -257,8 +257,8 @@ impl App {
         })
     }
 
-    /// Write a recorded note over its row's note, velocity and gate cell, with its length in the
-    /// cell. The row keeps its pulses, so recording never changes a loop's length, and until it's
+    /// Write a recorded note over its row's note, velocity, nudge and gate cell, with how far off
+    /// the row it was played as the nudge and its length in the cell. The row keeps its pulses, so recording never changes a loop's length, and until it's
     /// let go the note holds on. Other columns and rows are left alone, and the pass is one undo
     /// step.
     fn write_take(&mut self, take: &Take, held: Option<f64>, depth: &mut Option<usize>) {
@@ -276,6 +276,7 @@ impl App {
         };
         step.note = Note::On(take.note);
         step.velocity = Some(take.velocity);
+        step.nudge = recorded_nudge(take.pressed - take.starts);
         // The note is one note, held, so its gate is a `SGL`, on the pulses the row had. Until
         // it's let go, it holds on until something ends it.
         let pulses = step.gate.map_or(1, |gate| gate.pulses);
@@ -314,6 +315,15 @@ fn running(count: f64) -> usize {
 /// How far the groove moves the step at a place on the running count, in steps.
 fn pushed(groove: &Groove, count: f64) -> f64 {
     f64::from(groove.push(running(count))) / TICKS_PER_STEP as f64
+}
+
+/// The nudge a note played this many steps from where its row lands is written with, to the
+/// nearest 24th of a step and no further than a nudge goes.
+fn recorded_nudge(off: f64) -> i8 {
+    let most = f64::from(MAX_NUDGE);
+    (off * (TICKS_PER_STEP / NUDGE_TICKS) as f64)
+        .round()
+        .clamp(-most, most) as i8
 }
 
 /// The length a note held this many steps is written with on a row of so many pulses, which stay
@@ -357,6 +367,19 @@ mod tests {
             "a tap lasts into the last pulse"
         );
         assert_eq!(recorded_length(4.5, 4, 1.0), 0xFF);
+    }
+
+    #[test]
+    fn a_note_played_off_its_row_is_nudged_to_the_nearest_24th() {
+        assert_eq!(recorded_nudge(0.0), 0);
+        assert_eq!(recorded_nudge(0.1), 2);
+        assert_eq!(recorded_nudge(-0.13), -3);
+        assert_eq!(
+            recorded_nudge(0.49),
+            MAX_NUDGE,
+            "half a step is as far as it goes"
+        );
+        assert_eq!(recorded_nudge(-0.5), -MAX_NUDGE);
     }
 
     #[test]

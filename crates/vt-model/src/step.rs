@@ -264,6 +264,10 @@ pub struct Gate {
 /// The most pulses a row can last.
 pub const MAX_PULSES: u8 = 8;
 
+/// The furthest a row's nudge moves it either way, in 24ths of a step: just under half a step, as
+/// Elektron's micro-timing goes, so a row's note can't pass the next row's.
+pub const MAX_NUDGE: i8 = 11;
+
 impl Default for Gate {
     fn default() -> Self {
         Self {
@@ -280,6 +284,9 @@ pub struct Step {
     pub note: Note,
     /// `None` means full level.
     pub velocity: Option<u8>,
+    /// How far the row's note part lands from its place, in 24ths of a step: late above 0, early
+    /// below, and on the grid at 0. It moves the note and the row's own FX together.
+    pub nudge: i8,
     /// `None` plays as one pulse of `Single`, as every row did before gates.
     pub gate: Option<Gate>,
     pub fx: Vec<FxSlot>,
@@ -307,6 +314,7 @@ impl Default for Step {
         Self {
             note: Note::Empty,
             velocity: None,
+            nudge: 0,
             gate: None,
             fx: vec![FxSlot::default(); FX_SLOTS],
         }

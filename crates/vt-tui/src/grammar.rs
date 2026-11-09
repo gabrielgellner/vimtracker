@@ -488,6 +488,9 @@ impl App {
             // On a gate's length, they move the length rather than the pulses.
             (Field::GateLength, Shift::Large) => Shift::LengthLarge,
             (Field::GateLength, Shift::Increment | Shift::Chromatic) => Shift::Length,
+            // On a nudge, they move it by 24ths of a step, or `DEL`'s sixths.
+            (Field::Nudge, Shift::Large) => Shift::NudgeLarge,
+            (Field::Nudge, Shift::Increment | Shift::Chromatic) => Shift::Nudge,
             _ => kind,
         };
         let amount = self.count.take().unwrap_or(1) as i32;
@@ -557,7 +560,9 @@ impl App {
                 return false;
             };
             match field {
-                Field::Velocity | Field::GateLength => matches!(step.note, Note::On(_)),
+                Field::Velocity | Field::Nudge | Field::GateLength => {
+                    matches!(step.note, Note::On(_))
+                }
                 Field::FxValue(slot) => step.fx.get(slot).is_some_and(|s| s.command.is_some()),
                 Field::FxFine(slot) => step
                     .fx
@@ -644,6 +649,7 @@ impl App {
                 velocity: self.note_velocity,
             },
             Field::Velocity => Fill::Velocity(value.velocity),
+            Field::Nudge => Fill::Nudge(value.nudge),
             Field::Gate => Fill::Gate(value.gate),
             Field::GateLength => Fill::GateLength(value.length()),
             Field::FxCommand(slot) => Fill::Slot(slot, value.fx[slot]),
@@ -707,6 +713,15 @@ impl App {
             {
                 self.set_length(None);
             }
+            // `x` on a velocity or a nudge clears just that one, as they share a column group.
+            Change::ClearField if !self.mode.is_visual() && self.cursor.field == Field::Nudge => {
+                self.set_nudge(0);
+            }
+            Change::ClearField
+                if !self.mode.is_visual() && self.cursor.field == Field::Velocity =>
+            {
+                self.set_field(FieldValue::Velocity(None));
+            }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
@@ -765,6 +780,12 @@ impl App {
                         phrase,
                         step,
                         value: FieldValue::Velocity(value.velocity),
+                    },
+                    Field::Nudge => Action::SetField {
+                        track: self.cursor.track,
+                        phrase,
+                        step,
+                        value: FieldValue::Nudge(value.nudge),
                     },
                     Field::Gate | Field::GateLength => Action::SetField {
                         track: self.cursor.track,

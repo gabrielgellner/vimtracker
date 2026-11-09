@@ -3,7 +3,8 @@
 use crate::constants::BEAT_STEPS;
 use crate::scale::Scale;
 use crate::step::{
-    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
+    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
+    Step,
 };
 
 /// One editable part of a step.
@@ -11,6 +12,9 @@ use crate::step::{
 pub enum Field {
     Note,
     Velocity,
+    /// How far the row's note part lands off its place, in the velocity's column group, as both
+    /// are how the note is played.
+    Nudge,
     /// The gate cell: a gate type and the row's length in pulses.
     Gate,
     /// The gate cell's length: how much of its last pulse the row's note lasts.
@@ -22,20 +26,22 @@ pub enum Field {
     FxFine(usize),
 }
 
+/// The column group of the velocity and the nudge.
+pub const VELOCITY_GROUP: usize = 1;
 /// The column group of the gate cell.
 pub const GATE_GROUP: usize = 2;
 /// The column group of the first FX slot. Each slot after it is one more.
 pub const FX_GROUP: usize = 3;
-/// Where the first FX slot's command is in `h l` order, after the note, velocity and the gate
-/// cell's two parts. Each slot takes three places: its command, value and fine digits.
-pub const FIRST_FX_ORDER: usize = 4;
+/// Where the first FX slot's command is in `h l` order, after the note, velocity, nudge and the
+/// gate cell's two parts. Each slot takes three places: its command, value and fine digits.
+pub const FIRST_FX_ORDER: usize = 5;
 
 impl Field {
     /// The column group this field belongs to: note, velocity, gate, then each FX slot.
     pub fn group(self) -> usize {
         match self {
             Self::Note => 0,
-            Self::Velocity => 1,
+            Self::Velocity | Self::Nudge => VELOCITY_GROUP,
             Self::Gate | Self::GateLength => GATE_GROUP,
             Self::FxCommand(slot) | Self::FxValue(slot) | Self::FxFine(slot) => FX_GROUP + slot,
         }
@@ -45,7 +51,7 @@ impl Field {
     pub fn of_group(group: usize) -> Self {
         match group {
             0 => Self::Note,
-            1 => Self::Velocity,
+            VELOCITY_GROUP => Self::Velocity,
             GATE_GROUP => Self::Gate,
             slot => Self::FxCommand(slot - FX_GROUP),
         }
@@ -56,8 +62,9 @@ impl Field {
         match self {
             Self::Note => 0,
             Self::Velocity => 1,
-            Self::Gate => 2,
-            Self::GateLength => 3,
+            Self::Nudge => 2,
+            Self::Gate => 3,
+            Self::GateLength => 4,
             Self::FxCommand(slot) => FIRST_FX_ORDER + slot * 3,
             Self::FxValue(slot) => FIRST_FX_ORDER + 1 + slot * 3,
             Self::FxFine(slot) => FIRST_FX_ORDER + 2 + slot * 3,
@@ -69,8 +76,9 @@ impl Field {
         match order {
             0 => Self::Note,
             1 => Self::Velocity,
-            2 => Self::Gate,
-            3 => Self::GateLength,
+            2 => Self::Nudge,
+            3 => Self::Gate,
+            4 => Self::GateLength,
             n => {
                 let (slot, part) = ((n - FIRST_FX_ORDER) / 3, (n - FIRST_FX_ORDER) % 3);
                 match part {
@@ -308,8 +316,9 @@ pub fn clear_step(step: &mut Step, scope: Scope) {
     if scope.covers(0) {
         step.note = Note::Empty;
     }
-    if scope.covers(1) {
+    if scope.covers(VELOCITY_GROUP) {
         step.velocity = None;
+        step.nudge = 0;
     }
     if scope.covers(GATE_GROUP) {
         step.gate = None;
@@ -361,7 +370,15 @@ pub enum Shift {
     Length,
     /// `+` and `_` on a gate's length, by 16.
     LengthLarge,
+    /// `=` and `-` on a nudge, by a 24th of a step. Only nudges move, and a row without one gets
+    /// one only if it has a note.
+    Nudge,
+    /// `+` and `_` on a nudge, by a sixth of a step, `DEL`'s unit.
+    NudgeLarge,
 }
+
+/// How many 24ths of a step one large step of a nudge is: a sixth, as `DEL` counts.
+const LARGE_NUDGE: i32 = 4;
 
 /// How much one large step is for a value in hex.
 const LARGE_HEX: i32 = 0x10;
@@ -407,6 +424,19 @@ pub fn shift_step(
     gate: u8,
 ) {
     let by = by.clamp(-0xFFFF, 0xFFFF);
+    if matches!(kind, Shift::Nudge | Shift::NudgeLarge) {
+        let by = if kind == Shift::NudgeLarge {
+            by * LARGE_NUDGE
+        } else {
+            by
+        };
+        let has_note = matches!(step.note, Note::On(_));
+        if scope.covers(VELOCITY_GROUP) && (step.nudge != 0 || has_note) {
+            let most = i32::from(MAX_NUDGE);
+            step.nudge = (i32::from(step.nudge) + by).clamp(-most, most) as i8;
+        }
+        return;
+    }
     if matches!(kind, Shift::Length | Shift::LengthLarge) {
         if !scope.covers(GATE_GROUP) {
             return;
@@ -518,7 +548,10 @@ pub fn paste_step(
         let to = column_to(target, group, scope, at_group)?;
         match group {
             0 => target.note = source.note,
-            1 => target.velocity = source.velocity,
+            VELOCITY_GROUP => {
+                target.velocity = source.velocity;
+                target.nudge = source.nudge;
+            }
             GATE_GROUP => target.gate = source.gate,
             slot => {
                 if let Some(value) = source.fx.get(slot - FX_GROUP) {
@@ -551,9 +584,16 @@ pub fn merge_step(
         };
         match group {
             0 if source.note != Note::Empty => target.note = source.note,
-            1 if source.velocity.is_some() => target.velocity = source.velocity,
+            VELOCITY_GROUP => {
+                if source.velocity.is_some() {
+                    target.velocity = source.velocity;
+                }
+                if source.nudge != 0 {
+                    target.nudge = source.nudge;
+                }
+            }
             GATE_GROUP if source.gate.is_some() => target.gate = source.gate,
-            0 | 1 | GATE_GROUP => {}
+            0 | GATE_GROUP => {}
             slot => {
                 if let Some(value) = source.fx.get(slot - FX_GROUP)
                     && value.command.is_some()
@@ -656,6 +696,62 @@ mod tests {
         let mut step: Step = text.parse().unwrap();
         shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None, 0xFF);
         step.to_string()
+    }
+
+    fn nudged(text: &str, by: i32, kind: Shift) -> String {
+        let mut step: Step = text.parse().unwrap();
+        shift_step(
+            &mut step,
+            Scope::column(VELOCITY_GROUP),
+            by,
+            kind,
+            None,
+            0xFF,
+        );
+        step.to_string()
+    }
+
+    #[test]
+    fn a_nudge_moves_alone_within_just_under_half_a_step() {
+        assert_eq!(nudged("C-4 64", 1, Shift::Nudge), "C-4 64 +1");
+        assert_eq!(nudged("C-4 64 +1", -2, Shift::Nudge), "C-4 64 -1");
+        assert_eq!(
+            nudged("C-4 64 -1", 1, Shift::Nudge),
+            "C-4 64",
+            "0 is on the grid"
+        );
+        assert_eq!(nudged("C-4 64", 1, Shift::NudgeLarge), "C-4 64 +4");
+        assert_eq!(nudged("C-4 64 +9", 1, Shift::NudgeLarge), "C-4 64 +B");
+        assert_eq!(nudged("C-4 64", -9, Shift::NudgeLarge), "C-4 64 -B");
+        assert_eq!(
+            nudged("--- -- cut:40", 1, Shift::Nudge),
+            "--- -- cut:40",
+            "a row with no note gets no nudge"
+        );
+        assert_eq!(
+            nudged("--- -- +2 cut:40", 1, Shift::Nudge),
+            "--- -- +3 cut:40",
+            "but one it has moves"
+        );
+        // The velocity moves on its own part, and keeps the nudge.
+        assert_eq!(nudged("C-4 60 +2", 1, Shift::Increment), "C-4 61 +2");
+    }
+
+    #[test]
+    fn the_velocity_group_copies_and_clears_the_nudge_with_it() {
+        let mut step: Step = "C-4 60 -3 SGL2".parse().unwrap();
+        let source: Step = "D-4 70 +5".parse().unwrap();
+        let velocity = Scope::column(VELOCITY_GROUP);
+        merge_step(&mut step, &"D-4 -- +5".parse().unwrap(), velocity, 1).unwrap();
+        assert_eq!(
+            step.to_string(),
+            "C-4 60 +5 SGL2",
+            "a merge keeps what's empty"
+        );
+        paste_step(&mut step, &source, velocity, 1).unwrap();
+        assert_eq!(step.to_string(), "C-4 70 +5 SGL2");
+        clear_step(&mut step, velocity);
+        assert_eq!(step.to_string(), "C-4 -- SGL2");
     }
 
     fn lengthened(text: &str, by: i32, kind: Shift, gate: u8) -> String {
@@ -767,14 +863,16 @@ mod tests {
         for order in 0..12 {
             assert_eq!(Field::from_order(order).order(), order);
         }
-        assert_eq!(Field::from_order(3), Field::GateLength);
+        assert_eq!(Field::from_order(2), Field::Nudge);
+        assert_eq!(Field::Nudge.group(), VELOCITY_GROUP);
+        assert_eq!(Field::from_order(4), Field::GateLength);
         assert_eq!(Field::GateLength.group(), GATE_GROUP);
-        assert_eq!(Field::from_order(6), Field::FxFine(0));
-        assert_eq!(Field::from_order(7), Field::FxCommand(1));
+        assert_eq!(Field::from_order(7), Field::FxFine(0));
+        assert_eq!(Field::from_order(8), Field::FxCommand(1));
         assert_eq!(Field::FxFine(1).group(), 4);
         assert_eq!(Field::FxValue(1).group(), 4);
         assert_eq!(Field::of_group(4), Field::FxCommand(1));
         assert_eq!(Field::of_group(GATE_GROUP), Field::Gate);
-        assert_eq!(Field::from_order(2), Field::Gate);
+        assert_eq!(Field::from_order(3), Field::Gate);
     }
 }

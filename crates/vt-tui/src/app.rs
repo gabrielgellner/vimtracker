@@ -37,8 +37,8 @@ pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
 use vt_model::song::{ChainEntry, Lane, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{
-    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
-    Step,
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
+    Mark, Note, Step,
 };
 
 use crate::grammar::Change;
@@ -1295,7 +1295,7 @@ impl App {
     fn fx_column(&self) -> Option<usize> {
         match self.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => Some(slot),
-            Field::Note | Field::Velocity | Field::Gate | Field::GateLength => None,
+            Field::Note | Field::Velocity | Field::Nudge | Field::Gate | Field::GateLength => None,
         }
     }
 
@@ -1619,6 +1619,7 @@ impl App {
             _ => match self.cursor.field {
                 Field::Note => self.insert_note(key),
                 Field::Velocity | Field::FxValue(_) => self.insert_value(key),
+                Field::Nudge => self.insert_nudge(key),
                 Field::Gate => self.insert_gate(key),
                 Field::GateLength => self.insert_length(key),
                 Field::FxCommand(slot) => self.insert_command(key, slot),
@@ -1680,6 +1681,7 @@ impl App {
         match self.cursor.field {
             Field::Note => self.insert_note(key),
             Field::Velocity | Field::FxValue(_) => self.insert_value(key),
+            Field::Nudge => self.insert_nudge(key),
             Field::Gate => self.insert_gate(key),
             Field::GateLength => self.insert_length(key),
             Field::FxCommand(slot) => self.insert_command(key, slot),
@@ -2123,6 +2125,48 @@ impl App {
             None => None,
         };
         self.set_field(FieldValue::Gate(gate));
+    }
+
+    /// A nudge's 24ths as one hex digit, `0` to `B`, late unless `-` comes first, and `+` or `=`
+    /// first says late again. `0` puts the row back on the grid, and auto-jump moves on by the
+    /// grid once the digit's in.
+    fn insert_nudge(&mut self, key: Key) {
+        match key.code {
+            KeyCode::Esc => self.cancel_entry(),
+            KeyCode::Backspace => {
+                if self.entry.text.pop().is_none() {
+                    self.back_for_clearing();
+                    self.set_nudge(0);
+                }
+            }
+            KeyCode::Char(sign @ ('-' | '+' | '=')) if !key.ctrl => {
+                self.entry.text = if sign == '-' { "-" } else { "+" }.to_owned();
+            }
+            KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
+                let amount = c.to_digit(16).unwrap_or(0) as i8;
+                if amount > MAX_NUDGE {
+                    self.status =
+                        format!("A nudge goes up to {MAX_NUDGE:X}, just under half a step");
+                    return;
+                }
+                let early = std::mem::take(&mut self.entry.text) == "-";
+                self.set_nudge(if early { -amount } else { amount });
+                self.advance();
+            }
+            _ => {}
+        }
+    }
+
+    /// Nudge the row under the cursor, or put it back on the grid with 0.
+    pub(crate) fn set_nudge(&mut self, nudge: i8) {
+        self.set_field(FieldValue::Nudge(nudge));
+    }
+
+    /// How far the row under the cursor is nudged, in 24ths of a step.
+    pub(crate) fn current_nudge(&self) -> i8 {
+        self.phrase_here()
+            .and_then(|phrase| phrase.steps().get(self.cursor.step))
+            .map_or(0, |step| step.nudge)
     }
 
     /// The gate cell under the cursor.
