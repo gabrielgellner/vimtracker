@@ -5,7 +5,8 @@ From an empty project to a loop you can hear, in about two minutes.
 ## 1. Load a sound
 
 Press `Space 5` to list the WAV files nearby, type a few letters to filter, such
-as `kick`, and press `Enter`. The sample goes on the current track.
+as `kick`, and press `Enter`. The sample goes in the project's bank, and the current
+track plays it.
 
 Nothing listed? Run `:sample /path/to/folder` to browse a folder.
 

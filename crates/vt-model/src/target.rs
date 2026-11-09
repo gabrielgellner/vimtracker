@@ -5,7 +5,7 @@
 use crate::insert::{INSERTS, Insert};
 use crate::lfo::LFOS_PER_TRACK;
 use crate::settings::{Effect, Owner, SettingId, voice_entries};
-use crate::song::{Track, TrackKind};
+use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
@@ -65,6 +65,7 @@ impl SettingId {
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
             (Owner::Lfo(_), _) => true,
+            (Owner::Sampler, _) => track.is_sound() && track.machine == Machine::Sampler,
             (Owner::Bypass(slot), _) => track
                 .inserts
                 .get(slot)
@@ -103,6 +104,7 @@ impl SettingId {
             (Owner::Lfo(lfo), 0) => format!("How far LFO {} swings", lfo + 1),
             (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
+            (Owner::Sampler, _) => "Which of the bank's samples plays".to_owned(),
         }
     }
 
@@ -129,6 +131,9 @@ impl SettingId {
         if let Some(voice) = track.voice() {
             settings
                 .extend((0..voice_entries(voice).len()).filter_map(|at| Self::voice(voice, at)));
+        }
+        if Self::SAMPLE.exists_on(track) {
+            settings.push(Self::SAMPLE);
         }
         for slot in 0..INSERTS {
             if let Some(effect) = Effect::of(track.inserts[slot]) {

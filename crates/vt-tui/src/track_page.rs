@@ -343,7 +343,7 @@ impl Page {
     /// The page's rows, top to bottom, for a track with this machine.
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
-            (Self::Sound, Machine::Sample) => &SAMPLE_ROWS,
+            (Self::Sound, Machine::Sampler) => &SAMPLE_ROWS,
             (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 4 => &SYNTH8_ROWS,
             (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
             (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
@@ -372,7 +372,7 @@ impl Control {
             Self::Glide => "Glide",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
-            Self::Sample => "File",
+            Self::Sample => "Sample",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
             Self::FilterType => "Filter",
@@ -677,7 +677,7 @@ impl App {
             (Page::Mod, kind) if kind != TrackKind::Sound => &FIXED_MOD_ROWS,
             _ => self
                 .track_page
-                .rows(track.map_or(Machine::Sample, |track| track.machine)),
+                .rows(track.map_or(Machine::Sampler, |track| track.machine)),
         }
     }
 
@@ -775,7 +775,12 @@ impl App {
                 });
             }
             Control::Sample => {
-                self.status = "K chooses a sample".to_owned();
+                let size = if large { HEX_JUMP as usize } else { 1 };
+                let sample = self.next_sample(track.sample(), up, size * count);
+                self.apply(&Action::SetTrackSample {
+                    track: self.cursor.track,
+                    sample,
+                });
             }
             Control::Base(which) => {
                 let value = match which {
@@ -1309,10 +1314,10 @@ impl App {
                     });
                 }
             }
-            Control::Sample if track.sample.is_some() => {
+            Control::Sample if track.sample() != 0 => {
                 self.apply(&Action::SetTrackSample {
                     track: self.cursor.track,
-                    sample: None,
+                    sample: 0,
                 });
             }
             Control::Sample => {}
@@ -1497,6 +1502,19 @@ impl App {
 
     /// List what an LFO's setting can be, with the current one highlighted.
     /// Switch this track's mute or solo.
+    /// The bank entry so many on from this one, up or down, through those the bank has, with
+    /// `Off` below the first. It stops at either end.
+    fn next_sample(&self, from: u8, up: bool, count: usize) -> u8 {
+        let numbers = std::iter::once(0).chain(self.song().bank.iter().map(|(number, _)| number));
+        let found = if up {
+            numbers.filter(|number| *number > from).take(count).last()
+        } else {
+            let below: Vec<u8> = numbers.filter(|number| *number < from).collect();
+            below.get(below.len().saturating_sub(count)).copied()
+        };
+        found.unwrap_or(from)
+    }
+
     fn toggle_control(&mut self, control: Control) {
         if control == Control::Mute {
             self.toggle_mute();
@@ -1512,7 +1530,7 @@ impl App {
             return;
         }
         if self.track_control() == Control::Sample {
-            self.open_default_sample_picker();
+            self.open_bank_picker();
             return;
         }
         if let Control::Insert(slot) = control {

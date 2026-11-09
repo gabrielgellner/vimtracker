@@ -35,7 +35,7 @@ fn pool() -> Arc<SamplePool> {
 /// One short hit on the first step, sending this to both returns.
 fn song(send: &str) -> Song {
     let mut song = Song::new(1);
-    song.tracks[0].sample = Some("s".to_owned());
+    song.sample_on(0, "s");
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     song.tracks[0].send_a = 0xE0;
@@ -171,7 +171,7 @@ fn a_note_on_a_fixed_track_plays_nothing() {
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = "--- -- --- --- ---".parse().unwrap();
     for track in [RETURN_A, RETURN_B, MASTER] {
-        song.tracks[track].sample = Some("s".to_owned());
+        song.sample_on(track, "s");
         song.tracks[track].add_chain(0);
         song.sections[0].chains[track] = Some(0);
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());

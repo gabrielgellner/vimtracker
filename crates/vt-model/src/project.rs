@@ -1,5 +1,6 @@
 //! Project folders: `song.ron` and a `samples/` folder.
 
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,8 +8,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::bank::ContentHash;
 use crate::constants::FORMAT_VERSION;
-use crate::sample::{SampleError, load_sample};
+use crate::sample::{SampleError, is_sample_file, load_sample};
 use crate::samples::SamplePool;
 use crate::song::Song;
 
@@ -166,7 +168,7 @@ pub fn import_sample(folder: &Path, source: &Path) -> Result<String, ProjectErro
     unreachable!("the import loop always returns")
 }
 
-/// Where a track's sample path points. Paths in an unsaved project are absolute.
+/// Where a bank entry's file is. Paths in an unsaved project are absolute.
 pub fn resolve_sample(folder: Option<&Path>, sample: &str) -> PathBuf {
     match folder {
         Some(folder) => folder.join(sample),
@@ -174,26 +176,89 @@ pub fn resolve_sample(folder: Option<&Path>, sample: &str) -> PathBuf {
     }
 }
 
-/// Save a song to a new folder, copying its samples there, and return the song with its sample
-/// paths rewritten. A folder that already has a song is refused.
+/// Save a song to a new folder, copying its bank's files into its `samples/` folder, each
+/// content once, and return the song with its bank's paths rewritten. A folder that already has a
+/// song is refused.
 pub fn save_as(from: Option<&Path>, to: &Path, song: &Song) -> Result<Song, ProjectError> {
     if to.join(SONG_FILE).exists() {
         return Err(ProjectError::Exists(to.display().to_string()));
     }
     fs::create_dir_all(to).map_err(io_at(to))?;
     let mut saved = song.clone();
-    for track in &mut saved.tracks {
-        if let Some(sample) = &track.sample {
-            let source = resolve_sample(from, sample);
-            track.sample = Some(import_sample(to, &source)?);
+    let mut copied: HashMap<ContentHash, String> = HashMap::new();
+    for (_, entry) in saved.bank.iter_mut() {
+        for source in entry.sources_mut() {
+            if let Some(stored) = copied.get(&source.hash) {
+                source.path = stored.clone();
+                continue;
+            }
+            source.path = import_sample(to, &resolve_sample(from, &source.path))?;
+            if source.hash.is_known() {
+                copied.insert(source.hash, source.path.clone());
+            }
         }
     }
     save_song(to, &saved)?;
     Ok(saved)
 }
 
-/// Load every track's sample that isn't already in the pool. Samples that can't be read are
-/// reported, and the rest still load.
+/// Check the bank's files against their hashes: one that's gone is looked for by its content in
+/// the project's `samples/` folder, and the bank pointed at it if it's there, and one whose content
+/// has changed since it joined the bank is reported. What's said about each is given back.
+pub fn find_sources(folder: Option<&Path>, song: &mut Song) -> Vec<String> {
+    let mut notes = Vec::new();
+    let mut in_project: Option<HashMap<ContentHash, String>> = None;
+    for (number, entry) in song.bank.iter_mut() {
+        for source in entry.sources_mut() {
+            if !source.hash.is_known() {
+                continue;
+            }
+            let path = resolve_sample(folder, &source.path);
+            match ContentHash::of_file(&path) {
+                Ok(hash) if hash == source.hash => {}
+                Ok(_) => notes.push(format!(
+                    "Sample {number:02X}: {} has changed since it joined the bank",
+                    source.path
+                )),
+                Err(_) => {
+                    let found = in_project.get_or_insert_with(|| hashes_in_project(folder));
+                    if let Some(moved) = found.get(&source.hash) {
+                        notes.push(format!(
+                            "Sample {number:02X}: {} was missing, and is found at {moved}",
+                            source.path
+                        ));
+                        source.path = moved.clone();
+                    }
+                }
+            }
+        }
+    }
+    notes
+}
+
+/// The sample files in a project's `samples/` folder, by their content, as the song refers to
+/// them.
+fn hashes_in_project(folder: Option<&Path>) -> HashMap<ContentHash, String> {
+    let Some(folder) = folder else {
+        return HashMap::new();
+    };
+    let Ok(files) = fs::read_dir(folder.join(SAMPLES_DIR)) else {
+        return HashMap::new();
+    };
+    files
+        .filter_map(Result::ok)
+        .map(|file| file.path())
+        .filter(|path| is_sample_file(path))
+        .filter_map(|path| {
+            let hash = ContentHash::of_file(&path).ok()?;
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            Some((hash, format!("{SAMPLES_DIR}/{name}")))
+        })
+        .collect()
+}
+
+/// Load each of the bank's files that isn't already in the pool, once however many tracks play
+/// it. Files that can't be read are reported, and the rest still load.
 pub fn load_samples(
     folder: Option<&Path>,
     song: &Song,
@@ -201,16 +266,13 @@ pub fn load_samples(
     pool: &mut SamplePool,
 ) -> Vec<SampleError> {
     let mut errors = Vec::new();
-    for track in &song.tracks {
-        let Some(sample) = &track.sample else {
-            continue;
-        };
-        if pool.id_of(sample).is_some() {
+    for source in song.bank.iter().flat_map(|(_, entry)| entry.sources()) {
+        if pool.id_of(&source.path).is_some() {
             continue;
         }
-        match load_sample(&resolve_sample(folder, sample), rate) {
+        match load_sample(&resolve_sample(folder, &source.path), rate) {
             Ok(data) => {
-                pool.insert(sample, data);
+                pool.insert(&source.path, data);
             }
             Err(error) => errors.push(error),
         }

@@ -26,6 +26,10 @@ pub enum Line {
     Sample(Option<PathBuf>),
     /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
+    /// List the bank, to choose what this track plays.
+    Bank,
+    /// Remove the bank's samples nothing plays.
+    BankClean,
     /// Put a kit's sounds on tracks, by name or path.
     KitTracks(PathBuf),
     /// Name this track, or clear its name.
@@ -96,6 +100,8 @@ pub enum LineError {
         ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
     )]
     Order,
+    #[error(":bank takes clean, or nothing to list the bank")]
+    Bank,
     #[error(":track takes add [n] or del")]
     Track,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
@@ -292,7 +298,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 29] = [
+pub const COMMANDS: [Command; 30] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -344,6 +350,16 @@ pub const COMMANDS: [Command; 29] = [
                 Some(kit) if kit.ends_with(' ') => Line::KitTracks(path(kit.trim_end())),
                 _ => Line::Kit(optional_path(argument)),
             })
+        },
+    },
+    Command {
+        name: "bank",
+        meaning: "List the project's samples, or clean to remove those nothing plays",
+        takes: Takes::Words(&["clean"]),
+        parse: |argument| match argument {
+            "" => Ok(Line::Bank),
+            "clean" => Ok(Line::BankClean),
+            _ => Err(LineError::Bank),
         },
     },
     Command {
@@ -747,6 +763,9 @@ mod tests {
         assert_eq!(parse("kit"), Ok(Line::Kit(None)));
         assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
         assert_eq!(parse("kit 909 all"), Ok(Line::KitTracks("909".into())));
+        assert_eq!(parse("bank"), Ok(Line::Bank));
+        assert_eq!(parse("bank clean"), Ok(Line::BankClean));
+        assert_eq!(parse("bank all"), Err(LineError::Bank));
     }
 
     #[test]

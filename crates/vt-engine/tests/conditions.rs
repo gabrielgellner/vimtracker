@@ -47,8 +47,8 @@ fn song(tracks: &[&[&str]]) -> Song {
     let mut song = Song::new(tracks.len());
     song.limiter = false;
     for (index, rows) in tracks.iter().enumerate() {
+        song.sample_on(index, "s");
         let track = &mut song.tracks[index];
-        track.sample = Some("s".to_owned());
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;
         track.pan = match (tracks.len(), index) {

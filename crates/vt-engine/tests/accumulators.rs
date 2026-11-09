@@ -46,8 +46,8 @@ fn song(rows: &[&str], accumulation: Accumulation) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
     song.scale = C_MAJOR;
+    song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
-    track.sample = Some("ramp".to_owned());
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     track.accumulation = accumulation;

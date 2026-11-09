@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use vt_engine::link::Command;
+use vt_model::bank::BankEntry;
 use vt_model::names::numbered;
 use vt_model::project;
 
@@ -467,12 +468,13 @@ impl App {
     /// Choose this track's sample, from the kit's sounds and the usual places, on the track's own
     /// sample. With no sample, it's on the kit's first sound.
     pub(crate) fn open_sample_explorer(&mut self, kit: Vec<Item>, kit_name: String) {
-        let sample = self
-            .song()
+        let song = self.song();
+        let sample = song
             .tracks
             .get(self.cursor.track)
-            .and_then(|track| track.sample.as_deref())
-            .map(|sample| project::resolve_sample(self.folder.as_deref(), sample));
+            .and_then(|track| song.bank.get(track.sample()))
+            .and_then(BankEntry::source)
+            .map(|source| project::resolve_sample(self.folder.as_deref(), &source.path));
         let same = |path: &Path| {
             sample.as_deref().is_some_and(|sample| {
                 path.file_name() == sample.file_name()

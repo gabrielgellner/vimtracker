@@ -26,8 +26,8 @@ fn flat(level: f32) -> Arc<SamplePool> {
 /// A song with one track playing these step texts, and instant envelopes.
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(1);
-    for track in &mut song.tracks {
-        track.sample = Some("s".to_owned());
+    for track in 0..song.sound_tracks() {
+        song.sample_on(track, "s");
     }
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
@@ -407,7 +407,7 @@ fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
 fn two_tracks() -> Song {
     let mut song = song(&["C-4 -- --- --- ---"]);
     song.add_track();
-    song.tracks[1].sample = song.tracks[0].sample.clone();
+    song.sample_on(1, "s");
     let chain = song.sections[0].chains[1].unwrap();
     let phrase = song.tracks[1].chains[&chain].entries[0].phrase;
     let steps = Arc::make_mut(song.tracks[1].phrases.get_mut(&phrase).unwrap());
@@ -530,7 +530,8 @@ fn a_preview_goes_through_its_tracks_sound() {
         (panned - open * std::f32::consts::FRAC_1_SQRT_2).abs() < 0.01,
         "{panned}"
     );
-    let no_sample = hear(|song| song.tracks[0].sample = None);
+    let no_sample =
+        hear(|song| song.tracks[0].set_setting(vt_model::settings::SettingId::SAMPLE, 0));
     assert_eq!(no_sample, 0.0);
 }
 
@@ -648,7 +649,7 @@ fn a_flat_eq_changes_nothing_and_a_boost_does() {
 fn ducked(compressor: Insert) -> Vec<[f32; 2]> {
     let mut song = Song::new(2);
     for track in 0..2 {
-        song.tracks[track].sample = Some("s".to_owned());
+        song.sample_on(track, "s");
         song.tracks[track].envelopes[0].attack_ms = 0;
         song.tracks[track].envelopes[0].release_ms = 0;
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
@@ -978,7 +979,7 @@ fn warps_ring_modulates_one_track_by_another_thats_muted() {
     let played = |source| {
         let mut song = Song::new(2);
         for (track, note) in [(0, "C-4"), (1, "F#4")] {
-            song.tracks[track].sample = Some("s".to_owned());
+            song.sample_on(track, "s");
             song.tracks[track].envelopes[0].attack_ms = 0;
             song.tracks[track].envelopes[0].release_ms = 0;
             let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
@@ -1029,7 +1030,7 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
     let played = |source| {
         let mut song = Song::new(2);
         for (track, text) in [(0, "C-4 -- kil:02 --- ---"), (1, "C-4 -- --- --- ---")] {
-            song.tracks[track].sample = Some("s".to_owned());
+            song.sample_on(track, "s");
             song.tracks[track].envelopes[0].attack_ms = 0;
             song.tracks[track].envelopes[0].release_ms = 0;
             let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());

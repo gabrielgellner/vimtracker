@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use vt_model::action::{Action, EditError, KitSound, edit};
+use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::constants::{MAX_SOUND_TRACKS, UNITY_LEVEL};
 use vt_model::history::History;
 use vt_model::song::{Launch, Song};
@@ -102,14 +103,44 @@ fn a_tracks_sample_and_name_are_set_on_it() {
     let song = Arc::new(Song::new(2));
     let next = edit(
         &song,
-        &Action::SetTrackSample {
-            track: 1,
-            sample: Some("samples/a.wav".into()),
+        &Action::SetBankEntry {
+            number: 3,
+            entry: Some(BankEntry::of_file("samples/a.wav", ContentHash::of(b"a"))),
         },
     )
     .unwrap();
-    assert_eq!(next.tracks[1].sample.as_deref(), Some("samples/a.wav"));
-    assert_eq!(next.tracks[0].sample, None);
+    assert_eq!(next.bank.get(3).unwrap().name, "a");
+    let mut synth = Song::clone(&next);
+    synth.tracks[1].machine = vt_model::song::Machine::Plaits(Default::default());
+    let next = edit(
+        &Arc::new(synth),
+        &Action::SetTrackSample {
+            track: 1,
+            sample: 3,
+        },
+    )
+    .unwrap();
+    assert_eq!(next.tracks[1].sample(), 3);
+    assert_eq!(
+        next.tracks[1].machine,
+        vt_model::song::Machine::Sampler,
+        "choosing a sample means wanting to hear it"
+    );
+    assert_eq!(next.tracks[0].sample(), 0);
+    let emptied = edit(
+        &next,
+        &Action::SetBankEntry {
+            number: 3,
+            entry: None,
+        },
+    )
+    .unwrap();
+    assert!(emptied.bank.is_empty());
+    assert_eq!(
+        emptied.tracks[1].sample(),
+        3,
+        "a track keeps its number, which plays nothing now"
+    );
     let next = edit(
         &next,
         &Action::SetTrackName {
@@ -121,7 +152,7 @@ fn a_tracks_sample_and_name_are_set_on_it() {
     assert_eq!(next.tracks[1].name, "BD");
     let bad = Action::SetTrackSample {
         track: 9,
-        sample: None,
+        sample: 0,
     };
     assert_eq!(edit(&next, &bad), Err(EditError::NoTrack(9)));
 }
@@ -131,34 +162,34 @@ fn a_kit_fills_tracks_from_the_first_and_adds_what_it_needs() {
     let mut start = Song::new(1);
     start.tracks[0].cutoff = 0x40;
     let start = Arc::new(start);
-    let sound = |sample: &str, name: &str| KitSound {
-        sample: sample.into(),
+    let sound = |sample: u8, name: &str| KitSound {
+        sample,
         name: name.into(),
-        level: UNITY_LEVEL,
-        pitch: 0x80,
         choke: None,
     };
     let hat = KitSound {
-        level: 0xD8,
-        pitch: 0x83,
         choke: Some(1),
-        ..sound("b.wav", "CH")
+        ..sound(2, "CH")
     };
-    let kit = Action::LoadKit(vec![sound("a.wav", "BD"), hat]);
+    let kit = Action::LoadKit(vec![sound(1, "BD"), hat]);
     let next = edit(&start, &kit).unwrap();
     assert_eq!(next.sound_tracks(), 2);
     assert_eq!(next.sections[0].chains.len(), next.tracks.len());
-    assert_eq!(next.tracks[0].sample.as_deref(), Some("a.wav"));
+    assert_eq!(next.tracks[0].sample(), 1);
     assert_eq!(next.tracks[0].name, "BD");
     assert_eq!(next.tracks[0].cutoff, 0x40, "other settings stay");
-    assert_eq!(next.tracks[1].sample.as_deref(), Some("b.wav"));
+    assert_eq!(next.tracks[1].sample(), 2);
     let hat = &next.tracks[1];
-    assert_eq!((hat.level, hat.pitch, hat.choke), (0xD8, 0x83, Some(1)));
-    let huge = Action::LoadKit(vec![sound("a.wav", ""); MAX_SOUND_TRACKS + 1]);
+    assert_eq!(
+        (hat.level, hat.pitch, hat.choke),
+        (UNITY_LEVEL, 0x80, Some(1)),
+        "a sound's gain and tune are its bank entry's, not the track's"
+    );
+    let huge = Action::LoadKit(vec![sound(1, ""); MAX_SOUND_TRACKS + 1]);
     assert_eq!(edit(&start, &huge), Err(EditError::TooManyTracks));
     let bad = Action::LoadKit(vec![KitSound {
         choke: Some(17),
-        ..sound("a.wav", "")
+        ..sound(1, "")
     }]);
     assert_eq!(edit(&start, &bad), Err(EditError::Choke(17)));
 }

@@ -3,6 +3,7 @@
 pub mod accumulator;
 pub mod action;
 pub mod arpeggio;
+pub mod bank;
 pub mod condition;
 pub mod constants;
 pub mod envelope;

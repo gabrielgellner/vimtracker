@@ -233,11 +233,22 @@ pub struct NoteOn {
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
+    /// What its bank entry's own gain multiplies it by, apart from the note's, and how much faster
+    /// than its note the entry's tune plays it. A synth's are 1.
+    pub sample_gain: f32,
+    pub speed: f64,
     /// Whether its velocity accents it, for a voice with an accent of its own.
     pub accent: bool,
     /// The shape of its level.
     pub shape: Envelope,
     pub release_after: Option<u32>,
+}
+
+impl NoteOn {
+    /// How fast it plays: its note, where `C-4` is as recorded, at its entry's tune.
+    fn increment(&self) -> f64 {
+        2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.speed
+    }
 }
 
 impl Voice {
@@ -251,12 +262,12 @@ impl Voice {
             stage: Stage::Held { from },
             sample: note.sample,
             position: 0.0,
-            increment: 2_f64.powf((f64::from(note.note) - 60.0) / 12.0),
+            increment: note.increment(),
             gliding: None,
             pitch,
             pitch_target: pitch,
             pitch_slew: f64::from(fast_coefficient(rate)),
-            gain: note.gain,
+            gain: note.gain * note.sample_gain,
             level: from,
             shape: note.shape,
             rate,
@@ -342,8 +353,8 @@ impl Voice {
     /// it glides there in about that long, on the same lag `Acid` slides on, and without one it
     /// jumps. `Acid` always slides, for as long as its own `Slide` says unless it's given a time.
     pub fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
-        let to = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
-        self.gain = note.gain;
+        let to = note.increment();
+        self.gain = note.gain * note.sample_gain;
         if let Some(Synth::Acid(synth)) = &mut self.synth {
             // It lags its pitch itself, so it's given the note at once.
             self.increment = to;
@@ -374,9 +385,9 @@ impl Voice {
     pub fn retrigger(&mut self, note: NoteOn) {
         self.stage = Stage::Held { from: self.level };
         self.elapsed = 0;
-        self.increment = 2_f64.powf((f64::from(note.note) - 60.0) / 12.0);
+        self.increment = note.increment();
         self.gliding = None;
-        self.gain = note.gain;
+        self.gain = note.gain * note.sample_gain;
         self.shape = note.shape;
         self.release_after = note.release_after;
         if let Some(synth) = &mut self.synth {

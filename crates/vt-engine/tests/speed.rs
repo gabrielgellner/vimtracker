@@ -53,8 +53,8 @@ fn song(tracks: &[(Speed, &[&str])]) -> Song {
     let mut song = Song::new(tracks.len());
     song.limiter = false;
     for (index, (speed, rows)) in tracks.iter().enumerate() {
+        song.sample_on(index, "s");
         let track = &mut song.tracks[index];
-        track.sample = Some("s".to_owned());
         track.speed = *speed;
         track.envelopes[0].attack_ms = 0;
         track.envelopes[0].release_ms = 0;

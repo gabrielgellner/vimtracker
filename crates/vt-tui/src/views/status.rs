@@ -17,6 +17,7 @@ use vt_model::song::{SynthVoice, Track};
 use vt_model::step::{FxCommand, Note};
 
 use crate::app::{App, Field};
+use crate::banking::sample_shown;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
@@ -134,6 +135,9 @@ pub fn value_shown(app: &App) -> Option<String> {
     if app.view == View::Track && app.track_control() == Control::Glide {
         return Some(glide_shown(track));
     }
+    if app.view == View::Track && app.track_control() == Control::Sample {
+        return Some(sample_shown(app.song(), track.sample()));
+    }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
@@ -150,6 +154,9 @@ pub fn value_shown(app: &App) -> Option<String> {
                         track.accumulation,
                         app.scale.on,
                     ));
+                }
+                if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
+                    return Some(sample_shown(app.song(), cell.coarse()));
                 }
                 let id = cell.command?.setting()?;
                 (id, cell.value)

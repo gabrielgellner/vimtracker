@@ -4,14 +4,14 @@
 <text x="153" y="14" fill="#949cbb" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Mod  FX </text>
 <text x="738" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Machine   </text>
-<text x="90" y="52" fill="#c6d0f5" textLength="234" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sample                    </text>
+<text x="90" y="52" fill="#c6d0f5" textLength="234" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sampler                   </text>
 <text x="324" y="52" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Level     </text>
 <text x="414" y="52" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">E0   </text>
 <text x="459" y="52" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="468" y="52" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███████▉ </text>
 <text x="549" y="52" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="0" y="71" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">File      </text>
-<text x="90" y="71" fill="#c6d0f5" textLength="234" lengthAdjust="spacingAndGlyphs" xml:space="preserve">kick.wav                  </text>
+<text x="0" y="71" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sample    </text>
+<text x="90" y="71" fill="#c6d0f5" textLength="234" lengthAdjust="spacingAndGlyphs" xml:space="preserve">01 kick                   </text>
 <text x="324" y="71" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Pan       </text>
 <text x="414" y="71" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80</text>
 <text x="432" y="71" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>

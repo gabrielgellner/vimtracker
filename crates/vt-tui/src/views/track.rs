@@ -9,14 +9,14 @@ use vt_engine::engine::Transport;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
-use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
-use vt_model::song::{SynthVoice, Track};
+use vt_model::song::{Song, SynthVoice, Track};
 use vt_model::speed::Speed;
 
 use crate::app::App;
+use crate::banking::sample_text;
 use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
@@ -282,7 +282,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         let mut text = if typing && !on_fine {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().groove)
+            value(*control, track, app.song())
         };
         if *control == Control::Sample {
             text = text.chars().take(FILE_WIDTH).collect();
@@ -341,7 +341,7 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
 }
 
 /// A setting's value as text.
-pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -> String {
+pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     let hex = |value: u8| format!("{value:02X}");
     match control {
         Control::Machine => track.machine.name().to_owned(),
@@ -370,17 +370,14 @@ pub(crate) fn value(control: Control, track: &Track, project_groove: GrooveId) -
             .entry()
             .kind
             .shown(u16::from(track.glide) << 8),
-        Control::Sample => track.sample.as_deref().map_or_else(
-            || "---".to_owned(),
-            |sample| sample.rsplit('/').next().unwrap_or(sample).to_owned(),
-        ),
+        Control::Sample => sample_text(song, track.sample()),
         Control::Mute | Control::Solo => String::new(),
         Control::FilterType => track.filter.name().to_owned(),
         // The MS-20's have none, so it doesn't apply.
         Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
         Control::FilterMode => track.filter.plays(track.filter_mode).name().to_owned(),
         Control::Level => hex(track.level),
-        Control::Groove => track.groove.unwrap_or(project_groove).name().to_owned(),
+        Control::Groove => track.groove.unwrap_or(song.groove).name().to_owned(),
         Control::Envelope(slot, field) => {
             let envelope = &track.envelopes[slot];
             let ms = |value: u16| format!("{value} ms");
@@ -500,7 +497,7 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let text = if typing {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().groove)
+            value(*control, track, app.song())
         };
         // A track following the project's groove shows what it plays, dimmed as it isn't its own.
         let style = if *control == current {
@@ -656,7 +653,7 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
         let text = if selected && app.mode == Mode::Insert {
             format!("{}_", app.entry.text)
         } else {
-            value(*control, track, app.song().groove)
+            value(*control, track, app.song())
         };
         let style = if selected {
             theme::cursor(app.mode)
@@ -842,7 +839,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             if track.is_sound() {
                 let waveform = app
                     .waveform_image
-                    .filter(|_| track.machine == vt_model::song::Machine::Sample);
+                    .filter(|_| track.machine == vt_model::song::Machine::Sampler);
                 lines.extend(
                     app.filter_image
                         .map_or_else(Vec::new, |filter| curves(filter, waveform)),

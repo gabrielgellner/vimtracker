@@ -33,7 +33,7 @@ fn pool() -> Arc<SamplePool> {
 fn song(rows: &[&str]) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
-    song.tracks[0].sample = Some("flat".to_owned());
+    song.sample_on(0, "flat");
     song.tracks[0].envelopes[0].attack_ms = 0;
     song.tracks[0].envelopes[0].release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
@@ -213,7 +213,6 @@ fn closing_the_gate_releases_the_note_without_a_click() {
 /// An `Acid` track playing these rows, at its own `Gate`.
 fn acid(rows: &[&str]) -> Song {
     let mut song = song(rows);
-    song.tracks[0].sample = None;
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
     song.tracks[0].envelopes[0] = Default::default();
     song

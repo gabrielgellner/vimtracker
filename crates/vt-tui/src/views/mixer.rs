@@ -124,7 +124,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Control::Mute => if live.mute { "M" } else { "-" }.to_owned(),
                 Control::Solo => if live.solo { "S" } else { "-" }.to_owned(),
                 _ if selected && app.mode == Mode::Insert => format!("{}_", app.entry.text),
-                _ => value(control, track, song.groove),
+                _ => value(control, track, song),
             };
             let style = if selected {
                 theme::cursor(app.mode)

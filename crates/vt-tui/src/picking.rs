@@ -5,19 +5,20 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use vt_model::accumulator::{MOST_DEGREES, amount, amount_text, amount_value};
-use vt_model::action::{Action, FieldValue, KitSound, TrackControl};
+use vt_model::action::{Action, FieldValue};
+use vt_model::bank::{BankEntry, PlayParams};
 use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::order::Order;
-use vt_model::project;
 use vt_model::sample::load_sample;
-use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
+use vt_model::settings::SettingId;
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry, Field};
+use crate::banking::Seed;
 use crate::explorer::Purpose;
 use crate::guides::GUIDES;
 use crate::input::command::Line;
@@ -35,8 +36,11 @@ fn kit_item(entry: &KitEntry) -> Item {
         Pick::KitSound {
             path: entry.path.clone(),
             label: entry.label.clone(),
-            level: entry.level(),
-            pitch: entry.pitch(),
+            name: entry.name.clone(),
+            play: PlayParams {
+                gain_db: entry.gain,
+                tune: entry.tune,
+            },
             choke: entry.choke,
         },
     )
@@ -266,12 +270,13 @@ impl App {
             .enumerate()
             .map(|(track, state)| {
                 let sound = match state.machine {
-                    _ if !state.is_sound() => state.kind.title(),
-                    Machine::Sample => state
-                        .sample
-                        .as_deref()
-                        .map_or("", |sample| sample.rsplit('/').next().unwrap_or(sample)),
-                    Machine::Plaits(voice) => voice.name(),
+                    _ if !state.is_sound() => state.kind.title().to_owned(),
+                    Machine::Sampler => self
+                        .song()
+                        .bank
+                        .get(state.sample())
+                        .map_or_else(String::new, BankEntry::title),
+                    Machine::Plaits(voice) => voice.name().to_owned(),
                 };
                 let number = if state.is_sound() {
                     format!("{:02}", track + 1)
@@ -334,71 +339,6 @@ impl App {
         }
     }
 
-    /// Put a kit's sounds on tracks from the first, keeping their other settings and adding
-    /// tracks if needed. It is one undo step, and if any sound won't load, nothing changes.
-    /// Replacing a different sample is reported.
-    pub fn load_kit(&mut self, path: &Path) {
-        let kit = match load_kit(path) {
-            Ok(kit) if kit.sounds.is_empty() => {
-                self.status = format!("{} has no sounds", path.display());
-                return;
-            }
-            Ok(kit) => kit,
-            Err(error) => {
-                self.status = error.to_string();
-                return;
-            }
-        };
-        let mut pool = SamplePool::clone(&self.samples);
-        let mut sounds = Vec::with_capacity(kit.sounds.len());
-        for entry in &kit.sounds {
-            let stored = self.store_sample(&entry.path).map_err(|e| e.to_string());
-            let loaded = stored.and_then(|stored| {
-                let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-                let data = load_sample(&resolved, self.rate).map_err(|e| e.to_string())?;
-                Ok((stored, data))
-            });
-            let (stored, data) = match loaded {
-                Ok(loaded) => loaded,
-                Err(error) => {
-                    self.status = format!("{}: {error}", entry.path.display());
-                    return;
-                }
-            };
-            pool.insert(&stored, data);
-            sounds.push(KitSound {
-                sample: stored,
-                name: entry.label.clone(),
-                level: entry.level(),
-                pitch: entry.pitch(),
-                choke: entry.choke,
-            });
-        }
-        let replaced: Vec<String> = sounds
-            .iter()
-            .enumerate()
-            .filter(|(track, sound)| {
-                let old = self.song().tracks.get(*track);
-                old.and_then(|t| t.sample.as_ref())
-                    .is_some_and(|old| *old != sound.sample)
-            })
-            .map(|(track, _)| format!("{:02}", track + 1))
-            .collect();
-        let count = sounds.len();
-        self.samples = Arc::new(pool);
-        self.apply(&Action::LoadKit(sounds));
-        self.fit_levels();
-        self.kit_file = Some(path.to_path_buf());
-        self.status = format!("Kit {}: {count} tracks", kit.name);
-        if !replaced.is_empty() {
-            self.status = format!(
-                "{}. Replaced {}: u to undo",
-                self.status,
-                replaced.join(" ")
-            );
-        }
-    }
-
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
         match self.cursor.field {
@@ -413,6 +353,13 @@ impl App {
                 if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Acu) =>
             {
                 self.open_amount_picker(slot);
+            }
+            // And a sample lock's is one of the bank's.
+            Field::FxValue(slot)
+                if self.current_slot(slot).and_then(|s| s.command)
+                    == Some(FxCommand::Set(SettingId::SAMPLE)) =>
+            {
+                self.open_sample_lock_picker(slot);
             }
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
@@ -516,6 +463,11 @@ impl App {
             .is_some_and(|s| amount(s.coarse()).is_some_and(|amount| amount != 0));
         if command == FxCommand::Acu && !has_amount {
             self.open_amount_picker(slot);
+            return;
+        }
+        let has_value = current.is_some_and(|s| s.command.is_some());
+        if command == FxCommand::Set(SettingId::SAMPLE) && !has_value {
+            self.open_sample_lock_picker(slot);
             return;
         }
         if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {
@@ -689,25 +641,28 @@ impl App {
             Pick::KitSound {
                 path,
                 label,
-                level,
-                pitch,
+                name,
+                play,
                 choke,
             } => {
                 let track = self.cursor.track;
-                let mut more = vec![
-                    Action::SetTrackLevel { track, level },
-                    Action::SetTrackBase {
-                        track,
-                        control: TrackControl::Pitch,
-                        value: pitch,
-                    },
-                    Action::SetTrackChoke { track, choke },
-                ];
+                let mut more = vec![Action::SetTrackChoke { track, choke }];
                 if !label.is_empty() {
-                    more.push(Action::SetTrackName { track, name: label });
+                    more.push(Action::SetTrackName {
+                        track,
+                        name: label.clone(),
+                    });
                 }
-                self.sample_with(&path, more);
+                let seed = Seed { label, name, play };
+                self.sample_with(&path, Some(&seed), more);
             }
+            Pick::BankSample { track, number } => {
+                self.apply(&Action::SetTrackSample {
+                    track,
+                    sample: number,
+                });
+            }
+            Pick::SampleLock { slot, number } => self.pick_sample_lock(slot, number),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

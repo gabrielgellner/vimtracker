@@ -10,12 +10,24 @@ use vt_model::song::Song;
 use vt_model::speed::Speed;
 use vt_model::step::FxCommand;
 
-/// A song version, its samples, and which sample each track plays.
+/// How a bank entry plays, worked out on the edit thread so the callback only has to look it up:
+/// the sample in the pool, and its gain and tune as numbers the voice uses.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Playable {
+    pub sample: SampleId,
+    /// What it multiplies the sound by.
+    pub gain: f32,
+    /// How much faster than its note it plays.
+    pub speed: f64,
+}
+
+/// A song version, its samples, and how each of the bank's entries plays.
 #[derive(Debug)]
 pub struct Published {
     pub song: Arc<Song>,
     pub samples: Arc<SamplePool>,
-    pub track_samples: Vec<Option<SampleId>>,
+    /// Each bank number's entry, `00` to `FF`, if it has one and its file loaded.
+    pub bank: Box<[Option<Playable>; 256]>,
     /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
     /// nudge can play it early: as early as any groove the song can play lands a step, and further
     /// by the earliest nudge in the song, as shares of the longest step any track can play. With
@@ -37,20 +49,26 @@ pub struct Published {
 }
 
 impl Published {
-    /// Build a version, resolving each track's sample path on this thread, since the callback
-    /// can't look up by string.
+    /// Build a version, resolving the bank's paths on this thread, since the callback can't look
+    /// up by string.
     pub fn new(song: Arc<Song>, samples: Arc<SamplePool>) -> Self {
-        let track_samples = song
-            .tracks
-            .iter()
-            .map(|track| samples.id_of(track.sample.as_deref()?))
-            .collect();
+        let mut bank = Box::new([None; 256]);
+        for (number, entry) in song.bank.iter() {
+            bank[usize::from(number)] = entry
+                .source()
+                .and_then(|source| samples.id_of(&source.path))
+                .map(|sample| Playable {
+                    sample,
+                    gain: entry.edit.play.gain(),
+                    speed: entry.edit.play.speed(),
+                });
+        }
         let (groove_lead, groove_steps) = lead(&song);
         let earliest = earliest_nudge(&song);
         let (longest, speed_steps) = longest_step(&song);
         let early = groove_lead + earliest.map_or(0, |early| early.unsigned_abs());
         Self {
-            track_samples,
+            bank,
             lead: early * longest / TICKS_PER_STEP,
             groove_lead,
             nudges: earliest.is_some(),

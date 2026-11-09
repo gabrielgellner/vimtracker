@@ -50,8 +50,8 @@ fn song(rows: &[&str], arpeggio: Arpeggio) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
     song.scale.on = false;
+    song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
-    track.sample = Some("ramp".to_owned());
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     track.arpeggio = arpeggio;
@@ -186,7 +186,7 @@ fn zero_crossings_hear_the_same_cycle() {
         &["C-4 -- SGL2 arp:47"],
         with(ArpRate::ThirtySecond, ArpMode::Up, 1),
     );
-    song.tracks[0].sample = Some("sine".to_owned());
+    song.sample_on(0, "sine");
     let out = render(&song, 2 * STEP);
     let heard: Vec<i32> = (0..4)
         .map(|note| {
@@ -411,7 +411,7 @@ fn a_new_note_starts_its_own_from_the_top() {
 #[test]
 fn the_gate_closing_ends_it() {
     let mut song = song(&["C-4 -- arp:47", "--- --"], Arpeggio::default());
-    song.tracks[0].sample = Some("sine".to_owned());
+    song.sample_on(0, "sine");
     // `6B` closes the gate 42% of the way through the step, on the G.
     song.tracks[0].gate_length = Some(0x6B);
     song.tracks[0].envelopes[0].release_ms = 500;
@@ -426,7 +426,7 @@ fn the_gate_closing_ends_it() {
 #[test]
 fn an_off_ends_it() {
     let mut off = song(&["C-4 -- arp:47 off:03"], Arpeggio::default());
-    off.tracks[0].sample = Some("sine".to_owned());
+    off.sample_on(0, "sine");
     off.tracks[0].envelopes[0].release_ms = 500;
     let out = render(&off, STEP);
     let notes: Vec<i32> = (0..6)
