@@ -79,6 +79,7 @@
 <text x="90" y="204" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
 <text x="135" y="204" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="225" y="204" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="324" y="204" fill="#949cbb" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Gate      100%</text>
 <rect x="1008" y="190" width="18" height="19" fill="#292c3c"/>
 <rect x="1035" y="190" width="18" height="19" fill="#292c3c"/>
 <rect x="1062" y="190" width="18" height="19" fill="#292c3c"/>

@@ -39,10 +39,14 @@ notes around `C-2`, with `Resonance` well up.
   filter envelope and a shorter decay. Notes are written at `64`, so one step up the
   velocity ladder, to `74`, accents a note, and so does `7F`. Accents close together build
   up, swelling higher each time, the more so with `Resonance` up.
-- **Slide** is the `HLD` gate. A note held into the next row's glides to its pitch, with
-  neither envelope starting again. `Slide` sets how long it takes.
-- A note holds until the next one, or an `OFF`. For the 303's short, bouncing notes, end
-  some early with `OFF`.
+- **Slide** is the `HLD` gate, on the row that slides away, as a 303's slide is on the
+  step it leaves. A note held into the next row's glides to its pitch, with neither
+  envelope starting again. `Slide` sets how long it takes.
+- **Gate.** Its notes are short and bouncy, as a 303's are: its `Gate` starts at `50%`,
+  so each note's gate closes halfway through its step and it falls silent about 16 ms
+  later. A slide holds its gate on into the note it slides to, and an `SGL2` is a note
+  tied over two steps. Turn `Gate` up to `100%`, on the track page, for notes that hold
+  until the next, or lock `LEN` on a step for one note.
 - From the keyboard, holding a second key slides to its note, and letting go of it slides
   back to the first, rather than playing a chord.
 

@@ -10,7 +10,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
-use vt_model::settings::SettingId;
+use vt_model::settings::{SettingId, gate_value};
 use vt_model::song::{
     Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song, SynthVoice,
 };
@@ -3220,7 +3220,11 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "Ljjj0K/");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
-    assert_eq!(picker.items().len(), 9, "what a sample track has, and none");
+    assert_eq!(
+        picker.items().len(),
+        10,
+        "what a sample track has, and none"
+    );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
     special(&mut app, KeyCode::Enter);
@@ -3439,6 +3443,80 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     assert_eq!(track(&app).choke, None);
     press(&mut app, "=-");
     assert_eq!(track(&app).choke, None, "down from 1 is none");
+}
+
+#[test]
+fn the_track_page_sets_how_long_notes_last() {
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let gate = |app: &App| app.song().tracks[0].gate_length;
+    let line = |app: &App| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.contains("Gate"))
+            .unwrap_or_default()
+    };
+    assert!(
+        line(&app).contains("Gate") && line(&app).contains("100%"),
+        "{}",
+        line(&app)
+    );
+
+    // Past Res's fine digits, and down past Pitch and Choke.
+    press(&mut app, "jlljj");
+    assert_eq!(app.track_control().label(), "Gate");
+    assert_eq!(value_shown(&app).as_deref(), Some("100 %"));
+    press(&mut app, "-");
+    assert_eq!(gate(&app), Some(252), "a percent down");
+    press(&mut app, "_");
+    assert_eq!(gate(&app), Some(227), "ten more");
+    assert!(line(&app).contains("89%"), "{}", line(&app));
+    typed(&mut app, "25");
+    assert_eq!(gate(&app), Some(0x40));
+    assert_eq!(value_shown(&app).as_deref(), Some("25 %"));
+    typed(&mut app, "50%");
+    assert_eq!(gate(&app), Some(0x80));
+    typed(&mut app, "0");
+    assert_eq!(gate(&app), Some(0x80));
+    assert!(app.status.contains("1 to 100"), "{}", app.status);
+    press(&mut app, "200-");
+    assert_eq!(gate(&app), Some(gate_value(1)), "1% is the least");
+    press(&mut app, "x");
+    assert_eq!(gate(&app), None, "back to the machine's");
+    assert!(line(&app).contains("100%"), "{}", line(&app));
+    press(&mut app, "u");
+    assert_eq!(gate(&app), Some(gate_value(1)));
+    press(&mut app, "x");
+
+    // `Acid`'s own is 50%, as a 303's is.
+    press(&mut app, "kkkkkkkhK");
+    press(&mut app, "/acid");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::Acid)
+    );
+    assert!(
+        line(&app).contains("Gate") && line(&app).contains("50%"),
+        "{}",
+        line(&app)
+    );
+}
+
+#[test]
+fn a_step_locks_the_gate_by_its_label() {
+    use vt_tui::views::status::{column_name, value_shown};
+    let (mut app, _realtime) = app();
+    press(&mut app, "llli");
+    press(&mut app, "len");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "40");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "k");
+    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    assert!(step.contains("gate:40"), "{step}");
+    assert_eq!(column_name(&app), "Machine: Gate");
+    assert_eq!(value_shown(&app).as_deref(), Some("25 %"));
 }
 
 #[test]
@@ -6488,8 +6566,8 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, "jj");
-    // Past the eight a sample track has, as a synth's settings aren't on it.
-    for _ in 0..9 {
+    // Past the nine a sample track has, as a synth's settings aren't on it.
+    for _ in 0..10 {
         press(&mut app, "=");
     }
     assert_eq!(
@@ -6786,16 +6864,18 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
         "changing nothing"
     );
 
-    // A category of one is the item itself. On a sample track, Machine holds Pitch.
+    // On a sample track, Machine holds Pitch and Gate, and l opens it on Pitch.
     press(&mut app, "Kgg");
     let at = picker(&app)
         .rows()
         .iter()
-        .position(|row| matches!(row, Row::Item(item) if picker(&app).item(*item).label == "Pitch"))
+        .position(|row| matches!(row, Row::Category(category) if picker(&app).category(*category) == ("Machine", 2, false)))
         .unwrap();
     for _ in 0..at {
         press(&mut app, "j");
     }
+    press(&mut app, "l");
+    assert_eq!(current(&app), "Pitch");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,

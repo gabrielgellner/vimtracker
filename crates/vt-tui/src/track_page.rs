@@ -12,7 +12,7 @@ use vt_model::lfo::{
     LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, depth_value, note_rates, phase_value,
 };
 use vt_model::selection::Motion;
-use vt_model::settings::{Effect, Kind, SettingId, voice_entries};
+use vt_model::settings::{Effect, Kind, SettingId, gate_percent, gate_value, voice_entries};
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
 use crate::app::{App, Entry};
@@ -27,6 +27,8 @@ const PHASE_JUMP: i32 = 90;
 /// How far a small and a large step move a swing, in tenths of a percent.
 const SWING_NUDGE: i32 = 10;
 const SWING_JUMP: i32 = 50;
+/// How far a large step moves `Gate`, in percent.
+const GATE_JUMP: i32 = 10;
 /// How many small steps a large one is for a value in hex.
 const HEX_JUMP: i64 = 0x10;
 /// How many small steps a large one is for an envelope time.
@@ -73,6 +75,8 @@ pub enum Control {
     Swing,
     /// The choke group it's in, or none.
     Choke,
+    /// How much of its last pulse a note lasts, as a percentage.
+    GateLength,
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
@@ -180,7 +184,7 @@ pub const SAMPLE_ROWS: [&[Control]; 9] = [
     &[base(TrackControl::Cutoff), Control::Swing],
     &[base(TrackControl::Resonance), base(TrackControl::Pitch)],
     &[base(TrackControl::Drive), Control::Choke],
-    &[base(TrackControl::LowCut)],
+    &[base(TrackControl::LowCut), Control::GateLength],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
@@ -193,7 +197,7 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::Setting(3), Control::Swing],
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff)],
+    &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -208,7 +212,7 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(3), Control::Swing],
     &[Control::Setting(4), base(TrackControl::Pitch)],
     &[Control::Setting(5), Control::Choke],
-    &[Control::Setting(6)],
+    &[Control::Setting(6), Control::GateLength],
     &[Control::Setting(7)],
     &[Control::FilterType],
     &[Control::FilterMode],
@@ -227,7 +231,7 @@ pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::Swing],
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff)],
+    &[base(TrackControl::Cutoff), Control::GateLength],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
@@ -306,6 +310,7 @@ impl Control {
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",
             Self::Choke => "Choke",
+            Self::GateLength => "Gate",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "File",
@@ -350,6 +355,7 @@ impl Control {
             Self::Level
             | Self::Swing
             | Self::Choke
+            | Self::GateLength
             | Self::Base(
                 TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
             ) => 1,
@@ -380,6 +386,7 @@ impl Control {
             Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
             Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
             Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
+            Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -426,7 +433,8 @@ impl Control {
         match self {
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
             Self::Base(TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch)
-            | Self::Choke => track.is_sound(),
+            | Self::Choke
+            | Self::GateLength => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -720,6 +728,16 @@ impl App {
                 self.apply(&Action::SetTrackChoke {
                     track: self.cursor.track,
                     choke: (moved > 0).then_some(moved),
+                });
+            }
+            Control::GateLength => {
+                let size = if large { GATE_JUMP } else { 1 };
+                let by = size * count.min(100) as i32;
+                let from = i32::from(gate_percent(track.gate_length()));
+                let moved = from + if up { by } else { -by };
+                self.apply(&Action::SetTrackGateLength {
+                    track: self.cursor.track,
+                    gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
                 });
             }
             Control::Swing => {
@@ -1167,6 +1185,13 @@ impl App {
                 });
             }
             Control::Choke => {}
+            Control::GateLength if track.gate_length.is_some() => {
+                self.apply(&Action::SetTrackGateLength {
+                    track: self.cursor.track,
+                    gate_length: None,
+                });
+            }
+            Control::GateLength => {}
             Control::FilterType => {
                 if track.filter != fresh.filter {
                     self.apply(&Action::SetFilterType {
@@ -1625,6 +1650,15 @@ impl App {
                     });
                 }
                 _ => self.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+            },
+            Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
+                Ok(percent) if (1..=100).contains(&percent) => {
+                    self.apply(&Action::SetTrackGateLength {
+                        track: self.cursor.track,
+                        gate_length: Some(gate_value(percent)),
+                    });
+                }
+                _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
             },
             Control::Swing if text.eq_ignore_ascii_case("off") => {
                 self.apply(&Action::SetTrackSwing {

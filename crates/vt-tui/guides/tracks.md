@@ -514,6 +514,13 @@ as `PTCH` on a step does for that step. `Choke` puts the track in a group, `1`
 to `16`, or `Off`: a note on it cuts off what's sounding on the other tracks in
 the group, as a closed hat cuts an open one. A kit sets both, with the level.
 
+`Gate` is how much of its last pulse each note lasts before it's let go, from
+`1%` to `100%`, as `LEN` on a step sets it for one row. `=` and `-` move it a
+percent, `+` and `_` ten, and `i` takes a percent. Dimmed, it's the machine's
+own: `100%`, which holds a note until the next, or `50%` on `Acid`, as a 303's
+gate closes halfway through each step. `x` goes back to that. See **Note entry**
+for what it does to each gate.
+
 ## Returns and the master
 
 Every song ends with three fixed tracks, labelled `A`, `B` and `M`. `W`, `B` and the
@@ -546,7 +553,7 @@ width depends only on its own time.
 
 | Setting | Value |
 |---|---|
-| Dest | `Vol` `Cut` `Res` `Pan` `SendA` `SendB` `Pitch`, or `---` for off |
+| Dest | `Vol` `Cut` `Res` `Pan` `SendA` `SendB` `Pitch` `Gate`, or `---` for off |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
 | Release | Milliseconds, after the note ends |
@@ -572,7 +579,7 @@ step moves the centre and the LFO carries on around it.
 
 | Setting | Value |
 |---|---|
-| Dest | `Cut` `Res` `Pan` `Vol` `SendA` `SendB` `Pitch`, or `---` for off |
+| Dest | `Cut` `Res` `Pan` `Vol` `SendA` `SendB` `Pitch` `Gate`, or `---` for off |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |

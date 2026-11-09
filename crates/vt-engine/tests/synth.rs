@@ -8,7 +8,7 @@ use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{Machine, Phrase, Song, SynthVoice};
+use vt_model::song::{FULL_GATE, Machine, Phrase, Song, SynthVoice};
 
 const RATE: u32 = 48_000;
 const STEP: usize = 6000;
@@ -357,11 +357,14 @@ fn acid_accents_a_note_from_its_velocity() {
 
 #[test]
 fn acid_slides_into_the_note_after_a_hold() {
-    let slid = play(
-        on(SynthVoice::Acid, &["C-2 64 HLD1", "C-3 64", REST, REST]),
-        4,
-    );
-    let struck = play(on(SynthVoice::Acid, &["C-2 64", "C-3 64", REST, REST]), 4);
+    // Held to the next note, so the second note's pitch can be heard over the rows after it.
+    let held = |rows: &[&str]| {
+        let mut song = on(SynthVoice::Acid, rows);
+        song.tracks[0].gate_length = Some(FULL_GATE);
+        play(song, 4)
+    };
+    let slid = held(&["C-2 64 HLD1", "C-3 64", REST, REST]);
+    let struck = held(&["C-2 64", "C-3 64", REST, REST]);
     // Both end on the second note's pitch.
     for out in [&slid, &struck] {
         let hertz = pitch_of(out, 2, 4);

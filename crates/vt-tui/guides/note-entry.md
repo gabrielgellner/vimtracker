@@ -171,3 +171,22 @@ of nothing. `K` chooses the gate, `=` and `-` change the pulses, and `x` empties
 it. The row's FX run on its first pulse, though a `MLT` runs its `DEL`, `KIL`,
 `OFF` and `RET` on each, and lanes keep running on every step. A beat row is one
 that starts on a beat, however long the rows before it.
+
+## How long a note lasts
+
+The track's `Gate`, on the track page under `Choke`, is how much of its last
+pulse a note lasts before its gate closes, from `1%` to `100%`. Closing the gate
+starts the release, as `OFF` does, so the release shapes the gap before the next
+note.
+
+| Gate | At `Gate` 50% |
+|---|---|
+| `SGL` | Held to halfway through its last pulse, so `SGL3` is 2.5 steps |
+| `MLT` | Each pulse's note lasts half the pulse, for a staccato run |
+| `HLD` | Ignores it, tying into the next row's note, which closes its own |
+| `RST` | No note, as before |
+
+At `100%`, every voice's default but `Acid`'s, a note holds until something ends
+it. A delayed note's length counts from where it starts, and a `RET` repeats only
+while the gate is open. `LEN` on a step sets the `Gate` of that row's notes. See
+**FX commands**.

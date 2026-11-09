@@ -140,6 +140,15 @@ impl Synth {
         }
     }
 
+    /// Whether nothing it carries from note to note is left, so a voice let go can stop. `Acid`'s
+    /// accent sweep drains between notes, as a 303's does, and the next note carries on from it.
+    fn settled(&self) -> bool {
+        match self {
+            Self::Acid(synth) => synth.settled(),
+            _ => true,
+        }
+    }
+
     /// Start a note, for a synth with envelopes of its own that an accent changes.
     fn trigger(&mut self, accent: bool) {
         if let Self::Acid(synth) = self {
@@ -418,7 +427,10 @@ impl Voice {
         }
         let finished = match self.stage {
             Stage::Held { .. } => self.shape.finished_holding(self.elapsed, self.rate),
-            Stage::Released { .. } => self.shape.finished_releasing(self.elapsed, self.rate),
+            Stage::Released { .. } => {
+                self.shape.finished_releasing(self.elapsed, self.rate)
+                    && self.synth.as_ref().is_none_or(Synth::settled)
+            }
             Stage::Fading { .. } => self.level <= 0.0,
             Stage::Idle => false,
         };

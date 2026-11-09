@@ -1127,6 +1127,7 @@ impl Engine {
                 track.delayed.map(|d| d.at),
                 track.kill_at,
                 track.off_at,
+                track.gate_at,
                 track.retrigger.map(|r| r.next_at),
             ];
             for at in events.into_iter().flatten() {
@@ -1134,6 +1135,19 @@ impl Engine {
             }
         }
         soonest
+    }
+
+    /// How long a note of so many pulses is held for at the track's `Gate`, from its start, or
+    /// `None` at 100%, which holds it until something ends it, as before there was a `Gate`.
+    fn gate_frames(&self, index: usize, pulses: usize) -> Option<u64> {
+        let share = self.tracks[index].gate_share();
+        if share >= 1.0 {
+            return None;
+        }
+        let pulses = pulses.saturating_sub(1) as f64 + f64::from(share);
+        let step = TICKS_PER_STEP as f64 * 60.0 * f64::from(self.rate) * 1000.0
+            / (TICKS_PER_QUARTER as f64 * f64::from(self.millibpm));
+        Some((pulses * step).round() as u64)
     }
 
     fn groove_units(&self, units: u8) -> u64 {
@@ -1165,15 +1179,16 @@ impl Engine {
                 self.tracks[index].delayed = None;
                 self.start_modulation(index);
                 if self.plays(index) {
-                    let (kill, off, retrigger) = {
+                    let (kill, off, gate, retrigger) = {
                         let t = &self.tracks[index];
-                        (t.kill_at, t.off_at, t.retrigger)
+                        (t.kill_at, t.off_at, t.gate_at, t.retrigger)
                     };
                     self.tracks[index].start(delayed.note, self.rate);
                     self.choke(index);
                     let t = &mut self.tracks[index];
                     t.kill_at = kill;
                     t.off_at = off;
+                    t.gate_at = gate;
                     t.retrigger = retrigger;
                 }
             }
@@ -1184,6 +1199,14 @@ impl Engine {
             }
             if self.tracks[index].off_at.is_some_and(|at| at <= clock) {
                 self.tracks[index].off_at = None;
+                self.release_modulation(index);
+                self.tracks[index].voice.release();
+            }
+            // The gate closing lets the note go as `OFF` does, and ends its ratchets, which only
+            // repeat while the gate's open.
+            if self.tracks[index].gate_at.is_some_and(|at| at <= clock) {
+                self.tracks[index].gate_at = None;
+                self.tracks[index].retrigger = None;
                 self.release_modulation(index);
                 self.tracks[index].voice.release();
             }
@@ -1208,12 +1231,13 @@ impl Engine {
         };
         let gain = (note.gain * retrigger.factor).clamp(0.0, 1.0);
         let next = NoteOn { gain, ..note };
-        let (kill, off) = (track.kill_at, track.off_at);
+        let (kill, off, gate) = (track.kill_at, track.off_at, track.gate_at);
         if audible {
             track.start(next, rate);
         }
         track.kill_at = kill;
         track.off_at = off;
+        track.gate_at = gate;
         track.last_note = Some(next);
         track.retrigger = Some(Retrigger {
             next_at: retrigger.next_at + retrigger.interval,
@@ -1404,6 +1428,18 @@ impl Engine {
                     None => self.tracks[index].cut_to_tail(),
                 }
             }
+        }
+        // A note's gate closes `Gate` of the way through its last pulse: a `Single`'s is its row's
+        // last, a `Multi`'s note is one pulse long, and a `Hold` ties past it into the next row.
+        if plays && matches!(event, Note::On(_)) && gate != GateKind::Hold {
+            let pulses = if gate == GateKind::Multi {
+                1
+            } else {
+                step.pulses()
+            };
+            self.tracks[index].gate_at = self
+                .gate_frames(index, pulses)
+                .map(|frames| start_at + frames);
         }
         if let Some(units) = kill_units {
             self.tracks[index].kill_at = Some(start_at + self.groove_units(units));

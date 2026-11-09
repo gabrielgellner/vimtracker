@@ -6,7 +6,7 @@ use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
-use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId};
+use vt_model::settings::{Effect, MAX_MACHINE_SETTINGS, Owner, SettingId, gate_share};
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
@@ -203,6 +203,8 @@ pub struct TrackState {
     pub delayed: Option<DelayedNote>,
     pub kill_at: Option<u64>,
     pub off_at: Option<u64>,
+    /// When the note's gate closes, `Gate` of the way through its last pulse.
+    pub gate_at: Option<u64>,
     pub retrigger: Option<Retrigger>,
     /// A step waiting for its swing delay.
     pub swung: Option<(u64, usize)>,
@@ -272,6 +274,8 @@ pub struct TrackState {
     /// and the page set them.
     lfo_values: [[f32; 2]; LFOS_PER_TRACK],
     held_pitch: f32,
+    /// Held `LEN`, the track's `Gate`, on the `00` to `FF` scale.
+    held_gate: f32,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -318,6 +322,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::SEND_B => track.send_b,
             SettingId::PITCH => track.pitch,
             SettingId::FILTER_MODE => track.filter_mode.index(),
+            SettingId::GATE_LENGTH => track.gate_length(),
             _ => id.entry().default,
         },
         (Owner::Voice(_), _) => track.setting(id),
@@ -367,6 +372,7 @@ impl TrackState {
             delayed: None,
             kill_at: None,
             off_at: None,
+            gate_at: None,
             retrigger: None,
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
@@ -424,6 +430,7 @@ impl TrackState {
             pitch: 1.0,
             lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
             held_pitch: 128.0,
+            held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             filter_moving: false,
             key: [0.0; 2],
         }
@@ -740,6 +747,7 @@ impl TrackState {
         self.delayed = None;
         self.kill_at = None;
         self.off_at = None;
+        self.gate_at = None;
         self.last_note = Some(note);
         self.tell_slots_the_note();
         if carries_on {
@@ -751,6 +759,12 @@ impl TrackState {
         if self.voice.uses_noise() {
             self.voice.seed_noise(self.rng.next_u32());
         }
+    }
+
+    /// How much of its last pulse a note starting now lasts, with what modulation adds: 1 holds
+    /// it to the next note.
+    pub fn gate_share(&self) -> f32 {
+        gate_share(self.held_gate + self.offsets[SettingId::GATE_LENGTH.index()] * 255.0)
     }
 
     /// Fade the playing note.
@@ -768,6 +782,7 @@ impl TrackState {
         self.delayed = None;
         self.kill_at = None;
         self.off_at = None;
+        self.gate_at = None;
         self.retrigger = None;
         self.swung = None;
         self.tied = false;
@@ -887,6 +902,10 @@ impl TrackState {
                 SettingId::SEND_B => self.send_b = value,
                 SettingId::FILTER_MODE => {
                     self.filter_mode = value;
+                    return;
+                }
+                SettingId::GATE_LENGTH => {
+                    self.held_gate = value;
                     return;
                 }
                 _ => return,

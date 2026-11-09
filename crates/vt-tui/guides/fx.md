@@ -40,6 +40,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
+| `LEN` | Gate: how much of its last pulse a note lasts. `80` is half |
 | `DEP1` `DEP2` | An LFO's depth: `80` is none, shown as on the Mod page |
 | `PHS1` `PHS2` | An LFO's phase: `00` to `FF` is a whole turn, and it goes round |
 

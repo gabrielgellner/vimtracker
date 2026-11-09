@@ -71,6 +71,8 @@ const SWEEP_GAIN: f32 = (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
 const SLIDE_SHARE: f32 = 1.0 / 3.0;
 /// The high-pass before the filter, in Hz, as Open303 measured a 303's.
 const HIGH_PASS_HZ: f32 = 44.486;
+/// Below this, its level and accent sweep have nothing left to carry to the next note.
+const SETTLED: f32 = 1e-4;
 /// The level's smoothing, so nothing that jumps in it clicks: Open303's 200 Hz.
 const DECLICK_HZ: f32 = 200.0;
 /// The highest cutoff the envelope and accent can take it to, as on the Devil Fish.
@@ -231,6 +233,12 @@ impl Acid {
     /// Let go of the note.
     pub fn release(&mut self) {
         self.gate = false;
+    }
+
+    /// Whether its level and accent sweep have fallen away, so a note after it would start as
+    /// if from nothing.
+    pub fn settled(&self) -> bool {
+        self.level < SETTLED && self.sweep < SETTLED
     }
 
     /// The cutoff it played the latest frame at, in Hz.
