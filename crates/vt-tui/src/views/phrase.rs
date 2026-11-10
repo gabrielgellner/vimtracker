@@ -11,6 +11,7 @@ use vt_model::song::{Phrase, Track};
 use vt_model::step::{FxCommand, Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
+use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
 
@@ -104,12 +105,13 @@ fn pending_step(app: &App, step: &Step, typing: bool) -> Option<Step> {
 }
 
 /// Split text into runs of the same style, given a style for each character.
-fn spans_of(text: &str, styles: &[Style]) -> Vec<Span<'static>> {
+fn spans_of(text: &[char], styles: &[Style]) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     let mut start = 0;
     for end in 1..=text.len() {
         if end == text.len() || styles[end] != styles[start] {
-            spans.push(Span::styled(text[start..end].to_owned(), styles[start]));
+            let run: String = text[start..end].iter().collect();
+            spans.push(Span::styled(run, styles[start]));
             start = end;
         }
     }
@@ -289,21 +291,52 @@ fn row_number(row: isize) -> String {
     format!("{sign}{:02X}", row.unsigned_abs())
 }
 
-fn track_label(app: &App, track: usize) -> String {
-    let live = app.levels.get(track).copied().unwrap_or_default();
-    let flag = if live.mute {
-        'm'
-    } else if live.solo {
-        's'
-    } else {
-        ' '
-    };
+/// A track's name, or its number if it has none.
+fn track_name(app: &App, track: usize) -> String {
     let name = app.song().tracks.get(track).map_or("", |t| t.name.as_str());
     if name.is_empty() {
-        format!("{:02}{flag} ", track + 1)
+        format!("{:02}", track + 1)
     } else {
-        format!("{name}{flag} ")
+        name.to_owned()
     }
+}
+
+/// The glyph for a track that's muted or soloed, if it is. A mute wins, as the track is silent.
+pub(crate) fn level_glyph(app: &App, track: usize) -> Option<char> {
+    let live = app.levels.get(track).copied().unwrap_or_default();
+    if live.mute {
+        Some(glyphs::MUTE)
+    } else if live.solo {
+        Some(glyphs::SOLO)
+    } else {
+        None
+    }
+}
+
+/// A track's label over its column in the overview, three cells wide: the start of its name, and
+/// its mute or solo glyph in the last cell if it has one.
+fn column_label(app: &App, track: usize) -> (String, Option<char>) {
+    let name = track_name(app, track);
+    match level_glyph(app, track) {
+        Some(glyph) => (name.chars().take(2).collect(), Some(glyph)),
+        None => (
+            format!("{:<3}", name.chars().take(3).collect::<String>()),
+            None,
+        ),
+    }
+}
+
+/// Spans cut to a width, and padded to it, counting cells.
+fn fitted(spans: Vec<Span<'static>>, width: usize) -> Vec<Span<'static>> {
+    let mut room = width;
+    let mut fitted = Vec::new();
+    for span in spans {
+        let kept: String = span.content.chars().take(room).collect();
+        room -= kept.chars().count();
+        fitted.push(Span::styled(kept, span.style));
+    }
+    fitted.push(Span::raw(" ".repeat(room)));
+    fitted
 }
 
 /// Draw the view.
@@ -363,8 +396,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         ""
     };
     let mut heading = format!(
-        "Track {}Phrase {id:02X}{shared} {}/{}",
-        track_label(app, app.cursor.track),
+        " Phrase {id:02X}{shared} {}/{}",
         app.cursor.slot + 1,
         app.chain_entries().len(),
     );
@@ -377,24 +409,39 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             heading.push_str(&format!(" FX{}:{}", slot + 1, lane.length));
         }
     }
-    heading.truncate(GUTTER + body_width);
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let mut title = vec![Span::styled(
-        format!("{heading:<width$}  ", width = GUTTER + body_width),
+    // The track's machine or kind as a glyph before it, and whether it's muted or soloed after.
+    let mut named = vec![];
+    if let Some(track) = app.track_here() {
+        named.push(Span::styled(
+            format!("{} ", glyphs::track(track)),
+            theme::dim(),
+        ));
+    }
+    named.push(Span::styled(
+        format!("Track {}", track_name(app, app.cursor.track)),
         bold,
-    )];
+    ));
+    if let Some(glyph) = level_glyph(app, app.cursor.track) {
+        named.push(Span::styled(format!(" {glyph}"), theme::active()));
+    }
+    named.push(Span::styled(heading, bold));
+    let mut title = fitted(named, GUTTER + body_width);
+    title.push(Span::raw("  "));
     for track in &others {
         // Over the note, past the column's marker. The track being edited is marked out, so the
         // overview shows every track in its place.
-        let label = &track_label(app, *track)[..3];
-        if *track == app.cursor.track {
-            title.push(Span::raw(" "));
-            title.push(Span::styled(
-                label.to_owned(),
-                bold.fg(theme::BASE).bg(theme::GREEN),
-            ));
+        let (label, glyph) = column_label(app, *track);
+        title.push(Span::raw(" "));
+        let (style, glyph_style) = if *track == app.cursor.track {
+            let marked = bold.fg(theme::BASE).bg(theme::GREEN);
+            (marked, marked)
         } else {
-            title.push(Span::styled(format!(" {label}"), bold));
+            (bold, theme::active())
+        };
+        title.push(Span::styled(label, style));
+        if let Some(glyph) = glyph {
+            title.push(Span::styled(glyph.to_string(), glyph_style));
         }
     }
     let cursor_style = theme::cursor(app.mode);
@@ -644,11 +691,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 *style = style.bg(theme::FX_BAND);
             }
         }
+        // A value's `Lock` mark is a lock, dim, as it's what a value does unless marked otherwise.
+        // The text is worked on a character to a cell, so the glyph goes in last.
+        let mut shown: Vec<char> = text.chars().collect();
         for (slot, fx) in step.fx.iter().enumerate() {
             if fx.is_value() && fx.mark == Mark::Lock {
                 let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
                 if styles[at].fg.is_none() {
                     styles[at] = styles[at].patch(theme::dim());
+                }
+                if shown.get(at) == Some(&Mark::Lock.glyph()) {
+                    shown[at] = glyphs::LOCK;
                 }
             }
         }
@@ -668,7 +721,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             });
             styles[first..last].fill(cursor_style);
         }
-        spans.extend(spans_of(&text, &styles));
+        spans.extend(spans_of(&shown, &styles));
         let padding = body_width.saturating_sub(text.len());
         spans.push(Span::raw(" ".repeat(padding)));
         spans.push(Span::styled(side, edge));

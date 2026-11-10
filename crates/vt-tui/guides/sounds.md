@@ -307,7 +307,8 @@ Neither writes audio: each changes how the track's sample plays, and `u` takes
 it back. Both read the sample's analysis, which is worked out in the background
 when a file joins the bank and kept in `~/Library/Caches/vimtracker`
 (`$XDG_CACHE_HOME/vimtracker` if that's set), never beside your files and never
-in the project, so a project opened again finds it there.
+in the project, so a project opened again finds it there. While a long file is
+being analysed, the right of the status line shows a spinner and `Analysing`.
 
 | Command | Does |
 |---|---|

@@ -651,13 +651,15 @@ fn a_fixed_tracks_pages_only_show_what_it_has() {
     let (mut app, _rt) = app();
     press(&mut app, "WW 4");
     let lines = track_page_text(&app);
-    assert!(lines[0].starts_with("Return A"), "{}", lines[0]);
+    let fixed = format!("{} Return A", vt_tui::glyphs::RETURN);
+    assert!(lines[0].starts_with(&fixed), "{}", lines[0]);
     assert!(lines[2].starts_with("Level"), "{}", lines[2]);
     assert!(lines[3].starts_with("Pan"), "{}", lines[3]);
     assert!(!lines.iter().any(|line| line.contains("Machine")));
     press(&mut app, "WW");
     let lines = track_page_text(&app);
-    assert!(lines[0].starts_with("Master"), "{}", lines[0]);
+    let master = format!("{} Master", vt_tui::glyphs::MASTER);
+    assert!(lines[0].starts_with(&master), "{}", lines[0]);
     assert!(lines[2].starts_with("Level"), "{}", lines[2]);
     assert!(!lines.iter().any(|line| line.contains("Pan")));
 }
@@ -4355,13 +4357,19 @@ fn the_track_page_shows_its_settings_in_columns() {
     press(&mut app, "l");
     typed(&mut app, "90");
     let lines = track_page_text(&app);
-    assert!(lines[0].starts_with("Track 01"), "{}", lines[0]);
+    assert!(lines[0].contains(" Track 01 "), "{}", lines[0]);
     assert!(lines[2].contains("Attack") && lines[2].contains("Reset"));
     assert!(lines[3].starts_with("Env 1") && lines[3].contains("Vol"));
     assert!(lines[4].starts_with("Env 2") && lines[4].contains("Cut"));
     assert!(lines[6].contains("Dest") && lines[6].contains("Retrig"));
     let lfo: Vec<&str> = lines[7].split_whitespace().collect();
-    assert_eq!(lfo, ["LFO", "1", "Cut", "Tri", "1/8d", "+40", "90°", "off"]);
+    let triangle = vt_tui::glyphs::TRIANGLE_WAVE.to_string();
+    assert_eq!(
+        lfo,
+        [
+            "LFO", "1", "Cut", "Tri", &triangle, "1/8d", "+40", "90°", "off"
+        ]
+    );
     assert!(lines[8].starts_with("LFO 2"));
     press(&mut app, "H");
     let lines = track_page_text(&app);
@@ -4546,7 +4554,10 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).contains("CUT   4000 . SNA   2000 h RES   1000 g"),
+        row(2).contains(&format!(
+            "CUT   4000 {} SNA   2000 h RES   1000 g",
+            vt_tui::glyphs::LOCK
+        )),
         "{}",
         row(2)
     );
@@ -4698,8 +4709,10 @@ fn each_kind_of_cell_has_its_own_colours() {
     let (app, _realtime) = app_with_a_lock_for_another_voice();
     let buffer = screen(&app);
     let row: String = (0..80).map(|x| buffer[(x, 2)].symbol()).collect();
+    // Counted in cells, as a value's lock mark is a glyph of more than one byte.
     let style_at = |text: &str, past: usize| {
         let at = row.find(text).unwrap_or_else(|| panic!("no {text}: {row}"));
+        let at = row[..at].chars().count();
         buffer[((at + past) as u16, 2)].style()
     };
     // A lock: its coarse digits bold in the value colour, and its fine ones set back.
@@ -5178,7 +5191,7 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     assert!(!app.levels[0].mute);
     press(&mut app, "j=");
     assert!(app.levels[0].solo);
-    assert!(mixer_line(&app, "Solo")[4..].contains('S'));
+    assert!(mixer_line(&app, "Solo").contains(vt_tui::glyphs::SOLO));
     press(&mut app, "i");
     assert!(!app.levels[0].solo);
     assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
@@ -5934,43 +5947,9 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
 }
 
 #[test]
-fn an_lfos_shape_has_an_icon_sent_once_and_shared() {
-    use vt_tui::kitty::Graphics;
-    let (mut app, _realtime) = app();
-    let mut graphics = Graphics::new();
-    let sync = |app: &mut App, graphics: &mut Graphics| {
-        let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
-        String::from_utf8(out).unwrap().matches(",c=4,").count()
-    };
-    press(&mut app, " 4L");
-    // Both LFOs start on the same shape, so one image serves both.
-    assert_eq!(sync(&mut app, &mut graphics), 1);
-    let plain = app.lfo_images.unwrap();
-    assert_eq!(plain[0], plain[1]);
-    assert_eq!(sync(&mut app, &mut graphics), 0);
-
-    // The cursor picks one out, once. After that, moving it sends nothing.
-    press(&mut app, "jj");
-    assert_eq!(sync(&mut app, &mut graphics), 1);
-    let picked = app.lfo_images.unwrap();
-    assert_ne!(picked[0], picked[1]);
-    assert_eq!(picked[1], plain[1]);
-    press(&mut app, "k");
-    assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.lfo_images.unwrap(), plain);
-
-    // A new shape has its own image, and coming back to the old one needs nothing sent.
-    press(&mut app, "jl=");
-    assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.lfo_images.unwrap()[0], picked[0]);
-    press(&mut app, "-");
-    assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.lfo_images.unwrap(), picked);
-}
-
-#[test]
-fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
+fn an_lfos_shape_has_its_glyph_after_its_name_and_keeps_the_columns_in_line() {
+    use vt_tui::glyphs;
+    use vt_tui::theme;
     let draw = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -5981,9 +5960,8 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
     };
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
+    assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Tri);
     let plain = draw(&app);
-    app.lfo_images = Some([0x01_02_03, 0x04_05_06]);
-    let drawn = draw(&app);
     let row = (0..24)
         .find(|y| {
             (0..80)
@@ -5993,13 +5971,26 @@ fn an_lfos_icon_sits_after_its_name_and_keeps_the_columns_in_line() {
         })
         .unwrap();
     let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
-    // Name column, then the icon, with the same text after it either way.
-    assert_eq!(text(&drawn, 30), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(drawn[(30, row)].fg, ratatui::style::Color::Rgb(1, 2, 3));
-    assert_eq!(text(&drawn, 33), "\u{10EEEE}\u{305}\u{310}");
-    assert_eq!(text(&drawn, 34), " ");
-    for x in 36..80 {
-        assert_eq!(text(&drawn, x), text(&plain, x), "at {x}");
+    // After the name's column, one cell, dim while the cursor is on another LFO.
+    assert_eq!(text(&plain, 30), glyphs::TRIANGLE_WAVE.to_string());
+    assert_eq!(plain[(30, row)].fg, theme::dim().fg.unwrap());
+    assert_eq!(text(&plain, 31), " ");
+
+    // In the active colour while the cursor is on its LFO.
+    press(&mut app, "jj");
+    assert_eq!(draw(&app)[(30, row)].fg, theme::active().fg.unwrap());
+
+    // A falling saw has no glyph, and the columns after it stay where they were.
+    press(&mut app, "l=");
+    assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Saw);
+    let saw = draw(&app);
+    assert_eq!(text(&saw, 30), " ");
+    for x in 31..80 {
+        assert_eq!(text(&saw, x), text(&plain, x), "at {x}");
+    }
+    assert_eq!(glyphs::lfo_shape(Shape::Ramp), Some(glyphs::SAWTOOTH_WAVE));
+    for shape in [Shape::Saw, Shape::Random, Shape::Smooth] {
+        assert_eq!(glyphs::lfo_shape(shape), None);
     }
 }
 
@@ -8464,6 +8455,71 @@ fn status_line(app: &App) -> String {
     (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
 }
 
+/// The status line's transport while playing with a realign waiting.
+fn realign_shown() -> String {
+    use vt_tui::glyphs::{PLAY, WAITING};
+    format!(" {PLAY} {WAITING} REALIGN  ")
+}
+
+#[test]
+fn the_transport_is_glyphs_with_the_waits_named() {
+    use vt_tui::glyphs::{PLAY, STOP, WAITING};
+    let (mut app, mut rt) = app();
+    assert!(status_line(&app).contains(&format!(" {STOP}  120 BPM")));
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    assert!(status_line(&app).contains(&format!(" {PLAY}  120 BPM")));
+    // A launch cued on any track waits for the grid too.
+    app.jam[2].cued = Some(Some(1));
+    assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LAUNCH  ")));
+}
+
+#[test]
+fn dropouts_put_a_warning_at_the_right_of_the_status_line_only_once_there_are_any() {
+    use vt_tui::glyphs::{SPINNER, WARNING};
+    let (mut app, _rt) = app();
+    let line = status_line(&app);
+    assert!(!line.contains(WARNING));
+    assert!(
+        !line.contains(SPINNER),
+        "nothing is going on in the background"
+    );
+    assert_eq!(app.background_work(), None);
+    app.audio.late = 2;
+    app.audio.xruns = 1;
+    let line = status_line(&app);
+    assert!(line.ends_with(&format!("{WARNING} 3  ")), "{line}");
+}
+
+#[test]
+fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
+    use vt_tui::glyphs::{DRUM, MUTE, SAMPLER, SOLO, SYNTH};
+    let (mut app, _rt) = app();
+    let heading = |app: &App| -> String {
+        let buffer = screen(app);
+        (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    let machine = app.song().tracks[0].machine;
+    let glyph = vt_tui::glyphs::machine(machine);
+    assert!(heading(&app).starts_with(&format!("{glyph} Track 01 Phrase")));
+    tap(&mut app, " m");
+    assert!(heading(&app).starts_with(&format!("{glyph} Track 01 {MUTE} Phrase")));
+    // Over its column in the overview too, in place of the number's last cell.
+    assert!(heading(&app).contains(&format!(" 01{MUTE}")));
+    tap(&mut app, " m");
+    app.levels[0].solo = true;
+    assert!(heading(&app).contains(&format!("Track 01 {SOLO} Phrase")));
+    assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
+    assert_eq!(
+        vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
+        DRUM
+    );
+    assert_eq!(
+        vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Fm)),
+        SYNTH
+    );
+}
+
 #[test]
 fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
@@ -8474,14 +8530,16 @@ fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     let mut at = play_from_the_top(&mut app, &mut rt);
     press_at(&mut app, at, " r");
     assert!(app.recording());
+    let (play, record) = (vt_tui::glyphs::PLAY, vt_tui::glyphs::RECORD);
     assert!(
-        status_line(&app).contains("playing REC"),
+        status_line(&app).contains(&format!(" {play} {record}  ")),
         "{}",
         status_line(&app)
     );
     press_at(&mut app, at, " r");
     assert!(!app.recording(), "it toggles");
-    assert!(!status_line(&app).contains("REC"));
+    assert!(!status_line(&app).contains(record));
+    assert!(status_line(&app).contains(&format!(" {play}  ")));
 
     // Pausing stops it.
     let tab = Key::new(KeyCode::Tab);
@@ -10342,7 +10400,7 @@ fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
     assert!(rt.engine().track_realign_waiting(0));
     assert!(!rt.engine().realign_waiting(), "only this track");
     assert!(app.realigning_tracks[0]);
-    assert!(status_line(&app).contains("playing REALIGN"));
+    assert!(status_line(&app).contains(&realign_shown()));
     assert!(!app.dirty, "it moves playback, not the song");
 
     // Again, it's taken back.
@@ -10776,7 +10834,8 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let status: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
-    assert!(status.contains("stopped FILL"), "{status}");
+    let fill = format!("{} FILL", vt_tui::glyphs::STOP);
+    assert!(status.contains(&fill), "{status}");
 
     press(&mut app, " ");
     hold_for(&mut app, 'l', 100);
@@ -11382,7 +11441,7 @@ fn space_a_realigns_every_track_on_the_launch_grid_while_playing() {
     block(&mut rt, &mut app);
     assert!(rt.engine().realign_waiting());
     assert!(app.realigning);
-    assert!(status_line(&app).contains("playing REALIGN"));
+    assert!(status_line(&app).contains(&realign_shown()));
     assert!(!app.dirty, "it moves playback, not the song");
 
     // Again, it's taken back.

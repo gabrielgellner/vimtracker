@@ -11,6 +11,7 @@ use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::config::Settings;
 use crate::explorer::Purpose;
 use crate::exploring::Naming;
+use crate::glyphs;
 use crate::loading::Loader;
 use crate::meter::Meter;
 use crate::places::RecentPlaces;
@@ -31,7 +32,6 @@ use vt_model::constants::{
 use vt_model::groove::GrooveId;
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
-use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::project::{self, ProjectError};
@@ -226,8 +226,6 @@ pub struct App {
     pub track_page: Page,
     /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
     pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
-    /// The ids of the images of the LFOs' shapes, likewise.
-    pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
     /// The id of the image of the filter's curve, likewise.
     pub filter_image: Option<u32>,
     /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
@@ -366,6 +364,9 @@ pub struct App {
     pub loader: Loader,
     /// Analyses the bank's files, off this thread, for normalising, `:trim` and the waveform.
     pub analyst: Analyst,
+    /// When the loader or the analyst started on what they're doing, while they are, for the
+    /// spinner on the status line.
+    pub(crate) work_since: Option<Instant>,
     /// Whether the explorer plays the sample its cursor moves onto, which `A` switches and the
     /// next one opened keeps.
     pub audition_files: bool,
@@ -423,7 +424,6 @@ impl App {
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: Page::Sound,
             envelope_images: None,
-            lfo_images: None,
             filter_image: None,
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
@@ -520,6 +520,7 @@ impl App {
             kit_file: None,
             loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
             analyst: Analyst::new(None),
+            work_since: None,
             audition_files: true,
             file_wanted: None,
             file_playing: None,
@@ -821,6 +822,25 @@ impl App {
         self.take_loaded();
         self.take_analyses();
         self.follow_recording();
+        let working = self.loader.is_waiting() || self.analyst.is_waiting();
+        self.work_since = working.then(|| self.work_since.unwrap_or(now));
+    }
+
+    /// The work going on in the background, by name, and the spinner's turn for it. Only work
+    /// that has taken a moment shows, so a file read as the explorer's cursor passes doesn't flash
+    /// on the status line, and nothing shows once it's done, so an idle screen stays still.
+    pub fn background_work(&self) -> Option<(&'static str, char)> {
+        let since = self.work_since?;
+        let elapsed = self.now.saturating_duration_since(since);
+        if elapsed < glyphs::SPINNER_AFTER {
+            return None;
+        }
+        let work = if self.analyst.is_waiting() {
+            "Analysing"
+        } else {
+            "Loading"
+        };
+        Some((work, glyphs::spinner(elapsed)))
     }
 
     /// A key from the terminal, which the kitty keyboard protocol says is a press, a repeat or a

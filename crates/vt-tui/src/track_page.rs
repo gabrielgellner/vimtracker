@@ -22,6 +22,7 @@ use vt_model::song::{FilterType, Machine, Track, TrackKind, reset_named};
 use vt_model::speed::Speed;
 
 use crate::app::{App, Entry};
+use crate::glyphs;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
@@ -1888,14 +1889,15 @@ impl App {
         self.show_picker(Picker::new("Filter mode", items).opened_on(position));
     }
 
-    /// List the machines, with what each does and the current one highlighted.
+    /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does, and
+    /// the current one highlighted.
     fn open_machine_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().machine;
         let items = Machine::ALL
             .map(|machine| {
-                Item::new(machine.name(), Pick::Machine { track, machine })
-                    .meaning(machine.meaning())
+                let label = format!("{} {}", glyphs::machine(machine), machine.name());
+                Item::new(label, Pick::Machine { track, machine }).meaning(machine.meaning())
             })
             .to_vec();
         let position = Machine::ALL.iter().position(|machine| *machine == current);

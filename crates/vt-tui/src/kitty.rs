@@ -20,7 +20,6 @@ use vt_model::bank::BankEntry;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
-use vt_model::lfo::{LFOS_PER_TRACK, Shape, wave};
 use vt_model::sample::SampleData;
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
@@ -37,8 +36,8 @@ use crate::views::picker::{
 };
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
-    FILTER_CURVE_WIDTH, LFO_ICON_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    envelope_being_edited, filter_being_edited, lfo_being_edited, slot_being_edited,
+    FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
+    envelope_being_edited, filter_being_edited, slot_being_edited,
 };
 use crate::waveform;
 
@@ -361,12 +360,6 @@ const CELL_DOTS_DOWN: usize = 12;
 /// that's already near its final size, which keeps its edges crisp.
 const DOT_PIXELS: usize = 3;
 
-/// How much of a row an LFO's icon stays inside, so the icons of two rows don't touch.
-const ICON_HEIGHT: f32 = 0.8;
-/// The random values an LFO's icon shows, and how many a random shape's icon shows.
-const ICON_KEY: u64 = 148;
-const RANDOM_ICON_CYCLES: f64 = 4.0;
-
 /// What a filter curve's height covers, in dB, with the frequency across it from 20 Hz to 20 kHz. It
 /// has more room below than above, as a filter takes away more than it adds.
 const CURVE_BOTTOM_DB: f32 = -36.0;
@@ -548,22 +541,6 @@ fn line_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
 pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
     let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
     line_png(&envelope_columns(envelope, across, down), down, color)
-}
-
-/// An LFO's wave as a PNG, to show which shape it is. It uses the real wave, with one cycle or, for
-/// a random one, a few, since one cycle of `Random` is only flat.
-pub fn shape_png(shape: Shape, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
-    let cycles = match shape {
-        Shape::Random | Shape::Smooth => RANDOM_ICON_CYCLES,
-        _ => 1.0,
-    };
-    let level = |x: f32| {
-        // Stopping just short of the end, or a saw would jump back up there.
-        let value = wave(shape, f64::from(x.min(0.999)) * cycles, ICON_KEY);
-        0.5 + value * 0.5 * ICON_HEIGHT
-    };
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
 /// A track's filter and utility filter as a PNG, showing what they let through at each frequency.
@@ -801,7 +778,7 @@ fn color(active: bool) -> [u8; 3] {
 }
 
 /// The images the terminal has. Each envelope keeps one with the cursor on it and one without, so
-/// moving the cursor sends nothing, and each LFO shape has the same two, sent once when first shown.
+/// moving the cursor sends nothing.
 ///
 /// A changed image gets a new id, rather than replacing the one with the old id. Kitty only looks at
 /// placeholders on lines that have changed, and replacing an image disconnects them, so it would stay
@@ -810,7 +787,6 @@ pub struct Graphics {
     base: u32,
     next: u32,
     images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
-    shapes: [[Option<u32>; 2]; Shape::ALL.len()],
     filter: [Option<(FilterSettings, u32)>; 2],
     /// The waveform of the sample the cursor's track plays. It's drawn once for each sample, which
     /// is held so another loaded later can't be mistaken for it.
@@ -834,7 +810,6 @@ impl Graphics {
             base: (std::process::id() & 0xFFFF) << 8,
             next: 0,
             images: [[None; 2]; TRACK_ENVELOPES],
-            shapes: [[None; 2]; Shape::ALL.len()],
             filter: [None; 2],
             waveform: [None, None],
             slots: [[None; 2]; INSERTS],
@@ -851,17 +826,11 @@ impl Graphics {
             self.next = self.next % 0xFF + 1;
             let id = self.base | self.next;
             let in_use = self
-                .shapes
+                .images
                 .iter()
                 .flatten()
                 .flatten()
-                .any(|shape| *shape == id)
-                || self
-                    .images
-                    .iter()
-                    .flatten()
-                    .flatten()
-                    .any(|image| image.1 == id)
+                .any(|image| image.1 == id)
                 || self.filter.iter().flatten().any(|image| image.1 == id)
                 || self.waveform.iter().flatten().any(|image| image.1 == id)
                 || self
@@ -1098,9 +1067,9 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the Mod page's envelopes and LFO shapes, if the terminal lacks them.
+    /// Send the Mod page's envelopes, if the terminal lacks them. The LFOs' shapes are glyphs.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
-        let (envelopes, lfos) = (track.envelopes, track.lfos);
+        let envelopes = track.envelopes;
         let edited = envelope_being_edited(app);
         let mut envelope_ids = [0; TRACK_ENVELOPES];
         for (slot, envelope) in envelopes.iter().enumerate() {
@@ -1118,27 +1087,7 @@ impl Graphics {
                 }
             };
         }
-        let edited = lfo_being_edited(app);
-        let mut lfo_ids = [0; LFOS_PER_TRACK];
-        for (slot, lfo) in lfos.iter().enumerate() {
-            let active = edited == Some(slot);
-            let index = Shape::ALL
-                .iter()
-                .position(|shape| *shape == lfo.shape)
-                .unwrap_or(0);
-            lfo_ids[slot] = match self.shapes[index][usize::from(active)] {
-                Some(id) => id,
-                None => {
-                    let id = self.new_id();
-                    let png = shape_png(lfo.shape, color(active), LFO_ICON_WIDTH, 1);
-                    self.send(out, id, &png, LFO_ICON_WIDTH, 1)?;
-                    self.shapes[index][usize::from(active)] = Some(id);
-                    id
-                }
-            };
-        }
         app.envelope_images = Some(envelope_ids);
-        app.lfo_images = Some(lfo_ids);
         Ok(())
     }
 
@@ -1163,13 +1112,11 @@ impl Graphics {
     /// Have the terminal forget the images.
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
         let held = self.images.iter().flatten().flatten().map(|image| &image.1);
-        let shapes = self.shapes.iter().flatten().flatten();
         let filter = self.filter.iter().flatten().map(|image| &image.1);
         let waveform = self.waveform.iter().flatten().map(|image| &image.1);
         let slots = self.slots.iter().flatten().flatten().map(|image| &image.1);
         let scope = self.scope.iter().map(|image| &image.1);
         for id in held
-            .chain(shapes)
             .chain(filter)
             .chain(waveform)
             .chain(slots)
@@ -1293,40 +1240,6 @@ mod tests {
         assert_eq!(answer(&ok.as_bytes()[..ok.len() - 1]), None);
         assert_eq!(answer(b"\x1b_Gi=31;OK\x1b\\"), None);
         assert_eq!(answer(b""), None);
-    }
-
-    #[test]
-    fn each_lfo_shape_has_its_own_small_icon() {
-        let icons = Shape::ALL.map(|shape| shape_png(shape, [255; 3], 4, 1));
-        for (index, icon) in icons.iter().enumerate() {
-            assert!(icon.len() < 1000, "{}", icon.len());
-            let (_, pixels) = decode(icon);
-            let (across, down) = (4 * CELL_DOTS_ACROSS, CELL_DOTS_DOWN);
-            assert_eq!(
-                (pixels[0].len(), pixels.len()),
-                (across * DOT_PIXELS, down * DOT_PIXELS)
-            );
-            assert!(
-                !icons[index + 1..].contains(icon),
-                "{:?}",
-                Shape::ALL[index]
-            );
-            // It stays off the top and bottom of its row, so two rows' icons don't touch.
-            assert!(pixels[0].iter().all(|pixel| !pixel));
-            assert!(pixels[down * DOT_PIXELS - 1].iter().all(|pixel| !pixel));
-        }
-    }
-
-    #[test]
-    fn a_saw_falls_and_a_ramp_rises_with_no_jump_at_the_end() {
-        let spans = |shape| {
-            let level = |x: f32| 0.5 + wave(shape, f64::from(x.min(0.999)), 0) * 0.4;
-            line_columns(level, level(0.0), 24, 12)
-        };
-        let (saw, ramp) = (spans(Shape::Saw), spans(Shape::Ramp));
-        assert!(saw[0].0 < saw[23].0);
-        assert!(ramp[0].0 > ramp[23].0);
-        assert_eq!(saw[23].0, saw[23].1, "a single dot, with no line back up");
     }
 
     /// A filter curve's height at points across it, from 0 at the bottom to 1.

@@ -8,6 +8,10 @@ LFOs, accumulator and arpeggio, and FX its effects. `H` and `L` go to the previo
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
+The page's heading, and the phrase view's, starts with what the track is: `󱑽` a
+sampler, `󰙽` a synth, `` a drum, `󱞳` a return and `󰓃` the master. The machine list
+shows the same beside each machine.
+
 | Keys | Does |
 |---|---|
 | `H` `L` | The Sound page or the Mod page |
@@ -608,7 +612,9 @@ step moves the centre and the LFO carries on around it.
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
-from one to the next, which suits a slow drift on `Cut`.
+from one to the next, which suits a slow drift on `Cut`. `Sine`, `Tri`, `Ramp`
+and `Square` have their wave after the name, `󰥛` `󱑼` `󱑺` `󱑻`. `Saw` has none, as the
+font's saw rises, and nor have the random shapes.
 
 | Type this as a rate | For |
 |---|---|

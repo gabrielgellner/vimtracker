@@ -79,5 +79,8 @@ but leaves less room when the CPU is busy, so it drops out sooner. Lower it unti
 or `xruns` start to count up, then go back a step. `Latency` is the time from working the
 sound out to it leaving the device. On Bluetooth, most of it is the headset's own.
 
+Once audio has dropped out, the right of the status line shows a red `󰀦` and how many
+times, `late` and `xruns` together, until the device is opened again.
+
 If the device changes or goes away while playing, audio stops and the status line says
 so. Choose one on the audio page to play again.
