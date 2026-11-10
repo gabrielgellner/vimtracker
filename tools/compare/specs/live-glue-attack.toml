@@ -24,7 +24,7 @@ effects = ["comp"]
 1.comp.threshold = 0xD5       # -10 dB
 1.comp.busratio = "4:1"
 1.comp.busrelease = "0.1 s"
-1.comp.makeup = 0x00         # 0 dB, as Glue's Makeup
+1.comp.makeup = 0x00         # 0 dB, as Glue's Output
 1.comp.auto = "Off"
 1.comp.mix = 0xFF
 
@@ -35,8 +35,8 @@ live = "Glue Compressor"
 [references.parameters]
 Threshold = "-10 dB"
 Ratio = 4
-Release = "0.1 s"
-Makeup = "0 dB"
+Release = 0.1
+Output = "0 dB"
 "Dry/Wet" = "100 %"
 
 [[references]]
@@ -82,39 +82,39 @@ Glue; Bus FORCE is drawn beside them.
 [[cases]]
 name = "attack-0.1"
 ours = { 1.comp.busattack = "0.1 ms" }
-references = { Glue = { Attack = "0.1 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+references = { Glue = { Attack = 0.1 }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
 
 [[cases]]
 name = "attack-0.3"
 ours = { 1.comp.busattack = "0.3 ms" }
-references = { Glue = { Attack = "0.3 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+references = { Glue = { Attack = 0.3 }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
 
 [[cases]]
 name = "attack-1"
 ours = { 1.comp.busattack = "1 ms" }
-references = { Glue = { Attack = "1 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+references = { Glue = { Attack = 1 }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
 
 [[cases]]
 name = "attack-3"
 ours = { 1.comp.busattack = "3 ms" }
-references = { Glue = { Attack = "3 ms" }, "Bus FORCE" = { comp_attack_ms = 3.0 } }
+references = { Glue = { Attack = 3 }, "Bus FORCE" = { comp_attack_ms = 3.0 } }
 
 [[cases]]
 name = "attack-10"
 ours = { 1.comp.busattack = "10 ms" }
-references = { Glue = { Attack = "10 ms" }, "Bus FORCE" = { comp_attack_ms = 10.0 } }
+references = { Glue = { Attack = 10 }, "Bus FORCE" = { comp_attack_ms = 10.0 } }
 
 [[cases]]
 name = "attack-30"
 ours = { 1.comp.busattack = "30 ms" }
-references = { Glue = { Attack = "30 ms" }, "Bus FORCE" = { comp_attack_ms = 30.0 } }
+references = { Glue = { Attack = 30 }, "Bus FORCE" = { comp_attack_ms = 30.0 } }
 
 [[cases]]
 name = "attack-10-at-2"
 ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "2:1" }
-references = { Glue = { Attack = "10 ms", Ratio = 2 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 2.7 } }
+references = { Glue = { Attack = 10, Ratio = 2 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 2.7 } }
 
 [[cases]]
 name = "attack-10-at-10"
 ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "10:1" }
-references = { Glue = { Attack = "10 ms", Ratio = 10 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 5.25 } }
+references = { Glue = { Attack = 10, Ratio = 10 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 5.25 } }

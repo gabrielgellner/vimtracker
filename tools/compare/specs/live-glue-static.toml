@@ -26,7 +26,7 @@ effects = ["comp"]
 1.comp.threshold = 0xAA       # -20 dB
 1.comp.busattack = "10 ms"
 1.comp.busrelease = "0.1 s"
-1.comp.makeup = 0x00         # 0 dB, as Glue's Makeup
+1.comp.makeup = 0x00         # 0 dB, as Glue's Output
 1.comp.auto = "Off"
 1.comp.mix = 0xFF
 
@@ -36,9 +36,9 @@ live = "Glue Compressor"
 
 [references.parameters]
 Threshold = "-20 dB"
-Attack = "10 ms"
-Release = "0.1 s"
-Makeup = "0 dB"
+Attack = 10
+Release = 0.1
+Output = "0 dB"
 "Dry/Wet" = "100 %"
 
 [[references]]

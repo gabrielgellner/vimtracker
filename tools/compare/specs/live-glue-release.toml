@@ -24,7 +24,7 @@ effects = ["comp"]
 1.comp.threshold = 0xD5       # -10 dB
 1.comp.busratio = "4:1"
 1.comp.busattack = "1 ms"
-1.comp.makeup = 0x00         # 0 dB, as Glue's Makeup
+1.comp.makeup = 0x00         # 0 dB, as Glue's Output
 1.comp.auto = "Off"
 1.comp.mix = 0xFF
 
@@ -34,8 +34,8 @@ live = "Glue Compressor"
 [reference.parameters]
 Threshold = "-10 dB"
 Ratio = 4
-Attack = "1 ms"
-Makeup = "0 dB"
+Attack = 1
+Output = "0 dB"
 "Dry/Wet" = "100 %"
 
 [report]
@@ -56,29 +56,29 @@ slowly, so its release should grow with the burst's length on both.
 [[cases]]
 name = "release-0.1-long"
 ours = { 1.comp.busrelease = "0.1 s" }
-reference = { Release = "0.1 s" }
+reference = { Release = 0.1 }
 
 [[cases]]
 name = "release-0.1-short"
 ours = { 1.comp.busrelease = "0.1 s" }
-reference = { Release = "0.1 s" }
+reference = { Release = 0.1 }
 input = { on = 0.05 }
 
 [[cases]]
 name = "release-0.6-long"
 ours = { 1.comp.busrelease = "0.6 s" }
-reference = { Release = "0.6 s" }
+reference = { Release = 0.6 }
 
 [[cases]]
 name = "release-0.6-short"
 ours = { 1.comp.busrelease = "0.6 s" }
-reference = { Release = "0.6 s" }
+reference = { Release = 0.6 }
 input = { on = 0.05 }
 
 [[cases]]
 name = "release-1.2-long"
 ours = { 1.comp.busrelease = "1.2 s" }
-reference = { Release = "1.2 s" }
+reference = { Release = 1.2 }
 
 [[cases]]
 name = "auto-20ms"

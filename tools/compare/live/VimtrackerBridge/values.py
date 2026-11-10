@@ -29,6 +29,9 @@ SCALED = {
 EPSILON = 1e-9
 # How many times a search halves the range it looks in: 2^-60 of it is far finer than any display.
 HALVINGS = 60
+# How many evenly spaced values a scan of a continuous parameter's range reads, to find where it
+# shows a name such as Glue's `A` release, or where it shows numbers at all.
+SCAN_POINTS = 4001
 
 
 class Unsettable(Exception):
@@ -162,8 +165,34 @@ def value_for(parameter, wanted):
         raise Unsettable(f"{name} isn't a switch; give it a number")
     target = target_of(wanted)
     if target is None:
-        raise Unsettable(f"{name} takes a number, such as {parameter.str_for_value(low)}, not {wanted}")
+        return named(parameter, wanted)
     return search(parameter, target[0], target[1])
+
+
+def scan(parameter):
+    """Evenly spaced values over a continuous parameter's range, each with what it shows."""
+    low, high = float(parameter.min), float(parameter.max)
+    step = (high - low) / (SCAN_POINTS - 1)
+    return [(low + index * step, str(parameter.str_for_value(low + index * step))) for index in range(SCAN_POINTS)]
+
+
+def named(parameter, wanted):
+    """The middle of the values a continuous parameter shows a name at, such as Glue's `A` for an
+    automatic release at the top of its range."""
+    found = [value for value, text in scan(parameter) if item_matches(str(wanted), text)]
+    if not found:
+        raise Unsettable(
+            f"{parameter.name} takes a number, such as {parameter.str_for_value(float(parameter.min))}, "
+            f"not {wanted}"
+        )
+    return (found[0] + found[-1]) / 2.0
+
+
+def readable_span(parameter, unit):
+    """Where a continuous parameter shows numbers, when one end of it shows a name instead: the
+    first and last scanned values that read as a number in the spec's terms, or None."""
+    readable = [value for value, text in scan(parameter) if shown_number(text, unit) is not None]
+    return (readable[0], readable[-1]) if readable else None
 
 
 def search(parameter, number, unit):
@@ -176,6 +205,11 @@ def search(parameter, number, unit):
         return shown_number(parameter.str_for_value(value), unit)
 
     bottom, top = shown(low), shown(high)
+    if bottom is None or top is None:
+        span = readable_span(parameter, unit)
+        if span is not None:
+            low, high = span
+            bottom, top = shown(low), shown(high)
     if bottom is None or top is None:
         raise Unsettable(
             f"{name} shows {parameter.str_for_value(low)} to {parameter.str_for_value(high)}, "

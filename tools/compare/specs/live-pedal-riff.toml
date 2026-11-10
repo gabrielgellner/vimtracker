@@ -35,26 +35,26 @@ Ableton Live's Pedal in its Overdrive and Distortion modes, the same samples int
 wet with its output at 0 dB and its Bass, Mid and Treble where they load.
 
 Our `Tone` is at its default, `80`, and `Amount` at its default, `40`, and its top, against \
-Pedal's Gain at 25 and 100%, unfitted. The shape and the level over time are compared with the \
+Pedal's Drive at 25 and 100%, unfitted. The shape and the level over time are compared with the \
 overall level difference taken out.
 """
 
 [[cases]]
 name = "overdrive-40"
 ours = { 1.distort.type = "Overdrive", 1.distort.amount = 0x40 }
-reference = { Type = "Overdrive", Gain = "25 %" }
+reference = { Type = "Overdrive", Drive = "25 %" }
 
 [[cases]]
 name = "overdrive-FF"
 ours = { 1.distort.type = "Overdrive", 1.distort.amount = 0xFF }
-reference = { Type = "Overdrive", Gain = "100 %" }
+reference = { Type = "Overdrive", Drive = "100 %" }
 
 [[cases]]
 name = "distortion-40"
 ours = { 1.distort.type = "Distortion", 1.distort.amount = 0x40 }
-reference = { Type = "Distortion", Gain = "25 %" }
+reference = { Type = "Distortion", Drive = "25 %" }
 
 [[cases]]
 name = "distortion-FF"
 ours = { 1.distort.type = "Distortion", 1.distort.amount = 0xFF }
-reference = { Type = "Distortion", Gain = "100 %" }
+reference = { Type = "Distortion", Drive = "100 %" }
