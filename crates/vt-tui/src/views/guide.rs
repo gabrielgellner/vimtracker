@@ -3,10 +3,11 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Clear, Paragraph};
 
 use crate::guides::Guide;
 use crate::theme;
+use crate::views;
 
 /// The widest the window gets, since long lines are hard to read.
 const WIDTH: u16 = 100;
@@ -39,9 +40,8 @@ pub fn draw(frame: &mut Frame, area: Rect, guide: Guide, scroll: usize) {
     frame.render_widget(Clear, window);
     frame.render_widget(
         Paragraph::new(lines).block(
-            Block::new()
+            views::window_border()
                 .style(theme::window())
-                .borders(Borders::ALL)
                 .title(format!(" {} ", guide.title()))
                 .title_bottom(" j k scroll  C-d C-u page  g G ends  ? guides  q close ")
                 .title_style(Style::new().add_modifier(Modifier::BOLD)),

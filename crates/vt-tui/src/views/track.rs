@@ -4,7 +4,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
@@ -25,6 +25,7 @@ use crate::track_page::{
     ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, ENVELOPES, EnvelopeField,
     FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
+use crate::views;
 use crate::views::meter::{hanging_cell, hanging_eighths};
 use crate::views::phrase::level_glyph;
 
@@ -804,8 +805,7 @@ fn curves(filter: u32, waveform: Option<u32>) -> Vec<Line<'static>> {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
     let area = if app.mode == Mode::Keys {
-        let block = Block::new()
-            .borders(Borders::ALL)
+        let block = views::window_border()
             .border_style(Style::new().fg(theme::YELLOW))
             .title(" Keys ");
         let inner = block.inner(area);
