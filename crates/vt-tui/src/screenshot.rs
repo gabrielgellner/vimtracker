@@ -19,6 +19,8 @@ const CELL_HEIGHT: f32 = 19.0;
 const FONT_SIZE: f32 = 15.0;
 /// Where the text sits in a cell, from its top.
 const BASELINE: f32 = 14.0;
+/// Where an underline is drawn, from a cell's top: a little under the text, as a font puts it.
+const UNDERLINE: f32 = BASELINE + 2.0;
 /// The fonts the picture asks for: ordinary monospace ones for the text, then Nerd Fonts, which a
 /// browser falls back to a character at a time for the icons the others don't have.
 const FONTS: &str = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', \
@@ -40,12 +42,14 @@ fn escaped(text: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// How one cell looks: its text colour, background, and whether it's bold.
+/// How one cell looks: its text colour, background, whether it's bold, and its underline's colour
+/// if it has one.
 #[derive(PartialEq)]
 struct Look {
     fg: String,
     bg: String,
     bold: bool,
+    underline: Option<String>,
 }
 
 fn look(buffer: &Buffer, x: u16, y: u16) -> Look {
@@ -58,6 +62,10 @@ fn look(buffer: &Buffer, x: u16, y: u16) -> Look {
         fg,
         bg,
         bold: cell.modifier.contains(Modifier::BOLD),
+        underline: cell
+            .modifier
+            .contains(Modifier::UNDERLINED)
+            .then(|| colour(cell.underline_color, cell.fg)),
     }
 }
 
@@ -172,6 +180,13 @@ pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
                     here.bg
                 );
             }
+            if let Some(line) = &here.underline {
+                let _ = writeln!(
+                    svg,
+                    r#"<rect x="{left}" y="{}" width="{run}" height="1" fill="{line}"/>"#,
+                    top + UNDERLINE
+                );
+            }
             if !text.trim().is_empty() {
                 let weight = if here.bold {
                     r#" font-weight="bold""#
@@ -240,6 +255,20 @@ mod tests {
             "the cursor's background"
         );
         assert!(svg.trim_end().ends_with("</svg>"));
+    }
+
+    #[test]
+    fn an_underline_is_drawn_in_its_own_colour_under_its_cells() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
+        let ruled = Style::new()
+            .add_modifier(Modifier::UNDERLINED)
+            .underline_color(theme::SURFACE1);
+        buffer.set_string(2, 1, "C-4", ruled);
+        let svg = to_svg(&buffer, &HashMap::new());
+        assert!(
+            svg.contains(r##"<rect x="18" y="35" width="27" height="1" fill="#51576d"/>"##),
+            "{svg}"
+        );
     }
 
     #[test]

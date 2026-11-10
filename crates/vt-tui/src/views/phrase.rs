@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_model::constants::{BEAT_STEPS, FX_SLOTS};
+use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS};
 use vt_model::selection::Scope;
 use vt_model::song::{Phrase, Track};
 use vt_model::step::{FxCommand, Mark, Note, Step};
@@ -43,6 +43,43 @@ const LENGTH_EMPTY: &str = "--";
 const NUDGE_EMPTY: &str = "  ";
 /// Where the first FX slot starts: after the note, velocity, nudge and gate cell with its length.
 const FX_START: usize = 18;
+
+/// Where a row falls in the bar: on the first step of a bar or of a beat, or between them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stress {
+    Bar,
+    Beat,
+    Step,
+}
+
+impl Stress {
+    /// The stress of a row that starts this many steps from the loop's start.
+    fn at(time: isize) -> Self {
+        if time.rem_euclid(BAR_STEPS as isize) == 0 {
+            Self::Bar
+        } else if time.rem_euclid(BEAT_STEPS as isize) == 0 {
+            Self::Beat
+        } else {
+            Self::Step
+        }
+    }
+
+    /// The rule under the row before one with this stress, which marks where its bar or beat
+    /// begins: brighter for a bar than a beat, as a DAW's grid draws them, and none between steps.
+    /// It's an underline, so it costs no row and moves nothing.
+    fn rule(self) -> Option<Style> {
+        let colour = match self {
+            Self::Bar => theme::OVERLAY0,
+            Self::Beat => theme::SURFACE1,
+            Self::Step => return None,
+        };
+        Some(
+            Style::new()
+                .add_modifier(Modifier::UNDERLINED)
+                .underline_color(colour),
+        )
+    }
+}
 
 /// A step's text on screen, naming a slot's settings from what's on this track.
 fn step_text(step: &Step, track: Option<&Track>) -> String {
@@ -372,6 +409,29 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Some(start)
         })
         .collect();
+    let extent = phrase.extent();
+    // Where a row falls in the bar: by when it starts while it plays, and by its number outside
+    // the loop, where it doesn't play.
+    let stress = |index: usize| {
+        let row = extent.row(index);
+        match usize::try_from(row).ok().and_then(|row| starts.get(row)) {
+            Some(start) if extent.plays(index) => Stress::at(*start as isize),
+            _ => Stress::at(row),
+        }
+    };
+    let stored = phrase.steps().len();
+    // The rule under a row, from the stress of the row after it. The loop's last row is followed
+    // by its first, which starts a bar, and the phrase's last row by nothing.
+    let rule_under = |index: usize| {
+        let next = index + 1;
+        if next >= stored {
+            None
+        } else if extent.plays(index) && !extent.plays(next) {
+            Stress::Bar.rule()
+        } else {
+            stress(next).rule()
+        }
+    };
     let body_width = phrase
         .steps()
         .iter()
@@ -380,9 +440,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
     let others = neighbours(app, room);
-    let extent = phrase.extent();
     let columns: Vec<_> = others.iter().map(|track| column(app, *track)).collect();
-    let stored = phrase.steps().len();
     // A short phrase still has rows for the longer tracks beside it.
     let rows = columns
         .iter()
@@ -548,10 +606,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         let marker = if playhead == Some(index) { ">" } else { " " };
         let plays = extent.plays(index);
-        let on_beat = match usize::try_from(row).ok().and_then(|row| starts.get(row)) {
-            Some(start) if plays => start.is_multiple_of(BEAT_STEPS),
-            _ => row.rem_euclid(BEAT_STEPS as isize) == 0,
-        };
+        let on_beat = stress(index) != Stress::Step;
         let number = match (plays, on_beat) {
             (true, true) => Style::new().fg(theme::YELLOW),
             (true, false) => Style::new().fg(theme::SUBTEXT1),
@@ -721,9 +776,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             });
             styles[first..last].fill(cursor_style);
         }
+        // The rule runs under the whole row, over whatever else its cells show.
+        let under = rule_under(index);
+        if let Some(under) = under {
+            for style in &mut styles {
+                *style = style.patch(under);
+            }
+        }
         spans.extend(spans_of(&shown, &styles));
         let padding = body_width.saturating_sub(text.len());
-        spans.push(Span::raw(" ".repeat(padding)));
+        spans.push(Span::styled(" ".repeat(padding), under.unwrap_or_default()));
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
         spans.extend(column_spans(&columns, &others, row, across));

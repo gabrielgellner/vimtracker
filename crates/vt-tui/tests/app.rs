@@ -7851,6 +7851,76 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
     assert_eq!(number_colour(6), beat, "row 06 starts at step 8");
 }
 
+/// The colour of the rule under a row of the phrase view's grid, at its first column, if it has one.
+fn rule_under(buffer: &ratatui::buffer::Buffer, y: u16) -> Option<ratatui::style::Color> {
+    let cell = &buffer[(9, y)];
+    cell.modifier
+        .contains(ratatui::style::Modifier::UNDERLINED)
+        .then_some(cell.underline_color)
+}
+
+#[test]
+fn a_rule_under_a_row_marks_where_the_next_beat_or_bar_begins() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 20");
+    app.top = 0;
+    let buffer = screen(&app);
+    let beat = Some(vt_tui::theme::SURFACE1);
+    let bar = Some(vt_tui::theme::OVERLAY0);
+    assert_eq!(rule_under(&buffer, 2), None, "row 01 is a step");
+    assert_eq!(rule_under(&buffer, 5), beat, "row 04 starts a beat");
+    assert_eq!(rule_under(&buffer, 13), beat, "row 0C starts a beat");
+    assert_eq!(rule_under(&buffer, 17), bar, "row 10 starts a bar");
+    assert_eq!(
+        rule_under(&buffer, 21),
+        None,
+        "nothing follows the last row"
+    );
+    // The rule runs under the whole row, its FX too.
+    let fx = &buffer[(40, 17)];
+    assert!(fx.modifier.contains(ratatui::style::Modifier::UNDERLINED));
+    assert_eq!(fx.underline_color, vt_tui::theme::OVERLAY0);
+}
+
+#[test]
+fn the_rules_follow_rows_that_last_several_pulses() {
+    let (mut app, _realtime) = app();
+    // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
+    press(&mut app, "lllrSGL2jrSGL2gg");
+    app.top = 0;
+    let buffer = screen(&app);
+    assert_eq!(rule_under(&buffer, 2), None, "row 01 starts at step 2");
+    assert_eq!(
+        rule_under(&buffer, 3),
+        Some(vt_tui::theme::SURFACE1),
+        "row 02 starts at step 4"
+    );
+    assert_eq!(rule_under(&buffer, 4), None, "row 03 starts at step 5");
+}
+
+#[test]
+fn the_loops_last_row_is_followed_by_a_bar() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 4");
+    press(&mut app, "2]l");
+    app.top = 0;
+    let buffer = screen(&app);
+    // Rows -02 and -01 come before the loop, which plays rows 00 to 03 of those kept.
+    assert_eq!(row_number_at(&buffer, 7), " 03");
+    let bar = Some(vt_tui::theme::OVERLAY0);
+    assert_eq!(
+        rule_under(&buffer, 3),
+        bar,
+        "row -01 is followed by the loop"
+    );
+    assert_eq!(
+        rule_under(&buffer, 7),
+        bar,
+        "the loop starts again after row 03"
+    );
+    assert_eq!(rule_under(&buffer, 4), None);
+}
+
 #[test]
 fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
     use vt_tui::views::status::{column_name, value_shown};

@@ -94,7 +94,8 @@ Here's a phrase with gates. Row 00 holds for 3 steps, then ties into row 01. Row
 plays twice, each note half its pulse long, row 03 is skipped, and row 04 rests for 2
 steps. The yellow numbers are
 beats, and they fall on the rows that start on a beat, however long the rows before
-them are.
+them are. A faint line under a row says a beat starts on the next, and a brighter one
+a bar.
 
 ![A phrase with a gate column](images/gates.svg)
 
