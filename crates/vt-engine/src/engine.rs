@@ -1379,7 +1379,7 @@ impl Engine {
                 let number = state.sample_number();
                 let playable = self.current.bank[usize::from(number)].as_deref()?;
                 let cut = state.sample_cut();
-                let slice = state.slice_number();
+                let slice = state.slice_number(playable, owner.setting(SettingId::SLICE));
                 (
                     playable.sample,
                     Some(number),

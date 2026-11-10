@@ -10,6 +10,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
+use crate::settings::SettingId;
 use crate::step::{
     FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
     Mark, Note, Step,
@@ -166,6 +167,19 @@ impl FromStr for FxSlot {
         };
         let command =
             FxCommand::from_key(key).ok_or_else(|| StepTextError::Command(key.to_owned()))?;
+        // An `SLI` can lock a slice by the letter naming it, as `slice:'a`.
+        if let Some(letter) = digits.strip_prefix('\'') {
+            let mut letters = letter.chars();
+            return match (letters.next(), letters.next(), mark) {
+                (Some(letter), None, Mark::Lock | Mark::Hold)
+                    if crate::bank::is_mark(letter)
+                        && command == FxCommand::Set(SettingId::SLICE) =>
+                {
+                    Ok(FxSlot::slice_by_mark(letter, mark))
+                }
+                _ => Err(bad()),
+            };
+        }
         let coarse = digits.get(..2).and_then(hex_byte).ok_or_else(bad)?;
         let fine = match digits.get(2..) {
             Some("") => 0,
@@ -191,11 +205,12 @@ impl FromStr for FxSlot {
 
 impl fmt::Display for FxSlot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.command {
-            Some(command) => write!(f, "{}:{:02X}", command.key(), self.coarse())?,
-            None => f.write_str("---")?,
+        match (self.command, self.slice_mark()) {
+            (Some(command), Some(letter)) => write!(f, "{}:'{letter}", command.key())?,
+            (Some(command), None) => write!(f, "{}:{:02X}", command.key(), self.coarse())?,
+            (None, _) => f.write_str("---")?,
         }
-        if self.fine() != 0 {
+        if self.fine() != 0 && self.slice_mark().is_none() {
             write!(f, "{:02X}", self.fine())?;
         }
         match self.mark {

@@ -126,6 +126,13 @@ pub enum Pick {
         slot: usize,
         number: u8,
     },
+    /// A slice for a step's `SLI` to lock by the letter naming it, in this FX column.
+    SliceMarkLock {
+        slot: usize,
+        letter: char,
+    },
+    /// The slice a letter names, to go to on the sample page, as `'a` goes.
+    Mark(char),
     /// Go to this track.
     Track(usize),
     /// What makes a track's sound.

@@ -1,8 +1,8 @@
 //! Slicing the sample the current track plays, from `:slice`: into so many of the same length, or
 //! back into one, and how one slice plays, its gain, pan, tune, reverse and fades. Each is one
 //! undo step on the bank entry, which every track playing it hears. And choosing a slice from a
-//! list, `K` on a step's `SLI` or the Sound page's `Slice`, and `g d` on a step's `SLI` to see it
-//! on the sample page.
+//! list, `K` on a step's `SLI` or the Sound page's `Slice`, by its number or by a letter naming it,
+//! and `g d` on a step's `SLI` to see it on the sample page.
 
 use vt_model::action::{Action, FieldValue};
 use vt_model::bank::BankEntry;
@@ -44,7 +44,7 @@ pub fn entry_of_step(step: Option<&Step>, own: u8) -> u8 {
 
 impl App {
     /// The bank entry the current track's sampler plays, before any step chooses another.
-    fn track_sample_number(&self) -> u8 {
+    pub(crate) fn track_sample_number(&self) -> u8 {
         self.song()
             .tracks
             .get(self.cursor.track)
@@ -54,7 +54,7 @@ impl App {
 
     /// The slice a change to one slice is to: the one the sample page's cursor is in, while it
     /// shows this entry, or else the one the track's `Slice` is on.
-    fn slice_here(&self, number: u8, entry: &BankEntry) -> usize {
+    pub(crate) fn slice_here(&self, number: u8, entry: &BankEntry) -> usize {
         let points = &entry.edit.points;
         let shown = self.sample_page.shown.map(|(shown, _)| shown);
         let page = self.view == View::Sample && shown == Some(number);
@@ -168,8 +168,8 @@ impl App {
         self.status = format!("{name}: slice {at:02X} plays {said}");
     }
 
-    /// An entry's slices as a list, each with its number and where it starts, as `03  0.214 s`,
-    /// or the entry as one, `00`, if it has none.
+    /// An entry's slices as a list, each with its number, the letters naming it and where it
+    /// starts, as `03  a  0.214 s`, or the entry as one, `00`, if it has none.
     fn slice_items(&self, number: u8, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
         let Some(entry) = self.song().bank.get(number) else {
             return vec![Item::new("00", pick(0)).meaning("No sample to slice")];
@@ -177,12 +177,22 @@ impl App {
         let points = &entry.edit.points;
         let file = self.file_of(entry);
         let length = file.map_or(u64::MAX, |(_, length)| length);
+        // The letters line up in a column as wide as the most any slice has, if any has one.
+        let letters = |at: usize| points.marks_of(at).into_iter().collect::<String>();
+        let widest = (0..points.slices.len())
+            .map(|at| letters(at).len())
+            .max()
+            .unwrap_or(0);
         (0..points.slice_count())
             .map(|at| {
                 let frames = points.slice_frames(at, length);
+                let named = match widest {
+                    0 => String::new(),
+                    widest => format!("  {:<widest$}", letters(at)),
+                };
                 let label = match file {
-                    Some((rate, _)) => format!("{at:02X}  {}", time(frames.start, rate)),
-                    None => format!("{at:02X}"),
+                    Some((rate, _)) => format!("{at:02X}{named}  {}", time(frames.start, rate)),
+                    None => format!("{at:02X}{named}"),
                 };
                 let item = Item::new(label, pick(at as u8));
                 match file {
@@ -223,8 +233,23 @@ impl App {
     }
 
     /// What the status line says of a step's `SLI`: which slice of the sample the step plays,
-    /// where it starts and how long it is.
-    pub fn slice_shown(&self, slice: u8) -> String {
+    /// where it starts and how long it is, and for one by a letter, which slice the letter names,
+    /// or that it names none, so the track's own plays.
+    pub fn slice_shown(&self, cell: FxSlot) -> String {
+        match (cell.slice_mark(), self.slice_of_lock(cell)) {
+            (Some(letter), Ok(slice)) => format!("'{letter} names {}", self.slice_said(slice)),
+            (Some(letter), Err(own)) => format!(
+                "'{letter} names no slice of {}, so the track's own plays: {}",
+                sample_text(self.song(), self.step_entry()),
+                self.slice_said(own)
+            ),
+            (None, _) => self.slice_said(cell.coarse()),
+        }
+    }
+
+    /// Which slice of the sample the step under the cursor plays this is, where it starts and how
+    /// long it is.
+    fn slice_said(&self, slice: u8) -> String {
         let number = self.step_entry();
         let Some(entry) = self.song().bank.get(number) else {
             return format!("{slice:02X}: no sample to slice");
@@ -275,24 +300,60 @@ impl App {
         }
     }
 
-    /// Choose the slice a step's `SLI` locks, from the slices of the sample the step plays.
+    /// Choose the slice a step's `SLI` locks, from the slices of the sample the step plays: first
+    /// by each letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before
+    /// it come and go, and then by number.
     pub(crate) fn open_slice_lock_picker(&mut self, slot: usize) {
         self.count = None;
         let current = self
             .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
+        let number = self.step_entry();
+        let mut items = self.mark_items(number, |letter| Pick::SliceMarkLock { slot, letter });
+        let named = items.len();
+        items.extend(self.slice_items(number, |number| Pick::SliceLock { slot, number }));
+        let at = match current.map(|cell| (cell.slice_mark(), cell.coarse())) {
+            Some((Some(letter), _)) => items[..named]
+                .iter()
+                .position(|item| item.pick == Pick::SliceMarkLock { slot, letter }),
+            Some((None, number)) => Some(named + usize::from(number).min(items.len() - named - 1)),
+            None => Some(named),
+        };
+        self.show_picker(Picker::new("Slice lock", items).opened_on(at));
+    }
+
+    /// Each letter naming a slice of an entry, in the order of their slices, as `'a  03  0.214 s`.
+    pub(crate) fn mark_items(&self, number: u8, pick: impl Fn(char) -> Pick) -> Vec<Item> {
+        let Some(entry) = self.song().bank.get(number) else {
+            return Vec::new();
+        };
+        let points = &entry.edit.points;
+        let file = self.file_of(entry);
+        let length = file.map_or(u64::MAX, |(_, length)| length);
+        points
+            .marks_in_order()
+            .into_iter()
+            .map(|(letter, at)| {
+                let frames = points.slice_frames(at, length);
+                let label = match file {
+                    Some((rate, _)) => format!("'{letter}  {at:02X}  {}", time(frames.start, rate)),
+                    None => format!("'{letter}  {at:02X}"),
+                };
+                Item::new(label, pick(letter)).meaning(format!("The slice named {letter}"))
+            })
+            .collect()
+    }
+
+    /// The mark an `SLI` in a slot has, if it has one, to keep as its value changes.
+    fn slice_lock_mark(&self, slot: usize) -> Mark {
+        self.current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
-            .map_or(0, |cell| cell.coarse());
-        let items = self.slice_items(self.step_entry(), |number| Pick::SliceLock { slot, number });
-        let at = usize::from(current).min(items.len() - 1);
-        self.show_picker(Picker::new("Slice lock", items).opened_on(Some(at)));
+            .map_or(Mark::default(), |cell| cell.mark)
     }
 
     /// Put a chosen slice in a slot as an `SLI`, keeping its mark.
     pub(crate) fn pick_slice_lock(&mut self, slot: usize, number: u8) {
-        let mark = self
-            .current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
-            .map_or(Mark::default(), |cell| cell.mark);
+        let mark = self.slice_lock_mark(slot);
         self.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(
             slot,
@@ -302,6 +363,33 @@ impl App {
                 mark,
             },
         ));
+    }
+
+    /// Put a slice chosen by a letter in a slot as an `SLI 'a`, keeping its mark.
+    pub(crate) fn pick_slice_mark_lock(&mut self, slot: usize, letter: char) {
+        let mark = self.slice_lock_mark(slot);
+        self.cursor.field = Field::FxValue(slot);
+        self.set_field(FieldValue::Slot(slot, FxSlot::slice_by_mark(letter, mark)));
+    }
+
+    /// The slice an `SLI` plays of the sample the step under the cursor plays, by its number: the
+    /// one its letter names, if it's by a letter. A letter naming none plays the track's own
+    /// `Slice`, which comes back as an error with it.
+    pub(crate) fn slice_of_lock(&self, cell: FxSlot) -> Result<u8, u8> {
+        let Some(letter) = cell.slice_mark() else {
+            return Ok(cell.coarse());
+        };
+        let own = self
+            .song()
+            .tracks
+            .get(self.cursor.track)
+            .map_or(0, |track| track.setting(SettingId::SLICE));
+        self.song()
+            .bank
+            .get(self.step_entry())
+            .and_then(|entry| entry.edit.points.marked(letter))
+            .map(|number| number as u8)
+            .ok_or(own)
     }
 
     /// `g d` on a step's `SLI` value: the sample page on the slice it locks, of the sample the step
@@ -320,9 +408,10 @@ impl App {
         let track = self.cursor.track;
         self.jump_to_view(View::Sample);
         self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));
+        let slice = self.slice_of_lock(cell).unwrap_or_else(|own| own);
         match self.sample_page_here() {
             Ok(shown) => {
-                let slice = usize::from(cell.coarse());
+                let slice = usize::from(slice);
                 let points = &shown.entry.edit.points;
                 let frames = points.slice_frames(slice, shown.length());
                 self.sample_page.show_frame(frames.start, shown.length());

@@ -19,7 +19,7 @@ use crate::input::mode::{Mode, View};
 use crate::kitty;
 use crate::sample_page::{SamplePage, Shown};
 use crate::sample_wave::{
-    END_COLOR, LOOP_COLOR, POINT_PIXELS, SLICE_COLOR, SLICE_PIXELS, START_COLOR,
+    END_COLOR, LOOP_COLOR, MARK_COLOR, POINT_PIXELS, SLICE_COLOR, SLICE_PIXELS, START_COLOR,
 };
 use crate::slicing::pan_text;
 use crate::theme;
@@ -359,7 +359,8 @@ pub fn cursor_column() -> Color {
 }
 
 /// The ruler: each point's mark in its colour, over the column it's in, each slice's number in
-/// hex before its mark where there's room, as Vim numbers lines, and the time at round steps
+/// hex before its mark where there's room, as Vim numbers lines, the letters naming it after its
+/// mark, as `03▾a`, and the time at round steps
 /// where there's room after that, faint. With the pictures drawn, the terminal places each mark
 /// at its line's pixels, so the ruler leaves the columns the mark covers for it, and draws it as
 /// `▾` itself only while something is drawn over the page.
@@ -399,12 +400,18 @@ fn ruler(app: &App, shown: &Shown) -> Line<'static> {
     }
     // Each slice's number, in the two columns before its mark, or after it at the ruler's left
     // edge, if they're free.
-    let slices = marks.iter().filter(|mark| mark.kind == MarkKind::Slice);
-    for (number, mark) in slices.enumerate() {
+    let slices: Vec<&Mark> = marks
+        .iter()
+        .filter(|mark| mark.kind == MarkKind::Slice)
+        .collect();
+    // Where the letters naming each slice can start, after its mark or a number after it.
+    let mut after = vec![None; slices.len()];
+    for (number, mark) in slices.iter().enumerate() {
         let Some(column) = on_screen(mark.frame) else {
             continue;
         };
         let (first, last) = covers(mark, column);
+        after[number] = Some(last + 1);
         let from = first.checked_sub(2).unwrap_or(last + 1);
         if from + 2 > columns || taken[from..from + 2].iter().any(|taken| *taken) {
             continue;
@@ -412,6 +419,27 @@ fn ruler(app: &App, shown: &Shown) -> Line<'static> {
         let style = Style::new().fg(SLICE_COLOR);
         for (at, c) in (from..from + 2).zip(format!("{number:02X}").chars()) {
             cells[at] = (c, style);
+            taken[at] = true;
+        }
+        if from > last {
+            after[number] = Some(from + 2);
+        }
+    }
+    // The letters naming each slice, whole after its mark if they're free, once every number is
+    // in, so a slice's number before its mark wins over the letters of the slice before.
+    let points = &shown.entry.edit.points;
+    for (number, from) in after.into_iter().enumerate() {
+        let letters = points.marks_of(number);
+        let Some(from) = from.filter(|_| !letters.is_empty()) else {
+            continue;
+        };
+        let span = from..from + letters.len();
+        if span.end > columns || span.clone().any(|at| taken[at]) {
+            continue;
+        }
+        let style = Style::new().fg(MARK_COLOR);
+        for (at, letter) in span.zip(letters) {
+            cells[at] = (letter, style);
             taken[at] = true;
         }
     }
@@ -485,6 +513,13 @@ fn settings(shown: &Shown) -> Line<'static> {
         0 => "none".to_owned(),
         count => count.to_string(),
     }));
+    let marks = points.marks_in_order();
+    if !marks.is_empty() {
+        spans.push(Span::raw("   "));
+        spans.push(named("Marks", MARK_COLOR));
+        let letters: String = marks.iter().map(|(letter, _)| *letter).collect();
+        spans.push(Span::raw(letters));
+    }
     Line::from(spans)
 }
 
@@ -527,6 +562,20 @@ fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
         )),
         Span::styled(format!("slice {slice:02X}"), Style::new().fg(SLICE_COLOR)),
     ];
+    let letters: Vec<String> = shown
+        .entry
+        .edit
+        .points
+        .marks_of(slice)
+        .into_iter()
+        .map(|letter| format!("'{letter}"))
+        .collect();
+    if !letters.is_empty() {
+        spans.push(Span::styled(
+            format!("  {}", letters.join(" ")),
+            Style::new().fg(MARK_COLOR),
+        ));
+    }
     if let Some(own) = slice_own(shown, slice) {
         spans.push(Span::raw(format!("  {own}")));
     }

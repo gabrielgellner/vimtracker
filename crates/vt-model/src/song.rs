@@ -1633,7 +1633,10 @@ impl Song {
             let old = usize::from(slot.coarse()).min(last);
             slot.value = (u16::from(renumbered[old]) << 8) | u16::from(slot.fine());
         };
-        let is_slice = |slot: &FxSlot| slot.command == Some(FxCommand::Set(SettingId::SLICE));
+        // A lock by a letter follows its slice already, through the entry's marks.
+        let is_slice = |slot: &FxSlot| {
+            slot.command == Some(FxCommand::Set(SettingId::SLICE)) && slot.slice_mark().is_none()
+        };
         for track in &mut self.tracks {
             if track.machine != Machine::Sampler || !track.is_sound() {
                 continue;

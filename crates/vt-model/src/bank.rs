@@ -192,6 +192,27 @@ pub struct Points {
     /// The id the next new slice takes, so no id is used twice within the entry.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub next_id: SliceId,
+    /// The slices named by a letter, `a` to `z`, as Vim's marks name lines, so a step can lock a
+    /// slice by its name, `SLI 'a`, and keep playing it as slices before it come and go. One letter
+    /// names one slice, and a slice can have several.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub marks: BTreeMap<char, SliceId>,
+}
+
+/// The letters that can name a slice, as Vim's marks within a file are `a` to `z`.
+pub const MARK_LETTERS: std::ops::RangeInclusive<char> = 'a'..='z';
+
+/// How many letters can name slices.
+pub const MARK_COUNT: usize = 26;
+
+/// Whether a letter can name a slice.
+pub fn is_mark(letter: char) -> bool {
+    MARK_LETTERS.contains(&letter)
+}
+
+/// A mark's place among the letters, `a` first, if it's one.
+pub fn mark_index(letter: char) -> Option<usize> {
+    is_mark(letter).then(|| letter as usize - 'a' as usize)
 }
 
 /// A slice's own name within its entry, which it keeps as slices before it come and go and its
@@ -337,6 +358,10 @@ impl Points {
     /// gives the number each old slice has now, that of the slice holding the frame it started on,
     /// so steps that chose it keep playing the same sound, as Vim's marks follow their lines. With
     /// no slices before or after, there's no numbering to follow, and it gives none.
+    ///
+    /// Each mark moves the same way, to the slice holding its old slice's start. So a split keeps
+    /// the marks on the part that keeps the start, a join gives the slice that's left the marks of
+    /// the one it took in, and cutting into none drops them all.
     pub fn reslice(&mut self, starts: &[u64]) -> Option<Vec<u8>> {
         let mut starts = starts.to_vec();
         starts.sort_unstable();
@@ -358,6 +383,16 @@ impl Points {
             };
             self.slices.push(slice);
         }
+        let marks = std::mem::take(&mut self.marks);
+        if !self.slices.is_empty() {
+            self.marks = marks
+                .into_iter()
+                .filter_map(|(letter, id)| {
+                    let start = old.iter().find(|slice| slice.id == id)?.start;
+                    Some((letter, self.slices[self.slice_at(start)].id))
+                })
+                .collect();
+        }
         if old.is_empty() || self.slices.is_empty() {
             return None;
         }
@@ -366,6 +401,74 @@ impl Points {
                 .map(|slice| self.slice_at(slice.start) as u8)
                 .collect(),
         )
+    }
+
+    /// Where the slices would start with one more starting at this frame, splitting the slice it's
+    /// in: none if a slice already starts there or it's outside the entry. An entry with no slices
+    /// is one from its start, which the split cuts in two.
+    pub fn split_starts(&self, at: u64) -> Option<Vec<u64>> {
+        let inside = at > self.start && self.end.is_none_or(|end| at < end);
+        let mut starts: Vec<u64> = match self.slices.is_empty() {
+            true => vec![self.start],
+            false => self.slices.iter().map(|slice| slice.start).collect(),
+        };
+        if !inside || starts.contains(&at) {
+            return None;
+        }
+        starts.push(at);
+        starts.sort_unstable();
+        Some(starts)
+    }
+
+    /// Where the slices would start with a slice joined to the next, by its number: the same
+    /// without the next one's start, or none if there's no next.
+    pub fn join_starts(&self, number: usize) -> Option<Vec<u64>> {
+        self.slices.get(number + 1)?;
+        let mut starts: Vec<u64> = self.slices.iter().map(|slice| slice.start).collect();
+        starts.remove(number + 1);
+        Some(starts)
+    }
+
+    /// The number of the slice a letter names, if it names one that's still there.
+    pub fn marked(&self, letter: char) -> Option<usize> {
+        let id = *self.marks.get(&letter)?;
+        self.slices.iter().position(|slice| slice.id == id)
+    }
+
+    /// The letters naming a slice, by its number, in order.
+    pub fn marks_of(&self, number: usize) -> Vec<char> {
+        let Some(slice) = self.slices.get(number) else {
+            return Vec::new();
+        };
+        self.marks
+            .iter()
+            .filter(|(_, id)| **id == slice.id)
+            .map(|(letter, _)| *letter)
+            .collect()
+    }
+
+    /// Every mark naming a slice that's there, in the order the slices come and then by letter,
+    /// each with its slice's number.
+    pub fn marks_in_order(&self) -> Vec<(char, usize)> {
+        let mut marks: Vec<(char, usize)> = self
+            .marks
+            .keys()
+            .filter_map(|letter| Some((*letter, self.marked(*letter)?)))
+            .collect();
+        marks.sort_by_key(|(letter, number)| (*number, *letter));
+        marks
+    }
+
+    /// Name a slice, by its number, with a letter, which leaves whatever slice it named before.
+    /// Whether there's such a slice and the letter can name it.
+    pub fn set_mark(&mut self, letter: char, number: usize) -> bool {
+        match self.slices.get(number) {
+            Some(slice) if is_mark(letter) => {
+                self.marks.insert(letter, slice.id);
+                true
+            }
+            _ => false,
+        }
     }
 }
 

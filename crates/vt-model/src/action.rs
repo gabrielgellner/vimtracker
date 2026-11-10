@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
-use crate::bank::BankEntry;
+use crate::bank::{BankEntry, Points};
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
     MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
@@ -348,6 +348,20 @@ pub enum Action {
         number: u8,
         starts: Vec<u64>,
     },
+    /// Split the slice of a bank entry holding a frame of its file in two there, as
+    /// [`Points::split_starts`](crate::bank::Points::split_starts) does. The part before keeps the
+    /// slice's id and marks, and the steps' `SLI` locks follow their sound as a re-slice's do.
+    SplitSlice {
+        number: u8,
+        at: u64,
+    },
+    /// Join a bank entry's slice, by its number, to the next, which it takes in with its marks, as
+    /// [`Points::join_starts`](crate::bank::Points::join_starts) does, the steps' `SLI` locks
+    /// following their sound.
+    JoinSlices {
+        number: u8,
+        slice: u8,
+    },
     /// Name a track, or leave it with no name.
     SetTrackName {
         track: usize,
@@ -457,9 +471,33 @@ impl TrackControl {
     }
 }
 
+/// Cut a bank entry into slices starting where `starts` says from its points, moving its marks
+/// and the steps' `SLI` locks with their sound, as one change.
+fn reslice(
+    song: &mut Song,
+    number: u8,
+    starts: impl FnOnce(&Points) -> Result<Vec<u64>, EditError>,
+) -> Result<(), EditError> {
+    let mut entry = song
+        .bank
+        .get(number)
+        .cloned()
+        .ok_or(EditError::NoSample(number))?;
+    let starts = starts(&entry.edit.points)?;
+    let renumbered = entry.edit.points.reslice(&starts);
+    song.bank.set(number, Some(entry));
+    if let Some(renumbered) = renumbered {
+        song.renumber_slices(number, &renumbered);
+    }
+    Ok(())
+}
+
 /// An FX slot with its value within what its command takes, and a fine part only on what has
-/// one.
+/// one, or on an `SLI` locking a slice by its letter.
 fn snapped(slot: FxSlot) -> FxSlot {
+    if let Some(letter) = slot.slice_mark() {
+        return FxSlot::slice_by_mark(letter, slot.mark).with_valid_mark();
+    }
     let highest = slot.command.map_or(0xFF00, FxCommand::highest_value);
     let value = if slot.command.is_some_and(FxCommand::has_fine) {
         slot.value
@@ -526,6 +564,10 @@ pub enum EditError {
     NoTrack(usize),
     #[error("the bank has no sample {0:02X}")]
     NoSample(u8),
+    #[error("a slice already starts there, or it's outside the sample")]
+    Split,
+    #[error("slice {0:02X} has no slice after it to join")]
+    Join(u8),
     #[error("a reset needs at least 1 step")]
     Reset,
     #[error("a track's reset is from 1 to {MAX_TRACK_RESET} steps, or off")]
@@ -651,12 +693,14 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                             });
                         }
                     }
-                    // Typing coarse digits keeps the fine part.
+                    // Typing coarse digits keeps the fine part, and over an `SLI` by a letter
+                    // locks the slice by its number instead.
                     Fill::SlotValue(slot, value) => {
                         let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
-                        if slot.command.is_some() {
+                        if let Some(command) = slot.command {
+                            let fine = if command.has_fine() { slot.fine() } else { 0 };
                             *slot = snapped(FxSlot {
-                                value: u16::from(*value) << 8 | u16::from(slot.fine()),
+                                value: u16::from(*value) << 8 | u16::from(fine),
                                 ..*slot
                             });
                         }
@@ -1030,17 +1074,16 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             next.bank.set(*number, entry.clone());
         }
         Action::SetSlices { number, starts } => {
-            let mut entry = next
-                .bank
-                .get(*number)
-                .cloned()
-                .ok_or(EditError::NoSample(*number))?;
-            let renumbered = entry.edit.points.reslice(starts);
-            next.bank.set(*number, Some(entry));
-            if let Some(renumbered) = renumbered {
-                next.renumber_slices(*number, &renumbered);
-            }
+            reslice(&mut next, *number, |_| Ok(starts.clone()))?;
         }
+        Action::SplitSlice { number, at } => reslice(&mut next, *number, |points| {
+            points.split_starts(*at).ok_or(EditError::Split)
+        })?,
+        Action::JoinSlices { number, slice } => reslice(&mut next, *number, |points| {
+            points
+                .join_starts(usize::from(*slice))
+                .ok_or(EditError::Join(*slice))
+        })?,
         Action::SetTrackName { track, name } => {
             let owner = next
                 .tracks

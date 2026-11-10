@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
-use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN};
+use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, is_mark};
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
@@ -30,6 +30,16 @@ pub enum Line {
     SampleChange(SampleChange),
     /// Slice the sample this track plays, or change how one of its slices plays.
     Slice(SliceChange),
+    /// Name a slice of the sample this track plays with a letter: one by its number, or the one
+    /// here.
+    Mark {
+        letter: char,
+        slice: Option<u8>,
+    },
+    /// List the letters naming slices of the sample this track plays.
+    Marks,
+    /// Take these letters off the slices of the sample this track plays, or every letter.
+    DelMarks(Option<Vec<char>>),
     /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
     /// List the bank, to choose what this track plays.
@@ -206,6 +216,55 @@ fn sample(argument: &str) -> Result<Line, LineError> {
         .ok_or(LineError::SampleChange)
 }
 
+/// Read `:mark`'s arguments: a letter, and a slice's number in hex, as `SLI` shows it, or nothing
+/// for the slice here.
+fn mark(argument: &str) -> Result<Line, LineError> {
+    let (letter, slice) = match argument.split_whitespace().collect::<Vec<_>>()[..] {
+        [letter] => (letter, None),
+        [letter, slice] => (
+            letter,
+            Some(u8::from_str_radix(slice, 16).map_err(|_| LineError::Mark)?),
+        ),
+        _ => return Err(LineError::Mark),
+    };
+    let mut letters = letter.chars();
+    match (letters.next(), letters.next()) {
+        (Some(letter), None) if is_mark(letter) => Ok(Line::Mark { letter, slice }),
+        _ => Err(LineError::Mark),
+    }
+}
+
+/// Read `:delmarks`'s letters, as Vim's are: each alone, run together, or a range, `a-c`, with
+/// spaces between or not.
+fn delmarks(argument: &str) -> Result<Line, LineError> {
+    let text: Vec<char> = argument.chars().filter(|c| !c.is_whitespace()).collect();
+    let mut letters = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        let from = text[at];
+        if !is_mark(from) {
+            return Err(LineError::DelMarks);
+        }
+        match text.get(at + 1..at + 3) {
+            Some(['-', to]) if is_mark(*to) && from <= *to => {
+                letters.extend(from..=*to);
+                at += 3;
+            }
+            Some(['-', _]) => return Err(LineError::DelMarks),
+            _ => {
+                letters.push(from);
+                at += 1;
+            }
+        }
+    }
+    if letters.is_empty() {
+        return Err(LineError::DelMarks);
+    }
+    letters.sort_unstable();
+    letters.dedup();
+    Ok(Line::DelMarks(Some(letters)))
+}
+
 /// Read `:slice`'s arguments: a number of slices, `clear`, or one of a slice's own settings and
 /// its value, where no value plays it as the entry does.
 fn slice(argument: &str) -> Result<Line, LineError> {
@@ -274,6 +333,12 @@ pub enum LineError {
         ":slice takes a number of slices up to 256, clear, or gain dB, pan -50 to 50, tune st, reverse on or off, or fade in out, each alone to play as the sample"
     )]
     Slice,
+    #[error(
+        ":mark takes a letter, a to z, and a slice's number in hex, or none for the slice here"
+    )]
+    Mark,
+    #[error(":delmarks takes letters, as a b, abc or a-c, and :delmarks! takes every one away")]
+    DelMarks,
     #[error(":normalize takes a peak level in dBFS from -60 to 0, such as -0.3, or off")]
     Normalize,
     #[error(":track takes add [n] or del")]
@@ -472,7 +537,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 33] = [
+pub const COMMANDS: [Command; 37] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -520,6 +585,36 @@ pub const COMMANDS: [Command; 33] = [
         meaning: "Slice this track's sample into so many, or clear, or set how a slice plays",
         takes: Takes::Words(&SLICE_WORDS),
         parse: slice,
+    },
+    Command {
+        name: "mark",
+        meaning: "Name a slice of this track's sample with a letter, a to z",
+        takes: Takes::Nothing,
+        parse: mark,
+    },
+    Command {
+        name: "marks",
+        meaning: "List the letters naming slices of this track's sample",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "" => Ok(Line::Marks),
+            _ => Err(LineError::Unknown(format!("marks {argument}"))),
+        },
+    },
+    Command {
+        name: "delmarks",
+        meaning: "Take letters off the slices of this track's sample, as a-c",
+        takes: Takes::Nothing,
+        parse: delmarks,
+    },
+    Command {
+        name: "delmarks!",
+        meaning: "Take every letter off the slices of this track's sample",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "" => Ok(Line::DelMarks(None)),
+            _ => Err(LineError::DelMarks),
+        },
     },
     Command {
         name: "kit",
@@ -974,6 +1069,38 @@ mod tests {
         assert_eq!(parse("normalize -61"), Err(LineError::Normalize));
         assert_eq!(parse("normalize loud"), Err(LineError::Normalize));
         assert_eq!(parse("trim"), Ok(Line::Trim));
+    }
+
+    #[test]
+    fn mark_takes_a_letter_and_a_slice_and_delmarks_letters_as_vims_do() {
+        assert_eq!(
+            parse("mark a"),
+            Ok(Line::Mark {
+                letter: 'a',
+                slice: None
+            })
+        );
+        assert_eq!(
+            parse("mark z 0F"),
+            Ok(Line::Mark {
+                letter: 'z',
+                slice: Some(15)
+            })
+        );
+        assert_eq!(parse("mark A 3"), Err(LineError::Mark));
+        assert_eq!(parse("mark ab 3"), Err(LineError::Mark));
+        assert_eq!(parse("mark a 100"), Err(LineError::Mark));
+        assert_eq!(parse("mark"), Err(LineError::Mark));
+        assert_eq!(parse("marks"), Ok(Line::Marks));
+        let letters = |letters: &str| Ok(Line::DelMarks(Some(letters.chars().collect())));
+        assert_eq!(parse("delmarks a"), letters("a"));
+        assert_eq!(parse("delmarks a-c"), letters("abc"));
+        assert_eq!(parse("delmarks b a"), letters("ab"));
+        assert_eq!(parse("delmarks a-cx"), letters("abcx"));
+        assert_eq!(parse("delmarks c-a"), Err(LineError::DelMarks));
+        assert_eq!(parse("delmarks"), Err(LineError::DelMarks));
+        assert_eq!(parse("delmarks 3"), Err(LineError::DelMarks));
+        assert_eq!(parse("delmarks!"), Ok(Line::DelMarks(None)));
     }
 
     #[test]

@@ -683,6 +683,8 @@ impl App {
             }
             Pick::SampleLock { slot, number } => self.pick_sample_lock(slot, number),
             Pick::SliceLock { slot, number } => self.pick_slice_lock(slot, number),
+            Pick::SliceMarkLock { slot, letter } => self.pick_slice_mark_lock(slot, letter),
+            Pick::Mark(letter) => self.jump_to_mark(letter),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

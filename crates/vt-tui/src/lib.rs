@@ -20,6 +20,7 @@ pub mod input;
 pub mod jumping;
 pub mod kitty;
 pub mod loading;
+pub mod marking;
 pub mod meter;
 pub mod picking;
 pub mod places;
