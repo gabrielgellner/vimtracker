@@ -196,6 +196,9 @@ pub struct App {
     pub dirty: bool,
     pub samples: Arc<SamplePool>,
     pub handle: Handle,
+    /// The version last sent to the audio thread, whose bank entries the next keeps where they're
+    /// the same.
+    published: Option<Arc<Published>>,
     pub rate: u32,
     /// The audio output as it plays, and what the audio page chooses from.
     pub audio: AudioState,
@@ -403,6 +406,7 @@ impl App {
             dirty: false,
             samples,
             handle,
+            published: None,
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
@@ -751,10 +755,16 @@ impl App {
         self.top = start;
     }
 
-    /// Send the current version to the audio thread.
+    /// Send the current version to the audio thread. Only the bank entries that changed are
+    /// worked out again.
     pub fn publish(&mut self) {
-        let version = Published::new(Arc::clone(self.song()), Arc::clone(&self.samples));
-        self.handle.publish(Arc::new(version));
+        let version = Arc::new(Published::after(
+            Arc::clone(self.song()),
+            Arc::clone(&self.samples),
+            self.published.as_deref(),
+        ));
+        self.published = Some(Arc::clone(&version));
+        self.handle.publish(version);
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -2468,6 +2478,7 @@ impl App {
             Line::New(None) => self.open_naming_explorer(Purpose::Save, "new", String::new()),
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
+            Line::SampleChange(change) => self.change_sample(change),
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),

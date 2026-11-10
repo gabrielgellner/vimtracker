@@ -4,30 +4,24 @@ use std::sync::Arc;
 
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
-use vt_model::samples::{SampleId, SamplePool};
+pub use vt_model::playable::{LoopSpan, Playable, Span};
+use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
 use vt_model::speed::Speed;
 use vt_model::step::FxCommand;
 
-/// How a bank entry plays, worked out on the edit thread so the callback only has to look it up:
-/// the sample in the pool, and its gain and tune as numbers the voice uses.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Playable {
-    pub sample: SampleId,
-    /// What it multiplies the sound by.
-    pub gain: f32,
-    /// How much faster than its note it plays.
-    pub speed: f64,
-}
+/// Each bank number's entry, `00` to `FF`, worked out on the edit thread so the callback only has
+/// to look it up, if it has one and its file loaded.
+pub type Bank = Arc<[Option<Arc<Playable>>]>;
 
 /// A song version, its samples, and how each of the bank's entries plays.
 #[derive(Debug)]
 pub struct Published {
     pub song: Arc<Song>,
     pub samples: Arc<SamplePool>,
-    /// Each bank number's entry, `00` to `FF`, if it has one and its file loaded.
-    pub bank: Box<[Option<Playable>; 256]>,
+    /// Each bank number's entry, `00` to `FF`: always 256 places.
+    pub bank: Bank,
     /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
     /// nudge can play it early: as early as any groove the song can play lands a step, and further
     /// by the earliest nudge in the song, as shares of the longest step any track can play. With
@@ -49,20 +43,21 @@ pub struct Published {
 }
 
 impl Published {
-    /// Build a version, resolving the bank's paths on this thread, since the callback can't look
-    /// up by string.
+    /// Build a version, working out each of the bank's entries on this thread, since the callback
+    /// can't look up by string.
     pub fn new(song: Arc<Song>, samples: Arc<SamplePool>) -> Self {
-        let mut bank = Box::new([None; 256]);
-        for (number, entry) in song.bank.iter() {
-            bank[usize::from(number)] = entry
-                .source()
-                .and_then(|source| samples.id_of(&source.path))
-                .map(|sample| Playable {
-                    sample,
-                    gain: entry.edit.play.gain(),
-                    speed: entry.edit.play.speed(),
-                });
-        }
+        Self::after(song, samples, None)
+    }
+
+    /// Build a version after another, working out again only the bank's entries that changed, so
+    /// the rest are the very ones the last version had.
+    pub fn after(song: Arc<Song>, samples: Arc<SamplePool>, last: Option<&Published>) -> Self {
+        let bank = match last {
+            Some(last) if last.song.bank == song.bank && Arc::ptr_eq(&last.samples, &samples) => {
+                Arc::clone(&last.bank)
+            }
+            _ => bank(&song, &samples, last),
+        };
         let (groove_lead, groove_steps) = lead(&song);
         let earliest = earliest_nudge(&song);
         let (longest, speed_steps) = longest_step(&song);
@@ -83,6 +78,28 @@ impl Published {
             samples,
         }
     }
+}
+
+/// Work out the bank's entries, keeping the last version's for each one that's the same and plays
+/// the same sound.
+fn bank(song: &Song, samples: &SamplePool, last: Option<&Published>) -> Bank {
+    let mut bank = vec![None; 256];
+    for (number, entry) in song.bank.iter() {
+        let at = usize::from(number);
+        let kept = last
+            .filter(|last| last.song.bank.get(number) == Some(entry))
+            .and_then(|last| last.bank[at].as_ref())
+            .filter(|playable| {
+                samples
+                    .shared(playable.sample)
+                    .is_some_and(|frames| Arc::ptr_eq(frames, &playable.frames))
+            });
+        bank[at] = match kept {
+            Some(playable) => Some(Arc::clone(playable)),
+            None => Playable::of(entry, samples).map(Arc::new),
+        };
+    }
+    bank.into()
 }
 
 /// The longest step any track can play, in ticks: its own speed, or one a step's `RATE` chooses,

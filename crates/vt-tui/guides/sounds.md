@@ -264,49 +264,32 @@ background, so the list doesn't wait for it, and the last few are kept.
 
 | Command | Does |
 |---|---|
-| `:sample path/kick.wav` | Put one file in the bank and on this track |
-| `:sample path/drums` | Choose from one folder |
+| `:sample start 0.25` | Start 0.25 s in, or alone, at the start |
+| `:sample end 1.5` | End there, or alone, at the file's end |
+| `:sample loop 0.5 1 20ms` | Loop 0.5 s to 1 s, crossfading 20 ms |
+| `:sample loop off` | No loop of its own |
+| `:sample reverse` | Backwards, or forwards again: or `on`, `off` |
+| `:sample fade 10ms 0.2` | Fade in and out over these. `off` for none |
+| `:sample gain -3` | Its gain in dB, up to 24 either way |
+| `:sample tune 12 -20` | Its tune, in semitones and cents |
 
-Samples stay where they are, and the project refers to them, so moving a
-file can break the projects that use it. To gather every sample into one
-folder, ready to move or share, save a copy with `:w path`. A file is known
-by what's in it as well as where it is: when a project opens, one that's gone
-is looked for in the project's `samples` folder, and one that's changed since
-it joined the bank is reported on the status line.
+Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
+it never clicks. A loop with no crossfade of its own gets one as short. The track's own
+settings cut the sample further, below `Sample` on the Sound page, and a step can lock
+any of them:
 
-Press `;` in a phrase to hear the row. Notes you play while editing and
-auditions go through this track's filter, levels and sends.
+| Setting | Step | Does |
+|---|---|---|
+| `Start` | `STA` | Where a note starts: `80` is half way in |
+| `Length` | `SLEN` | How much plays from there. `FF` is all of it |
+| `Play` | `PLY` | `One-shot`, round its `Loop`, or `Ping-pong` |
 
-## The bank
-
-A project keeps its samples in a bank, numbered `01` to `FF`, as an Elektron's
-project keeps its samples in slots. A file joins it once, however many tracks
-and steps play it, and is loaded once. The sampler's `Sample`, on the Sound
-page, says which one a track plays, and `00`, `Off`, plays nothing, as a new
-track does.
-
-`Sample` is a setting like any other, so a step can lock it: `SMP 03` plays
-sample `03` for that step's note, and the next note goes back to the track's
-own, as an Elektron's sample lock does. One drum track can play a whole kit
-this way. `h` holds it until playing next starts from the top, a lane of it
-plays a pattern of samples, and an LFO or an envelope can move it, a whole
-sample for each step of depth, as each note starts with the one it's on.
-
-Each sample keeps how it plays, its gain and its tune, so a kit's sound plays
-the same on any track. The track's own `Level` and `Pitch` come on top.
-
-| Keys | Does |
-|---|---|
-| `K` on `Sample` | List the bank, with waveforms, then `Add a file` |
-| `=` `-` on `Sample` | The next or previous sample in the bank |
-| `x` on `Sample` | Off: no sample |
-| `K` on an `SMP`'s value | List the bank to lock one |
-| `:bank` | List the bank, to choose what this track plays |
-| `:bank clean` | Remove the samples nothing plays or locks |
-
-The status line says which sample a `Sample` or an `SMP` is on, and its file.
-Numbers stay where they are, so removing one never changes what a step plays.
-A full bank, 255 samples, takes no more until `:bank clean` makes room.
+`Loop` and `Ping-pong` go round the sample's own loop, or round all that plays if it
+has none, until the note ends. `Start` and `Length` are shares of the whole, counted
+from where the sample starts playing, so on a reversed sample they count back from
+its end. An LFO or an envelope can move them, read as each note starts, as an
+Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
+never reaches its end.
 
 ## Names
 

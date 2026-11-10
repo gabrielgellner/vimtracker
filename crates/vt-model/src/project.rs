@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::bank::ContentHash;
 use crate::constants::FORMAT_VERSION;
-use crate::sample::{SampleError, is_sample_file, load_sample};
+use crate::sample::{SampleError, is_sample_file};
 use crate::samples::SamplePool;
 use crate::song::Song;
 
@@ -270,11 +270,8 @@ pub fn load_samples(
         if pool.id_of(&source.path).is_some() {
             continue;
         }
-        match load_sample(&resolve_sample(folder, &source.path), rate) {
-            Ok(data) => {
-                pool.insert(&source.path, data);
-            }
-            Err(error) => errors.push(error),
+        if let Err(error) = pool.load(&source.path, &resolve_sample(folder, &source.path), rate) {
+            errors.push(error);
         }
     }
     errors

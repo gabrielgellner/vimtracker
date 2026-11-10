@@ -16,6 +16,7 @@ pub mod lfo;
 pub mod names;
 pub mod order;
 pub mod patch_names;
+pub mod playable;
 pub mod project;
 pub mod sample;
 pub mod samples;

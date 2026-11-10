@@ -142,6 +142,16 @@ impl Sounding {
 }
 
 impl Previews {
+    /// Have each voice and each note held for one follow a change, as a voice playing a bank entry
+    /// follows the entry's.
+    pub fn follow(&mut self, voice: impl Fn(&mut Voice), note: impl Fn(&mut NoteOn)) {
+        for preview in self.voices.iter_mut() {
+            voice(&mut preview.voice);
+            preview.playing.iter_mut().for_each(&note);
+            preview.under.iter_mut().flatten().for_each(&note);
+        }
+    }
+
     /// Start a note through a track, held until its key is let go if `on` has no timed release.
     ///
     /// `Acid` plays one note at a time, as the 303 does: a key pressed while another is down

@@ -3,8 +3,8 @@
 //! and each entry keeps how it plays, so a kit's sound plays the same on any track.
 //!
 //! An entry is metadata over audio that's never written: which file, found by its path and its
-//! content hash, and how it plays. Points, slices and the rest of the sample editor's work go in
-//! its [`SampleEdit`] later.
+//! content hash, where it starts, ends and loops, and how it plays. Slices and the rest of the
+//! sample editor's work go in its [`SampleEdit`] later.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -98,9 +98,24 @@ pub struct PlayParams {
     #[serde(default, skip_serializing_if = "is_zero_gain")]
     pub gain_db: f32,
     /// In semitones, up to a kit's `MAX_TUNE` either way.
-    #[serde(default, skip_serializing_if = "is_zero_tune")]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub tune: i8,
+    /// In cents, up to [`MAX_CENTS`] either way, on top of the tune.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cents: i8,
+    /// Whether it plays from its end back to its start.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub reverse: bool,
+    /// How long it fades in from its start and out to its end, in frames at its file's own rate.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub fade_in: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub fade_out: u32,
 }
+
+/// The most cents an entry's tune can be moved either way, short of a semitone, which is the
+/// tune's.
+pub const MAX_CENTS: i8 = 99;
 
 // The gain is never a NaN, so it's equal to itself.
 impl Eq for PlayParams {}
@@ -109,8 +124,9 @@ fn is_zero_gain(gain: &f32) -> bool {
     *gain == 0.0
 }
 
-fn is_zero_tune(tune: &i8) -> bool {
-    *tune == 0
+/// Whether a value is its type's default, so a song needn't store it.
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 impl PlayParams {
@@ -119,9 +135,43 @@ impl PlayParams {
         10_f32.powf(self.gain_db / 20.0)
     }
 
-    /// How much faster than its note the sample plays, for its tune.
+    /// How much faster than its note the sample plays, for its tune and cents.
     pub fn speed(self) -> f64 {
-        2_f64.powf(f64::from(self.tune) / 12.0)
+        let semitones = f64::from(self.tune) + f64::from(self.cents) / 100.0;
+        2_f64.powf(semitones / 12.0)
+    }
+}
+
+/// A loop inside an entry, from its start up to its end, in frames at the file's own rate. Whether
+/// it loops forward or ping-pongs is the track's `Play`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Loop {
+    pub start: u64,
+    /// One past its last frame.
+    pub end: u64,
+    /// How long the crossfade from its end into its start lasts, in frames at the file's own rate.
+    /// With none, a forward loop still has a short declick.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub crossfade: u32,
+}
+
+/// Where an entry starts, ends and loops, in frames at its file's own rate, so a point stays on
+/// the same sound whatever rate the program runs at.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Points {
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub start: u64,
+    /// One past its last frame, or none for the file's end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<u64>,
+    #[serde(default, rename = "loop", skip_serializing_if = "Option::is_none")]
+    pub loop_: Option<Loop>,
+}
+
+impl Points {
+    /// Whether they're the whole file, with no loop.
+    pub fn is_whole(&self) -> bool {
+        *self == Self::default()
     }
 }
 
@@ -129,6 +179,8 @@ impl PlayParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SampleEdit {
     pub timeline: Timeline,
+    #[serde(default, skip_serializing_if = "Points::is_whole")]
+    pub points: Points,
     #[serde(default, skip_serializing_if = "is_default_play")]
     pub play: PlayParams,
 }
@@ -162,6 +214,7 @@ impl BankEntry {
                         source: Source { path, hash },
                     }],
                 },
+                points: Points::default(),
                 play: PlayParams::default(),
             },
         }
@@ -356,9 +409,16 @@ mod tests {
         let play = PlayParams {
             gain_db: -6.0,
             tune: 12,
+            ..PlayParams::default()
         };
         assert!((play.gain() - 0.501).abs() < 1e-3);
         assert_eq!(play.speed(), 2.0);
+        let flat = PlayParams {
+            tune: 1,
+            cents: -50,
+            ..PlayParams::default()
+        };
+        assert!((flat.speed() - 2_f64.powf(0.5 / 12.0)).abs() < 1e-12);
         assert_eq!(PlayParams::default().gain(), 1.0);
         assert_eq!(PlayParams::default().speed(), 1.0);
     }

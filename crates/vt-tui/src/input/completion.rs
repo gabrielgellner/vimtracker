@@ -485,7 +485,10 @@ mod tests {
             texts(&found),
             ["sample", "set", "scale", "swing", "solo", "seed"]
         );
-        assert_eq!(found.candidates[0].meaning, "Load a sample on this track");
+        assert_eq!(
+            found.candidates[0].meaning,
+            "Load a sample on this track, or set where it starts, ends and loops"
+        );
         assert_eq!(tab("se", nowhere()), "se", "seed and set share only se");
         assert_eq!(texts(&complete("q", nowhere())), ["q", "q!"]);
         assert!(complete("zz", nowhere()).candidates.is_empty());

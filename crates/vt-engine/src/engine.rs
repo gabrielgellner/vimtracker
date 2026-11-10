@@ -30,12 +30,13 @@ use crate::dsp::smoother::{coefficient, fast_coefficient};
 use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
-use crate::published::{Playable, Published};
+use crate::published::{Bank, Published, Span};
 use crate::track_state::{
     Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part,
     PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
 };
-use crate::voice::NoteOn;
+use crate::voice::{Cut, NoteOn, Voice};
+use vt_model::samples::SampleId;
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
@@ -770,7 +771,31 @@ impl Engine {
         self.follow_levels();
         self.retune();
         self.find_listened();
+        if !Arc::ptr_eq(&old.bank, &self.current.bank) {
+            self.follow_bank();
+        }
         old
+    }
+
+    /// Have every note playing one of the bank's entries follow its changes, heard at once, as
+    /// moving a point is: notes sounding, and those waiting to sound or to sound again. One whose
+    /// entry now plays another file, or nothing, keeps playing what it was.
+    fn follow_bank(&mut self) {
+        let bank = &self.current.bank;
+        for track in self.tracks.iter_mut() {
+            follow_voice(&mut track.voice, bank);
+            follow_voice(&mut track.tail, bank);
+            if let Some(note) = &mut track.last_note {
+                follow_note(note, bank);
+            }
+            if let Some(delayed) = &mut track.delayed {
+                follow_note(&mut delayed.note, bank);
+            }
+        }
+        self.previews.follow(
+            |voice| follow_voice(voice, bank),
+            |note| follow_note(note, bank),
+        );
     }
 
     /// Note which tracks a compressor, Warps or a low-pass gate hears. One that's muted keeps playing, silently, so
@@ -1261,8 +1286,9 @@ impl Engine {
             synth: None,
             note: 60,
             gain: velocity_gain(DEFAULT_NOTE_VELOCITY),
-            sample_gain: 1.0,
-            speed: 1.0,
+            entry: None,
+            span: None,
+            cut: Cut::default(),
             accent: false,
             shape: Envelope::note_shape(),
             release_after: None,
@@ -1312,33 +1338,36 @@ impl Engine {
     }
 
     /// A note at a velocity, which sets its level and whether it's accented. A sampler plays the
-    /// bank entry its `SMP` is on as the note starts, and has nothing to play with none.
+    /// bank entry its `SMP` is on as the note starts, as its `STA`, `SLEN` and `PLY` cut it then,
+    /// and has nothing to play with none.
     fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;
         }
-        let (playable, synth) = match owner.machine {
+        let (sample, entry, span, cut, synth) = match owner.machine {
             Machine::Sampler => {
-                let number = self.tracks.get(track)?.sample_number();
-                (self.current.bank[usize::from(number)]?, None)
+                let state = self.tracks.get(track)?;
+                let number = state.sample_number();
+                let playable = self.current.bank[usize::from(number)].as_deref()?;
+                (
+                    playable.sample,
+                    Some(number),
+                    Some(playable.span()),
+                    state.sample_cut(),
+                    None,
+                )
             }
-            Machine::Plaits(voice) => (
-                Playable {
-                    sample: 0,
-                    gain: 1.0,
-                    speed: 1.0,
-                },
-                Some(voice),
-            ),
+            Machine::Plaits(voice) => (0, None, None, Cut::default(), Some(voice)),
         };
         Some(NoteOn {
-            sample: playable.sample,
+            sample,
             synth,
             note,
             gain: velocity_gain(velocity),
-            sample_gain: playable.gain,
-            speed: playable.speed,
+            entry,
+            span,
+            cut,
             accent: velocity >= ACCENT_VELOCITY,
             shape,
             release_after: None,
@@ -2531,6 +2560,26 @@ impl Engine {
             self.reading.add(mastered, out);
             *frame = out;
         }
+    }
+}
+
+/// The span a voice's entry plays now, if it still plays the voice's sample.
+fn span_now(bank: &Bank, entry: Option<u8>, sample: SampleId) -> Option<Span> {
+    let playable = bank.get(usize::from(entry?))?.as_deref()?;
+    (playable.sample == sample).then(|| playable.span())
+}
+
+/// Have a voice follow its entry's changes.
+fn follow_voice(voice: &mut Voice, bank: &Bank) {
+    if let Some(span) = span_now(bank, voice.entry(), voice.sample()) {
+        voice.respan(span);
+    }
+}
+
+/// Have a note waiting to start follow its entry's changes.
+fn follow_note(note: &mut NoteOn, bank: &Bank) {
+    if let Some(span) = span_now(bank, note.entry, note.sample) {
+        note.span = Some(span);
     }
 }
 

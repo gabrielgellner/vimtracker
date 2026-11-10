@@ -1001,17 +1001,77 @@ pub const BANK_CHOICES: [&str; 256] = {
     choices
 };
 
-/// The sampler's own, which it keeps whatever it plays.
-const SAMPLER: [Entry; 1] = [Entry {
-    key: "sample",
-    name: "Sample",
-    label: Some("SMP"),
-    kind: Kind::Stepped {
-        choices: &BANK_CHOICES,
-        wraps: false,
+/// How a sampler's note plays its sample: through once, round its loop, or back and forth in it,
+/// as [`PlayMode`] says.
+pub const PLAY_CHOICES: [&str; 3] = ["One-shot", "Loop", "Ping-pong"];
+
+/// How a sampler's note plays its sample, its `Play`. A loop is the entry's own if it has one,
+/// or else the whole of what plays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PlayMode {
+    /// From its start to its end, once.
+    #[default]
+    OneShot,
+    /// From its start, then round its loop until the note ends.
+    Loop,
+    /// From its start, then back and forth in its loop.
+    PingPong,
+}
+
+impl PlayMode {
+    /// The mode at a place in [`PLAY_CHOICES`], or the last for any past it.
+    pub fn from_index(index: u8) -> Self {
+        match index {
+            0 => Self::OneShot,
+            1 => Self::Loop,
+            _ => Self::PingPong,
+        }
+    }
+}
+
+/// A share of a sample, as `Start` and `Length` take it: `00` none of it and `FF` all of it.
+const fn share(key: &'static str, name: &'static str, label: &'static str, default: u8) -> Entry {
+    Entry {
+        key,
+        name,
+        label: Some(label),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
+        default,
+    }
+}
+
+/// How many settings the sampler has.
+pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
+
+/// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
+const SAMPLER: [Entry; 4] = [
+    Entry {
+        key: "sample",
+        name: "Sample",
+        label: Some("SMP"),
+        kind: Kind::Stepped {
+            choices: &BANK_CHOICES,
+            wraps: false,
+        },
+        default: 0,
     },
-    default: 0,
-}];
+    share("start", "Start", "STA", 0),
+    share("length", "Length", "SLEN", 0xFF),
+    Entry {
+        key: "play",
+        name: "Play",
+        label: Some("PLY"),
+        kind: Kind::Stepped {
+            choices: &PLAY_CHOICES,
+            wraps: false,
+        },
+        default: 0,
+    },
+];
 
 const fn voices_size() -> usize {
     let mut total = 0;
@@ -1287,6 +1347,12 @@ impl SettingId {
     pub const GLIDE: Self = Self(12);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
+    /// Where in its sample a sampler's note starts, as a share of the whole.
+    pub const SAMPLE_START: Self = Self(SAMPLER_START as u16 + 1);
+    /// How much of its sample a sampler's note plays from its start, as a share of the whole.
+    pub const SAMPLE_LENGTH: Self = Self(SAMPLER_START as u16 + 2);
+    /// How a sampler's note plays: a place in [`PLAY_CHOICES`].
+    pub const PLAY: Self = Self(SAMPLER_START as u16 + 3);
 
     /// How many settings there are.
     pub const COUNT: usize = SAMPLER_START + SAMPLER.len();
@@ -1334,6 +1400,15 @@ impl SettingId {
     pub const fn lfo(lfo: usize, setting: usize) -> Option<Self> {
         if lfo < LFOS_PER_TRACK && setting < LFO.len() {
             Some(Self((LFOS_START + lfo * LFO.len() + setting) as u16))
+        } else {
+            None
+        }
+    }
+
+    /// One of the sampler's settings, by its place among them: 0 is `Sample`.
+    pub const fn sampler(setting: usize) -> Option<Self> {
+        if setting < SAMPLER.len() {
+            Some(Self((SAMPLER_START + setting) as u16))
         } else {
             None
         }
@@ -1494,7 +1569,7 @@ mod tests {
                 (Owner::Slot { slot, effect }, at) => SettingId::slot(slot, effect, at),
                 (Owner::Lfo(lfo), at) => SettingId::lfo(lfo, at),
                 (Owner::Bypass(slot), _) => SettingId::bypass(slot),
-                (Owner::Sampler, _) => Some(SettingId::SAMPLE),
+                (Owner::Sampler, at) => SettingId::sampler(at),
             };
             assert_eq!(back, Some(id), "{}", id.key());
         }
@@ -1571,7 +1646,9 @@ mod tests {
             }
         }
         let mut seen = HashSet::new();
-        for label in track_and_events().chain(SettingId::SAMPLE.label()) {
+        let sampler = labels((0..SAMPLER.len()).filter_map(SettingId::sampler));
+        assert_eq!(sampler, ["SMP", "STA", "SLEN", "PLY"]);
+        for label in track_and_events().chain(sampler) {
             assert!(seen.insert(label.clone()), "{label} twice on the sampler");
         }
         for effect in Effect::ALL {

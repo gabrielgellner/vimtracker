@@ -223,19 +223,21 @@ const fn base(control: TrackControl) -> Control {
     Control::Base(control)
 }
 
-/// The Sound page of a track playing a sample, top to bottom, with output on the right.
-pub const SAMPLE_ROWS: [&[Control]; 11] = [
+/// The Sound page of a track playing a sample, top to bottom, with output on the right: its
+/// `Sample`, then the sampler's `Start`, `Length` and `Play`, as a synth's settings are.
+pub const SAMPLE_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
-    &[Control::FilterType, base(TrackControl::SendA)],
-    &[Control::FilterMode, base(TrackControl::SendB)],
-    &[base(TrackControl::Cutoff), base(TrackControl::Pitch)],
-    &[base(TrackControl::Resonance), Control::Groove],
-    &[base(TrackControl::Drive), Control::Choke],
-    &[base(TrackControl::LowCut), Control::GateLength],
-    &[base(TrackControl::HighCut), Control::Speed],
-    &[Control::Reset],
-    &[Control::Glide],
+    &[Control::Setting(1), base(TrackControl::SendA)],
+    &[Control::Setting(2), base(TrackControl::SendB)],
+    &[Control::Setting(3), base(TrackControl::Pitch)],
+    &[Control::FilterType, Control::Groove],
+    &[Control::FilterMode, Control::Choke],
+    &[base(TrackControl::Cutoff), Control::GateLength],
+    &[base(TrackControl::Resonance), Control::Speed],
+    &[base(TrackControl::Drive), Control::Reset],
+    &[base(TrackControl::LowCut), Control::Glide],
+    &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
 /// output on the right.

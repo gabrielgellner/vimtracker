@@ -8,7 +8,6 @@ use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::bank::{Bank, BankEntry, ContentHash, PlayParams, Source};
 use vt_model::kit::load_kit;
 use vt_model::project;
-use vt_model::sample::load_sample;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
@@ -82,10 +81,8 @@ impl App {
         if let Some(number) = found {
             return Ok((number, false));
         }
-        if pool.id_of(&stored).is_none() {
-            let data = load_sample(&resolved, self.rate).map_err(|error| error.to_string())?;
-            pool.insert(&stored, data);
-        }
+        pool.load(&stored, &resolved, self.rate)
+            .map_err(|error| error.to_string())?;
         let mut entry = BankEntry::of_file(stored, hash);
         if let Some(seed) = seed {
             entry.label = seed.label.clone();
@@ -170,6 +167,7 @@ impl App {
                 play: PlayParams {
                     gain_db: sound.gain,
                     tune: sound.tune,
+                    ..PlayParams::default()
                 },
             };
             let (number, new) = match self.bank_file(&sound.path, Some(&seed), &mut bank, &mut pool)
