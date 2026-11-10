@@ -13,8 +13,11 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
-use vt_model::sample::SampleData;
+use vt_model::analysis::Analysis;
+use vt_model::bank::{BankEntry, ContentHash, Loop, Points};
+use vt_model::sample::{Decoded, SampleData};
 use vt_model::samples::SamplePool;
+use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song, SynthVoice};
 use vt_tui::app::App;
 use vt_tui::explorer::Purpose;
@@ -47,6 +50,9 @@ struct Shot {
     voice: Option<SynthVoice>,
     /// Whether the first track plays a kick drum, so its Sound page shows a waveform.
     kick: bool,
+    /// Whether the first track plays a drum loop, analysed, with a start, an end and a loop, for
+    /// the sample page.
+    drums: bool,
 }
 
 const GATES: &[&str] = &[
@@ -72,12 +78,22 @@ const LANE: &[&str] = &[
 
 const SHOTS: &[Shot] = &[
     Shot {
+        name: "sample",
+        rows: GATES,
+        keys: " 0zizilllllzc",
+        play: 0,
+        voice: None,
+        kick: false,
+        drums: true,
+    },
+    Shot {
         name: "gates",
         rows: GATES,
         keys: "lll",
         play: 0,
         voice: None,
         kick: false,
+        drums: false,
     },
     Shot {
         name: "gate-list",
@@ -86,6 +102,7 @@ const SHOTS: &[Shot] = &[
         play: 0,
         voice: None,
         kick: false,
+        drums: false,
     },
     Shot {
         name: "lane",
@@ -94,6 +111,7 @@ const SHOTS: &[Shot] = &[
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,
+        drums: false,
     },
     Shot {
         name: "track-sound",
@@ -102,6 +120,7 @@ const SHOTS: &[Shot] = &[
         play: 0,
         voice: None,
         kick: true,
+        drums: false,
     },
     Shot {
         name: "track-fx",
@@ -110,6 +129,7 @@ const SHOTS: &[Shot] = &[
         play: 6,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,
+        drums: false,
     },
     Shot {
         name: "project",
@@ -118,6 +138,7 @@ const SHOTS: &[Shot] = &[
         play: 0,
         voice: None,
         kick: false,
+        drums: false,
     },
     Shot {
         name: "track-mod",
@@ -126,8 +147,46 @@ const SHOTS: &[Shot] = &[
         play: 0,
         voice: None,
         kick: false,
+        drums: false,
     },
 ];
+
+/// The sample page's shot is of the author's screen, kitty full screen on a MacBook.
+const SAMPLE_WIDTH: u16 = 163;
+const SAMPLE_HEIGHT: u16 = 42;
+
+/// The name the drum loop is played by, and the content it's analysed as.
+const DRUMS: &str = "drums.wav";
+const DRUMS_HASH: ContentHash = ContentHash(0xD2D2);
+
+/// Two bars of drums at 120 BPM, made here so the screenshot needs no file: a kick on each beat, a
+/// snare on two and four, and a closed hat between, in stereo with the hat to the right.
+fn drums() -> Decoded {
+    let beat = RATE as usize / 2;
+    let mut noise = 0x1234_5678_u32;
+    let mut samples = Vec::with_capacity(beat * 8 * 2);
+    for index in 0..beat * 8 {
+        noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let white = (noise >> 8) as f32 / (1 << 23) as f32 - 1.0;
+        let in_beat = (index % beat) as f32 / RATE as f32;
+        let in_half = (index % (beat / 2)) as f32 / RATE as f32;
+        let kick = (std::f32::consts::TAU * 55.0 * in_beat).sin() * (-in_beat * 9.0).exp();
+        let snare = if (index / beat) % 2 == 1 {
+            white * 0.5 * (-in_beat * 14.0).exp()
+        } else {
+            0.0
+        };
+        let hat = white * 0.25 * (-in_half * 60.0).exp();
+        let left = (kick * 0.8 + snare + hat * 0.4).clamp(-1.0, 1.0);
+        let right = (kick * 0.8 + snare + hat).clamp(-1.0, 1.0);
+        samples.extend([left, right]);
+    }
+    Decoded {
+        samples,
+        channels: 2,
+        rate: RATE,
+    }
+}
 
 /// The name the kick is played by.
 const KICK: &str = "kick.wav";
@@ -220,10 +279,10 @@ fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
 }
 
 /// Write the screen as it is now as an SVG, with the images the terminal would be sent in it.
-fn write(app: &mut App, now: Instant, height: u16, path: &Path) -> std::io::Result<()> {
+fn write(app: &mut App, now: Instant, size: (u16, u16), path: &Path) -> std::io::Result<()> {
     let mut sent = Vec::new();
     Graphics::new().sync(app, &mut sent)?;
-    let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, height));
+    let Ok(mut terminal) = Terminal::new(TestBackend::new(size.0, size.1));
     let Ok(_) = terminal.draw(|frame| draw_screen(frame, app, None, now));
     std::fs::write(
         path,
@@ -238,18 +297,43 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
         pool.insert(KICK, kick());
         song.sample_on(0, KICK);
     }
+    if shot.drums {
+        let decoded = drums();
+        pool.insert(
+            DRUMS,
+            SampleData {
+                frames: decoded.samples.as_chunks::<2>().0.to_vec(),
+            },
+        );
+        pool.insert_analysis(Arc::new(Analysis::of(DRUMS_HASH, &decoded)));
+        let mut entry = BankEntry::of_file(DRUMS, DRUMS_HASH);
+        entry.name = "Drums 120".to_owned();
+        let beat = u64::from(RATE / 2);
+        entry.edit.points = Points {
+            start: beat / 16,
+            end: Some(beat * 8 - beat / 4),
+            loop_: Some(Loop {
+                start: beat * 4,
+                end: beat * 6,
+                crossfade: 0,
+            }),
+        };
+        let number = song.bank.add(entry).expect("room in the bank");
+        song.tracks[0].machine = Machine::Sampler;
+        song.tracks[0].set_setting(SettingId::SAMPLE, number);
+    }
     // Taken before the app, so its first frame measures no time since the app began.
     let start = Instant::now();
     let (mut app, mut realtime) = app_on(song, pool);
     press(&mut app, shot.keys);
     let now = play(&mut app, &mut realtime, shot.play, start);
-    let height = if shot.name == "project" {
-        PROJECT_HEIGHT
-    } else {
-        HEIGHT
+    let size = match shot.name {
+        "project" => (WIDTH, PROJECT_HEIGHT),
+        "sample" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));
-    write(&mut app, now, height, &path)?;
+    write(&mut app, now, size, &path)?;
     Ok(path)
 }
 
@@ -310,7 +394,7 @@ fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
     press(&mut app, "kkkljjjljjj");
     app.finish_loading();
     let path = folder.join("explorer.svg");
-    write(&mut app, start, HEIGHT, &path)?;
+    write(&mut app, start, (WIDTH, HEIGHT), &path)?;
     std::fs::remove_dir_all(&home)?;
     Ok(path)
 }

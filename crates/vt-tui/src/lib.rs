@@ -27,6 +27,8 @@ pub mod probe;
 pub mod project_page;
 pub mod recording;
 pub mod run;
+pub mod sample_page;
+pub mod sample_wave;
 pub mod scope;
 pub mod screenshot;
 pub mod shaping;

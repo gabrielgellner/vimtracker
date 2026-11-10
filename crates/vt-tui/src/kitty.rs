@@ -16,7 +16,7 @@ use ratatui::style::Color;
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
-use vt_model::bank::BankEntry;
+use vt_model::bank::{BankEntry, ContentHash, Points};
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
@@ -26,6 +26,7 @@ use vt_model::song::{FilterMode, FilterType, Machine, Track};
 use crate::app::App;
 use crate::input::mode::View;
 use crate::input::picker::Shown;
+use crate::sample_wave::Drawing;
 use crate::theme;
 use crate::track_page::{Control, Page};
 use crate::views::curve::{envelope_columns, line_columns};
@@ -34,6 +35,7 @@ use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
     PREVIEW_WAVE_WIDTH,
 };
+use crate::views::sample::{WAVE_ROWS, overlaid};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
@@ -656,6 +658,79 @@ pub fn transmit(out: &mut impl Write, image: &Image) -> io::Result<()> {
     Ok(())
 }
 
+/// Send an image for the program to place itself with [`place_at`], rather than with placeholders.
+pub fn store(out: &mut impl Write, id: u32, png: &[u8]) -> io::Result<()> {
+    let encoded = STANDARD.encode(png);
+    let mut chunks = encoded.as_bytes().chunks(CHUNK).peekable();
+    let mut first = true;
+    while let Some(chunk) = chunks.next() {
+        let more = u8::from(chunks.peek().is_some());
+        let controls = if first {
+            format!("a=t,f=100,i={id},q=2,m={more}")
+        } else {
+            format!("q=2,m={more}")
+        };
+        command(out, &controls, chunk)?;
+        first = false;
+    }
+    Ok(())
+}
+
+/// Where an image is placed directly: at a character, this many pixels into it across, with this
+/// many of its rows of pixels shown from the top.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Placement {
+    pub column: u16,
+    pub row: u16,
+    pub offset: usize,
+    pub height: usize,
+}
+
+/// Place a stored image, or move it, as placing it again under the same placement id moves it.
+/// It's drawn above the text, and the terminal's cursor is put back where it was.
+pub fn place_at(out: &mut impl Write, id: u32, at: Placement) -> io::Result<()> {
+    let Placement {
+        column,
+        row,
+        offset,
+        height,
+    } = at;
+    write!(out, "\x1b7\x1b[{};{}H", row + 1, column + 1)?;
+    command(
+        out,
+        &format!("a=p,i={id},p=1,X={offset},h={height},C=1,z=1,q=2"),
+        &[],
+    )?;
+    out.write_all(b"\x1b8")
+}
+
+/// Take a placed image off the screen, keeping it to place again.
+pub fn unplace(out: &mut impl Write, id: u32) -> io::Result<()> {
+    command(out, &format!("a=d,d=i,i={id},p=1,q=2"), &[])
+}
+
+/// What the sample page's waveform or overview was drawn from, which is all that's compared to
+/// tell if it has to be drawn again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WaveKey {
+    hash: ContentHash,
+    /// Whether the file's frames were there to draw closer than the analysis goes.
+    loaded: bool,
+    points: Points,
+    first: u64,
+    zoom: u64,
+    columns: usize,
+    rows: usize,
+    cell: (usize, usize),
+}
+
+/// How wide the sample page's cursor is as a line, in pixels.
+const CURSOR_LINE_PIXELS: usize = 2;
+
+/// A character's size in pixels until the terminal says: the author's screen's, kitty full screen
+/// on a MacBook.
+pub const DEFAULT_CELL: (usize, usize) = (15, 39);
+
 /// The id the question about images asks with, which no image of the program's has.
 const QUERY_ID: u32 = 31;
 /// How long the terminal has to answer it. Both answer at once, so this is only for one that never
@@ -764,6 +839,14 @@ impl SlotDrawing {
     }
 }
 
+/// A theme colour as the bytes of a picture's palette.
+pub(crate) fn rgb(color: Color) -> [u8; 3] {
+    match color {
+        Color::Rgb(red, green, blue) => [red, green, blue],
+        _ => [255; 3],
+    }
+}
+
 /// The colour of a drawing, with the cursor on it or not.
 fn color(active: bool) -> [u8; 3] {
     let style = if active {
@@ -797,6 +880,17 @@ pub struct Graphics {
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// The picker's preview and its images.
     preview: Option<(Arc<Shown>, PreviewImages)>,
+    /// The sample page's waveform and its overview, with what each was drawn from.
+    sample_wave: Option<(WaveKey, u32)>,
+    sample_overview: Option<(WaveKey, u32)>,
+    /// The image of the sample page's cursor as a line, and how tall it is in pixels.
+    cursor_line: Option<(usize, u32)>,
+    /// Where the line is placed, if it's on screen.
+    cursor_placed: Option<Placement>,
+    /// A character's size in pixels, which the sample page's pictures are drawn for.
+    cell: (usize, usize),
+    /// The window's size in characters, as last told.
+    window: Option<(u16, u16)>,
     /// How many times the screen has been brought up to date, for how often the scope is.
     frames: usize,
     /// Images to forget once the screen has moved on from them.
@@ -815,9 +909,40 @@ impl Graphics {
             slots: [[None; 2]; INSERTS],
             scope: None,
             preview: None,
+            sample_wave: None,
+            sample_overview: None,
+            cursor_line: None,
+            cursor_placed: None,
+            cell: DEFAULT_CELL,
+            window: None,
             frames: 0,
             retired: Vec::new(),
         }
+    }
+
+    /// Draw the sample page's pictures for characters of this many pixels, as the terminal says
+    /// its window has.
+    pub fn use_cell(&mut self, cell: (usize, usize)) {
+        if cell.0 > 0 && cell.1 > 0 {
+            self.cell = cell;
+        }
+    }
+
+    /// Take in the window's size as the terminal says it, in characters and pixels. ratatui clears
+    /// a window that's changed size, and in kitty and Ghostty a clear frees an image that isn't
+    /// shown through placeholders, so the cursor's line is sent again.
+    pub fn use_window(&mut self, size: terminal::WindowSize) {
+        self.use_cell((
+            usize::from(size.width) / usize::from(size.columns.max(1)),
+            usize::from(size.height) / usize::from(size.rows.max(1)),
+        ));
+        let characters = (size.columns, size.rows);
+        if self.window.is_some_and(|was| was != characters) {
+            self.retired
+                .extend(self.cursor_line.take().map(|(_, id)| id));
+            self.cursor_placed = None;
+        }
+        self.window = Some(characters);
     }
 
     /// An id no image has at the moment.
@@ -840,6 +965,12 @@ impl Graphics {
                     .flatten()
                     .any(|image| image.1 == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
+                || self.sample_wave.as_ref().is_some_and(|image| image.1 == id)
+                || self
+                    .sample_overview
+                    .as_ref()
+                    .is_some_and(|image| image.1 == id)
+                || self.cursor_line.is_some_and(|image| image.1 == id)
                 || self
                     .preview
                     .iter()
@@ -867,11 +998,24 @@ impl Graphics {
                 Page::Fx => self.sync_fx(app, &track, out)?,
             }
         }
+        if app.view == View::Sample {
+            self.sync_sample(app, out)?;
+        } else {
+            app.sample_images = None;
+        }
         self.sync_preview(app, out)?;
         if app.scope_shown && self.frames.is_multiple_of(SCOPE_FRAMES) {
             self.sync_scope(app, out)?;
         }
         self.frames = self.frames.wrapping_add(1);
+        out.flush()
+    }
+
+    /// Place what the terminal places itself rather than through placeholders, once the screen
+    /// is drawn: the sample page's cursor as a line. After the drawing, so it goes where the page
+    /// is now, and so a clear as the window changes size has already happened.
+    pub fn place(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        self.sync_cursor_line(app, out)?;
         out.flush()
     }
 
@@ -1067,6 +1211,128 @@ impl Graphics {
         Ok(())
     }
 
+    /// Send the sample page's waveform and overview, if the terminal lacks them. Each is drawn
+    /// again only when what it shows changes: the zoom, the view, the points or the window, never
+    /// for the cursor alone.
+    fn sync_sample(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
+        let Ok(shown) = app.sample_page_here() else {
+            app.sample_images = None;
+            return Ok(());
+        };
+        let page = &app.sample_page;
+        let wave = WaveKey {
+            hash: shown.analysis.hash,
+            loaded: shown.frames.is_some(),
+            points: shown.entry.edit.points.clone(),
+            first: page.first_frame(),
+            zoom: page.zoom,
+            columns: page.columns,
+            rows: usize::from(WAVE_ROWS),
+            cell: self.cell,
+        };
+        let overview = WaveKey {
+            first: 0,
+            zoom: page.fit(shown.length()),
+            rows: 1,
+            ..wave.clone()
+        };
+        let mut ids = [0; 2];
+        for (index, key) in [wave, overview].into_iter().enumerate() {
+            let held = if index == 0 {
+                self.sample_wave.take()
+            } else {
+                self.sample_overview.take()
+            };
+            let (key, id) = match held {
+                Some((drawn, id)) if drawn == key => (drawn, id),
+                old => {
+                    // Retired first, so the new one can't be given its id.
+                    self.retired.extend(old.map(|(_, id)| id));
+                    let id = self.new_id();
+                    let drawing = Drawing {
+                        analysis: &shown.analysis,
+                        frames: shown
+                            .frames
+                            .as_ref()
+                            .map(|(data, rates)| (data.as_ref(), *rates)),
+                        points: &key.points,
+                        first: key.first,
+                        zoom: key.zoom,
+                        columns: key.columns,
+                        rows: key.rows,
+                        cell: key.cell,
+                        merged: index == 1,
+                    };
+                    let png = drawing.picture().png();
+                    self.send(out, id, &png, key.columns, key.rows)?;
+                    (key, id)
+                }
+            };
+            ids[index] = id;
+            if index == 0 {
+                self.sample_wave = Some((key, id));
+            } else {
+                self.sample_overview = Some((key, id));
+            }
+        }
+        app.sample_images = Some((ids[0], ids[1]));
+        Ok(())
+    }
+
+    /// Place the sample page's cursor as a thin line at its frame, or take it away when it isn't
+    /// on screen, is shown as its column, or something is drawn over the page. It's an image of its
+    /// own, sent once, and moving it is placing it again, so the waveform isn't sent again.
+    fn sync_cursor_line(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        let page = &app.sample_page;
+        let height = usize::from(WAVE_ROWS) * self.cell.1;
+        let across = self.cell.0 as u128;
+        let wanted = match &page.on_screen {
+            Some(screen)
+                if app.view == View::Sample
+                    && page.cursor_line
+                    && app.sample_images.is_some()
+                    && !overlaid(app, std::time::Instant::now()) =>
+            {
+                let pixels = u128::from(page.cursor.saturating_sub(page.first_frame())) * across
+                    / u128::from(page.zoom.max(1));
+                let column = screen.left + (pixels / across) as i32;
+                screen.columns.contains(&column).then(|| Placement {
+                    column: column as u16,
+                    row: screen.top,
+                    offset: (pixels % across) as usize,
+                    height: usize::from(screen.rows) * self.cell.1,
+                })
+            }
+            _ => None,
+        };
+        if wanted == self.cursor_placed {
+            return Ok(());
+        }
+        let Some(at) = wanted else {
+            if let Some((_, id)) = self.cursor_line {
+                unplace(out, id)?;
+            }
+            self.cursor_placed = None;
+            return Ok(());
+        };
+        let id = match self.cursor_line.take() {
+            Some((drawn, id)) if drawn == height => id,
+            old => {
+                self.retired.extend(old.map(|(_, id)| id));
+                let id = self.new_id();
+                let mut line =
+                    Picture::new(CURSOR_LINE_PIXELS, height, vec![rgb(theme::ROSEWATER)]);
+                line.pixels.fill(1);
+                store(out, id, &line.png())?;
+                id
+            }
+        };
+        self.cursor_line = Some((height, id));
+        place_at(out, id, at)?;
+        self.cursor_placed = Some(at);
+        Ok(())
+    }
+
     /// Send the Mod page's envelopes, if the terminal lacks them. The LFOs' shapes are glyphs.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let envelopes = track.envelopes;
@@ -1116,11 +1382,18 @@ impl Graphics {
         let waveform = self.waveform.iter().flatten().map(|image| &image.1);
         let slots = self.slots.iter().flatten().flatten().map(|image| &image.1);
         let scope = self.scope.iter().map(|image| &image.1);
+        let sample = self
+            .sample_wave
+            .iter()
+            .chain(&self.sample_overview)
+            .map(|image| &image.1)
+            .chain(self.cursor_line.iter().map(|image| &image.1));
         for id in held
             .chain(filter)
             .chain(waveform)
             .chain(slots)
             .chain(scope)
+            .chain(sample)
             .chain(&self.retired)
         {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;

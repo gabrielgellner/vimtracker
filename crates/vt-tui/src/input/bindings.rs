@@ -9,6 +9,7 @@ use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::sample_page::SampleKey;
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +138,8 @@ pub enum Cmd {
     Accent,
     /// Likewise, slide from the note into the next row's, with `HLD` on its gate.
     Slide,
+    /// A key of the sample page's own.
+    Sample(SampleKey),
 }
 
 /// One row of the table.
@@ -233,6 +236,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 5", Cmd::PickSample, "Choose this track's sample"),
     ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
     ("Space 8", Cmd::PickKit, "Choose a kit"),
+    (
+        "Space 0",
+        Cmd::ShowView(View::Sample),
+        "Sample page: this track's sample, big",
+    ),
     (
         "Space 7",
         Cmd::ShowView(View::Audio),
@@ -432,6 +440,11 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("b", Cmd::Bypass, "Bypass this slot, or bring it back"),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     (
+        "g d",
+        Cmd::OpenItem,
+        "On Sample, open the sample page on it",
+    ),
+    (
         "}",
         Cmd::Move(Motion::NextBeat),
         "Next slot, on the FX page",
@@ -505,6 +518,102 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ),
     ("d d", Cmd::RemoveRow, "Remove this section"),
     (";", Cmd::Audition, "Hear the start of this section"),
+];
+
+/// Keys for the sample page. A sample is a buffer and a cell column a character, so `h` and `l` move
+/// a column at the zoom shown, and the slice is the line.
+const SAMPLE: &[(&str, Cmd, &str)] = &[
+    ("h", Cmd::Move(Motion::Left), "A column earlier"),
+    ("l", Cmd::Move(Motion::Right), "A column later"),
+    ("0", Cmd::Move(Motion::RowStart), "Start of the slice"),
+    ("$", Cmd::Move(Motion::RowEnd), "End of the slice"),
+    (
+        "^",
+        Cmd::Sample(SampleKey::FirstSound),
+        "First sound in the slice",
+    ),
+    (
+        "g _",
+        Cmd::Sample(SampleKey::LastSound),
+        "Last sound in the slice",
+    ),
+    ("j", Cmd::Move(Motion::Down), "Next slice"),
+    ("k", Cmd::Move(Motion::Up), "Previous slice"),
+    (
+        "g g",
+        Cmd::Move(Motion::First),
+        "Start of the sample, or slice n",
+    ),
+    (
+        "G",
+        Cmd::Move(Motion::Last),
+        "End of the sample, or slice n",
+    ),
+    (
+        "}",
+        Cmd::Move(Motion::NextBeat),
+        "Next beat, from the start, at the tempo",
+    ),
+    (
+        "{",
+        Cmd::Move(Motion::PreviousBeat),
+        "Previous beat, from the start, at the tempo",
+    ),
+    (
+        "] ]",
+        Cmd::Sample(SampleKey::NextPoint),
+        "Next point: start, end or loop",
+    ),
+    (
+        "[ [",
+        Cmd::Sample(SampleKey::PreviousPoint),
+        "Previous point: start, end or loop",
+    ),
+    ("H", Cmd::ViewTop, "Cursor to the left of the view"),
+    ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),
+    ("L", Cmd::ViewBottom, "Cursor to the right of the view"),
+    ("C-d", Cmd::HalfPageDown, "Half a screen later"),
+    ("C-u", Cmd::HalfPageUp, "Half a screen earlier"),
+    ("C-e", Cmd::ScrollDown, "Scroll the view a column later"),
+    ("C-y", Cmd::ScrollUp, "Scroll the view a column earlier"),
+    (
+        "z z",
+        Cmd::Sample(SampleKey::CursorMiddle),
+        "View with the cursor in its middle",
+    ),
+    (
+        "z s",
+        Cmd::Sample(SampleKey::CursorLeft),
+        "View with the cursor at its left",
+    ),
+    (
+        "z e",
+        Cmd::Sample(SampleKey::CursorRight),
+        "View with the cursor at its right",
+    ),
+    (
+        "z i",
+        Cmd::Sample(SampleKey::ZoomIn),
+        "Zoom in by 2, on the cursor",
+    ),
+    (
+        "z o",
+        Cmd::Sample(SampleKey::ZoomOut),
+        "Zoom out by 2, on the cursor",
+    ),
+    ("z O", Cmd::Sample(SampleKey::ZoomAll), "The whole sample"),
+    (
+        "z v",
+        Cmd::Sample(SampleKey::ZoomSlice),
+        "The slice, filling the view",
+    ),
+    ("M-1", Cmd::NarrowGrid, "Zoom in by 2, as z i"),
+    ("M-2", Cmd::WidenGrid, "Zoom out by 2, as z o"),
+    (
+        "z c",
+        Cmd::Sample(SampleKey::CursorStyle),
+        "The cursor as a line, or as its column",
+    ),
 ];
 
 const AUDIO: &[(&str, Cmd, &str)] = &[
@@ -678,6 +787,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Project, PROJECT);
     add(Mode::Project, ADJUST);
     add(Mode::Project, EVERY_VIEW);
+    add(Mode::Sample, SAMPLE);
+    add(Mode::Sample, EVERY_VIEW);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);

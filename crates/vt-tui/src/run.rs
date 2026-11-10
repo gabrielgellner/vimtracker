@@ -345,8 +345,13 @@ fn main_loop(
         app.cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
         app.autosave_if_due(Instant::now());
+        // The sample page's waveform is drawn at one pixel for each of the screen's.
+        if let Ok(size) = terminal::window_size() {
+            graphics.use_window(size);
+        }
         graphics.sync(app, &mut std::io::stdout())?;
         terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
+        graphics.place(app, &mut std::io::stdout())?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
                 match event::read()? {
@@ -410,7 +415,12 @@ pub fn draw_screen(
     app.follow_cursor(usize::from(
         body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
     ));
-    let (view, meter) = views::meter::split(body);
+    // The sample page's waveform has the whole width, as a sample editor's does.
+    let (view, meter) = if app.view == View::Sample {
+        (body, None)
+    } else {
+        views::meter::split(body)
+    };
     match app.view {
         View::Chain => views::chain::draw(frame, view, app),
         View::Phrase => views::phrase::draw(frame, view, app),
@@ -418,6 +428,7 @@ pub fn draw_screen(
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Audio => views::audio::draw(frame, view, app),
         View::Project => views::project::draw(frame, view, app),
+        View::Sample => views::sample::draw(frame, view, app),
         View::Song => views::song::draw(frame, view, app),
     }
     // Inside the box the track page has while the keyboard plays it.

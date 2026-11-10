@@ -63,6 +63,7 @@ fn fx_name(app: &App, slot: usize) -> String {
 pub fn column_name(app: &App) -> String {
     match app.view {
         View::Audio => app.audio_row_here().name().to_owned(),
+        View::Sample => "Sample".to_owned(),
         View::Project => app.project_control().label().to_owned(),
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
@@ -379,7 +380,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::Mixer
             | Mode::Song
             | Mode::Audio
-            | Mode::Project => theme::BLUE,
+            | Mode::Project
+            | Mode::Sample => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,

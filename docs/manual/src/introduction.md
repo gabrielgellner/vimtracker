@@ -42,3 +42,8 @@ and on its FX page, a compressor's curve, with a meter beside it of how far it's
 down, an EQ's curve, and a limiter's meter:
 
 ![A track's FX page, with a compressor's curve and gain reduction, an EQ's curve and a limiter's gain reduction](images/track-fx.svg)
+
+and the sample page, on `Space 0`, with the track's sample as a big waveform, left above right,
+its start, end and loop marked, and an overview of the whole sample below with the part in view:
+
+![The sample page, with a drum loop's waveform, its start, end and loop, and the cursor's column](images/sample.svg)
