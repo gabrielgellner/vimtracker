@@ -1,0 +1,180 @@
+# Arturia's Acid V against our Acid: the Accent knob in sixteen steps over a plain note and
+# four accents in a row, a sixteenth apart at 120 BPM: how much louder and brighter an
+# accent is, and how much the accents build on each other (#295, decision 117).
+#
+#   uv run run.py specs/acid-accent.toml --report out/acid-accent.html
+
+rate = 48000
+duration = 1.35
+
+[[notes]]
+time = 0.05
+length = 0.0625
+note = 36
+velocity = 99
+accent = false
+
+[[notes]]
+time = 0.3
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.425
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.55
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.675
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x40
+acid.resonance = 0x80
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+cutoff = 0.25
+resonance = 0.5
+envelope_mod = 0.5
+decay = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Accent knob against Acid V's, accents in a row"
+knob = "acid.accent"
+reference_knob = "accent"
+measure = "accents"
+about = """
+Our Acid's Accent and Acid V's, each turned from bottom to top in sixteen even steps, with the \
+cutoff at a quarter and the other knobs at noon. Each step plays a plain C-2, a sixteenth's rest, \
+then four accents in a row, a sixteenth apart at 120 BPM. On a 303 an accent shortens the filter \
+envelope and adds a sweep from a capacitor that drains more slowly than accents come, so accents \
+in a row build up and accents apart don't.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default \
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator \
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our \
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so \
+a plain note is played at 99 and an accent at 0x70.
+"""
+
+[[cases]]
+name = "accent-00"
+ours = { acid.accent = 0x00 }
+reference = { accent = 0 }
+
+[[cases]]
+name = "accent-10"
+ours = { acid.accent = 0x10 }
+reference = { accent = 0.0625 }
+
+[[cases]]
+name = "accent-20"
+ours = { acid.accent = 0x20 }
+reference = { accent = 0.125 }
+
+[[cases]]
+name = "accent-30"
+ours = { acid.accent = 0x30 }
+reference = { accent = 0.1875 }
+
+[[cases]]
+name = "accent-40"
+ours = { acid.accent = 0x40 }
+reference = { accent = 0.25 }
+
+[[cases]]
+name = "accent-50"
+ours = { acid.accent = 0x50 }
+reference = { accent = 0.3125 }
+
+[[cases]]
+name = "accent-60"
+ours = { acid.accent = 0x60 }
+reference = { accent = 0.375 }
+
+[[cases]]
+name = "accent-70"
+ours = { acid.accent = 0x70 }
+reference = { accent = 0.4375 }
+
+[[cases]]
+name = "accent-80"
+ours = { acid.accent = 0x80 }
+reference = { accent = 0.5 }
+
+[[cases]]
+name = "accent-8F"
+ours = { acid.accent = 0x8F }
+reference = { accent = 0.5625 }
+
+[[cases]]
+name = "accent-9F"
+ours = { acid.accent = 0x9F }
+reference = { accent = 0.625 }
+
+[[cases]]
+name = "accent-AF"
+ours = { acid.accent = 0xAF }
+reference = { accent = 0.6875 }
+
+[[cases]]
+name = "accent-BF"
+ours = { acid.accent = 0xBF }
+reference = { accent = 0.75 }
+
+[[cases]]
+name = "accent-CF"
+ours = { acid.accent = 0xCF }
+reference = { accent = 0.8125 }
+
+[[cases]]
+name = "accent-DF"
+ours = { acid.accent = 0xDF }
+reference = { accent = 0.875 }
+
+[[cases]]
+name = "accent-EF"
+ours = { acid.accent = 0xEF }
+reference = { accent = 0.9375 }
+
+[[cases]]
+name = "accent-FF"
+ours = { acid.accent = 0xFF }
+reference = { accent = 1 }

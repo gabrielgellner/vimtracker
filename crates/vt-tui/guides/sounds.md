@@ -54,10 +54,10 @@ notes around `C-2`, with `Resonance` well up.
 | Setting | Does |
 |---|---|
 | `Wave` | The saw, or the square a 303 makes from it |
-| `Cutoff` | Where the filter sits, from 314 Hz to 2.4 kHz, as on a 303 |
+| `Cutoff` | Where the filter sits, 170 Hz to 1.45 kHz, moving most up top |
 | `Resonance` | How much the filter rings. It thins the bass as it rises |
 | `Env mod` | How far each note's envelope sweeps the cutoff |
-| `Decay` | How long that sweep takes to fall, from 200 ms to 2 s |
+| `Decay` | How long that sweep takes to fall, from 40 ms to 600 ms |
 | `Accent` | How much louder and brighter an accented note is |
 | `Slide` | How long a slide takes: 60 ms at `00`, as on a 303, to 360 ms |
 | `Drive` | How hard the saw drives the filter, up to 24 dB, for grit |

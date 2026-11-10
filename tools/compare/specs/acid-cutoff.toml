@@ -12,7 +12,7 @@ duration = 1.0
 time = 0.05
 length = 0.6
 note = 36          # C-2 in the program, as MIDI numbers it
-velocity = 100     # under an accent, which starts at 0x70
+velocity = 99      # under an accent on both sides: Acid V accents from 100, ours from 0x70
 
 [ours]
 machine = "acid"
@@ -43,6 +43,7 @@ decay = 0.5
 accent = 0.5
 distortion_dry_wet = 0.0
 sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
 
 [report]
 kind = "knob"

@@ -99,19 +99,36 @@ pub enum Units {
     Glide,
 }
 
-/// The acid voice's cutoff at either end of its range, in Hz, as Open303 measured a TB-303's.
-pub const ACID_LOWEST_CUTOFF: f32 = 313.8;
-pub const ACID_HIGHEST_CUTOFF: f32 = 2394.4;
+/// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
+pub const ACID_LOWEST_CUTOFF: f32 = 170.0;
+pub const ACID_HIGHEST_CUTOFF: f32 = 1450.0;
+/// The acid voice's Cutoff knob's taper: how far it's turned, to this power, is how far along its
+/// range in octaves the cutoff is.
+pub const ACID_CUTOFF_TAPER: f32 = 1.9;
 
-/// The acid voice's cutoff in Hz for a value on the `00` to `FF` scale, evenly in pitch.
-pub fn acid_cutoff_hz(value: f32) -> f32 {
-    ACID_LOWEST_CUTOFF * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).powf(value / 255.0)
+/// How far along its range in octaves the acid voice's cutoff is, from 0 to 1, for a value on the
+/// `00` to `FF` scale. It moves little over the knob's first quarter and most over its top half,
+/// as Acid V's does and as an audio-taper pot on a 303 would (decision 117).
+pub fn acid_cutoff_position(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0).powf(ACID_CUTOFF_TAPER)
 }
 
-/// The acid voice's filter envelope decay in ms, as a time constant: a TB-303's Decay knob, from
-/// 200 ms to 2 s, evenly in ratio.
+/// The acid voice's cutoff in Hz for a value on the `00` to `FF` scale.
+pub fn acid_cutoff_hz(value: f32) -> f32 {
+    ACID_LOWEST_CUTOFF
+        * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).powf(acid_cutoff_position(value))
+}
+
+/// The acid voice's filter envelope decay at either end of its Decay knob, as time constants in ms.
+pub const ACID_SHORTEST_DECAY: f32 = 40.0;
+pub const ACID_LONGEST_DECAY: f32 = 600.0;
+
+/// The acid voice's filter envelope decay in ms, as a time constant: a TB-303's Decay knob, evenly
+/// in ratio from `ACID_SHORTEST_DECAY` to `ACID_LONGEST_DECAY`, the span Acid V's knob sweeps over
+/// (decision 117). The 200 ms to 2 s given for a 303 doesn't say what it times, and read as time
+/// constants, as Open303 reads them, most of the knob fell slower than a sixteenth note lasts.
 pub fn acid_decay_ms(value: f32) -> f32 {
-    200.0 * 10_f32.powf(value / 255.0)
+    ACID_SHORTEST_DECAY * (ACID_LONGEST_DECAY / ACID_SHORTEST_DECAY).powf(value / 255.0)
 }
 
 /// How long the acid voice takes to slide to a note, in ms: a TB-303's 60 ms at `00`, up to the

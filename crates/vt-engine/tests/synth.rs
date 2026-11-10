@@ -359,8 +359,15 @@ fn pitch_of(out: &[f32], from: usize, to: usize) -> f32 {
 #[test]
 fn acid_accents_a_note_from_its_velocity() {
     // Velocities either side of the line sound nearly as loud as each other, but for the accent.
-    let plain = play(on(SynthVoice::Acid, &["C-2 6F", REST]), 2);
-    let accented = play(on(SynthVoice::Acid, &["C-2 70", REST]), 2);
+    // With the voice's `Accent` full, as at noon an accent adds only about a dB, as Acid V's does
+    // (decision 117).
+    let full = |rows: &[&str]| {
+        let mut song = on(SynthVoice::Acid, rows);
+        song.tracks[0].set_machine_value(5, 0xFF);
+        play(song, 2)
+    };
+    let plain = full(&["C-2 6F", REST]);
+    let accented = full(&["C-2 70", REST]);
     // Measured on average, as a resonant wave's peaks come and go with its filter.
     let louder = 20.0 * (rms(&accented, 0) / rms(&plain, 0)).log10();
     assert!(louder > 3.0, "{louder} dB");
@@ -410,7 +417,11 @@ fn acid_carries_its_accent_sweep_from_note_to_note() {
 
 #[test]
 fn acid_plays_one_held_note_at_a_time_and_slides_between_overlapping_keys() {
-    let mut engine = Engine::new(RATE, version(on(SynthVoice::Acid, &[REST])));
+    // With no resonance, so a low note's resonant peak at its second harmonic doesn't add zero
+    // crossings to count.
+    let mut song = on(SynthVoice::Acid, &[REST]);
+    song.tracks[0].set_machine_value(2, 0x00);
+    let mut engine = Engine::new(RATE, version(song));
     let listen = |engine: &mut Engine, steps: usize| {
         let mut out = vec![0.0; steps * STEP * 2];
         engine.process(&mut out);

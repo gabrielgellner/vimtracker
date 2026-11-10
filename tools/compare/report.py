@@ -15,6 +15,7 @@ and how to lay it out:
     window = [1.0, 2.0]   # seconds to measure a held note or a ringing filter over
     knob = "acid.cutoff"  # our knob a knob sweep turns, and the reference's
     reference_knob = "cutoff"
+    measure = "note"      # what a knob sweep measures: note, filter, decay or accents
 
 The kinds:
 
@@ -25,7 +26,8 @@ The kinds:
 - `oscillation`: a filter ringing on its own from one click, its pitch in cents off its cutoff.
 - `static`: a compressor's static curve, from stepped levels.
 - `timing`: a compressor's gain over a tone burst, with attack and release times.
-- `knob`: one knob swept on both sides, each step's spectral centroid and peak level.
+- `knob`: one knob swept on both sides, each step's spectral centroid and peak level, or with
+  `measure` its filter's peak and bass, its brightness's decay, or its accents (see `Knob`).
 """
 
 from __future__ import annotations
@@ -952,71 +954,184 @@ class Timing(Report):
 
 
 class Knob(Report):
-    """One knob swept on both sides."""
+    """One knob swept on both sides, measured as the spec's `[report] measure` says:
 
-    reading = (
-        "Each point is one step of the knob, placed by how far it's turned: ours from 00 to FF, the "
-        "reference's from 0 to 1. The left panel is the spectral centroid of the whole note, the "
-        "centre of its spectrum's weight, a measure of brightness; the right is its peak level. "
-        "Where the two curves part is where the knobs map differently."
-    )
+    - `note`, the default: the whole render's spectral centroid and peak level.
+    - `filter`: a held note's filter read from its harmonics over `window`, as `harmonics` does:
+      its peak's frequency and height over the bass, and the bass against the knob's bottom.
+    - `decay`: how the note's brightness falls, fitted with an exponential, for a decay knob.
+    - `accents`: a pattern's notes, a plain one first and then accents: the first accent's
+      brightness and level over the plain note's, and how much the last accent builds over the
+      first.
+    """
+
+    # Each measure's columns: (name, axis label, whether it's read in octaves, digits).
+    COLUMNS = {
+        "note": [
+            ("centroid Hz", "Spectral centroid, Hz", True, 0),
+            ("peak dBFS", "Peak level, dBFS", False, 1),
+        ],
+        "filter": [
+            ("peak Hz", "Filter peak, Hz", True, 0),
+            ("peak dB", "Peak over the bass, dB", False, 1),
+            ("bass dB", "Bass against the knob's bottom, dB", False, 1),
+        ],
+        "decay": [
+            ("decay ms", "Brightness decay, ms", True, 0),
+            ("fall octaves", "Brightness fall, octaves", False, 2),
+        ],
+        "accents": [
+            ("accent octaves", "First accent over the plain note, octaves", False, 2),
+            ("accent dB", "First accent over the plain note, dB", False, 1),
+            ("build octaves", "Last accent over the first, octaves", False, 2),
+        ],
+    }
+    READINGS = {
+        "note": (
+            "The left panel is the spectral centroid of the whole note, the centre of its "
+            "spectrum's weight, a measure of brightness; the right is its peak level."
+        ),
+        "filter": (
+            "Each step holds one note and reads its harmonics, each times its number so a "
+            "sawtooth's are level, once the filter's envelope has decayed. The panels are the "
+            "highest harmonic's frequency, where it stands a decibel over the bass; how far it "
+            "stands over the bass, the 2nd to 4th harmonics; and the bass against the knob's "
+            "bottom, so a fall is bass lost to resonance."
+        ),
+        "decay": (
+            "The note's brightness, its spectral centroid every 5 ms, is fitted with an "
+            "exponential falling to a resting brightness. The left panel is the fit's time "
+            "constant, which follows the filter envelope's decay; the right is how far it falls."
+        ),
+        "accents": (
+            "The pattern plays a plain note and then accents. Each note's brightness is the "
+            "centroid over its first 40 ms, and its level the RMS over its first 60 ms. The "
+            "panels are the first accent's brightness and level over the plain note's, and how "
+            "much brighter the last accent is than the first, which is the accent sweep building "
+            "up."
+        ),
+    }
+
+    @property
+    def kind(self) -> str:
+        return self.layout.get("measure", "note")
+
+    @property
+    def reading(self) -> str:
+        return (
+            "Each point is one step of the knob, placed by how far it's turned: ours from 00 to "
+            "FF, the reference's from 0 to 1. "
+            + self.READINGS[self.kind]
+            + " Where the two curves part is where the knobs map differently; the summary gives "
+            "how far apart they are on average over the knob's steps."
+        )
+
+    def measured(self, samples) -> dict:
+        rate, notes = self.spec.rate, self.spec.data.get("notes", [])
+        if self.kind == "filter":
+            start, end = self.layout.get("window", [1.0, 2.0])
+            expected = 440.0 * 2.0 ** ((notes[0]["note"] - 69) / 12)
+            return measure.filter_shape(samples, rate, start, end, expected)
+        if self.kind == "decay":
+            return measure.brightness_decay(samples, rate, notes[0]["time"])
+        if self.kind == "accents":
+            starts = [note["time"] for note in notes]
+            marks = measure.note_marks(samples, rate, starts)
+            accented = [m for m, note in zip(marks, notes) if note.get("accent")]
+            plain = next(m for m, note in zip(marks, notes) if not note.get("accent"))
+            first, last = accented[0], accented[-1]
+            return {
+                "accent octaves": math.log2(first["bright Hz"] / plain["bright Hz"]),
+                "accent dB": first["RMS dBFS"] - plain["RMS dBFS"],
+                "build octaves": math.log2(last["bright Hz"] / first["bright Hz"]),
+            }
+        return measure.summary(samples, rate)
 
     def build(self):
         ours_knob = self.layout["knob"]
         their_knob = self.layout.get("reference_knob")
+        columns = self.COLUMNS[self.kind]
         points = []
         for r in self.rendered:
-            values = {side: measure.summary(samples, self.spec.rate) for side, _, _, samples in self.sides(r)}
+            values = {side: self.measured(samples) for side, _, _, samples in self.sides(r)}
             points.append((r.name, self.settings[r.name][ours_knob], self.parameters[r.name].get(their_knob), values))
-        figure, (left, right) = plt.subplots(1, 2, figsize=(10.0, 3.2))
-        for side, colour in (("ours", OURS), ("reference", REFERENCE)):
-            chosen = [p for p in points if side in p[3]]
-            if not chosen:
-                continue
-            x = [p[1] / 255.0 if side == "ours" else p[2] for p in chosen]
-            left.plot(x, [p[3][side]["centroid Hz"] for p in chosen], color=colour, marker="o", markersize=3.5)
-            right.plot(x, [p[3][side]["peak dBFS"] for p in chosen], color=colour, marker="o", markersize=3.5)
-        left.set_yscale("log")
-        left.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 3.0, 5.0, 7.0)))
-        left.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v / 1000:g}k" if v >= 1000 else f"{v:g}"))
-        left.yaxis.set_minor_formatter(NullFormatter())
-        left.set_ylabel("Spectral centroid, Hz")
-        right.set_ylabel("Peak level, dBFS")
-        for panel in (left, right):
+        if self.kind == "filter":
+            # The bass against the same side's at the knob's bottom.
+            for side in ("ours", "reference"):
+                chosen = [p[3][side] for p in points if side in p[3]]
+                if chosen:
+                    bottom = chosen[0]["bass dB"]
+                    for values in chosen:
+                        values["bass dB"] -= bottom
+
+        figure, panels = plt.subplots(1, len(columns), figsize=(5.0 * len(columns), 3.2))
+        for (key, label, octaves, _), panel in zip(columns, panels):
+            for side, colour in (("ours", OURS), ("reference", REFERENCE)):
+                chosen = [p for p in points if side in p[3]]
+                if not chosen:
+                    continue
+                x = [p[1] / 255.0 if side == "ours" else p[2] for p in chosen]
+                panel.plot(x, [p[3][side][key] for p in chosen], color=colour, marker="o", markersize=3.5)
+            if octaves:
+                panel.set_yscale("log")
+                panel.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 3.0, 5.0, 7.0)))
+                panel.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v / 1000:g}k" if v >= 1000 else f"{v:g}"))
+                panel.yaxis.set_minor_formatter(NullFormatter())
+            panel.set_ylabel(label)
             panel.set_xlabel("How far the knob is turned")
             panel.set_xlim(-0.02, 1.02)
         figure.tight_layout()
 
+        def shown(value, digits):
+            return number(value, digits) if digits else (f"{value:.0f}" if math.isfinite(value) else "–")
+
         rows = []
         for name, ours_value, their_value, values in points:
-            row = [name, f"0x{ours_value:02X}", f"{values['ours']['centroid Hz']:.0f}", number(values["ours"]["peak dBFS"], 1)]
+            row = [name, f"0x{ours_value:02X}"] + [shown(values["ours"][key], digits) for key, _, _, digits in columns]
             if "reference" in values:
-                row += [f"{their_value:g}", f"{values['reference']['centroid Hz']:.0f}", number(values["reference"]["peak dBFS"], 1)]
+                row += [f"{their_value:g}"] + [shown(values["reference"][key], digits) for key, _, _, digits in columns]
             rows.append(row)
+
         summary = []
-        for side in ("ours", "reference"):
-            chosen = [p[3][side] for p in points if side in p[3]]
-            if not chosen:
-                continue
-            who = "Ours" if side == "ours" else self.reference_name
-            centroids = [c["centroid Hz"] for c in chosen]
-            peaks = [c["peak dBFS"] for c in chosen]
-            summary.append(html.escape(
-                f"{who}: the centroid runs from {hertz(centroids[0])} to {hertz(centroids[-1])}, "
-                f"{math.log2(max(centroids) / min(centroids)):.1f} octaves end to end, and the peak level "
-                f"from {number(peaks[0], 1)} to {number(peaks[-1], 1)} dBFS ({number(max(peaks) - min(peaks), 1)} dB between its lowest and highest)."
-            ))
-        headers = ["Case", f"Ours {ours_knob}", "Centroid Hz", "Peak dBFS"]
+        for key, label, octaves, digits in columns:
+            unit = "octaves" if octaves else label.rsplit(", ", 1)[-1]
+            ends = []
+            for side in ("ours", "reference"):
+                chosen = [p[3][side][key] for p in points if side in p[3]]
+                if chosen:
+                    who = "ours" if side == "ours" else self.reference_name
+                    ends.append(f"{who} from {shown(chosen[0], digits)} to {shown(chosen[-1], digits)}")
+            line = f"{label}: {', '.join(ends)}."
+            if self.reference_name:
+                apart = []
+                for _, _, _, values in points:
+                    a, b = values["ours"][key], values["reference"][key]
+                    if math.isfinite(a) and math.isfinite(b) and (not octaves or (a > 0 and b > 0)):
+                        apart.append(abs(math.log2(a / b)) if octaves else abs(a - b))
+                if apart:
+                    line += (
+                        f" The two are {number(float(np.mean(apart)), 2)} {unit} apart on average over "
+                        f"{len(apart)} steps, {number(max(apart), 2)} at most."
+                    )
+            summary.append(html.escape(line))
+
+        names = [label for _, label, _, _ in columns]
+        headers = ["Case", f"Ours {ours_knob}"] + names
         if self.reference_name:
-            headers += [f"{self.reference_name} {their_knob}", "Centroid Hz", "Peak dBFS"]
+            headers += [f"{self.reference_name} {their_knob}"] + names
+        notes = {
+            "note": "The centroid and peak are of the whole render.",
+            "filter": "Measured over the held note's harmonics; a dash where no harmonic stands a decibel over the bass.",
+            "decay": "From the brightness of one held note.",
+            "accents": "From each note's first 40 ms for its brightness and the RMS of its first 60 ms for its level.",
+        }
         return {
             "keys": [(c, "marker", w) for c, _, w in self.keys()],
             "summary": summary,
             "figures": [image(figure)],
             "numbers": table(headers, rows, numeric_from=1),
-            "numbers note": "The centroid and peak are of the whole render.",
+            "numbers note": notes[self.kind],
         }
-
 
 KINDS = {
     "response": Response,
