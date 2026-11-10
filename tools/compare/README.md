@@ -40,7 +40,7 @@ M27's specs, `specs/nuance-*.toml`, render the Acid against two references at on
 Acid V and AudioRealism's ABL3 (#347, decision 125). One command runs them all:
 
 ```sh
-uv run run.py --suite nuance     # about 3 minutes
+uv run run.py --suite nuance     # about 5 minutes
 ```
 
 It writes each spec's report into `out/nuance/`, with `index.html` beside them ranking our
@@ -97,6 +97,8 @@ reference plugin.
 | `nuance-legato` | two notes 60 ms apart to 20 ms overlapping, and slid | Acid V and ABL3 | the same, for where legato turns to a retrigger |
 | `nuance-gate` | one note held from a 128th to a quarter | Acid V and ABL3 | its level as it's held and its release (`gate`) |
 | `nuance-extremes` | every knob at its bottom or top, 32 ways, two plain notes and two accents | Acid V and ABL3 | as `nuance-accents` |
+| `nuance-chirp` | one plain or accented C-2 at Res 75, 85, 95 and 100%, Env Mod 50 and 100%, Cutoff low and mid, Decay short and long, 64 ways | Acid V and ABL3 | the resonant peak over time: its place, its height over the fundamental and the passband, the skirt an octave over it, and the note's start (`chirp`) |
+| `nuance-chirp-riff` | the Blade riff's Acid line from `confusion-pump-panel`, once through | Acid V and ABL3 | the same, note by note along the riff |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -135,6 +137,20 @@ brighter the second note starts than the first ended, which a retriggered envelo
 `gate` report holds one note for a different length in each case and reads its level at its end
 and its release, 20 and 40 dB down. Their levels are the RMS over one cycle of the note, which a
 wave's phase doesn't move.
+
+A `chirp` report follows each note's resonant peak as the filter envelope sweeps it down, the
+303's squelch at high Res (#348, #349). Every 2 ms it reads two cycles of the note through a Hann
+window, a length that puts each harmonic on its neighbours' zeros, so none leaks into the next,
+and takes each harmonic times its number, so a sawtooth's are level and what's left is the
+filter's shape (`measure.resonance_track`). The peak is the loudest harmonic above the
+fundamental, read between harmonics by a parabola in dB. Its height still wavers by about a dB as
+it crosses the harmonics, so each measure is a median over a window: the peak's place at 20, 60
+and 150 ms, how far it falls from 20 to 120 ms, its height over the fundamental at those times,
+its height over the harmonics an octave and more under it, the level an octave over it, which
+says how the filter falls past its resonance, and the note's first 20 ms over the 40 after. The
+harmonics are read at each side's own tuning, the layout's `tuning` in cents, as the sweeping
+filter's phase moves the pitch a tracker reads: on held notes with nothing sweeping, ours and
+Acid V play MIDI 36 at 65.41 Hz and ABL3 at 65.55, 3.8 cents sharp.
 
 ### The consensus
 

@@ -1,0 +1,607 @@
+# The resonant chirp at high Res, against Arturia's Acid V and AudioRealism's ABL3, for #348
+# and #349. Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-chirp.toml --report out/nuance-chirp.html
+
+rate = 48000
+duration = 0.75
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0x80
+acid.resonance = 0xBF
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.5
+resonance = 0.75
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.5
+resonance = 0.75
+envmod = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "chirp"
+title = "The resonant chirp at high Res, against Acid V and ABL3"
+columns = 8
+tuning = { ABL3 = 3.8 }
+about = """
+The chirp: with Res high and Env Mod up, the filter's resonant peak sweeps down as the \
+envelope falls, the 303's squelch. Each note's peak is tracked over time from \
+pitch-synchronous spectra, two cycles of the note at a time, every 2 ms: where it is, and \
+how far it stands over the fundamental and over the harmonics an octave and more under it.
+
+One plain or accented C-2 from rest in each case, held for 0.45 s: Res at \
+75, 85, 95 and 100%, Env Mod at 50 and 100%, Cutoff low, 20%, and mid, 50%, and Decay \
+short, 20%, and long, 80%, with Accent at noon. A case's name gives each: `R95-E100-Clow-\
+Dlong-accent` has Res at 95%, Env Mod full, Cutoff low and Decay long, accented.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "R75-E50-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E50-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E50-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E50-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E50-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E50-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E50-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E50-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E100-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E100-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E100-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E100-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.75, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.75, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E100-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E100-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R75-E100-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R75-E100-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xBF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.75, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.75, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E50-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E50-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E50-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E50-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E50-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E50-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E50-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E50-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E100-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E100-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E100-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E100-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.85, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.85, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E100-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E100-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R85-E100-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R85-E100-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xD9, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.85, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.85, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E50-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E50-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E50-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E50-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E50-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E50-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E50-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E50-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E100-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E100-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E100-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E100-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 0.95, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 0.95, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E100-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E100-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R95-E100-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R95-E100-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xF2, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 0.95, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 0.95, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E50-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E50-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E50-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E50-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E50-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E50-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 0.5, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 0.5, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E50-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E50-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0x80, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 0.5, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 0.5, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E100-Clow-Dshort-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E100-Clow-Dshort-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E100-Clow-Dlong-plain"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E100-Clow-Dlong-accent"
+ours = { acid.cutoff = 0x33, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.2, resonance = 1.0, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.2, resonance = 1.0, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E100-Cmid-Dshort-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E100-Cmid-Dshort-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0x33, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 1.0, decay = 0.2, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 1.0, decay = 0.2, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "R100-E100-Cmid-Dlong-plain"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 99, accent = false },
+]
+
+[[cases]]
+name = "R100-E100-Cmid-Dlong-accent"
+ours = { acid.cutoff = 0x80, acid.resonance = 0xFF, acid.envmod = 0xFF, acid.decay = 0xCC, acid.accent = 0x80 }
+references = { "Acid V" = { cutoff = 0.5, resonance = 1.0, envelope_mod = 1.0, decay = 0.8, accent = 0.5 }, ABL3 = { cutoff = 0.5, resonance = 1.0, envmod = 1.0, decay = 0.8, accent = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.45, note = 36, velocity = 112, accent = true },
+]

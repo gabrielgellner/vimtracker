@@ -13,8 +13,10 @@ const LADDER_SPEC: &str = include_str!("../../../tools/compare/specs/filter-ladd
 const TIMING_SPEC: &str = include_str!("../../../tools/compare/specs/comp-timing.toml");
 /// Specs in tools/compare, which must all parse and prepare, with the nuance suite's, whose cases
 /// play notes of their own and name two references.
-const SPECS: [&str; 24] = [
+const SPECS: [&str; 26] = [
     include_str!("../../../tools/compare/specs/nuance-accents.toml"),
+    include_str!("../../../tools/compare/specs/nuance-chirp.toml"),
+    include_str!("../../../tools/compare/specs/nuance-chirp-riff.toml"),
     include_str!("../../../tools/compare/specs/nuance-extremes.toml"),
     include_str!("../../../tools/compare/specs/nuance-gate.toml"),
     include_str!("../../../tools/compare/specs/nuance-knob-accent-apart.toml"),

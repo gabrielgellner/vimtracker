@@ -6,7 +6,7 @@ and how to lay it out:
 
     [report]
     kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity,
-                          # taper, notes, transition or gate
+                          # taper, notes, transition, gate or chirp
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -42,6 +42,8 @@ The kinds:
 - `transition`: two notes in each case, the glide, dip and retrigger between them, for slides and
   legato (see `Transition`).
 - `gate`: one note in each case, its level as it's held and its release (see `Gate`).
+- `chirp`: each note's resonant peak over time, its place and its height, as the filter envelope
+  sweeps it, for the 303's squelch at high Res (see `Chirp`).
 
 Every side is drawn on the same plots: ours, and each of the spec's references. A kind that gives
 its measurements as `measures` gets a consensus view as well (`consensus.py`): where the
@@ -2034,6 +2036,202 @@ class Gate(Report):
         }
 
 
+class Chirp(Report):
+    """Each note's resonant peak over time, the 303's chirp: where the peak is as the filter
+    envelope sweeps it down, and how far it stands over the fundamental and over the passband
+    under it, from `measure.resonance_track`. Each note is tracked from its start to its end, or
+    to the next note's start, at its own pitch on each side: the note's, tuned by the layout's
+    `tuning`, cents by side, such as `{ ABL3 = 3.8 }`. The oscillator's pitch is what the
+    harmonics sit on; a pitch tracker's reading moves as the sweeping filter's phase moves.
+
+    Each note gives the consensus: the peak's place 20 ms in, where the sweep starts once a
+    window of two cycles fits, and at 60 and 150 ms; how far it falls from 20 to 120 ms, in
+    octaves; its height over the fundamental at 20, 60 and 150 ms, the first being the ping; its
+    height over the passband over the first 200 ms; the level an octave over it, under it, over the
+    same time, the filter's skirt past its resonance; and the note's level over its first 20 ms
+    over the 40 ms after, which a resonance ringing out at the start raises. Each time is read as
+    the median over a window around it, so the height's wavering as the peak crosses the
+    harmonics evens out, and a window past a note's end is left out. The layout's `columns` says
+    how many panels go in a row, 3 if not given; with one, a case's notes are drawn along one
+    line, for a pattern.
+    """
+
+    reading = (
+        "Each panel is one case, the time in ms from the note's start, or along a pattern in "
+        "seconds. The top figure is where the resonant peak is, the loudest harmonic above the "
+        "fundamental, each harmonic taken times its number so a sawtooth's are level; the "
+        "bottom, how many dB it stands over the fundamental. Each point reads two cycles of the "
+        "note, every 2 ms, placed at their centre, so the first is a cycle in. A gap is where "
+        "no harmonic stands a dB over the fundamental. The chirp is the peak falling from where "
+        "the envelope throws it, standing high over the fundamental as it goes."
+    )
+    # The times after a note's start its peak is read at, in seconds, each the median of the frames
+    # within a window around it: from where the first frame falls, a cycle in, to 30 ms; 40 to
+    # 80 ms; and 120 to 180 ms.
+    AT = ((0.02, 0.01), (0.06, 0.02), (0.15, 0.03))
+    FALL = (0.02, 0.12)
+    PASSBAND = (0.02, 0.2)
+    PING = (0.0, 0.02, 0.06)
+
+    def tracked(self, samples, notes, side) -> list[dict]:
+        rate = self.spec.rate
+        tuning = self.layout.get("tuning", {}).get(side, 0.0)
+        out = []
+        for index, note in enumerate(notes):
+            following = notes[index + 1]["time"] if index + 1 < len(notes) else None
+            end = note["time"] + note["length"]
+            end = min(end, following) if following is not None else end
+            f0 = midi_hz(note["note"]) * 2.0 ** (tuning / measure.CENTS)
+            track = measure.resonance_track(samples, rate, note["time"], end, f0)
+            track["since"] = track["times"] - note["time"]
+            track["f0"] = f0
+            track["length"] = end - note["time"]
+            out.append(track)
+        return out
+
+    def at(self, track, key, time) -> float:
+        """The median of a track's frames within a window around a time after the note's start."""
+        (centre, half) = time if isinstance(time, tuple) else (time, 0.01)
+        if centre + half > track["length"]:
+            return float("nan")
+        near = np.abs(track["since"] - centre) <= half
+        values = track[key][near]
+        values = values[np.isfinite(values)]
+        return float(np.median(values)) if values.size else float("nan")
+
+    def note_measures(self, samples, note, track) -> dict:
+        found = {}
+        for time in self.AT:
+            found[f"Hz {time[0]}"] = self.at(track, "Hz", time)
+            found[f"dB {time[0]}"] = self.at(track, "over fundamental", time)
+        start, stop = (self.at(track, "Hz", time) for time in self.FALL)
+        found["fall"] = math.log2(start / stop) if start > 0 and stop > 0 else float("nan")
+        within = (track["since"] >= self.PASSBAND[0]) & (track["since"] <= self.PASSBAND[1])
+        passband = track["over passband"][within]
+        passband = passband[np.isfinite(passband)]
+        found["passband"] = float(np.mean(passband)) if passband.size else float("nan")
+        skirt = track["skirt"][within]
+        skirt = skirt[np.isfinite(skirt)]
+        found["skirt"] = float(np.mean(skirt)) if skirt.size else float("nan")
+        first, split, last = (note["time"] + t for t in self.PING)
+        signal = measure.mono(samples)
+        rate = self.spec.rate
+        level = lambda a, b: measure.db(float(np.sqrt(np.mean(signal[int(a * rate) : int(b * rate)] ** 2))))  # noqa: E731
+        found["ping"] = level(first, split) - level(split, last) if last - note["time"] <= track["length"] else float("nan")
+        return found
+
+    MEASURES = [
+        ("Hz 0.02", "the peak's place at 20 ms, Hz", "Hz"),
+        ("Hz 0.06", "the peak's place at 60 ms, Hz", "Hz"),
+        ("Hz 0.15", "the peak's place at 150 ms, Hz", "Hz"),
+        ("fall", "the sweep's fall from 20 to 120 ms, octaves", "octaves"),
+        ("dB 0.02", "the peak over the fundamental at 20 ms, dB", "dB"),
+        ("dB 0.06", "the peak over the fundamental at 60 ms, dB", "dB"),
+        ("dB 0.15", "the peak over the fundamental at 150 ms, dB", "dB"),
+        ("passband", "the peak over the passband, mean over 20 to 200 ms, dB", "dB"),
+        ("skirt", "an octave over the peak, under it, mean over 20 to 200 ms, dB", "dB"),
+        ("ping", "the first 20 ms's level over the next 40 ms', dB", "dB"),
+    ]
+
+    def build(self):
+        sides = ["ours"] + self.reference_names
+        names = [r.name for r in self.rendered]
+        found = {}
+        for r in self.rendered:
+            notes = sorted(self.spec.notes(r.case), key=lambda note: note["time"])
+            per_side = {}
+            for side, _, _, samples in self.sides(r):
+                tracks = self.tracked(samples, notes, side)
+                per_side[side] = (tracks, [self.note_measures(samples, n, t) for n, t in zip(notes, tracks)])
+            found[r.name] = (notes, per_side)
+
+        records = []
+        for name in names:
+            notes, per_side = found[name]
+            for index, note in enumerate(notes):
+                case = name if len(notes) == 1 else f"{name} {index + 1:02d}"
+                for key, label, unit in self.MEASURES:
+                    values = {side: per_side[side][1][index][key] for side in sides}
+                    if all(not math.isfinite(v) for v in values.values()):
+                        continue
+                    records.append({"measure": label, "case": case, "unit": unit, "values": values})
+
+        columns = int(self.layout.get("columns", 3))
+        pattern = columns == 1
+        figures = []
+        for key, label in (("Hz", "The peak's place, Hz"), ("over fundamental", "The peak over the fundamental, dB")):
+            if pattern:
+                figure, panels = panel_grid(len(names), 1, width=13.0, height=3.0)
+            else:
+                figure, panels = panel_grid(len(names), columns, width=2.1, height=1.6)
+            for name, panel in zip(names, panels):
+                notes, per_side = found[name]
+                for side in sides:
+                    for track in per_side[side][0]:
+                        x = track["times"] if pattern else track["since"] * 1000.0
+                        panel.plot(x, track[key], color=self.colour(side), linewidth=1.0 if pattern else 0.9)
+                if key == "Hz":
+                    panel.set_yscale("log")
+                    panel.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v / 1000:g}k" if v >= 1000 else f"{v:g}"))
+                if pattern:
+                    for note in notes:
+                        panel.axvline(note["time"], color=MUTED, linewidth=0.5, linestyle=":" if note.get("accent") is False else "-")
+                panel.set_title(name, loc="left", fontsize=7 if not pattern else 9)
+            for panel in panels[-columns:]:
+                panel.set_xlabel("Seconds" if pattern else "ms from the note's start")
+            panels[0].set_ylabel(label)
+            figure.tight_layout()
+            figures.append(f"<h3>{html.escape(label.split(',')[0])}</h3>{image(figure)}")
+
+        rows = []
+        for name in names:
+            notes, per_side = found[name]
+            for index, note in enumerate(notes):
+                for side in sides:
+                    m = per_side[side][1][index]
+                    rows.append([
+                        (name if len(notes) == 1 else f"{name} {index + 1:02d}") if side == "ours" else "",
+                        self.label(side),
+                        number(per_side[side][0][index]["f0"], 1),
+                        *[number(m[f"Hz {t[0]}"], 0) for t in self.AT],
+                        number(m["fall"], 2),
+                        *[number(m[f"dB {t[0]}"], 1) for t in self.AT],
+                        number(m["passband"], 1),
+                        number(m["skirt"], 1),
+                        number(m["ping"], 1, True),
+                    ])
+        import consensus
+
+        summary = []
+        for row in consensus.summarize([consensus.judge(r, self.reference_names) for r in records]):
+            if "score" not in row:
+                continue
+            unit = row["gap unit"]
+            summary.append(html.escape(
+                f"{row['measure']}: ours is {number(row['mean gap'], 2)} {unit} from the target on average, "
+                f"{'higher' if row['mean signed gap'] > 0 else 'lower'}, over the {row['agreed']} cases the references agree on."
+            ))
+        notes_key = [(MUTED, "solid", "an accented note's start"), (MUTED, "dotted", "a plain note's start")] if pattern else []
+        return {
+            "keys": self.keys() + notes_key,
+            "summary": summary,
+            "figures": figures,
+            "numbers": table(
+                ["Case", "Side", "Pitch Hz", "Peak at 20 ms, Hz", "60 ms", "150 ms", "Fall 20 to 120 ms, octaves",
+                 "Over the fundamental at 20 ms, dB", "60 ms", "150 ms", "Over the passband, dB", "An octave over, dB", "Ping dB"],
+                rows,
+                numeric_from=2,
+            ),
+            "numbers note": (
+                "The peak's place and height at 20, 60 and 150 ms are the median of the frames from 10 "
+                "to 30, 40 to 80 and 120 to 180 ms; the "
+                "passband's, the mean from 20 to 200 ms; the ping, the RMS over the note's first 20 ms "
+                "against the 40 ms after. A dash is a time past the note's end, or no peak."
+            ),
+            "measures": records,
+        }
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -2047,6 +2245,7 @@ KINDS = {
     "notes": Notes,
     "transition": Transition,
     "gate": Gate,
+    "chirp": Chirp,
 }
 
 STYLE = """

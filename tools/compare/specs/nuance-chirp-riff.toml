@@ -1,0 +1,114 @@
+# The Blade riff's notes, from confusion-pump-panel, against Arturia's Acid V and AudioRealism's
+# ABL3, for the chirp (#348, #349). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-chirp-riff.toml --report out/nuance-chirp-riff.html
+
+rate = 48000
+duration = 3.979
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0x40
+acid.resonance = 0xD0
+acid.envmod = 0xC8
+acid.decay = 0x68
+acid.accent = 0xC8
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.25098
+resonance = 0.815686
+envelope_mod = 0.784314
+decay = 0.407843
+accent = 0.784314
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.25
+resonance = 0.82
+envmod = 0.78
+decay = 0.41
+accent = 0.78
+
+[report]
+kind = "chirp"
+title = "The Blade riff's chirp, against Acid V and ABL3"
+columns = 1
+tuning = { ABL3 = 3.8 }
+about = """
+The chirp: with Res high and Env Mod up, the filter's resonant peak sweeps down as the \
+envelope falls, the 303's squelch. Each note's peak is tracked over time from \
+pitch-synchronous spectra, two cycles of the note at a time, every 2 ms: where it is, and \
+how far it stands over the fundamental and over the harmonics an octave and more under it.
+
+The Acid line of `confusion-pump-panel`, the Blade riff, once through its \
+two phrases at 136 BPM with its knobs: Cutoff `40`, Res `D0`, Env Mod `C8`, Decay `68` \
+and Accent `C8`. A `SGL` row is held to halfway through its last step, the Acid's 50% \
+gate, and a `HLD` row slides into the next.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "blade"
+notes = [
+  { time = 0.05, length = 0.165441, note = 56, velocity = 112, accent = true },
+  { time = 0.270588, length = 0.055147, note = 56, velocity = 112, accent = true },
+  { time = 0.380882, length = 0.330882, note = 56, velocity = 112, accent = true, slide = true },
+  { time = 0.711765, length = 0.441176, note = 28, velocity = 99, accent = false, slide = true },
+  { time = 1.152941, length = 0.275735, note = 31, velocity = 99, accent = false },
+  { time = 1.483824, length = 0.055147, note = 43, velocity = 99, accent = false },
+  { time = 1.594118, length = 0.165441, note = 45, velocity = 99, accent = false },
+  { time = 1.814706, length = 0.330882, note = 33, velocity = 112, accent = true, slide = true },
+  { time = 2.145588, length = 0.110294, note = 31, velocity = 112, accent = true, slide = true },
+  { time = 2.255882, length = 0.110294, note = 29, velocity = 112, accent = true, slide = true },
+  { time = 2.366176, length = 0.055147, note = 27, velocity = 99, accent = false },
+  { time = 2.476471, length = 0.386029, note = 43, velocity = 99, accent = false },
+  { time = 2.917647, length = 0.165441, note = 45, velocity = 112, accent = true },
+  { time = 3.138235, length = 0.386029, note = 45, velocity = 112, accent = true },
+]
