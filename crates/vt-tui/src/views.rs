@@ -3,6 +3,7 @@
 use ratatui::widgets::{Block, BorderType, Borders};
 
 pub mod audio;
+pub mod bar;
 pub mod chain;
 pub mod curve;
 pub mod guide;
@@ -17,6 +18,7 @@ pub mod shape;
 pub mod song;
 pub mod status;
 pub mod system;
+pub mod table;
 pub mod track;
 
 /// A window's border, all round, with rounded corners: `╭`, `╮`, `╰` and `╯`, U+256D to U+2570,

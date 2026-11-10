@@ -1967,7 +1967,7 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
     assert_eq!(column_name(&app), "Patch");
     assert_eq!(patch(&app), 0x20, "E.PIANO 1 to start");
     assert!(
-        track_text(&app)[3].contains("20 E.PIANO 1"),
+        track_text(&app)[3].contains("20   E.PIANO 1"),
         "{:?}",
         track_text(&app)
     );
@@ -1979,7 +1979,7 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
     assert_eq!(patch(&app), 0x1F);
     press(&mut app, "i00=");
     assert_eq!(patch(&app), 1, "one patch a step");
-    assert!(track_text(&app)[3].contains("01 Mooger Low"));
+    assert!(track_text(&app)[3].contains("01   Mooger Low"));
     press(&mut app, "i5F=");
     assert_eq!(patch(&app), 0x5F, "it stops at the last");
     press(&mut app, "i90");
@@ -2033,16 +2033,16 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
 
 #[test]
 fn bars_show_where_a_value_is() {
-    use vt_tui::views::track::{centre_bar, level_bar};
-    assert_eq!(level_bar(0x00), "         ");
-    assert_eq!(level_bar(0x01), "▏        ");
-    assert_eq!(level_bar(0x40), "██▎      ");
-    assert_eq!(level_bar(0x80), "████▌    ");
-    assert_eq!(level_bar(0xFE), "████████▉");
-    assert_eq!(level_bar(0xFF), "█████████");
-    assert_eq!(centre_bar(0x00), "│        ");
-    assert_eq!(centre_bar(0x80), "    │    ");
-    assert_eq!(centre_bar(0xFF), "        │");
+    use vt_tui::views::bar::{centre_bar, level_bar};
+    assert_eq!(level_bar(0x00, 9), "         ");
+    assert_eq!(level_bar(0x01, 9), "▏        ");
+    assert_eq!(level_bar(0x40, 9), "██▎      ");
+    assert_eq!(level_bar(0x80, 9), "████▌    ");
+    assert_eq!(level_bar(0xFE, 9), "████████▉");
+    assert_eq!(level_bar(0xFF, 9), "█████████");
+    assert_eq!(centre_bar(0x00, 9), "│        ");
+    assert_eq!(centre_bar(0x80, 9), "    │    ");
+    assert_eq!(centre_bar(0xFF, 9), "        │");
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     let text = track_text(&app).join("\n");
@@ -2053,7 +2053,9 @@ fn bars_show_where_a_value_is() {
 fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
     use ratatui::style::Style;
     use vt_tui::theme;
-    use vt_tui::views::track::bar_spans;
+    use vt_tui::views::bar::ValueBar;
+    let bar_spans =
+        |set, live, centred| ValueBar::new(set, 9).playing(live).centred(centred).spans();
     let text = |spans: &[ratatui::text::Span]| {
         spans
             .iter()
@@ -2093,9 +2095,11 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
 
 #[test]
 fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
-    use vt_tui::views::track::{bar_spans, level_bar};
+    use vt_tui::views::bar::{ValueBar, level_bar};
     let text = |set, live| -> String {
-        bar_spans(set, live, false)
+        ValueBar::new(set, 9)
+            .playing(live)
+            .spans()
             .iter()
             .map(|span| span.content.as_ref())
             .collect()
@@ -2103,7 +2107,7 @@ fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
     for set in 0..=u8::MAX {
         for live in 0..u8::MAX {
             // Each step the plain bar takes shows, wherever the mark is.
-            if level_bar(live) != level_bar(live + 1) {
+            if level_bar(live, 9) != level_bar(live + 1, 9) {
                 assert_ne!(
                     text(set, live),
                     text(set, live + 1),
@@ -4476,6 +4480,31 @@ fn plus_makes_a_rate_faster_of_any_kind() {
 }
 
 #[test]
+fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
+    let (mut app, _realtime) = app();
+    let line = |app: &App, name: &str| {
+        track_page_text(app)
+            .into_iter()
+            .find(|line| line.starts_with(name))
+            .unwrap_or_else(|| panic!("{name} in {:#?}", track_page_text(app)))
+    };
+    // The bar stays where it is while a value is typed, from its first key.
+    press(&mut app, " 4jjji");
+    assert!(
+        line(&app, "Start").starts_with("Start     _ 00 ▕         ▏"),
+        "{}",
+        line(&app, "Start")
+    );
+    special(&mut app, KeyCode::Esc);
+    // A choice's name starts where the bars do, and a word beside it keeps to its column.
+    let play = line(&app, "Play");
+    assert!(
+        play.starts_with("Play      00   One-shot             Groove    Straight"),
+        "{play}"
+    );
+}
+
+#[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "Ljj0=ll");
@@ -4503,7 +4532,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     let lines = track_page_text(&app);
     assert!(lines[2].starts_with("Machine") && lines[2].contains("Level"));
     assert!(lines[3].starts_with("Sample") && lines[3].contains("Pan"));
-    assert!(lines[4].starts_with("Slice     00 whole"), "{}", lines[4]);
+    assert!(lines[4].starts_with("Slice     00   whole"), "{}", lines[4]);
     assert!(lines[4].contains("Send A"));
     assert!(
         lines[5].starts_with("Start     0000 ▕         ▏"),
@@ -11296,9 +11325,9 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4LG");
     let text = track_text(&app).join("\n");
-    assert!(text.contains("Rate   Mode     Oct    Retrig"), "{text}");
+    assert!(text.contains("Rate   Mode        Oct    Retrig"), "{text}");
     assert!(
-        text.contains("Arp       Tick   Up       1      off"),
+        text.contains("Arp       Tick   Up          1      off"),
         "{text}"
     );
     assert_eq!(column_name(&app), "Arp rate");
@@ -11378,7 +11407,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     );
     let text = track_text(&app).join("\n");
     assert!(
-        text.contains("Arp       1/32   Up-down  2      on"),
+        text.contains("Arp       1/32   Up-down     2      on"),
         "{text}"
     );
     press(&mut app, "x");
@@ -11386,6 +11415,15 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("legato: each note only changes the pitch, and Acid slides")
+    );
+
+    // The longest mode has room, and the columns after it stay in line.
+    press(&mut app, "hh+");
+    assert_eq!(arpeggio(&app).mode, ArpMode::UpDownInc);
+    let text = track_text(&app).join("\n");
+    assert!(
+        text.contains("Arp       1/32   Up-down-inc 2      off"),
+        "{text}"
     );
 }
 
@@ -11798,7 +11836,7 @@ fn the_sound_page_sets_a_samplers_start_length_and_play() {
     // Above Start, the slice, which plays the sample whole until it's sliced.
     press(&mut app, "kkk");
     assert_eq!(app.track_control().label_on(&app.song().tracks[0]), "Slice");
-    assert!(track_page_text(&app)[4].contains("00 whole"));
+    assert!(track_page_text(&app)[4].contains("00   whole"));
     press(&mut app, "==");
     assert_eq!(setting(&app, SettingId::SLICE), 2);
     press(&mut app, "jjj");
