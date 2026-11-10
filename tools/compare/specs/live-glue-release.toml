@@ -1,0 +1,99 @@
+# Our Bus compressor against Ableton Live's Glue Compressor: the set releases both have, 0.1, 0.6
+# and 1.2 s, after a half-second burst and a 50 ms one, and the Auto release both have, after
+# bursts from 20 ms to 2 s, which comp-bus-auto measured ours alone on, as Bus FORCE has none
+# (#364).
+#
+#   uv run run.py specs/live-glue-release.toml --report out/live-glue-release.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 6.0
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Bus"
+1.comp.threshold = 0xD5       # -10 dB
+1.comp.busratio = "4:1"
+1.comp.busattack = "1 ms"
+1.comp.makeup = 0x00         # 0 dB, as Glue's Makeup
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[reference]
+live = "Glue Compressor"
+
+[reference.parameters]
+Threshold = "-10 dB"
+Ratio = 4
+Attack = "1 ms"
+Makeup = "0 dB"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "timing"
+title = "Bus compressor release against Glue Compressor"
+about = """
+Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against Ableton Live's \
+Glue Compressor, also modelled on the G-bus, by a tone burst: a 1 kHz sine at -20 dBFS, then \
+0 dBFS for the burst, then -20 dBFS again for six seconds. Both thresholds are at -10 dBFS, both \
+at 4:1 with a 1 ms attack.
+
+The first cases are the set releases the two share, 0.1, 0.6 and 1.2 s, after a half-second burst \
+and a 50 ms one: a set release recovers as fast after each. The rest are both at Auto, after \
+bursts from 20 ms to 2 s; a G-bus's Auto lets go of a short peak quickly and a long squeeze \
+slowly, so its release should grow with the burst's length on both.
+"""
+
+[[cases]]
+name = "release-0.1-long"
+ours = { 1.comp.busrelease = "0.1 s" }
+reference = { Release = "0.1 s" }
+
+[[cases]]
+name = "release-0.1-short"
+ours = { 1.comp.busrelease = "0.1 s" }
+reference = { Release = "0.1 s" }
+input = { on = 0.05 }
+
+[[cases]]
+name = "release-0.6-long"
+ours = { 1.comp.busrelease = "0.6 s" }
+reference = { Release = "0.6 s" }
+
+[[cases]]
+name = "release-0.6-short"
+ours = { 1.comp.busrelease = "0.6 s" }
+reference = { Release = "0.6 s" }
+input = { on = 0.05 }
+
+[[cases]]
+name = "release-1.2-long"
+ours = { 1.comp.busrelease = "1.2 s" }
+reference = { Release = "1.2 s" }
+
+[[cases]]
+name = "auto-20ms"
+ours = { 1.comp.busrelease = "Auto" }
+reference = { Release = "A" }
+input = { on = 0.02 }
+
+[[cases]]
+name = "auto-200ms"
+ours = { 1.comp.busrelease = "Auto" }
+reference = { Release = "A" }
+input = { on = 0.2 }
+
+[[cases]]
+name = "auto-2s"
+ours = { 1.comp.busrelease = "Auto" }
+reference = { Release = "A" }
+input = { on = 2.0 }

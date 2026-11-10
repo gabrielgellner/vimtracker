@@ -1,0 +1,120 @@
+# Our Bus compressor against Ableton Live's Glue Compressor, and Arturia's Bus FORCE as
+# comp-bus-attack has it: the attack at each of the Bus's six, from a 1 kHz tone burst from
+# -20 dBFS up to 0 dBFS and back (#364). Glue has the G-bus's attacks, 0.1 ms to 30 ms, so it's set
+# to ours; Bus FORCE goes no faster than 1 ms.
+#
+#   uv run run.py specs/live-glue-attack.toml --report out/live-glue-attack.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 1.0
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Bus"
+1.comp.threshold = 0xD5       # -10 dB
+1.comp.busratio = "4:1"
+1.comp.busrelease = "0.1 s"
+1.comp.makeup = 0x00         # 0 dB, as Glue's Makeup
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[[references]]
+name = "Glue"
+live = "Glue Compressor"
+
+[references.parameters]
+Threshold = "-10 dB"
+Ratio = 4
+Release = "0.1 s"
+Makeup = "0 dB"
+"Dry/Wet" = "100 %"
+
+[[references]]
+name = "Bus FORCE"
+plugin = "/Library/Audio/Plug-Ins/VST3/Bus FORCE.vst3"
+buffer_size = 512
+
+[references.parameters]
+dry_path_mute = true
+comp_path_mute = false
+comp_path_level_db = 0.0
+sat_path_mute = true
+filter_on_off = false
+eq_on_off = false
+comp_on_off = true
+comp_sc_filter = "Off"
+comp_threshold_db = -10.0
+comp_force = 4.3
+comp_release_ms = 100.0
+comp_make_up_gain_db = 0.0
+saturation_on_off = false
+auto_gain = false
+output_clipping_on_off = false
+input_trim_db = 0.0
+output_trim_db = 0.0
+
+[report]
+kind = "timing"
+title = "Bus compressor attack against Glue Compressor and Bus FORCE"
+about = """
+Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against Ableton Live's \
+Glue Compressor, also modelled on the G-bus, and the compressor in Arturia's Bus FORCE, by a tone \
+burst: a 1 kHz sine at -20 dBFS for half a second, then 0 dBFS for the burst, then -20 dBFS again. \
+Every threshold is at -10 dBFS, so the burst is compressed and the rest isn't.
+
+Each case is one of the Bus's attacks at 4:1, against Glue's same attack at 4 and Bus FORCE's with \
+its Force at 4.3, all releasing in 100 ms. Bus FORCE goes no faster than 1 ms, so the Bus's 0.1 \
+and 0.3 ms are set against its 1 ms; Glue has both. The last two cases are 10 ms at 2:1 and 10:1, \
+where a G-bus's feedback detector grabs faster at the higher ratio. The summary compares ours with \
+Glue; Bus FORCE is drawn beside them.
+"""
+
+[[cases]]
+name = "attack-0.1"
+ours = { 1.comp.busattack = "0.1 ms" }
+references = { Glue = { Attack = "0.1 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+
+[[cases]]
+name = "attack-0.3"
+ours = { 1.comp.busattack = "0.3 ms" }
+references = { Glue = { Attack = "0.3 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+
+[[cases]]
+name = "attack-1"
+ours = { 1.comp.busattack = "1 ms" }
+references = { Glue = { Attack = "1 ms" }, "Bus FORCE" = { comp_attack_ms = 1.0 } }
+
+[[cases]]
+name = "attack-3"
+ours = { 1.comp.busattack = "3 ms" }
+references = { Glue = { Attack = "3 ms" }, "Bus FORCE" = { comp_attack_ms = 3.0 } }
+
+[[cases]]
+name = "attack-10"
+ours = { 1.comp.busattack = "10 ms" }
+references = { Glue = { Attack = "10 ms" }, "Bus FORCE" = { comp_attack_ms = 10.0 } }
+
+[[cases]]
+name = "attack-30"
+ours = { 1.comp.busattack = "30 ms" }
+references = { Glue = { Attack = "30 ms" }, "Bus FORCE" = { comp_attack_ms = 30.0 } }
+
+[[cases]]
+name = "attack-10-at-2"
+ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "2:1" }
+references = { Glue = { Attack = "10 ms", Ratio = 2 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 2.7 } }
+
+[[cases]]
+name = "attack-10-at-10"
+ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "10:1" }
+references = { Glue = { Attack = "10 ms", Ratio = 10 }, "Bus FORCE" = { comp_attack_ms = 10.0, comp_force = 5.25 } }

@@ -2367,6 +2367,13 @@ code { font: 12.5px ui-monospace, Menlo, monospace; }
 """
 
 
+def source_of(section: dict) -> str:
+    """Where a reference comes from: a plugin pedalboard hosts, or a device in Ableton Live."""
+    if section.get("live"):
+        return f"Ableton Live's {section['live']}, through the Live bridge"
+    return f"{section['plugin']}, hosted by pedalboard"
+
+
 def write(spec, rendered, path: Path) -> dict:
     """Write a spec's report page, and give what was built for it, with its consensus's summary
     under `consensus` for a suite's index."""
@@ -2382,8 +2389,7 @@ def write(spec, rendered, path: Path) -> dict:
     about = "".join(f"<p>{html.escape(part.strip())}</p>" for part in layout.get("about", "").split("\n\n") if part.strip())
     sections = dict(spec._references())
     reference = (
-        ", ".join(f"{html.escape(name)} ({html.escape(sections[name]['plugin'])})" for name in report.reference_names)
-        + ", hosted by pedalboard"
+        ", ".join(f"{html.escape(name)} ({html.escape(source_of(sections[name]))})" for name in report.reference_names)
         if report.reference_names
         else "none: ours is measured against its own drawing"
     )

@@ -1,5 +1,5 @@
 """Render a spec's reference side: one of its references' plugins, hosted by pedalboard, playing
-the spec's notes or given its input.
+the spec's notes or given its input, or one of Ableton Live's devices through `live_bridge.py`.
 
 Usage: render_reference.py <spec.toml> <out.wav> [--case NAME] [--reference NAME]
 
@@ -59,9 +59,13 @@ class Reference:
         self.loaded = {}
 
     @classmethod
-    def of(cls, section: dict) -> "Reference":
+    def of(cls, section: dict):
         """The plugin a spec's reference section names, started from its preset and state if it
-        gives them."""
+        gives them, or the Live device it names, which `live_bridge.py` renders through Live."""
+        if section.get("live"):
+            import live_bridge
+
+            return live_bridge.LiveReference.of(section)
         return cls(section)
 
     def set(self, parameters: dict) -> None:
@@ -86,6 +90,8 @@ def render(spec: specs.Spec, case: str | None, reference: Reference | None = Non
     section = spec.reference(case, name or (reference.name if reference else None))
     if reference is None:
         reference = Reference.of(section)
+    if getattr(reference, "renders_itself", False):
+        return reference.render(spec, case, section)
     reference.set(section["parameters"])
     buffer_size = int(section.get("buffer_size", DEFAULT_BUFFER_SIZE))
     channels = int(section.get("channels", 2))

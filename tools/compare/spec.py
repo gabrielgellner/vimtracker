@@ -48,7 +48,7 @@ class Spec:
     @property
     def reference_names(self) -> list[str]:
         """The references' names, in the spec's order: each of `[[references]]`'s `name`, or the
-        one `[reference]`'s plugin's."""
+        one `[reference]`'s plugin's, or its Live device's."""
         return [name for name, _ in self._references()]
 
     def _references(self) -> list[tuple[str, dict]]:
@@ -56,11 +56,15 @@ class Spec:
         if listed:
             out = []
             for section in listed:
-                if not section.get("name") or not section.get("plugin"):
-                    raise SystemExit(f"{self.path}: each of [[references]] needs a `name` and a `plugin`")
+                if not section.get("name") or not (section.get("plugin") or section.get("live")):
+                    raise SystemExit(
+                        f"{self.path}: each of [[references]] needs a `name`, and a `plugin` or a `live` device"
+                    )
                 out.append((section["name"], section))
             return out
         single = self.data.get("reference") or {}
+        if single.get("live"):
+            return [(single["live"], single)]
         if not single.get("plugin"):
             return []
         return [(Path(single["plugin"]).stem, single)]
@@ -92,7 +96,7 @@ class Spec:
         own: the case's `reference`, which is for every reference, then its `references.<name>`."""
         known = dict(self._references())
         if not known:
-            raise SystemExit(f"{self.path}: [reference] needs a `plugin` path")
+            raise SystemExit(f"{self.path}: [reference] needs a `plugin` path or a `live` device")
         name = name or next(iter(known))
         if name not in known:
             raise SystemExit(f"{self.path} has no reference called {name}; it has {', '.join(known)}")
