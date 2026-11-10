@@ -1,0 +1,272 @@
+# Our track filter's clean types against Arturia's Filter M12, an Oberheim Matrix-12 filter, by a
+# sine sweep's magnitude response: low-pass at 12 and 24 dB, high-pass, band-pass and notch, at
+# three cutoffs and Res 0, 50% and 90%. The sweep is at -30 dBFS, quiet enough that neither side's
+# saturation bends it. M12's cutoff is in semitones, as MIDI numbers notes, so 55, 83 and 111 are
+# about our 200 Hz, 988 Hz and 5 kHz; its resonance runs 0 to 63, and its limiter is off.
+#
+#   uv run run.py specs/filter-clean.toml --report out/filter-clean.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter M12.vst3"
+buffer_size = 512
+
+[reference.parameters]
+filter_routing = "A Only"
+limit_resonance = false
+dry_wet = 100.0
+
+[report]
+kind = "response"
+title = "Clean filters against Filter M12"
+figure = ["filter", "mode"]
+row = "res"
+column = "cut"
+about = """
+Our track filter's clean types, the state-variable low-pass, high-pass, band-pass and notch, against \
+Arturia's Filter M12, a model of the Oberheim Matrix-12's multimode filter. Each is given the same \
+quiet sine sweep, and the response is the output's spectrum over the input's.
+
+M12's cutoff is in semitones (MIDI note numbers), so it was set to the note nearest our Cut: 55 for \
+200 Hz, 83 for 988 Hz and 111 for 5 kHz. Its resonance runs from 0 to 63, so 32 and 57 stand for \
+50% and 90%. Our 12 dB types are matched with its two-pole types and our 24 dB low-pass with its \
+four-pole. The two filters are different circuits, so the shapes aren't meant to agree exactly: \
+the comparison shows where the peak sits and how tall it is for the same knob, and how much bass \
+a low-pass keeps as resonance rises.
+"""
+
+[[cases]]
+name = "lp12-55-res0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 55.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp12-55-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 55.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp12-55-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xE6 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 55.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "lp12-90-res0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 83.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp12-90-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 83.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp12-90-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xE6 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 83.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "lp12-CC-res0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 111.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp12-CC-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 111.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp12-CC-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xE6 }
+reference = { filter_a_type = "LP2P", filter_a_cutoff = 111.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "lp24-55-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0x00 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 55.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp24-55-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0x80 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 55.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp24-55-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0xE6 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 55.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "lp24-90-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0x00 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 83.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp24-90-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0x80 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 83.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp24-90-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0xE6 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 83.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "lp24-CC-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0x00 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 111.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "lp24-CC-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0x80 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 111.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "lp24-CC-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0xE6 }
+reference = { filter_a_type = "LP4P", filter_a_cutoff = 111.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "hp12-55-res0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 55.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "hp12-55-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 55.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "hp12-55-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xE6 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 55.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "hp12-90-res0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 83.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "hp12-90-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 83.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "hp12-90-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xE6 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 83.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "hp12-CC-res0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 111.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "hp12-CC-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 111.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "hp12-CC-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xE6 }
+reference = { filter_a_type = "HP2P", filter_a_cutoff = 111.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "bp12-55-res0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 55.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "bp12-55-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 55.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "bp12-55-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xE6 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 55.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "bp12-90-res0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 83.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "bp12-90-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 83.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "bp12-90-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xE6 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 83.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "bp12-CC-res0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 111.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "bp12-CC-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 111.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "bp12-CC-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xE6 }
+reference = { filter_a_type = "BP2P", filter_a_cutoff = 111.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "notch12-55-res0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 55.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "notch12-55-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 55.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "notch12-55-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xE6 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 55.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "notch12-90-res0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 83.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "notch12-90-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 83.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "notch12-90-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xE6 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 83.0, filter_a_resonance = 57.0 }
+
+[[cases]]
+name = "notch12-CC-res0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 111.0, filter_a_resonance = 0.0 }
+
+[[cases]]
+name = "notch12-CC-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 111.0, filter_a_resonance = 32.0 }
+
+[[cases]]
+name = "notch12-CC-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xE6 }
+reference = { filter_a_type = "Notch", filter_a_cutoff = 111.0, filter_a_resonance = 57.0 }

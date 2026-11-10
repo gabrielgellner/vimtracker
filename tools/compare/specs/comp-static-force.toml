@@ -1,0 +1,80 @@
+# Arturia's Bus FORCE, its compressor alone, against our compressor in slot 1: a 1 kHz sine stepped
+# from -60 to 0 dBFS a dB at a time, each level held a quarter of a second, for the static curve.
+# Both thresholds are at -20 dBFS. Bus FORCE's Force knob has no ratio on it, so a quarter, half
+# and three quarters of it are set against our 2, 4 and 8 to 1, and the ratio measured is its
+# mapping. Its dry and saturation paths are muted and its filter, EQ, side-chain filter, auto gain
+# and output clipper are off, so only its compressor is heard.
+#
+#   uv run run.py specs/comp-static-force.toml --report out/comp-static-force.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -60.0
+to = 0.0
+step = 1.0
+hold = 0.25
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.threshold = 0xAA   # -20 dB
+1.comp.attack = 0xAA      # 10 ms
+1.comp.release = 0x80     # 100 ms
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Bus FORCE.vst3"
+buffer_size = 512
+
+[reference.parameters]
+dry_path_mute = true
+comp_path_mute = false
+comp_path_level_db = 0.0
+sat_path_mute = true
+filter_on_off = false
+eq_on_off = false
+comp_on_off = true
+comp_sc_filter = "Off"
+comp_threshold_db = -20.0
+comp_attack_ms = 10.0
+comp_release_ms = 100.0
+comp_make_up_gain_db = 0.0
+saturation_on_off = false
+auto_gain = false
+output_clipping_on_off = false
+input_trim_db = 0.0
+output_trim_db = 0.0
+
+[report]
+kind = "static"
+title = "Compressor static curve against Bus FORCE"
+about = """
+Our compressor in a track's first slot against the compressor in Arturia's Bus FORCE, by its \
+static curve: a 1 kHz sine stepped from -60 to 0 dBFS a decibel at a time, each level held a \
+quarter of a second, with the output read once each step has settled.
+
+Bus FORCE's dry and saturation paths are muted, and its filter, EQ, side-chain filter, auto gain \
+and clipper are off, so only its compressor path is heard. Both thresholds are at -20 dBFS, and \
+both attacks 10 ms and releases 100 ms. Its Force knob, from 0 to 10, has no ratio printed on it, \
+so 2.5, 5 and 7.5 are set against our 2, 4 and 8 to 1, and the ratio measured is its mapping.
+"""
+
+[[cases]]
+name = "ratio-2"
+ours = { 1.comp.ratio = 0x3B }   # 2.0:1
+reference = { comp_force = 2.5 }
+
+[[cases]]
+name = "ratio-4"
+ours = { 1.comp.ratio = 0x65 }   # 4.0:1
+reference = { comp_force = 5.0 }
+
+[[cases]]
+name = "ratio-8"
+ours = { 1.comp.ratio = 0x9B }   # 8.0:1
+reference = { comp_force = 7.5 }

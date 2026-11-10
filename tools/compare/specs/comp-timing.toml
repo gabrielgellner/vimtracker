@@ -1,0 +1,101 @@
+# Arturia's Comp VCA-65 against our compressor in slot 1: attack and release from a 1 kHz tone
+# burst, from -20 dBFS up to 0 dBFS and back, at three settings, each with a long burst and a short
+# one for program dependence. Comp VCA-65's attack and release knobs have no times on them, so
+# they're turned to their bottom, middle and top against ours at 1, 10 and 30 ms of attack and 50,
+# 100 and 500 ms of release, and the times measured are their mapping. Its automatic attack and
+# release, which follow the programme, are tried too.
+#
+#   uv run run.py specs/comp-timing.toml --report out/comp-timing.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 1.5
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.threshold = 0xD5   # -10 dB
+1.comp.ratio = 0x65       # 4.0:1
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Comp VCA-65.vst3"
+buffer_size = 512
+
+[reference.parameters]
+threshold = -10.0
+compression = 0.5
+auto_att_rel = false
+output_gain_db = 0.0
+mix = 100.0
+
+[report]
+kind = "timing"
+title = "Compressor attack and release against Comp VCA-65"
+about = """
+Our compressor in a track's first slot against Arturia's Comp VCA-65, a model of the dbx 165A, by \
+a tone burst: a 1 kHz sine at -20 dBFS for half a second, then 0 dBFS for the burst, then -20 dBFS \
+again for a second and a half. Both thresholds are at -10 on their own scales, so the burst is \
+compressed and the rest isn't, and the gain falls as the burst starts and recovers after it ends.
+
+Comp VCA-65's attack and release knobs have no times printed on them, so they're turned to their \
+bottom, middle and top against our attacks of 1, 10 and 30 ms and releases of 50, 100 and 500 ms, \
+and the times measured are their mapping. Each setting has a long burst, half a second, and a \
+short one, 50 ms: a compressor whose release follows the programme recovers at a different speed \
+after each. Comp VCA-65's automatic attack and release, which does that on purpose, is tried \
+against our middle setting. Ours is at 4:1 and Comp VCA-65's Compression knob at its middle, about \
+3:1.
+"""
+
+[[cases]]
+name = "fast-long"
+ours = { 1.comp.attack = 0x55, 1.comp.release = 0x59 }   # 1 ms, 50 ms
+reference = { attack_time = 0.0, release_time = 0.0 }
+
+[[cases]]
+name = "fast-short"
+ours = { 1.comp.attack = 0x55, 1.comp.release = 0x59 }
+reference = { attack_time = 0.0, release_time = 0.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "middle-long"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }   # 10 ms, 100 ms
+reference = { attack_time = 0.5, release_time = 0.5 }
+
+[[cases]]
+name = "middle-short"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }
+reference = { attack_time = 0.5, release_time = 0.5 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "slow-long"
+ours = { 1.comp.attack = 0xD3, 1.comp.release = 0xD9 }   # 30 ms, 500 ms
+reference = { attack_time = 1.0, release_time = 1.0 }
+
+[[cases]]
+name = "slow-short"
+ours = { 1.comp.attack = 0xD3, 1.comp.release = 0xD9 }
+reference = { attack_time = 1.0, release_time = 1.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "auto-long"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }
+reference = { auto_att_rel = true }
+
+[[cases]]
+name = "auto-short"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }
+reference = { auto_att_rel = true }
+input = { on = 0.05 }

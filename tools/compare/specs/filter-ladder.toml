@@ -1,0 +1,95 @@
+# Our track filter's Ladder, at its 24 dB low-pass, against Arturia's Filter MINI, a Moog ladder,
+# by a sine sweep's magnitude response at three cutoffs and Res 0, 50% and 90%. MINI's cutoff knob
+# runs 0 to 1 with no frequency on it, so it was set where its Res 90% peak falls on our Cut, found
+# by halving on 2026-11-10: 0.241 for 200 Hz, 0.504 for 988 Hz and 0.777 for 5 kHz. Its output
+# volume of 0.343 passes 0 dB at Res 0, and its modulation is all at 0, as it loads.
+#
+#   uv run run.py specs/filter-ladder.toml --report out/filter-ladder.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[ours.settings]
+filter = "Ladder"
+mode = "LP24"
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter MINI.vst3"
+buffer_size = 512
+
+[reference.parameters]
+output_volume = 0.343
+drive = 0.0
+dry_wet = 1.0
+limit_resonance = false
+
+[report]
+kind = "response"
+title = "Ladder against Filter MINI"
+figure = ["filter", "mode"]
+row = "res"
+column = "cut"
+about = """
+Our track filter's Ladder type in its 24 dB low-pass mode against Arturia's Filter MINI, a model \
+of the Minimoog's four-pole transistor ladder. Each is given the same quiet sine sweep, and the \
+response is the output's spectrum over the input's.
+
+MINI's cutoff knob runs from 0 to 1 with no frequency printed on it, so it was set where its \
+Res 90% peak falls on our Cut: 0.241 for 200 Hz, 0.504 for 988 Hz and 0.777 for 5 kHz. Its \
+resonance knob's 0.5 and 0.9 stand for 50% and 90%, and its output volume was set to pass 0 dB at \
+Res 0. A Moog ladder loses bass as its resonance rises, which the bass loss column measures.
+"""
+
+[[cases]]
+name = "ladder-55-res0"
+ours = { cut = 0x55, res = 0x00 }
+reference = { cutoff = 0.241, resonance = 0.0 }
+
+[[cases]]
+name = "ladder-55-res50"
+ours = { cut = 0x55, res = 0x80 }
+reference = { cutoff = 0.241, resonance = 0.5 }
+
+[[cases]]
+name = "ladder-55-res90"
+ours = { cut = 0x55, res = 0xE6 }
+reference = { cutoff = 0.241, resonance = 0.9 }
+
+[[cases]]
+name = "ladder-90-res0"
+ours = { cut = 0x90, res = 0x00 }
+reference = { cutoff = 0.504, resonance = 0.0 }
+
+[[cases]]
+name = "ladder-90-res50"
+ours = { cut = 0x90, res = 0x80 }
+reference = { cutoff = 0.504, resonance = 0.5 }
+
+[[cases]]
+name = "ladder-90-res90"
+ours = { cut = 0x90, res = 0xE6 }
+reference = { cutoff = 0.504, resonance = 0.9 }
+
+[[cases]]
+name = "ladder-CC-res0"
+ours = { cut = 0xCC, res = 0x00 }
+reference = { cutoff = 0.777, resonance = 0.0 }
+
+[[cases]]
+name = "ladder-CC-res50"
+ours = { cut = 0xCC, res = 0x80 }
+reference = { cutoff = 0.777, resonance = 0.5 }
+
+[[cases]]
+name = "ladder-CC-res90"
+ours = { cut = 0xCC, res = 0xE6 }
+reference = { cutoff = 0.777, resonance = 0.9 }

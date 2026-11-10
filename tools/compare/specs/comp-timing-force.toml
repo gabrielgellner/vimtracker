@@ -1,0 +1,98 @@
+# Arturia's Bus FORCE, its compressor alone, against our compressor in slot 1: attack and release
+# from a 1 kHz tone burst, from -20 dBFS up to 0 dBFS and back, at three settings, each with a long
+# burst and a short one for program dependence. Bus FORCE's attack and release are in ms, so both
+# sides are set to the same times: 1, 10 and 30 ms of attack and 50, 100 and 500 ms of release.
+#
+#   uv run run.py specs/comp-timing-force.toml --report out/comp-timing-force.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 1.5
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.threshold = 0xD5   # -10 dB
+1.comp.ratio = 0x65       # 4.0:1
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Bus FORCE.vst3"
+buffer_size = 512
+
+[reference.parameters]
+dry_path_mute = true
+comp_path_mute = false
+comp_path_level_db = 0.0
+sat_path_mute = true
+filter_on_off = false
+eq_on_off = false
+comp_on_off = true
+comp_sc_filter = "Off"
+comp_threshold_db = -10.0
+comp_force = 7.0
+comp_make_up_gain_db = 0.0
+saturation_on_off = false
+auto_gain = false
+output_clipping_on_off = false
+input_trim_db = 0.0
+output_trim_db = 0.0
+
+[report]
+kind = "timing"
+title = "Compressor attack and release against Bus FORCE"
+about = """
+Our compressor in a track's first slot against the compressor in Arturia's Bus FORCE, by a tone \
+burst: a 1 kHz sine at -20 dBFS for half a second, then 0 dBFS for the burst, then -20 dBFS again \
+for a second and a half. Both thresholds are at -10 dBFS, so the burst is compressed and the rest \
+isn't, and the gain falls as the burst starts and recovers after it ends.
+
+Bus FORCE's attack and release are in milliseconds, so both sides are set to the same times: \
+attacks of 1, 10 and 30 ms and releases of 50, 100 and 500 ms. Each setting has a long burst, half \
+a second, and a short one, 50 ms: a compressor whose release follows the programme recovers at a \
+different speed after each. Bus FORCE's dry and saturation paths are muted and its filter, EQ, \
+side-chain filter, auto gain and clipper are off. Ours is at 4:1 and Bus FORCE's Force at 7, \
+which reduces the burst by about as much.
+"""
+
+[[cases]]
+name = "fast-long"
+ours = { 1.comp.attack = 0x55, 1.comp.release = 0x59 }   # 1 ms, 50 ms
+reference = { comp_attack_ms = 1.0, comp_release_ms = 50.0 }
+
+[[cases]]
+name = "fast-short"
+ours = { 1.comp.attack = 0x55, 1.comp.release = 0x59 }
+reference = { comp_attack_ms = 1.0, comp_release_ms = 50.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "middle-long"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }   # 10 ms, 100 ms
+reference = { comp_attack_ms = 10.0, comp_release_ms = 100.0 }
+
+[[cases]]
+name = "middle-short"
+ours = { 1.comp.attack = 0xAA, 1.comp.release = 0x80 }
+reference = { comp_attack_ms = 10.0, comp_release_ms = 100.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "slow-long"
+ours = { 1.comp.attack = 0xD3, 1.comp.release = 0xD9 }   # 30 ms, 500 ms
+reference = { comp_attack_ms = 30.0, comp_release_ms = 500.0 }
+
+[[cases]]
+name = "slow-short"
+ours = { 1.comp.attack = 0xD3, 1.comp.release = 0xD9 }
+reference = { comp_attack_ms = 30.0, comp_release_ms = 500.0 }
+input = { on = 0.05 }

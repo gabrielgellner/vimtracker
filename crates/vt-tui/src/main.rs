@@ -48,6 +48,9 @@ enum Command {
         /// Also write an effect's input as the probe made it, to check the reference side's against.
         #[arg(long)]
         write_input: Option<PathBuf>,
+        /// Also write the track filter's response as the Sound page draws it, as CSV.
+        #[arg(long)]
+        response: Option<PathBuf>,
     },
     /// Make and manage kits.
     Kits {
@@ -118,11 +121,13 @@ fn main() -> std::process::ExitCode {
             out,
             case,
             write_input,
+            response,
         }) => vt_tui::dsp_probe::run(&vt_tui::dsp_probe::ProbeRequest {
             spec,
             out,
             case,
             write_input,
+            response,
         })
         .map_err(|e| e.to_string()),
         None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),

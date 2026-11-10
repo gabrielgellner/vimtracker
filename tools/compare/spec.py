@@ -39,6 +39,33 @@ class Spec:
     def cases(self) -> list[str]:
         return [case["name"] for case in self.data.get("cases", [])]
 
+    @property
+    def has_reference(self) -> bool:
+        """Whether there's a reference to render, as a spec can measure ours alone."""
+        return bool((self.data.get("reference") or {}).get("plugin"))
+
+    @property
+    def report(self) -> dict:
+        """How `report.py` lays out the spec's measurements."""
+        return dict(self.data.get("report") or {})
+
+    def settings(self, case: str | None) -> dict:
+        """Our settings, by their keys, with a case's over them."""
+        settings = flatten(self.data.get("ours", {}).get("settings", {}))
+        settings.update(flatten(self.case(case).get("ours", {})))
+        return settings
+
+    def input(self, case: str | None) -> dict | None:
+        """The input, with a case's fields over it, or the case's alone if it names another
+        `signal`, as the probe takes it."""
+        given = self.data.get("input")
+        changes = self.case(case).get("input") or {}
+        if given is None:
+            return None
+        if "signal" in changes and changes["signal"] != given.get("signal"):
+            return dict(changes)
+        return {**given, **changes}
+
     def reference(self, case: str | None) -> dict:
         """The reference's section, with a case's parameters over its own."""
         reference = dict(self.data.get("reference") or {})
@@ -61,6 +88,18 @@ class Spec:
         raise SystemExit(f"{self.path} has no case called {name}; it has {', '.join(self.cases)}")
 
 
+def flatten(table: dict, prefix: str = "") -> dict:
+    """Settings with bare dotted keys' tables flattened back into keys, as the probe reads them."""
+    out = {}
+    for key, value in table.items():
+        key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(flatten(value, key))
+        else:
+            out[key] = value
+    return out
+
+
 def read(path: Path) -> Spec:
     with open(path, "rb") as file:
         return Spec(path=path, data=tomllib.load(file))
@@ -79,9 +118,9 @@ def _sine(frequency: float, frames: np.ndarray, rate: int) -> np.ndarray:
     return np.sin(2.0 * np.pi * frequency * frames / rate)
 
 
-def signal(spec: Spec) -> np.ndarray:
+def signal(spec: Spec, case: str | None = None) -> np.ndarray:
     """An effect's input as stereo samples, shape (2, frames), made as the probe makes it."""
-    given = spec.data["input"]
+    given = spec.input(case)
     rate = spec.rate
     kind = given["signal"]
     if kind == "file":
@@ -117,6 +156,9 @@ def signal(spec: Spec) -> np.ndarray:
         mono = 10.0 ** (levels / 20.0) * _sine(given["frequency"], frames, rate)
     elif kind == "silence":
         mono = np.zeros(frames_in(given["seconds"], rate))
+    elif kind == "impulse":
+        mono = np.zeros(max(1, frames_in(given["seconds"], rate)))
+        mono[0] = gain_of(given["level"])
     else:
         raise SystemExit(f"{spec.path}: no input signal called {kind}")
     mono = mono.astype(np.float32)
