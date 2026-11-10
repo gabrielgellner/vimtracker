@@ -1,11 +1,21 @@
-//! A feed-forward compressor, after Giannoulis, Massberg and Reiss, "Digital Dynamic Range
-//! Compressor Design — A Tutorial and Analysis" (JAES 2012): a gain computer with a soft knee,
-//! worked out in dB, then the smooth branching peak detector on how much it turns down, so the
-//! attack and release each shape their own side. Both sides are linked: the louder one decides,
-//! so the stereo picture doesn't move. What it hears can be another track, for ducking.
+//! A slot's compressor, of whichever type it's set to (#338): an enum matched each frame rather
+//! than boxed, so changing type allocates nothing.
+//!
+//! `Clean` is a feed-forward compressor after Giannoulis, Massberg and Reiss, "Digital Dynamic
+//! Range Compressor Design — A Tutorial and Analysis" (JAES 2012): a gain computer with a soft
+//! knee, worked out in dB, then their smooth decoupled peak detector on how much it turns down. Its
+//! release comes first, holding what a wave's peaks asked for through its troughs, then its attack
+//! smooths that, so the attack is a plain one-pole with no long tail (#334). Both sides are linked:
+//! the louder one decides, so the stereo picture doesn't move. What it hears can be another track,
+//! for ducking.
+//!
+//! `Bus` is in [`super::bus`].
 
-use vt_model::insert::{Compressor as Settings, attack_ms, ratio, release_ms, threshold_db};
+use vt_model::insert::{
+    Compressor as Settings, CompressorType, attack_ms, ratio, release_ms, threshold_db,
+};
 
+use super::bus::{self, Bus};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The knee's width in dB: the curve bends over this much either side of the threshold.
@@ -21,11 +31,60 @@ const AUTO_QUIET: f32 = 1e-8;
 /// The most Auto gives, in dB, however hard it's turned down.
 const AUTO_MOST: f32 = 60.0;
 
-/// The detector's state, and where its curve sits, moving smoothly to where it's set.
+/// A compressor of one of the types, with its own state.
+#[derive(Debug, Clone, Copy)]
+pub enum Compressor {
+    Clean(Clean),
+    Bus(Bus),
+}
+
+impl Default for Compressor {
+    fn default() -> Self {
+        Self::Clean(Clean::default())
+    }
+}
+
+impl Compressor {
+    /// How far it's turning down now, in dB, for a meter.
+    pub fn reduction(&self) -> f32 {
+        match self {
+            Self::Clean(clean) => clean.reduction,
+            Self::Bus(bus) => bus.reduction(),
+        }
+    }
+
+    /// One frame turned down by what `key` asks for, all wet, as its type does. `key` is the frame
+    /// itself unless it hears another track. Changing type starts the new one afresh.
+    #[inline]
+    pub fn process(
+        &mut self,
+        input: [f32; 2],
+        key: [f32; 2],
+        settings: Settings,
+        smoothing: f32,
+        rate: u32,
+    ) -> [f32; 2] {
+        match (&mut *self, settings.kind) {
+            (Self::Clean(clean), CompressorType::Clean) => {
+                return clean.process(input, key, settings, smoothing, rate);
+            }
+            (Self::Bus(bus), CompressorType::Bus) => {
+                return bus.process(input, key, settings, smoothing, rate);
+            }
+            (_, CompressorType::Clean) => *self = Self::Clean(Clean::default()),
+            (_, CompressorType::Bus) => *self = Self::Bus(Bus::default()),
+        }
+        self.process(input, key, settings, smoothing, rate)
+    }
+}
+
+/// The clean type's detector, and where its curve sits, moving smoothly to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Compressor {
+pub struct Clean {
     /// How far it's turning down now, in dB.
     reduction: f32,
+    /// What the release lets go of, before the attack smooths it, in dB.
+    released: f32,
     /// How loud it's been going in lately, and coming out before Auto, as power.
     heard: f32,
     left: f32,
@@ -60,27 +119,19 @@ fn computed(level: f32, threshold: f32, slope: f32) -> f32 {
 }
 
 /// How loud a steady level comes out, in dB, once it's settled, before `Auto`, `Mix` and `Gain`:
-/// the static curve, for drawing, worked out as the compressor does.
+/// the static curve of the type it's set to, for drawing, worked out as the compressor does.
 pub fn curve_db(level: f32, settings: Settings) -> f32 {
-    let threshold = threshold_db(f32::from(settings.threshold));
-    let slope = 1.0 / ratio(f32::from(settings.ratio));
-    computed(level, threshold, slope)
+    match settings.kind {
+        CompressorType::Clean => {
+            let threshold = threshold_db(f32::from(settings.threshold));
+            let slope = 1.0 / ratio(f32::from(settings.ratio));
+            computed(level, threshold, slope)
+        }
+        CompressorType::Bus => level - bus::settled(level, settings),
+    }
 }
 
-impl Compressor {
-    /// How far it's turning down now, in dB, for a meter.
-    pub fn reduction(&self) -> f32 {
-        self.reduction
-    }
-
-    /// Forget how far it was turning down, for a fresh start.
-    pub fn clear(&mut self) {
-        self.reduction = 0.0;
-        self.heard = 0.0;
-        self.left = 0.0;
-        self.makeup = 0.0;
-    }
-
+impl Clean {
     /// Take what's set now, jumping to it the first time.
     fn follow(&mut self, settings: Settings, rate: u32) -> [f32; 3] {
         if let Some((was, times)) = self.times
@@ -122,13 +173,10 @@ impl Compressor {
         let peak = key[0].abs().max(key[1].abs()).max(FLOOR);
         let level = 20.0 * peak.log10();
         let wanted = level - computed(level, threshold, slope);
-        // Rising takes the attack, and falling the release.
-        let keep = if wanted > self.reduction {
-            attack
-        } else {
-            release
-        };
-        self.reduction = keep * self.reduction + (1.0 - keep) * wanted;
+        // The release lets go with no attack of its own, so it holds what a wave's peaks ask for
+        // through its troughs, and the attack smooths what it holds.
+        self.released = wanted.max(release * self.released + (1.0 - release) * wanted);
+        self.reduction = attack * self.reduction + (1.0 - attack) * self.released;
         let turned = 10_f32.powf(-self.reduction / 20.0);
         // Auto matches how loud it comes out to how loud it went in, so switching it in or out
         // compares like with like, however hard it's turned down.
@@ -163,12 +211,12 @@ mod tests {
 
     /// How far a steady level is turned down once it's settled, in dB.
     fn settled(level_db: f32, settings: Settings) -> f32 {
-        let mut compressor = Compressor::default();
+        let mut compressor = Clean::default();
         let level = 10_f32.powf(level_db / 20.0);
         for _ in 0..RATE {
             compressor.process([level; 2], [level; 2], settings, 1.0, RATE);
         }
-        compressor.reduction()
+        compressor.reduction
     }
 
     #[test]
@@ -198,7 +246,7 @@ mod tests {
 
     /// How loud a steady level comes out once it's settled, in dB, with what's set.
     fn comes_out(level_db: f32, settings: Settings) -> f32 {
-        let mut compressor = Compressor::default();
+        let mut compressor = Clean::default();
         let level = 10_f32.powf(level_db / 20.0);
         let mut out = [0.0; 2];
         for _ in 0..RATE * 8 {
@@ -241,7 +289,7 @@ mod tests {
                 release: 0x60,
                 ..settings(threshold, ratio)
             };
-            let mut compressor = Compressor::default();
+            let mut compressor = Clean::default();
             let (mut went_in, mut came_out) = (Vec::new(), Vec::new());
             for frame in 0..RATE as usize * 6 {
                 let sample = hit(frame);
@@ -258,7 +306,7 @@ mod tests {
 
     #[test]
     fn moving_the_threshold_or_ratio_glides_without_a_step() {
-        let mut compressor = Compressor::default();
+        let mut compressor = Clean::default();
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let mut last = 0.0;
         for _ in 0..RATE / 10 {
@@ -295,22 +343,22 @@ mod tests {
             release: 0xFF,
             ..Settings::DEFAULT
         };
-        let mut compressor = Compressor::default();
+        let mut compressor = Clean::default();
         // A millisecond in, a 100 ms attack has barely started.
         for _ in 0..RATE / 1000 {
             compressor.process([1.0; 2], [1.0; 2], slow, 1.0, RATE);
         }
-        let early = compressor.reduction();
+        let early = compressor.reduction;
         assert!(early > 0.0 && early < 6.0, "{early}");
         for _ in 0..RATE {
             compressor.process([1.0; 2], [1.0; 2], slow, 1.0, RATE);
         }
-        let full = compressor.reduction();
+        let full = compressor.reduction;
         for _ in 0..RATE / 100 {
             compressor.process([0.0; 2], [0.0; 2], slow, 1.0, RATE);
         }
         assert!(
-            compressor.reduction() > full * 0.9,
+            compressor.reduction > full * 0.9,
             "a second's release hasn't let go yet"
         );
     }
@@ -318,13 +366,13 @@ mod tests {
     #[test]
     fn another_tracks_key_ducks_it_and_a_quiet_one_leaves_it() {
         let duck = settings(0x80, 0xFF);
-        let mut compressor = Compressor::default();
+        let mut compressor = Clean::default();
         let mut out = [0.0; 2];
         for _ in 0..RATE / 10 {
             out = compressor.process([0.5; 2], [1.0; 2], duck, 1.0, RATE);
         }
         assert!(out[0] < 0.1, "{out:?}");
-        let mut quiet = Compressor::default();
+        let mut quiet = Clean::default();
         for _ in 0..RATE / 10 {
             out = quiet.process([0.5; 2], [0.0; 2], duck, 1.0, RATE);
         }

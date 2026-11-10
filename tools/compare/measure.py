@@ -182,6 +182,44 @@ def static_curve(given: dict, out: np.ndarray, rate: int):
     return curve
 
 
+def curve_distance(ours, theirs, low: float = -40.0) -> float:
+    """How far apart two static curves are, as the RMS of their outputs' differences in dB over the
+    input levels from `low` up, the measure #186 asks to be under 0.5 dB."""
+    apart = [a - b for (level, a), (_, b) in zip(ours, theirs) if level >= low]
+    return float(np.sqrt(np.mean(np.square(apart)))) if apart else float("nan")
+
+
+def step_harmonics(given: dict, out: np.ndarray, rate: int, highest: int = 9):
+    """A stepped sine's harmonics at each input level, from the last half of each hold, so a
+    compressor has settled: for each level, the output's fundamental in dBFS, its total harmonic
+    distortion in dB under the fundamental, and each harmonic from the 2nd to the `highest` in dB
+    under it, read from a Blackman-windowed spectrum."""
+    held = int(math.floor(given["hold"] * rate + 0.5))
+    step = given.get("step", 1.0)
+    count = int(np.floor((given["to"] - given["from"]) / step + 1e-9)) + 1
+    frequency = given["frequency"]
+    signal = mono(out)
+    found = []
+    for index in range(count):
+        part = signal[index * held + held // 2 : (index + 1) * held]
+        window = np.blackman(part.size)
+        spectrum = np.abs(np.fft.rfft(part * window)) * 2.0 / window.sum()
+        bins = np.fft.rfftfreq(part.size, 1.0 / rate)
+        levels = []
+        for number in range(1, highest + 1):
+            near = np.abs(bins - number * frequency) <= max(3.0, 2.0 * rate / part.size)
+            levels.append(float(spectrum[near].max()) if near.any() and number * frequency < rate / 2 else 0.0)
+        fundamental = max(levels[0], 1e-30)
+        rest = np.sqrt(sum(level * level for level in levels[1:]))
+        found.append({
+            "level": given["from"] + step * index,
+            "out dBFS": db(fundamental),
+            "THD dB": db(rest / fundamental),
+            "harmonics dB": [db(level / fundamental) for level in levels[1:]],
+        })
+    return found
+
+
 def curve_measures(curve) -> dict:
     """What a static curve shows: the ratio over the top 10 dB of input, the gain reduction at
     the top, and the input levels where the reduction first reaches 0.5 and 1 dB, which is where

@@ -1,0 +1,97 @@
+# Our Bus compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
+# release at each of the Bus's set times, after a long burst and a short one, from a 1 kHz tone
+# burst from -20 dBFS up to 0 dBFS and back. Bus FORCE goes no slower than 500 ms, so the Bus's 0.6
+# and 1.2 s are set against its 500 ms (#338).
+#
+#   uv run run.py specs/comp-bus-release.toml --report out/comp-bus-release.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 5.0
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Bus"
+1.comp.threshold = 0xD5       # -10 dB
+1.comp.busratio = "4:1"
+1.comp.busattack = "1 ms"
+1.comp.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Bus FORCE.vst3"
+buffer_size = 512
+
+[reference.parameters]
+dry_path_mute = true
+comp_path_mute = false
+comp_path_level_db = 0.0
+sat_path_mute = true
+filter_on_off = false
+eq_on_off = false
+comp_on_off = true
+comp_sc_filter = "Off"
+comp_threshold_db = -10.0
+comp_force = 4.3
+comp_attack_ms = 1.0
+comp_make_up_gain_db = 0.0
+saturation_on_off = false
+auto_gain = false
+output_clipping_on_off = false
+input_trim_db = 0.0
+output_trim_db = 0.0
+
+[report]
+kind = "timing"
+title = "Bus compressor release against Bus FORCE"
+about = """
+Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against the compressor in \
+Arturia's Bus FORCE, by a tone burst: a 1 kHz sine at -20 dBFS for half a second, then 0 dBFS for \
+the burst, then -20 dBFS again. Both thresholds are at -10 dBFS, so the burst is compressed and \
+the rest isn't, and the gain falls as the burst starts and recovers after it ends.
+
+Each case is one of the Bus's set releases at 4:1 with its 1 ms attack, against Bus FORCE at the \
+same time with its Force at 4.3, after a half-second burst and a 50 ms one: a set release recovers \
+as fast after each. Bus FORCE goes no slower than 500 ms, so the Bus's 0.6 and 1.2 s are set \
+against its 500 ms. The Bus's Auto release is measured in comp-bus-auto, as Bus FORCE has none.
+"""
+
+[[cases]]
+name = "release-0.1-long"
+ours = { 1.comp.busrelease = "0.1 s" }
+reference = { comp_release_ms = 100.0 }
+
+[[cases]]
+name = "release-0.1-short"
+ours = { 1.comp.busrelease = "0.1 s" }
+reference = { comp_release_ms = 100.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "release-0.3-long"
+ours = { 1.comp.busrelease = "0.3 s" }
+reference = { comp_release_ms = 300.0 }
+
+[[cases]]
+name = "release-0.3-short"
+ours = { 1.comp.busrelease = "0.3 s" }
+reference = { comp_release_ms = 300.0 }
+input = { on = 0.05 }
+
+[[cases]]
+name = "release-0.6-long"
+ours = { 1.comp.busrelease = "0.6 s" }
+reference = { comp_release_ms = 500.0 }
+
+[[cases]]
+name = "release-1.2-long"
+ours = { 1.comp.busrelease = "1.2 s" }
+reference = { comp_release_ms = 500.0 }

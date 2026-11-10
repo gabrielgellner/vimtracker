@@ -5,7 +5,7 @@ by matplotlib, the plots embedded as PNGs, and the measurements in tables.
 and how to lay it out:
 
     [report]
-    kind = "response"     # response, harmonics, oscillation, static, timing or knob
+    kind = "response"     # response, harmonics, oscillation, static, timing, distortion or knob
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -26,6 +26,8 @@ The kinds:
 - `oscillation`: a filter ringing on its own from one click, its pitch in cents off its cutoff.
 - `static`: a compressor's static curve, from stepped levels.
 - `timing`: a compressor's gain over a tone burst, with attack and release times.
+- `distortion`: the harmonics an effect adds to a sine at stepped levels, as THD and the 2nd and
+  3rd harmonics against the input level.
 - `knob`: one knob swept on both sides, each step's spectral centroid and peak level, or with
   `measure` its filter's peak and bass, its brightness's decay, or its accents (see `Knob`).
 """
@@ -843,12 +845,17 @@ class Static(Report):
             panel.set_xlabel("Input, dBFS")
             if len(found) == 2:
                 ours, theirs = found["ours"], found["reference"]
+                apart = measure.curve_distance(
+                    measure.static_curve(given, r.ours, self.spec.rate),
+                    measure.static_curve(given, r.reference, self.spec.rate),
+                )
                 summary.append(html.escape(
                     f"{r.name}: ours {ratio_text(ours['ratio'])}, reducing from "
                     f"{number(ours['0.5 dB onset dBFS'], 0)} dBFS; {self.reference_name} "
                     f"{ratio_text(theirs['ratio'])}, from {number(theirs['0.5 dB onset dBFS'], 0)} dBFS; "
                     f"at 0 dBFS, {number(ours['reduction at top dB'], 1)} dB against "
-                    f"{number(theirs['reduction at top dB'], 1)} dB."
+                    f"{number(theirs['reduction at top dB'], 1)} dB; the curves are "
+                    f"{number(apart, 2)} dB apart, RMS, from -40 to 0 dBFS."
                 ))
         axes[0][0].set_ylabel("Gain reduction, dB")
         figure.tight_layout()
@@ -950,6 +957,63 @@ class Timing(Report):
             "figures": [image(figure)],
             "numbers": table(["Case", "Side", "Burst ms", "Reduction dB", "Attack 63% ms", "Attack 90% ms", "Release 63% ms", "Release 90% ms"], rows, numeric_from=2),
             "numbers note": "Times are from the burst's start, for the attack, and its end, for the release, to 63% and 90% of the way to where the gain settles.",
+        }
+
+
+class Distortion(Report):
+    """The harmonics an effect adds to a sine at stepped levels."""
+
+    reading = (
+        "Each panel is one setting. The solid curves are the total harmonic distortion at each "
+        "input level, the 2nd to 9th harmonics' power under the fundamental's, in dB; the dashed "
+        "ones are the 2nd harmonic alone, which a VCA's or a transformer's colour shows most. Each "
+        "level is read once it's settled, from the second half of its hold. A curve near the "
+        "bottom is the arithmetic's own floor, so no colour at all."
+    )
+
+    def build(self):
+        names = [r.name for r in self.rendered]
+        figure, axes = plt.subplots(1, len(names), figsize=(3.4 * len(names), 3.0), squeeze=False, sharey=True)
+        rows, summary = [], []
+        for index, r in enumerate(self.rendered):
+            given = self.inputs[r.name]
+            panel = axes[0][index]
+            worst = {}
+            for side, name, colour, samples in self.sides(r):
+                found = measure.step_harmonics(given, samples, self.spec.rate)
+                levels = [f["level"] for f in found]
+                panel.plot(levels, [f["THD dB"] for f in found], color=colour)
+                panel.plot(levels, [f["harmonics dB"][0] for f in found], color=colour, linestyle="--", linewidth=1.0)
+                for f in found:
+                    rows.append([
+                        r.name if side == "ours" and f is found[0] else "",
+                        name if f is found[0] else "",
+                        number(f["level"], 0),
+                        number(f["out dBFS"], 1),
+                        number(f["THD dB"], 1),
+                        number(f["harmonics dB"][0], 1),
+                        number(f["harmonics dB"][1], 1),
+                    ])
+                worst[side] = max(found, key=lambda f: f["THD dB"])
+            panel.set_title(r.name, loc="left")
+            panel.set_xlabel("Input, dBFS")
+            parts = []
+            for side, f in worst.items():
+                who = "ours" if side == "ours" else self.reference_name
+                parts.append(
+                    f"{who} at most {number(f['THD dB'], 1)} dB at {number(f['level'], 0)} dBFS, "
+                    f"its 2nd harmonic {number(f['harmonics dB'][0], 1)} dB and 3rd {number(f['harmonics dB'][1], 1)} dB"
+                )
+            summary.append(html.escape(f"{r.name}: " + "; ".join(parts) + "."))
+        axes[0][0].set_ylabel("Under the fundamental, dB")
+        figure.tight_layout()
+        keys = self.keys() + [(MUTED, "dashed", "the 2nd harmonic alone")]
+        return {
+            "keys": keys,
+            "summary": summary,
+            "figures": [image(figure)],
+            "numbers": table(["Case", "Side", "Input dBFS", "Out dBFS", "THD dB", "2nd dB", "3rd dB"], rows, numeric_from=2),
+            "numbers note": "Harmonics are in dB under the fundamental, from a Blackman-windowed spectrum of each level's settled half.",
         }
 
 
@@ -1139,6 +1203,7 @@ KINDS = {
     "oscillation": Oscillation,
     "static": Static,
     "timing": Timing,
+    "distortion": Distortion,
     "knob": Knob,
 }
 

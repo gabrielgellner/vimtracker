@@ -65,6 +65,10 @@ reference plugin.
 | `acid-accent`, `acid-accent-apart` | Acid's Accent, 17 steps | Acid V's | an accent's brightness and level over a plain note, and how accents in a row, or apart, build |
 | `comp-static`, `comp-static-force` | the compressor | Comp VCA-65, Bus FORCE | static curve |
 | `comp-timing`, `comp-timing-force` | the compressor | Comp VCA-65, Bus FORCE | attack, release, short and long bursts |
+| `comp-bus-static` | the compressor's `Bus` type at 2, 4 and 10:1 | Bus FORCE | static curve |
+| `comp-bus-attack`, `comp-bus-release` | `Bus`'s attacks and set releases | Bus FORCE | attack and release, short and long bursts |
+| `comp-bus-auto` | `Bus`'s Auto release | none | release after bursts from 20 ms to 2 s |
+| `comp-bus-harmonics` | `Bus` at stepped levels, 100 Hz and 1 kHz | Bus FORCE | THD and the 2nd and 3rd harmonics (`distortion`) |
 
 The Acid's filter is inside the voice, where the probe can't feed it a sweep, so `acid-filter`
 reads its shape from a held sawtooth's harmonics on both sides. The track filter's `Diode` type is

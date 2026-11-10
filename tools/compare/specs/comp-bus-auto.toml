@@ -1,0 +1,62 @@
+# Our Bus compressor's Auto release alone, as Bus FORCE has none: tone bursts from 20 ms to 2 s,
+# from -20 dBFS up to 0 dBFS and back, each followed by six seconds to let go. The G-bus's Auto is
+# two capacitors, so a short peak lets go in tens of ms and a long squeeze over seconds (#338).
+#
+#   uv run run.py specs/comp-bus-auto.toml --report out/comp-bus-auto.html
+
+rate = 48000
+
+[input]
+signal = "burst"
+frequency = 1000.0
+rest = -20.0
+level = 0.0
+before = 0.5
+on = 0.5
+after = 6.0
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Bus"
+1.comp.threshold = 0xD5       # -10 dB
+1.comp.busratio = "4:1"
+1.comp.busattack = "1 ms"
+1.comp.busrelease = "Auto"
+1.comp.mix = 0xFF
+
+[report]
+kind = "timing"
+title = "Bus compressor Auto release"
+about = """
+Our Bus compressor, the SSL G-bus type of Comp, alone, as Bus FORCE has no automatic release: a \
+1 kHz sine at -20 dBFS, then 0 dBFS for a burst, then -20 dBFS again for six seconds, with the \
+threshold at -10 dBFS, 4:1, a 1 ms attack and the release at Auto.
+
+The G-bus's Auto is two capacitors on its control voltage: a small one, 0.47 uF let go by 750k, \
+and a big one, 6.8 uF, hung on it through 91k. A short peak charges only the small one, which lets \
+go in tens of milliseconds into the empty big one; held down longer, the big one fills too, over \
+about 0.6 s, and the pair let go together over seconds. So the release after each burst should \
+grow with the burst's length.
+"""
+
+[[cases]]
+name = "burst-20ms"
+input = { on = 0.02 }
+
+[[cases]]
+name = "burst-50ms"
+input = { on = 0.05 }
+
+[[cases]]
+name = "burst-200ms"
+input = { on = 0.2 }
+
+[[cases]]
+name = "burst-500ms"
+input = { on = 0.5 }
+
+[[cases]]
+name = "burst-2s"
+input = { on = 2.0 }

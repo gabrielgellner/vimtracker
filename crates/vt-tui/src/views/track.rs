@@ -67,14 +67,12 @@ const FX_EFFECT_WIDTH: u16 = 10;
 const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [10, 10, 10, 6, 5];
 const FX_VALUE_WIDTH: u16 = 3;
 const FX_BAR_WIDTH: u16 = FX_BAR_CELLS as u16 + BAR_ENDS + 2;
-/// The columns of settings before a slot's drawing, which is as many as the effects with drawings
-/// have. The drawing starts a space after them, so that space is a column of its own, taken from
-/// the next setting's name.
-const FX_DRAWN_COLUMNS: usize = 4;
+/// A slot's drawing comes after all its columns of settings, as a compressor's `Clean` type has
+/// five, and starts a space after them.
 const FX_DRAWING_GAP: u16 = 1;
 /// The table column a slot's drawing starts in: after its number and effect, three for each
-/// column of settings before it, and the gap.
-const FX_DRAWING_COLUMN: usize = 2 + 3 * FX_DRAWN_COLUMNS + 1;
+/// column of settings, and the gap.
+const FX_DRAWING_COLUMN: usize = 2 + 3 * FX_COLUMNS + 1;
 /// Cells in a bar on the FX page, where there are more columns to fit.
 const FX_BAR_CELLS: usize = 5;
 /// Room for a section's name.
@@ -521,17 +519,13 @@ fn faded(line: Line<'static>, cursor: Style) -> Line<'static> {
 }
 
 /// The FX page's columns: a slot's number and its effect, then for each column of settings a name,
-/// a value and a bar, with the gap before a slot's drawing taken from the name after it.
+/// a value and a bar, then the gap before a slot's drawing and the drawing.
 fn fx_columns() -> Columns {
     let mut widths = vec![FX_INDENT, FX_EFFECT_WIDTH];
-    for (column, name) in FX_NAME_WIDTHS.into_iter().enumerate() {
-        if column == FX_DRAWN_COLUMNS {
-            widths.extend([FX_DRAWING_GAP, name - FX_DRAWING_GAP]);
-        } else {
-            widths.push(name);
-        }
-        widths.extend([FX_VALUE_WIDTH, FX_BAR_WIDTH]);
+    for name in FX_NAME_WIDTHS {
+        widths.extend([name, FX_VALUE_WIDTH, FX_BAR_WIDTH]);
     }
+    widths.extend([FX_DRAWING_GAP, EQ_CURVE_WIDTH as u16]);
     Columns::new(widths)
 }
 
@@ -564,8 +558,7 @@ fn fx_row(
                 let column = param / 2;
                 let labels = jump_label(app, *control);
                 let name = name_line(app, control.name_on(track), &labels, FX_NAME_WIDTHS[column]);
-                // The column before a drawing's has the gap before it too.
-                cells.span(name, 1 + usize::from(column == FX_DRAWN_COLUMNS));
+                cells.cell(name);
                 let insert = track.inserts[slot];
                 let value = value_spans(app, *control, text, style);
                 if insert.params()[param].choices.is_empty() {
@@ -737,7 +730,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 let mut below = area;
                 take_top(&mut below, start);
                 let cell = take_top(&mut below, SLOT_DRAWING_HEIGHT as u16);
-                let cell = columns.area_of(cell, FX_DRAWING_COLUMN, 3);
+                let cell = columns.area_of(cell, FX_DRAWING_COLUMN, 1);
                 frame.render_widget(Paragraph::new(slot_drawing(app, track, slot)), cell);
             }
         }

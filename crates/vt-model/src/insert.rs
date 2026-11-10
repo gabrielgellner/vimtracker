@@ -78,6 +78,37 @@ impl ChorusType {
 
 const CHORUS_TYPE_NAMES: [&str; 2] = ["Chorus", "Ensemble"];
 
+/// A compressor's character, each modelled on its own reference and tuned against it (#338).
+/// `VCA`, `FET` and `Diode` come after these, in this order, so a song's types keep their places.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompressorType {
+    /// Transparent and digital, with an exact ratio and knee, as Ableton's Compressor is.
+    #[default]
+    Clean,
+    /// An SSL G-bus's glue: set ratios, attacks and releases, an automatic release, and its
+    /// detector hearing what it's already turned down.
+    Bus,
+}
+
+impl CompressorType {
+    /// Every type, in the order `+` goes through them.
+    pub const ALL: [Self; 2] = [Self::Clean, Self::Bus];
+}
+
+const COMPRESSOR_TYPE_NAMES: [&str; 2] = ["Clean", "Bus"];
+
+/// The bus compressor's ratios, as its switch has them.
+pub const BUS_RATIOS: [f32; 3] = [2.0, 4.0, 10.0];
+const BUS_RATIO_NAMES: [&str; 3] = ["2:1", "4:1", "10:1"];
+/// The bus compressor's attacks in ms, as its switch has them.
+pub const BUS_ATTACKS_MS: [f32; 6] = [0.1, 0.3, 1.0, 3.0, 10.0, 30.0];
+const BUS_ATTACK_NAMES: [&str; 6] = ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"];
+/// The bus compressor's releases in ms, as its switch has them, before `Auto`.
+pub const BUS_RELEASES_MS: [f32; 4] = [100.0, 300.0, 600.0, 1200.0];
+/// Where `Auto` is among the bus compressor's releases: after the set times.
+pub const BUS_AUTO_RELEASE: u8 = BUS_RELEASES_MS.len() as u8;
+const BUS_RELEASE_NAMES: [&str; 5] = ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"];
+
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Setting {
@@ -106,6 +137,12 @@ pub enum Setting {
     Source,
     /// Whether a compressor makes up what it takes by itself.
     AutoGain,
+    /// A compressor's character, and the bus type's switches: its ratio, attack and release, each
+    /// a place among its choices.
+    CompressorType,
+    BusRatio,
+    BusAttack,
+    BusRelease,
     /// A limiter's: how hard it's driven, the most that comes out, and how fast it lets go.
     Input,
     Ceiling,
@@ -193,6 +230,10 @@ impl Setting {
             Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
             Self::Source => SOURCE_NAMES.len() as u8 - 1,
             Self::AutoGain => 1,
+            Self::CompressorType => CompressorType::ALL.len() as u8 - 1,
+            Self::BusRatio => BUS_RATIOS.len() as u8 - 1,
+            Self::BusAttack => BUS_ATTACKS_MS.len() as u8 - 1,
+            Self::BusRelease => BUS_AUTO_RELEASE,
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
@@ -214,6 +255,10 @@ impl Setting {
             Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
             Self::Source => (SOURCE_NAMES.len() - 1) as f32,
             Self::AutoGain => 1.0,
+            Self::CompressorType => (CompressorType::ALL.len() - 1) as f32,
+            Self::BusRatio => (BUS_RATIOS.len() - 1) as f32,
+            Self::BusAttack => (BUS_ATTACKS_MS.len() - 1) as f32,
+            Self::BusRelease => BUS_AUTO_RELEASE as f32,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
@@ -248,8 +293,11 @@ pub struct Param {
     pub default: u8,
 }
 
-/// The most settings any effect has.
+/// The most settings any effect shows at once, in the type or mode it's in.
 pub const MAX_PARAMS: usize = 10;
+/// The most settings any effect keeps across all of its types and modes, of which it shows at
+/// most [`MAX_PARAMS`]. A compressor keeps each type's own.
+pub const MAX_KEPT_PARAMS: usize = 16;
 
 const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
 const TYPE_PARAM: Param = Param {
@@ -537,59 +585,136 @@ pub fn release_ms(value: f32) -> f32 {
     10.0 * 100_f32.powf(value / 255.0)
 }
 
-/// A compressor's, in the order the page shows them.
-pub(crate) const COMPRESSOR_PARAMS: [Param; 8] = [
-    hex_param(
-        "Threshold",
-        "threshold",
-        "THRS",
-        Setting::Threshold,
-        Compressor::DEFAULT.threshold,
-    ),
-    hex_param(
-        "Ratio",
-        "ratio",
-        "RTIO",
-        Setting::Ratio,
-        Compressor::DEFAULT.ratio,
-    ),
-    hex_param(
-        "Attack",
-        "attack",
-        "ATK",
-        Setting::Attack,
-        Compressor::DEFAULT.attack,
-    ),
-    hex_param(
-        "Release",
-        "release",
-        "REL",
-        Setting::Release,
-        Compressor::DEFAULT.release,
-    ),
-    Param {
-        name: "Source",
-        key: "source",
-        // What it hears is part of how it's set up, so steps don't change it.
-        label: None,
-        setting: Setting::Source,
-        choices: &SOURCE_NAMES,
-        wraps: false,
-        default: 0,
-    },
-    Param {
-        name: "Auto",
-        key: "auto",
-        label: Some("AUTO"),
-        setting: Setting::AutoGain,
-        choices: &["Off", "On"],
-        wraps: true,
-        default: 0,
-    },
-    Param {
-        default: 0xFF,
-        ..MIX_PARAM
-    },
+const COMPRESSOR_TYPE_PARAM: Param = Param {
+    name: "Type",
+    key: "type",
+    // Choosing a type chooses a sound, so steps don't lock it.
+    label: None,
+    setting: Setting::CompressorType,
+    choices: &COMPRESSOR_TYPE_NAMES,
+    wraps: true,
+    default: 0,
+};
+const SOURCE_PARAM: Param = Param {
+    name: "Source",
+    key: "source",
+    // What it hears is part of how it's set up, so steps don't change it.
+    label: None,
+    setting: Setting::Source,
+    choices: &SOURCE_NAMES,
+    wraps: false,
+    default: 0,
+};
+const THRESHOLD_PARAM: Param = hex_param(
+    "Threshold",
+    "threshold",
+    "THRS",
+    Setting::Threshold,
+    Compressor::DEFAULT.threshold,
+);
+const RATIO_PARAM: Param = hex_param(
+    "Ratio",
+    "ratio",
+    "RTIO",
+    Setting::Ratio,
+    Compressor::DEFAULT.ratio,
+);
+const ATTACK_PARAM: Param = hex_param(
+    "Attack",
+    "attack",
+    "ATK",
+    Setting::Attack,
+    Compressor::DEFAULT.attack,
+);
+const RELEASE_PARAM: Param = hex_param(
+    "Release",
+    "release",
+    "REL",
+    Setting::Release,
+    Compressor::DEFAULT.release,
+);
+const AUTO_GAIN_PARAM: Param = Param {
+    name: "Auto",
+    key: "auto",
+    label: Some("AUTO"),
+    setting: Setting::AutoGain,
+    choices: &["Off", "On"],
+    wraps: true,
+    default: 0,
+};
+/// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
+/// their own, as a slot's labels name one setting each.
+const BUS_RATIO_PARAM: Param = Param {
+    name: "Ratio",
+    key: "busratio",
+    label: Some("BRTO"),
+    setting: Setting::BusRatio,
+    choices: &BUS_RATIO_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.bus_ratio,
+};
+const BUS_ATTACK_PARAM: Param = Param {
+    name: "Attack",
+    key: "busattack",
+    label: Some("BATK"),
+    setting: Setting::BusAttack,
+    choices: &BUS_ATTACK_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.bus_attack,
+};
+const BUS_RELEASE_PARAM: Param = Param {
+    name: "Release",
+    key: "busrelease",
+    label: Some("BREL"),
+    setting: Setting::BusRelease,
+    choices: &BUS_RELEASE_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.bus_release,
+};
+/// A compressor's whole mix, which it starts at, for compressing in parallel when turned down.
+const COMPRESSOR_MIX_PARAM: Param = Param {
+    default: 0xFF,
+    ..MIX_PARAM
+};
+/// Every setting a compressor has in any of its types, in the order songs number them. Each type
+/// shows only its own.
+pub(crate) const COMPRESSOR_PARAMS: [Param; 12] = [
+    COMPRESSOR_TYPE_PARAM,
+    SOURCE_PARAM,
+    THRESHOLD_PARAM,
+    RATIO_PARAM,
+    ATTACK_PARAM,
+    RELEASE_PARAM,
+    BUS_RATIO_PARAM,
+    BUS_ATTACK_PARAM,
+    BUS_RELEASE_PARAM,
+    AUTO_GAIN_PARAM,
+    COMPRESSOR_MIX_PARAM,
+    GAIN_PARAM,
+];
+/// `Clean`'s, in the order the page shows them: the type over what it hears, then the threshold
+/// over the ratio, the attack over the release, and Auto over the mix.
+const CLEAN_PARAMS: [Param; 9] = [
+    COMPRESSOR_TYPE_PARAM,
+    SOURCE_PARAM,
+    THRESHOLD_PARAM,
+    RATIO_PARAM,
+    ATTACK_PARAM,
+    RELEASE_PARAM,
+    AUTO_GAIN_PARAM,
+    COMPRESSOR_MIX_PARAM,
+    GAIN_PARAM,
+];
+/// `Bus`'s: its switches in place of the clean type's knobs, and no Auto gain, as the G-bus has a
+/// makeup knob and nothing to make up by itself.
+const BUS_PARAMS: [Param; 8] = [
+    COMPRESSOR_TYPE_PARAM,
+    SOURCE_PARAM,
+    THRESHOLD_PARAM,
+    BUS_RATIO_PARAM,
+    BUS_ATTACK_PARAM,
+    BUS_RELEASE_PARAM,
+    COMPRESSOR_MIX_PARAM,
     GAIN_PARAM,
 ];
 
@@ -1448,7 +1573,10 @@ impl Insert {
             Self::Reverb(_) => &REVERB_PARAMS,
             Self::Chorus(_) => &CHORUS_PARAMS,
             Self::Eq(_) => &EQ_PARAMS,
-            Self::Compressor(_) => &COMPRESSOR_PARAMS,
+            Self::Compressor(compressor) => match compressor.kind {
+                CompressorType::Clean => &CLEAN_PARAMS,
+                CompressorType::Bus => &BUS_PARAMS,
+            },
             Self::Limit(_) => &LIMIT_PARAMS,
             Self::Phaser(_) => &PHASER_PARAMS,
             Self::Flanger(_) => &FLANGER_PARAMS,
@@ -1482,7 +1610,8 @@ impl Insert {
     }
 
     /// A setting as a step gives it: a place for `Type` and `Bits`. Nothing if there's no effect
-    /// here that has it. A distortion keeps every mode's, so one not shown now still reads.
+    /// here that has it. A distortion keeps every mode's, and a compressor every type's, so one not
+    /// shown now still reads.
     pub fn read(self, setting: Setting) -> Option<u8> {
         let distort = match self {
             Self::Distort(distort) => distort,
@@ -1959,10 +2088,18 @@ impl Equaliser {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Compressor {
+    /// Its character. Each type keeps its own settings, so changing type and back finds them as
+    /// they were; those that mean the same in each are shared.
+    pub kind: CompressorType,
     pub threshold: u8,
+    /// `Clean`'s ratio, attack and release, on the `00` to `FF` scale.
     pub ratio: u8,
     pub attack: u8,
     pub release: u8,
+    /// `Bus`'s ratio, attack and release, each a place among its switch's.
+    pub bus_ratio: u8,
+    pub bus_attack: u8,
+    pub bus_release: u8,
     /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
     pub source: u8,
     /// `1` to make up by itself how much quieter it comes out than it went in, each measured over
@@ -1981,12 +2118,18 @@ impl Default for Compressor {
 }
 
 impl Compressor {
-    /// As it starts: -15 dB, about 3.7:1, a quick attack and a 100 ms release, hearing itself.
+    /// As it starts: `Clean`, at -15 dB, about 3.7:1, a quick attack and a 100 ms release,
+    /// hearing itself. `Bus` starts at 4:1 with a 10 ms attack and `Auto` release, the G-bus's
+    /// usual place on a drum bus.
     pub const DEFAULT: Self = Self {
+        kind: CompressorType::Clean,
         threshold: 0xC0,
         ratio: 0x60,
         attack: 0x55,
         release: 0x80,
+        bus_ratio: 1,
+        bus_attack: 4,
+        bus_release: BUS_AUTO_RELEASE,
         source: 0,
         auto: 0,
         mix: 0xFF,
@@ -2002,10 +2145,14 @@ impl Compressor {
     /// A setting's value. One it doesn't have reads as nothing.
     fn read(self, setting: Setting) -> u8 {
         match setting {
+            Setting::CompressorType => self.kind as u8,
             Setting::Threshold => self.threshold,
             Setting::Ratio => self.ratio,
             Setting::Attack => self.attack,
             Setting::Release => self.release,
+            Setting::BusRatio => self.bus_ratio,
+            Setting::BusAttack => self.bus_attack,
+            Setting::BusRelease => self.bus_release,
             Setting::Source => self.source,
             Setting::AutoGain => self.auto,
             Setting::Mix => self.mix,
@@ -2019,10 +2166,14 @@ impl Compressor {
         let value = value.min(setting.highest());
         let mut compressor = self;
         match setting {
+            Setting::CompressorType => compressor.kind = CompressorType::ALL[usize::from(value)],
             Setting::Threshold => compressor.threshold = value,
             Setting::Ratio => compressor.ratio = value,
             Setting::Attack => compressor.attack = value,
             Setting::Release => compressor.release = value,
+            Setting::BusRatio => compressor.bus_ratio = value,
+            Setting::BusAttack => compressor.bus_attack = value,
+            Setting::BusRelease => compressor.bus_release = value,
             Setting::Source => compressor.source = value,
             Setting::AutoGain => compressor.auto = value,
             Setting::Mix => compressor.mix = value,
@@ -2982,6 +3133,119 @@ mod tests {
             }
         }
         assert_eq!(Insert::ALL[1], Insert::Distort(Distort::default()));
+        for effect in crate::settings::Effect::ALL {
+            assert!(effect.params().len() <= MAX_KEPT_PARAMS, "{effect:?}");
+        }
+    }
+
+    /// A compressor of a type, as it starts.
+    fn compressor(kind: CompressorType) -> Insert {
+        Insert::Compressor(Compressor {
+            kind,
+            ..Compressor::DEFAULT
+        })
+    }
+
+    #[test]
+    fn a_compressor_starts_clean_and_each_type_shows_only_its_own() {
+        assert_eq!(Compressor::default().kind, CompressorType::Clean);
+        let names = |kind| {
+            compressor(kind)
+                .params()
+                .iter()
+                .map(|param| param.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(CompressorType::Clean),
+            [
+                "Type",
+                "Source",
+                "Threshold",
+                "Ratio",
+                "Attack",
+                "Release",
+                "Auto",
+                "Mix",
+                "Gain"
+            ]
+        );
+        assert_eq!(
+            names(CompressorType::Bus),
+            [
+                "Type",
+                "Source",
+                "Threshold",
+                "Ratio",
+                "Attack",
+                "Release",
+                "Mix",
+                "Gain"
+            ]
+        );
+        // The bus's ratio, attack and release are its switches', with `Auto` after the times.
+        let bus = compressor(CompressorType::Bus);
+        let choices = |at: usize| bus.params()[at].choices;
+        assert_eq!(choices(3), ["2:1", "4:1", "10:1"]);
+        assert_eq!(
+            choices(4),
+            ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"]
+        );
+        assert_eq!(choices(5), ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"]);
+        assert_eq!(bus.value(3), 1, "4:1");
+        assert_eq!(bus.value(5), BUS_AUTO_RELEASE);
+    }
+
+    #[test]
+    fn a_compressors_type_and_switches_save_and_load_and_an_old_one_loads_clean() {
+        let bus = Insert::Compressor(Compressor {
+            kind: CompressorType::Bus,
+            bus_ratio: 2,
+            bus_attack: 0,
+            bus_release: 3,
+            ..Compressor::DEFAULT
+        });
+        let saved = ron::to_string(&bus).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&saved).unwrap(), bus);
+        // A compressor saved before it had types is the clean one, as it sounded.
+        let old: Compressor = ron::from_str("(threshold: 170, ratio: 101, mix: 255)").unwrap();
+        assert_eq!(old.kind, CompressorType::Clean);
+        assert_eq!((old.threshold, old.ratio), (170, 101));
+        // Each switch has a key of its own to save and lock it by.
+        use crate::settings::{Effect, SettingId};
+        let id = SettingId::from_key("1.comp.busrelease").unwrap();
+        assert_eq!(id.name(), "Release");
+        assert_eq!(id.label().as_deref(), Some("1BREL"));
+        let at = Effect::Compressor
+            .params()
+            .iter()
+            .position(|param| param.key == "type")
+            .unwrap();
+        assert_eq!(
+            SettingId::slot(0, Effect::Compressor, at).unwrap().label(),
+            None
+        );
+    }
+
+    #[test]
+    fn changing_a_compressors_type_and_back_finds_each_types_settings() {
+        let clean = compressor(CompressorType::Clean).write(Setting::Ratio, f32::from(0x30_u8));
+        let bus = clean
+            .write(Setting::CompressorType, 1.0)
+            .write(Setting::BusRatio, 9.0);
+        assert_eq!(
+            bus.read(Setting::BusRatio),
+            Some(2),
+            "a switch stops at its last"
+        );
+        assert_eq!(
+            bus.read(Setting::Ratio),
+            Some(0x30),
+            "kept while it's not shown"
+        );
+        let back = bus.write(Setting::CompressorType, 0.0);
+        assert_eq!(back.read(Setting::Ratio), Some(0x30));
+        assert_eq!(back.read(Setting::BusRatio), Some(2));
     }
 
     #[test]
@@ -3016,6 +3280,10 @@ mod tests {
                 let highest = param.setting.highest();
                 let written = effect.write(param.setting, f32::from(highest));
                 assert_eq!(written.read(param.setting), Some(highest), "{}", param.name);
+                // A type or mode shows its own settings, so the others are another list.
+                if written.params() != effect.params() {
+                    continue;
+                }
                 for other in (0..effect.params().len()).filter(|other| *other != at) {
                     let same = effect.params()[other].name;
                     assert_eq!(written.value(other), effect.value(other), "{same}");
