@@ -4,10 +4,11 @@
 //!
 //! A spec is TOML. Its `[ours]` names a machine and the effects in a track's slots, and sets them
 //! by the keys songs store, such as `acid.cutoff` or `1.comp.threshold`, with the values the
-//! program shows, `00` to `FF` or a choice's name. Its `[reference]` is for the reference side,
-//! and isn't read here. Between them go what both play: `notes` for a voice, or `input` for an
-//! effect, at a `rate` for a `duration` in seconds. A spec can have `cases`, each changing some of
-//! either side's settings, and one is rendered at a time.
+//! program shows, `00` to `FF` or a choice's name. Its `[reference]`, or its list of
+//! `[[references]]`, is for the reference side, and isn't read here. Between them go what both
+//! play: `notes` for a voice, or `input` for an effect, at a `rate` for a `duration` in seconds. A
+//! spec can have `cases`, each changing some of either side's settings, or playing notes of its
+//! own, and one is rendered at a time.
 //!
 //! A note is played as the keyboard plays one, held through the track for its length, so the
 //! track's sound, filter and effects are all heard and nothing is sequenced. An effect's input is
@@ -86,6 +87,9 @@ pub struct Spec {
     pub ours: Ours,
     /// The reference plugin and its parameters, which only the reference side reads.
     pub reference: Option<toml::Table>,
+    /// Several reference plugins, each with a `name`, which only the reference side reads.
+    #[serde(default)]
+    pub references: Vec<toml::Table>,
     /// Versions of the spec, each changing some settings, rendered one at a time.
     #[serde(default)]
     pub cases: Vec<Case>,
@@ -125,6 +129,11 @@ pub struct Case {
     /// The reference's parameters it changes or adds, which only the reference side reads.
     #[serde(default)]
     pub reference: toml::Table,
+    /// Each named reference's parameters it changes or adds, which only the reference side reads.
+    #[serde(default)]
+    pub references: toml::Table,
+    /// The notes it plays instead of the spec's, for a voice.
+    pub notes: Option<Vec<NoteSpec>>,
     /// The input's fields it changes, such as a burst's `on`, or a whole input of another
     /// `signal`.
     #[serde(default)]
@@ -243,7 +252,8 @@ pub fn parse(text: &str) -> Result<Spec, ProbeError> {
             RATES.end()
         )));
     }
-    match (spec.notes.is_empty(), &spec.input) {
+    let case_notes = spec.cases.iter().any(|case| case.notes.is_some());
+    match (spec.notes.is_empty() && !case_notes, &spec.input) {
         (true, None) => {
             return Err(wrong(
                 "a spec needs `notes` for a voice to play or an `input` for an effect",
@@ -268,20 +278,7 @@ pub fn parse(text: &str) -> Result<Spec, ProbeError> {
             "a duration of {duration} s isn't one a probe renders, which is up to {LONGEST_SECONDS} s"
         )));
     }
-    for note in &spec.notes {
-        if !(note.time >= 0.0 && note.length > 0.0) {
-            return Err(wrong(format!(
-                "the note at {} s for {} s needs a time from 0 and a length over 0",
-                note.time, note.length
-            )));
-        }
-        if note.note > 127 || !(1..=MAX_VELOCITY).contains(&note.velocity()) {
-            return Err(wrong(format!(
-                "the note at {} s needs a note from 0 to 127 and a velocity from 1 to {MAX_VELOCITY}",
-                note.time
-            )));
-        }
-    }
+    check_notes(&spec.notes)?;
     let mut names = Vec::new();
     for case in &spec.cases {
         if names.contains(&case.name.as_str()) {
@@ -296,9 +293,47 @@ pub fn parse(text: &str) -> Result<Spec, ProbeError> {
     for case in &spec.cases {
         check_settings(&settings(&case.ours)?, machine, &effects)
             .and_then(|()| input_for(&spec, Some(case)).map(drop))
+            .and_then(|()| notes_for(&spec, Some(case)).map(drop))
             .map_err(|error| wrong(format!("in the case {}: {error}", case.name)))?;
     }
     Ok(spec)
+}
+
+/// Check that each note starts in time, lasts, and is a note at a velocity MIDI has.
+fn check_notes(notes: &[NoteSpec]) -> Result<(), ProbeError> {
+    for note in notes {
+        if !(note.time >= 0.0 && note.length > 0.0) {
+            return Err(wrong(format!(
+                "the note at {} s for {} s needs a time from 0 and a length over 0",
+                note.time, note.length
+            )));
+        }
+        if note.note > 127 || !(1..=MAX_VELOCITY).contains(&note.velocity()) {
+            return Err(wrong(format!(
+                "the note at {} s needs a note from 0 to 127 and a velocity from 1 to {MAX_VELOCITY}",
+                note.time
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// The notes a spec, or one of its cases, plays: the case's own, or else the spec's.
+fn notes_for(spec: &Spec, case: Option<&Case>) -> Result<Vec<NoteSpec>, ProbeError> {
+    match case.and_then(|case| case.notes.as_ref()) {
+        Some(_) if spec.input.is_some() => Err(wrong(
+            "a case plays notes, but the spec gives an effect an input",
+        )),
+        Some(notes) if notes.is_empty() => Err(wrong("a case's `notes` needs a note to play")),
+        Some(notes) => {
+            check_notes(notes)?;
+            Ok(notes.clone())
+        }
+        None if spec.input.is_none() && spec.notes.is_empty() => Err(wrong(
+            "the spec has no notes of its own, so every case needs `notes`",
+        )),
+        None => Ok(spec.notes.clone()),
+    }
 }
 
 /// The input a spec, or one of its cases, gives: the spec's, with the case's fields over it, or
@@ -798,7 +833,7 @@ pub fn prepare(loaded: &Loaded, case: Option<&str>) -> Result<Probe, ProbeError>
             }
         }
         Some(machine) => song.tracks[0].machine = machine,
-        None if !spec.notes.is_empty() => {
+        None if spec.input.is_none() => {
             return Err(wrong("a spec with notes needs a `machine` to play them"));
         }
         None => {}
@@ -822,7 +857,7 @@ pub fn prepare(loaded: &Loaded, case: Option<&str>) -> Result<Probe, ProbeError>
             let length = frames.len();
             (Play::Input(Arc::new(SampleData { frames })), length)
         }
-        None => (Play::Notes(spec.notes.clone()), 0),
+        None => (Play::Notes(notes_for(spec, case)?), 0),
     };
     let frames = spec
         .duration

@@ -1,50 +1,68 @@
-"""Render a spec's reference side: its `[reference]` plugin, hosted by pedalboard, playing the
-spec's notes or given its input.
+"""Render a spec's reference side: one of its references' plugins, hosted by pedalboard, playing
+the spec's notes or given its input.
 
-Usage: render_reference.py <spec.toml> <out.wav> [--case NAME]
+Usage: render_reference.py <spec.toml> <out.wav> [--case NAME] [--reference NAME]
 
 Only reads the plugin. Some plugins write their own caches as they load (u-he's do), which is
 theirs to do; nothing here writes in a plugin's folder or its preferences.
+
+A reference's section can say, beside its plugin, parameters and state:
+
+- `channels`, how many it puts out, 2 if not given; ABL3's output is mono, so 1.
+- `accent_from`, the velocity it accents a note from, so a note's `accent` reaches it as an
+  accent, or a plain note, however its threshold sits against ours.
+- `preroll`, seconds it plays before the notes, which are cut from what it renders, for a plugin
+  that makes a sound of its own as it starts, rounded up to whole buffers so its buffers fall
+  where they would without it.
+- `wake_note`, a MIDI note played for a tenth of a second at the pre-roll's start, for a plugin
+  that stays silent until it's had one.
 """
 
 from __future__ import annotations
 
 import argparse
 import difflib
+import math
 import sys
 from pathlib import Path
 
 import numpy as np
 import pedalboard
+from mido import Message
 from scipy.io import wavfile
 
-import arturia
+import plugin_state
 import spec as specs
 
 # Arturia's plugins put out silence at pedalboard's default buffer size of 8192 (#186), so a host's
 # buffer size is used unless a spec gives its own.
 DEFAULT_BUFFER_SIZE = 512
+# How long a wake note is held, in seconds.
+WAKE_SECONDS = 0.1
 
 
 class Reference:
     """A loaded plugin, kept between cases, with the values its parameters had as it loaded so each
     case starts from them."""
 
-    def __init__(self, path: str, plugin_name: str | None = None, preset=None, state=None):
-        self.path = path
-        self.plugin = pedalboard.load_plugin(path, plugin_name=plugin_name)
+    def __init__(self, section: dict):
+        self.section = section
+        self.name = section.get("name") or Path(section["plugin"]).stem
+        self.path = section["plugin"]
+        self.plugin = pedalboard.load_plugin(self.path, plugin_name=section.get("plugin_name"))
+        preset, state = section.get("preset"), section.get("state")
         if preset or state:
             # Acid V, at least, plays from a state only once it's been given it a second time: the
             # first leaves it silent (found on 2026-11-10).
             for _ in range(2):
-                arturia.start_from(self.plugin, path, preset, state)
+                plugin_state.start_from(self.plugin, self.path, preset, state)
         self.loaded = {}
 
     @classmethod
     def of(cls, section: dict) -> "Reference":
-        """The plugin a spec's `[reference]` names, started from its preset and state if it gives
-        them."""
-        return cls(section["plugin"], section.get("plugin_name"), section.get("preset"), section.get("state"))
+        """The plugin a spec's reference section names, started from its preset and state if it
+        gives them."""
+        return cls(section)
 
     def set(self, parameters: dict) -> None:
         known = self.plugin.parameters
@@ -62,31 +80,43 @@ class Reference:
             setattr(self.plugin, name, value)
 
 
-def render(spec: specs.Spec, case: str | None, reference: Reference | None = None) -> np.ndarray:
-    """The reference's output for a spec, or one of its cases, as stereo samples (2, frames)."""
-    section = spec.reference(case)
+def render(spec: specs.Spec, case: str | None, reference: Reference | None = None, name: str | None = None) -> np.ndarray:
+    """A reference's output for a spec, or one of its cases, as stereo samples (2, frames): the
+    one called `name`, or the reference given, or the spec's first."""
+    section = spec.reference(case, name or (reference.name if reference else None))
     if reference is None:
         reference = Reference.of(section)
     reference.set(section["parameters"])
     buffer_size = int(section.get("buffer_size", DEFAULT_BUFFER_SIZE))
+    channels = int(section.get("channels", 2))
     plugin, rate = reference.plugin, spec.rate
-    if "notes" in spec.data:
+    preroll = math.ceil(float(section.get("preroll", 0.0)) * rate / buffer_size) * buffer_size
+    if spec.plays_notes:
         frames = specs.duration_frames(spec)
+        messages = specs.midi(spec, case, int(section.get("accent_from", specs.ACCENT_VELOCITY)), preroll / rate)
+        if "wake_note" in section:
+            note = int(section["wake_note"])
+            messages = [
+                Message("note_on", note=note, velocity=specs.DEFAULT_VELOCITY, time=0.0),
+                Message("note_off", note=note, velocity=0, time=WAKE_SECONDS),
+            ] + messages
+            # In time order, keeping each time's note-offs before its note-ons.
+            messages.sort(key=lambda message: message.time)
         out = plugin(
-            specs.midi(spec),
-            duration=frames / rate,
+            messages,
+            duration=(preroll + frames) / rate,
             sample_rate=rate,
-            num_channels=2,
+            num_channels=channels,
             buffer_size=buffer_size,
             reset=True,
         )
     else:
         given = specs.signal(spec, case)
         frames = specs.duration_frames(spec, given.shape[1])
-        padded = np.zeros((2, frames), dtype=np.float32)
-        padded[:, : min(frames, given.shape[1])] = given[:, :frames]
+        padded = np.zeros((channels, preroll + frames), dtype=np.float32)
+        padded[:, preroll : preroll + min(frames, given.shape[1])] = given[:channels, :frames]
         out = plugin(padded, rate, buffer_size=buffer_size, reset=True)
-    out = np.asarray(out, dtype=np.float32)
+    out = np.asarray(out, dtype=np.float32)[:, preroll:]
     if out.shape[0] == 1:
         out = np.vstack([out, out])
     if out.shape[1] < frames:
@@ -104,9 +134,10 @@ def main() -> None:
     parser.add_argument("spec", type=Path)
     parser.add_argument("out", type=Path)
     parser.add_argument("--case")
+    parser.add_argument("--reference", help="which of the spec's references; the first if not given")
     args = parser.parse_args()
     spec = specs.read(args.spec)
-    out = render(spec, args.case)
+    out = render(spec, args.case, name=args.reference)
     write(args.out, spec.rate, out)
     print(f"Rendered {args.out} ({out.shape[1] / spec.rate:.2f} s)", file=sys.stderr)
 

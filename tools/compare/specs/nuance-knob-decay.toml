@@ -1,0 +1,186 @@
+# Decision 117's `acid-decay` against both references, Arturia's Acid V and AudioRealism's
+# ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-knob-decay.toml --report out/nuance-knob-decay.html
+
+rate = 48000
+duration = 4.2
+
+[[notes]]
+time = 0.05
+length = 4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x00
+acid.resonance = 0x00
+acid.envmod = 0xFF
+acid.accent = 0x80
+acid.drive = 0x00
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.0
+resonance = 0.0
+envelope_mod = 1.0
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.0
+resonance = 0.0
+envmod = 1.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Decay knob against Acid V's and ABL3's"
+knob = "acid.decay"
+reference_knob = { "Acid V" = "decay", ABL3 = "decay" }
+measure = "decay"
+about = """
+Our Acid's Decay and Acid V's, each turned from bottom to top in sixteen even steps, with Env
+Mod full, the cutoff at its bottom and no resonance, so the note's brightness follows the filter
+envelope. Each step holds a C-2 for 4 s; its spectral centroid is read every 5 ms and fitted
+with an exponential, whose time constant is the decay measured. It's measured through the
+brightness, so it's shorter than the envelope's own time constant, the same way on both sides.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so
+a plain note is played at 99 and an accent at 0x70.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "decay-00"
+ours = { acid.decay = 0x00 }
+references = { "Acid V" = { decay = 0 }, ABL3 = { decay = 0.0 } }
+
+[[cases]]
+name = "decay-10"
+ours = { acid.decay = 0x10 }
+references = { "Acid V" = { decay = 0.0625 }, ABL3 = { decay = 0.06 } }
+
+[[cases]]
+name = "decay-20"
+ours = { acid.decay = 0x20 }
+references = { "Acid V" = { decay = 0.125 }, ABL3 = { decay = 0.12 } }
+
+[[cases]]
+name = "decay-30"
+ours = { acid.decay = 0x30 }
+references = { "Acid V" = { decay = 0.1875 }, ABL3 = { decay = 0.19 } }
+
+[[cases]]
+name = "decay-40"
+ours = { acid.decay = 0x40 }
+references = { "Acid V" = { decay = 0.25 }, ABL3 = { decay = 0.25 } }
+
+[[cases]]
+name = "decay-50"
+ours = { acid.decay = 0x50 }
+references = { "Acid V" = { decay = 0.3125 }, ABL3 = { decay = 0.31 } }
+
+[[cases]]
+name = "decay-60"
+ours = { acid.decay = 0x60 }
+references = { "Acid V" = { decay = 0.375 }, ABL3 = { decay = 0.38 } }
+
+[[cases]]
+name = "decay-70"
+ours = { acid.decay = 0x70 }
+references = { "Acid V" = { decay = 0.4375 }, ABL3 = { decay = 0.44 } }
+
+[[cases]]
+name = "decay-80"
+ours = { acid.decay = 0x80 }
+references = { "Acid V" = { decay = 0.5 }, ABL3 = { decay = 0.5 } }
+
+[[cases]]
+name = "decay-8F"
+ours = { acid.decay = 0x8F }
+references = { "Acid V" = { decay = 0.5625 }, ABL3 = { decay = 0.56 } }
+
+[[cases]]
+name = "decay-9F"
+ours = { acid.decay = 0x9F }
+references = { "Acid V" = { decay = 0.625 }, ABL3 = { decay = 0.62 } }
+
+[[cases]]
+name = "decay-AF"
+ours = { acid.decay = 0xAF }
+references = { "Acid V" = { decay = 0.6875 }, ABL3 = { decay = 0.69 } }
+
+[[cases]]
+name = "decay-BF"
+ours = { acid.decay = 0xBF }
+references = { "Acid V" = { decay = 0.75 }, ABL3 = { decay = 0.75 } }
+
+[[cases]]
+name = "decay-CF"
+ours = { acid.decay = 0xCF }
+references = { "Acid V" = { decay = 0.8125 }, ABL3 = { decay = 0.81 } }
+
+[[cases]]
+name = "decay-DF"
+ours = { acid.decay = 0xDF }
+references = { "Acid V" = { decay = 0.875 }, ABL3 = { decay = 0.88 } }
+
+[[cases]]
+name = "decay-EF"
+ours = { acid.decay = 0xEF }
+references = { "Acid V" = { decay = 0.9375 }, ABL3 = { decay = 0.94 } }
+
+[[cases]]
+name = "decay-FF"
+ours = { acid.decay = 0xFF }
+references = { "Acid V" = { decay = 1 }, ABL3 = { decay = 1.0 } }

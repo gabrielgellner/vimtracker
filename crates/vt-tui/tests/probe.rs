@@ -11,8 +11,21 @@ const ACID_SPEC: &str = include_str!("../../../tools/compare/specs/acid-cutoff.t
 const COMP_SPEC: &str = include_str!("../../../tools/compare/specs/comp-static.toml");
 const LADDER_SPEC: &str = include_str!("../../../tools/compare/specs/filter-ladder.toml");
 const TIMING_SPEC: &str = include_str!("../../../tools/compare/specs/comp-timing.toml");
-/// Every spec in tools/compare, which must all parse and prepare.
-const SPECS: [&str; 12] = [
+/// Specs in tools/compare, which must all parse and prepare, with the nuance suite's, whose cases
+/// play notes of their own and name two references.
+const SPECS: [&str; 24] = [
+    include_str!("../../../tools/compare/specs/nuance-accents.toml"),
+    include_str!("../../../tools/compare/specs/nuance-extremes.toml"),
+    include_str!("../../../tools/compare/specs/nuance-gate.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-accent-apart.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-accent.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-cutoff-peak.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-cutoff.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-decay.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-envmod.toml"),
+    include_str!("../../../tools/compare/specs/nuance-knob-resonance.toml"),
+    include_str!("../../../tools/compare/specs/nuance-legato.toml"),
+    include_str!("../../../tools/compare/specs/nuance-slides.toml"),
     ACID_SPEC,
     include_str!("../../../tools/compare/specs/acid-filter.toml"),
     COMP_SPEC,
@@ -375,4 +388,68 @@ fn a_spec_plays_notes_or_an_input_and_says_how_long() {
         parse("rate = 48000\nmistake = 1\n[ours]\n"),
         Err(ProbeError::Parse(_))
     ));
+}
+
+/// A spec whose cases each play their own notes, with no notes of its own, and two references.
+const CASE_NOTES: &str = "duration = 0.5\n\
+     [ours]\nmachine = \"acid\"\n\
+     [[references]]\nname = \"one\"\nplugin = \"a.vst3\"\n\
+     [[references]]\nname = \"two\"\nplugin = \"b.vst3\"\n\
+     [[cases]]\nname = \"early\"\nnotes = [{ time = 0.05, length = 0.1, note = 36 }]\n\
+     references.one = { cutoff = 0.5 }\n\
+     [[cases]]\nname = \"late\"\nnotes = [{ time = 0.25, length = 0.1, note = 36 }]\n";
+
+#[test]
+fn a_case_plays_its_own_notes_instead_of_the_specs() {
+    // The frame a note starts on, whose first sample is the attack's zero.
+    let start = |out: &[f32]| out.iter().position(|sample| *sample != 0.0).unwrap() / 2 - 1;
+    assert_eq!(
+        start(&rendered(CASE_NOTES, Some("early"))),
+        frames_in(0.05, 48_000)
+    );
+    assert_eq!(
+        start(&rendered(CASE_NOTES, Some("late"))),
+        frames_in(0.25, 48_000)
+    );
+
+    // Over the spec's own notes too, which a case without notes keeps.
+    let spec = format!(
+        "{}[[cases]]\nname = \"late\"\nnotes = [{{ time = 0.15, length = 0.05, note = 48 }}]\n\
+         [[cases]]\nname = \"own\"\n",
+        acid("")
+    );
+    assert_eq!(
+        start(&rendered(&spec, Some("own"))),
+        frames_in(0.05, 48_000)
+    );
+    assert_eq!(
+        start(&rendered(&spec, Some("late"))),
+        frames_in(0.15, 48_000)
+    );
+}
+
+#[test]
+fn case_notes_are_checked_and_need_a_voice() {
+    let without = format!("{CASE_NOTES}[[cases]]\nname = \"none\"\n");
+    let message = refused(&without);
+    assert!(
+        message.contains("none") && message.contains("notes"),
+        "{message}"
+    );
+
+    let empty = CASE_NOTES.replace(
+        "notes = [{ time = 0.25, length = 0.1, note = 36 }]",
+        "notes = []",
+    );
+    assert!(refused(&empty).contains("late"));
+
+    let held_for_nothing =
+        CASE_NOTES.replace("time = 0.25, length = 0.1", "time = 0.25, length = 0.0");
+    assert!(refused(&held_for_nothing).contains("length"));
+
+    let effect = format!(
+        "{}[[cases]]\nname = \"notes\"\nnotes = [{{ time = 0.0, length = 0.1, note = 36 }}]\n",
+        sine_through("")
+    );
+    assert!(refused(&effect).contains("input"));
 }

@@ -1,7 +1,8 @@
 """Reading a comparison spec, as `vimtracker probe` reads it, and making what both sides play.
 
-A spec is TOML (decision 110). Our side reads `[ours]`, the reference side `[reference]`, and both
-read `rate`, `duration`, and `notes` or `input`. The input signals and the notes' timing here must
+A spec is TOML (decision 110). Our side reads `[ours]`, the reference side `[reference]` or the
+list `[[references]]`, and both read `rate`, `duration`, and `notes` or `input`, which a case can
+change. The input signals and the notes' timing here must
 match `crates/vt-tui/src/dsp_probe.rs`: `run.py` checks the signals against the probe's own.
 """
 
@@ -42,7 +43,27 @@ class Spec:
     @property
     def has_reference(self) -> bool:
         """Whether there's a reference to render, as a spec can measure ours alone."""
-        return bool((self.data.get("reference") or {}).get("plugin"))
+        return bool(self.reference_names)
+
+    @property
+    def reference_names(self) -> list[str]:
+        """The references' names, in the spec's order: each of `[[references]]`'s `name`, or the
+        one `[reference]`'s plugin's."""
+        return [name for name, _ in self._references()]
+
+    def _references(self) -> list[tuple[str, dict]]:
+        listed = self.data.get("references")
+        if listed:
+            out = []
+            for section in listed:
+                if not section.get("name") or not section.get("plugin"):
+                    raise SystemExit(f"{self.path}: each of [[references]] needs a `name` and a `plugin`")
+                out.append((section["name"], section))
+            return out
+        single = self.data.get("reference") or {}
+        if not single.get("plugin"):
+            return []
+        return [(Path(single["plugin"]).stem, single)]
 
     @property
     def report(self) -> dict:
@@ -66,15 +87,32 @@ class Spec:
             return dict(changes)
         return {**given, **changes}
 
-    def reference(self, case: str | None) -> dict:
-        """The reference's section, with a case's parameters over its own."""
-        reference = dict(self.data.get("reference") or {})
-        if not reference.get("plugin"):
+    def reference(self, case: str | None, name: str | None = None) -> dict:
+        """A reference's section, the first if no name is given, with a case's parameters over its
+        own: the case's `reference`, which is for every reference, then its `references.<name>`."""
+        known = dict(self._references())
+        if not known:
             raise SystemExit(f"{self.path}: [reference] needs a `plugin` path")
+        name = name or next(iter(known))
+        if name not in known:
+            raise SystemExit(f"{self.path} has no reference called {name}; it has {', '.join(known)}")
+        reference = dict(known[name])
+        reference["name"] = name
         parameters = dict(reference.get("parameters", {}))
-        parameters.update(self.case(case).get("reference", {}))
+        chosen = self.case(case)
+        parameters.update(chosen.get("reference", {}))
+        parameters.update((chosen.get("references") or {}).get(name, {}))
         reference["parameters"] = parameters
         return reference
+
+    def notes(self, case: str | None) -> list[dict]:
+        """The notes a case plays: its own, or else the spec's."""
+        own = self.case(case).get("notes")
+        return list(own) if own is not None else list(self.data.get("notes", []))
+
+    @property
+    def plays_notes(self) -> bool:
+        return bool(self.data.get("notes")) or any("notes" in case for case in self.data.get("cases", []))
 
     def case(self, name: str | None) -> dict:
         cases = self.data.get("cases", [])
@@ -165,27 +203,31 @@ def signal(spec: Spec, case: str | None = None) -> np.ndarray:
     return np.vstack([mono, mono])
 
 
-def velocity(note: dict) -> int:
-    """A note's velocity with its accent, as the probe plays it."""
+def velocity(note: dict, accent_from: int = ACCENT_VELOCITY) -> int:
+    """A note's velocity with its accent, as the probe plays it, or for a reference that accents
+    from `accent_from`: an accent is raised to ours and its, whichever is higher, and a plain note
+    kept under both, so `accent` means the same on every side."""
     value = int(note.get("velocity", DEFAULT_VELOCITY))
     accent = note.get("accent")
     if accent is True:
-        return max(value, ACCENT_VELOCITY)
+        return max(value, ACCENT_VELOCITY, accent_from)
     if accent is False:
-        return min(value, ACCENT_VELOCITY - 1)
+        return min(value, ACCENT_VELOCITY - 1, accent_from - 1)
     return value
 
 
-def midi(spec: Spec) -> list:
-    """The notes as MIDI messages at times in seconds, for pedalboard. A sliding note is held until
-    just after the next starts, as the probe holds it into the next."""
+def midi(spec: Spec, case: str | None = None, accent_from: int = ACCENT_VELOCITY, later: float = 0.0) -> list:
+    """A case's notes as MIDI messages at times in seconds, for pedalboard, all `later` seconds
+    on. A sliding note is held until just after the next starts, as the probe holds it into the
+    next."""
     from mido import Message
 
-    notes = sorted(spec.data["notes"], key=lambda note: note["time"])
+    notes = sorted(spec.notes(case), key=lambda note: note["time"])
     events = []  # (seconds, order, message): note-offs before note-ons at the same time
     for index, note in enumerate(notes):
         start, end = note["time"], note["time"] + note["length"]
-        events.append((start, 1, Message("note_on", note=note["note"], velocity=velocity(note))))
+        played = velocity(note, accent_from)
+        events.append((start, 1, Message("note_on", note=note["note"], velocity=played)))
         following = notes[index + 1] if index + 1 < len(notes) else None
         if note.get("slide") and following is not None and following["time"] >= end:
             if following["note"] == note["note"]:
@@ -195,7 +237,7 @@ def midi(spec: Spec) -> list:
     events.sort(key=lambda event: (event[0], event[1]))
     messages = []
     for seconds, _, message in events:
-        messages.append(message.copy(time=seconds))
+        messages.append(message.copy(time=seconds + later))
     return messages
 
 
