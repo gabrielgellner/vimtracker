@@ -1,7 +1,7 @@
 # Distort's `Overdrive` pedal against Ableton Live's Pedal in its Overdrive mode, the first
 # overdrive reference the harness has (#364): the harmonics each adds to a sine at stepped levels,
 # as pedal-overdrive measured ours alone, at our lowest, a quarter and highest `Amount` against
-# Pedal's Gain at 0, 25 and 100%, at 1 kHz, over the 720 Hz where a Tube Screamer's gain branch
+# Pedal's Drive at 0, 25 and 100%, at 1 kHz, over the 720 Hz where a Tube Screamer's gain branch
 # starts, and at 110 Hz, under it. Pedal's tone controls are left where they load.
 #
 #   uv run run.py specs/live-pedal-overdrive.toml --report out/live-pedal-overdrive.html
@@ -40,7 +40,7 @@ Our Distort slot's `Overdrive` type, a Tube Screamer's circuit, against Ableton 
 its Overdrive mode, fully wet, with its output at 0 dB and its Bass, Mid and Treble where they \
 load: the harmonics each adds to a 1 kHz or 110 Hz sine held at -54 to 0 dBFS, 6 dB apart.
 
-Our `Amount` isn't fitted to Pedal's Gain, so its bottom, a quarter and top are set against \
+Our `Amount` isn't fitted to Pedal's Drive, so its bottom, a quarter and top are set against \
 Pedal's 0, 25 and 100%. A Tube Screamer clips only what's over 720 Hz and adds it to the clean \
 sound, so its 110 Hz sine keeps its clean part even when clipped; whether Pedal's does says how \
 close its overdrive is to one.
@@ -49,26 +49,26 @@ close its overdrive is to one.
 [[cases]]
 name = "amount-00-1kHz"
 ours = { 1.distort.amount = 0x00 }
-reference = { Gain = "0 %" }
+reference = { Drive = "0 %" }
 
 [[cases]]
 name = "amount-40-1kHz"
 ours = { 1.distort.amount = 0x40 }
-reference = { Gain = "25 %" }
+reference = { Drive = "25 %" }
 
 [[cases]]
 name = "amount-FF-1kHz"
 ours = { 1.distort.amount = 0xFF }
-reference = { Gain = "100 %" }
+reference = { Drive = "100 %" }
 
 [[cases]]
 name = "amount-40-110Hz"
 ours = { 1.distort.amount = 0x40 }
-reference = { Gain = "25 %" }
+reference = { Drive = "25 %" }
 input = { frequency = 110.0 }
 
 [[cases]]
 name = "amount-FF-110Hz"
 ours = { 1.distort.amount = 0xFF }
-reference = { Gain = "100 %" }
+reference = { Drive = "100 %" }
 input = { frequency = 110.0 }

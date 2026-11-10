@@ -42,6 +42,7 @@ import math
 import os
 import socket
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -87,7 +88,26 @@ class LiveError(SystemExit):
     """Something Live or the bridge refused, with why."""
 
 
+# Live fills a new track's list of inputs a moment after making it, so a request that finds it
+# empty is tried again after this long, this many times.
+ROUTING_RETRY_SECONDS = 1.0
+ROUTING_RETRIES = 3
+
+
 def request(command: str, timeout: float = 15.0, address=None, **fields) -> dict:
+    """Send the bridge one request and wait for its answer, trying again while a new track's inputs
+    aren't listed yet."""
+    for _ in range(ROUTING_RETRIES):
+        try:
+            return request_once(command, timeout, address, **fields)
+        except LiveError as error:
+            if "can't take its input from" not in str(error):
+                raise
+            time.sleep(ROUTING_RETRY_SECONDS)
+    return request_once(command, timeout, address, **fields)
+
+
+def request_once(command: str, timeout: float = 15.0, address=None, **fields) -> dict:
     """Send the bridge one request and wait for its answer."""
     host, port = address or ADDRESS
     try:
@@ -316,12 +336,16 @@ def main() -> None:
     listing = commands.add_parser("params", help="load a device and list its parameters")
     listing.add_argument("device")
     commands.add_parser("null", help="render a sweep through no device and check it comes back the same")
+    commands.add_parser("reload", help="have the bridge read its code again, without restarting Live")
     args = parser.parse_args()
     if args.command == "ping":
         answer = request("ping")
         print(f"Live {answer.get('live')} is answering: bridge {answer['bridge']}, tempo {answer['tempo']:g} BPM")
     elif args.command == "params":
         print_parameters(args.device)
+    elif args.command == "reload":
+        answer = request("reload")
+        print(f"the bridge read its code again: bridge {answer['bridge']}")
     elif args.command == "null":
         sys.exit(0 if null_check() else 1)
 

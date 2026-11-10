@@ -1,7 +1,7 @@
 # Distort's `Distortion` pedal against Ableton Live's Pedal in its Distortion mode, and Arturia's
 # Dist OPAMP-21 in its `Modern` mode as pedal-distortion-harmonics has it: the harmonics each adds
 # to a sine held at stepped levels, at three drives (#364). Our `Amount`'s `40`, `80` and `FF` are
-# OPAMP-21's 25, 50 and 100% `Drive`, and are set against Pedal's Gain at the same.
+# OPAMP-21's 25, 50 and 100% `Drive`, and are set against Pedal's Drive at the same.
 #
 #   uv run run.py specs/live-pedal-distortion.toml --report out/live-pedal-distortion.html
 
@@ -58,27 +58,27 @@ Arturia's Dist OPAMP-21 in its `Modern` mode, which has no tone stack, with its 
 harmonics each adds to a 110 Hz or 1 kHz sine held at -54 to 0 dBFS, 6 dB apart. Our `Tone` is \
 fully open, at 12 kHz.
 
-`Amount` is fitted so its place is OPAMP-21's `Drive`; Pedal's Gain is set to the same place, \
+`Amount` is fitted so its place is OPAMP-21's `Drive`; Pedal's Drive is set to the same place, \
 unfitted. The summary compares ours with Pedal; OPAMP-21 is drawn beside them.
 """
 
 [[cases]]
 name = "drive-25"
 ours = { 1.distort.amount = 0x40 }
-references = { Pedal = { Gain = "25 %" }, "Dist OPAMP-21" = { drive = 25.0 } }
+references = { Pedal = { Drive = "25 %" }, "Dist OPAMP-21" = { drive = 25.0 } }
 
 [[cases]]
 name = "drive-50"
 ours = { 1.distort.amount = 0x80 }
-references = { Pedal = { Gain = "50 %" }, "Dist OPAMP-21" = { drive = 50.0 } }
+references = { Pedal = { Drive = "50 %" }, "Dist OPAMP-21" = { drive = 50.0 } }
 
 [[cases]]
 name = "drive-100"
 ours = { 1.distort.amount = 0xFF }
-references = { Pedal = { Gain = "100 %" }, "Dist OPAMP-21" = { drive = 100.0 } }
+references = { Pedal = { Drive = "100 %" }, "Dist OPAMP-21" = { drive = 100.0 } }
 
 [[cases]]
 name = "drive-50-1kHz"
 ours = { 1.distort.amount = 0x80 }
-references = { Pedal = { Gain = "50 %" }, "Dist OPAMP-21" = { drive = 50.0 } }
+references = { Pedal = { Drive = "50 %" }, "Dist OPAMP-21" = { drive = 50.0 } }
 input = { frequency = 1000.0 }

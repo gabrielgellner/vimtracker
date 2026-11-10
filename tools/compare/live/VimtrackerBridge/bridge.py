@@ -27,6 +27,7 @@ stand-ins for Live's.
 """
 
 import difflib
+import importlib
 import json
 import os
 import socket
@@ -48,6 +49,8 @@ NO_QUANTIZATION = 0
 # How long Live may take to put a device on a track, and to finish writing a recording, in seconds.
 LOAD_SECONDS = 5.0
 WRITE_SECONDS = 15.0
+# How long a fired empty slot on an armed track may take to start recording, in seconds.
+ARM_SECONDS = 2.0
 
 
 class Refused(Exception):
@@ -194,12 +197,24 @@ class Bridge:
             return {"device": self.describe(self.device())}
         if command == "set":
             return self.set(request.get("parameters") or {})
+        if command == "reload":
+            return self.reload()
         if command == "render":
             if self.rendering:
                 raise Refused("a render is already running")
             self.rendering = True
             return self.render(request["path"], float(request["seconds"]))
-        raise Refused(f"no command called {command}; there are ping, load, parameters, set and render")
+        raise Refused(f"no command called {command}; there are ping, load, parameters, set, render and reload")
+
+    def reload(self):
+        """Read this module and `values` again from disk, so a change to the bridge takes without
+        restarting Live. The listener and the tracks stay as they are; only the code is new."""
+        if self.rendering:
+            raise Refused("a render is running; reload once it's done")
+        importlib.reload(values)
+        module = importlib.reload(importlib.import_module(__name__))
+        self.__class__ = module.Bridge
+        return {"bridge": module.VERSION}
 
     def live_version(self):
         application = self.application
@@ -356,9 +371,20 @@ class Bridge:
         played = source_slot.clip
         settle(played, "warping", False)
         settle(played, "looping", False)
-        if not sink_slot.will_record_on_start:
-            raise Refused(f"{SINK} won't record: arm it, and check it's an audio track")
+        # Live says an empty slot will record only once it's been fired, so the sink is fired and
+        # then watched until it is recording, before the source starts.
         sink_slot.fire()
+        deadline = self.clock() + ARM_SECONDS
+        while not (
+            sink_slot.is_recording
+            or getattr(sink_slot, "is_triggered", False)
+            or sink_slot.will_record_on_start
+            or sink_slot.has_clip
+        ):
+            if self.clock() > deadline:
+                song.stop_playing()
+                raise Refused(f"{SINK} won't record: {recording_state(sink, sink_slot)}")
+            yield
         source_slot.fire()
         started = self.clock()
         while self.clock() < started + seconds:
@@ -386,6 +412,24 @@ class Bridge:
             "clip gain": getattr(played, "gain_display_string", None),
             "warping": getattr(played, "warping", None),
         }
+
+
+def recording_state(track, slot):
+    """What Live says about the sink, for when its slot won't record."""
+    fields = {
+        "arm": getattr(track, "arm", None),
+        "can be armed": getattr(track, "can_be_armed", None),
+        "frozen": getattr(track, "is_frozen", None),
+        "input": getattr(getattr(track, "input_routing_type", None), "display_name", None),
+        "channel": getattr(getattr(track, "input_routing_channel", None), "display_name", None),
+        "monitoring": getattr(track, "current_monitoring_state", None),
+        "slot has a clip": getattr(slot, "has_clip", None),
+        "slot will record": getattr(slot, "will_record_on_start", None),
+        "slot triggered": getattr(slot, "is_triggered", None),
+        "slot recording": getattr(slot, "is_recording", None),
+        "playing": getattr(getattr(track, "canonical_parent", None), "is_playing", None),
+    }
+    return ", ".join(f"{name} {value}" for name, value in fields.items())
 
 
 def chain(track):

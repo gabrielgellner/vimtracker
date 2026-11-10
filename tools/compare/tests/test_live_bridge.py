@@ -59,6 +59,12 @@ def listed(items):
     return lambda value: items[int(round(value))]
 
 
+def stepped(shown):
+    """A continuous parameter from 0 to 1 that shows one of a few steps, as Glue's Attack and
+    Release do."""
+    return lambda value: shown[min(int(value * len(shown)), len(shown) - 1)]
+
+
 def decibels(low, high, digits=1):
     return lambda value: f"{low + (high - low) * value:.{digits}f} dB"
 
@@ -93,15 +99,14 @@ def glue():
             Parameter("Device On", listed(["Off", "On"]), 0, 1, 1, items=["Off", "On"]),
             Parameter("Threshold", decibels(-40, 0), value=1.0),
             Parameter("Ratio", listed(["2", "4", "10"]), 0, 2, 0, items=["2", "4", "10"]),
-            Parameter("Attack", listed(["0.01 ms", "0.1 ms", "0.3 ms", "1.00 ms", "3.00 ms", "10.0 ms", "30.0 ms"]), 0, 6, 0,
-                      items=["0.01 ms", "0.1 ms", "0.3 ms", "1.00 ms", "3.00 ms", "10.0 ms", "30.0 ms"]),
-            Parameter("Release", listed(["0.1 s", "0.2 s", "0.4 s", "0.6 s", "0.8 s", "1.2 s", "A"]), 0, 6, 0,
-                      items=["0.1 s", "0.2 s", "0.4 s", "0.6 s", "0.8 s", "1.2 s", "A"]),
-            Parameter("Makeup", decibels(0, 20, 2), value=0.0),
+            # As Live 12.4 shows them: continuous, in steps, as bare numbers, Release topped by A.
+            Parameter("Attack", stepped([".01", ".1", ".3", "1", "3", "10", "30"]), value=1 / 3),
+            Parameter("Release", stepped([".1", ".2", ".4", ".6", ".8", "1.2", "A"]), value=0.5),
+            Parameter("Output", decibels(0, 20, 2), value=0.0),
             Parameter("Dry/Wet", lambda value: f"{value * 100:.0f} %", value=1.0),
             Parameter("Hold", seconds_or_ms, value=0.5),
         ],
-        gain_from="Makeup",
+        gain_from="Output",
     )
 
 
@@ -149,7 +154,9 @@ class ClipSlot:
 
     @property
     def will_record_on_start(self):
-        return self.track.arm and not self.has_clip
+        # As Live 12.4 has it: only a fired slot waiting to start says it will record, never an
+        # armed empty one before it's fired.
+        return False
 
     def create_audio_clip(self, path):
         assert self.clip is None and os.path.isabs(path)
@@ -160,7 +167,7 @@ class ClipSlot:
 
     def fire(self):
         self.fired = True
-        if self.will_record_on_start:
+        if self.track.arm and not self.has_clip:
             self.is_recording = True
         self.track.song.is_playing = True
 
@@ -289,6 +296,14 @@ class Values(unittest.TestCase):
         self.assertIsNone(values.parse("A"))
         self.assertIsNone(values.parse("Overdrive"))
 
+    def test_bare_steps_and_a_named_top(self):
+        release = Parameter("Release", stepped([".1", ".2", ".4", ".6", ".8", "1.2", "A"]))
+        for wanted, shown in ((0.1, ".1"), (0.6, ".6"), (1.2, "1.2"), ("A", "A")):
+            self.assertEqual(release.str_for_value(values.value_for(release, wanted)), shown)
+            self.assertTrue(values.matches(wanted, shown))
+        with self.assertRaises(values.Unsettable):
+            values.value_for(release, "B")
+
     def test_matches_to_the_shown_rounding(self):
         self.assertTrue(values.matches("-20 dB", "-20.0 dB"))
         self.assertTrue(values.matches(-20, "-20.0 dB"))
@@ -323,10 +338,10 @@ class Values(unittest.TestCase):
         on, ratio, attack, release = device.parameters[0], device.parameters[2], device.parameters[3], device.parameters[4]
         self.assertEqual(values.value_for(ratio, 4), 1)
         self.assertEqual(values.value_for(ratio, "10"), 2)
-        self.assertEqual(values.value_for(attack, "10 ms"), 5)
-        self.assertEqual(values.value_for(attack, "0.01 ms"), 0)
-        self.assertEqual(values.value_for(release, "A"), 6)
-        self.assertEqual(values.value_for(release, "0.4 s"), 2)
+        self.assertEqual(attack.str_for_value(values.value_for(attack, 10)), "10")
+        self.assertEqual(attack.str_for_value(values.value_for(attack, 0.01)), ".01")
+        self.assertEqual(release.str_for_value(values.value_for(release, "A")), "A")
+        self.assertEqual(release.str_for_value(values.value_for(release, 0.4)), ".4")
         self.assertEqual(values.value_for(on, False), 0)
         kind = pedal().parameters[0]
         self.assertEqual(values.value_for(kind, "distort"), 1)
@@ -387,8 +402,8 @@ class Protocol(unittest.TestCase):
 
     def test_set_answers_with_what_live_shows(self):
         live_bridge.request("load", device="Glue Compressor")
-        answer = live_bridge.request("set", parameters={"Threshold": "-20 dB", "Ratio": 4, "Attack": "10 ms", "Release": "A"})
-        self.assertEqual(answer["set"], {"Threshold": "-20.0 dB", "Ratio": "4", "Attack": "10.0 ms", "Release": "A"})
+        answer = live_bridge.request("set", parameters={"Threshold": "-20 dB", "Ratio": 4, "Attack": 10, "Release": "A"})
+        self.assertEqual(answer["set"], {"Threshold": "-20.0 dB", "Ratio": "4", "Attack": "10", "Release": "A"})
         self.assertEqual(answer["shown"]["Dry/Wet"], "100 %")
 
     def test_an_unknown_parameter_is_refused_with_its_neighbours(self):

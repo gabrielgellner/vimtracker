@@ -318,7 +318,7 @@ The specs: `live-glue-static`, `live-glue-attack` and `live-glue-release` set ou
 Glue Compressor, which is modelled on the same SSL G-bus and has its ratios, attacks and set
 releases, and its Auto release, the first reference for ours; the first two have Bus FORCE beside
 it. `live-pedal-overdrive`, `live-pedal-distortion` and `live-pedal-riff` set Distort's
-`Overdrive` and `Distortion` against Pedal's two modes, its Gain at the same place as our
+`Overdrive` and `Distortion` against Pedal's two modes, its Drive at the same place as our
 `Amount`, unfitted, with Dist OPAMP-21 beside `Distortion`. `uv run run.py --suite live` runs them
 all, about 5 minutes of Live's time.
 
