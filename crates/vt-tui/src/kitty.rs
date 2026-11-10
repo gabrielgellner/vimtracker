@@ -837,8 +837,9 @@ type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
 /// What an FX slot's drawing shows, which is all that's compared to tell if it's changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SlotDrawing {
-    /// A compressor's curve, from its threshold and ratio.
-    Compressor { threshold: u8, ratio: u8 },
+    /// A compressor's curve, from its type, threshold and ratio, with what doesn't bend it left
+    /// as it starts.
+    Compressor(Compressor),
     /// An EQ's curve, from all of its settings.
     Eq(Equaliser),
 }
@@ -852,10 +853,13 @@ impl SlotDrawing {
             })
         });
         match playing {
-            Insert::Compressor(settings) => Some(Self::Compressor {
+            Insert::Compressor(settings) => Some(Self::Compressor(Compressor {
+                kind: settings.kind,
                 threshold: settings.threshold,
                 ratio: settings.ratio,
-            }),
+                bus_ratio: settings.bus_ratio,
+                ..Compressor::DEFAULT
+            })),
             Insert::Eq(settings) => Some(Self::Eq(settings)),
             _ => None,
         }
@@ -864,7 +868,7 @@ impl SlotDrawing {
     /// How many characters across it is.
     fn width(self) -> usize {
         match self {
-            Self::Compressor { .. } => DYNAMICS_CURVE_WIDTH,
+            Self::Compressor(_) => DYNAMICS_CURVE_WIDTH,
             Self::Eq(_) => EQ_CURVE_WIDTH,
         }
     }
@@ -872,16 +876,9 @@ impl SlotDrawing {
     fn png(self, color: [u8; 3], rate: u32) -> Vec<u8> {
         match self {
             Self::Eq(settings) => eq_png(settings, rate, color, self.width(), SLOT_DRAWING_HEIGHT),
-            Self::Compressor { threshold, ratio } => compressor_png(
-                Compressor {
-                    threshold,
-                    ratio,
-                    ..Compressor::DEFAULT
-                },
-                color,
-                self.width(),
-                SLOT_DRAWING_HEIGHT,
-            ),
+            Self::Compressor(settings) => {
+                compressor_png(settings, color, self.width(), SLOT_DRAWING_HEIGHT)
+            }
         }
     }
 }

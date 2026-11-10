@@ -453,7 +453,7 @@ module per file, each keeping its port's licence notice:
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
 | `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
-| `dynamics/` | The mixing tools | `compressor`, `limiter`, `eq` |
+| `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, and `Clean`), `bus` (its `Bus` type), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A part that two folders would
@@ -468,7 +468,9 @@ as Vital files its comb and formant filters. `resonator` is the `Reso` slot effe
 voice borrows its bank of modes. `memory` names every effect with a long buffer, so it sits beside
 them in `effects/` rather than under them in `blocks/`. `grain` (Plaits' formant voice) and `noise`
 (its clocked noise) are voices; `granular`, Beads' effect, is an effect. `eq` sits with the
-compressor and limiter as a mixing tool, as a channel strip has them. `plaits_parts` holds Plaits'
+compressor and limiter as a mixing tool, as a channel strip has them. Each of the compressor's types
+(#338) has a module of its own beside `compressor`, which matches the slot's type each frame, so
+`VCA`, `FET` and `Diode` each add a module and an arm. `plaits_parts` holds Plaits'
 and stmlib's shared filters and helpers, used by voices, `lpg`, `warps` and `resonator`, so it's a
 block. Two soft clips, `drums::soft_clip` and `filter::soft_clip`, stay
 where they were written and are borrowed across folders; #260 may move shared shapers into `blocks/`.

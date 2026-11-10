@@ -5,7 +5,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
-use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
@@ -559,7 +559,7 @@ pub struct TrackState {
     /// What each of its effects keeps.
     inserts: [InsertState; INSERTS],
     /// What's heard for each setting of each slot, before modulation, as a step command gives it.
-    slot_values: [[f32; MAX_PARAMS]; INSERTS],
+    slot_values: [[f32; MAX_KEPT_PARAMS]; INSERTS],
     /// What each slot's effect is playing with now.
     resolved: [Insert; INSERTS],
     /// Whether modulation is moving each slot.
@@ -759,7 +759,7 @@ impl TrackState {
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|_| InsertState::default()),
             gliding: 0,
-            slot_values: [[0.0; MAX_PARAMS]; INSERTS],
+            slot_values: [[0.0; MAX_KEPT_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             slot_moving: [false; INSERTS],
             high_cut: Smoothed::at(1.0),

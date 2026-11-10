@@ -9160,7 +9160,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
 
     // The attack isn't on the curve, so changing it sends nothing.
-    press(&mut app, "ll=");
+    press(&mut app, "lll=");
     assert!(matches!(
         app.song().tracks[0].inserts[0],
         Insert::Compressor(Compressor { attack: 0x56, .. })
@@ -9174,10 +9174,75 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
 }
 
 #[test]
+fn a_compressors_type_shows_its_own_settings_and_the_bus_picks_its_switches_with_k() {
+    use vt_model::insert::{BUS_AUTO_RELEASE, Compressor, CompressorType, Insert};
+    let screen = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(163, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..24)
+            .map(|y| {
+                (0..163)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let compressor = |app: &App| match app.song().tracks[0].inserts[0] {
+        Insert::Compressor(compressor) => compressor,
+        other => panic!("{other:?}"),
+    };
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LLK");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).kind, CompressorType::Clean);
+    let clean = screen(&app);
+    assert!(clean.contains("Type") && clean.contains("Clean"), "{clean}");
+    assert!(clean.contains("Auto"), "{clean}");
+
+    // `=` on Type steps it to Bus, which shows its switches and no Auto gain.
+    press(&mut app, "l=");
+    assert_eq!(compressor(&app).kind, CompressorType::Bus);
+    let bus = screen(&app);
+    for shown in [
+        "Bus", "Ratio", "4:1", "Attack", "10 ms", "Release", "Mix", "Gain",
+    ] {
+        assert!(bus.contains(shown), "{shown}: {bus}");
+    }
+    assert!(!bus.contains("Auto gain") && !bus.contains("Off"), "{bus}");
+    assert_eq!(compressor(&app).bus_release, BUS_AUTO_RELEASE);
+
+    // The ratio is picked from its switch's three with `K`, and the release from its five.
+    press(&mut app, "jl");
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
+    press(&mut app, "10:1");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).bus_ratio, 2);
+    press(&mut app, "lK");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
+    press(&mut app, "0.3 s");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).bus_release, 1);
+
+    // Back to Clean, its own settings are as they were, and the bus's are kept.
+    press(&mut app, "khh-");
+    let back = compressor(&app);
+    assert_eq!(back.kind, CompressorType::Clean);
+    assert_eq!(back.ratio, Compressor::DEFAULT.ratio);
+    assert_eq!((back.bus_ratio, back.bus_release), (2, 1));
+}
+
+#[test]
 fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     use vt_engine::track_state::LiveValues;
     let draw = |app: &App| {
-        let backend = ratatui::backend::TestBackend::new(120, 24);
+        let backend = ratatui::backend::TestBackend::new(163, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
@@ -9201,7 +9266,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     let row_of = |text: &str| {
         (0..24)
             .find(|y| {
-                (0..120)
+                (0..163)
                     .map(|x| buffer[(x, *y)].symbol())
                     .collect::<String>()
                     .contains(text)
@@ -9210,23 +9275,23 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     };
     let comp = row_of("Comp");
     // The curve's placeholders, then a space, then the meter.
-    assert_eq!(buffer[(98, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(98, comp)].fg, Color::Rgb(1, 2, 3));
-    assert_eq!(buffer[(101, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
-    assert_eq!(buffer[(103, comp)].symbol(), "█");
+    assert_eq!(buffer[(115, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(115, comp)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(118, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
+    assert_eq!(buffer[(120, comp)].symbol(), "█");
     // Half a cell filled from the top: the lower half drawn in the background's colour.
-    assert_eq!(buffer[(103, comp + 1)].symbol(), "▄");
-    assert_eq!(buffer[(103, comp + 1)].fg, vt_tui::theme::BASE);
+    assert_eq!(buffer[(120, comp + 1)].symbol(), "▄");
+    assert_eq!(buffer[(120, comp + 1)].fg, vt_tui::theme::BASE);
     // A limiter has its meter alone, where the curve would start: 3 dB is the top quarter
     // of its top row.
     let limit = row_of("Limit");
-    assert_eq!(buffer[(98, limit)].symbol(), "▆");
-    assert_eq!(buffer[(98, limit + 1)].symbol(), " ");
+    assert_eq!(buffer[(115, limit)].symbol(), "▆");
+    assert_eq!(buffer[(115, limit + 1)].symbol(), " ");
 
     // Bypassed, it turns nothing down, and its meter is empty.
     press(&mut app, "b");
     assert_eq!(app.song().tracks[0].bypassed, [false, false, true]);
-    assert_eq!(draw(&app)[(98, limit)].symbol(), "▔");
+    assert_eq!(draw(&app)[(115, limit)].symbol(), "▔");
 }
 
 #[test]
@@ -9264,7 +9329,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     assert_ne!(app.slot_images[0], Some(picked));
 
     let buffer = {
-        let backend = ratatui::backend::TestBackend::new(120, 24);
+        let backend = ratatui::backend::TestBackend::new(163, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
@@ -9273,14 +9338,14 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     };
     let row = (0..24)
         .find(|y| {
-            (0..120)
+            (0..163)
                 .map(|x| buffer[(x, *y)].symbol())
                 .collect::<String>()
                 .contains("EQ3")
         })
         .unwrap();
-    assert_eq!(buffer[(98, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(107, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+    assert_eq!(buffer[(115, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(124, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
 }
 
 /// Press and let go of a key that isn't a character.
