@@ -81,7 +81,8 @@ an edit changes all of them.
 
 A tap of `m` or `s` switches the mute or solo and leaves it. Hold the key down
 for longer than about a third of a second and it switches back when you let go,
-for a drop while jamming. A save while the key is down keeps it as it was.
+for a drop while jamming. A save while the key is down keeps it as it was. A
+muted track shows `󰝟` after its name, and a soloed one `󰋋`.
 
 ## The level scale
 
@@ -159,7 +160,8 @@ it once through, and `--stems` does too.
 
 While the song plays, `Enter` on any chain, on any row, plays it on that track
 at the next line of the launch grid. `~` marks a chain waiting to start, `>` one
-that's been launched, and the song stays on the section it's on. A launch doesn't
+that's been launched, and the song stays on the section it's on. While one
+waits, the status line shows `󰔟 LAUNCH`, as a realign waiting shows `󰔟 REALIGN`. A launch doesn't
 change the song, and it ends when the song moves on or plays again. A chain still
 waiting when the song moves on starts with the new section.
 

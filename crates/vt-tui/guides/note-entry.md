@@ -85,7 +85,7 @@ steps. Anything half typed in another column is dropped when you move.
 ## Recording while it plays
 
 While the song plays, `Space r` in Normal mode arms recording, and the status
-line shows `playing REC`. Then press `i`, and each note you play on the Note
+line shows a red record dot, `󰑊`, beside play's `󰐊`. Then press `i`, and each note you play on the Note
 column goes in where the track is playing, not at the cursor, which stays put.
 Notes sound as you play them, chords too.
 

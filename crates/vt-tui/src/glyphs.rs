@@ -1,8 +1,131 @@
 //! The Nerd Font symbols the program draws, each named after its Nerd Font name and codepoint.
 //! kitty and Ghostty both ship the symbols built in (decision 101), so they need no font set up.
 //! Each one means something, as a switch's state does, and none is there for decoration.
+//!
+//! Every one is a single cell wide, as the terminal counts it, so nothing after it moves. kitty and
+//! Ghostty may draw an icon over the space after it as well, which only makes it bigger.
+
+use std::time::Duration;
+
+use vt_model::lfo::Shape;
+use vt_model::song::{Machine, SynthVoice, Track, TrackKind};
 
 /// A switch that's on: `nf-fa-toggle_on`, U+F205.
 pub const SWITCH_ON: char = '\u{f205}';
 /// A switch that's off: `nf-fa-toggle_off`, U+F204.
 pub const SWITCH_OFF: char = '\u{f204}';
+
+// LFO shapes (decision 104). The Material Design waves, after an LFO's shape name. A falling saw
+// has none, as Material's saw rises, and neither have the random shapes.
+
+/// `Sine`: `nf-md-sine_wave`, U+F095B.
+pub const SINE_WAVE: char = '\u{f095b}';
+/// `Tri`: `nf-md-triangle_wave`, U+F147C.
+pub const TRIANGLE_WAVE: char = '\u{f147c}';
+/// `Ramp`, which rises: `nf-md-sawtooth_wave`, U+F147A.
+pub const SAWTOOTH_WAVE: char = '\u{f147a}';
+/// `Square`: `nf-md-square_wave`, U+F147B.
+pub const SQUARE_WAVE: char = '\u{f147b}';
+
+/// An LFO shape's icon, if it has one.
+pub fn lfo_shape(shape: Shape) -> Option<char> {
+    match shape {
+        Shape::Sine => Some(SINE_WAVE),
+        Shape::Tri => Some(TRIANGLE_WAVE),
+        Shape::Ramp => Some(SAWTOOTH_WAVE),
+        Shape::Square => Some(SQUARE_WAVE),
+        Shape::Saw | Shape::Random | Shape::Smooth => None,
+    }
+}
+
+// Transport, on the status line (decision 104). These stand in for the words, rather than
+// beside them.
+
+/// Playing: `nf-md-play`, U+F040A.
+pub const PLAY: char = '\u{f040a}';
+/// Paused: `nf-md-pause`, U+F03E4.
+pub const PAUSE: char = '\u{f03e4}';
+/// Stopped: `nf-md-stop`, U+F04DB.
+pub const STOP: char = '\u{f04db}';
+/// Recording: `nf-md-record`, U+F044A.
+pub const RECORD: char = '\u{f044a}';
+/// Waiting for the launch grid, as a realign or a cued launch does: `nf-md-timer_sand`, U+F051F.
+pub const WAITING: char = '\u{f051f}';
+
+// Warnings, on the status line (decision 104).
+
+/// Audio has dropped out: `nf-md-alert`, U+F0026.
+pub const WARNING: char = '\u{f0026}';
+
+// Machines and kinds of track, in a track's heading and the machine picker (decision 104).
+
+/// A sampler: `nf-md-waveform`, U+F147D.
+pub const SAMPLER: char = '\u{f147d}';
+/// A synth voice: `nf-md-piano`, U+F067D.
+pub const SYNTH: char = '\u{f067d}';
+/// A drum voice: `nf-fa-drum`, U+EE32.
+pub const DRUM: char = '\u{ee32}';
+/// A return, where sends come back: `nf-md-arrow_u_left_top`, U+F17B3.
+pub const RETURN: char = '\u{f17b3}';
+/// The master, which is what's heard: `nf-md-speaker`, U+F04C3.
+pub const MASTER: char = '\u{f04c3}';
+/// A muted track: `nf-md-volume_mute`, U+F075F.
+pub const MUTE: char = '\u{f075f}';
+/// A soloed track: `nf-md-headphones`, U+F02CB.
+pub const SOLO: char = '\u{f02cb}';
+
+/// A machine's icon: a sampler, a drum voice or any other synth voice.
+pub fn machine(machine: Machine) -> char {
+    match machine {
+        Machine::Sampler => SAMPLER,
+        Machine::Plaits(SynthVoice::Kick | SynthVoice::Snare | SynthVoice::Hat) => DRUM,
+        Machine::Plaits(_) => SYNTH,
+    }
+}
+
+/// A track's icon: its machine's, or what kind of fixed track it is.
+pub fn track(track: &Track) -> char {
+    match track.kind {
+        TrackKind::Sound => machine(track.machine),
+        TrackKind::ReturnA | TrackKind::ReturnB => RETURN,
+        TrackKind::Master => MASTER,
+    }
+}
+
+// Steps (decision 104).
+
+/// A value's `Lock` mark in the phrase grid, which holds it until the next note:
+/// `nf-md-lock`, U+F033E.
+pub const LOCK: char = '\u{f033e}';
+
+// Spinners, while work goes on in the background (decision 104).
+
+/// The six turns of Fira Code's spinner, which the Nerd Font symbols carry from U+EE06 to U+EE0B
+/// with no names of their own.
+pub const SPINNER: [char; 6] = [
+    '\u{ee06}', '\u{ee07}', '\u{ee08}', '\u{ee09}', '\u{ee0a}', '\u{ee0b}',
+];
+/// How long the spinner shows each turn.
+pub const SPINNER_TURN: Duration = Duration::from_millis(100);
+/// How long work goes on before the spinner shows, so quick work doesn't flash it.
+pub const SPINNER_AFTER: Duration = Duration::from_millis(300);
+
+/// The spinner's turn some time after the work started.
+pub fn spinner(elapsed: Duration) -> char {
+    let turn = elapsed.as_millis() / SPINNER_TURN.as_millis();
+    SPINNER[(turn % SPINNER.len() as u128) as usize]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_spinner_turns_once_each_turn_and_goes_round() {
+        assert_eq!(spinner(Duration::ZERO), SPINNER[0]);
+        assert_eq!(spinner(SPINNER_TURN - Duration::from_millis(1)), SPINNER[0]);
+        assert_eq!(spinner(SPINNER_TURN), SPINNER[1]);
+        assert_eq!(spinner(SPINNER_TURN * 6), SPINNER[0]);
+        assert_eq!(spinner(SPINNER_TURN * 11), SPINNER[5]);
+    }
+}

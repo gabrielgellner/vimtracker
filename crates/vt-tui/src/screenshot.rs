@@ -136,7 +136,7 @@ pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
     let mut svg = String::new();
     let _ = writeln!(
         svg,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="{FONT_SIZE}">"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', monospace" font-size="{FONT_SIZE}">"#
     );
     let _ = writeln!(
         svg,

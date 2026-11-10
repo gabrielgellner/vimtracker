@@ -184,8 +184,40 @@ A `symbol_map` in `kitty.conf` that sends those codepoints to a font without the
 glyph is a constant in `glyphs.rs` named after its Nerd Font name and codepoint, such as
 `nf-fa-toggle_on`, U+F205.
 
-The manual's screenshots name ordinary monospace fonts, so a screenshot with a glyph in it would
-need a Nerd Font where it's read. None has one yet.
+The manual's screenshots name ordinary monospace fonts, then `Symbols Nerd Font Mono`, so their
+glyphs show where that font is installed, and are boxes or blanks where it isn't.
+
+### Width
+
+Every glyph is one cell to the terminal and to ratatui, so nothing after it moves. kitty and Ghostty
+may draw an icon that's wider than a cell over a space after it, which makes it bigger and leaves
+the text where it was. Every glyph the program draws has a space or an empty cell after it, so each
+one draws the same way wherever it is, apart from the lock in the last FX column in Insert, which
+the box's edge follows. kitty's `narrow_symbols` keeps a symbol to one cell.
+
+### Glyphs for the transport, tracks, LFOs, warnings and work (decision 104)
+
+| Glyph | Name | Codepoint | Where |
+|---|---|---|---|
+| `󰐊` | `nf-md-play` | U+F040A | Status line, playing, in the active colour |
+| `󰏤` | `nf-md-pause` | U+F03E4 | Status line, paused, dim |
+| `󰓛` | `nf-md-stop` | U+F04DB | Status line, stopped, dim |
+| `󰑊` | `nf-md-record` | U+F044A | Status line, recording, red |
+| `󰔟` | `nf-md-timer_sand` | U+F051F | Status line, before `REALIGN` or `LAUNCH` while one waits for the grid |
+| `󰀦` | `nf-md-alert` | U+F0026 | Right of the status line, in the warning colour, with the count of dropouts |
+| `` to `` | Fira Code's spinner | U+EE06 to U+EE0B | Right of the status line, before `Analysing` or `Loading`, once work has taken 300 ms |
+| `󰥛` | `nf-md-sine_wave` | U+F095B | After an LFO's `Sine` |
+| `󱑼` | `nf-md-triangle_wave` | U+F147C | After an LFO's `Tri` |
+| `󱑺` | `nf-md-sawtooth_wave` | U+F147A | After an LFO's `Ramp`, which rises as the glyph does |
+| `󱑻` | `nf-md-square_wave` | U+F147B | After an LFO's `Square` |
+| `󱑽` | `nf-md-waveform` | U+F147D | A sampler track's heading, and the machine list |
+| `󰙽` | `nf-md-piano` | U+F067D | A synth track's heading, and the machine list |
+| `` | `nf-fa-drum` | U+EE32 | A drum track's heading (`Kick`, `Snare`, `Hat`), and the machine list |
+| `󱞳` | `nf-md-arrow_u_left_top` | U+F17B3 | A return's heading |
+| `󰓃` | `nf-md-speaker` | U+F04C3 | The master's heading |
+| `󰝟` | `nf-md-volume_mute` | U+F075F | A muted track's heading and its overview column, and the mixer's `Mute` |
+| `󰋋` | `nf-md-headphones` | U+F02CB | A soloed track's, likewise, and the mixer's `Solo` |
+| `󰌾` | `nf-md-lock` | U+F033E | A value's `Lock` mark in the phrase grid, in place of `.` |
 
 ## Still to check by hand
 

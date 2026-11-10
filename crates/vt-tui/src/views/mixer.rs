@@ -9,6 +9,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::song::level_gain;
 
 use crate::app::App;
+use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::meter::{height_of, to_db};
 use crate::theme;
@@ -119,15 +120,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             let live = app.levels.get(index).copied().unwrap_or_default();
             let here = index == app.cursor.track;
             let selected = here && control == current;
-            let text = match control {
+            // A mute or solo that's on is its glyph, in the active colour.
+            let switched = match control {
+                Control::Mute => Some((live.mute, glyphs::MUTE)),
+                Control::Solo => Some((live.solo, glyphs::SOLO)),
+                _ => None,
+            };
+            let text = match (control, switched) {
                 _ if !control.exists_on(track) => String::new(),
-                Control::Mute => if live.mute { "M" } else { "-" }.to_owned(),
-                Control::Solo => if live.solo { "S" } else { "-" }.to_owned(),
+                (_, Some((true, glyph))) => glyph.to_string(),
+                (_, Some((false, _))) => "-".to_owned(),
                 _ if selected && app.mode == Mode::Insert => format!("{}_", app.entry.text),
                 _ => value(control, track, song),
             };
             let style = if selected {
                 theme::cursor(app.mode)
+            } else if switched.is_some_and(|(on, _)| on) {
+                theme::active()
             } else if live.mute {
                 theme::dim()
             } else {

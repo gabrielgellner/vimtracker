@@ -18,6 +18,7 @@ use vt_model::step::{FxCommand, Note};
 
 use crate::app::{App, Field};
 use crate::banking::sample_shown;
+use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
@@ -315,23 +316,59 @@ pub(crate) fn grid_name(skip: u32) -> String {
     }
 }
 
+/// The transport as glyphs in place of words: play in the active colour, pause and stop dim, and a
+/// red record beside play while recording. Fill changes what the conditions play, so it's named
+/// while it's on, and a realign and a cued launch are named, with the glyph for waiting, until the
+/// launch grid comes round.
+pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
+    let (glyph, style) = match app.transport {
+        Transport::Playing => (glyphs::PLAY, theme::active()),
+        Transport::Paused => (glyphs::PAUSE, theme::dim()),
+        Transport::Stopped => (glyphs::STOP, theme::dim()),
+    };
+    let mut spans = vec![Span::raw(" "), Span::styled(glyph.to_string(), style)];
+    if app.transport == Transport::Playing && app.recording() {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            glyphs::RECORD.to_string(),
+            Style::new().fg(theme::RED),
+        ));
+    }
+    if app.fill {
+        spans.push(Span::raw(" FILL"));
+    }
+    let realigning = app.realigning || app.realigning_tracks.contains(&true);
+    let cued = app.jam.iter().any(|jam| jam.cued.is_some());
+    for (waiting, name) in [(realigning, "REALIGN"), (cued, "LAUNCH")] {
+        if waiting {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(glyphs::WAITING.to_string(), theme::dim()));
+            spans.push(Span::raw(format!(" {name}")));
+        }
+    }
+    spans
+}
+
+/// What goes at the right of the status line, only while there's any: a spinner while work goes on
+/// in the background, and a warning glyph in the warning colour, with a count, once audio has
+/// dropped out.
+pub fn right_spans(app: &App) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    if let Some((work, turn)) = app.background_work() {
+        spans.push(Span::styled(format!("{turn} {work}  "), theme::dim()));
+    }
+    let dropouts = app.audio.late + app.audio.xruns;
+    if dropouts > 0 {
+        spans.push(Span::styled(
+            format!("{} {dropouts}  ", glyphs::WARNING),
+            theme::warning(),
+        ));
+    }
+    spans
+}
+
 /// Draw the status line and the message or command line below it.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let transport = match app.transport {
-        Transport::Stopped => "stopped",
-        Transport::Playing if app.recording() => "playing REC",
-        Transport::Playing => "playing",
-        Transport::Paused => "paused",
-    };
-    // Fill changes what the conditions play, so it's shown while it's on, and a realign while
-    // it waits for the grid.
-    let mut transport = transport.to_owned();
-    if app.fill {
-        transport.push_str(" FILL");
-    }
-    if app.realigning || app.realigning_tracks.contains(&true) {
-        transport.push_str(" REALIGN");
-    }
     let mode_style = Style::new()
         .fg(theme::BASE)
         .bg(match app.mode {
@@ -407,7 +444,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         String::new()
     };
-    let status = Line::from(vec![
+    let mut status = vec![
         // The keyboard takes the page's keys, but is its own mode.
         Span::styled(
             format!(
@@ -427,13 +464,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             },
             theme::selected(),
         ),
-        Span::raw(format!(
-            " {transport}  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
-            format_bpm(app.song().millibpm),
-            app.octave,
-            app.note_velocity,
-        )),
-    ]);
+    ];
+    status.extend(transport_spans(app));
+    status.push(Span::raw(format!(
+        "  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
+        format_bpm(app.song().millibpm),
+        app.octave,
+        app.note_velocity,
+    )));
     let message = if app.mode == Mode::Command {
         format!(":{}", app.command_line)
     } else if let Some(jump) = &app.field_jump {
@@ -441,7 +479,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         app.status.clone()
     };
-    frame.render_widget(Paragraph::new(vec![status, Line::raw(message)]), area);
+    frame.render_widget(
+        Paragraph::new(vec![Line::from(status), Line::raw(message)]),
+        area,
+    );
+    // The right end of the status line, over whatever reaches it.
+    let right = Line::from(right_spans(app));
+    let width = (right.width() as u16).min(area.width);
+    if width > 0 {
+        let at = Rect::new(area.right() - width, area.y, width, 1);
+        frame.render_widget(Paragraph::new(right), at);
+    }
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ use vt_model::speed::Speed;
 
 use crate::app::App;
 use crate::banking::sample_text;
+use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::kitty;
 use crate::theme;
@@ -25,12 +26,13 @@ use crate::track_page::{
     FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
 use crate::views::meter::{hanging_cell, hanging_eighths};
+use crate::views::phrase::level_glyph;
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
 pub(crate) const DIAGRAM_HEIGHT: usize = 4;
 /// The size of an LFO's icon, in characters, and the room for its shape's name before it.
-pub(crate) const LFO_ICON_WIDTH: usize = 4;
+const LFO_ICON_WIDTH: usize = 1;
 const LFO_SHAPE_NAME: usize = 7;
 /// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
 pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
@@ -513,15 +515,19 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         let mut gap = room.saturating_sub(text.chars().count());
         let length = text.chars().count();
         spans.extend(value_spans(app, *control, text, style));
-        // A drawing of an LFO's shape follows its name, with the column the same width without one.
-        if let (Control::Lfo(slot, LfoField::Shape), Some(ids)) = (*control, app.lfo_images) {
+        // An LFO's shape has its icon after its name, where it has one, in the active colour while
+        // the cursor is on that LFO. The column is the same width without one.
+        if let Control::Lfo(slot, LfoField::Shape) = *control
+            && let Some(icon) = glyphs::lfo_shape(track.lfos[slot].shape)
+        {
             let before = LFO_SHAPE_NAME.saturating_sub(length);
             spans.push(Span::raw(" ".repeat(before)));
-            let icon = kitty::placeholder_lines(LFO_ICON_WIDTH, 1).concat();
-            spans.push(Span::styled(
-                icon,
-                Style::new().fg(kitty::id_color(ids[slot])),
-            ));
+            let style = if lfo_being_edited(app) == Some(slot) {
+                theme::active()
+            } else {
+                theme::dim()
+            };
+            spans.push(Span::styled(icon.to_string(), style));
             gap = room.saturating_sub(length + before + LFO_ICON_WIDTH);
         }
         spans.push(Span::raw(" ".repeat(gap)));
@@ -822,11 +828,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
     });
     let name = if track.is_sound() {
-        format!("Track {:02} {} ", app.cursor.track + 1, track.name)
+        let name = format!("Track {:02} {}", app.cursor.track + 1, track.name);
+        format!("{} ", name.trim_end())
     } else {
         format!("{} ", track.kind.title())
     };
-    let mut title = vec![Span::styled(name, bold)];
+    // The track's machine or kind as a glyph before it, and whether it's muted or soloed after.
+    let mut title = vec![
+        Span::styled(format!("{} ", glyphs::track(track)), theme::dim()),
+        Span::styled(name, bold),
+    ];
+    if let Some(glyph) = level_glyph(app, app.cursor.track) {
+        title.push(Span::styled(format!("{glyph} "), theme::active()));
+    }
     title.extend(tabs);
     let mut lines = vec![Line::from(title), Line::raw("")];
     match app.track_page {
