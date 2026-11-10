@@ -5,9 +5,10 @@
 //!
 //! How it works comes from Robin Whittle's notes on the 303 and the Devil Fish, and Tim
 //! Stinchcombe's analysis of its diode ladder. Several measured values come from Robin Schmidt's
-//! Open303: the cutoff's range and how the envelope moves it, the share of the filter envelope that
-//! reaches the level, the level envelope's decay, and the high-pass before the filter. The filter is
-//! Vital's, in [`crate::dsp::filters::diode_filter`].
+//! Open303: how the envelope moves the cutoff, the share of the filter envelope that reaches the
+//! level, the level envelope's decay, and the high-pass before the filter. The filter is Vital's,
+//! in [`crate::dsp::filters::diode_filter`]. The knobs' ranges and tapers are fitted to Arturia's
+//! Acid V by the comparison harness, `tools/compare` (decision 117).
 //!
 //! Open303 is copyright (c) 2009 Robin Schmidt (www.rs-met.com), under the MIT license:
 //!
@@ -34,18 +35,23 @@ use crate::dsp::filters::diode_filter::{
     DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE, feedback_coefficient,
 };
 use vt_model::settings::slide_ms;
-use vt_model::settings::{ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, acid_decay_ms, acid_drive_db};
+use vt_model::settings::{
+    ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, ACID_SHORTEST_DECAY, acid_cutoff_position,
+    acid_decay_ms, acid_drive_db,
+};
 
-/// How loud it is against the other voices: a plain note is about as loud as the virtual analog
-/// voice. An accented note at full `Accent` peaks nearly three times as high, which a soft clip
-/// rounds off, as a 303 driven hard into what follows it would be.
-const LEVEL: f32 = 0.4;
+/// How loud it is: a plain note with every knob at noon is as loud as Acid V's at 0 dB, and within
+/// 6 dB of the virtual analog voice on average, as its resonance makes its peaks high for its
+/// level (decision 117). An accented note at full `Accent` peaks higher, which a soft clip rounds
+/// off, as a 303 driven hard into what follows it would be.
+const LEVEL: f32 = 0.75;
 /// The square's share of each cycle spent high. A 303 makes its square by driving its saw hard
 /// into a transistor with an offset, which Open303 models as `tanh(70 saw + 4.37)`: that switches
 /// a little before the saw's middle, so the square isn't quite even.
 const SQUARE_DUTY: f32 = 0.531;
-/// The filter envelope's decay on an accented note, in ms, whatever `Decay` says.
-const ACCENT_DECAY_MS: f32 = 200.0;
+/// The filter envelope's decay on an accented note, in ms, whatever `Decay` says: a 303 shorts
+/// its Decay pot out on an accent, so it's the knob's shortest.
+const ACCENT_DECAY_MS: f32 = ACID_SHORTEST_DECAY;
 /// The level envelope's fixed decay, as a time constant in ms. It falls to silence over about
 /// three seconds, as a 303's does.
 const LEVEL_DECAY_MS: f32 = 1230.0;
@@ -58,11 +64,16 @@ const ACCENT_RELEASE_MS: f32 = 50.0;
 /// The filter envelope also reaches the level, through 47k and 33 nF on a 303, which softens it.
 const ENVELOPE_TO_LEVEL: f32 = 0.45;
 const SOFTENING_MS: f32 = 1.55;
-/// How much the accent sweep adds to the level, against the level envelope's 1. Open303 adds 4,
-/// for a full accent 11 dB over a plain note; this is gentler, at about 9 dB.
-const ACCENT_TO_LEVEL: f32 = 2.5;
-/// How far the accent sweep moves the cutoff at its height, in octaves.
-const ACCENT_OCTAVES: f32 = 2.0;
+/// How much the accent sweep adds to the level, against the level envelope's 1. Open303 adds 4;
+/// with an accent's filter envelope as short as a 303's, which this pulse rides on, it takes 5 for
+/// a full accent to sound about 4.5 dB over a plain note, as on Acid V (decision 117).
+const ACCENT_TO_LEVEL: f32 = 5.0;
+/// How far the accent sweep moves the cutoff at its height, in octaves. The pulse falls with the
+/// accent's short envelope, so it's at its height only for the first few milliseconds.
+const ACCENT_OCTAVES: f32 = 5.0;
+/// The Accent knob's taper: how far it's turned, to this power, is how strong the accent is, so
+/// it builds slowly over the first half and most over the second, as Acid V's does.
+const ACCENT_TAPER: f32 = 2.0;
 /// The accent sweep's capacitor charges through a diode and 147k, and drains through 100k, on
 /// 1 µF. It drains more slowly than accents come, so they build up.
 const SWEEP_CHARGE_MS: f32 = 147.0;
@@ -85,6 +96,30 @@ const HIGHEST_HZ: f32 = 20_000.0;
 /// which cut deep notches into the harmonics that moved with the note (#332). At this level it
 /// stays under the clip with `Drive` at 0, and `Drive` still pushes it into the clip.
 const FILTER_LEVEL: f32 = 0.3;
+
+/// How the Resonance knob reaches the ladder, whose own law is a cube of what it's given: the
+/// feedback rises as the knob to this power, up to this share of the ladder's most. A cube left
+/// the knob's lower half with no peak and its top few steps with nearly all of it; this way the
+/// peak climbs about evenly in dB from a quarter of the way up, and the bass thins from the first
+/// step, as Acid V's does (decision 117).
+const RESONANCE_CURVE: f32 = 1.1;
+const RESONANCE_TOP: f32 = 0.8;
+/// How much quieter the whole voice is with Resonance full, in dB, and the knob's curve to it.
+const RESONANCE_LOSS_DB: f32 = 4.0;
+const RESONANCE_LOSS_CURVE: f32 = 0.7;
+
+/// The Env Mod knob's taper: how far it's turned, to this power, is how far along Open303's
+/// measured range the envelope's sweep is. Acid V's knob does little until three quarters of the
+/// way and then sweeps most of its range; a square, like an audio-taper pot, keeps noon near
+/// Acid V's without leaving a dead stretch (decision 117).
+const ENVELOPE_MOD_TAPER: f32 = 2.0;
+/// How much wider the envelope's sweep is than Open303 measured, with Env Mod at 0 and full, so
+/// it spans what Acid V's does. A 303's can't be turned down to nothing.
+const SWEEP_LEAST: f32 = 1.4;
+const SWEEP_MOST: f32 = 1.25;
+/// How much of Open303's centre the envelope's sweep is around, so the cutoff it settles to once
+/// the envelope has fallen sits nearer Acid V's.
+const CENTRE_SHARE: f32 = 0.6;
 
 /// How many decibels double a level.
 const DECIBELS_PER_OCTAVE: f32 = 6.020_6;
@@ -315,7 +350,7 @@ impl Acid {
         self.envelope *= self.decay;
         self.softened += (self.envelope - self.softened) * self.softening;
         let pulse = if self.accented && self.gate {
-            values[ACCENT] * self.envelope
+            values[ACCENT].powf(ACCENT_TAPER) * self.envelope
         } else {
             0.0
         };
@@ -348,13 +383,15 @@ impl Acid {
         self.amplitude += (amplitude - self.amplitude) * self.declick;
 
         // The cutoff: the envelope moves it by an amount and around a centre that Open303
-        // measured on a 303, which depend on both knobs, and the accent adds to it.
-        let knob = values[CUTOFF];
-        let amount = values[ENVELOPE_MOD];
+        // measured on a 303, which depend on both knobs, widened and raised to Acid V's span,
+        // and the accent adds to it. Both knobs are taken through their tapers first.
+        let knob = acid_cutoff_position(values[CUTOFF] * 255.0);
+        let amount = values[ENVELOPE_MOD].powf(ENVELOPE_MOD_TAPER);
         let low = 3.774 * amount + 0.737;
         let high = 4.195 * amount + 0.864;
-        let scale = (1.0 - knob) * low + knob * high;
-        let centre = 0.0483 * knob + 0.2944;
+        let scale = ((1.0 - knob) * low + knob * high)
+            * (SWEEP_LEAST + (SWEEP_MOST - SWEEP_LEAST) * amount);
+        let centre = (0.0483 * knob + 0.2944) * CENTRE_SHARE;
         let octaves = scale * (self.envelope - centre) + ACCENT_OCTAVES * accent;
         // `acid_cutoff_hz`, in octaves, so one power of two does both.
         let knob_octaves = knob * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).log2();
@@ -379,12 +416,19 @@ impl Acid {
 
         // `acid_drive_db` as a gain.
         let drive = (acid_drive_db(values[DRIVE] * 255.0) / DECIBELS_PER_OCTAVE).exp2();
-        // The filter resonates under the cutoff it's given, and Open303's are where a 303 resonates.
+        // The filter resonates under the cutoff it's given, and the cutoff is where it resonates.
         let cutoff = self.cutoff / RESONANT_SHARE / (self.rate * 2.0);
+        // Resonance thins the bass in the ladder itself, and quietens the whole voice a little
+        // more, so it loses as much under its peak as Acid V does.
+        let loss = (-RESONANCE_LOSS_DB / DECIBELS_PER_OCTAVE
+            * resonance.powf(RESONANCE_LOSS_CURVE))
+        .exp2();
+        let resonance = (RESONANCE_TOP * resonance.powf(RESONANCE_CURVE)).cbrt();
         let (filter, feedback) = (&mut self.filter, self.feedback);
         let filtered = self.oversampler.process(input * FILTER_LEVEL, |sample| {
             filter.next(sample, cutoff, resonance, drive, feedback, HIGH_PASS_RATIO)
-        }) / FILTER_LEVEL;
+        }) * loss
+            / FILTER_LEVEL;
         soft_clip(filtered * self.amplitude * LEVEL)
     }
 }
@@ -489,10 +533,14 @@ mod tests {
                         .collect();
                     let levels = harmonics(&out[RATE as usize..], note, 16);
                     for number in 2..16 {
-                        let neighbours = (levels[number - 2] + levels[number]) / 2.0;
-                        let dip = neighbours - levels[number - 1];
+                        let (before, here, after) =
+                            (levels[number - 2], levels[number - 1], levels[number]);
+                        // A notch is under both its neighbours. A harmonic on the steep side of
+                        // a peak at the fundamental, as the lowest cutoff with some resonance
+                        // makes, is under their mean but not under both.
+                        let dip = (before + after) / 2.0 - here;
                         assert!(
-                            dip < 6.0,
+                            here > before.min(after) || dip < 6.0,
                             "harmonic {number} is {dip} dB under its neighbours at {note} Hz, \
                              cutoff {cutoff}, resonance {resonance}: {levels:?}"
                         );
@@ -515,21 +563,28 @@ mod tests {
 
     #[test]
     fn an_accent_is_louder_and_brighter() {
-        let plain_note = note(false, plain(), 4_800);
-        let accented = note(true, plain(), 4_800);
-        let louder = 20.0 * (rms(&accented) / rms(&plain_note)).log10();
-        assert!(louder > 3.0, "{louder} dB");
-        // The cutoff over the note's first 100 ms is higher.
+        // With `Accent` at noon an accent is about a dB louder, as on Acid V, whose knob does
+        // most over its top half; full, it's about 4.5 dB.
+        for (accent, least) in [(0.5, 0.5), (1.0, 3.0)] {
+            let settings = places([0.0, 0.5, 0.5, 0.5, 0.5, accent, 0.0, 0.0]);
+            let plain_note = note(false, settings, 4_800);
+            let accented = note(true, settings, 4_800);
+            let louder = 20.0 * (rms(&accented) / rms(&plain_note)).log10();
+            assert!(louder > least, "{louder} dB at {accent}");
+        }
+        // The cutoff over the note's first 20 ms is higher with `Accent` full. After that, an
+        // accent's short filter envelope has it darker than a plain note, as on a 303.
+        let full = places([0.0, 0.5, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0]);
         let mean_cutoff = |accent| {
             let mut acid = Acid::new(RATE);
             acid.trigger(accent);
-            let total: f32 = (0..4_800)
+            let total: f32 = (0..960)
                 .map(|_| {
-                    acid.next(hertz(110.0), plain());
+                    acid.next(hertz(110.0), full);
                     acid.cutoff().log2()
                 })
                 .sum();
-            (total / 4_800.0).exp2()
+            (total / 960.0).exp2()
         };
         let (plain_cutoff, accented_cutoff) = (mean_cutoff(false), mean_cutoff(true));
         assert!(
@@ -537,8 +592,8 @@ mod tests {
             "{plain_cutoff} {accented_cutoff}"
         );
         // Which is heard, on a darker sound.
-        let dark = places([0.0, 0.2, 0.5, 0.2, 0.5, 0.8, 0.0, 0.0]);
-        let (plain_note, accented) = (note(false, dark, 4_800), note(true, dark, 4_800));
+        let dark = places([0.0, 0.2, 0.5, 0.2, 0.5, 1.0, 0.0, 0.0]);
+        let (plain_note, accented) = (note(false, dark, 960), note(true, dark, 960));
         assert!(
             brightness(&accented) > brightness(&plain_note) * 1.25,
             "{} {}",

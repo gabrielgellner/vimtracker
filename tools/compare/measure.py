@@ -251,3 +251,83 @@ def burst_times(given: dict, signal: np.ndarray, out: np.ndarray, rate: int) -> 
         "release 63% ms": reach(ends, gain.size, during, after, 0.63),
         "release 90% ms": reach(ends, gain.size, during, after, 0.90),
     }
+
+
+def windowed_centroid(samples: np.ndarray, rate: int, start: float, end: float) -> float:
+    """The spectral centroid between two times, in Hz, through a Hann window, so the cut at either
+    end doesn't spread energy up the spectrum and brighten it."""
+    part = mono(samples)[int(start * rate) : int(end * rate)]
+    if part.size < 2:
+        return float("nan")
+    magnitude = np.abs(np.fft.rfft(part * np.hanning(part.size)))
+    frequencies = np.fft.rfftfreq(part.size, 1.0 / rate)
+    total = magnitude.sum()
+    return float((magnitude * frequencies).sum() / total) if total > 0 else float("nan")
+
+
+def filter_shape(samples: np.ndarray, rate: int, start: float, end: float, expected: float) -> dict:
+    """A voice's filter read from a held sawtooth's harmonics between two times: the highest
+    harmonic's frequency and how far it stands over the bass, when it stands a decibel over it,
+    and the bass itself, the mean of the 2nd to 4th harmonics, each times its number, in dB."""
+    _, levels = harmonics(samples, rate, start, end, expected)
+    bass = float(np.mean(levels[1:4, 1]))
+    top = 1 + int(np.argmax(levels[1:, 1]))
+    height = float(levels[top, 1]) - bass
+    is_peak = height > 1.0
+    return {
+        "peak Hz": float(levels[top, 0]) if is_peak else float("nan"),
+        "peak dB": height if is_peak else float("nan"),
+        "bass dB": bass,
+    }
+
+
+def brightness_decay(samples: np.ndarray, rate: int, onset: float) -> dict:
+    """How a note's brightness falls after it starts: its spectral centroid in octaves, read every
+    5 ms over 30 ms windows, fitted with an exponential that falls to a resting brightness. Gives
+    the fit's time constant, which follows the filter envelope's decay, and how far it falls, in
+    octaves of centroid."""
+    from scipy.optimize import curve_fit
+
+    signal = mono(samples)
+    width, hop = int(0.03 * rate), int(0.005 * rate)
+    window = np.hanning(width)
+    frequencies = np.fft.rfftfreq(width, 1.0 / rate)
+    times, octaves, levels = [], [], []
+    for start in range(0, signal.size - width, hop):
+        part = signal[start : start + width] * window
+        magnitude = np.abs(np.fft.rfft(part))
+        total = magnitude.sum()
+        times.append((start + width / 2) / rate)
+        octaves.append(math.log2(max((magnitude * frequencies).sum() / total, 1.0)) if total > 0 else 0.0)
+        levels.append(float(np.sqrt(np.mean(part**2))))
+    times, octaves, levels = np.array(times), np.array(octaves), np.array(levels)
+    keep = (times > onset + 0.02) & (levels > levels.max() * 1e-3)
+    t, c = times[keep] - onset, octaves[keep]
+    if t.size < 4:
+        return {"decay ms": float("nan"), "fall octaves": float("nan")}
+
+    def model(t, rest, fall, tau):
+        return rest + fall * np.exp(-t / tau)
+
+    try:
+        (rest, fall, tau), _ = curve_fit(
+            model, t, c, p0=(c[-1], c[0] - c[-1], 0.3), bounds=([0.0, 0.0, 0.005], [20.0, 10.0, 20.0])
+        )
+    except RuntimeError:
+        return {"decay ms": float("nan"), "fall octaves": float("nan")}
+    return {"decay ms": float(tau * 1000.0), "fall octaves": float(fall)}
+
+
+def note_marks(samples: np.ndarray, rate: int, starts: list[float], bright=(0.002, 0.042), length=0.06):
+    """Each note's brightness, the windowed centroid over its first few tens of milliseconds, and
+    its RMS level in dBFS over `length` seconds from its start, which says how loud it sounds
+    better than its peak, as a resonant note's first few cycles can peak far over the rest."""
+    signal = mono(samples)
+    marks = []
+    for start in starts:
+        part = signal[int(start * rate) : int((start + length) * rate)]
+        marks.append({
+            "bright Hz": windowed_centroid(samples, rate, start + bright[0], start + bright[1]),
+            "RMS dBFS": db(float(np.sqrt(np.mean(part.astype(np.float64) ** 2))) if part.size else 0.0),
+        })
+    return marks

@@ -1,0 +1,150 @@
+# Arturia's Acid V against our Acid: the Decay knob in sixteen steps on one long C-2 with
+# Env Mod full, the cutoff at the bottom and no resonance, timing how its brightness falls (#295,
+# decision 117).
+#
+#   uv run run.py specs/acid-decay.toml --report out/acid-decay.html
+
+rate = 48000
+duration = 4.2
+
+[[notes]]
+time = 0.05
+length = 4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x00
+acid.resonance = 0x00
+acid.envmod = 0xFF
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+cutoff = 0.0
+resonance = 0.0
+envelope_mod = 1.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Decay knob against Acid V's"
+knob = "acid.decay"
+reference_knob = "decay"
+measure = "decay"
+about = """
+Our Acid's Decay and Acid V's, each turned from bottom to top in sixteen even steps, with Env Mod \
+full, the cutoff at its bottom and no resonance, so the note's brightness follows the filter \
+envelope. Each step holds a C-2 for 4 s; its spectral centroid is read every 5 ms and fitted with \
+an exponential, whose time constant is the decay measured. It's measured through the brightness, \
+so it's shorter than the envelope's own time constant, the same way on both sides.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default \
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator \
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our \
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so \
+a plain note is played at 99 and an accent at 0x70.
+"""
+
+[[cases]]
+name = "decay-00"
+ours = { acid.decay = 0x00 }
+reference = { decay = 0 }
+
+[[cases]]
+name = "decay-10"
+ours = { acid.decay = 0x10 }
+reference = { decay = 0.0625 }
+
+[[cases]]
+name = "decay-20"
+ours = { acid.decay = 0x20 }
+reference = { decay = 0.125 }
+
+[[cases]]
+name = "decay-30"
+ours = { acid.decay = 0x30 }
+reference = { decay = 0.1875 }
+
+[[cases]]
+name = "decay-40"
+ours = { acid.decay = 0x40 }
+reference = { decay = 0.25 }
+
+[[cases]]
+name = "decay-50"
+ours = { acid.decay = 0x50 }
+reference = { decay = 0.3125 }
+
+[[cases]]
+name = "decay-60"
+ours = { acid.decay = 0x60 }
+reference = { decay = 0.375 }
+
+[[cases]]
+name = "decay-70"
+ours = { acid.decay = 0x70 }
+reference = { decay = 0.4375 }
+
+[[cases]]
+name = "decay-80"
+ours = { acid.decay = 0x80 }
+reference = { decay = 0.5 }
+
+[[cases]]
+name = "decay-8F"
+ours = { acid.decay = 0x8F }
+reference = { decay = 0.5625 }
+
+[[cases]]
+name = "decay-9F"
+ours = { acid.decay = 0x9F }
+reference = { decay = 0.625 }
+
+[[cases]]
+name = "decay-AF"
+ours = { acid.decay = 0xAF }
+reference = { decay = 0.6875 }
+
+[[cases]]
+name = "decay-BF"
+ours = { acid.decay = 0xBF }
+reference = { decay = 0.75 }
+
+[[cases]]
+name = "decay-CF"
+ours = { acid.decay = 0xCF }
+reference = { decay = 0.8125 }
+
+[[cases]]
+name = "decay-DF"
+ours = { acid.decay = 0xDF }
+reference = { decay = 0.875 }
+
+[[cases]]
+name = "decay-EF"
+ours = { acid.decay = 0xEF }
+reference = { decay = 0.9375 }
+
+[[cases]]
+name = "decay-FF"
+ours = { acid.decay = 0xFF }
+reference = { decay = 1 }

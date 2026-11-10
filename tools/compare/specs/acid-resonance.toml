@@ -1,0 +1,151 @@
+# Arturia's Acid V against our Acid: the Resonance knob in sixteen steps on one held C-2 with
+# the cutoff at the top, read from its harmonics once the filter's envelope has decayed: the
+# peak's frequency and height, and how much bass it thins (#295, decision 117).
+#
+#   uv run run.py specs/acid-resonance.toml --report out/acid-resonance.html
+
+rate = 48000
+duration = 2.5
+
+[[notes]]
+time = 0.05
+length = 2.4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0xFF
+acid.envmod = 0x00
+acid.decay = 0x00
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+cutoff = 1.0
+envelope_mod = 0.0
+decay = 0.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Resonance knob against Acid V's"
+knob = "acid.resonance"
+reference_knob = "resonance"
+measure = "filter"
+window = [1, 2]
+about = """
+Our Acid's Resonance and Acid V's, each turned from bottom to top in sixteen even steps, with the \
+cutoff at the top and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-2 \
+and reads the filter's shape from its harmonics a second in: where it peaks, how far the peak \
+stands over the bass, and how much bass the resonance thins against the knob's bottom. A 303's \
+resonance thins its bass as it rises, and its peak climbs with the knob.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default \
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator \
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our \
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so \
+a plain note is played at 99 and an accent at 0x70.
+"""
+
+[[cases]]
+name = "res-00"
+ours = { acid.resonance = 0x00 }
+reference = { resonance = 0 }
+
+[[cases]]
+name = "res-10"
+ours = { acid.resonance = 0x10 }
+reference = { resonance = 0.0625 }
+
+[[cases]]
+name = "res-20"
+ours = { acid.resonance = 0x20 }
+reference = { resonance = 0.125 }
+
+[[cases]]
+name = "res-30"
+ours = { acid.resonance = 0x30 }
+reference = { resonance = 0.1875 }
+
+[[cases]]
+name = "res-40"
+ours = { acid.resonance = 0x40 }
+reference = { resonance = 0.25 }
+
+[[cases]]
+name = "res-50"
+ours = { acid.resonance = 0x50 }
+reference = { resonance = 0.3125 }
+
+[[cases]]
+name = "res-60"
+ours = { acid.resonance = 0x60 }
+reference = { resonance = 0.375 }
+
+[[cases]]
+name = "res-70"
+ours = { acid.resonance = 0x70 }
+reference = { resonance = 0.4375 }
+
+[[cases]]
+name = "res-80"
+ours = { acid.resonance = 0x80 }
+reference = { resonance = 0.5 }
+
+[[cases]]
+name = "res-8F"
+ours = { acid.resonance = 0x8F }
+reference = { resonance = 0.5625 }
+
+[[cases]]
+name = "res-9F"
+ours = { acid.resonance = 0x9F }
+reference = { resonance = 0.625 }
+
+[[cases]]
+name = "res-AF"
+ours = { acid.resonance = 0xAF }
+reference = { resonance = 0.6875 }
+
+[[cases]]
+name = "res-BF"
+ours = { acid.resonance = 0xBF }
+reference = { resonance = 0.75 }
+
+[[cases]]
+name = "res-CF"
+ours = { acid.resonance = 0xCF }
+reference = { resonance = 0.8125 }
+
+[[cases]]
+name = "res-DF"
+ours = { acid.resonance = 0xDF }
+reference = { resonance = 0.875 }
+
+[[cases]]
+name = "res-EF"
+ours = { acid.resonance = 0xEF }
+reference = { resonance = 0.9375 }
+
+[[cases]]
+name = "res-FF"
+ours = { acid.resonance = 0xFF }
+reference = { resonance = 1 }

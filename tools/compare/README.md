@@ -58,6 +58,11 @@ reference plugin.
 | `filter-ringing-ours` | Diode, MS20 LP and HP, Dirty | none | the same |
 | `acid-filter` | Acid's diode ladder | Acid V | a held note's harmonics |
 | `acid-cutoff` | Acid's Cutoff, 16 steps | Acid V's | centroid and peak against the knob (#295) |
+| `acid-cutoff-peak` | Acid's Cutoff at Res 90%, 17 steps | Acid V's | where the filter rings, its height and the bass |
+| `acid-resonance` | Acid's Resonance at the top Cutoff, 17 steps | Acid V's | the same, so the peak's growth and the bass it thins |
+| `acid-envmod` | Acid's Env Mod, 17 steps | Acid V's | centroid and peak against the knob |
+| `acid-decay` | Acid's Decay, 17 steps | Acid V's | the time constant of the brightness's fall |
+| `acid-accent`, `acid-accent-apart` | Acid's Accent, 17 steps | Acid V's | an accent's brightness and level over a plain note, and how accents in a row, or apart, build |
 | `comp-static`, `comp-static-force` | the compressor | Comp VCA-65, Bus FORCE | static curve |
 | `comp-timing`, `comp-timing-force` | the compressor | Comp VCA-65, Bus FORCE | attack, release, short and long bursts |
 
@@ -72,6 +77,15 @@ nothing here writes in their folders or their preferences. Plugins write their o
 load, which is theirs to do: Arturia's update `/Library/Arturia/Presets/db.db3`, the preset tags
 beside it and `/Library/Arturia/<plugin>/tmp/plugin.pref.xml`, and print their logging settings
 (`## LogInRelease : 0` and so on); u-he's write a cache.
+
+Acid V accents a note from velocity 100 and ours from `0x70`, 112, so the Acid specs play a plain
+note at 99 and an accent at `0x70`, which both sides read the same way. They also turn Acid V's hiss
+off, `noise_db = -100`, which would otherwise brighten a quiet note's centroid.
+
+A `knob` report's `measure` says what each step is measured by: `note`, the whole render's centroid
+and peak; `filter`, a held note's harmonics read as `harmonics` reads them; `decay`, an exponential
+fitted to the note's brightness; or `accents`, each note of a pattern of a plain note and then
+accents. The summary gives how far apart the two curves are on average over the knob.
 
 Always give pedalboard a host's buffer size: Arturia's plugins put out silence at its default of
 8192, so a spec's `buffer_size` is 512 unless it says otherwise.
@@ -157,5 +171,5 @@ it.
 
 ## Left for later
 
-Fitting a mapping to a knob sweep, the 303's accent and slide set, saturation, and voices'
+The 303's slide set, saturation, and voices'
 envelopes, each in its own PR (#186).

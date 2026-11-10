@@ -1,0 +1,147 @@
+# Arturia's Acid V against our Acid: the Env Mod knob in sixteen steps on one C-2, with the
+# other knobs at noon (#295, decision 117).
+#
+#   uv run run.py specs/acid-envmod.toml --report out/acid-envmod.html
+
+rate = 48000
+duration = 1
+
+[[notes]]
+time = 0.05
+length = 0.6
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x80
+acid.resonance = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+cutoff = 0.5
+resonance = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Env Mod knob against Acid V's"
+knob = "acid.envmod"
+reference_knob = "envelope_mod"
+measure = "note"
+about = """
+Our Acid's Env Mod and Acid V's, each turned from bottom to top in sixteen even steps, with the \
+other knobs at noon. Each step plays one C-2 for 0.6 s, and the whole render's spectral centroid \
+and peak level are measured. A 303's Env Mod can't take the envelope's sweep down to nothing.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default \
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator \
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our \
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so \
+a plain note is played at 99 and an accent at 0x70.
+"""
+
+[[cases]]
+name = "envmod-00"
+ours = { acid.envmod = 0x00 }
+reference = { envelope_mod = 0 }
+
+[[cases]]
+name = "envmod-10"
+ours = { acid.envmod = 0x10 }
+reference = { envelope_mod = 0.0625 }
+
+[[cases]]
+name = "envmod-20"
+ours = { acid.envmod = 0x20 }
+reference = { envelope_mod = 0.125 }
+
+[[cases]]
+name = "envmod-30"
+ours = { acid.envmod = 0x30 }
+reference = { envelope_mod = 0.1875 }
+
+[[cases]]
+name = "envmod-40"
+ours = { acid.envmod = 0x40 }
+reference = { envelope_mod = 0.25 }
+
+[[cases]]
+name = "envmod-50"
+ours = { acid.envmod = 0x50 }
+reference = { envelope_mod = 0.3125 }
+
+[[cases]]
+name = "envmod-60"
+ours = { acid.envmod = 0x60 }
+reference = { envelope_mod = 0.375 }
+
+[[cases]]
+name = "envmod-70"
+ours = { acid.envmod = 0x70 }
+reference = { envelope_mod = 0.4375 }
+
+[[cases]]
+name = "envmod-80"
+ours = { acid.envmod = 0x80 }
+reference = { envelope_mod = 0.5 }
+
+[[cases]]
+name = "envmod-8F"
+ours = { acid.envmod = 0x8F }
+reference = { envelope_mod = 0.5625 }
+
+[[cases]]
+name = "envmod-9F"
+ours = { acid.envmod = 0x9F }
+reference = { envelope_mod = 0.625 }
+
+[[cases]]
+name = "envmod-AF"
+ours = { acid.envmod = 0xAF }
+reference = { envelope_mod = 0.6875 }
+
+[[cases]]
+name = "envmod-BF"
+ours = { acid.envmod = 0xBF }
+reference = { envelope_mod = 0.75 }
+
+[[cases]]
+name = "envmod-CF"
+ours = { acid.envmod = 0xCF }
+reference = { envelope_mod = 0.8125 }
+
+[[cases]]
+name = "envmod-DF"
+ours = { acid.envmod = 0xDF }
+reference = { envelope_mod = 0.875 }
+
+[[cases]]
+name = "envmod-EF"
+ours = { acid.envmod = 0xEF }
+reference = { envelope_mod = 0.9375 }
+
+[[cases]]
+name = "envmod-FF"
+ours = { acid.envmod = 0xFF }
+reference = { envelope_mod = 1 }

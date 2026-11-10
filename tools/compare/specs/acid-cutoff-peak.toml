@@ -1,0 +1,151 @@
+# Arturia's Acid V against our Acid: the Cutoff knob in sixteen steps at Res 90%, on one held
+# C-2 with no envelope, read from its harmonics: where the filter rings across the knob, the
+# clearest view of the cutoff's taper and range (#295, decision 117).
+#
+#   uv run run.py specs/acid-cutoff-peak.toml --report out/acid-cutoff-peak.html
+
+rate = 48000
+duration = 2.5
+
+[[notes]]
+time = 0.05
+length = 2.4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.resonance = 0xE6
+acid.envmod = 0x00
+acid.decay = 0x00
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+resonance = 0.9
+envelope_mod = 0.0
+decay = 0.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's cutoff knob against Acid V's, at Res 90%"
+knob = "acid.cutoff"
+reference_knob = "cutoff"
+measure = "filter"
+window = [1, 2]
+about = """
+Our Acid's Cutoff and Acid V's, each turned from bottom to top in sixteen even steps, with Res at \
+90% and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-2 and reads the \
+filter's shape from its harmonics a second in. The peak's frequency is where the filter rings, \
+which shows the knob's taper and range; under about 200 Hz it falls between the note's harmonics \
+and reads as the nearest one.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default \
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator \
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our \
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so \
+a plain note is played at 99 and an accent at 0x70.
+"""
+
+[[cases]]
+name = "cutoff-00"
+ours = { acid.cutoff = 0x00 }
+reference = { cutoff = 0 }
+
+[[cases]]
+name = "cutoff-10"
+ours = { acid.cutoff = 0x10 }
+reference = { cutoff = 0.0625 }
+
+[[cases]]
+name = "cutoff-20"
+ours = { acid.cutoff = 0x20 }
+reference = { cutoff = 0.125 }
+
+[[cases]]
+name = "cutoff-30"
+ours = { acid.cutoff = 0x30 }
+reference = { cutoff = 0.1875 }
+
+[[cases]]
+name = "cutoff-40"
+ours = { acid.cutoff = 0x40 }
+reference = { cutoff = 0.25 }
+
+[[cases]]
+name = "cutoff-50"
+ours = { acid.cutoff = 0x50 }
+reference = { cutoff = 0.3125 }
+
+[[cases]]
+name = "cutoff-60"
+ours = { acid.cutoff = 0x60 }
+reference = { cutoff = 0.375 }
+
+[[cases]]
+name = "cutoff-70"
+ours = { acid.cutoff = 0x70 }
+reference = { cutoff = 0.4375 }
+
+[[cases]]
+name = "cutoff-80"
+ours = { acid.cutoff = 0x80 }
+reference = { cutoff = 0.5 }
+
+[[cases]]
+name = "cutoff-8F"
+ours = { acid.cutoff = 0x8F }
+reference = { cutoff = 0.5625 }
+
+[[cases]]
+name = "cutoff-9F"
+ours = { acid.cutoff = 0x9F }
+reference = { cutoff = 0.625 }
+
+[[cases]]
+name = "cutoff-AF"
+ours = { acid.cutoff = 0xAF }
+reference = { cutoff = 0.6875 }
+
+[[cases]]
+name = "cutoff-BF"
+ours = { acid.cutoff = 0xBF }
+reference = { cutoff = 0.75 }
+
+[[cases]]
+name = "cutoff-CF"
+ours = { acid.cutoff = 0xCF }
+reference = { cutoff = 0.8125 }
+
+[[cases]]
+name = "cutoff-DF"
+ours = { acid.cutoff = 0xDF }
+reference = { cutoff = 0.875 }
+
+[[cases]]
+name = "cutoff-EF"
+ours = { acid.cutoff = 0xEF }
+reference = { cutoff = 0.9375 }
+
+[[cases]]
+name = "cutoff-FF"
+ours = { acid.cutoff = 0xFF }
+reference = { cutoff = 1 }
