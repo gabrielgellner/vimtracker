@@ -49,8 +49,9 @@ Use the release build for playing: the debug build uses far more of the audio de
 vimtracker my-song        # opens my-song, or creates it on the first :w
 ```
 
-1.  `Space 5` lists WAV, AIFF and FLAC files under the project, your sample folders and the
-    folder you ran from, for the current track. `:sample path` takes a file, or a folder to browse.
+1.  `Space 5` lists WAV, AIFF and FLAC files under the project, your kits and sample folders and
+    the folder you ran from, for the current track, with each kit opening like a folder to its
+    sounds. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
     `a` to `l` are white keys, `w` to `o` black keys, `z` and `x` change octave, `c` and `v` set
     the velocity written, and the arrows move without writing. A note stays where it's written,

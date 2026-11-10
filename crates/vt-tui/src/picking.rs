@@ -29,10 +29,16 @@ use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 
-/// A row for a kit's sound: its label, and its name beside it.
-fn kit_item(entry: &KitEntry) -> Item {
+/// A row for a kit's sound: its label, and its name beside it, or its name alone if it has no
+/// label. Moving onto it plays it and shows its waveform, as a file's row does.
+pub(crate) fn kit_item(entry: &KitEntry) -> Item {
+    let (label, meaning) = if entry.label.is_empty() {
+        (entry.name.clone(), String::new())
+    } else {
+        (entry.label.clone(), entry.name.clone())
+    };
     Item::new(
-        entry.label.clone(),
+        label,
         Pick::KitSound {
             path: entry.path.clone(),
             label: entry.label.clone(),
@@ -45,7 +51,8 @@ fn kit_item(entry: &KitEntry) -> Item {
             choke: entry.choke,
         },
     )
-    .meaning(entry.name.clone())
+    .meaning(meaning)
+    .preview(Preview::Sample(entry.path.clone()))
 }
 
 /// What a kit's preview shows: its name, how many sounds it has and where it came from, and each

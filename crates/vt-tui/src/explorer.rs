@@ -1,13 +1,16 @@
 //! What the file explorer lists for each of its purposes, after snacks.nvim's explorer: the picker
 //! in tree mode (`input/picker.rs`) over the folders it starts from, read a folder at a time as
-//! they're opened.
+//! they're opened. In the sample explorer a kit opens like a folder, to its sounds, and a sound
+//! with variants or layers opens to those.
 
 use std::path::{Path, PathBuf};
 
+use vt_model::kit::{KitEntry, load_kit};
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
 
 use crate::input::picker::{Item, Pick, Preview};
+use crate::picking::kit_item;
 
 /// What the explorer is choosing, which decides what it lists and what choosing does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +64,15 @@ pub enum Kind {
     Project,
     Sample,
     Kit,
+    /// A kit in the sample explorer, which opens like a folder to list its sounds.
+    KitFolder,
+}
+
+impl Kind {
+    /// Whether it opens, as a folder does, rather than being chosen.
+    pub fn opens(self) -> bool {
+        matches!(self, Self::Folder | Self::KitFolder)
+    }
 }
 
 /// What a path is, for a purpose, or none if it isn't listed.
@@ -78,6 +90,8 @@ pub fn kind_of(path: &Path, purpose: Purpose) -> Option<Kind> {
     match purpose {
         Purpose::Sample if is_sample_file(path) => Some(Kind::Sample),
         Purpose::Kit if kit => Some(Kind::Kit),
+        // Only a file that reads as a kit, so a project's `song.ron` isn't one.
+        Purpose::Sample if kit && load_kit(path).is_ok() => Some(Kind::KitFolder),
         _ => None,
     }
 }
@@ -131,7 +145,118 @@ pub fn item(path: &Path, kind: Kind) -> Item {
         )
         .wider(Pick::KitTracks(path.clone()))
         .preview(Preview::Kit(path)),
+        // By the kit's own name, such as `909 Core Kit`.
+        Kind::KitFolder => Item::new(
+            load_kit(&path).map_or(name, |kit| kit.name),
+            Pick::Folder(path.clone()),
+        )
+        .preview(Preview::Kit(path)),
     }
+}
+
+/// One thing in a folder or kit that's been opened: the path the tree knows it by, its item, and
+/// whether it opens.
+pub struct Entry {
+    pub path: PathBuf,
+    pub item: Item,
+    pub opens: bool,
+}
+
+/// What's listed in a folder or kit as it's opened for a purpose. A kit's sounds are known by
+/// their places in it, under the kit's own path, as `909 Core Kit.ron/0`, and a sound's files by
+/// their places under the sound's, so the tree finds them again as it finds files.
+pub fn contents(path: &Path, purpose: Purpose, hidden: bool) -> Vec<Entry> {
+    if path.is_dir() {
+        return list(path, purpose, hidden)
+            .into_iter()
+            .map(|(path, kind)| Entry {
+                item: item(&path, kind),
+                opens: kind.opens(),
+                path,
+            })
+            .collect();
+    }
+    if path.is_file() {
+        return kit_sounds(path);
+    }
+    let place = path
+        .file_name()
+        .and_then(|name| name.to_str()?.parse::<usize>().ok());
+    match (path.parent(), place) {
+        (Some(kit), Some(place)) if kit.is_file() => sound_files(kit, place),
+        _ => Vec::new(),
+    }
+}
+
+/// A kit's sounds, label first and named beside it, as the kit in use lists them. A sound with
+/// variants or layers opens to them.
+fn kit_sounds(kit: &Path) -> Vec<Entry> {
+    let Ok(loaded) = load_kit(kit) else {
+        return Vec::new();
+    };
+    loaded
+        .sounds
+        .iter()
+        .enumerate()
+        .map(|(place, sound)| Entry {
+            path: kit.join(place.to_string()),
+            item: kit_item(sound),
+            opens: !sound.variants.is_empty() || !sound.layers.is_empty(),
+        })
+        .collect()
+}
+
+/// One of a kit's sounds as its files: its own, then its variants, then its velocity layers from
+/// the softest, each by its file's name with what it is beside it. Each is chosen as the sound
+/// is, with its label, choke group, gain and tune.
+fn sound_files(kit: &Path, place: usize) -> Vec<Entry> {
+    let Some(sound) = load_kit(kit)
+        .ok()
+        .and_then(|loaded| loaded.sounds.into_iter().nth(place))
+    else {
+        return Vec::new();
+    };
+    let layers = sound.layers.len();
+    let mut files = vec![(sound.path.clone(), "Main".to_owned())];
+    files.extend(
+        sound
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(at, path)| (path.clone(), format!("Variant {}", at + 1))),
+    );
+    files.extend(sound.layers.iter().enumerate().map(|(at, path)| {
+        let which = match at {
+            0 if layers > 1 => " soft",
+            _ if at + 1 == layers && layers > 1 => " hard",
+            _ => "",
+        };
+        (path.clone(), format!("Layer {}{which}", at + 1))
+    }));
+    let folder = kit.join(place.to_string());
+    files
+        .into_iter()
+        .enumerate()
+        .map(|(at, (file, meaning))| {
+            let label = file.file_name().map_or_else(
+                || file.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            let entry = KitEntry {
+                path: file,
+                ..sound.clone()
+            };
+            Entry {
+                path: folder.join(at.to_string()),
+                item: Item {
+                    label,
+                    meaning,
+                    ..kit_item(&entry)
+                },
+                opens: false,
+            }
+        })
+        .collect()
 }
 
 /// A folder as the top of the tree names it: from the home folder as `~`, or in full.

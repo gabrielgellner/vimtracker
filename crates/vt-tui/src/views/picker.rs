@@ -13,6 +13,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
+use crate::glyphs;
 use crate::input::picker::{Picker, Row};
 use crate::kitty;
 use crate::theme;
@@ -38,8 +39,9 @@ pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
 pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
 const PREVIEW_LABEL_WIDTH: usize = 4;
-/// The explorer's list's width, inside its border, as its tree grows and shrinks.
-const EXPLORER_WIDTH: usize = 52;
+/// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 54 so the
+/// sample explorer's hint, with its three switches, fits under it with the preview off.
+const EXPLORER_WIDTH: usize = 54;
 /// Room for a relative line number in the explorer, and the space after it.
 const NUMBER_WIDTH: usize = 3;
 /// Where an item's name starts: after a category's arrow, or the mark on the item already chosen.
@@ -91,7 +93,7 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
         .borders(Borders::ALL)
         .title(Line::from(title));
     if let Some(hint) = picker.hint {
-        block = block.title_bottom(Span::styled(format!(" {hint} "), theme::dim()));
+        block = block.title_bottom(hint_line(picker, hint));
     }
     let inner = block.inner(window);
     frame.render_widget(Clear, window);
@@ -118,6 +120,34 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
             preview_area,
         );
     }
+}
+
+/// The hint under the list, and in the explorer its `H`, `P` and `A` after it, each with a switch
+/// that shows whether it's on: green when it is, and faint when it isn't. The gaps are two spaces,
+/// so the sample explorer's fits under its list with the preview off.
+fn hint_line(picker: &Picker, hint: &str) -> Line<'static> {
+    let mut spans = vec![Span::styled(format!(" {hint}"), theme::dim())];
+    if let Some(tree) = picker.tree() {
+        let mut switch = |key: char, on: bool, name: &str| {
+            let (glyph, style) = if on {
+                (glyphs::SWITCH_ON, theme::active())
+            } else {
+                (glyphs::SWITCH_OFF, theme::faint())
+            };
+            spans.push(Span::styled(format!("  {key} "), theme::dim()));
+            spans.push(Span::styled(glyph.to_string(), style));
+            spans.push(Span::styled(format!(" {name}"), theme::dim()));
+        };
+        switch('H', tree.hidden, "hidden");
+        if tree.purpose.previews() {
+            switch('P', tree.preview, "preview");
+        }
+        if tree.purpose.auditions() {
+            switch('A', tree.audition, "audition");
+        }
+    }
+    spans.push(Span::raw(" "));
+    Line::from(spans)
 }
 
 /// Draw the list of matches the command line's Tab shows, as a small box that sits on the status

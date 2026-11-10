@@ -413,7 +413,8 @@ pub struct Picker {
     /// Whether `zz` or `zt` showed space after the last row, which moving then keeps.
     past_end: bool,
     room: usize,
-    /// A hint for keys this list has beyond the usual, drawn under it.
+    /// A hint for keys this list has beyond the usual, drawn under it. The explorer's `H`, `P`
+    /// and `A` follow it there, each with its switch showing whether it's on.
     pub hint: Option<&'static str>,
     items: Vec<Item>,
     categories: Vec<Category>,
@@ -693,7 +694,7 @@ impl Picker {
         }
     }
 
-    /// Read what's in a folder, if it hasn't been read.
+    /// Read what's in a folder, or a kit, if it hasn't been read.
     fn load(&mut self, at: usize) {
         let Some(tree) = self.tree.as_ref() else {
             return;
@@ -706,18 +707,17 @@ impl Picker {
             return;
         }
         let depth = node.depth + 1;
-        let entries = explorer::list(path, tree.purpose, tree.hidden);
+        let entries = explorer::contents(path, tree.purpose, tree.hidden);
         let children = entries
             .into_iter()
-            .map(|(path, kind)| {
-                let folder = (kind == explorer::Kind::Folder).then(Folder::default);
+            .map(|entry| {
                 self.push(
-                    explorer::item(&path, kind),
+                    entry.item,
                     Node {
-                        path: Some(path),
+                        path: Some(entry.path),
                         parent: Some(at),
                         depth,
-                        folder,
+                        folder: entry.opens.then(Folder::default),
                     },
                 )
             })
@@ -931,7 +931,8 @@ impl Picker {
     }
 
     /// `l` and `Enter` in the explorer: open a folder and go into it, or choose a file. `Enter`
-    /// chooses a folder where that's what's being chosen.
+    /// chooses a folder where that's what's being chosen, and chooses what opens to more of its
+    /// own, such as a kit's sound with variants, which `l` opens.
     fn enter_tree(&mut self, wider: bool, confirm: bool) -> Outcome {
         let Some(at) = self.current_index() else {
             return Outcome::Stay;
@@ -940,7 +941,8 @@ impl Picker {
             return Outcome::Stay;
         };
         let node = &tree.nodes[at];
-        if node.folder.is_none() {
+        let chooses = !matches!(self.items[at].pick, Pick::Folder(_));
+        if node.folder.is_none() || (confirm && chooses) {
             let item = &self.items[at];
             let pick = if wider { item.wider.as_ref() } else { None };
             return Outcome::Choose(pick.unwrap_or(&item.pick).clone());

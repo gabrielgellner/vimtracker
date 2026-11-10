@@ -88,6 +88,14 @@ pub fn default_library() -> Option<PathBuf> {
     lives.pop().map(|(_, _, library)| library)
 }
 
+/// The `Samples` folder of the Live that `default_library` finds, with its `Loops`, `One Shots`
+/// and `Multisamples`, which the imported kits play from.
+pub fn default_samples() -> Option<PathBuf> {
+    default_library()
+        .map(|library| library.join("Samples"))
+        .filter(|samples| samples.is_dir())
+}
+
 /// The import as the command runs it: Live's library and the first kit folder's `Ableton`
 /// unless they're given, and what it did, printed.
 pub fn run(library: Option<PathBuf>, out: Option<PathBuf>) -> Result<(), ImportError> {

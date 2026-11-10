@@ -12,6 +12,7 @@ pub mod command_line;
 pub mod config;
 pub mod explorer;
 pub mod exploring;
+pub mod glyphs;
 pub mod grammar;
 pub mod guides;
 pub mod input;

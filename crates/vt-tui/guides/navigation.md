@@ -98,7 +98,8 @@ the top are the places it starts from, each with why it's there: `recent` for th
 few you chose from, then the project, your sample or kit folders, `here` for where the
 program was run from, and `home`. It opens on the current file, with its folders open.
 Only what fits is listed: samples and folders, kits and folders, or projects and
-folders, and hidden files are left out.
+folders, and hidden files are left out. Choosing a sample, a kit opens like a folder to
+its sounds.
 
 | Keys | Does |
 |---|---|
@@ -109,6 +110,9 @@ folders, and hidden files are left out.
 | `P` | Show the preview, or hide it |
 | `A` | Stop playing samples as you move, or start |
 | `/` | Search what's been opened |
+
+The hint under the list shows `H`, `P` and `A` each with a switch, green while it's on
+and faint while it's off.
 
 The numbers down the left count from the cursor, so `12j` can be read off them. A
 search matches names exactly, ignoring case, among the folders you've opened, and

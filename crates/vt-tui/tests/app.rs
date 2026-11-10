@@ -1780,7 +1780,7 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
         .collect();
     assert_eq!(
         labels[..3],
-        ["Kit named", "SD  Snare 909", "  hat"],
+        ["Kit named", "SD  Snare 909", "hat"],
         "the kit first, by name or the file's"
     );
     special(&mut app, KeyCode::Enter);
@@ -2413,7 +2413,10 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         })
         .collect();
     assert!(text.contains("┌ Kits ─"), "{text}");
-    assert!(text.contains("Enter use   L on tracks"), "{text}");
+    assert!(
+        text.contains("Enter use  L on tracks  H \u{f204} hidden  P \u{f205} preview"),
+        "{text}"
+    );
     assert!(text.contains("│ 909"), "{text}");
     let bd = text.lines().find(|line| line.contains(" BD  ")).unwrap();
     assert!(bd.contains('\u{10EEEE}'), "its waveform beside it: {bd}");
@@ -2526,6 +2529,165 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit Ableton/Drum Machines/808 Core Kit all");
     assert_eq!(app.status, "Kit 808 Core Kit: 3 tracks");
+}
+
+#[test]
+fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sounds() {
+    let (mut app, _realtime) = app();
+    let root = kit_folders();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    press(&mut app, " 5");
+    assert_eq!(explorer_roots(&app)[0].1, "kits");
+    assert_eq!(
+        explorer_rows(&app)[..4],
+        ["v kits", "  > Ableton", "  > drums", "  > 909"],
+        "a kit is a folder, after the real ones"
+    );
+    // Down to a kit, by its name, and into it.
+    press(&mut app, "ll");
+    assert_eq!(
+        app.picker.as_ref().unwrap().current().unwrap().label,
+        "808 Core Kit"
+    );
+    press(&mut app, "l");
+    assert_eq!(
+        explorer_rows(&app)[3..6],
+        ["      v 808 Core Kit", "          BD", "          SD"]
+    );
+    let picker = app.picker.as_ref().unwrap();
+    let bd = picker.current().unwrap();
+    assert_eq!((bd.label.as_str(), bd.meaning.as_str()), ("BD", "Kick 808"));
+
+    // It plays as the cursor moves onto it, with its waveform beside the list.
+    app.finish_loading();
+    assert!(
+        app.file_playing
+            .as_ref()
+            .is_some_and(|path| path.ends_with("drums/kick.wav")),
+        "{:?}",
+        app.file_playing
+    );
+    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    assert_eq!(shown.heading, "kick.wav");
+    assert!(shown.wave.is_some());
+
+    // Hidden files shown keep the kit open and the cursor on its sound.
+    press(&mut app, "jH");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "SD");
+    press(&mut app, "H");
+
+    // Choosing it is choosing from the kit in use: its label names the track.
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(sample_of(&app, 0).unwrap().ends_with("drums/snare.wav"));
+    assert_eq!(app.song().tracks[0].name, "SD");
+    assert_eq!(app.song().bank.get(1).unwrap().title(), "SD Snare 808");
+}
+
+#[test]
+fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let root = kit.parent().unwrap().to_path_buf();
+    std::fs::write(
+        root.join("layered.ron"),
+        r#"(name: "Layered", sounds: [
+            (label: "BD", name: "Kick", path: "drums/kick.wav", variants: ["drums/snare.wav"],
+             layers: ["drums/hat.wav", "drums/kick.wav"], gain: -3.0, choke: Some(2)),
+            (label: "GH", name: "Ghost", path: "drums/gone.wav"),
+        ])"#,
+    )
+    .unwrap();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    press(&mut app, " 5jjl");
+    assert_eq!(
+        explorer_rows(&app)[3..6],
+        ["  v Layered", "    > BD", "      GH"],
+        "a sound with variants or layers opens"
+    );
+    // l opens it: its own file, then its variants, then its layers from the softest.
+    press(&mut app, "l");
+    let picker = app.picker.as_ref().unwrap();
+    let files: Vec<String> = picker
+        .rows()
+        .iter()
+        .filter_map(|row| match row {
+            vt_tui::input::picker::Row::Item(item) if picker.depth(*item) == 3 => {
+                let item = picker.item(*item);
+                Some(format!("{}  {}", item.label, item.meaning))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "kick.wav  Main",
+            "snare.wav  Variant 1",
+            "hat.wav  Layer 1 soft",
+            "kick.wav  Layer 2 hard"
+        ]
+    );
+    // A variant is chosen as the sound is, with its gain, label and choke group.
+    press(&mut app, "j");
+    special(&mut app, KeyCode::Enter);
+    assert!(sample_of(&app, 0).unwrap().ends_with("drums/snare.wav"));
+    assert_eq!(app.song().tracks[0].name, "BD");
+    assert_eq!(app.song().tracks[0].choke, Some(2));
+    assert_eq!(app.song().bank.get(1).unwrap().edit.play.gain_db, -3.0);
+    press(&mut app, "u");
+
+    // Enter on the sound itself chooses its own file, where l opens it.
+    press(&mut app, " 5jjl");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(sample_of(&app, 0).unwrap().ends_with("drums/kick.wav"));
+    press(&mut app, "u");
+
+    // A sound whose file has gone is listed, and says why as a missing file does.
+    press(&mut app, " 5jjlj");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "GH");
+    app.finish_loading();
+    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    assert_eq!(shown.heading, "gone.wav");
+    assert!(shown.note.contains("gone.wav"), "{}", shown.note);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(sample_of(&app, 0), None);
+    assert!(app.status.contains("gone.wav"), "{}", app.status);
+}
+
+#[test]
+fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
+    let (mut app, _realtime) = app();
+    let root = kit_folders();
+    let library = folder();
+    std::fs::create_dir_all(library.join("Loops")).unwrap();
+    wav(&library.join("Loops/break.wav"));
+    let project = folder();
+    command(&mut app, &format!("w {}", project.display()));
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    app.library = Some(library.clone());
+    press(&mut app, " 5");
+    let meanings: Vec<String> = explorer_roots(&app)
+        .into_iter()
+        .map(|(_, meaning)| meaning)
+        .collect();
+    assert_eq!(meanings, ["project", "kits", "library", "here", "home"]);
+    // The project's own song isn't a kit, so it isn't listed.
+    let rows = explorer_rows(&app);
+    assert!(!rows.iter().any(|row| row.contains("song")), "{rows:?}");
+    std::fs::remove_dir_all(&library).unwrap();
+    std::fs::remove_dir_all(&project).unwrap();
 }
 
 #[test]
@@ -9128,6 +9290,83 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
 }
 
 #[test]
+fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
+    let (mut app, _realtime) = app();
+    let library = sample_library(&mut app);
+    press(&mut app, " 5l");
+    let on = vt_tui::glyphs::SWITCH_ON;
+    let off = vt_tui::glyphs::SWITCH_OFF;
+    let hint = |app: &App| {
+        let text = picker_text(app, 163, 42);
+        text.lines()
+            .find(|line| line.contains("Enter choose"))
+            .unwrap()
+            .to_owned()
+    };
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!(
+            "└ Enter choose  H {off} hidden  P {on} preview  A {on} audition ─"
+        )),
+        "both on, whole: {line}"
+    );
+    // Each switch is green while it's on, and faint while it's off.
+    let switch_colour = |app: &App, glyph: char, after: &str| {
+        let backend = ratatui::backend::TestBackend::new(163, 42);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let mut picker = app.picker.clone().unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let area = buffer.area;
+        (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .find(|&(x, y)| {
+                buffer[(x, y)].symbol() == glyph.to_string()
+                    && (1..=after.len() as u16)
+                        .map(|i| buffer[(x + 1 + i, y)].symbol())
+                        .collect::<String>()
+                        == after
+            })
+            .map(|cell| buffer[cell].fg)
+            .unwrap()
+    };
+    assert_eq!(switch_colour(&app, on, "preview"), vt_tui::theme::GREEN);
+    // With the preview off the box is at its narrowest, and the hint still fits.
+    press(&mut app, "P");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!(
+            "└ Enter choose  H {off} hidden  P {off} preview  A {on} audition ─┘"
+        )),
+        "{line}"
+    );
+    assert_eq!(switch_colour(&app, off, "preview"), vt_tui::theme::OVERLAY0);
+    press(&mut app, "A");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!("P {off} preview  A {off} audition")),
+        "{line}"
+    );
+    assert_eq!(
+        switch_colour(&app, off, "audition"),
+        vt_tui::theme::OVERLAY0
+    );
+    press(&mut app, "PA");
+    assert_eq!(switch_colour(&app, on, "audition"), vt_tui::theme::GREEN);
+    assert_eq!(switch_colour(&app, off, "hidden"), vt_tui::theme::OVERLAY0);
+    press(&mut app, "H");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!("H {on} hidden  P {on} preview  A {on} audition")),
+        "{line}"
+    );
+    assert_eq!(switch_colour(&app, on, "hidden"), vt_tui::theme::GREEN);
+    std::fs::remove_dir_all(&library).unwrap();
+}
+
+#[test]
 fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     let (mut app, mut realtime) = app();
     let library = sample_library(&mut app);
@@ -9373,6 +9612,12 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     command(&mut app, &format!("e {}", root.join("one").display()));
     command(&mut app, "render --tail");
     assert_eq!(app.picker.as_ref().unwrap().title, "Render into");
+    // Choosing a folder shows nothing beside it, so only `H` has a switch.
+    let text = picker_text(&app, 163, 42);
+    assert!(
+        text.contains("└ l open  Enter choose  H \u{f204} hidden ─"),
+        "{text}"
+    );
     assert_eq!(
         explorer_rows(&app)[0],
         "v project",

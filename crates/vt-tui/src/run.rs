@@ -239,6 +239,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         devices: audio::devices(),
         ..crate::app::AudioState::default()
     };
+    app.library = crate::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
         app.settings = settings;
