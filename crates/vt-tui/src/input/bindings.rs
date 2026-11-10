@@ -9,6 +9,7 @@ use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::placing::Edge;
 use crate::sample_page::SampleKey;
 
 /// An operator key.
@@ -635,7 +636,106 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         Cmd::Sample(SampleKey::CursorStyle),
         "The cursor as a line, or as its column",
     ),
-    (";", Cmd::Audition, "Hear the slice; held, until let go"),
+    (
+        ";",
+        Cmd::Audition,
+        "Hear the slice, or the selection; held, until let go",
+    ),
+    (
+        "Enter",
+        Cmd::Sample(SampleKey::Split),
+        "Split the slice here, or at the playhead as it plays",
+    ),
+    (
+        "J",
+        Cmd::Sample(SampleKey::Join),
+        "Join the slice with the next",
+    ),
+    (
+        "x",
+        Cmd::ClearField,
+        "Take the point here away, or a setting back",
+    ),
+    (
+        "=",
+        Cmd::Increase,
+        "Nudge the point here a pixel later, or a setting up",
+    ),
+    (
+        "-",
+        Cmd::Decrease,
+        "Nudge the point here a pixel earlier, or a setting down",
+    ),
+    (
+        "+",
+        Cmd::IncreaseLarge,
+        "Nudge the point here a column later, or a setting up more",
+    ),
+    (
+        "_",
+        Cmd::DecreaseLarge,
+        "Nudge the point here a column earlier, or a setting down more",
+    ),
+    (
+        "D-l",
+        Cmd::Sample(SampleKey::NudgeFrame { later: true }),
+        "Nudge the point here a frame later",
+    ),
+    (
+        "D-h",
+        Cmd::Sample(SampleKey::NudgeFrame { later: false }),
+        "Nudge the point here a frame earlier",
+    ),
+    ("D-k", Cmd::IncreaseLarge, "Nudge a column later, as +"),
+    ("D-j", Cmd::DecreaseLarge, "Nudge a column earlier, as _"),
+    (
+        "g s",
+        Cmd::Sample(SampleKey::SetPoint(Edge::Start)),
+        "Start the sample here",
+    ),
+    (
+        "g e",
+        Cmd::Sample(SampleKey::SetPoint(Edge::End)),
+        "End the sample here",
+    ),
+    (
+        "g l",
+        Cmd::Sample(SampleKey::SetPoint(Edge::LoopStart)),
+        "Start the loop here",
+    ),
+    (
+        "g L",
+        Cmd::Sample(SampleKey::SetPoint(Edge::LoopEnd)),
+        "End the loop here",
+    ),
+    (
+        "m",
+        Cmd::Sample(SampleKey::NameSlice),
+        "Then a letter: name the slice here with it",
+    ),
+    ("v", Cmd::VisualField, "Select frames, or end the selection"),
+    ("g v", Cmd::Reselect, "Select the last selection again"),
+    (
+        "o",
+        Cmd::Sample(SampleKey::OtherEnd),
+        "To the selection's other end",
+    ),
+    (
+        ">",
+        Cmd::Sample(SampleKey::GainUp),
+        "The slice's gain up a dB",
+    ),
+    (
+        "<",
+        Cmd::Sample(SampleKey::GainDown),
+        "The slice's gain down a dB",
+    ),
+    ("~", Cmd::Sample(SampleKey::Reverse), "Reverse the slice"),
+    (
+        "K",
+        Cmd::PickValue,
+        "Choose a setting to change, or list its values",
+    ),
 ];
 
 const AUDIO: &[(&str, Cmd, &str)] = &[

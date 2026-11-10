@@ -117,6 +117,10 @@ pub struct PlayParams {
     /// gain. The same gain scales every channel, and the entry's own gain comes on top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub normalize: Option<f32>,
+    /// Whether the sample page puts a point it places on the nearest zero crossing, so a slice
+    /// starts without a click. It only changes where points go, never how anything plays.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub snap_zero: bool,
 }
 
 /// The most cents an entry's tune can be moved either way, short of a semitone, which is the

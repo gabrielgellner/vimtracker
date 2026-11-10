@@ -67,6 +67,7 @@ impl App {
 
     /// Remember this place before a jump away from it.
     pub(crate) fn record_jump(&mut self) {
+        self.jumped_from = Some(self.here());
         self.jumps.truncate(self.jump_index);
         self.jumps.push(self.here());
         if self.jumps.len() > JUMP_LIMIT {
@@ -93,6 +94,17 @@ impl App {
                 self.sample_page.go(place.sample_cursor, shown.length());
             }
         }
+    }
+
+    /// `''`: back to where the latest jump left from, as a jump itself, so a second `''` comes
+    /// back again, as Vim's previous context mark does. Whether there was one.
+    pub(crate) fn jump_to_previous_context(&mut self) -> bool {
+        let Some(place) = self.jumped_from else {
+            return false;
+        };
+        self.record_jump();
+        self.restore(place);
+        true
     }
 
     fn jump_back(&mut self) {

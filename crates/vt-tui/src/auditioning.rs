@@ -69,6 +69,29 @@ impl App {
         self.hear(shown, &playable, span);
     }
 
+    /// `;` while selecting: the frames selected, forward, at the entry's gain and tune, with a
+    /// declick at each end rather than the entry's fades, as they're cut out of it. Held, until
+    /// it's let go.
+    pub(crate) fn audition_frames(&mut self, shown: &Shown, frames: std::ops::Range<u64>) {
+        let Some((playable, rates)) = self.playable(shown) else {
+            return;
+        };
+        let whole = playable.whole;
+        let start = rates.loaded_frame(frames.start).min(whole.frames);
+        let end = rates.loaded_frame(frames.end).clamp(start, whole.frames);
+        let span = Span {
+            start,
+            end,
+            loop_: None,
+            reverse: false,
+            fade_in: 0,
+            fade_out: 0,
+            pan: [1.0, 1.0],
+            ..whole
+        };
+        self.hear(shown, &playable, span);
+    }
+
     /// Play one of the entry's slices, by its number, and say whether it went.
     fn play_slice(&mut self, shown: &Shown, number: usize) -> bool {
         let Some((playable, _)) = self.playable(shown) else {

@@ -1,8 +1,9 @@
 //! The sample page, `Space 0`: the sample the cursor's track plays, as a big waveform to move over
 //! with Vim's motions. A sample is a buffer and a cell column is a character, but the cursor is a
 //! line placed to the pixel, so `h` and `l` move a pixel at the zoom shown, speeding up to a column
-//! as they're held, `0` and `$` go to the slice's ends, and `zi` and `zo` zoom on the cursor. It
-//! only shows the bank entry for now: editing its points comes with #276.
+//! as they're held, `0` and `$` go to the slice's ends, and `zi` and `zo` zoom on the cursor.
+//! `placing.rs` edits the entry's points from here, `sample_settings.rs` its settings, and `v`
+//! selects frames to hear.
 //!
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.
@@ -18,6 +19,9 @@ use vt_model::selection::Motion;
 
 use crate::app::App;
 use crate::input::bindings::Cmd;
+use crate::marking::MarkWait;
+use crate::placing::{Edge, Nudge};
+use crate::sample_settings::SampleSetting;
 use crate::views::sample::WaveOnScreen;
 
 /// How many columns the waveform has until the page is first drawn: the author's screen, 163
@@ -65,6 +69,25 @@ pub enum SampleKey {
     ZoomSlice,
     /// `zc`: the cursor as a thin line at its frame, or as its column's background.
     CursorStyle,
+    /// `m` and a letter: name the slice under the cursor with it.
+    NameSlice,
+    /// `Enter`: split the slice at the cursor, or at the playhead while one plays.
+    Split,
+    /// `J`: join the slice under the cursor with the next.
+    Join,
+    /// Cmd-l and Cmd-h: nudge the point under the cursor a frame later or earlier.
+    NudgeFrame {
+        later: bool,
+    },
+    /// `g s`, `g e`, `g l` and `g L`: put the start, the end or a loop point at the cursor.
+    SetPoint(Edge),
+    /// `o`: the cursor to the selection's other end, as Vim's `o` in Visual mode.
+    OtherEnd,
+    /// `>` and `<`: the slice's gain up or down a dB.
+    GainUp,
+    GainDown,
+    /// `~`: the slice played the other way.
+    Reverse,
 }
 
 /// Where the sample page is, kept while other views are shown, and started afresh for another
@@ -103,6 +126,13 @@ pub struct SamplePage {
     pub hearings: u64,
     /// The slice the keys mode's first key plays, a multiple of [`PADS`](crate::auditioning::PADS).
     pub pads_from: usize,
+    /// Where a selection of frames started, while `v` is selecting: it reaches from there to the
+    /// cursor, both included.
+    pub anchor: Option<u64>,
+    /// The first and last frame of the last selection, for `'<`, `'>` and `gv`.
+    pub last_selection: Option<(u64, u64)>,
+    /// The setting the settings rows have the focus on, if they have it rather than the waveform.
+    pub setting: Option<SampleSetting>,
 }
 
 /// A run of `h` or `l` as it's held, which speeds up from a pixel a repeat to a column, as an
@@ -133,6 +163,9 @@ impl Default for SamplePage {
             heard: None,
             hearings: 0,
             pads_from: 0,
+            anchor: None,
+            last_selection: None,
+            setting: None,
         }
     }
 }
@@ -293,12 +326,29 @@ impl SamplePage {
         (column < self.columns as u64).then_some(column as usize)
     }
 
+    /// The frames selected, the anchor's and the cursor's included, while `v` is selecting.
+    pub fn selection(&self) -> Option<std::ops::Range<u64>> {
+        let anchor = self.anchor?;
+        Some(anchor.min(self.cursor)..anchor.max(self.cursor) + 1)
+    }
+
+    /// End a selection, keeping its ends for `'<`, `'>` and `gv`.
+    pub fn end_selection(&mut self) {
+        if let Some(selected) = self.selection() {
+            self.last_selection = Some((selected.start, selected.end - 1));
+        }
+        self.anchor = None;
+    }
+
     /// Start afresh on a sample: the whole of it in view, and the cursor on its start.
     fn start_on(&mut self, shown: &Shown) {
         self.shown = Some((shown.number, shown.analysis.hash));
         self.zoom = self.fit(shown.length());
         self.column = 0;
         self.pads_from = 0;
+        self.anchor = None;
+        self.last_selection = None;
+        self.setting = None;
         self.cursor = shown
             .entry
             .edit
@@ -533,6 +583,41 @@ impl App {
         let length = shown.length();
         let beat = beat_frames(shown.rate(), self.song().millibpm);
         let (repeating, now) = (self.repeating, self.now);
+        // With the focus on the settings rows, `h` and `l` go along them and the keys that change
+        // values change the setting rather than a point.
+        if let Some(setting) = self.sample_page.setting {
+            let large = matches!(cmd, Cmd::IncreaseLarge | Cmd::DecreaseLarge);
+            let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
+            match cmd {
+                Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
+                    let later = cmd == Cmd::Move(Motion::Right);
+                    self.move_setting(&shown, later, times as usize);
+                    return true;
+                }
+                Cmd::Move(Motion::RowStart) | Cmd::Move(Motion::RowEnd) => {
+                    let later = cmd == Cmd::Move(Motion::RowEnd);
+                    self.move_setting(&shown, later, usize::MAX);
+                    return true;
+                }
+                Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
+                    self.change_setting(&shown, setting, up, large, times);
+                    return true;
+                }
+                Cmd::Sample(SampleKey::NudgeFrame { later }) => {
+                    self.change_setting(&shown, setting, later, false, times);
+                    return true;
+                }
+                Cmd::ClearField => {
+                    self.reset_setting(&shown, setting);
+                    return true;
+                }
+                Cmd::PickValue => {
+                    self.open_setting_values_picker(&shown, setting);
+                    return true;
+                }
+                _ => {}
+            }
+        }
         let page = &mut self.sample_page;
         let zoom = page.zoom;
         let columns = page.columns as u64;
@@ -616,28 +701,51 @@ impl App {
             Cmd::NarrowGrid => zoom_by(page, times, true, length),
             Cmd::WidenGrid => zoom_by(page, times, false, length),
             Cmd::Sample(key) => self.run_sample_key(key, &shown, times),
-            Cmd::Audition => self.audition_slice(&shown),
+            Cmd::Audition => match page.selection() {
+                Some(selected) => self.audition_frames(&shown, selected),
+                None => self.audition_slice(&shown),
+            },
             Cmd::PlayFromCursor => self.audition_from_cursor(&shown),
             Cmd::EnterInsert => self.start_pads(&shown),
-            Cmd::Replace | Cmd::Substitute => {
-                self.status = "The sample page only shows the sample for now".to_owned();
+            Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
+                let by = if matches!(cmd, Cmd::Increase | Cmd::Decrease) {
+                    Nudge::Pixel
+                } else {
+                    Nudge::Column
+                };
+                let later = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
+                self.nudge_point(&shown, by, later, times);
             }
-            Cmd::Operator(_) | Cmd::VisualField | Cmd::VisualStep | Cmd::Reselect => {
-                self.status = "Selecting and editing the sample come later".to_owned();
+            Cmd::ClearField => self.remove_point(&shown),
+            Cmd::PickValue => self.open_settings_picker(&shown),
+            Cmd::VisualField => {
+                if page.anchor.is_some() {
+                    page.end_selection();
+                } else {
+                    page.anchor = Some(page.cursor);
+                }
             }
-            Cmd::Increase
-            | Cmd::Decrease
-            | Cmd::IncreaseLarge
-            | Cmd::DecreaseLarge
+            Cmd::Reselect => match page.last_selection {
+                Some((first, last)) => {
+                    page.anchor = Some(first);
+                    page.go(last, length);
+                }
+                None => self.status = "No selection yet: v starts one".to_owned(),
+            },
+            Cmd::VisualStep | Cmd::Operator(_) => {
+                self.status = "Whole slices and the operators come later: v selects frames to hear"
+                    .to_owned();
+            }
+            Cmd::Replace
+            | Cmd::Substitute
             | Cmd::IncreaseChromatic
             | Cmd::DecreaseChromatic
-            | Cmd::ClearField
             | Cmd::CycleMark
             | Cmd::Paste
             | Cmd::PasteAfter
             | Cmd::PasteMerge
             | Cmd::Repeat => {
-                self.status = "The sample page only shows the sample for now".to_owned();
+                self.status = "That doesn't work on the sample page yet".to_owned();
             }
             _ => {
                 self.count = count;
@@ -680,7 +788,26 @@ impl App {
                     None => self.status = "No point further that way".to_owned(),
                 }
             }
-            SampleKey::Mark => self.awaiting_mark = true,
+            SampleKey::Mark => self.awaiting_mark = Some(MarkWait::Jump),
+            SampleKey::NameSlice => self.awaiting_mark = Some(MarkWait::Name),
+            SampleKey::Split => self.split_here(shown),
+            SampleKey::Join => self.join_here(shown),
+            SampleKey::NudgeFrame { later } => {
+                self.nudge_point(shown, Nudge::Frame, later, times);
+            }
+            SampleKey::SetPoint(edge) => self.set_point(shown, edge),
+            SampleKey::OtherEnd => match page.anchor {
+                Some(anchor) => {
+                    page.anchor = Some(page.cursor);
+                    page.go(anchor, length);
+                }
+                None => self.status = "o swaps a selection's ends: v starts one".to_owned(),
+            },
+            SampleKey::GainUp | SampleKey::GainDown => {
+                let up = key == SampleKey::GainUp;
+                self.change_setting(shown, SampleSetting::Gain, up, false, times);
+            }
+            SampleKey::Reverse => self.reverse_here(shown),
             SampleKey::NextMark | SampleKey::PreviousMark => {
                 self.jump_to_next_mark(key == SampleKey::NextMark, times as usize);
             }
@@ -791,6 +918,13 @@ fn is_sample_motion(cmd: Cmd) -> bool {
             | Cmd::Audition
             | Cmd::PlayFromCursor
             | Cmd::EnterInsert
+            | Cmd::Increase
+            | Cmd::Decrease
+            | Cmd::IncreaseLarge
+            | Cmd::DecreaseLarge
+            | Cmd::ClearField
+            | Cmd::VisualField
+            | Cmd::Reselect
     )
 }
 

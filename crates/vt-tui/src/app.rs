@@ -272,6 +272,8 @@ pub struct App {
     pub(crate) yanked_row: Option<ChainEntry>,
     pub(crate) jumps: Vec<Place>,
     pub(crate) jump_index: usize,
+    /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
+    pub(crate) jumped_from: Option<Place>,
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
     pub cursor: Cursor,
@@ -361,8 +363,9 @@ pub struct App {
     pub(crate) operator_count: Option<usize>,
     pub(crate) register: Option<char>,
     pub(crate) awaiting_register: bool,
-    /// Whether `'` on the sample page waits for the letter naming the slice to go to.
-    pub(crate) awaiting_mark: bool,
+    /// Whether `'` or `m` on the sample page waits for a letter: of the slice to go to, or to
+    /// name the slice under the cursor with.
+    pub(crate) awaiting_mark: Option<crate::marking::MarkWait>,
     pub(crate) registers: HashMap<char, Block>,
     pub(crate) anchor: Option<(usize, Scope)>,
     /// How far a selection reaches across tracks from the cursor's.
@@ -471,6 +474,7 @@ impl App {
             yanked_row: None,
             jumps: Vec::new(),
             jump_index: 0,
+            jumped_from: None,
             last_autosave: None,
             autosaved: None,
             cursor: Cursor {
@@ -532,7 +536,7 @@ impl App {
             operator_count: None,
             register: None,
             awaiting_register: false,
-            awaiting_mark: false,
+            awaiting_mark: None,
             registers: HashMap::new(),
             anchor: None,
             anchor_track: None,
