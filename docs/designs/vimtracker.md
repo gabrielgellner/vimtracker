@@ -742,7 +742,7 @@ of the list, this does not change other tracks.
 
 Each track has one voice: one-shot sample playback, a filter, a volume envelope and equal-power pan, with
 `80` defined as exact centre. Final gain is step velocity x `VOL` x track level x instrument volume, and `--` in the step
-means full. Velocity runs `00` to `7F`, matching MIDI, and is still linear. Level values run `00` to `F8` on an even scale in dB, as a fader
+means full. Velocity runs `00` to `7F`, matching MIDI, and is still linear. `Acid` has none, as a 303 has none: its velocity only says whether a note is accented (decision 121). Level values run `00` to `F8` on an even scale in dB, as a fader
 does, since a linear one covers only 6 dB in its top half: 4 steps is 1 dB, `E0` is 0 dB and the default, `F8` is +6 dB of headroom, `01` is -55.75 dB
 and `00` is silent, so every `10` in hex is 4 dB. Anything entered above `F8` snaps to it, and the engine treats any higher value in a file the same way. Track level, instrument volume, `VOL`, `DLY` and `REV` use it, as do LFOs moving those. The scale follows
 Polyend Tracker's gain tables and Ableton Live's fader, which run about -36 to +6 dB and -70 to +6 dB. Track level comes before the sends, so it scales them too, and it belongs on mixer pages

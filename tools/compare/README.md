@@ -63,6 +63,7 @@ reference plugin.
 | `acid-envmod` | Acid's Env Mod, 17 steps | Acid V's | centroid and peak against the knob |
 | `acid-decay` | Acid's Decay, 17 steps | Acid V's | the time constant of the brightness's fall |
 | `acid-accent`, `acid-accent-apart` | Acid's Accent, 17 steps | Acid V's | an accent's brightness and level over a plain note, and how accents in a row, or apart, build |
+| `acid-velocity` | Acid at ten velocities, 10 to 127 | Acid V | each note's level, peak and brightness, which only an accent should change (decision 121) |
 | `comp-static`, `comp-static-force` | the compressor | Comp VCA-65, Bus FORCE | static curve |
 | `comp-timing`, `comp-timing-force` | the compressor | Comp VCA-65, Bus FORCE | attack, release, short and long bursts |
 | `comp-bus-static` | the compressor's `Bus` type at 2, 4 and 10:1 | Bus FORCE | static curve |
@@ -90,6 +91,10 @@ A `knob` report's `measure` says what each step is measured by: `note`, the whol
 and peak; `filter`, a held note's harmonics read as `harmonics` reads them; `decay`, an exponential
 fitted to the note's brightness; or `accents`, each note of a pattern of a plain note and then
 accents. The summary gives how far apart the two curves are on average over the knob.
+
+A `velocity` report has no cases: one render plays notes at different velocities, far enough apart
+for each to start from rest. Each note's RMS over its first 60 ms and its peak over its first
+250 ms are read against the first note's, with its brightness over its first 40 ms.
 
 Always give pedalboard a host's buffer size: Arturia's plugins put out silence at its default of
 8192, so a spec's `buffer_size` is 512 unless it says otherwise.

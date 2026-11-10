@@ -357,20 +357,49 @@ fn pitch_of(out: &[f32], from: usize, to: usize) -> f32 {
 }
 
 #[test]
-fn acid_accents_a_note_from_its_velocity() {
-    // Velocities either side of the line sound nearly as loud as each other, but for the accent.
-    // With the voice's `Accent` full, as at noon an accent adds only about a dB, as Acid V's does
-    // (decision 117).
-    let full = |rows: &[&str]| {
-        let mut song = on(SynthVoice::Acid, rows);
+fn acid_ignores_velocity_but_for_the_accent() {
+    // As on a 303, every plain note sounds the same whatever its velocity, and so does every
+    // accent (decision 121). With the voice's `Accent` full, as at noon an accent adds only a
+    // little, as Acid V's does (decision 117).
+    let at = |velocity: &str| {
+        let note = format!("C-2 {velocity}");
+        let mut song = on(SynthVoice::Acid, &[&note, REST]);
         song.tracks[0].set_machine_value(5, 0xFF);
         play(song, 2)
     };
-    let plain = full(&["C-2 6F", REST]);
-    let accented = full(&["C-2 70", REST]);
+    let plain = at("10");
+    for velocity in ["40", "64", "6F"] {
+        assert!(at(velocity) == plain, "a plain note at {velocity} differs");
+    }
+    let accented = at("70");
+    assert!(
+        at("7F") == accented,
+        "an accent at 7F differs from one at 70"
+    );
     // Measured on average, as a resonant wave's peaks come and go with its filter.
     let louder = 20.0 * (rms(&accented, 0) / rms(&plain, 0)).log10();
     assert!(louder > 3.0, "{louder} dB");
+}
+
+#[test]
+fn every_other_voice_is_as_loud_as_its_velocity() {
+    // A note's level is its velocity's share of the most, on every voice but `Acid`.
+    for voice in SynthVoice::ALL {
+        if voice == SynthVoice::Acid {
+            continue;
+        }
+        let at = |velocity: &str| {
+            let note = format!("C-2 {velocity}");
+            play(on(voice, &[&note, REST]), 2)
+        };
+        let (soft, full) = (at("40"), at("7F"));
+        let ratio = rms(&soft, 0) / rms(&full, 0);
+        let expected = f32::from(0x40_u8) / f32::from(0x7F_u8);
+        assert!(
+            (ratio / expected - 1.0).abs() < 0.01,
+            "{voice:?}: {ratio} against {expected}"
+        );
+    }
 }
 
 #[test]

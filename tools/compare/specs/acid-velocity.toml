@@ -1,0 +1,119 @@
+# Arturia's Acid V against our Acid: one C-2 at each of ten velocities, a second apart, so
+# each note starts from rest: how much louder and brighter a note is for its velocity, which on a
+# 303 is nothing but the accent (#295, decision 121).
+#
+#   uv run run.py specs/acid-velocity.toml --report out/acid-velocity.html
+
+rate = 48000
+duration = 10.05
+
+[[notes]]
+time = 0.05
+length = 0.0625
+note = 36
+velocity = 10
+
+[[notes]]
+time = 1.05
+length = 0.0625
+note = 36
+velocity = 16
+
+[[notes]]
+time = 2.05
+length = 0.0625
+note = 36
+velocity = 40
+
+[[notes]]
+time = 3.05
+length = 0.0625
+note = 36
+velocity = 64
+
+[[notes]]
+time = 4.05
+length = 0.0625
+note = 36
+velocity = 99
+
+[[notes]]
+time = 5.05
+length = 0.0625
+note = 36
+velocity = 100
+
+[[notes]]
+time = 6.05
+length = 0.0625
+note = 36
+velocity = 111
+
+[[notes]]
+time = 7.05
+length = 0.0625
+note = 36
+velocity = 112
+
+[[notes]]
+time = 8.05
+length = 0.0625
+note = 36
+velocity = 120
+
+[[notes]]
+time = 9.05
+length = 0.0625
+note = 36
+velocity = 127
+
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x40
+acid.resonance = 0x80
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+# Acid V opens with whatever preset it last had, so it starts from its factory Default, with its
+# sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0          # its hiss, which would brighten a quiet note's centroid
+cutoff = 0.25
+resonance = 0.5
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "velocity"
+title = "Acid's velocity against Acid V's"
+about = """
+One C-2 on our Acid and on Acid V at each of ten velocities, from 10 to 127, a second apart so \
+that each starts from rest, with the cutoff at a quarter and the other knobs, Accent among them, \
+at noon. A 303 has no velocity: a note is plain or accented, and every plain note sounds the same, \
+as does every accent. Acid V plays it that way, accenting a note from velocity 100. Ours accents \
+from 0x70, 112, as its default velocity is 0x64, 100, which must stay plain, so 100 and 111 are \
+accents on Acid V and plain notes on ours.
+
+Acid V opens with whatever preset it last had, so it starts from its factory Default preset with \
+its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator is raised 12 \
+semitones to play the same pitch. Its distortion and sub oscillator are off, as our Acid has \
+neither, and so is its hiss.
+"""
