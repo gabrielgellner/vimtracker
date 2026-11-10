@@ -41,10 +41,11 @@ use vt_model::samples::SampleId;
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
 
-/// The velocity every plain `Acid` note plays at, whatever its own: 99, where decision 117 fitted
-/// its level, so a note there sounds as it did before velocity was taken away from it. Every
-/// accented note plays at `ACCENT_VELOCITY`, where decision 117 fitted the accent (decision 121).
-const ACID_PLAIN_VELOCITY: u8 = 99;
+/// The velocity every `Acid` note plays at, whatever its own: 99, where decision 117 fitted its
+/// level, so a note there sounds as it did before velocity was taken away from it (decision 121).
+/// An accented note plays at it too, as all an accent adds to the level is the voice's own accent
+/// circuit's (decision 127).
+const ACID_VELOCITY: u8 = 99;
 
 /// Where a track is heard, as its own steps count.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -1519,8 +1520,7 @@ impl Engine {
         };
         let accent = velocity >= ACCENT_VELOCITY;
         let heard = match synth {
-            Some(SynthVoice::Acid) if accent => ACCENT_VELOCITY,
-            Some(SynthVoice::Acid) => ACID_PLAIN_VELOCITY,
+            Some(SynthVoice::Acid) => ACID_VELOCITY,
             _ => velocity,
         };
         Some(NoteOn {
