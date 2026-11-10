@@ -11,8 +11,8 @@ use crate::insert::{
     PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, Setting,
     TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms,
     ceiling_db, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
-    grain_time_seconds, input_db, limit_release_ms, plate_size, ratio, release_ms, tape_drive_db,
-    threshold_db, vowel_blend,
+    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, ratio, release_ms,
+    tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -62,6 +62,8 @@ pub enum Units {
     Ratio,
     Attack,
     Release,
+    /// A compressor's makeup in dB, from none up.
+    Makeup,
     /// A limiter's drive and ceiling in dB, and its release in ms.
     Input,
     Ceiling,
@@ -263,6 +265,7 @@ impl Kind {
                 },
                 Units::Attack => milliseconds(attack_ms(coarse as f32)),
                 Units::Release => milliseconds(release_ms(coarse as f32)),
+                Units::Makeup => format!("{:+.1} dB", makeup_db(coarse as f32)),
                 Units::Input => format!("{:+.1} dB", input_db(coarse as f32)),
                 Units::Ceiling => format!("{:.1} dB", ceiling_db(coarse as f32)),
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
@@ -917,6 +920,7 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Ratio => (false, Units::Ratio),
                 Setting::Attack => (false, Units::Attack),
                 Setting::Release => (false, Units::Release),
+                Setting::Makeup => (false, Units::Makeup),
                 Setting::Input => (false, Units::Input),
                 Setting::Ceiling => (false, Units::Ceiling),
                 Setting::LimitRelease => (false, Units::LimitRelease),
@@ -1772,6 +1776,11 @@ mod tests {
         assert_eq!(shown(eq(1), 0xFF00), "+15.0 dB");
         assert_eq!(shown(eq(1), 0x0000), "-15.0 dB");
         assert_eq!(shown(eq(6), 0x4000), "Q 0.71");
+        let makeup = SettingId::from_key("1.comp.makeup").unwrap();
+        assert_eq!(makeup.label(), Some("1MKUP".into()));
+        assert_eq!(shown(makeup, 0x0000), "+0.0 dB");
+        assert_eq!(shown(makeup, 0x8000), "+12.0 dB");
+        assert_eq!(shown(makeup, 0xFF00), "+24.0 dB");
         let algo = SettingId::slot(0, Effect::Warps, 0).unwrap();
         assert_eq!(shown(algo, 0x0000), "Xfade");
         assert_eq!(shown(algo, 0x6000), "Digital");

@@ -21,10 +21,8 @@
 <text x="684" y="52" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="711" y="52" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Auto  </text>
 <text x="765" y="52" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off         </text>
-<text x="873" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Gain </text>
-<text x="918" y="52" fill="#c6d0f5" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">E0 </text>
-<text x="945" y="52" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="954" y="52" fill="#ca9ee6" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█</text>
+<text x="873" y="52" fill="#949cbb" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Makeup </text>
+<text x="936" y="52" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00  </text>
 <text x="117" y="71" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Source    </text>
 <text x="207" y="71" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Self        </text>
 <text x="315" y="71" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Ratio     </text>

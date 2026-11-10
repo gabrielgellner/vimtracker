@@ -65,7 +65,7 @@ const FX_INDENT: u16 = 3;
 const FX_EFFECT_WIDTH: u16 = 10;
 /// Room for a setting's name on the FX page, for its value and a gap, and for its bar and a gap,
 /// so its columns line up. A choice takes the value's and the bar's room.
-const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [10, 10, 10, 6, 5];
+const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [10, 10, 10, 6, 7];
 const FX_VALUE_WIDTH: u16 = 3;
 const FX_BAR_WIDTH: u16 = FX_BAR_CELLS as u16 + BAR_ENDS + 2;
 /// A slot's drawing comes after all its columns of settings, as a compressor's `Clean` type has

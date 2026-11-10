@@ -149,8 +149,10 @@ pub enum Setting {
     Attack,
     Release,
     Source,
-    /// Whether a compressor makes up what it takes by itself.
+    /// Whether a compressor makes up what it takes by itself, and how much it turns up what it's
+    /// turned down, in dB, after that.
     AutoGain,
+    Makeup,
     /// A compressor's character, and the bus type's switches: its ratio, attack and release, each
     /// a place among its choices.
     CompressorType,
@@ -685,6 +687,15 @@ const AUTO_GAIN_PARAM: Param = Param {
     wraps: true,
     default: 0,
 };
+/// Every type's makeup, from 0 dB at `00` to [`MOST_MAKEUP_DB`] at `FF`, on top of what `Auto`
+/// gives back.
+const MAKEUP_PARAM: Param = hex_param(
+    "Makeup",
+    "makeup",
+    "MKUP",
+    Setting::Makeup,
+    Compressor::DEFAULT.makeup,
+);
 /// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
 /// their own, as a slot's labels name one setting each.
 const BUS_RATIO_PARAM: Param = Param {
@@ -733,10 +744,10 @@ pub(crate) const COMPRESSOR_PARAMS: [Param; 12] = [
     BUS_RELEASE_PARAM,
     AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
-    GAIN_PARAM,
+    MAKEUP_PARAM,
 ];
 /// `Clean`'s, in the order the page shows them: the type over what it hears, then the threshold
-/// over the ratio, the attack over the release, and Auto over the mix.
+/// over the ratio, the attack over the release, and Auto over the mix, with the makeup last.
 const CLEAN_PARAMS: [Param; 9] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
@@ -746,20 +757,29 @@ const CLEAN_PARAMS: [Param; 9] = [
     RELEASE_PARAM,
     AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
-    GAIN_PARAM,
+    MAKEUP_PARAM,
 ];
-/// `Bus`'s: its switches in place of the clean type's knobs, and no Auto gain, as the G-bus has a
-/// makeup knob and nothing to make up by itself.
-const BUS_PARAMS: [Param; 8] = [
+/// `Bus`'s: its switches in place of the clean type's knobs, and the rest as `Clean` has them.
+const BUS_PARAMS: [Param; 9] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
     THRESHOLD_PARAM,
     BUS_RATIO_PARAM,
     BUS_ATTACK_PARAM,
     BUS_RELEASE_PARAM,
+    AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
-    GAIN_PARAM,
+    MAKEUP_PARAM,
 ];
+
+/// The most a compressor's `Makeup` turns up what it's turned down, in dB, as a limiter's `Input`
+/// turns up what goes in.
+pub const MOST_MAKEUP_DB: f32 = 24.0;
+
+/// A compressor's makeup in dB, for a value on the `00` to `FF` scale: from 0 dB to +24 dB.
+pub fn makeup_db(value: f32) -> f32 {
+    value / 255.0 * MOST_MAKEUP_DB
+}
 
 /// How much a limiter's `Input` turns up what goes in at most, in dB.
 pub const MOST_INPUT_DB: f32 = 24.0;
@@ -2156,8 +2176,9 @@ pub struct Compressor {
     pub auto: u8,
     /// From `00`, all dry, to `FF`, all compressed, for compressing in parallel.
     pub mix: u8,
-    /// What comes out, on the level scale, to make up what it took.
-    pub gain: u8,
+    /// How much it turns up what it's turned down, before the mix and on top of `Auto`: from
+    /// 0 dB at `00` to +24 dB at `FF`, as [`makeup_db`] has it.
+    pub makeup: u8,
 }
 
 impl Default for Compressor {
@@ -2182,7 +2203,7 @@ impl Compressor {
         source: 0,
         auto: 0,
         mix: 0xFF,
-        gain: UNITY_LEVEL,
+        makeup: 0,
     };
 
     /// The track it hears, by its place among the tracks, if not its own input. The returns come
@@ -2205,7 +2226,7 @@ impl Compressor {
             Setting::Source => self.source,
             Setting::AutoGain => self.auto,
             Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
+            Setting::Makeup => self.makeup,
             _ => 0,
         }
     }
@@ -2226,7 +2247,7 @@ impl Compressor {
             Setting::Source => compressor.source = value,
             Setting::AutoGain => compressor.auto = value,
             Setting::Mix => compressor.mix = value,
-            Setting::Gain => compressor.gain = value,
+            Setting::Makeup => compressor.makeup = value,
             _ => {}
         }
         compressor
@@ -3223,7 +3244,7 @@ mod tests {
                 "Release",
                 "Auto",
                 "Mix",
-                "Gain"
+                "Makeup"
             ]
         );
         assert_eq!(
@@ -3235,8 +3256,9 @@ mod tests {
                 "Ratio",
                 "Attack",
                 "Release",
+                "Auto",
                 "Mix",
-                "Gain"
+                "Makeup"
             ]
         );
         // The bus's ratio, attack and release are its switches', with `Auto` after the times.
@@ -3305,15 +3327,36 @@ mod tests {
     }
 
     #[test]
-    fn every_effect_ends_with_a_gain() {
+    fn every_effect_ends_with_a_gain_and_a_compressor_with_its_makeup() {
         for effect in Insert::ALL.into_iter().filter(|e| *e != Insert::Empty) {
             let last = effect.params().last().unwrap();
-            assert_eq!(
-                (last.name, last.default),
-                ("Gain", UNITY_LEVEL),
-                "{effect:?}"
-            );
+            let expected = match effect {
+                Insert::Compressor(_) => ("Makeup", 0),
+                _ => ("Gain", UNITY_LEVEL),
+            };
+            assert_eq!((last.name, last.default), expected, "{effect:?}");
         }
+    }
+
+    #[test]
+    fn a_compressors_makeup_runs_from_unity_to_its_most_in_db() {
+        assert_eq!(makeup_db(0.0), 0.0);
+        assert_eq!(makeup_db(255.0), MOST_MAKEUP_DB);
+        assert_eq!(MOST_MAKEUP_DB, 24.0);
+        // Every type has it, with a label so steps lock it and LFOs move it over its whole range.
+        for kind in CompressorType::ALL {
+            let makeup = compressor(kind)
+                .params()
+                .iter()
+                .find(|param| param.setting == Setting::Makeup)
+                .copied()
+                .unwrap();
+            assert_eq!((makeup.key, makeup.label), ("makeup", Some("MKUP")));
+            assert_eq!(Setting::Makeup.highest(), 0xFF);
+            assert_eq!(Setting::Makeup.span(), 255.0);
+        }
+        let turned_up = compressor(CompressorType::Bus).write(Setting::Makeup, 255.0);
+        assert_eq!(turned_up.read(Setting::Makeup), Some(0xFF));
     }
 
     #[test]

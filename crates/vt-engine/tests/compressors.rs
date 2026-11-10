@@ -12,7 +12,8 @@ use vt_engine::dsp::compressor::{Compressor, curve_db};
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_model::insert::{
-    BUS_AUTO_RELEASE, Compressor as Settings, CompressorType, Insert, attack_ms, threshold_db,
+    BUS_AUTO_RELEASE, Compressor as Settings, CompressorType, Insert, MOST_MAKEUP_DB, attack_ms,
+    makeup_db, threshold_db,
 };
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -266,4 +267,88 @@ fn a_track_plays_the_type_its_slot_is_set_to() {
 fn golden_compressor_types_stay_the_same() {
     golden("comp-clean", &hits_through(clean(0x99, 0x80, 0x60, 0x70)));
     golden("comp-bus", &hits_through(bus(0x99, 1, 3, BUS_AUTO_RELEASE)));
+}
+
+#[test]
+fn makeup_is_unity_at_00_and_turns_up_by_24_db_at_ff_in_every_type() {
+    // The threshold at 0 dB, so -20 dB is well under it and only the makeup moves it.
+    let signal: Vec<f32> = sine(-20.0, RATE as usize, 0).collect();
+    for settings in [clean(0xFF, 0x60, 0x55, 0x80), bus(0xFF, 1, 4, 1)] {
+        assert_eq!(settings.makeup, 0x00, "it starts at none");
+        assert_eq!(through(settings, &signal), signal, "{:?}", settings.kind);
+        let most = Settings {
+            makeup: 0xFF,
+            ..settings
+        };
+        let out = through(most, &signal);
+        let raised = level_db(&out) - level_db(&signal);
+        assert!((raised - MOST_MAKEUP_DB).abs() < 1e-3, "{raised}");
+        // From the first frame, as it starts where it's set.
+        let gain = 10_f32.powf(MOST_MAKEUP_DB / 20.0);
+        assert!(
+            out.iter()
+                .zip(&signal)
+                .all(|(out, went_in)| (out - went_in * gain).abs() < 1e-5)
+        );
+    }
+}
+
+#[test]
+fn the_bus_under_its_threshold_lets_the_sound_through_bit_for_bit_at_every_ratio() {
+    // At -20 dB, Bus FORCE's comp path gives back exactly what went in up to its threshold
+    // (`comp-bus-static`), and the G-SSL's ratio switch moves the threshold up, never down.
+    for ratio in 0..3 {
+        let settings = bus(0xAA, ratio, 4, 1);
+        for level in [-60.0, -40.0, -30.0, -24.0, -20.0] {
+            let signal: Vec<f32> = sine(level, RATE as usize, 0).collect();
+            assert_eq!(through(settings, &signal), signal, "{ratio} {level}");
+        }
+    }
+}
+
+#[test]
+fn the_bus_with_auto_comes_out_as_loud_as_it_went_in_and_makeup_adds_to_that() {
+    // A held tone 24 dB over a -30 dB threshold, settled over 8 seconds.
+    let signal: Vec<f32> = sine(-6.0, RATE as usize * 8, 0).collect();
+    let last_second = |out: &[f32]| level_db(&out[out.len() - RATE as usize..]);
+    let went_in = last_second(&signal);
+    for ratio in 0..3 {
+        let settings = bus(0x80, ratio, 4, BUS_AUTO_RELEASE);
+        let turned_down = last_second(&through(settings, &signal)) - went_in;
+        assert!(turned_down < -5.0, "{ratio}: {turned_down}");
+        let auto = Settings {
+            auto: 1,
+            ..settings
+        };
+        let given_back = last_second(&through(auto, &signal)) - went_in;
+        assert!(given_back.abs() < 0.25, "{ratio}: {given_back}");
+        let more = Settings {
+            makeup: 0x80,
+            ..auto
+        };
+        let over = last_second(&through(more, &signal)) - went_in;
+        let makeup = makeup_db(f32::from(more.makeup));
+        assert!((over - makeup).abs() < 0.25, "{ratio}: {over} {makeup}");
+    }
+}
+
+#[test]
+fn makeup_turns_up_only_what_it_turned_down_so_an_all_dry_mix_is_left_alone() {
+    let dry = Settings {
+        mix: 0x00,
+        ..bus(0x99, 1, 3, BUS_AUTO_RELEASE)
+    };
+    let turned_up = Settings {
+        makeup: 0xFF,
+        ..dry
+    };
+    assert_eq!(hits_through(dry), hits_through(turned_up));
+    let wet = Settings { mix: 0xFF, ..dry };
+    assert_ne!(
+        hits_through(wet),
+        hits_through(Settings {
+            mix: 0xFF,
+            ..turned_up
+        })
+    );
 }
