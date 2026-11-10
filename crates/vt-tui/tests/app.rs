@@ -2414,7 +2414,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         .collect();
     assert!(text.contains("┌ Kits ─"), "{text}");
     assert!(
-        text.contains("Enter use  L on tracks  H hidden  P \u{f205} preview"),
+        text.contains("Enter use  L on tracks  H \u{f204} hidden  P \u{f205} preview"),
         "{text}"
     );
     assert!(text.contains("│ 909"), "{text}");
@@ -9290,7 +9290,7 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
 }
 
 #[test]
-fn the_sample_explorers_hint_shows_whether_p_and_a_are_on_with_switches() {
+fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let (mut app, _realtime) = app();
     let library = sample_library(&mut app);
     press(&mut app, " 5l");
@@ -9306,7 +9306,7 @@ fn the_sample_explorers_hint_shows_whether_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "└ Enter choose  H hidden  P {on} preview  A {on} audition ─"
+            "└ Enter choose  H {off} hidden  P {on} preview  A {on} audition ─"
         )),
         "both on, whole: {line}"
     );
@@ -9338,7 +9338,7 @@ fn the_sample_explorers_hint_shows_whether_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "└ Enter choose  H hidden  P {off} preview  A {on} audition ─┘"
+            "└ Enter choose  H {off} hidden  P {off} preview  A {on} audition ─┘"
         )),
         "{line}"
     );
@@ -9355,6 +9355,14 @@ fn the_sample_explorers_hint_shows_whether_p_and_a_are_on_with_switches() {
     );
     press(&mut app, "PA");
     assert_eq!(switch_colour(&app, on, "audition"), vt_tui::theme::GREEN);
+    assert_eq!(switch_colour(&app, off, "hidden"), vt_tui::theme::OVERLAY0);
+    press(&mut app, "H");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!("H {on} hidden  P {on} preview  A {on} audition")),
+        "{line}"
+    );
+    assert_eq!(switch_colour(&app, on, "hidden"), vt_tui::theme::GREEN);
     std::fs::remove_dir_all(&library).unwrap();
 }
 
@@ -9604,6 +9612,12 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     command(&mut app, &format!("e {}", root.join("one").display()));
     command(&mut app, "render --tail");
     assert_eq!(app.picker.as_ref().unwrap().title, "Render into");
+    // Choosing a folder shows nothing beside it, so only `H` has a switch.
+    let text = picker_text(&app, 163, 42);
+    assert!(
+        text.contains("└ l open  Enter choose  H \u{f204} hidden ─"),
+        "{text}"
+    );
     assert_eq!(
         explorer_rows(&app)[0],
         "v project",
