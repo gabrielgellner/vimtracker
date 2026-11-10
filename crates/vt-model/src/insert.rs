@@ -99,29 +99,54 @@ pub enum CompressorType {
     /// Transparent and digital, with an exact ratio and knee, as Ableton's Compressor is.
     #[default]
     Clean,
-    /// An SSL G-bus's glue: set ratios, attacks and releases, an automatic release, and its
-    /// detector hearing what it's already turned down.
-    Bus,
+    /// An SSL console's bus compressor, fitted to the one in Arturia's Bus FORCE: set ratios,
+    /// attacks and releases, an automatic release, and its detector hearing what it's already
+    /// turned down.
+    Console,
+    /// Ableton Live's Glue Compressor, another model of the same SSL, fitted to it: its own
+    /// switches, a knee that softens as the ratio falls, and a limit on how far it turns down.
+    Glue,
 }
 
 impl CompressorType {
     /// Every type, in the order `+` goes through them.
-    pub const ALL: [Self; 2] = [Self::Clean, Self::Bus];
+    pub const ALL: [Self; 3] = [Self::Clean, Self::Console, Self::Glue];
 }
 
-const COMPRESSOR_TYPE_NAMES: [&str; 2] = ["Clean", "Bus"];
+const COMPRESSOR_TYPE_NAMES: [&str; 3] = ["Clean", "Console", "Glue"];
 
-/// The bus compressor's ratios, as its switch has them.
-pub const BUS_RATIOS: [f32; 3] = [2.0, 4.0, 10.0];
-const BUS_RATIO_NAMES: [&str; 3] = ["2:1", "4:1", "10:1"];
-/// The bus compressor's attacks in ms, as its switch has them.
-pub const BUS_ATTACKS_MS: [f32; 6] = [0.1, 0.3, 1.0, 3.0, 10.0, 30.0];
-const BUS_ATTACK_NAMES: [&str; 6] = ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"];
-/// The bus compressor's releases in ms, as its switch has them, before `Auto`.
-pub const BUS_RELEASES_MS: [f32; 4] = [100.0, 300.0, 600.0, 1200.0];
-/// Where `Auto` is among the bus compressor's releases: after the set times.
-pub const BUS_AUTO_RELEASE: u8 = BUS_RELEASES_MS.len() as u8;
-const BUS_RELEASE_NAMES: [&str; 5] = ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"];
+/// The console compressor's ratios, as its switch has them.
+pub const CONSOLE_RATIOS: [f32; 3] = [2.0, 4.0, 10.0];
+const CONSOLE_RATIO_NAMES: [&str; 3] = ["2:1", "4:1", "10:1"];
+/// The console compressor's attacks in ms, as its switch has them.
+pub const CONSOLE_ATTACKS_MS: [f32; 6] = [0.1, 0.3, 1.0, 3.0, 10.0, 30.0];
+const CONSOLE_ATTACK_NAMES: [&str; 6] = ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"];
+/// The console compressor's releases in ms, as its switch has them, before `Auto`.
+pub const CONSOLE_RELEASES_MS: [f32; 4] = [100.0, 300.0, 600.0, 1200.0];
+/// Where `Auto` is among the console compressor's releases: after the set times.
+pub const CONSOLE_AUTO_RELEASE: u8 = CONSOLE_RELEASES_MS.len() as u8;
+const CONSOLE_RELEASE_NAMES: [&str; 5] = ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"];
+
+/// Glue's ratios, attacks and releases, as Live shows its switches. Its attacks are in ms, and
+/// its releases are named in seconds, as the SSL's are, though they don't take that long: what
+/// each takes is the engine's.
+pub const GLUE_RATIOS: [f32; 3] = [2.0, 4.0, 10.0];
+const GLUE_RATIO_NAMES: [&str; 3] = ["2:1", "4:1", "10:1"];
+const GLUE_ATTACK_NAMES: [&str; 7] = [
+    "0.01 ms", "0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms",
+];
+const GLUE_RELEASE_NAMES: [&str; 7] =
+    ["0.1 s", "0.2 s", "0.4 s", "0.6 s", "0.8 s", "1.2 s", "Auto"];
+/// Where `Auto` is among Glue's releases: after the set ones.
+pub const GLUE_AUTO_RELEASE: u8 = GLUE_RELEASE_NAMES.len() as u8 - 1;
+/// The most Glue's `Range` lets it turn down, in dB, where it starts, as Live's does.
+pub const MOST_RANGE_DB: f32 = 70.0;
+
+/// Glue's `Range` in dB, for a value on the `00` to `FF` scale: from 0 dB, where it doesn't turn
+/// down at all, to [`MOST_RANGE_DB`].
+pub fn range_db(value: f32) -> f32 {
+    value / 255.0 * MOST_RANGE_DB
+}
 
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,12 +178,16 @@ pub enum Setting {
     /// turned down, in dB, after that.
     AutoGain,
     Makeup,
-    /// A compressor's character, and the bus type's switches: its ratio, attack and release, each
-    /// a place among its choices.
+    /// A compressor's character, and the console and Glue types' switches: each one's ratio,
+    /// attack and release, a place among its choices. Glue's `Range` is the most it turns down.
     CompressorType,
-    BusRatio,
-    BusAttack,
-    BusRelease,
+    ConsoleRatio,
+    ConsoleAttack,
+    ConsoleRelease,
+    GlueRatio,
+    GlueAttack,
+    GlueRelease,
+    Range,
     /// A limiter's: how hard it's driven, the most that comes out, and how fast it lets go.
     Input,
     Ceiling,
@@ -247,9 +276,12 @@ impl Setting {
             Self::Source => SOURCE_NAMES.len() as u8 - 1,
             Self::AutoGain => 1,
             Self::CompressorType => CompressorType::ALL.len() as u8 - 1,
-            Self::BusRatio => BUS_RATIOS.len() as u8 - 1,
-            Self::BusAttack => BUS_ATTACKS_MS.len() as u8 - 1,
-            Self::BusRelease => BUS_AUTO_RELEASE,
+            Self::ConsoleRatio => CONSOLE_RATIOS.len() as u8 - 1,
+            Self::ConsoleAttack => CONSOLE_ATTACKS_MS.len() as u8 - 1,
+            Self::ConsoleRelease => CONSOLE_AUTO_RELEASE,
+            Self::GlueRatio => GLUE_RATIOS.len() as u8 - 1,
+            Self::GlueAttack => GLUE_ATTACK_NAMES.len() as u8 - 1,
+            Self::GlueRelease => GLUE_AUTO_RELEASE,
             Self::Bits => MOST_BITS - LEAST_BITS,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
@@ -272,9 +304,12 @@ impl Setting {
             Self::Source => (SOURCE_NAMES.len() - 1) as f32,
             Self::AutoGain => 1.0,
             Self::CompressorType => (CompressorType::ALL.len() - 1) as f32,
-            Self::BusRatio => (BUS_RATIOS.len() - 1) as f32,
-            Self::BusAttack => (BUS_ATTACKS_MS.len() - 1) as f32,
-            Self::BusRelease => BUS_AUTO_RELEASE as f32,
+            Self::ConsoleRatio => (CONSOLE_RATIOS.len() - 1) as f32,
+            Self::ConsoleAttack => (CONSOLE_ATTACKS_MS.len() - 1) as f32,
+            Self::ConsoleRelease => CONSOLE_AUTO_RELEASE as f32,
+            Self::GlueRatio => (GLUE_RATIOS.len() - 1) as f32,
+            Self::GlueAttack => (GLUE_ATTACK_NAMES.len() - 1) as f32,
+            Self::GlueRelease => GLUE_AUTO_RELEASE as f32,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
@@ -698,33 +733,69 @@ const MAKEUP_PARAM: Param = hex_param(
 );
 /// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
 /// their own, as a slot's labels name one setting each.
-const BUS_RATIO_PARAM: Param = Param {
+const CONSOLE_RATIO_PARAM: Param = Param {
     name: "Ratio",
-    key: "busratio",
-    label: Some("BRTO"),
-    setting: Setting::BusRatio,
-    choices: &BUS_RATIO_NAMES,
+    key: "consoleratio",
+    label: Some("CRTO"),
+    setting: Setting::ConsoleRatio,
+    choices: &CONSOLE_RATIO_NAMES,
     wraps: false,
-    default: Compressor::DEFAULT.bus_ratio,
+    default: Compressor::DEFAULT.console_ratio,
 };
-const BUS_ATTACK_PARAM: Param = Param {
+const CONSOLE_ATTACK_PARAM: Param = Param {
     name: "Attack",
-    key: "busattack",
-    label: Some("BATK"),
-    setting: Setting::BusAttack,
-    choices: &BUS_ATTACK_NAMES,
+    key: "consoleattack",
+    label: Some("CATK"),
+    setting: Setting::ConsoleAttack,
+    choices: &CONSOLE_ATTACK_NAMES,
     wraps: false,
-    default: Compressor::DEFAULT.bus_attack,
+    default: Compressor::DEFAULT.console_attack,
 };
-const BUS_RELEASE_PARAM: Param = Param {
+const CONSOLE_RELEASE_PARAM: Param = Param {
     name: "Release",
-    key: "busrelease",
-    label: Some("BREL"),
-    setting: Setting::BusRelease,
-    choices: &BUS_RELEASE_NAMES,
+    key: "consolerelease",
+    label: Some("CREL"),
+    setting: Setting::ConsoleRelease,
+    choices: &CONSOLE_RELEASE_NAMES,
     wraps: false,
-    default: Compressor::DEFAULT.bus_release,
+    default: Compressor::DEFAULT.console_release,
 };
+/// Glue's switches, shown by the same names again, with labels of their own.
+const GLUE_RATIO_PARAM: Param = Param {
+    name: "Ratio",
+    key: "glueratio",
+    label: Some("GRTO"),
+    setting: Setting::GlueRatio,
+    choices: &GLUE_RATIO_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.glue_ratio,
+};
+const GLUE_ATTACK_PARAM: Param = Param {
+    name: "Attack",
+    key: "glueattack",
+    label: Some("GATK"),
+    setting: Setting::GlueAttack,
+    choices: &GLUE_ATTACK_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.glue_attack,
+};
+const GLUE_RELEASE_PARAM: Param = Param {
+    name: "Release",
+    key: "gluerelease",
+    label: Some("GREL"),
+    setting: Setting::GlueRelease,
+    choices: &GLUE_RELEASE_NAMES,
+    wraps: false,
+    default: Compressor::DEFAULT.glue_release,
+};
+/// Glue's `Range`, the most it turns down, from none at `00` to [`MOST_RANGE_DB`] at `FF`.
+const RANGE_PARAM: Param = hex_param(
+    "Range",
+    "range",
+    "RNGE",
+    Setting::Range,
+    Compressor::DEFAULT.range,
+);
 /// A compressor's whole mix, which it starts at, for compressing in parallel when turned down.
 const COMPRESSOR_MIX_PARAM: Param = Param {
     default: 0xFF,
@@ -732,16 +803,20 @@ const COMPRESSOR_MIX_PARAM: Param = Param {
 };
 /// Every setting a compressor has in any of its types, in the order songs number them. Each type
 /// shows only its own.
-pub(crate) const COMPRESSOR_PARAMS: [Param; 12] = [
+pub(crate) const COMPRESSOR_PARAMS: [Param; 16] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
     THRESHOLD_PARAM,
     RATIO_PARAM,
     ATTACK_PARAM,
     RELEASE_PARAM,
-    BUS_RATIO_PARAM,
-    BUS_ATTACK_PARAM,
-    BUS_RELEASE_PARAM,
+    CONSOLE_RATIO_PARAM,
+    CONSOLE_ATTACK_PARAM,
+    CONSOLE_RELEASE_PARAM,
+    GLUE_RATIO_PARAM,
+    GLUE_ATTACK_PARAM,
+    GLUE_RELEASE_PARAM,
+    RANGE_PARAM,
     AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
     MAKEUP_PARAM,
@@ -759,16 +834,31 @@ const CLEAN_PARAMS: [Param; 9] = [
     COMPRESSOR_MIX_PARAM,
     MAKEUP_PARAM,
 ];
-/// `Bus`'s: its switches in place of the clean type's knobs, and the rest as `Clean` has them.
-const BUS_PARAMS: [Param; 9] = [
+/// `Console`'s: its switches in place of the clean type's knobs, and the rest as `Clean` has them.
+const CONSOLE_PARAMS: [Param; 9] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
     THRESHOLD_PARAM,
-    BUS_RATIO_PARAM,
-    BUS_ATTACK_PARAM,
-    BUS_RELEASE_PARAM,
+    CONSOLE_RATIO_PARAM,
+    CONSOLE_ATTACK_PARAM,
+    CONSOLE_RELEASE_PARAM,
     AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
+    MAKEUP_PARAM,
+];
+/// `Glue`'s: its switches as `Console` has its own, and its `Range` over the makeup, so the rest
+/// keep the places they have in the other types. Live's `Peak Clip In` isn't here, as the page
+/// shows ten settings and it's a clip after everything else, which a slot after it gives.
+const GLUE_PARAMS: [Param; 10] = [
+    COMPRESSOR_TYPE_PARAM,
+    SOURCE_PARAM,
+    THRESHOLD_PARAM,
+    GLUE_RATIO_PARAM,
+    GLUE_ATTACK_PARAM,
+    GLUE_RELEASE_PARAM,
+    AUTO_GAIN_PARAM,
+    COMPRESSOR_MIX_PARAM,
+    RANGE_PARAM,
     MAKEUP_PARAM,
 ];
 
@@ -1639,7 +1729,8 @@ impl Insert {
             Self::Eq(_) => &EQ_PARAMS,
             Self::Compressor(compressor) => match compressor.kind {
                 CompressorType::Clean => &CLEAN_PARAMS,
-                CompressorType::Bus => &BUS_PARAMS,
+                CompressorType::Console => &CONSOLE_PARAMS,
+                CompressorType::Glue => &GLUE_PARAMS,
             },
             Self::Limit(_) => &LIMIT_PARAMS,
             Self::Phaser(_) => &PHASER_PARAMS,
@@ -2165,10 +2256,16 @@ pub struct Compressor {
     pub ratio: u8,
     pub attack: u8,
     pub release: u8,
-    /// `Bus`'s ratio, attack and release, each a place among its switch's.
-    pub bus_ratio: u8,
-    pub bus_attack: u8,
-    pub bus_release: u8,
+    /// `Console`'s ratio, attack and release, each a place among its switch's.
+    pub console_ratio: u8,
+    pub console_attack: u8,
+    pub console_release: u8,
+    /// `Glue`'s, the same, and the most it turns down, from 0 dB at `00` to 70 dB at `FF`, as
+    /// [`range_db`] has it.
+    pub glue_ratio: u8,
+    pub glue_attack: u8,
+    pub glue_release: u8,
+    pub range: u8,
     /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
     pub source: u8,
     /// `1` to make up by itself how much quieter it comes out than it went in, each measured over
@@ -2189,17 +2286,22 @@ impl Default for Compressor {
 
 impl Compressor {
     /// As it starts: `Clean`, at -15 dB, about 3.7:1, a quick attack and a 100 ms release,
-    /// hearing itself. `Bus` starts at 4:1 with a 10 ms attack and `Auto` release, the G-bus's
-    /// usual place on a drum bus.
+    /// hearing itself. `Console` starts at 4:1 with a 10 ms attack and `Auto` release, the G-bus's
+    /// usual place on a drum bus, and `Glue` where Live loads it: 4:1, a 1 ms attack, a 0.6 s
+    /// release and all of its range.
     pub const DEFAULT: Self = Self {
         kind: CompressorType::Clean,
         threshold: 0xC0,
         ratio: 0x60,
         attack: 0x55,
         release: 0x80,
-        bus_ratio: 1,
-        bus_attack: 4,
-        bus_release: BUS_AUTO_RELEASE,
+        console_ratio: 1,
+        console_attack: 4,
+        console_release: CONSOLE_AUTO_RELEASE,
+        glue_ratio: 1,
+        glue_attack: 3,
+        glue_release: 3,
+        range: 0xFF,
         source: 0,
         auto: 0,
         mix: 0xFF,
@@ -2220,9 +2322,13 @@ impl Compressor {
             Setting::Ratio => self.ratio,
             Setting::Attack => self.attack,
             Setting::Release => self.release,
-            Setting::BusRatio => self.bus_ratio,
-            Setting::BusAttack => self.bus_attack,
-            Setting::BusRelease => self.bus_release,
+            Setting::ConsoleRatio => self.console_ratio,
+            Setting::ConsoleAttack => self.console_attack,
+            Setting::ConsoleRelease => self.console_release,
+            Setting::GlueRatio => self.glue_ratio,
+            Setting::GlueAttack => self.glue_attack,
+            Setting::GlueRelease => self.glue_release,
+            Setting::Range => self.range,
             Setting::Source => self.source,
             Setting::AutoGain => self.auto,
             Setting::Mix => self.mix,
@@ -2241,9 +2347,13 @@ impl Compressor {
             Setting::Ratio => compressor.ratio = value,
             Setting::Attack => compressor.attack = value,
             Setting::Release => compressor.release = value,
-            Setting::BusRatio => compressor.bus_ratio = value,
-            Setting::BusAttack => compressor.bus_attack = value,
-            Setting::BusRelease => compressor.bus_release = value,
+            Setting::ConsoleRatio => compressor.console_ratio = value,
+            Setting::ConsoleAttack => compressor.console_attack = value,
+            Setting::ConsoleRelease => compressor.console_release = value,
+            Setting::GlueRatio => compressor.glue_ratio = value,
+            Setting::GlueAttack => compressor.glue_attack = value,
+            Setting::GlueRelease => compressor.glue_release = value,
+            Setting::Range => compressor.range = value,
             Setting::Source => compressor.source = value,
             Setting::AutoGain => compressor.auto = value,
             Setting::Mix => compressor.mix = value,
@@ -3248,7 +3358,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(CompressorType::Bus),
+            names(CompressorType::Console),
             [
                 "Type",
                 "Source",
@@ -3261,39 +3371,90 @@ mod tests {
                 "Makeup"
             ]
         );
-        // The bus's ratio, attack and release are its switches', with `Auto` after the times.
-        let bus = compressor(CompressorType::Bus);
-        let choices = |at: usize| bus.params()[at].choices;
+        // The console's ratio, attack and release are its switches', with `Auto` after the times.
+        let console = compressor(CompressorType::Console);
+        let choices = |at: usize| console.params()[at].choices;
         assert_eq!(choices(3), ["2:1", "4:1", "10:1"]);
         assert_eq!(
             choices(4),
             ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"]
         );
         assert_eq!(choices(5), ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"]);
-        assert_eq!(bus.value(3), 1, "4:1");
-        assert_eq!(bus.value(5), BUS_AUTO_RELEASE);
+        assert_eq!(console.value(3), 1, "4:1");
+        assert_eq!(console.value(5), CONSOLE_AUTO_RELEASE);
+        // Glue's are Live's, and it has its range, ten settings, all the page shows.
+        assert_eq!(
+            names(CompressorType::Glue),
+            [
+                "Type",
+                "Source",
+                "Threshold",
+                "Ratio",
+                "Attack",
+                "Release",
+                "Auto",
+                "Mix",
+                "Range",
+                "Makeup"
+            ]
+        );
+        let glue = compressor(CompressorType::Glue);
+        let choices = |at: usize| glue.params()[at].choices;
+        assert_eq!(choices(3), ["2:1", "4:1", "10:1"]);
+        assert_eq!(
+            choices(4),
+            [
+                "0.01 ms", "0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"
+            ]
+        );
+        assert_eq!(
+            choices(5),
+            ["0.1 s", "0.2 s", "0.4 s", "0.6 s", "0.8 s", "1.2 s", "Auto"]
+        );
+        assert_eq!(GLUE_AUTO_RELEASE, 6);
+        // It starts where Live loads it: 4:1, 1 ms, `.6` and all 70 dB of its range.
+        assert_eq!(
+            (glue.value(3), glue.value(4), glue.value(5), glue.value(8)),
+            (1, 3, 3, 0xFF)
+        );
+        assert_eq!(range_db(255.0), MOST_RANGE_DB);
+        assert_eq!(range_db(0.0), 0.0);
     }
 
     #[test]
     fn a_compressors_type_and_switches_save_and_load_and_an_old_one_loads_clean() {
-        let bus = Insert::Compressor(Compressor {
-            kind: CompressorType::Bus,
-            bus_ratio: 2,
-            bus_attack: 0,
-            bus_release: 3,
+        let console = Insert::Compressor(Compressor {
+            kind: CompressorType::Console,
+            console_ratio: 2,
+            console_attack: 0,
+            console_release: 3,
             ..Compressor::DEFAULT
         });
-        let saved = ron::to_string(&bus).unwrap();
-        assert_eq!(ron::from_str::<Insert>(&saved).unwrap(), bus);
+        let saved = ron::to_string(&console).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&saved).unwrap(), console);
+        let glue = Insert::Compressor(Compressor {
+            kind: CompressorType::Glue,
+            glue_ratio: 2,
+            glue_attack: 0,
+            glue_release: GLUE_AUTO_RELEASE,
+            range: 0x40,
+            ..Compressor::DEFAULT
+        });
+        let saved = ron::to_string(&glue).unwrap();
+        assert_eq!(ron::from_str::<Insert>(&saved).unwrap(), glue);
         // A compressor saved before it had types is the clean one, as it sounded.
         let old: Compressor = ron::from_str("(threshold: 170, ratio: 101, mix: 255)").unwrap();
         assert_eq!(old.kind, CompressorType::Clean);
         assert_eq!((old.threshold, old.ratio), (170, 101));
         // Each switch has a key of its own to save and lock it by.
         use crate::settings::{Effect, SettingId};
-        let id = SettingId::from_key("1.comp.busrelease").unwrap();
+        let id = SettingId::from_key("1.comp.consolerelease").unwrap();
         assert_eq!(id.name(), "Release");
-        assert_eq!(id.label().as_deref(), Some("1BREL"));
+        assert_eq!(id.label().as_deref(), Some("1CREL"));
+        let id = SettingId::from_key("1.comp.gluerelease").unwrap();
+        assert_eq!(id.label().as_deref(), Some("1GREL"));
+        let id = SettingId::from_key("1.comp.range").unwrap();
+        assert_eq!((id.name(), id.label().as_deref()), ("Range", Some("1RNGE")));
         let at = Effect::Compressor
             .params()
             .iter()
@@ -3310,9 +3471,9 @@ mod tests {
         let clean = compressor(CompressorType::Clean).write(Setting::Ratio, f32::from(0x30_u8));
         let bus = clean
             .write(Setting::CompressorType, 1.0)
-            .write(Setting::BusRatio, 9.0);
+            .write(Setting::ConsoleRatio, 9.0);
         assert_eq!(
-            bus.read(Setting::BusRatio),
+            bus.read(Setting::ConsoleRatio),
             Some(2),
             "a switch stops at its last"
         );
@@ -3323,7 +3484,7 @@ mod tests {
         );
         let back = bus.write(Setting::CompressorType, 0.0);
         assert_eq!(back.read(Setting::Ratio), Some(0x30));
-        assert_eq!(back.read(Setting::BusRatio), Some(2));
+        assert_eq!(back.read(Setting::ConsoleRatio), Some(2));
     }
 
     #[test]
@@ -3355,7 +3516,7 @@ mod tests {
             assert_eq!(Setting::Makeup.highest(), 0xFF);
             assert_eq!(Setting::Makeup.span(), 255.0);
         }
-        let turned_up = compressor(CompressorType::Bus).write(Setting::Makeup, 255.0);
+        let turned_up = compressor(CompressorType::Console).write(Setting::Makeup, 255.0);
         assert_eq!(turned_up.read(Setting::Makeup), Some(0xFF));
     }
 

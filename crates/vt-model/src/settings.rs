@@ -11,8 +11,8 @@ use crate::insert::{
     PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, Setting,
     TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms,
     ceiling_db, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
-    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, ratio, release_ms,
-    tape_drive_db, threshold_db, vowel_blend,
+    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
+    release_ms, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -62,8 +62,9 @@ pub enum Units {
     Ratio,
     Attack,
     Release,
-    /// A compressor's makeup in dB, from none up.
+    /// A compressor's makeup in dB, from none up, and the most Glue turns down, in dB.
     Makeup,
+    Range,
     /// A limiter's drive and ceiling in dB, and its release in ms.
     Input,
     Ceiling,
@@ -266,6 +267,7 @@ impl Kind {
                 Units::Attack => milliseconds(attack_ms(coarse as f32)),
                 Units::Release => milliseconds(release_ms(coarse as f32)),
                 Units::Makeup => format!("{:+.1} dB", makeup_db(coarse as f32)),
+                Units::Range => format!("{:.1} dB", range_db(coarse as f32)),
                 Units::Input => format!("{:+.1} dB", input_db(coarse as f32)),
                 Units::Ceiling => format!("{:.1} dB", ceiling_db(coarse as f32)),
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
@@ -921,6 +923,7 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::Attack => (false, Units::Attack),
                 Setting::Release => (false, Units::Release),
                 Setting::Makeup => (false, Units::Makeup),
+                Setting::Range => (false, Units::Range),
                 Setting::Input => (false, Units::Input),
                 Setting::Ceiling => (false, Units::Ceiling),
                 Setting::LimitRelease => (false, Units::LimitRelease),

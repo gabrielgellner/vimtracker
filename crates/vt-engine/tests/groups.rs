@@ -80,14 +80,14 @@ fn loudest(out: &[[f32; 2]], around: usize) -> f32 {
         .fold(0.0, |most, frame| most.max(frame[0].abs()))
 }
 
-/// A bus compressor pulling hard on the tone, quick enough to hear within a hit.
-fn bus() -> Insert {
+/// A console compressor pulling hard on the tone, quick enough to hear within a hit.
+fn console() -> Insert {
     Insert::Compressor(Compressor {
-        kind: CompressorType::Bus,
+        kind: CompressorType::Console,
         threshold: 0x60,
-        bus_ratio: 2,
-        bus_attack: 0,
-        bus_release: 0,
+        console_ratio: 2,
+        console_attack: 0,
+        console_release: 0,
         ..Compressor::DEFAULT
     })
 }
@@ -112,11 +112,11 @@ fn two_drum_tracks_in_a_group_with_a_bus_compressor_are_the_compressed_sum() {
     grouped.tracks[0].group = Some(1);
     grouped.tracks[1].group = Some(1);
     let group = place(&grouped, TrackKind::Group(1));
-    grouped.tracks[group].inserts[0] = bus();
+    grouped.tracks[group].inserts[0] = console();
     // The same compressor on the master hears the same sum, as nothing else plays.
     let mut on_master = song(&[0, 0]);
     let master = place(&on_master, TrackKind::Master);
-    on_master.tracks[master].inserts[0] = bus();
+    on_master.tracks[master].inserts[0] = console();
     let plain = render(song(&[0, 0]));
     let (grouped, on_master) = (render(grouped), render(on_master));
     assert_eq!(grouped, on_master, "the compressor hears the sum");

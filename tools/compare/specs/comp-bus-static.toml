@@ -1,7 +1,7 @@
-# Our Bus compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
-# static curve at each of the Bus's ratios, from a 1 kHz sine stepped from -60 to 0 dBFS a dB at a
+# Our Console compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
+# static curve at each of Console's ratios, from a 1 kHz sine stepped from -60 to 0 dBFS a dB at a
 # time. Bus FORCE's Force knob has no ratio on it, and its curve steepens the harder it's driven,
-# so it's set where its top 10 dB has our ratio: 2.7, 4.3 and 5.25. The Bus's knee and where its
+# so it's set where its top 10 dB has our ratio: 2.7, 4.3 and 5.25. Console's knee and where its
 # line sits are fitted to these (#338).
 #
 #   uv run run.py specs/comp-bus-static.toml --report out/comp-bus-static.html
@@ -20,10 +20,10 @@ hold = 0.25
 effects = ["comp"]
 
 [ours.settings]
-1.comp.type = "Bus"
+1.comp.type = "Console"
 1.comp.threshold = 0xAA       # -20 dB
-1.comp.busattack = "10 ms"
-1.comp.busrelease = "0.1 s"
+1.comp.consoleattack = "10 ms"
+1.comp.consolerelease = "0.1 s"
 1.comp.mix = 0xFF
 
 [reference]
@@ -51,31 +51,31 @@ output_trim_db = 0.0
 
 [report]
 kind = "static"
-title = "Bus compressor static curve against Bus FORCE"
+title = "Console compressor static curve against Bus FORCE"
 about = """
-Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against the compressor in \
+Our Console compressor, the SSL console type of Comp, in a track's first slot against the compressor in \
 Arturia's Bus FORCE, by its static curve: a 1 kHz sine stepped from -60 to 0 dBFS a decibel at a \
 time, each level held a quarter of a second, with the output read once each step has settled.
 
 Bus FORCE's dry and saturation paths are muted, and its filter, EQ, side-chain filter, auto gain \
 and clipper are off, so only its compressor path is heard. Both thresholds are at -20 dBFS, and \
 both attacks 10 ms and releases 100 ms. Bus FORCE's Force knob has no ratio printed on it and its \
-curve steepens the harder it's driven, so it's set where its top 10 dB has the Bus's ratio: 2.7 \
-for 2:1, 4.3 for 4:1 and 5.25 for 10:1. The Bus's knee, and how far over the threshold its line \
+curve steepens the harder it's driven, so it's set where its top 10 dB has Console's ratio: 2.7 \
+for 2:1, 4.3 for 4:1 and 5.25 for 10:1. Console's knee, and how far over the threshold its line \
 sits, are fitted to these curves, as the G-bus's ratio switch moves its own threshold.
 """
 
 [[cases]]
 name = "ratio-2"
-ours = { 1.comp.busratio = "2:1" }
+ours = { 1.comp.consoleratio = "2:1" }
 reference = { comp_force = 2.7 }
 
 [[cases]]
 name = "ratio-4"
-ours = { 1.comp.busratio = "4:1" }
+ours = { 1.comp.consoleratio = "4:1" }
 reference = { comp_force = 4.3 }
 
 [[cases]]
 name = "ratio-10"
-ours = { 1.comp.busratio = "10:1" }
+ours = { 1.comp.consoleratio = "10:1" }
 reference = { comp_force = 5.25 }

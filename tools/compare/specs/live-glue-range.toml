@@ -1,0 +1,79 @@
+# Our Glue compressor against Ableton Live's Glue Compressor: its Range, the most it turns down,
+# from a 1 kHz sine stepped from -40 to 0 dBFS at 10:1 with the threshold at -30 dB, so it would
+# turn down over 20 dB without one (#338, #364). Ours is fitted to these.
+#
+#   uv run run.py specs/live-glue-range.toml --report out/live-glue-range.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -40.0
+to = 0.0
+step = 2.0
+hold = 0.25
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Glue"
+1.comp.threshold = 0x80       # -30 dB
+1.comp.glueratio = "10:1"
+1.comp.glueattack = "10 ms"
+1.comp.gluerelease = "0.1 s"
+1.comp.makeup = 0x00
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[[references]]
+name = "Glue"
+live = "Glue Compressor"
+
+[references.parameters]
+Threshold = "-30 dB"
+Ratio = 10
+Attack = 10
+Release = 0.1
+Output = "0 dB"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "static"
+title = "Glue compressor range against Glue Compressor"
+about = """
+Our Glue compressor, the Glue type of Comp, in a track's first slot against Ableton Live's Glue \
+Compressor, by their static curves at several of its Range, the most it turns down: a 1 kHz sine \
+stepped from -40 to 0 dBFS two decibels at a time, at 10:1 with the threshold at -30 dB, a 10 ms \
+attack and a 0.1 s release.
+
+Range caps what the rectifier asks for rather than the gain, so the capacitor's ripple brings it \
+in softly and it settles under the range: at 6 dB, a tone 30 dB over is turned down by 3.4 dB. \
+Ours sets a range by the nearest step on its 00 to FF scale, which runs to 70 dB.
+"""
+
+[[cases]]
+name = "range-3"
+ours = { 1.comp.range = 0x0B }
+references = { Glue = { Range = "3 dB" } }
+
+[[cases]]
+name = "range-6"
+ours = { 1.comp.range = 0x16 }
+references = { Glue = { Range = "6 dB" } }
+
+[[cases]]
+name = "range-12"
+ours = { 1.comp.range = 0x2C }
+references = { Glue = { Range = "12 dB" } }
+
+[[cases]]
+name = "range-20"
+ours = { 1.comp.range = 0x49 }
+references = { Glue = { Range = "20 dB" } }
+
+[[cases]]
+name = "range-40"
+ours = { 1.comp.range = 0x92 }
+references = { Glue = { Range = "40 dB" } }

@@ -1,4 +1,4 @@
-# Our Bus compressor's Auto release alone, as Bus FORCE has none: tone bursts from 20 ms to 2 s,
+# Our Console compressor's Auto release alone, as Bus FORCE has none: tone bursts from 20 ms to 2 s,
 # from -20 dBFS up to 0 dBFS and back, each followed by six seconds to let go. The G-bus's Auto is
 # two capacitors, so a short peak lets go in tens of ms and a long squeeze over seconds (#338).
 #
@@ -19,18 +19,18 @@ after = 6.0
 effects = ["comp"]
 
 [ours.settings]
-1.comp.type = "Bus"
+1.comp.type = "Console"
 1.comp.threshold = 0xD5       # -10 dB
-1.comp.busratio = "4:1"
-1.comp.busattack = "1 ms"
-1.comp.busrelease = "Auto"
+1.comp.consoleratio = "4:1"
+1.comp.consoleattack = "1 ms"
+1.comp.consolerelease = "Auto"
 1.comp.mix = 0xFF
 
 [report]
 kind = "timing"
-title = "Bus compressor Auto release"
+title = "Console compressor Auto release"
 about = """
-Our Bus compressor, the SSL G-bus type of Comp, alone, as Bus FORCE has no automatic release: a \
+Our Console compressor, the SSL console type of Comp, alone, as Bus FORCE has no automatic release: a \
 1 kHz sine at -20 dBFS, then 0 dBFS for a burst, then -20 dBFS again for six seconds, with the \
 threshold at -10 dBFS, 4:1, a 1 ms attack and the release at Auto.
 

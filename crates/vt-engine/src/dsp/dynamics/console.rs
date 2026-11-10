@@ -1,4 +1,4 @@
-//! The `Bus` compressor, after the SSL G-series bus compressor as Jakob Erland's G-SSL clone
+//! The `Console` compressor, after the SSL G-series bus compressor as Jakob Erland's G-SSL clone
 //! documents its circuit (https://gyraf.dk/gy_pd/ssl/ssl.htm), tuned against the compressor in
 //! Arturia's Bus FORCE with `tools/compare` (#338, decision 118). Only Bus FORCE's outputs were
 //! measured.
@@ -26,7 +26,7 @@
 //! compressor adds no even harmonics, nor any at all until it turns down.
 
 use vt_model::insert::{
-    BUS_AUTO_RELEASE, BUS_RATIOS, BUS_RELEASES_MS, Compressor as Settings, threshold_db,
+    CONSOLE_AUTO_RELEASE, CONSOLE_RATIOS, CONSOLE_RELEASES_MS, Compressor as Settings, threshold_db,
 };
 
 use crate::dsp::blocks::smoother::Smoothed;
@@ -94,9 +94,9 @@ fn charged(from: f32, attack: f32, over: f32, slope: f32, knee: f32) -> f32 {
 /// How far a steady level is turned down once it's settled, in dB, by the ratio and knee at a
 /// place on the switch.
 pub fn settled(level: f32, settings: Settings) -> f32 {
-    let at = usize::from(settings.bus_ratio).min(BUS_RATIOS.len() - 1);
+    let at = usize::from(settings.console_ratio).min(CONSOLE_RATIOS.len() - 1);
     let over = level - threshold_db(f32::from(settings.threshold)) - OFFSETS_DB[at];
-    charged(0.0, 0.0, over, BUS_RATIOS[at] - 1.0, KNEES_DB[at])
+    charged(0.0, 0.0, over, CONSOLE_RATIOS[at] - 1.0, KNEES_DB[at])
 }
 
 /// What it keeps each frame for the switches' times, worked out when they change.
@@ -114,7 +114,7 @@ struct Times {
 
 /// The control voltage and its capacitors, and where its curve sits, gliding to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Bus {
+pub struct Console {
     /// How far it's turning down now, in dB: the timing capacitor's voltage.
     reduction: f32,
     /// Auto's big capacitor's voltage, in dB.
@@ -130,7 +130,7 @@ pub struct Bus {
     times: Option<(Settings, Times)>,
 }
 
-impl Bus {
+impl Console {
     /// How far it's turning down now, in dB, for a meter.
     pub fn reduction(&self) -> f32 {
         self.reduction
@@ -143,9 +143,9 @@ impl Bus {
         {
             return times;
         }
-        let ratio = usize::from(settings.bus_ratio).min(BUS_RATIOS.len() - 1);
+        let ratio = usize::from(settings.console_ratio).min(CONSOLE_RATIOS.len() - 1);
         self.threshold.target = threshold_db(f32::from(settings.threshold));
-        self.slope.target = BUS_RATIOS[ratio] - 1.0;
+        self.slope.target = CONSOLE_RATIOS[ratio] - 1.0;
         self.knee.target = KNEES_DB[ratio];
         self.offset.target = OFFSETS_DB[ratio];
         if self.times.is_none() {
@@ -154,10 +154,10 @@ impl Bus {
             self.knee.settle();
             self.offset.settle();
         }
-        let attack = ATTACK_MS[usize::from(settings.bus_attack).min(ATTACK_MS.len() - 1)];
-        let release = (settings.bus_release < BUS_AUTO_RELEASE).then(|| {
+        let attack = ATTACK_MS[usize::from(settings.console_attack).min(ATTACK_MS.len() - 1)];
+        let release = (settings.console_release < CONSOLE_AUTO_RELEASE).then(|| {
             keeps(
-                BUS_RELEASES_MS[usize::from(settings.bus_release)] / 1000.0,
+                CONSOLE_RELEASES_MS[usize::from(settings.console_release)] / 1000.0,
                 rate,
             )
         });
@@ -222,13 +222,13 @@ mod tests {
 
     const RATE: u32 = 48_000;
 
-    fn bus(ratio: u8, attack: u8, release: u8) -> Settings {
+    fn console(ratio: u8, attack: u8, release: u8) -> Settings {
         Settings {
-            kind: CompressorType::Bus,
+            kind: CompressorType::Console,
             threshold: 0xAA,
-            bus_ratio: ratio,
-            bus_attack: attack,
-            bus_release: release,
+            console_ratio: ratio,
+            console_attack: attack,
+            console_release: release,
             ..Settings::DEFAULT
         }
     }
@@ -236,9 +236,9 @@ mod tests {
     #[test]
     fn the_loop_settles_where_the_curve_says() {
         for ratio in 0..3 {
-            let settings = bus(ratio, 0, 0);
+            let settings = console(ratio, 0, 0);
             for level_db in [-30.0, -15.0, -5.0, 0.0] {
-                let mut compressor = Bus::default();
+                let mut compressor = Console::default();
                 let level = 10_f32.powf(level_db / 20.0);
                 for _ in 0..RATE / 2 {
                     compressor.process([level; 2], [level; 2], settings, 1.0, RATE);
@@ -255,8 +255,8 @@ mod tests {
 
     #[test]
     fn the_curve_comes_to_its_ratio() {
-        for (at, ratio) in BUS_RATIOS.into_iter().enumerate() {
-            let settings = bus(at as u8, 0, 0);
+        for (at, ratio) in CONSOLE_RATIOS.into_iter().enumerate() {
+            let settings = console(at as u8, 0, 0);
             assert_eq!(settled(-40.0, settings), 0.0, "nothing under the threshold");
             // 10 dB more in, well past the knee, comes out 10 / ratio more. At 10:1, the knee of
             // what the detector hears, turned down, is 30 dB of input wide.
@@ -272,8 +272,8 @@ mod tests {
 
     #[test]
     fn a_fast_attack_at_ten_to_one_doesnt_ring() {
-        let settings = bus(2, 0, 0);
-        let mut compressor = Bus::default();
+        let settings = console(2, 0, 0);
+        let mut compressor = Console::default();
         let mut last = 0.0_f32;
         for frame in 0..RATE / 10 {
             compressor.process([1.0; 2], [1.0; 2], settings, 1.0, RATE);
@@ -287,8 +287,8 @@ mod tests {
 
     /// How far it's still turned down a while after a burst of so many seconds at full level.
     fn left_after(burst: f32, wait: f32, release: u8) -> f32 {
-        let settings = bus(1, 2, release);
-        let mut compressor = Bus::default();
+        let settings = console(1, 2, release);
+        let mut compressor = Console::default();
         for _ in 0..(burst * RATE as f32) as usize {
             compressor.process([1.0; 2], [1.0; 2], settings, 1.0, RATE);
         }
@@ -301,8 +301,8 @@ mod tests {
 
     #[test]
     fn auto_lets_a_short_peak_go_quickly_and_a_long_one_slowly() {
-        let short = left_after(0.02, 0.2, BUS_AUTO_RELEASE);
-        let long = left_after(3.0, 0.2, BUS_AUTO_RELEASE);
+        let short = left_after(0.02, 0.2, CONSOLE_AUTO_RELEASE);
+        let long = left_after(3.0, 0.2, CONSOLE_AUTO_RELEASE);
         assert!(short < 0.1, "a short peak's gone in 200 ms: {short}");
         assert!(long > 0.8, "a long one's barely let go: {long}");
         // A set release lets go the same whatever came before.

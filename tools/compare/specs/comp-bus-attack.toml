@@ -1,7 +1,7 @@
-# Our Bus compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
-# attack at each of the Bus's six, from a 1 kHz tone burst from -20 dBFS up to 0 dBFS and back. The
+# Our Console compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
+# attack at each of Console's six, from a 1 kHz tone burst from -20 dBFS up to 0 dBFS and back. The
 # Bus's attacks from 1 ms up are fitted to these at 4:1 (#338). Bus FORCE goes no faster than 1 ms,
-# so the Bus's 0.1 and 0.3 ms are set against its 1 ms. The 10 ms attack at 2:1 and 10:1 shows the
+# so Console's 0.1 and 0.3 ms are set against its 1 ms. The 10 ms attack at 2:1 and 10:1 shows the
 # Bus's feedback: the loop grabs faster at a higher ratio, where Bus FORCE's attack doesn't move.
 #
 #   uv run run.py specs/comp-bus-attack.toml --report out/comp-bus-attack.html
@@ -21,10 +21,10 @@ after = 1.0
 effects = ["comp"]
 
 [ours.settings]
-1.comp.type = "Bus"
+1.comp.type = "Console"
 1.comp.threshold = 0xD5       # -10 dB
-1.comp.busratio = "4:1"
-1.comp.busrelease = "0.1 s"
+1.comp.consoleratio = "4:1"
+1.comp.consolerelease = "0.1 s"
 1.comp.mix = 0xFF
 
 [reference]
@@ -52,56 +52,56 @@ output_trim_db = 0.0
 
 [report]
 kind = "timing"
-title = "Bus compressor attack against Bus FORCE"
+title = "Console compressor attack against Bus FORCE"
 about = """
-Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against the compressor in \
+Our Console compressor, the SSL console type of Comp, in a track's first slot against the compressor in \
 Arturia's Bus FORCE, by a tone burst: a 1 kHz sine at -20 dBFS for half a second, then 0 dBFS for \
 the burst, then -20 dBFS again. Both thresholds are at -10 dBFS, so the burst is compressed and \
 the rest isn't, and the gain falls as the burst starts and recovers after it ends.
 
-Each case is one of the Bus's attacks at 4:1, against Bus FORCE at the same time with its Force \
+Each case is one of Console's attacks at 4:1, against Bus FORCE at the same time with its Force \
 at 4.3, where its top 10 dB is 4:1; both release in 100 ms. Bus FORCE goes no faster than 1 ms, \
-so the Bus's 0.1 and 0.3 ms are set against its 1 ms. The Bus's detector hears what it has already \
+so Console's 0.1 and 0.3 ms are set against its 1 ms. Console's detector hears what it has already \
 turned down, as the G-bus's does, so its attack is quicker at a higher ratio: the last two cases \
 are 10 ms at 2:1 and 10:1, against Bus FORCE at 2.7 and 5.25.
 """
 
 [[cases]]
 name = "attack-0.1"
-ours = { 1.comp.busattack = "0.1 ms" }
+ours = { 1.comp.consoleattack = "0.1 ms" }
 reference = { comp_attack_ms = 1.0 }
 
 [[cases]]
 name = "attack-0.3"
-ours = { 1.comp.busattack = "0.3 ms" }
+ours = { 1.comp.consoleattack = "0.3 ms" }
 reference = { comp_attack_ms = 1.0 }
 
 [[cases]]
 name = "attack-1"
-ours = { 1.comp.busattack = "1 ms" }
+ours = { 1.comp.consoleattack = "1 ms" }
 reference = { comp_attack_ms = 1.0 }
 
 [[cases]]
 name = "attack-3"
-ours = { 1.comp.busattack = "3 ms" }
+ours = { 1.comp.consoleattack = "3 ms" }
 reference = { comp_attack_ms = 3.0 }
 
 [[cases]]
 name = "attack-10"
-ours = { 1.comp.busattack = "10 ms" }
+ours = { 1.comp.consoleattack = "10 ms" }
 reference = { comp_attack_ms = 10.0 }
 
 [[cases]]
 name = "attack-30"
-ours = { 1.comp.busattack = "30 ms" }
+ours = { 1.comp.consoleattack = "30 ms" }
 reference = { comp_attack_ms = 30.0 }
 
 [[cases]]
 name = "attack-10-at-2"
-ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "2:1" }
+ours = { 1.comp.consoleattack = "10 ms", 1.comp.consoleratio = "2:1" }
 reference = { comp_attack_ms = 10.0, comp_force = 2.7 }
 
 [[cases]]
 name = "attack-10-at-10"
-ours = { 1.comp.busattack = "10 ms", 1.comp.busratio = "10:1" }
+ours = { 1.comp.consoleattack = "10 ms", 1.comp.consoleratio = "10:1" }
 reference = { comp_attack_ms = 10.0, comp_force = 5.25 }
