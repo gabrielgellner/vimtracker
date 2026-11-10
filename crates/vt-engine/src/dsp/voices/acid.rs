@@ -8,7 +8,9 @@
 //! Open303: how the envelope moves the cutoff, the share of the filter envelope that reaches the
 //! level, the level envelope's decay, and the high-pass before the filter. The filter is Vital's,
 //! in [`crate::dsp::filters::diode_filter`]. The knobs' ranges and tapers are fitted to Arturia's
-//! Acid V by the comparison harness, `tools/compare` (decision 117).
+//! Acid V by the comparison harness, `tools/compare` (decision 117), and the slide, the accent
+//! and how a note ends to where Acid V and AudioRealism's ABL3 agree, with Whittle's measurements
+//! of a 303 settling where they don't (decision 127).
 //!
 //! Open303 is copyright (c) 2009 Robin Schmidt (www.rs-met.com), under the MIT license:
 //!
@@ -36,64 +38,79 @@ use crate::dsp::filters::diode_filter::{
 };
 use vt_model::settings::slide_ms;
 use vt_model::settings::{
-    ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, ACID_SHORTEST_DECAY, acid_cutoff_position,
-    acid_decay_ms, acid_drive_db,
+    ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, acid_cutoff_position, acid_decay_ms, acid_drive_db,
 };
 
 /// How loud it is: a plain note with every knob at noon is as loud as Acid V's at 0 dB, and within
 /// 6 dB of the virtual analog voice on average, as its resonance makes its peaks high for its
-/// level (decision 117). An accented note at full `Accent` peaks higher, which a soft clip rounds
-/// off, as a 303 driven hard into what follows it would be.
-const LEVEL: f32 = 0.75;
+/// level (decision 117). It's a little under decision 117's 0.75, as the soft clip after it now
+/// leaves a plain note's peaks alone, so the note is as loud as it was (decision 127).
+const LEVEL: f32 = 0.7121;
+/// Where the soft clip after the voice levels off, against full scale: 12 dB over, so a full
+/// accent's peaks reach 13 to 14 dB over a plain note's, as both references' do, rather than
+/// being rounded off at 5.6 dB (decision 127). A 303 driven hard into what follows it is still
+/// rounded off, and the track's level, its slots and the master's limiter come after it.
+const HEADROOM: f32 = 4.0;
 /// The square's share of each cycle spent high. A 303 makes its square by driving its saw hard
 /// into a transistor with an offset, which Open303 models as `tanh(70 saw + 4.37)`: that switches
 /// a little before the saw's middle, so the square isn't quite even.
 const SQUARE_DUTY: f32 = 0.531;
-/// The filter envelope's decay on an accented note, in ms, whatever `Decay` says: a 303 shorts
-/// its Decay pot out on an accent, so it's the knob's shortest.
-const ACCENT_DECAY_MS: f32 = ACID_SHORTEST_DECAY;
+/// The filter envelope's decay on an accented note, as a time constant in ms, or the plain
+/// note's if `Decay` makes that shorter. A 303 shorts its Decay pot out on an accent, so it's
+/// the pot's shortest, which Whittle gives as 200 ms; the knob's shortest, 40 ms, fitted to
+/// Acid V's range (decision 117), left an accent at `Accent` 00 0.2 octaves darker than both
+/// references' (decision 127).
+const ACCENT_DECAY_MS: f32 = 70.0;
 /// The level envelope's fixed decay, as a time constant in ms. It falls to silence over about
 /// three seconds, as a 303's does.
 const LEVEL_DECAY_MS: f32 = 1230.0;
 /// The level envelope's attack, as a time constant: a 303's takes about 3 ms.
 const ATTACK_MS: f32 = 1.0;
-/// How fast the level falls once the note ends: a 303 ends a plain note in about 16 ms, and an
-/// accented one more slowly.
-const RELEASE_MS: f32 = 4.0;
+/// How a plain note ends: a 303 holds its level for about 8 ms after the gate closes, and then
+/// falls in a straight line to nothing over about 8 more (Whittle's notes on the Devil Fish).
+const RELEASE_HOLD_MS: f32 = 8.0;
+const RELEASE_FALL_MS: f32 = 8.0;
+/// How fast an accented note's level falls once it ends, as a time constant in ms.
 const ACCENT_RELEASE_MS: f32 = 50.0;
 /// The filter envelope also reaches the level, through 47k and 33 nF on a 303, which softens it.
 const ENVELOPE_TO_LEVEL: f32 = 0.45;
 const SOFTENING_MS: f32 = 1.55;
 /// How much the accent sweep adds to the level with `Accent` full, against the level envelope,
-/// which rises to one. Open303 adds 4; with an accent's filter envelope as short as a 303's,
-/// which this pulse rides on, it takes 5.7 for an accent's first 60 ms to sound about 4.7 dB over
-/// a plain note's at noon and 9.8 dB full, as Acid V's do, from 3.9 to 4.7 dB at noon and 9 to
-/// 10 dB full. Full, the soft clip rounds its peaks off, so they're only about 5.6 dB over a
-/// plain note's, where Acid V's reach 12 (decision 124).
-const ACCENT_TO_LEVEL: f32 = 5.7;
+/// which rises to one. Open303 adds 4; this is fitted to where Acid V and ABL3 agree (decision
+/// 127). It's all an accent adds to the level, as an accented note plays at a plain one's
+/// velocity.
+const ACCENT_TO_LEVEL: f32 = 7.0;
 /// The Accent knob's taper for the level: how far it's turned, squared, is how much louder an
 /// accent is, so it's about even in dB from a quarter of the way up, as Acid V's is.
 const ACCENT_LEVEL_TAPER: f32 = 2.0;
 /// How far the accent sweep moves the cutoff at its height with `Accent` full, in octaves. The
 /// pulse falls with the accent's short envelope, so it's at its height only for the first few
 /// milliseconds.
-const ACCENT_OCTAVES: f32 = 3.25;
-/// The Accent knob's taper for the cutoff, steeper than the level's, and the share of the sweep
-/// left with the knob at `00`. Acid V's accent grows louder from a quarter of the way up but
-/// brighter only over the top half, and even at `00` it's about as bright at its start as a
-/// plain note, which an accent's shorter envelope alone would leave darker.
-const ACCENT_SWEEP_TAPER: f32 = 3.3;
-const ACCENT_SWEEP_LEAST: f32 = 0.18;
+const ACCENT_OCTAVES: f32 = 3.33;
+/// The Accent knob's taper for the cutoff, steeper than the level's: both references' accents
+/// grow louder from a quarter of the way up but brighter only over the top half, and at `00`
+/// neither is any brighter than its envelope makes it (decision 127).
+const ACCENT_SWEEP_TAPER: f32 = 2.7;
 /// The accent sweep's capacitor charges through a diode and 147k, and drains through 100k, on
 /// 1 µF. It drains more slowly than accents come, so they build up.
 const SWEEP_CHARGE_MS: f32 = 147.0;
 const SWEEP_DRAIN_MS: f32 = 100.0;
-/// What brings the capacitor's level up to the pulse's, where the two balance, and then 3.5
-/// times that, so accents a sixteenth apart build up about as much as Acid V's while accents an
-/// eighth apart hardly do.
-const SWEEP_GAIN: f32 = 3.5 * (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
+/// What brings the capacitor's level up to the pulse's, where the two balance, and a little over
+/// that, so accents a sixteenth apart at full Res build up by about 0.4 octaves, as both
+/// references' do, while accents an eighth apart hardly do. Decision 124's 3.5 times, fitted to
+/// Acid V alone, built up three times as far at full Res (decision 127).
+const SWEEP_GAIN: f32 = 1.05 * (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
+/// How the Resonance knob turns the accent from following the pulse to following the
+/// capacitor's slower swell: as the knob to this power, so the swell takes over mostly in its
+/// top half.
+const SWEEP_RESONANCE_CURVE: f32 = 1.4;
 /// A slide's time constant, as a share of its time, so it's nearly there when its time is up.
 const SLIDE_SHARE: f32 = 1.0 / 3.0;
+/// How much longer a slide down takes than one up. Whittle gives a 303's slide as 100k into
+/// 0.22 µF, a time constant of 22 ms, which `Slide` at 00 is near, and both references glide up
+/// to 90% in 45 to 51 ms; but both take 51 to 59 ms down a fifth or an octave, which this
+/// matches (decision 127).
+const FALLING_SLIDE: f32 = 1.3;
 /// The high-pass before the filter, in Hz, as Open303 measured a 303's.
 const HIGH_PASS_HZ: f32 = 44.486;
 /// Below this, its level and accent sweep have nothing left to carry to the next note.
@@ -186,6 +203,8 @@ pub struct Acid {
     jump: bool,
     accented: bool,
     gate: bool,
+    /// How many frames ago the gate closed, which a plain note's end is timed from.
+    released_for: u32,
     /// The filter envelope, and the same softened on its way to the level.
     envelope: f32,
     softened: f32,
@@ -213,12 +232,15 @@ pub struct Acid {
     countdown: u32,
     decay: f32,
     slide: f32,
+    /// The same for a slide down.
+    falling_slide: f32,
     /// How long the slide under way takes, if it was given a time rather than taking `Slide`'s.
     slide_ms: Option<f32>,
     // Coefficients for the fixed times.
     attack: f32,
     level_decay: f32,
-    release: f32,
+    hold_frames: u32,
+    fall_frames: f32,
     accent_release: f32,
     softening: f32,
     charge: f32,
@@ -238,6 +260,7 @@ impl Acid {
             jump: true,
             accented: false,
             gate: false,
+            released_for: 0,
             envelope: 0.0,
             softened: 0.0,
             sweep: 0.0,
@@ -256,10 +279,12 @@ impl Acid {
             countdown: 0,
             decay: 0.0,
             slide: 0.0,
+            falling_slide: 0.0,
             slide_ms: None,
             attack: one_pole(ATTACK_MS, rate),
             level_decay: falling(LEVEL_DECAY_MS, rate),
-            release: falling(RELEASE_MS, rate),
+            hold_frames: (RELEASE_HOLD_MS * rate / 1000.0) as u32,
+            fall_frames: RELEASE_FALL_MS * rate / 1000.0,
             accent_release: falling(ACCENT_RELEASE_MS, rate),
             softening: one_pole(SOFTENING_MS, rate),
             charge: one_pole(SWEEP_CHARGE_MS, rate),
@@ -271,6 +296,13 @@ impl Acid {
 
     /// Start a note, from wherever the last one left the filter and the accent sweep.
     pub fn trigger(&mut self, accent: bool) {
+        // A note let go and played again before it has fallen away starts from where it fell to.
+        if !self.gate && !self.accented {
+            let closing = self.closing();
+            self.level *= closing;
+            self.open *= closing;
+        }
+        self.released_for = 0;
         self.slide_ms = None;
         self.gate = true;
         self.accented = accent;
@@ -293,7 +325,20 @@ impl Acid {
 
     /// Let go of the note.
     pub fn release(&mut self) {
+        if self.gate {
+            self.released_for = 0;
+        }
         self.gate = false;
+    }
+
+    /// How much of a plain note's level is left as it ends: all of it while it's held and for
+    /// the hold after, then falling in a straight line to nothing.
+    fn closing(&self) -> f32 {
+        if self.gate || self.accented {
+            return 1.0;
+        }
+        let falling_for = self.released_for.saturating_sub(self.hold_frames) as f32;
+        (1.0 - falling_for / self.fall_frames).max(0.0)
     }
 
     /// Whether its level and accent sweep have fallen away, so a note after it would start as
@@ -334,16 +379,18 @@ impl Acid {
         let square = (settings.at(0) * 255.0).round() >= 1.0;
         let resonance = values[RESONANCE];
         if self.countdown == 0 {
+            let plain_decay = acid_decay_ms(values[DECAY] * 255.0);
             let decay = if self.accented {
-                ACCENT_DECAY_MS
+                ACCENT_DECAY_MS.min(plain_decay)
             } else {
-                acid_decay_ms(values[DECAY] * 255.0)
+                plain_decay
             };
             self.decay = falling(decay, self.rate);
             let slide = self
                 .slide_ms
                 .unwrap_or_else(|| slide_ms(values[SLIDE] * 255.0));
             self.slide = one_pole(slide * SLIDE_SHARE, self.rate);
+            self.falling_slide = one_pole(slide * SLIDE_SHARE * FALLING_SLIDE, self.rate);
             self.countdown = CONTROL_FRAMES;
         }
         self.countdown -= 1;
@@ -354,7 +401,13 @@ impl Acid {
             self.heard = target;
             self.jump = false;
         } else {
-            self.heard *= (target / self.heard).powf(self.slide);
+            // A slide down takes a little longer than one up.
+            let share = if target < self.heard {
+                self.falling_slide
+            } else {
+                self.slide
+            };
+            self.heard *= (target / self.heard).powf(share);
         }
 
         // The filter envelope, and the accent's pulse from it into the sweep's capacitor, which
@@ -370,12 +423,11 @@ impl Acid {
         self.sweep += (pulse - self.sweep).max(0.0) * self.charge - self.sweep * self.drain;
         // Resonance turns the same knob as the sweep's: low, the cutoff follows the pulse, and
         // high, the capacitor's slower swell.
-        let accent = pulse + (self.sweep * SWEEP_GAIN - pulse) * resonance;
+        let swell = resonance.powf(SWEEP_RESONANCE_CURVE);
+        let accent = pulse + (self.sweep * SWEEP_GAIN - pulse) * swell;
         let knob = values[ACCENT];
         let accent_level = ACCENT_TO_LEVEL * knob.powf(ACCENT_LEVEL_TAPER) * accent;
-        let accent_octaves = ACCENT_OCTAVES
-            * (ACCENT_SWEEP_LEAST + (1.0 - ACCENT_SWEEP_LEAST) * knob.powf(ACCENT_SWEEP_TAPER))
-            * accent;
+        let accent_octaves = ACCENT_OCTAVES * knob.powf(ACCENT_SWEEP_TAPER) * accent;
 
         // The level envelope, with the filter envelope and accent added while the note's held.
         if self.gate {
@@ -386,18 +438,21 @@ impl Acid {
                 self.level *= self.level_decay;
             }
             self.open += (1.0 - self.open) * self.attack;
+        } else if self.accented {
+            self.level *= self.accent_release;
+            self.open *= self.accent_release;
         } else {
-            let release = if self.accented {
-                self.accent_release
-            } else {
-                self.release
-            };
-            self.level *= release;
-            self.open *= release;
+            // A plain note holds and then falls to nothing, where it's left.
+            self.released_for = self.released_for.saturating_add(1);
+            if self.closing() == 0.0 {
+                self.level = 0.0;
+                self.open = 0.0;
+            }
         }
         let amplitude = (self.level
             + self.open * (ENVELOPE_TO_LEVEL * self.softened + accent_level))
-            / (1.0 + ENVELOPE_TO_LEVEL);
+            / (1.0 + ENVELOPE_TO_LEVEL)
+            * self.closing();
         self.amplitude += (amplitude - self.amplitude) * self.declick;
 
         // The cutoff: the envelope moves it by an amount and around a centre that Open303
@@ -447,7 +502,7 @@ impl Acid {
             filter.next(sample, cutoff, resonance, drive, feedback, HIGH_PASS_RATIO)
         }) * loss
             / FILTER_LEVEL;
-        soft_clip(filtered * self.amplitude * LEVEL)
+        HEADROOM * soft_clip(filtered * self.amplitude * LEVEL / HEADROOM)
     }
 }
 
@@ -581,8 +636,8 @@ mod tests {
 
     #[test]
     fn an_accent_is_louder_and_brighter() {
-        // As on Acid V, an accent is hardly louder with `Accent` at 00, about 4 dB at noon and
-        // about 10 dB full, where the soft clip rounds its peaks off (decision 124).
+        // As on Acid V and ABL3, an accent is hardly louder with `Accent` at 00, about 4 dB at
+        // noon and about 10 dB full (decisions 124 and 127).
         for (accent, least, most) in [(0.0, -1.0, 1.5), (0.5, 3.0, 6.0), (1.0, 8.0, 11.5)] {
             let settings = places([0.0, 0.5, 0.5, 0.5, 0.5, accent, 0.0, 0.0]);
             let plain_note = note(false, settings, 4_800);
@@ -674,14 +729,19 @@ mod tests {
 
     #[test]
     fn accents_a_sixteenth_apart_build_up_and_an_eighth_apart_hardly_do() {
-        // With every knob at noon but `Accent` full, as Acid V's do: four accents in a row peak
-        // about an octave higher by the last, and four with a sixteenth's rest between them build
-        // far less, as the capacitor drains in the rest (decision 124).
+        // With every knob at noon but `Accent` full: four accents in a row peak higher by the
+        // last, and four with a sixteenth's rest between them build far less, as the capacitor
+        // drains in the rest. Decision 124 had them peak over 0.8 octaves higher, fitted to
+        // Acid V alone, whose accents build up even with `Accent` at 00; where it and ABL3 agree
+        // they build far less, so a third to a half of an octave here (decision 127).
         let settings = places([0.0, 0.25, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0]);
         let built = |peaks: Vec<f32>| (peaks[3] / peaks[0]).log2();
         let in_a_row = built(accent_peaks_apart(4, settings, RATE as usize / 8));
         let apart = built(accent_peaks_apart(4, settings, RATE as usize / 4));
-        assert!(in_a_row > 0.8, "{in_a_row} octaves in a row");
+        assert!(
+            (0.2..=0.6).contains(&in_a_row),
+            "{in_a_row} octaves in a row"
+        );
         assert!(
             apart < 0.4 && apart < in_a_row / 3.0,
             "{apart} octaves apart"
@@ -735,6 +795,93 @@ mod tests {
             }
         }
         assert!(slow.heard() < quick.heard() - 20.0 / RATE as f32);
+    }
+
+    /// How many ms a slide at `Slide` 00 from one pitch to another takes to go 90% of the way.
+    fn ninety_percent_ms(from: f32, to: f32) -> f32 {
+        let mut acid = Acid::new(RATE);
+        acid.trigger(false);
+        acid.next(hertz(from), plain());
+        acid.slide(false, None);
+        let ninety = (to / from).log2() * 0.9;
+        let frames = (1..RATE)
+            .find(|_| {
+                acid.next(hertz(to), plain());
+                (acid.heard() / hertz(from)).log2().abs() >= ninety.abs()
+            })
+            .expect("it gets there");
+        frames as f32 * 1000.0 / RATE as f32
+    }
+
+    #[test]
+    fn a_slide_up_takes_about_46_ms_to_go_90_percent_and_one_down_about_60() {
+        // A 303's slide is its 100k and 0.22 µF, a 22 ms time constant, so about 51 ms to 90%
+        // (Whittle). Both references reach 90% up in 45 to 51 ms by any interval, and down a
+        // fifth or an octave in 51 to 59 (decision 127).
+        for (from, to) in [(65.4, 130.8), (65.4, 98.0), (65.4, 69.3)] {
+            let up = ninety_percent_ms(from, to);
+            assert!((42.0..=50.0).contains(&up), "{up} ms up to {to} Hz");
+            let down = ninety_percent_ms(to, from);
+            assert!((55.0..=65.0).contains(&down), "{down} ms down from {to} Hz");
+        }
+    }
+
+    /// A plain note's level over each ms after it's let go, against its level just before.
+    fn released_levels(acid: &mut Acid, ms: usize) -> Vec<f32> {
+        let before = acid.amplitude;
+        acid.release();
+        (0..ms)
+            .map(|_| {
+                for _ in 0..RATE / 1000 {
+                    acid.next(hertz(65.4), plain());
+                }
+                acid.amplitude / before
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_plain_note_holds_for_8_ms_once_let_go_and_falls_to_nothing_by_17() {
+        // As Whittle measured a 303: 8 ms at its level, then 8 ms of a straight fall. Through
+        // the voice and its track's note shape, the harness reads 20 dB down in about 17 ms and
+        // 40 dB in about 23, between the references' (decision 127).
+        let mut acid = Acid::new(RATE);
+        acid.trigger(false);
+        for _ in 0..RATE / 4 {
+            acid.next(hertz(65.4), plain());
+        }
+        let levels = released_levels(&mut acid, 30);
+        assert!(levels[6] > 0.95, "{levels:?}");
+        // Half way down the fall, 12 ms after, with a little lag from the declick.
+        assert!((0.4..=0.65).contains(&levels[11]), "{levels:?}");
+        assert!(levels[17] < 0.01, "{levels:?}");
+        assert!(
+            acid.level == 0.0 && acid.open == 0.0,
+            "it's left at nothing"
+        );
+    }
+
+    #[test]
+    fn a_note_played_again_5_ms_after_it_ends_hardly_dips() {
+        // A 5 ms gap falls inside the hold, so the level hardly moves, as on ABL3, where it dips
+        // 0.1 dB; Acid V's dips 2.7. 20 ms apart, the note has ended and starts again.
+        let again_after = |gap| {
+            let mut acid = Acid::new(RATE);
+            acid.trigger(false);
+            for _ in 0..RATE / 4 {
+                acid.next(hertz(65.4), plain());
+            }
+            let levels = released_levels(&mut acid, gap);
+            acid.trigger(false);
+            acid.next(hertz(65.4), plain());
+            (levels, acid.level)
+        };
+        let (levels, level) = again_after(5);
+        assert!(levels.iter().all(|level| *level > 0.97), "{levels:?}");
+        // Played again, it carries on from its level rather than starting from nothing.
+        assert!(level > 0.7, "{level}");
+        let (_, level) = again_after(20);
+        assert!(level < 0.1, "{level}");
     }
 
     #[test]
@@ -802,9 +949,11 @@ mod tests {
                                 acid.slide(true, None);
                             }
                         }
+                        // Up to the soft clip's ceiling, 12 dB over full scale, which a full
+                        // accent's peaks may reach (decision 127).
                         let sample = acid.next(hertz / rate as f32, settings);
                         assert!(
-                            sample.is_finite() && sample.abs() <= 1.0,
+                            sample.is_finite() && sample.abs() <= HEADROOM,
                             "{sample} at {hertz} {settings:?}"
                         );
                     }
