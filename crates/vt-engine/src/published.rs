@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
+use vt_model::playable::normalize_peak;
 pub use vt_model::playable::{LoopSpan, Playable, Span};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -80,14 +81,16 @@ impl Published {
     }
 }
 
-/// Work out the bank's entries, keeping the last version's for each one that's the same and plays
-/// the same sound.
+/// Work out the bank's entries, keeping the last version's for each one that's the same, plays the
+/// same sound and normalises from the same peak, so one whose analysis has come in since is worked
+/// out again at its new gain.
 fn bank(song: &Song, samples: &SamplePool, last: Option<&Published>) -> Bank {
     let mut bank = vec![None; 256];
     for (number, entry) in song.bank.iter() {
         let at = usize::from(number);
         let kept = last
             .filter(|last| last.song.bank.get(number) == Some(entry))
+            .filter(|last| normalize_peak(entry, &last.samples) == normalize_peak(entry, samples))
             .and_then(|last| last.bank[at].as_ref())
             .filter(|playable| {
                 samples

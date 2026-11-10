@@ -291,6 +291,27 @@ its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
 never reaches its end.
 
+## Normalising and trimming
+
+Neither writes audio: each changes how the track's sample plays, and `u` takes
+it back. Both read the sample's analysis, which is worked out in the background
+when a file joins the bank and kept in `~/Library/Caches/vimtracker`
+(`$XDG_CACHE_HOME/vimtracker` if that's set), never beside your files and never
+in the project, so a project opened again finds it there.
+
+| Command | Does |
+|---|---|
+| `:normalize -0.3` | Bring the sample's peak to -0.3 dBFS, as a gain |
+| `:normalize` | The same, to 0 dBFS |
+| `:normalize off` | Play it at its own level again |
+| `:trim` | Start and end it where its sound does, past any silence |
+
+Normalising scales both channels by the same gain, set by the louder, so a
+stereo sample keeps its balance. The sample's own gain comes on top. `:trim`
+keeps from the first frame above -60 dBFS to the last, setting the start and end
+that `:sample start` and `:sample end` set, and leaves its loop where it is. The
+track's `Start` and `Length` then count from what it kept.
+
 ## Names
 
 `:name BD` names the current track, in place of its number. A name is two

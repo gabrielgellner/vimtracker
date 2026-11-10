@@ -2,6 +2,7 @@
 
 pub mod accumulator;
 pub mod action;
+pub mod analysis;
 pub mod arpeggio;
 pub mod bank;
 pub mod condition;

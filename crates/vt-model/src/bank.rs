@@ -111,13 +111,21 @@ pub struct PlayParams {
     pub fade_in: u32,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub fade_out: u32,
+    /// A peak level to bring the file to, in dBFS, from [`MIN_NORMALIZE`] to 0, as a gain worked
+    /// out from its analysis rather than written into the audio, as Bitwig's Normalize writes a
+    /// gain. The same gain scales every channel, and the entry's own gain comes on top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalize: Option<f32>,
 }
 
 /// The most cents an entry's tune can be moved either way, short of a semitone, which is the
 /// tune's.
 pub const MAX_CENTS: i8 = 99;
 
-// The gain is never a NaN, so it's equal to itself.
+/// The lowest level `:normalize` brings a file to, in dBFS.
+pub const MIN_NORMALIZE: f32 = -60.0;
+
+// The gain and the level normalised to are never NaNs, so they're equal to themselves.
 impl Eq for PlayParams {}
 
 fn is_zero_gain(gain: &f32) -> bool {
@@ -139,6 +147,16 @@ impl PlayParams {
     pub fn speed(self) -> f64 {
         let semitones = f64::from(self.tune) + f64::from(self.cents) / 100.0;
         2_f64.powf(semitones / 12.0)
+    }
+
+    /// What normalising multiplies the sound by, given the file's peak, of whichever channel is
+    /// louder: enough to bring that peak to the level asked for. It's 1 with nothing asked for,
+    /// for a silent file, and while the peak isn't known yet.
+    pub fn normalize_gain(self, peak: Option<f32>) -> f32 {
+        match (self.normalize, peak) {
+            (Some(level), Some(peak)) if peak > 0.0 => 10_f32.powf(level / 20.0) / peak,
+            _ => 1.0,
+        }
     }
 }
 

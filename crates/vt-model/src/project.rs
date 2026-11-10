@@ -4,10 +4,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::analysis::{AnalysisError, analyse};
 use crate::bank::ContentHash;
 use crate::constants::FORMAT_VERSION;
 use crate::sample::{SampleError, is_sample_file};
@@ -272,6 +274,29 @@ pub fn load_samples(
         }
         if let Err(error) = pool.load(&source.path, &resolve_sample(folder, &source.path), rate) {
             errors.push(error);
+        }
+    }
+    errors
+}
+
+/// Read or work out the analysis of each of the bank's files whose content is known and whose
+/// analysis isn't in the pool yet, keeping it in a cache folder if there is one. It waits for
+/// each, as rendering a song must, so a render never depends on how far work in the background
+/// had got. Files that can't be read are reported, and the rest are analysed.
+pub fn analyse_samples(
+    folder: Option<&Path>,
+    song: &Song,
+    cache: Option<&Path>,
+    pool: &mut SamplePool,
+) -> Vec<AnalysisError> {
+    let mut errors = Vec::new();
+    for source in song.bank.iter().flat_map(|(_, entry)| entry.sources()) {
+        if !source.hash.is_known() || pool.analysis(source.hash).is_some() {
+            continue;
+        }
+        match analyse(&resolve_sample(folder, &source.path), source.hash, cache) {
+            Ok((analysis, _)) => pool.insert_analysis(Arc::new(analysis)),
+            Err(error) => errors.push(error),
         }
     }
     errors
