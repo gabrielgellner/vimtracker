@@ -10,8 +10,8 @@
 //! in [`crate::dsp::filters::diode_filter`]. The knobs' ranges and tapers are fitted to Arturia's
 //! Acid V by the comparison harness, `tools/compare` (decision 117), and the slide, the accent
 //! and how a note ends to where Acid V and AudioRealism's ABL3 agree, with Whittle's measurements
-//! of a 303 settling where they don't (decision 127), as is how its resonance stands through the
-//! chirp (decision 129).
+//! of a 303 settling where they don't (decision 127), as are how its resonance stands through the
+//! chirp (decision 129) and where the chirp starts (decision 131).
 //!
 //! Open303 is copyright (c) 2009 Robin Schmidt (www.rs-met.com), under the MIT license:
 //!
@@ -159,6 +159,14 @@ const SWEEP_MOST: f32 = 1.25;
 /// How much of Open303's centre the envelope's sweep is around, so the cutoff it settles to once
 /// the envelope has fallen sits nearer Acid V's.
 const CENTRE_SHARE: f32 = 0.6;
+/// How the envelope's push on the cutoff gives as it grows, in octaves: over where the knob puts
+/// the cutoff, each octave more the envelope asks for moves it less, along a tanh this wide, as a
+/// control path running short of headroom does on a large swing. Env Mod at noon, whose sweep
+/// reaches about two octaves over the knob, loses 0.04 octaves at its top, and Env Mod full, about
+/// five, loses 0.57. With full Env Mod, both references' resonant peaks start that much lower than
+/// a sweep that stays exponential all the way, and fall more slowly at first, where ours had
+/// started high and fallen fastest at its top (decision 131).
+const SWEEP_SOFTENING: f32 = 7.3;
 
 /// How many decibels double a level.
 const DECIBELS_PER_OCTAVE: f32 = 6.020_6;
@@ -179,6 +187,16 @@ const CONTROL_FRAMES: u32 = 16;
 /// How much of the rest of the way a one-pole covers each frame, for a time constant in ms.
 fn one_pole(ms: f32, rate: f32) -> f32 {
     1.0 - (-1000.0 / (ms * rate)).exp()
+}
+
+/// How many octaves the envelope moves the cutoff, for how many it would if the cutoff followed
+/// it exponentially all the way: the same under where the knob puts it, and less and less over.
+#[inline]
+fn softened_sweep(octaves: f32) -> f32 {
+    if octaves <= 0.0 {
+        return octaves;
+    }
+    SWEEP_SOFTENING * (octaves / SWEEP_SOFTENING).tanh()
 }
 
 /// What to multiply by each frame to fall with a time constant in ms.
@@ -475,7 +493,8 @@ impl Acid {
         let scale = ((1.0 - knob) * low + knob * high)
             * (SWEEP_LEAST + (SWEEP_MOST - SWEEP_LEAST) * amount);
         let centre = (0.0483 * knob + 0.2944) * CENTRE_SHARE;
-        let octaves = scale * (self.envelope - centre) + accent_octaves;
+        // The envelope's push gives as it grows, so the chirp starts lower and falls more evenly.
+        let octaves = softened_sweep(scale * (self.envelope - centre)) + accent_octaves;
         // `acid_cutoff_hz`, in octaves, so one power of two does both.
         let knob_octaves = knob * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).log2();
         self.cutoff =
@@ -704,14 +723,50 @@ mod tests {
 
     #[test]
     fn the_chirp_sweeps_down_from_where_the_envelope_throws_it() {
-        // Res 95%, Env Mod full, Cutoff noon and Decay long: the peak starts near 5.7 kHz and is
-        // near 1.8 kHz by 150 ms, between Acid V's and ABL3's there, though both start theirs
-        // about 0.4 octaves lower and fall more slowly at first (decision 129).
+        // Res 95%, Env Mod full, Cutoff noon and Decay long: the peak starts near 4.2 kHz, where
+        // Acid V's and ABL3's start, and is near 1.6 kHz by 150 ms, a little under theirs, 1.8 and
+        // 2.4 kHz (decisions 129 and 131).
         let out = chirp([0.5, 0.95, 1.0, 0.8]);
         let (start, _, _) = resonant_peak(&out, 20.0);
         let (later, _, _) = resonant_peak(&out, 150.0);
-        assert!((4_500.0..=7_000.0).contains(&start), "{start} Hz at 20 ms");
+        assert!((3_700.0..=4_800.0).contains(&start), "{start} Hz at 20 ms");
         assert!((1_400.0..=2_200.0).contains(&later), "{later} Hz at 150 ms");
+    }
+
+    #[test]
+    fn the_envelopes_push_on_the_cutoff_gives_as_it_grows() {
+        // Under the knob's cutoff the sweep is as it was; over it, each octave more moves the
+        // cutoff less: hardly at Env Mod noon's two octaves, and by over half an octave at Env
+        // Mod full's five (decision 131).
+        assert_eq!(softened_sweep(-1.0), -1.0);
+        assert!((softened_sweep(1.94) - 1.94).abs() < 0.05);
+        let full = softened_sweep(4.75);
+        assert!((4.1..=4.25).contains(&full), "{full} octaves");
+        let steps: Vec<f32> = (0..=80)
+            .map(|step| softened_sweep(step as f32 * 0.1))
+            .collect();
+        assert!(steps.windows(2).all(|pair| pair[1] > pair[0]));
+    }
+
+    #[test]
+    fn with_env_mod_full_the_chirp_starts_lower_and_falls_less_steeply() {
+        // Res 95%, Env Mod full and Decay long. Where both references agree, the peak starts
+        // about 0.4 octaves under where an envelope exponential all the way threw ours, 5.8 kHz
+        // at Cutoff noon and 3.5 at Cutoff 20%, and falls more slowly at first: from 20 to 120 ms
+        // Acid V's falls 0.65 octaves and ABL3's 0.93, where ours fell 1.37 (decision 131).
+        let out = chirp([0.5, 0.95, 1.0, 0.8]);
+        let (start, _, _) = resonant_peak(&out, 20.0);
+        let (later, _, _) = resonant_peak(&out, 120.0);
+        let fall = (start / later).log2();
+        assert!(
+            (0.8..=1.2).contains(&fall),
+            "{fall} octaves from 20 to 120 ms"
+        );
+        let (low, _, _) = resonant_peak(&chirp([0.2, 0.95, 1.0, 0.8]), 20.0);
+        assert!(
+            (2_200.0..=3_000.0).contains(&low),
+            "{low} Hz at 20 ms, Cutoff 20%"
+        );
     }
 
     #[test]
