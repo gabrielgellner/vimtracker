@@ -13,10 +13,12 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
+use crate::explorer::Icon;
 use crate::glyphs;
 use crate::input::picker::{Picker, Row};
 use crate::kitty;
 use crate::theme;
+use crate::views;
 
 /// The list's width, inside its border, at least and at most.
 const MIN_LIST_WIDTH: usize = 32;
@@ -44,7 +46,8 @@ const PREVIEW_LABEL_WIDTH: usize = 4;
 const EXPLORER_WIDTH: usize = 54;
 /// Room for a relative line number in the explorer, and the space after it.
 const NUMBER_WIDTH: usize = 3;
-/// Where an item's name starts: after a category's arrow, or the mark on the item already chosen.
+/// Where an item's name starts: after a category's arrow, the mark on the item already chosen, or
+/// in the explorer its icon.
 const GUTTER: usize = 2;
 /// How far an item in a category is indented.
 const INDENT: usize = 2;
@@ -88,9 +91,8 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
             theme::dim(),
         ));
     }
-    let mut block = Block::new()
+    let mut block = views::window_border()
         .style(theme::window())
-        .borders(Borders::ALL)
         .title(Line::from(title));
     if let Some(hint) = picker.hint {
         block = block.title_bottom(hint_line(picker, hint));
@@ -136,7 +138,8 @@ fn hint_line(picker: &Picker, hint: &str) -> Line<'static> {
             };
             spans.push(Span::styled(format!("  {key} "), theme::dim()));
             spans.push(Span::styled(glyph.to_string(), style));
-            spans.push(Span::styled(format!(" {name}"), theme::dim()));
+            let space = glyphs::ICON_SPACE;
+            spans.push(Span::styled(format!("{space}{name}"), theme::dim()));
         };
         switch('H', tree.hidden, "hidden");
         if tree.purpose.previews() {
@@ -171,9 +174,8 @@ pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Pi
         width,
         height,
     };
-    let block = Block::new()
+    let block = views::window_border()
         .style(theme::window())
-        .borders(Borders::ALL)
         .title(Line::from(vec![
             Span::styled(
                 format!(" {} ", picker.title),
@@ -316,7 +318,7 @@ fn item_spans(
 
 /// A line of the explorer: its distance from the cursor's, or its own number on the cursor's, as
 /// Vim's `relativenumber` with `number` shows them, then the file or folder indented by its
-/// depth, a folder with its arrow, the item already chosen with its mark, and its meaning dim.
+/// depth, with its icon, and its meaning dim.
 fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Span<'static>> {
     let item = picker.item(index);
     let number = if row == picker.selected {
@@ -324,16 +326,12 @@ fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Sp
     } else {
         row.abs_diff(picker.selected)
     };
-    let mark = match picker.folder_open(index) {
-        Some(true) => "▾ ",
-        Some(false) => "▸ ",
-        None if picker.marked() == Some(index) => "• ",
-        None => "  ",
-    };
     let indent = INDENT * picker.depth(index);
     let mut spans = vec![
         Span::styled(format!("{number:>NUMBER_WIDTH$} "), theme::faint()),
-        Span::raw(format!("{}{mark}", " ".repeat(indent))),
+        Span::raw(" ".repeat(indent)),
+        icon_span(picker, index),
+        Span::raw(glyphs::ICON_SPACE.to_string()),
     ];
     let meaning = if item.meaning.is_empty() {
         0
@@ -361,6 +359,32 @@ fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Sp
         ));
     }
     spans
+}
+
+/// An explorer row's icon, which says what it is: a folder open or closed, a project, a kit, a
+/// kit's sound, a sample or a loop. It's dim, but green on the item already chosen, as what's
+/// current in a list is, and a warning in the error colour on a file that's gone or won't read.
+fn icon_span(picker: &Picker, index: usize) -> Span<'static> {
+    let icon = picker.icon(index).unwrap_or(Icon::Folder);
+    let glyph = match icon {
+        Icon::Folder if picker.folder_open(index) == Some(true) => glyphs::FOLDER_OPEN,
+        Icon::Folder => glyphs::FOLDER,
+        Icon::Project => glyphs::PROJECT,
+        Icon::Kit => glyphs::KIT,
+        Icon::KitSound => glyphs::KIT_SOUND,
+        Icon::KitSoundLayered => glyphs::KIT_SOUND_LAYERED,
+        Icon::Sample => glyphs::SAMPLE,
+        Icon::Loop => glyphs::LOOP,
+        Icon::Missing => glyphs::MISSING,
+    };
+    let style = if icon == Icon::Missing {
+        theme::warning()
+    } else if picker.marked() == Some(index) {
+        theme::active()
+    } else {
+        theme::dim()
+    };
+    Span::styled(glyph.to_string(), style)
 }
 
 /// Text in a style, with the characters at these positions, counted from `start`, in the

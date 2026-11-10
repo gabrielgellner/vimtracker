@@ -19,6 +19,10 @@ const CELL_HEIGHT: f32 = 19.0;
 const FONT_SIZE: f32 = 15.0;
 /// Where the text sits in a cell, from its top.
 const BASELINE: f32 = 14.0;
+/// The fonts the picture asks for: ordinary monospace ones for the text, then Nerd Fonts, which a
+/// browser falls back to a character at a time for the icons the others don't have.
+const FONTS: &str = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', \
+    'JetBrainsMono Nerd Font Mono', 'FiraCode Nerd Font Mono', 'Hack Nerd Font Mono', monospace";
 
 /// A colour as SVG writes it, or the screen's own for the terminal's default.
 fn colour(color: Color, default: Color) -> String {
@@ -136,7 +140,7 @@ pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
     let mut svg = String::new();
     let _ = writeln!(
         svg,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', monospace" font-size="{FONT_SIZE}">"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="{FONTS}" font-size="{FONT_SIZE}">"#
     );
     let _ = writeln!(
         svg,

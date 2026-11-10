@@ -261,9 +261,10 @@ bank and has the current track play it. **Navigation** has the rest of the keys.
 A kit opens like a folder, named by the kit, to list its sounds by label and name,
 so `kits`, `Ableton`, `Drum Machines`, `909 Core Kit`, `BD` reaches a kick. Choosing
 one is the same as choosing it from the kit in use, below. A sound with variants or
-layers has an arrow: `Enter` chooses the sound itself, and `l` opens it to list its own
-file, its variants and its velocity layers, softest first, any of which can be chosen
-in its place. A sound whose file has gone is still listed, and its preview says why.
+layers has stacked pads for its icon: `Enter` chooses the sound itself, and `l` opens
+it to list its own file, its variants and its velocity layers, softest first, any of
+which can be chosen in its place. A sound whose file has gone is still listed, with a
+warning for its icon, and its preview says why.
 `library` is the `Samples` folder of the newest Live in `/Applications`, with its
 `Loops`, `One Shots` and `Multisamples`, which the imported kits play from.
 

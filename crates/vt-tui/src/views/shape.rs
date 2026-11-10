@@ -4,13 +4,14 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Clear, Paragraph};
 use vt_model::shape::{FillKind, ShapeColumn, Where, values};
 
 use crate::app::App;
 use crate::input::mode::Mode;
 use crate::shaping::{ShapePanel, ShapeRow};
 use crate::theme;
+use crate::views;
 
 const WIDTH: u16 = 38;
 /// The border, the heading and the keys, beyond the rows.
@@ -103,9 +104,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     frame.render_widget(Clear, window);
     frame.render_widget(
         Paragraph::new(lines).block(
-            Block::new()
+            views::window_border()
                 .style(theme::window())
-                .borders(Borders::ALL)
                 .title(" Shape ")
                 .title_bottom(" Enter keep  Esc cancel ")
                 .title_style(Style::new().add_modifier(Modifier::BOLD)),

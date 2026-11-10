@@ -3,7 +3,9 @@
 //! Each one means something, as a switch's state does, and none is there for decoration.
 //!
 //! Every one is a single cell wide, as the terminal counts it, so nothing after it moves. kitty and
-//! Ghostty may draw an icon over the space after it as well, which only makes it bigger.
+//! Ghostty may draw an icon over the space after it as well, which only makes it bigger. The
+//! explorer's icons are followed by a no-break space, `ICON_SPACE`, which they don't draw over, so
+//! each keeps to its cell and every row's icon is the same size.
 
 use std::time::Duration;
 
@@ -115,6 +117,33 @@ pub fn spinner(elapsed: Duration) -> char {
     let turn = elapsed.as_millis() / SPINNER_TURN.as_millis();
     SPINNER[(turn % SPINNER.len() as u128) as usize]
 }
+
+// Explorer (decision 103).
+
+/// The space after an icon: a no-break space, U+00A0. kitty and Ghostty draw a symbol over a plain
+/// space after it, two cells wide, but not over this, so each icon keeps to its own cell, as large
+/// as every other, and stays clear of the name beside it.
+pub const ICON_SPACE: char = '\u{a0}';
+/// A folder, closed: `nf-md-folder`, U+F024B, as snacks' explorer draws one.
+pub const FOLDER: char = '\u{f024b}';
+/// A folder, open: `nf-md-folder_open`, U+F0770. It takes the place of an arrow.
+pub const FOLDER_OPEN: char = '\u{f0770}';
+/// A project's folder, which holds a `song.ron`: `nf-md-folder_music`, U+F1359.
+pub const PROJECT: char = '\u{f1359}';
+/// A kit, as a grid of pads: `nf-md-view_grid`, U+F0570.
+pub const KIT: char = '\u{f0570}';
+/// One of a kit's sounds, as one pad: `nf-md-square_rounded`, U+F14FB.
+pub const KIT_SOUND: char = '\u{f14fb}';
+/// One of a kit's sounds with variants or velocity layers, which opens to them, as pads stacked:
+/// `nf-md-checkbox_multiple_blank`, U+F0136.
+pub const KIT_SOUND_LAYERED: char = '\u{f0136}';
+/// A sample: `nf-md-waveform`, U+F147D, as Ableton's browser shows one.
+pub const SAMPLE: char = '\u{f147d}';
+/// A sample that's a loop, by its folder or the tempo in its name: `nf-md-repeat`, U+F0456.
+pub const LOOP: char = '\u{f0456}';
+/// A file that isn't there, or a file or folder that couldn't be read: `nf-md-alert`, U+F0026,
+/// in the error colour.
+pub const MISSING: char = '\u{f0026}';
 
 #[cfg(test)]
 mod tests {
