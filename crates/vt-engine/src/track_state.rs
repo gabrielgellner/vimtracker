@@ -505,6 +505,10 @@ pub struct TrackState {
     pub solo: bool,
     /// On a return, whether it's heard, so muting fades.
     pub heard: Smoothed,
+    /// On a sound track in a group, whether it plays into the group. It's what's heard, but while a
+    /// compressor, Warps or a gate hears the group, the group's own mute and the solos elsewhere
+    /// are left to the group, so the group still has its tracks to hear while it's silent.
+    pub feeds: Smoothed,
     pub rng: Pcg32,
     pub last_note: Option<NoteOn>,
     pub delayed: Option<DelayedNote>,
@@ -717,6 +721,7 @@ impl TrackState {
             mute: false,
             solo: false,
             heard: Smoothed::at(1.0),
+            feeds: Smoothed::at(1.0),
             rng: Pcg32::new(seed, index as u64),
             groove_rng: groove_rng(seed, index),
             last_note: None,
@@ -1556,6 +1561,7 @@ impl TrackState {
         self.send_a_gain.settle();
         self.send_b_gain.settle();
         self.heard.settle();
+        self.feeds.settle();
         self.cut_offset.settle();
         self.res_offset.settle();
         self.pan_offset.settle();
@@ -1758,6 +1764,8 @@ impl TrackState {
     ) -> [f32; 2] {
         if input == [0.0, 0.0] && !self.ringing(rate) {
             self.key = [0.0, 0.0];
+            // With nothing to fade, a mute is heard at once when something comes in.
+            self.heard.settle();
             return [0.0, 0.0];
         }
         let frame = self.slots_and_level(input, smoothing, fast, rate, keys);

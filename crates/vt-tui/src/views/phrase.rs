@@ -17,6 +17,7 @@ use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
+use crate::views::widgets::group::{self, Switched};
 
 /// The width of a read-only note column for another track: its playhead marker and a note.
 const NEIGHBOUR_WIDTH: usize = 4;
@@ -415,21 +416,26 @@ fn track_name(app: &App, track: usize) -> String {
     }
 }
 
-/// The glyph for a track that's muted or soloed, if it is. A mute wins, as the track is silent.
-pub(crate) fn level_glyph(app: &App, track: usize) -> Option<char> {
-    let live = app.levels.get(track).copied().unwrap_or_default();
-    if live.mute {
-        Some(glyphs::MUTE)
-    } else if live.solo {
-        Some(glyphs::SOLO)
-    } else {
-        None
-    }
+/// The glyph for a track that's muted or soloed, if it is, and its style: the active colour for
+/// its own, or its group's colour for its group's. A mute wins, as the track is silent, and one of
+/// its own wins over its group's.
+pub(crate) fn level_glyph(app: &App, track: usize) -> Option<(char, Style)> {
+    let (muted, soloed) = (group::muted(app, track), group::soloed(app, track));
+    let order = [
+        (muted == Switched::Own, glyphs::MUTE, muted),
+        (muted.is_on(), glyphs::MUTE, muted),
+        (soloed == Switched::Own, glyphs::SOLO, soloed),
+        (soloed.is_on(), glyphs::SOLO, soloed),
+    ];
+    order
+        .into_iter()
+        .find(|(on, _, _)| *on)
+        .map(|(_, glyph, why)| (glyph, why.style()))
 }
 
 /// A track's label over its column in the overview, three cells wide: the start of its name, and
 /// its mute or solo glyph in the last cell if it has one.
-fn column_label(app: &App, track: usize) -> (String, Option<char>) {
+fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
     let name = track_name(app, track);
     match level_glyph(app, track) {
         Some(glyph) => (name.chars().take(2).collect(), Some(glyph)),
@@ -630,8 +636,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         format!("Track {}", track_name(app, app.cursor.track)),
         bold,
     ));
-    if let Some(glyph) = level_glyph(app, app.cursor.track) {
-        named.push(Span::styled(format!(" {glyph}"), theme::active()));
+    if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
+        named.push(Span::styled(format!(" {glyph}"), style));
     }
     named.push(Span::styled(heading, bold));
     let mut title = fitted(named, GUTTER + body_width);
@@ -641,15 +647,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // overview shows every track in its place.
         let (label, glyph) = column_label(app, *track);
         title.push(Span::raw(" "));
-        let (style, glyph_style) = if *track == app.cursor.track {
-            let marked = bold.fg(theme::BASE).bg(theme::GREEN);
-            (marked, marked)
-        } else {
-            (bold, theme::active())
-        };
-        title.push(Span::styled(label, style));
-        if let Some(glyph) = glyph {
-            title.push(Span::styled(glyph.to_string(), glyph_style));
+        let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
+        title.push(Span::styled(label, marked.unwrap_or(bold)));
+        if let Some((glyph, style)) = glyph {
+            title.push(Span::styled(glyph.to_string(), marked.unwrap_or(style)));
         }
     }
     let cursor_style = theme::cursor(app.mode);

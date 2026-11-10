@@ -220,14 +220,16 @@ as it is, and goes 15 dB either way. It stays smooth as an LFO sweeps it.
 down whenever that one plays: put it on a bass, hearing the kick, for the pumping
 sidechain sound. It hears the other track after that track's slots and before its level
 and mute, so a muted kick track still ducks the bass, and turning the kick down doesn't
-change it. Leave `Auto` off for ducking, or the bass is louder between kicks.
+change it. Set it to a group, like `G1`, and it hears the whole kit after the group's
+slots, even while the group is muted or another track is soloed. Leave `Auto` off for
+ducking, or the bass is louder between kicks.
 
 | Setting | Does |
 |---|---|
 | `Threshold` | Where it starts turning down, from -60 dB to 0 dB |
 | `Ratio` | How much: 1:1 at `00`, 20:1 near the top, a limiter at `FF` |
 | `Attack`, `Release` | How fast it turns down and lets go |
-| `Source` | `Self`, a track by its number, or return `A` or `B` |
+| `Source` | `Self`, a track by its number, `A`, `B`, or `G1` to `G4` |
 | `Auto` | `On` makes it come out as loud as it went in |
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
 | `Gain` | Makes up what it took, or trims `Auto`, on the level scale |
@@ -358,7 +360,7 @@ modulator, with a sine an octave above the note.
 |---|---|
 | `Algo` | Which algorithm, blending from each one into the next |
 | `Timbre` | What that algorithm does with it, as Warps' timbre knob |
-| `Source` | `Osc`, a track by its number, or return `A` or `B` |
+| `Source` | `Osc`, a track by its number, `A`, `B`, or `G1` to `G4` |
 | `Level` | How hard the modulator is driven, clipping above about `A0` |
 | `Pitch` | The oscillator, in semitones from the track's note |
 | `Shape` | The oscillator's wave: sine, triangle, saw, square or noise |
@@ -391,7 +393,7 @@ gate on its own sound, for plucked, woody notes.
 | `Base` | Where it rests when closed: its cutoff, or its level as `VCA` |
 | `Res` | The filter's resonance, in `Gate` and `Filter` |
 | `Response` | How slowly it opens and closes |
-| `Source` | `Self`, a track by its number, or return `A` or `B` |
+| `Source` | `Self`, a track by its number, `A`, `B`, or `G1` to `G4` |
 
 `Gate` is Streams' vactrol, which opens the level and the cutoff
 together: quickly as the sound comes in, and slowly as it goes, its
@@ -560,12 +562,18 @@ go through `G1` to `G4`, `i` takes a number or `off`, and `x` takes it out.
 A track in a group plays through it, and the group plays through its own slots,
 `Level` and `Pan` to the master. Its sends still go from the track itself, so a snare
 can go to the reverb on its own, and the group has `Send A` and `Send B` of its own
-too. A group's Sound page has `Level`, `Pan` and its sends, and the rest is as on a
-return.
+too. A group's Sound page lists its tracks on the left, each with its own mute or solo,
+and has `Level`, `Pan` and its sends on the right, where a track's are. The rest is as on
+a return.
+
+Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
+tracks' strips share it, as does a track's `Group` on its Sound page. A group with no
+tracks in it is faint on the mixer and in the song view.
 
 Muting a group mutes its tracks. Soloing a track in a group keeps the group, so you
-hear it through the group's slots, and soloing a group plays all its tracks. A group
-can't be in a group.
+hear it through the group's slots, and soloing a group plays all its tracks. A track
+muted or soloed by its group shows the glyph in the group's colour, where one of its
+own is green. A group can't be in a group.
 
 ## Returns and the master
 
@@ -690,3 +698,7 @@ with `0` marked, and show the track after its level and pan. `h` and `l` move be
 tracks, `j` and `k` up and down the strip, and values edit as they do on the track page. On mute and solo, `=` switches on,
 `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track.
+
+The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
+part. Under a track's name is the group it's in, and under a group's name the tracks
+in it, as `01-04 07`.

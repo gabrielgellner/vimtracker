@@ -551,13 +551,14 @@ pub(crate) const EQ_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
-/// What a compressor can hear: its own input, a track by its number, or a return.
-pub const SOURCE_NAMES: [&str; MAX_SOUND_TRACKS + 3] = [
+/// What a compressor can hear: its own input, a track by its number, a return, or a group. The
+/// groups come after the returns, so the returns keep the numbers songs saved them by.
+pub const SOURCE_NAMES: [&str; MAX_SOUND_TRACKS + 3 + MAX_GROUPS] = [
     "Self", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14",
     "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
     "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46",
     "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62",
-    "63", "64", "A", "B",
+    "63", "64", "A", "B", "G1", "G2", "G3", "G4",
 ];
 
 /// A compressor's threshold in dB, for a value on the `00` to `FF` scale: from -60 dB to 0 dB.
@@ -2691,12 +2692,14 @@ impl Grains {
 
 /// The track a `Source` hears, by its place among the tracks, if not the slot's own input or
 /// oscillator: `0` is that, then the sound tracks by number, then the two returns, which come after
-/// the sound tracks and the groups.
+/// the sound tracks and the groups, and then the groups.
 fn source_track(source: u8, sounds: usize) -> Option<usize> {
+    const RETURNS: usize = MAX_SOUND_TRACKS + 2;
     match usize::from(source) {
         0 => None,
         track if track <= MAX_SOUND_TRACKS => Some(track - 1),
-        other => Some(sounds + MAX_GROUPS + other - MAX_SOUND_TRACKS - 1),
+        other if other <= RETURNS => Some(sounds + MAX_GROUPS + other - MAX_SOUND_TRACKS - 1),
+        group => Some(sounds + group - RETURNS - 1),
     }
 }
 
@@ -3634,6 +3637,21 @@ mod tests {
         assert_eq!((from, to), (5, 6));
         assert!(by > 0.95, "{by}");
         assert_eq!(algorithm_blend(255.0), (7, 7, 0.0));
+    }
+
+    #[test]
+    fn a_source_names_the_returns_by_their_old_numbers_and_the_groups_after() {
+        // With 8 sound tracks, the groups are at 8 to 11, the returns at 12 and 13.
+        let heard = |source: u8| source_track(source, 8);
+        assert_eq!(SOURCE_NAMES[65], "A");
+        assert_eq!(SOURCE_NAMES[66], "B");
+        assert_eq!(heard(65), Some(8 + MAX_GROUPS));
+        assert_eq!(heard(66), Some(9 + MAX_GROUPS));
+        assert_eq!(SOURCE_NAMES[67], "G1");
+        assert_eq!(heard(67), Some(8));
+        assert_eq!(SOURCE_NAMES[66 + MAX_GROUPS], format!("G{MAX_GROUPS}"));
+        assert_eq!(heard(66 + MAX_GROUPS as u8), Some(7 + MAX_GROUPS));
+        assert_eq!(Setting::Source.highest(), 66 + MAX_GROUPS as u8);
     }
 
     #[test]

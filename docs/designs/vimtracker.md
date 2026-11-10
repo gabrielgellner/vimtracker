@@ -377,7 +377,11 @@ Song                               song.ron, refused unless format_version is FO
     plays the sum through its own slots, level and pan, and sends from there; the other sound
     tracks, the groups and the returns feed the master. A group can't be in a group, so the order
     stays fixed. `ensure_fixed_tracks` puts in any fixed track a song lacks, so raising
-    `MAX_GROUPS` keeps saved songs loading.
+    `MAX_GROUPS` keeps saved songs loading. `Song::group_members` lists the tracks a group sums.
+    A compressor's, Warps' or a gate's `Source` names a sound track by its number, a return, or a
+    group, numbered after the returns so theirs stay as songs saved them; while one hears a group,
+    the group's tracks play into it even while it's muted or soloed out, as a muted track a
+    compressor hears plays on silently.
 *   **Machines and their settings.** A `Machine` is the `Sampler`, which plays the bank entry its
     `Sample` setting or a step's `SMP` chooses, or `Plaits(voice)`, one of the synth voices. The
     track's own controls are fields. A machine's settings are a map by `SettingId`, saved by key,
@@ -417,8 +421,8 @@ Song                               song.ron, refused unless format_version is FO
     such as where kits are, the audio choice and the command history, is in the config folder, and
     sample analyses are in the cache folder.
 
-**Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111 and
-123;
+**Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
+123 and 126;
 the [M9](#m9-design-fx-inserts), [M10](#m10-design-tracks-that-process),
 [M12](#m12-design-lanes) and [M13](#m13-design-pulses) designs, and [song-flow.md](song-flow.md) for
 sections; and the [FX interpreter](#fx-interpreter) for LFOs and envelopes.
@@ -527,6 +531,9 @@ built from, so a new page uses them rather than working out its layout again:
     cells.
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
+*   `group`: a group's colour, from `theme::group`, the tracks it sums as runs such as `01-04 07`,
+    and whether a track's mute or solo is its own or its group's, for the mixer, the track page
+    and the phrase view's titles.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -552,7 +559,7 @@ screenshots unchanged. `SamplePage` is already half there: it keeps its own curs
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
-**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108 and 122, with #320 and #330.
+**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122 and 126, with #320 and #330.
 
 ### Graphics
 

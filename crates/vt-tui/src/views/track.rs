@@ -12,7 +12,7 @@ use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{Kind, SettingId, gate_percent};
-use vt_model::song::{Song, SynthVoice, Track, reset_name};
+use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
 
 use crate::app::App;
@@ -28,10 +28,11 @@ use crate::track_page::{
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::bar::{BAR_ENDS, ValueBar};
+use crate::views::widgets::group;
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
-use crate::views::widgets::table::{Columns, blank_row, take_top};
+use crate::views::widgets::table::{Cells, Columns, blank_row, take_top};
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
@@ -173,11 +174,18 @@ fn sound_columns() -> Columns {
 /// A row of the Sound page: a control on the left, and on the right perhaps one.
 fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) -> Row<'static> {
     let mut cells = columns.row();
+    sound_cells(app, track, controls, &mut cells);
+    cells.done()
+}
+
+/// A Sound page row's controls, put in their halves.
+fn sound_cells(app: &App, track: &Track, controls: &[Control], cells: &mut Cells<'_>) {
     let current = app.track_control();
     for control in controls {
-        // A sound track's output is always on the right, even on a row with nothing on the left. A
-        // return or the master has only output, so it's all on the left.
-        let half = usize::from(control.column() > 0 && track.is_sound());
+        // A sound track's output is always on the right, even on a row with nothing on the left,
+        // and so is a group's, with its tracks on the left. A return or the master has only
+        // output, so it's all on the left.
+        let half = usize::from(control.column() > 0 && (track.is_sound() || track.is_group()));
         cells.to(half * SOUND_HALF.len());
         cells.cell(name_line(
             app,
@@ -189,7 +197,14 @@ fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) 
         let on_fine = here && app.track_fine;
         let on_value = here && !on_fine;
         let text = setting::text(app, on_value, || value(*control, track, app.song()));
-        let style = setting::style(app, on_value, at_default(*control, track));
+        let mut style = setting::style(app, on_value, at_default(*control, track));
+        // The group a track is in is in its colour, as on the mixer.
+        if *control == Control::Group
+            && !on_value
+            && let Some(tint) = group::style(app.song(), app.cursor.track)
+        {
+            style = tint;
+        }
         let value = Line::from(value_spans(app, *control, text, style));
         // A setting that sweeps shows its fine part, set back.
         let fine = control.fine_on(track).map(|id| {
@@ -223,7 +238,63 @@ fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) 
             );
         }
     }
-    cells.done()
+}
+
+/// A group's Sound page: the tracks it sums down the left, where a sound track's machine is, each
+/// with its own mute or solo, and its output on the right, where a sound track's is, so its level
+/// stays in the same place as its tracks'. A list longer than the page ends with how many more.
+fn group_rows(app: &App, track: &Track, columns: &Columns, room: usize) -> Vec<Row<'static>> {
+    let song = app.song();
+    let members: Vec<usize> = song.group_members(app.cursor.track).collect();
+    let controls = app.page_rows();
+    let lines = members.len().max(1).min(room).max(controls.len());
+    let cut = members.len() > lines;
+    let mut rows = Vec::new();
+    for line in 0..lines {
+        let mut cells = columns.row();
+        let label = if line == 0 { "Tracks" } else { "" };
+        cells.cell(Line::styled(label, theme::dim()));
+        let member = members.get(line).copied();
+        let text = match member {
+            _ if cut && line == lines - 1 => {
+                Line::styled(format!("+{} more", members.len() - line), theme::faint())
+            }
+            None if line == 0 => Line::styled("None", theme::dim()),
+            None => Line::default(),
+            Some(member) => member_line(app, member),
+        };
+        cells.span(text, 4);
+        if let Some(controls) = controls.get(line) {
+            sound_cells(app, track, controls, &mut cells);
+        }
+        rows.push(cells.done());
+    }
+    rows
+}
+
+/// One of a group's tracks, by its number and name, with its own mute or solo after it, dim while
+/// it's muted.
+fn member_line(app: &App, member: usize) -> Line<'static> {
+    let song = app.song();
+    let name = format!("{:02} {}", member + 1, song.tracks[member].name);
+    let live = app.levels.get(member).copied().unwrap_or_default();
+    let style = if live.mute {
+        theme::dim()
+    } else {
+        Style::new()
+    };
+    let mut spans = vec![Span::styled(name.trim_end().to_owned(), style)];
+    let glyph = if live.mute {
+        Some(glyphs::MUTE)
+    } else if live.solo {
+        Some(glyphs::SOLO)
+    } else {
+        None
+    };
+    if let Some(glyph) = glyph {
+        spans.push(Span::styled(format!(" {glyph}"), theme::active()));
+    }
+    Line::from(spans)
 }
 
 /// A setting's value as text.
@@ -679,18 +750,28 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         format!("{} ", track.kind.title())
     };
-    // The track's machine or kind as a glyph before it, and whether it's muted or soloed after.
+    // The track's machine or kind as a glyph before it, a group's in its colour, and whether it's
+    // muted or soloed after.
+    let icon = match track.kind {
+        TrackKind::Group(_) => group::style(app.song(), app.cursor.track).unwrap_or_default(),
+        _ => theme::dim(),
+    };
     let mut title = vec![
-        Span::styled(format!("{} ", glyphs::track(track)), theme::dim()),
+        Span::styled(format!("{} ", glyphs::track(track)), icon),
         Span::styled(name, bold),
     ];
-    if let Some(glyph) = level_glyph(app, app.cursor.track) {
-        title.push(Span::styled(format!("{glyph} "), theme::active()));
+    if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
+        title.push(Span::styled(format!("{glyph} "), style));
     }
     title.extend(tabs);
     let mut rest = area;
     frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
     match app.track_page {
+        Page::Sound if track.is_group() => {
+            let columns = sound_columns();
+            let rows = group_rows(app, track, &columns, usize::from(rest.height));
+            columns.stack(frame, &mut rest, rows);
+        }
         Page::Sound => {
             let columns = sound_columns();
             let mut rows = Vec::new();

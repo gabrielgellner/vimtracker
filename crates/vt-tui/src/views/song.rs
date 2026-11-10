@@ -1,4 +1,5 @@
-//! The song view: a row per section, with its length, how it starts and each track's chain.
+//! The song view: a row per section, with its length, how it starts and each track's chain. A group
+//! with no tracks in it is faint, as it plays nothing (decision 126).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -12,6 +13,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
+use crate::views::widgets::group;
 
 /// Room for a section's number and playing marker.
 const NUMBER_WIDTH: usize = 5;
@@ -41,10 +43,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let first_track = first_shown(cursor_track, song.tracks.len(), room);
     let shown_tracks = first_track..(first_track + room.max(1)).min(song.tracks.len());
 
-    let mut heading = format!(
+    let mut heading = vec![Span::raw(format!(
         "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}",
         "", "Length", "Rpt", "Start"
-    );
+    ))];
     for track in shown_tracks.clone() {
         let name = &song.tracks[track].name;
         let label = if name.is_empty() {
@@ -52,12 +54,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             name.clone()
         };
-        heading.push_str(&format!("{label:<TRACK_WIDTH$}"));
+        let style = if group::is_empty(song, track) {
+            theme::faint()
+        } else {
+            Style::new()
+        };
+        heading.push(Span::styled(format!("{label:<TRACK_WIDTH$}"), style));
     }
     let mut lines = vec![
         Line::styled("Song", bold),
         Line::raw(""),
-        Line::styled(heading, theme::dim()),
+        Line::from(heading).style(theme::dim()),
     ];
 
     let rows = usize::from(area.height.saturating_sub(ROWS_AROUND_SECTIONS));
@@ -89,7 +96,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             number_style,
         )];
         let playing_here = moving && index == app.playing_section;
-        let mut cell = |text: String, column: usize, width: usize, faint: bool| {
+        let mut cell = |text: String, column: usize, width: usize, faint: Option<Style>| {
             let selected = here && app.song_column == column;
             let typing = selected && app.mode == Mode::Insert;
             let text = if typing {
@@ -99,8 +106,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             let style = if selected {
                 theme::cursor(app.mode)
-            } else if faint {
-                theme::dim()
+            } else if let Some(faint) = faint {
+                faint
             } else {
                 Style::new()
             };
@@ -112,19 +119,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             song.section_length(section).to_string(),
             LENGTH_COLUMN,
             LENGTH_WIDTH,
-            section.length.is_none(),
+            section.length.is_none().then(theme::dim),
         );
         cell(
             section.repeat.get().to_string(),
             REPEAT_COLUMN,
             REPEAT_WIDTH,
-            section.repeat.get() == 1,
+            (section.repeat.get() == 1).then(theme::dim),
         );
         let start = match section.start {
             SectionStart::New => "new",
             SectionStart::Reset => "reset",
         };
-        cell(start.to_owned(), START_COLUMN, START_WIDTH, false);
+        cell(start.to_owned(), START_COLUMN, START_WIDTH, None);
         for track in shown_tracks.clone() {
             let chain = section.chains.get(track).copied().flatten();
             let jam = app.jam.get(track).copied().unwrap_or_default();
@@ -138,11 +145,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 ""
             };
             let replaced = playing_here && jam.playing.is_some_and(|playing| playing != chain);
+            let faint = if group::is_empty(song, track) {
+                Some(theme::faint())
+            } else {
+                (chain.is_none() || replaced).then(theme::dim)
+            };
             cell(
                 format!("{text}{mark}"),
                 COLUMNS_BEFORE_TRACKS + track,
                 TRACK_WIDTH,
-                chain.is_none() || replaced,
+                faint,
             );
         }
         lines.push(Line::from(spans));

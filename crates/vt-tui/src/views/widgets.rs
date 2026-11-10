@@ -1,10 +1,12 @@
 //! The pieces pages are put together from, so a new page uses them rather than working out its
 //! layout again: a grid of columns, a value's bar, a setting's name and value, a meter's cells, an
-//! image's placeholders and the box round one, a window's border, and a hint with its switches.
+//! image's placeholders and the box round one, a window's border, a hint with its switches, and
+//! how a group and its tracks are marked.
 
 use ratatui::widgets::{Block, BorderType, Borders};
 
 pub mod bar;
+pub mod group;
 pub mod hint;
 pub mod image;
 pub mod meter;
