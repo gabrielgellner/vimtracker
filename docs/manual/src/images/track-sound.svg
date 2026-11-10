@@ -46,7 +46,12 @@
 <text x="135" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="144" y="147" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████    </text>
 <text x="225" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="324" y="147" fill="#949cbb" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Groove    Straight</text>
+<text x="324" y="147" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Pitch     </text>
+<text x="414" y="147" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80</text>
+<text x="432" y="147" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
+<text x="459" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="468" y="147" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    │    </text>
+<text x="549" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="963" y="147" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   0 </text>
 <rect x="1008" y="133" width="18" height="19" fill="#292c3c"/>
 <rect x="1035" y="133" width="18" height="19" fill="#292c3c"/>
@@ -56,12 +61,7 @@
 <text x="108" y="166" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
 <text x="135" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="225" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="324" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Pitch     </text>
-<text x="414" y="166" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80</text>
-<text x="432" y="166" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
-<text x="459" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="468" y="166" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    │    </text>
-<text x="549" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="324" y="166" fill="#949cbb" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Groove    Straight</text>
 <rect x="1008" y="152" width="18" height="19" fill="#292c3c"/>
 <rect x="1035" y="152" width="18" height="19" fill="#292c3c"/>
 <rect x="1062" y="152" width="18" height="19" fill="#292c3c"/>

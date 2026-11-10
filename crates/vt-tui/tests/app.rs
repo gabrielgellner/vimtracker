@@ -1879,7 +1879,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         "{text:?}"
     );
     assert!(
-        text[6].contains("Groove"),
+        text[6].contains("Pitch"),
         "a voice of three settings: {text:?}"
     );
     assert!(
@@ -1901,7 +1901,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, "kll");
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "jjj");
-    assert_eq!(column_name(&app), "Groove", "the row with only its groove");
+    assert_eq!(column_name(&app), "Pitch", "the row with only its pitch");
     press(&mut app, "ggh-");
     assert_eq!(
         app.song().tracks[0].machine,
@@ -3427,9 +3427,9 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     let track = |app: &App| app.song().tracks[0].clone();
     let lines = track_page_text(&app);
     assert!(
-        lines[8].contains("Pitch") && lines[8].contains("80"),
+        lines[7].contains("Pitch") && lines[7].contains("80"),
         "{}",
-        lines[8]
+        lines[7]
     );
     assert!(
         lines[9].contains("Choke") && lines[9].contains("Off"),
@@ -3437,15 +3437,16 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
         lines[9]
     );
 
-    // Past Res's fine digits.
-    press(&mut app, "jll");
+    // Past Cut's fine digits.
+    press(&mut app, "ll");
     assert_eq!(app.track_control().label(), "Pitch");
     press(&mut app, "i8C");
     assert_eq!(track(&app).pitch, 0x8C);
     press(&mut app, "x");
     assert_eq!(track(&app).pitch, 0x80);
 
-    press(&mut app, "j");
+    // Down past Groove.
+    press(&mut app, "jj");
     assert_eq!(app.track_control().label(), "Choke");
     press(&mut app, "=");
     assert_eq!(track(&app).choke, Some(1));
@@ -3486,7 +3487,7 @@ fn the_track_page_sets_how_long_notes_last() {
         line(&app)
     );
 
-    // Past Res's fine digits, and down past Pitch and Choke.
+    // Past Res's fine digits, and down past Groove and Choke.
     press(&mut app, "jlljj");
     assert_eq!(app.track_control().label(), "Gate");
     assert_eq!(value_shown(&app).as_deref(), Some("100 %"));
@@ -4019,7 +4020,7 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     press(&mut app, "ggl");
     press(&mut app, "+");
     assert_eq!(track(&app).level, 0xF0);
-    press(&mut app, "jjjj+");
+    press(&mut app, "jjjjj+");
     assert_eq!(
         track(&app).groove,
         GrooveId::from_index(1),
@@ -4140,11 +4141,11 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 7)].symbol() == "G")
+            .position(|x| buffer[(x, 8)].symbol() == "G")
             .unwrap() as u16
             + 10;
-        let text: String = (at..at + 8).map(|x| buffer[(x, 7)].symbol()).collect();
-        (text, buffer[(at, 7)].fg)
+        let text: String = (at..at + 8).map(|x| buffer[(x, 8)].symbol()).collect();
+        (text, buffer[(at, 8)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].groove, None);
@@ -4152,7 +4153,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
-    press(&mut app, "$=");
+    press(&mut app, "j$=");
     assert_eq!(app.song().tracks[0].groove, GrooveId::swing(62));
     press(&mut app, "k");
     assert_eq!(groove_cell(&app), ("Swing 62".to_owned(), Color::Reset));
@@ -4204,8 +4205,9 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[6].starts_with("Mode") && lines[6].contains("12 dB"));
     assert!(lines[6].contains("Send B"));
     assert!(lines[7].starts_with("Cut") && lines[7].contains("FF00 ▕█████████▏"));
-    assert!(lines[7].contains("Groove") && lines[7].contains("Straight"));
-    assert!(lines[8].starts_with("Res") && lines[8].contains("Pitch"));
+    assert!(lines[7].contains("Pitch"), "{}", lines[7]);
+    assert!(lines[8].starts_with("Res") && lines[8].contains("Groove"));
+    assert!(lines[8].contains("Straight"), "{}", lines[8]);
 }
 
 #[test]
@@ -4213,7 +4215,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
     use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
-    press(&mut app, "gg$jjjj");
+    press(&mut app, "gg$jjjjj");
     assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
@@ -8175,10 +8177,10 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "HHlgg");
     assert_eq!(app.track_control(), Control::Level);
     press(&mut app, "jjjj");
-    assert_eq!(app.track_control(), Control::Groove);
+    assert_eq!(app.track_control().label(), "Pitch");
     press(&mut app, "jjj");
     press(&mut app, "kkk");
-    assert_eq!(app.track_control(), Control::Groove);
+    assert_eq!(app.track_control().label(), "Pitch");
     press(&mut app, "Ggg");
     assert_eq!(app.track_control(), Control::Level, "G and gg keep it too");
 }
@@ -11033,7 +11035,7 @@ fn the_track_page_sets_how_long_a_tie_glides() {
     };
     assert!(line(&app).contains("Off"), "{}", line(&app));
 
-    // Past Res's fine digits, and down past Pitch, Choke, Gate, Speed and Reset.
+    // Past Res's fine digits, and down past Groove, Choke, Gate, Speed and Reset.
     press(&mut app, "jlljjjjj");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
