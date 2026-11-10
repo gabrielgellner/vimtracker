@@ -59,6 +59,13 @@ cargo test --workspace --locked
 Run the same before pushing. `--locked` fails if `Cargo.lock` is out of date with the
 manifests.
 
+A pull request that makes a choice the issue left open appends it to
+[docs/designs/decisions.md](docs/designs/decisions.md) as the next numbered decision. One that
+changes the structure, such as a crate, a thread or queue, the song model, what the engine sees,
+how pages are built, how images are drawn, an offline path or where a kind of test lives, also
+updates the design's [Architecture](docs/designs/vimtracker.md#architecture) section in the same
+pull request.
+
 CI runs on Apple silicon macOS. The render tests compare hashes of rendered audio, and the
 filter and reverb use library maths that can round differently on other platforms, so the
 hashes are only checked on one.
