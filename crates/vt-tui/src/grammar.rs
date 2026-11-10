@@ -87,9 +87,12 @@ impl App {
                 self.mode = Mode::Normal;
             }
             // On the sample page it also lets go of what the page is playing, ends a selection
-            // and leaves the settings row.
+            // and leaves the settings row, and what was said in them goes with them.
             if self.view == View::Sample {
                 self.stop_sample_audition();
+                if self.sample_page.anchor.is_some() || self.sample_page.setting.is_some() {
+                    self.status.clear();
+                }
                 self.sample_page.end_selection();
                 self.sample_page.setting = None;
             }

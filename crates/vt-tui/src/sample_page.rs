@@ -19,6 +19,7 @@ use vt_model::selection::Motion;
 
 use crate::app::App;
 use crate::input::bindings::Cmd;
+use crate::input::mode::{Mode, View};
 use crate::marking::MarkWait;
 use crate::placing::{Edge, Nudge};
 use crate::sample_settings::SampleSetting;
@@ -550,6 +551,47 @@ impl App {
         })
     }
 
+    /// The sample page's own modes, as the status line's badge names them: `PADS` for the keys
+    /// mode, `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where
+    /// `h` and `l` go along the rows rather than the waveform. None on the waveform.
+    pub fn sample_mode(&self) -> Option<&'static str> {
+        if self.view != View::Sample {
+            return None;
+        }
+        if self.mode == Mode::Keys {
+            Some("PADS")
+        } else if self.sample_page.anchor.is_some() {
+            Some(Mode::VisualField.label())
+        } else if self.sample_page.setting.is_some() {
+            Some("SETTINGS")
+        } else {
+            None
+        }
+    }
+
+    /// What the keys do in the sample page's mode, and how to leave it, for under the status
+    /// line while nothing else is said there, so a mode is never on without a word.
+    pub fn sample_mode_hint(&self) -> Option<String> {
+        if self.view != View::Sample {
+            return None;
+        }
+        if self.mode == Mode::Keys {
+            let shown = self.sample_shown().ok()?;
+            return Some(self.pads_hint(&shown));
+        }
+        if self.sample_page.anchor.is_some() {
+            return Some(
+                "; plays the selection, o goes to its other end; v or Esc ends it".to_owned(),
+            );
+        }
+        let setting = self.sample_page.setting?;
+        Some(format!(
+            "{}: = - + _ change it, K lists its values, x puts it back, h l the setting before or \
+             after; Esc goes back to the waveform",
+            setting.name()
+        ))
+    }
+
     /// Bring the page up to date with the sample the cursor's track plays, starting afresh if
     /// it's another, and say what it shows.
     pub fn sample_page_here(&mut self) -> Result<Shown, String> {
@@ -706,7 +748,7 @@ impl App {
                 None => self.audition_slice(&shown),
             },
             Cmd::PlayFromCursor => self.audition_from_cursor(&shown),
-            Cmd::EnterInsert => self.start_pads(&shown),
+            Cmd::EnterInsert => self.start_pads(),
             Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
                 let by = if matches!(cmd, Cmd::Increase | Cmd::Decrease) {
                     Nudge::Pixel

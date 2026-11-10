@@ -13,7 +13,7 @@ pub struct Guide {
 }
 
 /// Every guide, in the order to learn them.
-pub const GUIDES: [Guide; 10] = [
+pub const GUIDES: [Guide; 11] = [
     Guide {
         source: include_str!("../guides/first-loop.md"),
     },
@@ -34,6 +34,9 @@ pub const GUIDES: [Guide; 10] = [
     },
     Guide {
         source: include_str!("../guides/sounds.md"),
+    },
+    Guide {
+        source: include_str!("../guides/sample-editor.md"),
     },
     Guide {
         source: include_str!("../guides/tracks.md"),
