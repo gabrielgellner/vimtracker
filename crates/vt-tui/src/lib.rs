@@ -40,6 +40,7 @@ pub mod shaping;
 pub mod slicing;
 pub mod song_view;
 pub mod theme;
+pub mod timeline;
 pub mod track_page;
 pub mod tree;
 pub mod views;

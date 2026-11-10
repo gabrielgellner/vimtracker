@@ -1,24 +1,33 @@
 //! The phrase view: one track's steps, the cursor and the playhead.
 
+use std::ops::Range;
+
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS};
+use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::selection::Scope;
 use vt_model::song::{Phrase, Track};
-use vt_model::step::{FxCommand, Mark, Note, Step};
+use vt_model::step::{FxCommand, GateKind, Mark, Note, Step};
 
 use crate::app::{App, Field, TrackSpan};
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
+use crate::timeline::{self, Line as TimeLine};
 
 /// The width of a read-only note column for another track: its playhead marker and a note.
 const NEIGHBOUR_WIDTH: usize = 4;
 /// Room for the distance from the cursor, the row number, the playhead marker and a gap.
 const GUTTER: usize = 9;
+/// In another track's column, in its playhead's place before a note: more than one of its rows
+/// starts in this line's time, and the first shows, so nothing is hidden without a sign. A plain
+/// character, as a Nerd Font icon could be drawn over the note after it.
+pub const MORE_STARTS: char = '\u{22ee}';
+/// On a continuation line, under the note of a row that holds it through its pulses.
+const HELD: char = '\u{2502}';
 
 /// The rows that aren't steps: the heading, and the box's top and bottom. The box always has its
 /// room, so nothing moves when Insert starts.
@@ -197,13 +206,19 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
 
 /// Which step of this phrase the playhead is on, if it is on this phrase.
 pub(crate) fn playhead_step(app: &App) -> Option<usize> {
+    playhead_place(app).map(|(step, _)| step)
+}
+
+/// Which step of this phrase the playhead is on, and which of the step's pulses, if it is on this
+/// phrase.
+pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
     let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
     let playhead = app.playing_place(app.cursor.track, chain)?;
     let position = owner.chain_position(chain, playhead, app.dealer(app.cursor.track))?;
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
-        .then_some(start + position.step)
+        .then_some((start + position.step, position.pulse))
 }
 
 /// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
@@ -267,7 +282,25 @@ fn section_headings(width: usize) -> String {
 /// What another track's column shows: the phrase it's on and, if it's moving, where in that phrase.
 struct Column<'a> {
     steps: &'a [Step],
-    playing: Option<usize>,
+    /// The row playing, and which of its pulses.
+    playing: Option<(usize, usize)>,
+    /// When each row starts, in the track's own steps, and how many ticks its step lasts.
+    starts: Vec<usize>,
+    ticks: u64,
+}
+
+impl Column<'_> {
+    /// How many ticks its loop lasts.
+    fn length(&self) -> u64 {
+        self.steps.iter().map(Step::pulses).sum::<usize>() as u64 * self.ticks
+    }
+
+    /// When the row playing starts, and where the playhead is, in ticks from row `00`.
+    fn playing_ticks(&self) -> Option<(u64, u64)> {
+        let (row, pulse) = self.playing?;
+        let start = *self.starts.get(row)? as u64;
+        Some((start * self.ticks, (start + pulse as u64) * self.ticks))
+    }
 }
 
 /// The phrase a track is on now, or the one that would play from the cursor while stopped.
@@ -277,37 +310,79 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
     let moving = app.playing_place(track, chain);
     let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
     let position = owner.chain_position(chain, place, app.dealer(track))?;
+    let steps = owner.phrases.get(&position.phrase)?.loop_steps();
     Some(Column {
-        steps: owner.phrases.get(&position.phrase)?.loop_steps(),
-        playing: moving.map(|_| position.step),
+        steps,
+        playing: moving.map(|_| (position.step, position.pulse)),
+        starts: timeline::starts(steps),
+        ticks: owner.speed.ticks(),
     })
 }
 
-/// The other tracks' columns on one row. Row `00` is each track's own loop start, and past its
-/// end the column is blank, so it shows the track's real length.
+/// Where a line of the grid is, for the other tracks' columns: a row, collapsed, or the ticks from
+/// row `00` it covers in the timeline, if it covers any.
+enum At {
+    Row(isize),
+    Ticks(Option<Range<u64>>),
+}
+
+/// The other tracks' columns on one line. Row `00` is each track's own loop start, and past its
+/// end the column is blank, so it shows the track's real length. In the timeline, a line shows
+/// the row each track starts in its time, with a mark before it when more than one does, and
+/// nothing when none does, as a slower track leaves lines blank.
 fn column_spans(
     columns: &[Option<Column>],
     tracks: &[usize],
-    row: isize,
+    at: &At,
     selected: Option<(TrackSpan, isize, isize)>,
 ) -> Vec<Span<'static>> {
     columns
         .iter()
         .zip(tracks)
         .map(|(column, track)| {
-            let in_selection = selected.is_some_and(|(span, first, last)| {
-                span.contains(*track) && (first..=last).contains(&row)
-            });
-            let found = column.as_ref().and_then(|column| {
-                let step = column.steps.get(usize::try_from(row).ok()?)?;
-                Some((step, column.playing == usize::try_from(row).ok()))
-            });
-            match found {
-                Some((step, true)) => Span::styled(format!(">{}", step.note), theme::active()),
-                Some((step, false)) if in_selection => {
-                    Span::styled(format!(" {}", step.note), theme::selected())
+            let Some(column) = column else {
+                return Span::raw(" ".repeat(NEIGHBOUR_WIDTH));
+            };
+            // The row shown, whether the playhead is in this line, and whether more rows start.
+            let (shown, playing, more) = match at {
+                At::Row(row) => {
+                    let shown = usize::try_from(*row)
+                        .ok()
+                        .filter(|row| *row < column.steps.len());
+                    let playing = shown.is_some() && column.playing.map(|(row, _)| row) == shown;
+                    (shown, playing, false)
                 }
-                Some((step, false)) => Span::styled(format!(" {}", step.note), theme::dim()),
+                At::Ticks(None) => (None, false, false),
+                At::Ticks(Some(within)) => {
+                    let found =
+                        timeline::starting_in(column.steps, &column.starts, column.ticks, within);
+                    let ticks = column.playing_ticks();
+                    let playing = ticks.is_some_and(|(_, now)| within.contains(&now));
+                    // The playhead's row shows where it starts, over another starting there.
+                    let playing_row = column
+                        .playing
+                        .zip(ticks)
+                        .filter(|(_, (start, _))| playing && within.contains(start))
+                        .map(|((row, _), _)| row);
+                    let shown = playing_row.or(found.map(|(first, _)| first));
+                    (shown, playing, found.is_some_and(|(_, count)| count > 1))
+                }
+            };
+            let in_selection = shown.is_some_and(|row| {
+                selected.is_some_and(|(span, first, last)| {
+                    span.contains(*track) && (first..=last).contains(&(row as isize))
+                })
+            });
+            let note = shown.map(|row| column.steps[row].note.to_string());
+            let mark = if more { MORE_STARTS } else { ' ' };
+            match note {
+                Some(note) if playing => Span::styled(format!(">{note}"), theme::active()),
+                // The playhead is on a row that started in an earlier line.
+                None if playing => Span::styled(">   ", theme::active()),
+                Some(note) if in_selection => {
+                    Span::styled(format!("{mark}{note}"), theme::selected())
+                }
+                Some(note) => Span::styled(format!("{mark}{note}"), theme::dim()),
                 None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH)),
             }
         })
@@ -378,6 +453,53 @@ fn fitted(spans: Vec<Span<'static>>, width: usize) -> Vec<Span<'static>> {
     fitted
 }
 
+/// A continuation line of a row, one of the lines of its pulses after its first, in the timeline:
+/// dim, with a line under a note the row holds, the note again where a `MLT` plays it on each
+/// pulse, and nothing for a rest or a row with no note. The FX band, a selection of the row and
+/// the rule under it carry on through it, so the row reads as one block.
+fn continuation(
+    step: &Step,
+    width: usize,
+    selected: Option<Scope>,
+    lit: bool,
+    under: Option<Style>,
+) -> Vec<Span<'static>> {
+    let mut text = vec![' '; width];
+    let mut styles = vec![Style::new(); width];
+    let (start, end) = field_range(Field::Note);
+    if let Note::On(_) = step.note
+        && end <= width
+    {
+        let look = if lit { theme::active() } else { theme::dim() };
+        match step.gate_kind() {
+            GateKind::Multi => {
+                for (cell, character) in step.note.to_string().chars().enumerate() {
+                    text[start + cell] = character;
+                }
+                styles[start..end].fill(look);
+            }
+            GateKind::Rest => {}
+            GateKind::Single | GateKind::Hold => {
+                text[start + 1] = HELD;
+                styles[start + 1] = if lit { look } else { theme::faint() };
+            }
+        }
+    }
+    for style in styles.iter_mut().skip(FX_START) {
+        *style = style.bg(theme::FX_BAND);
+    }
+    if let Some(scope) = selected {
+        let (from, to) = selected_columns(step, scope, width);
+        styles[from..to].fill(theme::selected());
+    }
+    if let Some(under) = under {
+        for style in &mut styles {
+            *style = style.patch(under);
+        }
+    }
+    spans_of(&text, &styles)
+}
+
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let Some(phrase) = app.phrase_here() else {
@@ -398,42 +520,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             s.range.last as isize - start,
         )
     });
-    let playhead = playhead_step(app);
+    let timeline_on = app.timeline_on();
     let lane_playheads = lane_playheads(app, phrase);
-    // When each row of the loop starts, in steps, so a beat row is one that starts on a beat even
-    // when rows before it last several pulses.
-    let starts: Vec<usize> = phrase
-        .loop_steps()
-        .iter()
-        .scan(0, |time, step| {
-            let start = *time;
-            *time += step.pulses();
-            Some(start)
-        })
-        .collect();
     let extent = phrase.extent();
-    // Where a row falls in the bar: by when it starts while it plays, and by its number outside
-    // the loop, where it doesn't play.
-    let stress = |index: usize| {
-        let row = extent.row(index);
-        match usize::try_from(row).ok().and_then(|row| starts.get(row)) {
-            Some(start) if extent.plays(index) => Stress::at(*start as isize),
-            _ => Stress::at(row),
-        }
-    };
     let stored = phrase.steps().len();
-    // The rule under a row, from the stress of the row after it. The loop's last row is followed
-    // by its first, which starts a bar, and the phrase's last row by nothing.
-    let rule_under = |index: usize| {
-        let next = index + 1;
-        if next >= stored {
-            None
-        } else if extent.plays(index) && !extent.plays(next) {
-            Stress::Bar.rule()
-        } else {
-            stress(next).rule()
-        }
-    };
+    // The playhead's row, and the line it's on: the line of its pulse in the timeline.
+    let playhead_place = playhead_place(app);
+    let playhead = playhead_place.map(|(step, _)| step);
+    let playhead_line = playhead_place.map(|(step, pulse)| {
+        let last = timeline::row_lines(phrase, step, timeline_on) - 1;
+        (step, pulse.min(last))
+    });
     let body_width = phrase
         .steps()
         .iter()
@@ -443,12 +540,63 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
     let others = neighbours(app, room);
     let columns: Vec<_> = others.iter().map(|track| column(app, *track)).collect();
-    // A short phrase still has rows for the longer tracks beside it.
-    let rows = columns
+    // How long a line is, in ticks: one of this track's steps.
+    let ticks = app
+        .track_here()
+        .map_or(TICKS_PER_STEP, |track| track.speed.ticks());
+    // A short phrase still has rows for the longer tracks beside it, a line each past its end.
+    let rows = if timeline_on {
+        let stored_lines: usize = (0..stored)
+            .map(|index| timeline::row_lines(phrase, index, true))
+            .sum();
+        let needed = columns
+            .iter()
+            .flatten()
+            .map(|column| extent.start + column.length().div_ceil(ticks) as usize)
+            .fold(stored_lines, usize::max);
+        stored + (needed - stored_lines)
+    } else {
+        columns
+            .iter()
+            .flatten()
+            .map(|column| extent.start + column.steps.len())
+            .fold(stored, usize::max)
+    };
+    // Every line, each a row's own or one of its continuations, with when it starts, so a beat
+    // line is one that starts on a beat even when rows before it last several pulses.
+    let time_lines = timeline::lines(phrase, timeline_on, rows);
+    let first_line = time_lines
         .iter()
-        .flatten()
-        .map(|column| extent.start + column.steps.len())
-        .fold(stored, usize::max);
+        .position(|line| line.index >= top)
+        .unwrap_or(time_lines.len());
+    let stored_lines = time_lines
+        .iter()
+        .position(|line| line.index >= stored)
+        .unwrap_or(time_lines.len());
+    // Where a line falls in the bar: by when it starts while it plays, and by its number outside
+    // the loop, where it doesn't play, or on from the loop's end in the timeline.
+    let stress = |line: &TimeLine| Stress::at(line.time);
+    // The rule under a line, from the stress of the line after it. The loop's last line is
+    // followed by its first, which starts a bar, and the phrase's last line by nothing.
+    let rule_under = |at: usize| {
+        let line = time_lines[at];
+        let next = time_lines.get(at + 1)?;
+        if next.index >= stored {
+            None
+        } else if extent.plays(line.index) && !extent.plays(next.index) {
+            Stress::Bar.rule()
+        } else {
+            stress(next).rule()
+        }
+    };
+    // Where a line is, for the other tracks' columns.
+    let columns_at = |line: &TimeLine| {
+        if timeline_on {
+            At::Ticks(timeline::ticks_of(line, ticks))
+        } else {
+            At::Row(extent.row(line.index))
+        }
+    };
     let id = app.phrase_id().unwrap_or(0);
     let shared = if app.phrase_uses(id).len() > 1 {
         "*"
@@ -531,16 +679,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let side = if boxed { "│" } else { " " };
     let mut lines = vec![Line::from(title), top_rule];
-    for index in (top..rows).take(height) {
+    for (at_line, line) in time_lines.iter().enumerate().skip(first_line).take(height) {
+        let index = line.index;
         let row = extent.row(index);
+        let marker = if playhead_line == Some((index, line.pulse)) {
+            ">"
+        } else {
+            " "
+        };
         let Some(step) = phrase.steps().get(index) else {
-            // The box closes on the first row past the phrase, so rows don't move in Insert.
-            let (left, fill, right) = if boxed && index == stored {
+            // The box closes on the first line past the phrase, so rows don't move in Insert.
+            let (left, fill, right) = if boxed && at_line == stored_lines {
                 ("└", "─", "┘")
             } else {
                 (" ", " ", " ")
             };
-            let number = if row.rem_euclid(BEAT_STEPS as isize) == 0 {
+            let number = if line.time.rem_euclid(BEAT_STEPS as isize) == 0 {
                 theme::dim()
             } else {
                 theme::faint()
@@ -552,10 +706,38 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(format!("{left}{}{right}", fill.repeat(body_width)), edge),
                 Span::raw(" "),
             ];
-            spans.extend(column_spans(&columns, &others, row, across));
+            spans.extend(column_spans(&columns, &others, &columns_at(line), across));
             lines.push(Line::from(spans));
             continue;
         };
+        if line.pulse > 0 {
+            let selected = selection
+                .filter(|s| (s.range.first..=s.range.last).contains(&index))
+                .map(|s| s.scope);
+            let mut spans = vec![
+                Span::raw("      "),
+                Span::styled(format!(" {marker}"), theme::active()),
+                Span::styled(side, edge),
+            ];
+            let width = step_text(step, app.track_here()).len();
+            let lit = playhead == Some(index);
+            spans.extend(continuation(
+                step,
+                width,
+                selected,
+                lit,
+                rule_under(at_line),
+            ));
+            spans.push(Span::styled(
+                " ".repeat(body_width.saturating_sub(width)),
+                rule_under(at_line).unwrap_or_default(),
+            ));
+            spans.push(Span::styled(side, edge));
+            spans.push(Span::raw(" "));
+            spans.extend(column_spans(&columns, &others, &columns_at(line), across));
+            lines.push(Line::from(spans));
+            continue;
+        }
         let typing = index == app.cursor.step && matches!(app.mode, Mode::Insert | Mode::Replace);
         let pending = pending_step(app, step, typing);
         let step = pending.as_ref().unwrap_or(step);
@@ -606,9 +788,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 text.replace_range(before..=before, ">");
             }
         }
-        let marker = if playhead == Some(index) { ">" } else { " " };
         let plays = extent.plays(index);
-        let on_beat = stress(index) != Stress::Step;
+        let on_beat = stress(line) != Stress::Step;
         let number = match (plays, on_beat) {
             (true, true) => Style::new().fg(theme::YELLOW),
             (true, false) => Style::new().fg(theme::SUBTEXT1),
@@ -779,7 +960,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             styles[first..last].fill(cursor_style);
         }
         // The rule runs under the whole row, over whatever else its cells show.
-        let under = rule_under(index);
+        let under = rule_under(at_line);
         if let Some(under) = under {
             for style in &mut styles {
                 *style = style.patch(under);
@@ -790,10 +971,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::styled(" ".repeat(padding), under.unwrap_or_default()));
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
-        spans.extend(column_spans(&columns, &others, row, across));
+        spans.extend(column_spans(&columns, &others, &columns_at(line), across));
         lines.push(Line::from(spans));
     }
-    if !(top..top + height).contains(&stored) || stored >= rows {
+    if !(first_line..first_line + height).contains(&stored_lines)
+        || stored_lines >= time_lines.len()
+    {
         lines.push(rule("└", "┘"));
     }
     frame.render_widget(Paragraph::new(lines), area);
