@@ -28,6 +28,7 @@ use crate::input::picker::{Item, Outcome, Pick, Picker, Preview, PreviewLine, Sh
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
+use crate::views::widgets::group;
 
 /// A row for a kit's sound: its label, and its name beside it, or its name alone if it has no
 /// label. Moving onto it plays it and shows its waveform, as a file's row does.
@@ -291,11 +292,13 @@ impl App {
                 } else {
                     String::new()
                 };
+                // A group and the tracks in it are in its colour, as on the mixer.
                 Item::new(
                     format!("{number:<2}  {}", state.name).trim_end(),
                     Pick::Track(track),
                 )
                 .meaning(sound)
+                .styled(group::style(self.song(), track).unwrap_or_default())
             })
             .collect();
         // Found by name or number, as Vim's buffers are, so it opens on the search.
@@ -309,7 +312,10 @@ impl App {
     /// Go to a track chosen from the list, which `C-o` comes back from.
     fn go_to_track(&mut self, track: usize) {
         self.record_jump();
-        self.move_track(track as isize - self.cursor.track as isize);
+        // A track folded away is shown again, as Vim opens a fold a jump lands in.
+        let song = Arc::clone(self.song());
+        self.folds.open_over(&song, track);
+        self.go_to_track_at(track);
         self.song_column = COLUMNS_BEFORE_TRACKS + track;
     }
 

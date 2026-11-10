@@ -14,6 +14,7 @@ pub mod config;
 pub mod dsp_probe;
 pub mod explorer;
 pub mod exploring;
+pub mod folding;
 pub mod glyphs;
 pub mod grammar;
 pub mod guides;

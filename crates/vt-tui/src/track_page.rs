@@ -662,13 +662,16 @@ impl App {
         let row = self.mixer_row_here();
         let has = |track: &Track| MIXER[row].exists_on(track);
         let tracks = &self.song().tracks;
-        let found = if last {
-            tracks.iter().rposition(has)
-        } else {
-            tracks.iter().position(has)
+        // The first or last strip shown, as a folded one is stepped over.
+        let found = {
+            let mut shown = self
+                .folds
+                .shown(self.song())
+                .filter(|&track| has(&tracks[track]));
+            if last { shown.last() } else { shown.next() }
         };
         if let Some(to) = found {
-            self.move_track(to as isize - self.cursor.track as isize);
+            self.go_to_track_at(to);
             self.mixer_row = row;
         }
     }

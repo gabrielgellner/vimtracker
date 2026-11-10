@@ -13,6 +13,7 @@ use std::sync::Arc;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
+use ratatui::style::Style;
 use vt_model::accumulator::Accumulation;
 use vt_model::arpeggio::Arpeggio;
 use vt_model::bank::PlayParams;
@@ -217,6 +218,8 @@ pub struct Item {
     /// What `L` chooses, the wider choice, as a kit's sounds put on tracks rather than listed.
     pub wider: Option<Pick>,
     pub preview: Option<Preview>,
+    /// How its name is drawn, as a track in a group is in the group's colour.
+    pub style: Style,
 }
 
 impl Item {
@@ -229,7 +232,13 @@ impl Item {
             pick,
             wider: None,
             preview: None,
+            style: Style::new(),
         }
+    }
+
+    /// With its name drawn in this style.
+    pub fn styled(self, style: Style) -> Self {
+        Self { style, ..self }
     }
 
     /// With what it means beside it.

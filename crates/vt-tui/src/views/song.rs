@@ -1,5 +1,7 @@
 //! The song view: a row per section, with its length, how it starts and each track's chain. A group
-//! with no tracks in it is faint, as it plays nothing (decision 126).
+//! with no tracks in it is faint, as it plays nothing (decision 126). A group and its tracks are
+//! named in its colour, and a folded group's tracks are left out, its name marked, while an empty
+//! group is folded away unless it's opened (decision 128).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -10,6 +12,7 @@ use vt_engine::engine::Transport;
 use vt_model::song::SectionStart;
 
 use crate::app::App;
+use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
@@ -39,25 +42,33 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let song = app.song();
     let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH;
     let room = usize::from(area.width).saturating_sub(before) / TRACK_WIDTH;
+    // The tracks not folded away, of which as many as fit around the cursor's are drawn.
     let cursor_track = app.song_column.saturating_sub(COLUMNS_BEFORE_TRACKS);
-    let first_track = first_shown(cursor_track, song.tracks.len(), room);
-    let shown_tracks = first_track..(first_track + room.max(1)).min(song.tracks.len());
+    let tracks: Vec<usize> = app.folds.shown(song).collect();
+    let at = tracks.partition_point(|&track| track < cursor_track);
+    let first_track = first_shown(at, tracks.len(), room);
+    let shown_tracks = tracks[first_track..(first_track + room.max(1)).min(tracks.len())].to_vec();
 
     let mut heading = vec![Span::raw(format!(
         "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}",
         "", "Length", "Rpt", "Start"
     ))];
-    for track in shown_tracks.clone() {
+    for &track in &shown_tracks {
         let name = &song.tracks[track].name;
-        let label = if name.is_empty() {
+        let mut label = if name.is_empty() {
             format!("{:02}", track + 1)
         } else {
             name.clone()
         };
+        // A group with its tracks folded into it says so, as the mixer does.
+        if app.folds.holds(song, track) {
+            label.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
+        }
+        // A group and the tracks in it are in its colour, and an empty group is faint.
         let style = if group::is_empty(song, track) {
             theme::faint()
         } else {
-            Style::new()
+            group::style(song, track).unwrap_or_default()
         };
         heading.push(Span::styled(format!("{label:<TRACK_WIDTH$}"), style));
     }
@@ -132,7 +143,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             SectionStart::Reset => "reset",
         };
         cell(start.to_owned(), START_COLUMN, START_WIDTH, None);
-        for track in shown_tracks.clone() {
+        for &track in &shown_tracks {
             let chain = section.chains.get(track).copied().flatten();
             let jam = app.jam.get(track).copied().unwrap_or_default();
             let text = chain.map_or_else(|| "--".to_owned(), |id| format!("{id:02X}"));

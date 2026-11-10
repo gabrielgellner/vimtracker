@@ -2,6 +2,7 @@
 //! tracks, the tracks it sums, and a mute or solo a track has from its group rather than its own.
 
 use ratatui::style::Style;
+use ratatui::text::Span;
 use vt_model::song::{Song, TrackKind};
 
 use crate::app::App;
@@ -23,6 +24,13 @@ pub fn number(song: &Song, track: usize) -> Option<u8> {
 /// The colour of the group a track is, or plays through.
 pub fn style(song: &Song, track: usize) -> Option<Style> {
     number(song, track).map(|number| Style::new().fg(theme::group(number)))
+}
+
+/// The mark of a sound track in a group, `G1` in the group's colour, as under its strip on the
+/// mixer and after its name in a view's title (decision 128).
+pub fn mark(song: &Song, track: usize) -> Option<Span<'static>> {
+    let number = number(song, track).filter(|_| song.tracks[track].is_sound())?;
+    Some(Span::styled(format!("G{number}"), style(song, track)?))
 }
 
 /// Whether a track is a group with no tracks in it, which is shown dim.

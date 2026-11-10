@@ -253,22 +253,37 @@ fn slot_columns(slot: usize) -> (usize, usize) {
 }
 
 /// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
-/// those near it in view. Returns and the master have their notes elsewhere, so they're left out
-/// unless one is the track being edited.
+/// those near it in view. Groups, returns and the master have their notes elsewhere, so they're
+/// left out unless one is the track being edited. A folded group's tracks are left out too, with
+/// a column of the group's own, named and empty, where the first of them would be (decision 128).
 fn neighbours(app: &App, width: usize) -> Vec<usize> {
-    let tracks: Vec<usize> = app
-        .song()
+    let song = app.song();
+    let mut tracks: Vec<usize> = song
         .tracks
         .iter()
         .enumerate()
-        .filter(|(index, track)| track.is_sound() || *index == app.cursor.track)
+        .filter(|(index, track)| {
+            *index == app.cursor.track || (track.is_sound() && !app.folds.hides(song, *index))
+        })
         .map(|(index, _)| index)
         .collect();
+    for group in (0..song.tracks.len()).filter(|&track| app.folds.holds(song, track)) {
+        if group == app.cursor.track {
+            continue;
+        }
+        if let Some(first) = song.group_members(group).next() {
+            let at = tracks.partition_point(|&track| track < first);
+            tracks.insert(at, group);
+        }
+    }
     let shown = (width / NEIGHBOUR_WIDTH).min(tracks.len());
     if shown == 0 {
         return Vec::new();
     }
-    let centre = tracks.partition_point(|track| *track < app.cursor.track);
+    let centre = tracks
+        .iter()
+        .position(|&track| track == app.cursor.track)
+        .unwrap_or_else(|| tracks.partition_point(|&track| track < app.cursor.track));
     let start = centre.saturating_sub(shown / 2).min(tracks.len() - shown);
     tracks[start..start + shown].to_vec()
 }
@@ -304,8 +319,12 @@ impl Column<'_> {
     }
 }
 
-/// The phrase a track is on now, or the one that would play from the cursor while stopped.
+/// The phrase a track is on now, or the one that would play from the cursor while stopped. A
+/// group its tracks are folded into has none to show.
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
+    if track != app.cursor.track && app.folds.holds(app.song(), track) {
+        return None;
+    }
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
     let moving = app.playing_place(track, chain);
@@ -434,10 +453,15 @@ pub(crate) fn level_glyph(app: &App, track: usize) -> Option<(char, Style)> {
 }
 
 /// A track's label over its column in the overview, three cells wide: the start of its name, and
-/// its mute or solo glyph in the last cell if it has one.
+/// its mute or solo glyph in the last cell if it has one, or a group's mark that its tracks are
+/// folded into it.
 fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
     let name = track_name(app, track);
-    match level_glyph(app, track) {
+    let folded = (track != app.cursor.track && app.folds.holds(app.song(), track)).then(|| {
+        let style = group::style(app.song(), track).unwrap_or_default();
+        (glyphs::FOLDED, style)
+    });
+    match level_glyph(app, track).or(folded) {
         Some(glyph) => (name.chars().take(2).collect(), Some(glyph)),
         None => (
             format!("{:<3}", name.chars().take(3).collect::<String>()),
@@ -636,19 +660,28 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         format!("Track {}", track_name(app, app.cursor.track)),
         bold,
     ));
+    // A track in a group carries its mark, in the group's colour, as on the mixer.
+    if let Some(mark) = group::mark(app.song(), app.cursor.track) {
+        named.extend([Span::raw(" "), mark.patch_style(bold)]);
+    }
     if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
         named.push(Span::styled(format!(" {glyph}"), style));
     }
     named.push(Span::styled(heading, bold));
     let mut title = fitted(named, GUTTER + body_width);
     title.push(Span::raw("  "));
+    let mut after_glyph = false;
     for track in &others {
         // Over the note, past the column's marker. The track being edited is marked out, so the
-        // overview shows every track in its place.
+        // overview shows every track in its place, and a group and its tracks are in its colour.
         let (label, glyph) = column_label(app, *track);
-        title.push(Span::raw(" "));
+        // The space after a glyph is one it isn't drawn over.
+        let gap = if after_glyph { glyphs::ICON_SPACE } else { ' ' };
+        title.push(Span::raw(gap.to_string()));
         let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
-        title.push(Span::styled(label, marked.unwrap_or(bold)));
+        let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
+        title.push(Span::styled(label, marked.unwrap_or(named)));
+        after_glyph = glyph.is_some();
         if let Some((glyph, style)) = glyph {
             title.push(Span::styled(glyph.to_string(), marked.unwrap_or(style)));
         }

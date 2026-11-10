@@ -760,6 +760,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled(format!("{} ", glyphs::track(track)), icon),
         Span::styled(name, bold),
     ];
+    // A track in a group carries its mark, in the group's colour, as on the mixer.
+    if let Some(mark) = group::mark(app.song(), app.cursor.track) {
+        title.extend([mark.patch_style(bold), Span::raw(" ")]);
+    }
     if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
         title.push(Span::styled(format!("{glyph} "), style));
     }

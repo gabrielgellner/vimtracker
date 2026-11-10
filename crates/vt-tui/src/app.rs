@@ -11,6 +11,7 @@ use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
 use crate::config::Settings;
 use crate::explorer::Purpose;
 use crate::exploring::Naming;
+use crate::folding::Folds;
 use crate::glyphs;
 use crate::loading::Loader;
 use crate::meter::Meter;
@@ -352,6 +353,9 @@ pub struct App {
     pub view_height: usize,
     /// The phrase view is collapsed to a line a row, rather than laid out in time (decision 122).
     pub rows_collapsed: bool,
+    /// Which groups are folded in the song view, the mixer and the phrase view's overview, for
+    /// this song and this session (decision 128).
+    pub folds: Folds,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -527,6 +531,7 @@ impl App {
             top: 0,
             view_height: 16,
             rows_collapsed: false,
+            folds: Folds::default(),
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -1083,6 +1088,7 @@ impl App {
         let was = self.mode;
         self.started = None;
         self.handle_key(key, now);
+        self.keep_cursor_shown();
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
         if let Some(what) = self.started.take() {
@@ -1405,6 +1411,8 @@ impl App {
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
             Cmd::ToggleTimeline => self.toggle_timeline(),
+            Cmd::ToggleFold => self.toggle_fold(),
+            Cmd::FoldAll(closed) => self.fold_all(closed),
             Cmd::NarrowGrid => self.change_grid(false),
             Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
@@ -1748,10 +1756,15 @@ impl App {
         }
     }
 
-    /// Move to another track, staying at the same position in the section.
+    /// Move to the track as many along as `by`, stepping over those folded away (decision 128).
     pub(crate) fn move_track(&mut self, by: isize) {
-        let last = self.song().tracks.len() as isize - 1;
-        let track = (self.cursor.track as isize + by).clamp(0, last) as usize;
+        let track = self.folds.step(self.song(), self.cursor.track, by);
+        self.go_to_track_at(track);
+    }
+
+    /// Go to another track, staying at the same position in the section.
+    pub(crate) fn go_to_track_at(&mut self, track: usize) {
+        let track = track.min(self.song().tracks.len() - 1);
         if track == self.cursor.track {
             return;
         }
@@ -2921,6 +2934,7 @@ impl App {
         self.send_live();
         self.history = History::new(Arc::new(song));
         self.folder = folder;
+        self.folds = Folds::default();
         self.cursor = Cursor {
             step: self.cursor.step,
             ..self.cursor

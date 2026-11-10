@@ -69,6 +69,9 @@ pub const SYNTH: char = '\u{f067d}';
 pub const DRUM: char = '\u{ee32}';
 /// A group, where its tracks are summed: `nf-md-call_merge`, U+F00F8.
 pub const GROUP: char = '\u{f00f8}';
+/// After a group's name, its tracks folded into it (decision 128), pushed together from both
+/// sides: `nf-md-arrow_collapse_horizontal`, U+F084C.
+pub const FOLDED: char = '\u{f084c}';
 /// A return, where sends come back: `nf-md-arrow_u_left_top`, U+F17B3.
 pub const RETURN: char = '\u{f17b3}';
 /// The master, which is what's heard: `nf-md-speaker`, U+F04C3.

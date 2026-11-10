@@ -39,6 +39,17 @@ fn press(app: &mut App, keys: &str) {
     }
 }
 
+/// Go to a track that's shown with `W` or `B`, as many times as there are shown tracks between,
+/// as they step over the folded ones.
+fn to_track(app: &mut App, track: usize) {
+    let shown: Vec<usize> = app.folds.shown(app.song()).collect();
+    let place = |track: usize| shown.iter().position(|&shown| shown == track).unwrap();
+    let (from, to) = (place(app.cursor.track), place(track));
+    let key = if to > from { "W" } else { "B" };
+    press(app, &key.repeat(from.abs_diff(to)));
+    assert_eq!(app.cursor.track, track);
+}
+
 /// Press and let go of each key in turn, as typing does, so a key typed twice isn't taken as held.
 fn tap(app: &mut App, keys: &str) {
     let now = Instant::now();
@@ -632,7 +643,8 @@ fn the_fixed_tracks_stay_after_new_ones_and_cant_be_removed() {
 fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
     let (mut app, _rt) = app();
     let return_a = 2 + MAX_GROUPS;
-    press(&mut app, &"W".repeat(return_a));
+    // Past the groups, which are empty and so folded away.
+    press(&mut app, "WW");
     assert_eq!(app.song().tracks[app.cursor.track].name, "A");
     press(&mut app, " m");
     assert!(app.levels[return_a].mute);
@@ -658,7 +670,7 @@ fn the_master_cant_be_muted_or_soloed() {
 #[test]
 fn a_fixed_tracks_pages_only_show_what_it_has() {
     let (mut app, _rt) = app();
-    press(&mut app, &"W".repeat(2 + MAX_GROUPS));
+    to_track(&mut app, 2 + MAX_GROUPS);
     press(&mut app, " 4");
     let lines = track_page_text(&app);
     let fixed = format!("{} Return A", vt_tui::glyphs::RETURN);
@@ -679,7 +691,8 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
     let (mut app, _rt) = app();
     let return_a = 2 + MAX_GROUPS;
     press(&mut app, " 6");
-    press(&mut app, &"l".repeat(return_a));
+    // Past the groups, which are empty and so folded away.
+    press(&mut app, "ll");
     press(&mut app, "jj");
     assert_eq!(app.cursor.track, return_a);
     press(&mut app, "i40");
@@ -702,7 +715,8 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
 fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     use vt_tui::views::status::column_name;
     let (mut app, _rt) = app();
-    press(&mut app, " 6jj");
+    // With the empty groups shown.
+    press(&mut app, " 6zRjj");
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "ll");
     assert_eq!(app.cursor.track, 2);
@@ -5449,17 +5463,25 @@ fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
     // A gap parts the sound tracks from the groups, and the groups from the returns.
     let strip = |name: &str| column(names, name);
     assert_eq!(strip(&g1) - strip("06"), 7 + 2, "{names}");
+    // The empty groups are folded away, so the returns come after G2.
+    let g3 = format!("{GROUP}{ICON_SPACE}G3");
+    assert!(!names.contains(&g3), "{names}");
     assert_eq!(
-        strip("\u{a0}A") - 1 - strip(&format!("{GROUP}{ICON_SPACE}G4")),
+        strip("\u{a0}A") - 1 - strip(&format!("{GROUP}{ICON_SPACE}G2")),
         7 + 2
     );
-    // A group and its tracks share its colour, and an empty group is faint.
+    // A group and its tracks share its colour, and an empty group is faint, once it's shown.
     let blue = vt_tui::theme::group(1);
     assert_eq!(mixer_color(&app, 2, &g1), blue);
     assert_eq!(mixer_color(&app, 3, "G1"), blue);
     assert_eq!(mixer_color(&app, 3, "G2"), vt_tui::theme::group(2));
-    let g3 = format!("{GROUP}{ICON_SPACE}G3");
+    press(&mut app, "zR");
     assert_eq!(mixer_color(&app, 2, &g3), vt_tui::theme::OVERLAY0);
+    let names = &mixer_text_at(&app, 160)[2];
+    assert_eq!(
+        column(names, "\u{a0}A") - 1 - column(names, &format!("{GROUP}{ICON_SPACE}G4")),
+        7 + 2
+    );
 }
 
 #[test]
@@ -12310,9 +12332,10 @@ fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
     command(&mut app, "group 5 1");
     assert!(app.status.contains(":group takes"), "{}", app.status);
 
-    // A group can't join a group.
+    // A group can't join a group. The track picker reaches it, empty and folded away.
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
-    press(&mut app, &"W".repeat(group));
+    press(&mut app, " fbG1");
+    special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.track, group);
     command(&mut app, "group 2");
     assert_eq!(app.song().tracks[group].group, None);
@@ -12345,9 +12368,10 @@ fn the_track_page_puts_a_track_in_a_group_and_a_group_has_its_own_page() {
     assert_eq!(group(&app), None);
 
     // A group's own page has its level, pan and sends, on the right where a track's output is.
+    // The empty groups are folded away, so this is with them shown.
     let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
-    press(&mut app, &"W".repeat(at));
-    assert_eq!(app.cursor.track, at);
+    app.folds.set_all(false);
+    to_track(&mut app, at);
     let lines = track_page_text(&app);
     assert!(lines[0].contains("Group 2"), "{}", lines[0]);
     let output = lines[2].find("Level").unwrap();
@@ -12381,9 +12405,12 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
         "{}",
         track_page_text(&app)[3]
     );
-    // An empty group says so.
+    // An empty group says so. It's folded away, so `W` steps over it, and the picker reaches it.
     let empty = app.song().fixed_track(TrackKind::Group(2)).unwrap();
     press(&mut app, "W");
+    assert_eq!(app.cursor.track, empty + MAX_GROUPS - 1, "on A");
+    press(&mut app, " fbG2");
+    special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.track, empty);
     assert!(track_page_text(&app)[2].starts_with("Tracks    None"));
 }
@@ -12413,7 +12440,219 @@ fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
     };
     assert_eq!(cell_color(&app, "G2"), color, "the track's Group");
     let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
-    press(&mut app, &"W".repeat(at));
+    to_track(&mut app, at);
     let icon = vt_tui::glyphs::GROUP.to_string();
     assert_eq!(cell_color(&app, &icon), color, "the group's icon");
+}
+
+/// A view drawn 160 columns wide and 24 high.
+fn drawn(
+    app: &App,
+    draw: fn(&mut ratatui::Frame, ratatui::layout::Rect, &App),
+) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(160, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+/// What's drawn, a line at a time.
+fn drawn_lines(buffer: &ratatui::buffer::Buffer) -> Vec<String> {
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect()
+        })
+        .collect()
+}
+
+/// The colour of the first cell of some text on a line, from a column on.
+fn color_from(buffer: &ratatui::buffer::Buffer, row: usize, from: usize, text: &str) -> Color {
+    let line: String = drawn_lines(buffer)[row].chars().skip(from).collect();
+    let column = from + line[..line.find(text).unwrap()].chars().count();
+    buffer[(column as u16, row as u16)].fg
+}
+
+/// Eight tracks, 01 to 03 in group 1 and 05 in group 2.
+fn grouped() -> (App, Realtime) {
+    let (mut app, realtime) = app();
+    command(&mut app, "track add 6");
+    command(&mut app, "group 1 1-3");
+    command(&mut app, "group 2 5");
+    (app, realtime)
+}
+
+/// Where the phrase view's overview starts on its title line: past the grid's heading.
+fn overview_start(title: &str) -> usize {
+    let heading = title.find("Phrase").unwrap();
+    title[..heading].chars().count() + "Phrase 00 1/1".len()
+}
+
+#[test]
+fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
+    let (mut app, _realtime) = grouped();
+    let (blue, peach) = (vt_tui::theme::group(1), vt_tui::theme::group(2));
+    // The song view's columns.
+    press(&mut app, " 1");
+    let song = drawn(&app, vt_tui::views::song::draw);
+    assert_eq!(color_from(&song, 2, 0, "02"), blue);
+    assert_eq!(color_from(&song, 2, 0, "05"), peach);
+    assert_eq!(color_from(&song, 2, 0, "G1"), blue);
+    assert_ne!(color_from(&song, 2, 0, "04"), blue);
+    // The phrase view's overview, beside the grid.
+    press(&mut app, " 3");
+    let phrase = drawn(&app, vt_tui::views::phrase::draw);
+    let title = drawn_lines(&phrase)[0].clone();
+    let from = overview_start(&title);
+    assert_eq!(color_from(&phrase, 0, from, "02"), blue);
+    assert_eq!(color_from(&phrase, 0, from, "05"), peach);
+    assert_ne!(color_from(&phrase, 0, from, "04"), blue);
+    // The titles of a track in a group carry its mark.
+    assert!(title.contains("Track 01 G1 "), "{title}");
+    let chain = drawn_lines(&drawn(&app, vt_tui::views::chain::draw));
+    assert!(
+        chain[0].starts_with("Track 01 G1  Chain 00"),
+        "{}",
+        chain[0]
+    );
+    let page = drawn_lines(&drawn(&app, vt_tui::views::track::draw));
+    assert!(page[0].contains("Track 01 G1 "), "{}", page[0]);
+    // The track picker.
+    press(&mut app, " fb");
+    let items = app.picker.as_ref().unwrap().items();
+    assert_eq!(items[1].style.fg, Some(blue));
+    assert_eq!(items[3].style.fg, None);
+    assert_eq!(items[4].style.fg, Some(peach));
+}
+
+#[test]
+fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_it() {
+    use vt_tui::glyphs::{FOLDED, ICON_SPACE};
+    let (mut app, _realtime) = grouped();
+    press(&mut app, " 1");
+    let heading = |app: &App| song_text(app)[2].clone();
+    // The empty groups are folded away, the others open.
+    assert!(heading(&app).contains("08  G1  G2  A"), "{}", heading(&app));
+    // On a track in a group, `z a` folds the group, and the cursor stands on it.
+    press(&mut app, "llll");
+    assert_eq!(app.song_column, 3 + 1);
+    press(&mut app, "za");
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    assert_eq!(app.song_column, 3 + g1);
+    assert!(app.status.contains("G1 folded: 01-03"), "{}", app.status);
+    let text = heading(&app);
+    assert!(!text.contains("01") && !text.contains("03"), "{text}");
+    assert!(
+        text.contains(&format!("08  G1{FOLDED}{ICON_SPACE}G2")),
+        "{text}"
+    );
+    // The cursor steps over the folded tracks and the empty groups.
+    press(&mut app, "0lll");
+    assert_eq!(app.song_column, 3 + 3, "on 04");
+    press(&mut app, "h");
+    assert_eq!(app.song_column, 2, "on Start");
+    press(&mut app, "$");
+    assert_eq!(app.song_column, 3 + app.song().tracks.len() - 1);
+    // `z a` on the group opens it again.
+    press(&mut app, "hhhh");
+    assert_eq!(app.song_column, 3 + g1);
+    press(&mut app, "za");
+    assert!(heading(&app).contains("01  02  03"), "{}", heading(&app));
+    // `zR` opens every group, the empty ones too, and `zM` folds them all.
+    press(&mut app, "zR");
+    assert!(
+        heading(&app).contains("G1  G2  G3  G4  A"),
+        "{}",
+        heading(&app)
+    );
+    press(&mut app, "lll");
+    let g4 = g1 + 3;
+    assert_eq!(app.song_column, 3 + g4);
+    press(&mut app, "zM");
+    assert_eq!(app.song_column, 3 + g4 + 1, "off the empty group, onto A");
+    let text = heading(&app);
+    assert!(text.contains(&format!("08  G1{FOLDED}")), "{text}");
+    assert!(!text.contains("G3") && !text.contains("05"), "{text}");
+    // `z a` on a track in no group says so.
+    press(&mut app, "0lll");
+    press(&mut app, "za");
+    assert!(app.status.contains("isn't in a group"), "{}", app.status);
+}
+
+#[test]
+fn the_mixer_folds_a_groups_strips_into_it() {
+    use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
+    let (mut app, _realtime) = grouped();
+    press(&mut app, " 6");
+    let names = |app: &App| mixer_text_at(app, 160)[2].clone();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    // Folding from a track in it puts the cursor on its strip.
+    press(&mut app, "lza");
+    assert_eq!(app.cursor.track, g1);
+    let text = names(&app);
+    assert!(!text.contains("01 ") && !text.contains("03 "), "{text}");
+    assert!(
+        text.contains(&format!("{GROUP}{ICON_SPACE}G1{FOLDED}{ICON_SPACE}")),
+        "{text}"
+    );
+    assert!(text.trim_start().starts_with("04"), "{text}");
+    // `h`, `l`, `W`, `B`, `0` and `$` step over folded tracks.
+    press(&mut app, "0");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, "h");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, "B");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, 4);
+    press(&mut app, "$");
+    assert_eq!(app.cursor.track, app.song().tracks.len() - 1);
+    press(&mut app, "0l");
+    assert_eq!(app.cursor.track, 4);
+    // A track put in a folded group goes into it, and the cursor stands on the group.
+    command(&mut app, "group 1");
+    assert_eq!(app.cursor.track, g1);
+    assert!(!names(&app).contains("05 "), "{}", names(&app));
+    // The track picker opens the fold of a track it goes to.
+    press(&mut app, " fb02");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.cursor.track, 1);
+    assert!(names(&app).contains("02 "), "{}", names(&app));
+}
+
+#[test]
+fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
+    use vt_tui::glyphs::{FOLDED, ICON_SPACE};
+    let (mut app, _realtime) = grouped();
+    press(&mut app, " 6lza0");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, " 3");
+    let title = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[0].clone();
+    let overview: String = title.chars().skip(overview_start(&title)).collect();
+    assert!(
+        overview.contains(&format!(" G1{FOLDED}{ICON_SPACE}04 ")),
+        "{overview}"
+    );
+    assert!(!overview.contains("01"), "{overview}");
+    // `W` steps over the folded tracks in every view.
+    press(&mut app, "BW");
+    assert_eq!(app.cursor.track, 4);
+}
+
+#[test]
+fn folds_are_not_saved_and_a_project_opens_with_its_groups_open() {
+    let (mut app, _realtime) = grouped();
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    press(&mut app, " 6zM");
+    assert!(app.folds.hides(app.song(), 0));
+    assert!(!app.dirty, "a fold isn't a change to the song");
+    command(&mut app, &format!("e {}", path.display()));
+    assert!(!app.folds.hides(app.song(), 0));
+    let g3 = app.song().fixed_track(TrackKind::Group(3)).unwrap();
+    assert!(app.folds.hides(app.song(), g3), "an empty group still is");
+    std::fs::remove_dir_all(&path).unwrap();
 }

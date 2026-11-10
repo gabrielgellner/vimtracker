@@ -567,8 +567,38 @@ and has `Level`, `Pan` and its sends on the right, where a track's are. The rest
 a return.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
-tracks' strips share it, as does a track's `Group` on its Sound page. A group with no
-tracks in it is faint on the mixer and in the song view.
+tracks' strips share it, as does a track's `Group` on its Sound page. Its tracks are
+named in it wherever tracks are listed: the song view's columns, the phrase view's
+columns beside the grid, and the track list. The chain view, the phrase view and the
+track page put `G1` after a grouped track's name.
+
+### Folding a group
+
+In the song view and on the mixer, a group can fold its tracks into its own column
+or strip, as Ableton folds a group track, to make room. The tracks keep their order;
+folding only hides them, and the group's name gets a mark, two arrows pushed together.
+
+| Keys | What they do |
+|---|---|
+| `z a` | Fold this group, or the one this track is in, or open it |
+| `z M` | Fold every group |
+| `z R` | Open every group, the empty ones too |
+
+The cursor steps over folded tracks: `h`, `l`, `0` and `$` there, and `W` and `B` in
+every view. Folding a group from one of its tracks puts the cursor on the group, as
+Vim's cursor stands on a closed fold, and so does putting the cursor's track in a
+folded group. Choosing a folded track from the track list (`Space f b`) opens its
+group again.
+
+A group with no tracks in it is folded away, so it's left out of the song view and the
+mixer, and the cursor goes past it. It comes back as soon as a track joins it, or with
+`z R`, faint while it's empty. The phrase view folds the same groups: a folded one has
+a column of its own beside the grid, named and empty, in place of its tracks'. Its own
+`z a` collapses the timeline instead.
+
+Folds are how the screen shows the song, so they aren't saved with it. They last until
+you quit or open another project, which starts with every group open and the empty ones
+folded away.
 
 Muting a group mutes its tracks. Soloing a track in a group keeps the group, so you
 hear it through the group's slots, and soloing a group plays all its tracks. A track
@@ -701,4 +731,5 @@ it does on the track page, staying on the cursor's track.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part. Under a track's name is the group it's in, and under a group's name the tracks
-in it, as `01-04 07`.
+in it, as `01-04 07`. `z a` folds a group's strips into its own, `z M` folds them all
+and `z R` opens them; see **Folding a group**.
