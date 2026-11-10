@@ -324,6 +324,47 @@ keeps from the first frame above -60 dBFS to the last, setting the start and end
 that `:sample start` and `:sample end` set, and leaves its loop where it is. The
 track's `Start` and `Length` then count from what it kept.
 
+## The sample page
+
+`Space 0` shows the current track's sample as a big waveform, left above right,
+or `g d` on the Sound page's `Sample` row; `C-o` comes back. `W` and `B` show the
+next or previous track's. It only shows the sample for now: the points are set
+with `:sample start`, `:sample end` and `:sample loop` as above.
+
+The start is marked in teal, the end in red and the loop in blue, each as a line
+at its frame and a mark in the ruler above, which has the time too. Sound
+outside the start and end, which doesn't play, is dimmer. The row below the
+waveform is the whole sample, with the part in view behind it.
+
+A sample is like a line of text, a column of the waveform is a character, and
+the entry from its start to its end is one slice until slicing comes. Every
+motion takes a count.
+
+| Keys | Move to |
+|---|---|
+| `h` `l` | A column earlier or later, at the zoom shown |
+| `0` `$` | The start or end of the slice |
+| `^` `g_` | Its first or last sound, above -60 dBFS |
+| `gg` `G` | The start or end of the sample; with a count, a slice |
+| `j` `k` | The next or previous slice |
+| `}` `{` | The next or previous beat at the song's tempo, from the start |
+| `]]` `[[` | The next or previous point: the start, the end or the loop's |
+| `H` `M` `L` | The left, middle or right of the view |
+
+| Keys | View |
+|---|---|
+| `zi` `zo`, `M-1` `M-2` | Zoom in or out by 2 on the cursor, down to a frame a column |
+| `zO` | The whole sample |
+| `zv` | The slice, filling the view |
+| `C-d` `C-u` | Half a screen later or earlier |
+| `C-e` `C-y` | A column later or earlier |
+| `zz` `zs` `ze` | The cursor in the middle, at the left or at the right |
+| `zc` | The cursor as a thin line at its frame, or as its column |
+
+Closer than a frame a pixel, the waveform is a line from frame to frame with a
+dot on each, so a zero crossing is where the line crosses the faint one in the
+middle.
+
 ## Names
 
 `:name BD` names the current track, in place of its number. A name is two

@@ -106,6 +106,9 @@ What `kitty.rs` uses of the protocol:
 | Unicode placeholders | `U+10EEEE` with row and column diacritics, all 297 of them, so an image covers up to 297 characters across and down; the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
 | Delete | `a=d,d=I,i=<id>,q=2`, by id, freeing the data, when an image is replaced and on quitting |
 | Query | `a=q,i=31,f=100` at start, as above |
+| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, which the program places itself |
+| Place directly | `a=p,i=<id>,p=1,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it |
+| Take off | `a=d,d=i,i=<id>,p=1,q=2`, which keeps the data to place again |
 
 In kitty 0.50 on 2026-11-08, `scripts/live.sh` with the program run under `script` to record what
 it wrote showed the query, then the filter curve, envelope and LFO images sent as above on the
@@ -152,6 +155,28 @@ to check by eye. The author checked it full screen on 2026-11-09, in kitty 0.50.
 1.4.0: the waveform fills its cells past the 28th column, the selection, cursor and playhead show
 through it, and the playhead moves smoothly with nothing left behind. A cell background fills whole
 cells, so the playhead is a character wide; a finer one is an idea for the sample page (#274).
+
+**A line placed directly** (decision 102). The sample page's cursor can be a 2-pixel line at its
+frame rather than its character's background: an image of its own, sent once with `a=t` and placed
+with `a=p` at a character, `X=` pixels into it, cropped with `h=` to the rows on screen, above the
+text (`z=1`). Moving it is placing it again with the same placement id, about 150 bytes against
+about 2.6 KB for redrawing a column of placeholders with a new background. A script sending the
+program's own commands with `q=0` to see the answers, on 2026-11-09, in kitty 0.50.0 and Ghostty
+1.4.0, found:
+
+*   Both answer `OK` to storing, placing with `X` and `h`, and placing again elsewhere, and placing
+    again after `a=d,d=i` took it off.
+*   **A screen clear (`CSI 2 J`) frees it.** In both, placing it after a clear answers `ENOENT`,
+    whether it was placed or only stored. An image made with `U=1` for placeholders survives the
+    same clear. ratatui clears the screen whenever the window changes size, inside its draw, so
+    the program places the line after drawing each frame, and sends it again when the window's
+    size has changed.
+*   Placed directly, it's drawn over whatever is drawn over the page, which a placeholder image
+    isn't, so the program takes it off while a list, the help, a guide, the shape panel or the
+    key popup is open.
+
+Whether it moves as smoothly as a cell background, and which looks better, is for the author to
+see: `zc` switches between them.
 
 ### Ghostty
 

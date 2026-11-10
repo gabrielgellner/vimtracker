@@ -10,7 +10,7 @@ use crate::app::{App, Cursor, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
-use crate::track_page::Page;
+use crate::track_page::{Control, Page};
 
 /// How many places the jump list remembers.
 const JUMP_LIMIT: usize = 100;
@@ -110,7 +110,13 @@ impl App {
         match self.view {
             View::Chain => self.open_row(),
             View::Song => self.open_section_chain(),
-            View::Phrase | View::Track | View::Mixer | View::Audio | View::Project => {}
+            View::Track if self.track_control() == Control::Sample => {
+                self.jump_to_view(View::Sample);
+            }
+            View::Track => {
+                self.status = "g d opens the sample page from the Sample row".to_owned();
+            }
+            View::Phrase | View::Mixer | View::Audio | View::Project | View::Sample => {}
         }
     }
 

@@ -232,6 +232,9 @@ pub struct App {
     pub waveform_image: Option<u32>,
     /// The ids of the images of the FX page's slots, for those that have a drawing.
     pub slot_images: [Option<u32>; vt_model::insert::INSERTS],
+    /// Where the sample page is, and the ids of the images of its waveform and its overview.
+    pub sample_page: crate::sample_page::SamplePage,
+    pub sample_images: Option<(u32, u32)>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
     watched: usize,
@@ -427,6 +430,8 @@ impl App {
             filter_image: None,
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
+            sample_page: crate::sample_page::SamplePage::default(),
+            sample_images: None,
             live: None,
             watched: 0,
             track_row: 0,
@@ -1062,7 +1067,8 @@ impl App {
             | Mode::Mixer
             | Mode::Song
             | Mode::Audio
-            | Mode::Project => {
+            | Mode::Project
+            | Mode::Sample => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key),
@@ -1135,6 +1141,7 @@ impl App {
             (Mode::Normal, View::Mixer) => Mode::Mixer,
             (Mode::Normal, View::Audio) => Mode::Audio,
             (Mode::Normal, View::Project) => Mode::Project,
+            (Mode::Normal, View::Sample) => Mode::Sample,
             (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,
         }
@@ -1149,6 +1156,11 @@ impl App {
         self.clamp_cursor();
         if view != View::Phrase {
             self.stop_recording();
+        }
+        if view == View::Sample
+            && let Err(why) = self.sample_page_here()
+        {
+            self.status = why;
         }
     }
 
@@ -1259,6 +1271,7 @@ impl App {
             View::Mixer => self.run_mixer(cmd),
             View::Audio => self.run_audio_page(cmd),
             View::Project => self.run_project_page(cmd),
+            View::Sample => self.run_sample_page(cmd),
             View::Song => self.run_song(cmd),
             View::Phrase => false,
         };

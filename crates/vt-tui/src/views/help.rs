@@ -13,7 +13,7 @@ use crate::theme;
 use crate::views;
 
 /// How long a prefix waits before showing what can come next.
-const POPUP_DELAY: Duration = Duration::from_millis(300);
+pub const POPUP_DELAY: Duration = Duration::from_millis(300);
 
 /// Draw the list of next keys, if a prefix has waited long enough.
 pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {

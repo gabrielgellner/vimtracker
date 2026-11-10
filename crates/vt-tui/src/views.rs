@@ -12,6 +12,7 @@ pub mod mixer;
 pub mod phrase;
 pub mod picker;
 pub mod project;
+pub mod sample;
 pub mod shape;
 pub mod song;
 pub mod status;

@@ -12,11 +12,13 @@ pub enum View {
     Audio,
     /// The project's own settings, and saving, rendering and opening.
     Project,
+    /// The cursor's track's sample, as a big waveform.
+    Sample,
 }
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Phrase,
         Self::Chain,
         Self::Song,
@@ -24,6 +26,7 @@ impl View {
         Self::Mixer,
         Self::Audio,
         Self::Project,
+        Self::Sample,
     ];
 
     /// The view's name.
@@ -36,6 +39,7 @@ impl View {
             Self::Mixer => "mixer",
             Self::Audio => "audio",
             Self::Project => "project",
+            Self::Sample => "sample",
         }
     }
 }
@@ -78,6 +82,8 @@ pub enum Mode {
     Audio,
     /// Normal mode's keys on the project page. Only the binding table and the label use this.
     Project,
+    /// Normal mode's keys on the sample page. Only the binding table and the label use this.
+    Sample,
 }
 
 impl Mode {
@@ -103,6 +109,7 @@ impl Mode {
             Self::Song => "SONG",
             Self::Audio => "AUDIO",
             Self::Project => "PROJECT",
+            Self::Sample => "SAMPLE",
         }
     }
 
