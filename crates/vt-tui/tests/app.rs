@@ -2414,9 +2414,9 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
                 + "\n"
         })
         .collect();
-    assert!(text.contains("┌ Kits ─"), "{text}");
+    assert!(text.contains("╭ Kits ─"), "{text}");
     assert!(
-        text.contains("Enter use  L on tracks  H \u{f204} hidden  P \u{f205} preview"),
+        text.contains("Enter use  L on tracks  H \u{f204}\u{a0}hidden  P \u{f205}\u{a0}preview"),
         "{text}"
     );
     assert!(text.contains("│ 909"), "{text}");
@@ -2663,6 +2663,134 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(sample_of(&app, 0), None);
     assert!(app.status.contains("gone.wav"), "{}", app.status);
+}
+
+/// The icon of the first row shown with this name.
+fn icon_of(app: &App, label: &str) -> vt_tui::explorer::Icon {
+    use vt_tui::input::picker::Row;
+    let picker = app.picker.as_ref().expect("the explorer is open");
+    picker
+        .rows()
+        .iter()
+        .find_map(|row| match row {
+            Row::Item(item) if picker.item(*item).label == label => picker.icon(*item),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no row {label}"))
+}
+
+/// Where the explorer draws a glyph, and its colour.
+fn glyph_colour(app: &App, glyph: char) -> Option<Color> {
+    let backend = ratatui::backend::TestBackend::new(163, 42);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    let mut picker = app.picker.clone().unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let at = buffer
+        .content
+        .iter()
+        .position(|cell| cell.symbol() == glyph.to_string())?;
+    let after = &buffer.content[at + 1];
+    assert_eq!(
+        after.symbol(),
+        "\u{a0}",
+        "a no-break space keeps it one cell"
+    );
+    Some(buffer.content[at].fg)
+}
+
+#[test]
+fn the_explorer_shows_what_each_row_is_with_an_icon() {
+    use vt_tui::explorer::Icon;
+    use vt_tui::glyphs;
+    let (mut app, _realtime) = app();
+    let kit = kit_file();
+    let root = kit.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(root.join("Loops")).unwrap();
+    wav(&root.join("Loops/break.wav"));
+    wav(&root.join("Fill 120 bpm.wav"));
+    std::fs::write(root.join("broken.wav"), "not a sound").unwrap();
+    std::fs::write(
+        root.join("layered.ron"),
+        r#"(name: "Layered", sounds: [
+            (label: "BD", name: "Kick", path: "drums/kick.wav", layers: ["drums/hat.wav"]),
+            (label: "SD", name: "Snare", path: "drums/snare.wav"),
+            (label: "GH", name: "Ghost", path: "drums/gone.wav"),
+        ])"#,
+    )
+    .unwrap();
+    app.settings = Settings {
+        kits: vec![root.display().to_string()],
+        samples: Vec::new(),
+    };
+    press(&mut app, " 5");
+    assert_eq!(
+        explorer_rows(&app)[..7],
+        [
+            "v kits",
+            "  > drums",
+            "  > Loops",
+            "  > 909",
+            "    broken.wav",
+            "    Fill 120 bpm.wav",
+            "  > Layered",
+        ]
+    );
+    for (label, icon) in [
+        ("drums", Icon::Folder),
+        ("909", Icon::Kit),
+        ("Layered", Icon::Kit),
+        ("broken.wav", Icon::Sample),
+        ("Fill 120 bpm.wav", Icon::Loop),
+    ] {
+        assert_eq!(icon_of(&app, label), icon, "{label}");
+    }
+    // A folder's icon is open or closed, in place of an arrow, and dim.
+    assert_eq!(
+        glyph_colour(&app, glyphs::FOLDER_OPEN),
+        Some(vt_tui::theme::OVERLAY2)
+    );
+    assert_eq!(
+        glyph_colour(&app, glyphs::FOLDER),
+        Some(vt_tui::theme::OVERLAY2)
+    );
+    assert!(!picker_text(&app, 163, 42).contains('▸'), "no arrows");
+
+    // A kit's sounds are pads, stacked where they open to more, and a warning where the file has
+    // gone, in the error colour.
+    press(&mut app, "5jl");
+    assert_eq!(icon_of(&app, "BD"), Icon::KitSoundLayered);
+    assert_eq!(icon_of(&app, "SD"), Icon::KitSound);
+    assert_eq!(icon_of(&app, "GH"), Icon::Missing);
+    assert_eq!(
+        glyph_colour(&app, glyphs::MISSING),
+        Some(vt_tui::theme::RED)
+    );
+    press(&mut app, "l");
+    assert_eq!(
+        icon_of(&app, "hat.wav"),
+        Icon::Sample,
+        "a layer is a sample"
+    );
+    press(&mut app, "hh");
+
+    // A file that won't read is warned of once the explorer has tried it.
+    press(&mut app, "kk");
+    assert_eq!(
+        app.picker.as_ref().unwrap().current().unwrap().label,
+        "broken.wav"
+    );
+    app.finish_loading();
+    assert_eq!(icon_of(&app, "broken.wav"), Icon::Missing);
+
+    // The sample in use is marked by its icon in the colour of what's current.
+    press(&mut app, "j");
+    special(&mut app, KeyCode::Enter);
+    assert!(sample_of(&app, 0).unwrap().ends_with("Fill 120 bpm.wav"));
+    press(&mut app, " 5");
+    assert_eq!(glyph_colour(&app, glyphs::LOOP), Some(vt_tui::theme::GREEN));
 }
 
 #[test]
@@ -4729,7 +4857,7 @@ fn each_kind_of_cell_has_its_own_colours() {
     // A lock the track doesn't have is grey all over, brighter than an empty cell.
     assert_eq!(style_at("DCAY", 0).fg, theme::dim().fg);
     assert_eq!(style_at("DCAY  2000", 6).fg, theme::dim().fg);
-    assert_eq!(theme::dim().fg, Some(theme::OVERLAY2));
+    assert_eq!(theme::dim().fg, Some(vt_tui::theme::OVERLAY2));
 }
 
 #[test]
@@ -8137,7 +8265,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
         .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
         .unwrap();
     let corner = &terminal.backend().buffer()[(0, 0)];
-    assert_eq!((corner.symbol(), corner.fg), ("┌", vt_tui::theme::YELLOW));
+    assert_eq!((corner.symbol(), corner.fg), ("╭", vt_tui::theme::YELLOW));
     press(&mut app, ";");
     assert_eq!(app.mode, Mode::Normal);
     // Leaving the track page leaves the keyboard too.
@@ -9364,7 +9492,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "└ Enter choose  H {off} hidden  P {on} preview  A {on} audition ─"
+            "╰ Enter choose  H {off}\u{a0}hidden  P {on}\u{a0}preview  A {on}\u{a0}audition ─"
         )),
         "both on, whole: {line}"
     );
@@ -9396,7 +9524,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "└ Enter choose  H {off} hidden  P {off} preview  A {on} audition ─┘"
+            "╰ Enter choose  H {off}\u{a0}hidden  P {off}\u{a0}preview  A {on}\u{a0}audition ─╯"
         )),
         "{line}"
     );
@@ -9404,7 +9532,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     press(&mut app, "A");
     let line = hint(&app);
     assert!(
-        line.contains(&format!("P {off} preview  A {off} audition")),
+        line.contains(&format!("P {off}\u{a0}preview  A {off}\u{a0}audition")),
         "{line}"
     );
     assert_eq!(
@@ -9417,7 +9545,9 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     press(&mut app, "H");
     let line = hint(&app);
     assert!(
-        line.contains(&format!("H {on} hidden  P {on} preview  A {on} audition")),
+        line.contains(&format!(
+            "H {on}\u{a0}hidden  P {on}\u{a0}preview  A {on}\u{a0}audition"
+        )),
         "{line}"
     );
     assert_eq!(switch_colour(&app, on, "hidden"), vt_tui::theme::GREEN);
@@ -9673,7 +9803,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     // Choosing a folder shows nothing beside it, so only `H` has a switch.
     let text = picker_text(&app, 163, 42);
     assert!(
-        text.contains("└ l open  Enter choose  H \u{f204} hidden ─"),
+        text.contains("╰ l open  Enter choose  H \u{f204}\u{a0}hidden ─"),
         "{text}"
     );
     assert_eq!(

@@ -377,6 +377,9 @@ impl App {
         match preview {
             Preview::Sample(path) => {
                 let read = self.loader.want(path);
+                if let Some(Err(_)) = read {
+                    self.mark_unreadable(path);
+                }
                 Some(sample_preview(item, path, read.as_ref()))
             }
             Preview::Project(folder) => Some(project_preview(item, folder)),
@@ -457,8 +460,18 @@ impl App {
                 }
             }
             // It won't play, and the preview says why.
-            Some(Err(_)) => self.file_playing = Some(path),
+            Some(Err(_)) => {
+                self.mark_unreadable(&path);
+                self.file_playing = Some(path);
+            }
             None => {}
+        }
+    }
+
+    /// Show a sample that couldn't be read with a warning in the explorer.
+    fn mark_unreadable(&mut self, path: &Path) {
+        if let Some(picker) = self.picker.as_mut() {
+            picker.mark_unreadable(path);
         }
     }
 

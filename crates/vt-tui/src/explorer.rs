@@ -73,6 +73,107 @@ impl Kind {
     pub fn opens(self) -> bool {
         matches!(self, Self::Folder | Self::KitFolder)
     }
+
+    /// The icon it's drawn with, as it's been found in its folder.
+    pub fn icon(self, path: &Path) -> Icon {
+        match self {
+            Self::Folder => Icon::Folder,
+            Self::Project => Icon::Project,
+            Self::Sample if is_loop(path) => Icon::Loop,
+            Self::Sample => Icon::Sample,
+            Self::Kit | Self::KitFolder => Icon::Kit,
+        }
+    }
+}
+
+/// What a row of the explorer is, which its icon shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Icon {
+    /// A folder, or a place the explorer starts from, drawn open or closed.
+    Folder,
+    /// A project's folder.
+    Project,
+    /// A kit, or the kit in use at the top of the sample explorer.
+    Kit,
+    /// One of a kit's sounds.
+    KitSound,
+    /// One of a kit's sounds that opens to its variants or velocity layers.
+    KitSoundLayered,
+    Sample,
+    /// A sample that's a loop, as far as its folders and name say.
+    Loop,
+    /// A file that isn't there, or a file or folder that couldn't be read.
+    Missing,
+}
+
+/// The icon for a sample file a kit names: a loop's, or a warning if it isn't there.
+pub fn sample_icon(path: &Path) -> Icon {
+    if !path.exists() {
+        Icon::Missing
+    } else if is_loop(path) {
+        Icon::Loop
+    } else {
+        Icon::Sample
+    }
+}
+
+/// The icon for one of a kit's sounds, played from this file: a warning if it isn't there.
+pub fn kit_sound_icon(path: &Path, layered: bool) -> Icon {
+    if !path.exists() {
+        Icon::Missing
+    } else if layered {
+        Icon::KitSoundLayered
+    } else {
+        Icon::KitSound
+    }
+}
+
+/// The words in a name, in lower case, without the spaces and marks between them.
+fn words(name: &std::ffi::OsStr) -> Vec<String> {
+    name.to_string_lossy()
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Whether a sample is a loop, as far as its folders and name say. The nearest folder named for
+/// loops or one-shots decides, as Ableton's library has `Loops` and `One Shots`, whose one-shots
+/// can have a tempo in their names. Otherwise a tempo in its name, such as `Break 120 bpm.wav`,
+/// makes it a loop, as sample packs name them.
+pub fn is_loop(path: &Path) -> bool {
+    for folder in path.ancestors().skip(1) {
+        let Some(name) = folder.file_name() else {
+            continue;
+        };
+        let words = words(name);
+        let has = |wanted: &str| words.iter().any(|word| word == wanted);
+        if has("loop") || has("loops") {
+            return true;
+        }
+        let one_shot = words
+            .windows(2)
+            .any(|pair| pair[0] == "one" && matches!(pair[1].as_str(), "shot" | "shots"));
+        if one_shot || has("oneshot") || has("oneshots") {
+            return false;
+        }
+    }
+    let Some(stem) = path.file_stem() else {
+        return false;
+    };
+    let words = words(stem);
+    let tempo = |word: &str| {
+        (2..=3).contains(&word.len())
+            && word
+                .parse::<u32>()
+                .is_ok_and(|bpm| (40..=300).contains(&bpm))
+    };
+    words.iter().enumerate().any(|(at, word)| {
+        let joined = word.strip_suffix("bpm").is_some_and(tempo);
+        let apart = word == "bpm" && at > 0 && tempo(&words[at - 1]);
+        joined || apart
+    })
 }
 
 /// What a path is, for a purpose, or none if it isn't listed.
@@ -104,10 +205,12 @@ pub fn is_hidden(path: &Path) -> bool {
 
 /// What a folder holds that's listed for a purpose, folders first and then files, each in order
 /// of name ignoring case, as snacks sorts them. Hidden ones are left out unless asked for.
-pub fn list(folder: &Path, purpose: Purpose, hidden: bool) -> Vec<(PathBuf, Kind)> {
-    let Ok(read) = std::fs::read_dir(folder) else {
-        return Vec::new();
-    };
+pub fn list(
+    folder: &Path,
+    purpose: Purpose,
+    hidden: bool,
+) -> std::io::Result<Vec<(PathBuf, Kind)>> {
+    let read = std::fs::read_dir(folder)?;
     let mut found: Vec<(PathBuf, Kind)> = read
         .flatten()
         .map(|entry| entry.path())
@@ -121,7 +224,7 @@ pub fn list(folder: &Path, purpose: Purpose, hidden: bool) -> Vec<(PathBuf, Kind
             .unwrap_or_default();
         (*kind != Kind::Folder, name)
     });
-    found
+    Ok(found)
 }
 
 /// The picker's item for an entry: a folder opens, and anything else is chosen.
@@ -154,27 +257,29 @@ pub fn item(path: &Path, kind: Kind) -> Item {
     }
 }
 
-/// One thing in a folder or kit that's been opened: the path the tree knows it by, its item, and
-/// whether it opens.
+/// One thing in a folder or kit that's been opened: the path the tree knows it by, its item, its
+/// icon, and whether it opens.
 pub struct Entry {
     pub path: PathBuf,
     pub item: Item,
+    pub icon: Icon,
     pub opens: bool,
 }
 
-/// What's listed in a folder or kit as it's opened for a purpose. A kit's sounds are known by
-/// their places in it, under the kit's own path, as `909 Core Kit.ron/0`, and a sound's files by
-/// their places under the sound's, so the tree finds them again as it finds files.
-pub fn contents(path: &Path, purpose: Purpose, hidden: bool) -> Vec<Entry> {
+/// What's listed in a folder or kit as it's opened for a purpose, or none if it couldn't be read.
+/// A kit's sounds are known by their places in it, under the kit's own path, as
+/// `909 Core Kit.ron/0`, and a sound's files by their places under the sound's, so the tree finds
+/// them again as it finds files.
+pub fn contents(path: &Path, purpose: Purpose, hidden: bool) -> Option<Vec<Entry>> {
     if path.is_dir() {
-        return list(path, purpose, hidden)
-            .into_iter()
-            .map(|(path, kind)| Entry {
-                item: item(&path, kind),
-                opens: kind.opens(),
-                path,
-            })
-            .collect();
+        let listed = list(path, purpose, hidden).ok()?;
+        let entries = listed.into_iter().map(|(path, kind)| Entry {
+            item: item(&path, kind),
+            icon: kind.icon(&path),
+            opens: kind.opens(),
+            path,
+        });
+        return Some(entries.collect());
     }
     if path.is_file() {
         return kit_sounds(path);
@@ -184,38 +289,31 @@ pub fn contents(path: &Path, purpose: Purpose, hidden: bool) -> Vec<Entry> {
         .and_then(|name| name.to_str()?.parse::<usize>().ok());
     match (path.parent(), place) {
         (Some(kit), Some(place)) if kit.is_file() => sound_files(kit, place),
-        _ => Vec::new(),
+        _ => None,
     }
 }
 
 /// A kit's sounds, label first and named beside it, as the kit in use lists them. A sound with
 /// variants or layers opens to them.
-fn kit_sounds(kit: &Path) -> Vec<Entry> {
-    let Ok(loaded) = load_kit(kit) else {
-        return Vec::new();
-    };
-    loaded
-        .sounds
-        .iter()
-        .enumerate()
-        .map(|(place, sound)| Entry {
+fn kit_sounds(kit: &Path) -> Option<Vec<Entry>> {
+    let loaded = load_kit(kit).ok()?;
+    let sounds = loaded.sounds.iter().enumerate().map(|(place, sound)| {
+        let opens = !sound.variants.is_empty() || !sound.layers.is_empty();
+        Entry {
             path: kit.join(place.to_string()),
             item: kit_item(sound),
-            opens: !sound.variants.is_empty() || !sound.layers.is_empty(),
-        })
-        .collect()
+            icon: kit_sound_icon(&sound.path, opens),
+            opens,
+        }
+    });
+    Some(sounds.collect())
 }
 
 /// One of a kit's sounds as its files: its own, then its variants, then its velocity layers from
 /// the softest, each by its file's name with what it is beside it. Each is chosen as the sound
 /// is, with its label, choke group, gain and tune.
-fn sound_files(kit: &Path, place: usize) -> Vec<Entry> {
-    let Some(sound) = load_kit(kit)
-        .ok()
-        .and_then(|loaded| loaded.sounds.into_iter().nth(place))
-    else {
-        return Vec::new();
-    };
+fn sound_files(kit: &Path, place: usize) -> Option<Vec<Entry>> {
+    let sound = load_kit(kit).ok()?.sounds.into_iter().nth(place)?;
     let layers = sound.layers.len();
     let mut files = vec![(sound.path.clone(), "Main".to_owned())];
     files.extend(
@@ -234,29 +332,28 @@ fn sound_files(kit: &Path, place: usize) -> Vec<Entry> {
         (path.clone(), format!("Layer {}{which}", at + 1))
     }));
     let folder = kit.join(place.to_string());
-    files
-        .into_iter()
-        .enumerate()
-        .map(|(at, (file, meaning))| {
-            let label = file.file_name().map_or_else(
-                || file.display().to_string(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            let entry = KitEntry {
-                path: file,
-                ..sound.clone()
-            };
-            Entry {
-                path: folder.join(at.to_string()),
-                item: Item {
-                    label,
-                    meaning,
-                    ..kit_item(&entry)
-                },
-                opens: false,
-            }
-        })
-        .collect()
+    let entries = files.into_iter().enumerate().map(|(at, (file, meaning))| {
+        let label = file.file_name().map_or_else(
+            || file.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let icon = sample_icon(&file);
+        let entry = KitEntry {
+            path: file,
+            ..sound.clone()
+        };
+        Entry {
+            path: folder.join(at.to_string()),
+            item: Item {
+                label,
+                meaning,
+                ..kit_item(&entry)
+            },
+            icon,
+            opens: false,
+        }
+    });
+    Some(entries.collect())
 }
 
 /// A folder as the top of the tree names it: from the home folder as `~`, or in full.
@@ -312,7 +409,7 @@ mod tests {
     fn each_purpose_lists_folders_first_and_only_its_own_files() {
         let root = everything("purposes");
         assert_eq!(
-            names(&list(&root, Purpose::Sample, false)),
+            names(&list(&root, Purpose::Sample, false).unwrap()),
             [
                 "drums Folder",
                 "song Folder",
@@ -322,17 +419,17 @@ mod tests {
             ]
         );
         assert_eq!(
-            names(&list(&root, Purpose::Kit, false)),
+            names(&list(&root, Purpose::Kit, false).unwrap()),
             ["drums Folder", "song Folder", "Zed Folder", "909.ron Kit"]
         );
         assert_eq!(
-            names(&list(&root, Purpose::Project, false)),
+            names(&list(&root, Purpose::Project, false).unwrap()),
             ["drums Folder", "Zed Folder", "song Project"],
             "a project is chosen, so it comes with the files"
         );
         for purpose in [Purpose::Save, Purpose::Render] {
             assert_eq!(
-                names(&list(&root, purpose, false)),
+                names(&list(&root, purpose, false).unwrap()),
                 ["drums Folder", "song Folder", "Zed Folder"],
                 "folders only"
             );
@@ -343,7 +440,7 @@ mod tests {
     #[test]
     fn hidden_files_are_listed_only_when_asked_for() {
         let root = everything("hidden");
-        let shown = names(&list(&root, Purpose::Sample, true));
+        let shown = names(&list(&root, Purpose::Sample, true).unwrap());
         assert!(shown.contains(&".git Folder".to_owned()), "{shown:?}");
         assert!(
             shown.contains(&".hidden.wav Sample".to_owned()),
@@ -364,5 +461,47 @@ mod tests {
             place_name(Path::new("/Volumes/Card"), Some(home)),
             "/Volumes/Card"
         );
+    }
+
+    #[test]
+    fn a_loop_is_known_by_its_folder_or_the_tempo_in_its_name() {
+        let library = "/Applications/Live.app/Core Library/Samples";
+        let is = |path: &str| is_loop(Path::new(&path.replace("LIB", library)));
+        assert!(is("LIB/Loops/FX/Scratch Baby.aif"), "under Loops");
+        assert!(is("/samples/Drum Loops/amen.wav"));
+        assert!(is("/samples/Break 90 bpm.wav"), "a tempo");
+        assert!(is("/samples/break_174bpm.wav"));
+        assert!(
+            !is("LIB/One Shots/FX/Impact Deep Pad 120 bpm.wav"),
+            "a one-shot's folder says so, whatever its name"
+        );
+        assert!(!is("/samples/oneshots/hit 120 bpm.wav"));
+        assert!(!is("/samples/kick.wav"));
+        assert!(!is("/samples/909 kick.wav"), "a number alone isn't a tempo");
+        assert!(!is("/samples/bpm.wav"));
+        assert!(!is("/samples/Looper/kick.wav"), "a word, not part of one");
+    }
+
+    #[test]
+    fn each_entry_has_an_icon_and_a_folder_that_wont_read_has_none() {
+        let root = everything("icons");
+        let icons = |purpose: Purpose| -> Vec<(String, Icon)> {
+            contents(&root, purpose, false)
+                .unwrap()
+                .into_iter()
+                .map(|entry| (entry.item.label, entry.icon))
+                .collect()
+        };
+        assert_eq!(
+            icons(Purpose::Project)[2],
+            ("song".to_owned(), Icon::Project)
+        );
+        assert_eq!(icons(Purpose::Kit)[3], ("909".to_owned(), Icon::Kit));
+        assert_eq!(
+            icons(Purpose::Sample)[3],
+            ("kick.wav".to_owned(), Icon::Sample)
+        );
+        assert!(contents(&root.join("gone"), Purpose::Sample, false).is_none());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

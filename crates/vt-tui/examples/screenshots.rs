@@ -17,7 +17,10 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Song, SynthVoice};
 use vt_tui::app::App;
+use vt_tui::explorer::Purpose;
 use vt_tui::input::keys::Key;
+use vt_tui::input::mode::Mode;
+use vt_tui::input::picker::{Picker, Root};
 use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
 use vt_tui::screenshot::{sent_images, to_svg};
@@ -204,6 +207,30 @@ fn play(app: &mut App, realtime: &mut Realtime, steps: usize, start: Instant) ->
     now
 }
 
+/// An app on this song, with the samples it plays, and the audio side, from `start`.
+fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
+    let samples = Arc::new(pool);
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(RATE, version));
+    let mut app = App::new(song, None, samples, handle, RATE);
+    // The output as a laptop plays it, for the project page's audio row.
+    app.audio.device = "MacBook Pro Speakers".to_owned();
+    app.audio.running = true;
+    (app, realtime)
+}
+
+/// Write the screen as it is now as an SVG, with the images the terminal would be sent in it.
+fn write(app: &mut App, now: Instant, height: u16, path: &Path) -> std::io::Result<()> {
+    let mut sent = Vec::new();
+    Graphics::new().sync(app, &mut sent)?;
+    let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, height));
+    let Ok(_) = terminal.draw(|frame| draw_screen(frame, app, None, now));
+    std::fs::write(
+        path,
+        to_svg(terminal.backend().buffer(), &sent_images(&sent)),
+    )
+}
+
 fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let mut song = song(shot.rows, shot.voice);
     let mut pool = SamplePool::default();
@@ -211,31 +238,80 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
         pool.insert(KICK, kick());
         song.sample_on(0, KICK);
     }
-    let samples = Arc::new(pool);
-    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     // Taken before the app, so its first frame measures no time since the app began.
     let start = Instant::now();
-    let (handle, mut realtime) = connect(Engine::new(RATE, version));
-    let mut app = App::new(song, None, samples, handle, RATE);
-    // The output as a laptop plays it, for the project page's audio row.
-    app.audio.device = "MacBook Pro Speakers".to_owned();
-    app.audio.running = true;
+    let (mut app, mut realtime) = app_on(song, pool);
     press(&mut app, shot.keys);
     let now = play(&mut app, &mut realtime, shot.play, start);
-    let mut sent = Vec::new();
-    Graphics::new().sync(&mut app, &mut sent)?;
     let height = if shot.name == "project" {
         PROJECT_HEIGHT
     } else {
         HEIGHT
     };
-    let Ok(mut terminal) = Terminal::new(TestBackend::new(WIDTH, height));
-    let Ok(_) = terminal.draw(|frame| draw_screen(frame, &mut app, None, now));
     let path = folder.join(format!("{}.svg", shot.name));
+    write(&mut app, now, height, &path)?;
+    Ok(path)
+}
+
+/// Write the kick as a WAV file, a little louder or softer.
+fn kick_file(path: &Path, gain: f32) -> std::io::Result<()> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).map_err(std::io::Error::other)?;
+    for [sample, _] in kick().frames {
+        let value = (sample * gain * f32::from(i16::MAX)) as i16;
+        writer.write_sample(value).map_err(std::io::Error::other)?;
+    }
+    writer.finalize().map_err(std::io::Error::other)
+}
+
+/// The sample explorer, `Space 5`, over a folder of samples with a kit, some loops and a sound
+/// whose file has gone, so each of its icons shows. The folder is made in the system's temporary
+/// folder and named from it as `~`, so the picture is the same wherever it's taken.
+fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
+    let home = std::env::temp_dir().join("vimtracker-screenshots");
+    let _ = std::fs::remove_dir_all(&home);
+    let samples = home.join("Samples");
+    for inside in ["Drums", "Loops", "Vocals"] {
+        std::fs::create_dir_all(samples.join(inside))?;
+    }
+    kick_file(&samples.join("Drums/kick 909.wav"), 0.9)?;
+    kick_file(&samples.join("Drums/kick 909 soft.wav"), 0.4)?;
+    kick_file(&samples.join("Drums/snare 909.wav"), 0.7)?;
+    kick_file(&samples.join("Loops/break.wav"), 0.8)?;
+    kick_file(&samples.join("Loops/fill.wav"), 0.6)?;
+    kick_file(&samples.join("kick.wav"), 0.9)?;
+    kick_file(&samples.join("riser 128 bpm.wav"), 0.5)?;
     std::fs::write(
-        &path,
-        to_svg(terminal.backend().buffer(), &sent_images(&sent)),
+        samples.join("909 Core Kit.ron"),
+        r#"(name: "909 Core Kit", sounds: [
+            (label: "BD", name: "Kick 909", path: "Drums/kick 909.wav",
+             layers: ["Drums/kick 909 soft.wav", "Drums/kick 909.wav"]),
+            (label: "SD", name: "Snare 909", path: "Drums/snare 909.wav"),
+            (label: "CH", name: "Closed Hat 909", path: "Drums/hat 909.wav"),
+        ])"#,
     )?;
+    let start = Instant::now();
+    let (mut app, _realtime) = app_on(song(&[], None), SamplePool::default());
+    let roots = vec![Root::Place {
+        path: samples.clone(),
+        meaning: "samples".to_owned(),
+    }];
+    let picker = Picker::explorer(Purpose::Sample, roots, Some(home.clone()))
+        .following(Some(&samples.join("kick.wav")))
+        .hinted("Enter choose");
+    app.picker = Some(picker);
+    app.mode = Mode::Picker;
+    // Open the loops and the kit, and come back down to the kick, which is the track's.
+    press(&mut app, "kkkljjjljjj");
+    app.finish_loading();
+    let path = folder.join("explorer.svg");
+    write(&mut app, start, HEIGHT, &path)?;
+    std::fs::remove_dir_all(&home)?;
     Ok(path)
 }
 
@@ -247,6 +323,7 @@ fn main() -> std::io::Result<()> {
     for shot in SHOTS {
         println!("{}", take(shot, &folder)?.display());
     }
+    println!("{}", take_explorer(&folder)?.display());
     Ok(())
 }
 
@@ -266,6 +343,9 @@ mod tests {
             let b = std::fs::read(take(shot, &second).unwrap()).unwrap();
             assert!(a == b, "{} differs between runs", shot.name);
         }
+        let a = std::fs::read(take_explorer(&first).unwrap()).unwrap();
+        let b = std::fs::read(take_explorer(&second).unwrap()).unwrap();
+        assert!(a == b, "the explorer differs between runs");
         let _ = std::fs::remove_dir_all(&base);
     }
 }

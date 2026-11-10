@@ -184,16 +184,29 @@ A `symbol_map` in `kitty.conf` that sends those codepoints to a font without the
 glyph is a constant in `glyphs.rs` named after its Nerd Font name and codepoint, such as
 `nf-fa-toggle_on`, U+F205.
 
-The manual's screenshots name ordinary monospace fonts, then `Symbols Nerd Font Mono`, so their
-glyphs show where that font is installed, and are boxes or blanks where it isn't.
+The manual's screenshots name ordinary monospace fonts first, then `Symbols Nerd Font Mono` and
+a few patched Nerd Fonts, which a browser falls back to a character at a time, so the icons show
+where any of those is installed and are boxes elsewhere. The explorer's screenshot has them.
 
 ### Width
 
 Every glyph is one cell to the terminal and to ratatui, so nothing after it moves. kitty and Ghostty
 may draw an icon that's wider than a cell over a space after it, which makes it bigger and leaves
-the text where it was. Every glyph the program draws has a space or an empty cell after it, so each
+the text where it was. Every glyph outside the explorer has a space or an empty cell after it, so each
 one draws the same way wherever it is, apart from the lock in the last FX column in Insert, which
 the box's edge follows. kitty's `narrow_symbols` keeps a symbol to one cell.
+
+**The explorer keeps its icons to one cell.** kitty and Ghostty both widen a Nerd Font
+symbol over the cell after it when that cell is a plain space (or, in Ghostty, an en space),
+so most icons drawn as `icon name` spill into the gap and come out larger than one beside a
+letter. Neither widens one before a no-break space, U+00A0, so an icon is followed by
+`glyphs::ICON_SPACE` instead, and each stays in its own cell, the same size as the rest.
+Checked on 2026-11-09: kitty 0.50's own renderer (`kitty +runpy` with
+`kitty.fonts.render.render_string`) put ink in the space after `nf-md-folder`, `nf-md-waveform`,
+`nf-md-alert` and `nf-fa-toggle_on`, and none after a no-break space; narrow symbols such as
+`nf-md-music_note` aren't widened at all. Ghostty's `constraintWidth` in
+`src/renderer/cell.zig` allows two cells only before an empty cell, U+0020 or U+2002. The
+grid itself never moves, as the terminal counts each symbol as one cell either way.
 
 ### Glyphs for the transport, tracks, LFOs, warnings and work (decision 104)
 
@@ -218,6 +231,25 @@ the box's edge follows. kitty's `narrow_symbols` keeps a symbol to one cell.
 | `󰝟` | `nf-md-volume_mute` | U+F075F | A muted track's heading and its overview column, and the mixer's `Mute` |
 | `󰋋` | `nf-md-headphones` | U+F02CB | A soloed track's, likewise, and the mixer's `Solo` |
 | `󰌾` | `nf-md-lock` | U+F033E | A value's `Lock` mark in the phrase grid, in place of `.` |
+
+### Glyphs for the explorer and windows (decisions 101 and 103)
+
+| Glyph | Name | Codepoint | Where |
+|---|---|---|---|
+|   | `nf-fa-toggle_on`, `nf-fa-toggle_off` | U+F205, U+F204 | The explorer's `H`, `P`, `A` |
+| 󰉋 󰝰 | `nf-md-folder`, `nf-md-folder_open` | U+F024B, U+F0770 | Explorer folders |
+| 󱍙 | `nf-md-folder_music` | U+F1359 | Explorer projects |
+| 󰕰 | `nf-md-view_grid` | U+F0570 | Explorer kits |
+| 󱓻 | `nf-md-square_rounded` | U+F14FB | A kit's sound |
+| 󰄶 | `nf-md-checkbox_multiple_blank` | U+F0136 | A kit's sound with variants or layers |
+| 󱑽 | `nf-md-waveform` | U+F147D | A sample |
+| 󰑖 | `nf-md-repeat` | U+F0456 | A loop |
+| 󰀦 | `nf-md-alert` | U+F0026 | A file gone or unreadable |
+| ╭ ╮ ╰ ╯ | Box drawings light arc | U+256D to U+2570 | Every window's corners |
+
+The rounded corners are box-drawing characters, which both terminals draw themselves at the
+cell's exact size, so they join the lines beside them; ratatui's `BorderType::Rounded` draws
+them, through `views::window_border`.
 
 ## Still to check by hand
 

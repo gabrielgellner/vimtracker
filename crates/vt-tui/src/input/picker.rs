@@ -28,7 +28,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
 
 use crate::audio::AudioChoice;
-use crate::explorer::{self, Purpose};
+use crate::explorer::{self, Icon, Purpose};
 use crate::guides::Guide;
 use crate::input::command::Line;
 use crate::input::keys::Key;
@@ -282,6 +282,8 @@ struct Node {
     path: Option<PathBuf>,
     parent: Option<usize>,
     depth: usize,
+    /// What it is, as its icon shows.
+    icon: Icon,
     /// A folder's or a group's: whether it's open, and what's in it once it's been read.
     folder: Option<Folder>,
 }
@@ -618,6 +620,26 @@ impl Picker {
         self.node(item)?.path.as_deref()
     }
 
+    /// What an item in the explorer is, as its icon shows.
+    pub fn icon(&self, item: usize) -> Option<Icon> {
+        self.node(item).map(|node| node.icon)
+    }
+
+    /// A sample that couldn't be read, which the explorer then shows with a warning wherever
+    /// it's listed.
+    pub fn mark_unreadable(&mut self, path: &Path) {
+        let Some(tree) = self.tree.as_mut() else {
+            return;
+        };
+        for (item, node) in self.items.iter().zip(tree.nodes.iter_mut()) {
+            if let Pick::Sample(file) | Pick::KitSound { path: file, .. } = &item.pick
+                && file == path
+            {
+                node.icon = Icon::Missing;
+            }
+        }
+    }
+
     /// Add an item, and its node in the tree.
     fn push(&mut self, item: Item, node: Node) -> usize {
         self.items.push(item);
@@ -650,6 +672,7 @@ impl Picker {
                             path: Some(path),
                             parent: None,
                             depth: 0,
+                            icon: Icon::Folder,
                             folder: Some(Folder::default()),
                         },
                     )
@@ -661,6 +684,7 @@ impl Picker {
                             path: None,
                             parent: None,
                             depth: 0,
+                            icon: Icon::Kit,
                             folder: Some(Folder {
                                 open: true,
                                 children: Some(Vec::new()),
@@ -670,12 +694,20 @@ impl Picker {
                     let children = items
                         .into_iter()
                         .map(|item| {
+                            // The kit in use's sounds, each warned of if its file has gone.
+                            let icon = match &item.pick {
+                                Pick::KitSound { path, .. } => {
+                                    explorer::kit_sound_icon(path, false)
+                                }
+                                _ => Icon::KitSound,
+                            };
                             self.push(
                                 item,
                                 Node {
                                     path: None,
                                     parent: Some(group),
                                     depth: 1,
+                                    icon,
                                     folder: None,
                                 },
                             )
@@ -707,7 +739,16 @@ impl Picker {
             return;
         }
         let depth = node.depth + 1;
-        let entries = explorer::contents(path, tree.purpose, tree.hidden);
+        let Some(entries) = explorer::contents(path, tree.purpose, tree.hidden) else {
+            // It can't be read, so it's empty, and says so.
+            if let Some(node) = self.node_mut(at) {
+                node.icon = Icon::Missing;
+                if let Some(folder) = node.folder.as_mut() {
+                    folder.children = Some(Vec::new());
+                }
+            }
+            return;
+        };
         let children = entries
             .into_iter()
             .map(|entry| {
@@ -717,6 +758,7 @@ impl Picker {
                         path: Some(entry.path),
                         parent: Some(at),
                         depth,
+                        icon: entry.icon,
                         folder: entry.opens.then(Folder::default),
                     },
                 )

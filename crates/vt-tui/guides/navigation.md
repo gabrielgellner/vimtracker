@@ -101,6 +101,24 @@ Only what fits is listed: samples and folders, kits and folders, or projects and
 folders, and hidden files are left out. Choosing a sample, a kit opens like a folder to
 its sounds.
 
+Each row has an icon that says what it is. They are dim, the one already chosen is
+green, and a warning is red.
+
+| Icon | Is |
+|---|---|
+| 󰉋 󰝰 | A folder, closed or open |
+| 󱍙 | A project |
+| 󰕰 | A kit, as a grid of pads |
+| 󱓻 | One of a kit's sounds, as a pad |
+| 󰄶 | A kit's sound with variants or layers, which `l` opens |
+| 󱑽 | A sample |
+| 󰑖 | A loop: under a `Loops` folder, or with a tempo in its name |
+| 󰀦 | A file that has gone, or won't read |
+
+A sample is shown as a loop by its folders and name alone: the nearest folder named
+for loops or one-shots decides, as in Ableton's library, and otherwise a tempo such as
+`120 bpm` in its name. A file that won't read is found out when the cursor reaches it.
+
 | Keys | Does |
 |---|---|
 | `l` | Open a folder and go into it, or choose |
