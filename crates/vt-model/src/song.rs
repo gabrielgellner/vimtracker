@@ -12,8 +12,8 @@ use crate::arpeggio::Arpeggio;
 use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
-    FORMAT_VERSION, FX_SLOTS, MAX_LEVEL, MAX_PHRASE_STEPS, MAX_TRACK_RESET, TRACK_ENVELOPES,
-    UNITY_LEVEL,
+    FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_PHRASE_STEPS, MAX_TRACK_RESET,
+    TRACK_ENVELOPES, UNITY_LEVEL,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::groove::{Groove, GrooveId};
@@ -229,6 +229,10 @@ pub const FILTER_MODE_NAMES: [&str; 12] = [
 pub enum TrackKind {
     #[default]
     Sound,
+    /// A group, from 1 to `MAX_GROUPS`, which sums the sound tracks put in it and plays the sum
+    /// through its own slots, level and pan to the master, as Ableton's group tracks do. It sends
+    /// to the returns as a sound track does.
+    Group(u8),
     /// A return, which other tracks send to.
     ReturnA,
     ReturnB,
@@ -237,27 +241,44 @@ pub enum TrackKind {
 }
 
 impl TrackKind {
-    /// The fixed tracks, in order.
-    pub const FIXED: [Self; FIXED_TRACKS] = [Self::ReturnA, Self::ReturnB, Self::Master];
+    /// The fixed tracks, in order: the groups, the returns and the master.
+    pub const FIXED: [Self; FIXED_TRACKS] = {
+        let mut kinds = [Self::Master; FIXED_TRACKS];
+        let mut group = 0;
+        while group < MAX_GROUPS {
+            kinds[group] = Self::Group(group as u8 + 1);
+            group += 1;
+        }
+        kinds[MAX_GROUPS] = Self::ReturnA;
+        kinds[MAX_GROUPS + 1] = Self::ReturnB;
+        kinds
+    };
 
     /// The short name of a fixed track.
-    pub fn letter(self) -> &'static str {
+    pub fn letter(self) -> String {
         match self {
-            Self::Sound => "",
-            Self::ReturnA => "A",
-            Self::ReturnB => "B",
-            Self::Master => "M",
+            Self::Sound => String::new(),
+            Self::Group(group) => format!("G{group}"),
+            Self::ReturnA => "A".to_owned(),
+            Self::ReturnB => "B".to_owned(),
+            Self::Master => "M".to_owned(),
         }
     }
 
     /// What a fixed track is called in full.
-    pub fn title(self) -> &'static str {
+    pub fn title(self) -> String {
         match self {
-            Self::Sound => "",
-            Self::ReturnA => "Return A",
-            Self::ReturnB => "Return B",
-            Self::Master => "Master",
+            Self::Sound => String::new(),
+            Self::Group(group) => format!("Group {group}"),
+            Self::ReturnA => "Return A".to_owned(),
+            Self::ReturnB => "Return B".to_owned(),
+            Self::Master => "Master".to_owned(),
         }
+    }
+
+    /// Where it is among the fixed tracks, counted from the first after the sound tracks.
+    pub fn fixed_place(self) -> Option<usize> {
+        Self::FIXED.iter().position(|kind| *kind == self)
     }
 }
 
@@ -332,6 +353,10 @@ pub struct Track {
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub choke: Option<u8>,
+    /// The group it plays through, from 1 to `MAX_GROUPS`, or `None` to go straight to the master.
+    /// Only a sound track can be in one, and its sends still go from the track itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<u8>,
     /// Where held `LEN` starts, its `Gate`: how much of its last pulse a note lasts, or `None`
     /// for its machine's own, which [`Track::gate_length`] gives.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -395,11 +420,13 @@ impl Track {
     fn fixed(kind: TrackKind) -> Self {
         Self {
             kind,
-            name: kind.letter().to_owned(),
+            name: kind.letter(),
             inserts: match kind {
                 TrackKind::ReturnA => [Insert::RETURN_DELAY, Insert::Empty, Insert::Empty],
                 TrackKind::ReturnB => [Insert::RETURN_REVERB, Insert::Empty, Insert::Empty],
-                TrackKind::Sound | TrackKind::Master => [Insert::Empty; INSERTS],
+                TrackKind::Sound | TrackKind::Group(_) | TrackKind::Master => {
+                    [Insert::Empty; INSERTS]
+                }
             },
             ..Self::default()
         }
@@ -408,6 +435,11 @@ impl Track {
     /// Whether this track plays sounds.
     pub fn is_sound(&self) -> bool {
         self.kind == TrackKind::Sound
+    }
+
+    /// Whether this is one of the group tracks.
+    pub fn is_group(&self) -> bool {
+        matches!(self.kind, TrackKind::Group(_))
     }
 
     /// The synth voice it plays, if it plays one.
@@ -630,6 +662,7 @@ impl Default for Track {
             send_b: 0,
             pitch: centre(),
             choke: None,
+            group: None,
             gate_length: None,
             speed: Speed::Sixteenth,
             reset: None,
@@ -1579,13 +1612,29 @@ impl Song {
         song
     }
 
-    /// Give a song without them its fixed tracks, as a song from before them has none.
+    /// Give a song any fixed tracks it lacks, each in its place after the sound tracks: all of them
+    /// for a song built without, or the groups past those it was saved with once `MAX_GROUPS` is
+    /// raised.
     pub fn ensure_fixed_tracks(&mut self) {
-        if self.tracks.iter().all(Track::is_sound) {
-            self.tracks.extend(TrackKind::FIXED.map(Track::fixed));
-            for section in &mut self.sections {
-                section.chains.resize(self.tracks.len(), None);
+        let first = self
+            .tracks
+            .iter()
+            .position(|track| !track.is_sound())
+            .unwrap_or(self.tracks.len());
+        for (place, kind) in TrackKind::FIXED.into_iter().enumerate() {
+            let at = first + place;
+            if self.tracks.get(at).is_some_and(|track| track.kind == kind) {
+                continue;
             }
+            self.tracks.insert(at, Track::fixed(kind));
+            for section in &mut self.sections {
+                if at <= section.chains.len() {
+                    section.chains.insert(at, None);
+                }
+            }
+        }
+        for section in &mut self.sections {
+            section.chains.resize(self.tracks.len(), None);
         }
     }
 
@@ -1677,6 +1726,43 @@ impl Song {
     /// How many tracks play sounds. They come first, and then the fixed tracks.
     pub fn sound_tracks(&self) -> usize {
         self.tracks.len().saturating_sub(FIXED_TRACKS)
+    }
+
+    /// Where a fixed track is among all the tracks.
+    pub fn fixed_track(&self, kind: TrackKind) -> Option<usize> {
+        Some(self.sound_tracks() + kind.fixed_place()?)
+    }
+
+    /// The group track a sound track plays through, if it's in a group.
+    pub fn group_track_of(&self, track: usize) -> Option<usize> {
+        let group = self.tracks.get(track).filter(|t| t.is_sound())?.group?;
+        self.fixed_track(TrackKind::Group(group))
+    }
+
+    /// Whether a track is heard, by the mutes and solos saved with the song: a sound track by its
+    /// own and its group's, and a group while any of its tracks is. Soloing a track keeps its
+    /// group heard, and soloing a group plays all its tracks. The returns and the master are
+    /// always counted heard.
+    pub fn heard(&self, track: usize) -> bool {
+        let Some(this) = self.tracks.get(track) else {
+            return false;
+        };
+        if this.is_group() {
+            return (0..self.sound_tracks())
+                .any(|member| self.group_track_of(member) == Some(track) && self.heard(member));
+        }
+        if !this.is_sound() {
+            return true;
+        }
+        let group = self.group_track_of(track).map(|group| &self.tracks[group]);
+        let any_solo = self
+            .tracks
+            .iter()
+            .take(self.sound_tracks() + MAX_GROUPS)
+            .any(|track| track.solo);
+        !this.mute
+            && !group.is_some_and(|group| group.mute)
+            && (!any_solo || this.solo || group.is_some_and(|group| group.solo))
     }
 
     /// A groove's pushes: one that comes with the program, or the project's own, which is a bar
@@ -1978,23 +2064,31 @@ mod tests {
     fn the_fixed_tracks_stay_last_and_dont_set_a_sections_length() {
         let mut song = Song::new(2);
         let kinds = |song: &Song| song.tracks.iter().map(|t| t.kind).collect::<Vec<_>>();
-        use TrackKind::{Master, ReturnA, ReturnB, Sound};
-        assert_eq!(kinds(&song), [Sound, Sound, ReturnA, ReturnB, Master]);
+        use TrackKind::{Group, Master, ReturnA, ReturnB, Sound};
+        let fixed = [
+            Group(1),
+            Group(2),
+            Group(3),
+            Group(4),
+            ReturnA,
+            ReturnB,
+            Master,
+        ];
+        assert_eq!(kinds(&song)[..2], [Sound, Sound]);
+        assert_eq!(kinds(&song)[2..], fixed);
         let names: Vec<&str> = song.tracks[2..].iter().map(|t| t.name.as_str()).collect();
-        assert_eq!(names, ["A", "B", "M"]);
-        assert_eq!(song.sections[0].chains[2..], [None, None, None]);
+        assert_eq!(names, ["G1", "G2", "G3", "G4", "A", "B", "M"]);
+        assert!(song.sections[0].chains[2..].iter().all(Option::is_none));
 
         song.add_track();
-        assert_eq!(
-            kinds(&song),
-            [Sound, Sound, Sound, ReturnA, ReturnB, Master]
-        );
+        assert_eq!(kinds(&song)[..3], [Sound, Sound, Sound]);
+        assert_eq!(kinds(&song)[3..], fixed);
         assert_eq!(song.sections[0].chains[2], Some(0), "the new one's chain");
-        assert_eq!(song.sections[0].chains[3], None, "A's stays A's");
+        assert_eq!(song.sections[0].chains[3], None, "G1's stays G1's");
 
         song.remove_last_sound_track();
-        assert_eq!(kinds(&song), [Sound, Sound, ReturnA, ReturnB, Master]);
-        assert_eq!(song.sections[0].chains.len(), 5);
+        assert_eq!(kinds(&song)[2..], fixed);
+        assert_eq!(song.sections[0].chains.len(), 2 + FIXED_TRACKS);
     }
 
     #[test]
@@ -2003,11 +2097,85 @@ mod tests {
         song.tracks.truncate(2);
         song.sections[0].chains.truncate(2);
         song.ensure_fixed_tracks();
-        assert_eq!(song.tracks.len(), 5);
+        assert_eq!(song.tracks.len(), 2 + FIXED_TRACKS);
         assert_eq!(song.sound_tracks(), 2);
-        assert_eq!(song.sections[0].chains.len(), 5);
+        assert_eq!(song.sections[0].chains.len(), 2 + FIXED_TRACKS);
         song.ensure_fixed_tracks();
-        assert_eq!(song.tracks.len(), 5);
+        assert_eq!(song.tracks.len(), 2 + FIXED_TRACKS);
+    }
+
+    #[test]
+    fn a_song_saved_with_fewer_groups_gets_the_rest_before_the_returns() {
+        let mut song = Song::new(2);
+        song.sections[0].chains[2 + MAX_GROUPS] = Some(0);
+        // As a song saved when there were only two groups.
+        song.tracks.drain(4..2 + MAX_GROUPS);
+        song.sections[0].chains.drain(4..2 + MAX_GROUPS);
+        song.ensure_fixed_tracks();
+        assert_eq!(song.tracks.len(), 2 + FIXED_TRACKS);
+        assert_eq!(song.sound_tracks(), 2);
+        let kinds: Vec<_> = song.tracks[2..].iter().map(|t| t.kind).collect();
+        assert_eq!(kinds, TrackKind::FIXED);
+        assert_eq!(song.fixed_track(TrackKind::ReturnA), Some(2 + MAX_GROUPS));
+        assert_eq!(
+            song.sections[0].chains[2 + MAX_GROUPS],
+            Some(0),
+            "A's chain stays A's"
+        );
+    }
+
+    #[test]
+    fn a_track_in_a_group_plays_through_its_track_and_saves_it() {
+        let mut song = Song::new(3);
+        song.tracks[0].group = Some(1);
+        song.tracks[1].group = Some(2);
+        assert_eq!(song.group_track_of(0), Some(3));
+        assert_eq!(song.group_track_of(1), Some(4));
+        assert_eq!(song.group_track_of(2), None);
+        let text = ron::to_string(&song.tracks[0]).unwrap();
+        assert!(text.contains("group:Some(1)"), "{text}");
+        let loaded: Track = ron::from_str(&text).unwrap();
+        assert_eq!(loaded.group, Some(1));
+        let alone = ron::to_string(&song.tracks[2]).unwrap();
+        assert!(!alone.contains("group"), "none isn't written: {alone}");
+    }
+
+    #[test]
+    fn muting_a_group_mutes_its_tracks_and_soloing_one_keeps_it() {
+        let mut song = Song::new(3);
+        song.tracks[0].group = Some(1);
+        song.tracks[1].group = Some(1);
+        let group = song.group_track_of(0).unwrap();
+        let heard = |song: &Song| (0..3).map(|t| song.heard(t)).collect::<Vec<_>>();
+        assert_eq!(heard(&song), [true, true, true]);
+        assert!(song.heard(group));
+
+        song.tracks[group].mute = true;
+        assert_eq!(
+            heard(&song),
+            [false, false, true],
+            "a muted group mutes its tracks"
+        );
+        assert!(!song.heard(group));
+        song.tracks[group].mute = false;
+
+        song.tracks[0].solo = true;
+        assert_eq!(heard(&song), [true, false, false]);
+        assert!(song.heard(group), "a soloed track keeps its group heard");
+        song.tracks[0].solo = false;
+
+        song.tracks[group].solo = true;
+        assert_eq!(
+            heard(&song),
+            [true, true, false],
+            "a soloed group plays its tracks"
+        );
+        song.tracks[1].mute = true;
+        assert_eq!(
+            heard(&song),
+            [true, false, false],
+            "but not one muted itself"
+        );
     }
 
     fn gated(gates: &[&str]) -> Phrase {

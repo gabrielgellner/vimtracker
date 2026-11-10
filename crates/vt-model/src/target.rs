@@ -46,11 +46,14 @@ const TRACK_ORDER: [SettingId; 13] = [
 impl SettingId {
     /// Whether this track has it now: a voice's settings while it plays that voice, and an
     /// effect's while that effect is in its slot, in a mode that has it. A fixed track has no sound of its own to filter
-    /// or tune, and sends nowhere, and the master has no pan.
+    /// or tune, only a group of them sends, and the master has no pan.
     pub fn exists_on(self, track: &Track) -> bool {
         match self.owner() {
             (Owner::Track, _) if self == Self::VOL => true,
             (Owner::Track, _) if self == Self::PAN => track.kind != TrackKind::Master,
+            (Owner::Track, _) if self == Self::SEND_A || self == Self::SEND_B => {
+                track.is_sound() || track.is_group()
+            }
             // The MS-20's filters have no modes.
             (Owner::Track, _) if self == Self::FILTER_MODE => {
                 track.is_sound() && track.filter.has_modes()
@@ -333,9 +336,25 @@ mod tests {
     }
 
     #[test]
+    fn a_group_offers_its_level_pan_and_sends() {
+        let song = Song::new(1);
+        let group = &song.tracks[song.fixed_track(TrackKind::Group(1)).unwrap()];
+        assert_eq!(
+            SettingId::on_track(group)[..4],
+            [
+                SettingId::PAN,
+                SettingId::VOL,
+                SettingId::SEND_A,
+                SettingId::SEND_B
+            ]
+        );
+    }
+
+    #[test]
     fn a_fixed_track_only_offers_what_it_has() {
         let song = Song::new(1);
-        let (return_a, master) = (&song.tracks[1], &song.tracks[3]);
+        let return_a = &song.tracks[song.fixed_track(TrackKind::ReturnA).unwrap()];
+        let master = &song.tracks[song.fixed_track(TrackKind::Master).unwrap()];
         let offered = SettingId::on_track(return_a);
         assert_eq!(offered[..2], [SettingId::PAN, SettingId::VOL]);
         assert_eq!(

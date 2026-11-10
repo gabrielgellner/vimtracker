@@ -6,9 +6,9 @@ use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{
-    BAR_STEPS, DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_MILLIBPM,
-    MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS, TICKS_PER_QUARTER,
-    TICKS_PER_STEP,
+    BAR_STEPS, DEFAULT_NOTE_VELOCITY, FIXED_TRACKS, FX_SLOTS, GROOVE_UNIT_TICKS, MAX_GROUPS,
+    MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS,
+    TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::envelope::Envelope;
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
@@ -789,6 +789,11 @@ impl Engine {
         self.follow_levels();
         self.retune();
         self.find_listened();
+        // A track that's joined or left a group is heard by that group's mute and solo now.
+        let was = old.song.tracks.iter().map(|track| track.group);
+        if was.ne(self.current.song.tracks.iter().map(|track| track.group)) {
+            self.apply_audibility();
+        }
         if !Arc::ptr_eq(&old.bank, &self.current.bank) {
             self.follow_bank();
         }
@@ -1213,9 +1218,10 @@ impl Engine {
         self.apply_audibility();
     }
 
-    /// Set whether a track is soloed. While a track that plays sounds is soloed, only soloed ones
-    /// play, and the returns stay. While a return is soloed, only soloed returns are heard, and what
-    /// sends to them keeps playing without being heard itself.
+    /// Set whether a track is soloed. While a track that plays sounds or a group is soloed, only
+    /// soloed ones play, with the groups of soloed tracks and the tracks of soloed groups, and the
+    /// returns stay. While a return is soloed, only soloed returns are heard, and what sends to
+    /// them keeps playing without being heard itself.
     pub fn set_solo(&mut self, track: usize, solo: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
             state.solo = solo;
@@ -1223,30 +1229,68 @@ impl Engine {
         self.apply_audibility();
     }
 
+    /// Whether a sound track or a group is soloed.
     fn any_solo(&self) -> bool {
-        self.tracks[..self.sounds()].iter().any(|t| t.solo)
+        self.tracks[..self.returns()].iter().any(|t| t.solo)
     }
 
     /// Whether a return is soloed.
     fn return_soloed(&self) -> bool {
-        self.tracks[self.sounds()..self.sounds() + 2]
+        self.tracks[self.returns()..self.returns() + 2]
             .iter()
             .any(|t| t.solo)
+    }
+
+    /// Where the returns start, after the sound tracks and the groups.
+    fn returns(&self) -> usize {
+        self.sounds() + MAX_GROUPS
+    }
+
+    /// The group track a sound track plays through, if it's in one.
+    fn group_of(&self, index: usize) -> Option<usize> {
+        self.current
+            .song
+            .group_track_of(index)
+            .filter(|group| *group < MAX_TRACKS)
+    }
+
+    /// Whether a sound track is heard, given whether anything's soloed: not muted, nor in a muted
+    /// group, and, while something is soloed, soloed itself or in a soloed group.
+    fn heard_with(&self, index: usize, any_solo: bool) -> bool {
+        let state = &self.tracks[index];
+        let group = self.group_of(index).map(|group| &self.tracks[group]);
+        !state.mute
+            && !group.is_some_and(|group| group.mute)
+            && (!any_solo || state.solo || group.is_some_and(|group| group.solo))
+    }
+
+    /// Whether a group is heard, given whether anything's soloed: not muted, and, while something
+    /// is soloed, soloed itself or holding a soloed track.
+    fn group_heard_with(&self, group: usize, any_solo: bool) -> bool {
+        let state = &self.tracks[group];
+        let lit =
+            || (0..self.sounds()).any(|t| self.tracks[t].solo && self.group_of(t) == Some(group));
+        !state.mute && (!any_solo || state.solo || lit())
     }
 
     fn apply_audibility(&mut self) {
         let any_solo = self.any_solo();
         let return_soloed = self.return_soloed();
-        let sounds = self.sounds();
-        for (index, track) in self.tracks[..sounds].iter_mut().enumerate() {
-            let heard = !track.mute && (!any_solo || track.solo);
+        let (sounds, returns) = (self.sounds(), self.returns());
+        for index in 0..sounds {
+            let heard = self.heard_with(index, any_solo);
+            let track = &mut self.tracks[index];
             // One a compressor or Warps hears keeps playing, faded out of the mix and the sends.
             track.heard.target = if heard { 1.0 } else { 0.0 };
             if !heard && !self.listened[index] {
                 track.cut_to_tail();
             }
         }
-        for track in self.tracks[sounds..sounds + 2].iter_mut() {
+        for group in sounds..returns {
+            let heard = self.group_heard_with(group, any_solo);
+            self.tracks[group].heard.target = if heard { 1.0 } else { 0.0 };
+        }
+        for track in self.tracks[returns..returns + 2].iter_mut() {
             let heard = !track.mute && (!return_soloed || track.solo);
             track.heard.target = if heard { 1.0 } else { 0.0 };
         }
@@ -1650,9 +1694,18 @@ impl Engine {
         self.frames_of(u64::from(units) * GROOVE_UNIT_TICKS, step)
     }
 
+    /// Whether a track is heard by the mutes and solos: a sound track by its group's too, and a
+    /// group by its tracks'.
     fn audible(&self, index: usize) -> bool {
-        let state = &self.tracks[index];
-        !state.mute && (!self.any_solo() || state.solo)
+        let any_solo = self.any_solo();
+        match index {
+            _ if index < self.sounds() => self.heard_with(index, any_solo),
+            _ if index < self.returns() => self.group_heard_with(index, any_solo),
+            _ => {
+                let state = &self.tracks[index];
+                !state.mute && (!any_solo || state.solo)
+            }
+        }
     }
 
     /// Run anything due now on each track's own schedule.
@@ -2581,35 +2634,52 @@ impl Engine {
     fn render(&mut self, out: &mut [f32]) {
         let samples = Arc::clone(&self.current.samples);
         let limiter = self.current.song.limiter;
-        let return_a = self.sounds();
+        let groups = self.sounds();
+        let return_a = self.returns();
         let (return_b, master_track) = (return_a + 1, return_a + 2);
         let wet_only = self.return_soloed();
-        self.keys.sounds = return_a;
+        self.keys.sounds = groups;
         // A note or a preview only starts between runs, and a skipped track doesn't change, so a
         // track that's silent at the start of this one stays silent through it and is only asked
         // once. The others are asked each frame, as one can fall silent part way.
-        // The fixed tracks have their turn after the rest, with what's sent to them.
+        // The fixed tracks have their turn after the rest: the groups with what their tracks play,
+        // then the returns with what's sent to them.
         // The preview voices sounding are found once too, so with none there's nothing to ask.
         let previews = self.previews.sounding();
         let mut playing = [0_usize; MAX_TRACKS];
+        // Where each playing track goes: its group's place among the groups, or the master.
+        let mut routes = [None; MAX_TRACKS];
+        // While a return is soloed, a group is heard only if it or one of its tracks is soloed.
+        let mut lit = [false; MAX_GROUPS];
+        for (group, lit) in lit.iter_mut().enumerate() {
+            *lit = self.tracks[groups + group].solo;
+        }
         let mut count = 0;
         for (index, track) in self.tracks.iter().enumerate() {
-            if (return_a..=master_track).contains(&index) {
+            if (groups..=master_track).contains(&index) {
                 continue;
+            }
+            let route = self.group_of(index).map(|group| group - groups);
+            if let Some(group) = route
+                && track.solo
+            {
+                lit[group] = true;
             }
             let previewing = self.previews.on_track(&previews, index);
             if !track.sounding() && !previewing && !track.ringing(self.rate) {
                 self.keys.frames[index] = [0.0; 2];
             } else {
                 playing[count] = index;
+                routes[count] = route;
                 count += 1;
             }
         }
         for frame in out.as_chunks_mut::<2>().0 {
             let mut mix = [0.0_f32; 2];
+            let mut buses = [[0.0_f32; 2]; MAX_GROUPS];
             let mut send_a = [0.0_f32; 2];
             let mut send_b = [0.0_f32; 2];
-            for &index in &playing[..count] {
+            for (&index, &route) in playing[..count].iter().zip(&routes[..count]) {
                 let track = &mut self.tracks[index];
                 let preview = self.previews.next(&previews, index, &samples, &self.files);
                 if !track.sounding() && preview.is_none() && !track.ringing(self.rate) {
@@ -2635,9 +2705,15 @@ impl Engine {
                 let heard = track.heard.next(self.smoothing);
                 let dry = shaped.dry.map(|sample| sample * heard);
                 track.reading.add(dry, dry);
-                if !wet_only || track.solo {
-                    mix[0] += dry[0];
-                    mix[1] += dry[1];
+                // A track in a group always goes to it, and the group decides what's heard.
+                let into = match route {
+                    Some(group) => Some(&mut buses[group]),
+                    None if !wet_only || track.solo => Some(&mut mix),
+                    None => None,
+                };
+                if let Some(into) = into {
+                    into[0] += dry[0];
+                    into[1] += dry[1];
                 }
                 send_a[0] += shaped.send_a[0] * heard;
                 send_a[1] += shaped.send_a[1] * heard;
@@ -2646,6 +2722,19 @@ impl Engine {
             }
             let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
             let keys = &mut self.keys;
+            for (group, bus) in buses.into_iter().enumerate() {
+                let index = groups + group;
+                let shaped = self.tracks[index].process_group(bus, smoothing, fast, rate, keys);
+                keys.frames[index] = self.tracks[index].key;
+                if !wet_only || lit[group] {
+                    mix[0] += shaped.dry[0];
+                    mix[1] += shaped.dry[1];
+                }
+                send_a[0] += shaped.send_a[0];
+                send_a[1] += shaped.send_a[1];
+                send_b[0] += shaped.send_b[0];
+                send_b[1] += shaped.send_b[1];
+            }
             let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate, keys);
             keys.frames[return_a] = self.tracks[return_a].key;
             let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate, keys);

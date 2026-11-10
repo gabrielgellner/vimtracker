@@ -9,8 +9,9 @@ to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
 The page's heading, and the phrase view's, starts with what the track is: `󱑽` a
-sampler, `󰙽` a synth, `` a drum, `󱞳` a return and `󰓃` the master. The machine list
-shows the same beside each machine.
+sampler, `󰙽` a synth, `` a drum, `󰃸` a group,
+`󱞳` a return and `󰓃` the master. The machine list shows the same beside
+each machine.
 
 | Keys | Does |
 |---|---|
@@ -545,11 +546,32 @@ on `Acid`, shown as `Slide`, slides by the voice's own `Slide`. `=` and `-` move
 a step, `+` and `_` sixteen, `i` takes a time in ms or `off`, and `x` turns it off.
 `GLD` on a step sets it for that tie. See **Note entry**.
 
+## Groups
+
+A group sums tracks into one, as Ableton's group tracks do, so a whole kit can go
+through one compressor: `Comp` with its `Type` on `Bus` in a group's slot is the glue.
+Every song has four, `G1` to `G4`, after the tracks and before the returns.
+
+`:group 1 1-4` puts tracks 01 to 04 in group 1, `:group 2` puts the cursor's track in
+group 2, and `:group off` takes it out of any, or `:group off 1-4` a range. Each is one
+`u`. The Sound page's `Group`, under `Send B`, does the same for one track: `=` and `-`
+go through `G1` to `G4`, `i` takes a number or `off`, and `x` takes it out.
+
+A track in a group plays through it, and the group plays through its own slots,
+`Level` and `Pan` to the master. Its sends still go from the track itself, so a snare
+can go to the reverb on its own, and the group has `Send A` and `Send B` of its own
+too. A group's Sound page has `Level`, `Pan` and its sends, and the rest is as on a
+return.
+
+Muting a group mutes its tracks. Soloing a track in a group keeps the group, so you
+hear it through the group's slots, and soloing a group plays all its tracks. A group
+can't be in a group.
+
 ## Returns and the master
 
-Every song ends with three fixed tracks, labelled `A`, `B` and `M`. `W`, `B` and the
-track list go through them, and `:track add` and `:track del` work before them, so they
-always stay last.
+After the groups, every song ends with three more fixed tracks, labelled `A`, `B` and
+`M`. `W`, `B` and the track list go through them, and `:track add` and `:track del`
+work before the groups, so the fixed tracks always stay last.
 
 `A` and `B` are returns, as in Ableton: what a track's `Send A` and `Send B` send plays
 through their slots, and comes out alongside the track. A new song has a `Delay` in

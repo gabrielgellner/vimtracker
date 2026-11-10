@@ -90,6 +90,7 @@ fn rows_set_the_length_and_start_from_the_top() {
     let options = RenderOptions {
         rows: Some(4),
         tail: false,
+        ..RenderOptions::default()
     };
     let out = render(song(&["C-4 -- --- --- ---"]), options);
     assert_eq!(out.len(), 24_000 * 2);
@@ -123,6 +124,7 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
         RenderOptions {
             rows: None,
             tail: true,
+            ..RenderOptions::default()
         },
     );
     assert!(tailed.len() > plain.len());
@@ -137,6 +139,7 @@ fn the_tail_extends_the_render_and_ends_at_silence() {
         RenderOptions {
             rows: None,
             tail: true,
+            ..RenderOptions::default()
         },
     );
     assert_eq!(dry.len(), LOOP * 2);
@@ -265,6 +268,7 @@ fn stems_with_tails_end_together() {
     let options = RenderOptions {
         rows: None,
         tail: true,
+        ..RenderOptions::default()
     };
     let stems = stems_of(three_tracks(), options);
     let length = stems[0].samples.len();

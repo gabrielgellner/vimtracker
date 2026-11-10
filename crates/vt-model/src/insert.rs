@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
+use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
 /// How many a track has.
@@ -2690,13 +2690,13 @@ impl Grains {
 }
 
 /// The track a `Source` hears, by its place among the tracks, if not the slot's own input or
-/// oscillator: `0` is that, then the sound tracks by number, then the returns after them, at
-/// `sounds` and the one after.
+/// oscillator: `0` is that, then the sound tracks by number, then the two returns, which come after
+/// the sound tracks and the groups.
 fn source_track(source: u8, sounds: usize) -> Option<usize> {
     match usize::from(source) {
         0 => None,
         track if track <= MAX_SOUND_TRACKS => Some(track - 1),
-        other => Some(sounds + other - MAX_SOUND_TRACKS - 1),
+        other => Some(sounds + MAX_GROUPS + other - MAX_SOUND_TRACKS - 1),
     }
 }
 

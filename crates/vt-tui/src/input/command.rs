@@ -5,7 +5,7 @@ use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
 use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, is_mark};
-use vt_model::constants::MAX_LABEL_CHARS;
+use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
 use vt_model::label::is_name;
@@ -65,6 +65,12 @@ pub enum Line {
     Order(Option<Order>),
     TrackAdd(usize),
     TrackDel,
+    /// Put tracks in a group, from 1 to `MAX_GROUPS`, or take them out of any: those numbered
+    /// from the first to the last, counted from 1, or the cursor's.
+    Group {
+        group: Option<u8>,
+        tracks: Option<(usize, usize)>,
+    },
     Mute,
     Solo,
     Double,
@@ -90,8 +96,10 @@ pub enum Line {
         path: Option<PathBuf>,
         rows: Option<usize>,
         tail: bool,
-        /// Write one file per track into the path, as a folder.
+        /// Write one file per group, and per track in none, into the path, as a folder.
         stems: bool,
+        /// Write the stems of each track instead, those in groups too.
+        each_track: bool,
     },
     /// This track's own groove, or none to follow the project's.
     TrackGroove(Option<GrooveId>),
@@ -343,13 +351,17 @@ pub enum LineError {
     Normalize,
     #[error(":track takes add [n] or del")]
     Track,
+    #[error(
+        ":group takes a group from 1 to {MAX_GROUPS} or off, then tracks, as 1-4, or none for this one"
+    )]
+    Group,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
     Set,
     #[error(":scale takes fit, or nothing to choose from a list")]
     Scale,
     #[error(":chain takes a chain ID in hex")]
     Chain,
-    #[error(":render takes a path, --rows n, --tail and --stems")]
+    #[error(":render takes a path, --rows n, --tail, --stems and --split")]
     Render,
     #[error(":seed takes a number")]
     Seed,
@@ -416,22 +428,56 @@ pub fn groove_word(id: GrooveId) -> String {
     id.name().to_lowercase().replace(' ', "-")
 }
 
-/// `:render`'s flags, which its parser reads and Tab completes.
-pub const RENDER_FLAGS: [&str; 3] = ["--rows", "--tail", "--stems"];
+/// Read `:group`'s arguments: a group or `off`, then the tracks, by their numbers as one or a
+/// range, as `3` or `1-4`, or nothing for the cursor's.
+fn group(argument: &str) -> Result<Line, LineError> {
+    let mut words = argument.split_whitespace();
+    let group = match words.next().ok_or(LineError::Group)? {
+        "off" => None,
+        number => Some(
+            number
+                .parse::<u8>()
+                .ok()
+                .filter(|group| (1..=MAX_GROUPS).contains(&usize::from(*group)))
+                .ok_or(LineError::Group)?,
+        ),
+    };
+    let number = |text: &str| text.parse::<usize>().ok().filter(|track| *track > 0);
+    let tracks = match words.next() {
+        None => None,
+        Some(range) => {
+            let (first, last) = range.split_once('-').unwrap_or((range, range));
+            let (first, last) = number(first).zip(number(last)).ok_or(LineError::Group)?;
+            Some((first.min(last), first.max(last)))
+        }
+    };
+    if words.next().is_some() {
+        return Err(LineError::Group);
+    }
+    Ok(Line::Group { group, tracks })
+}
+
+/// `:render`'s flags, which its parser reads and Tab completes. `--split` renders stems of each
+/// track rather than each group, so it means `--stems` too.
+pub const RENDER_FLAGS: [&str; 4] = ["--rows", "--tail", "--stems", "--split"];
 
 /// Read `:render`'s arguments. Anything that isn't a flag is the path, which can hold spaces.
 fn render(argument: &str) -> Result<Line, LineError> {
-    let [rows_flag, tail_flag, stems_flag] = RENDER_FLAGS;
+    let [rows_flag, tail_flag, stems_flag, split_flag] = RENDER_FLAGS;
     let mut words = Vec::new();
     let mut rows = None;
     let mut tail = false;
     let mut stems = false;
+    let mut each_track = false;
     let mut parts = argument.split_whitespace();
     while let Some(part) = parts.next() {
         if part == tail_flag {
             tail = true;
         } else if part == stems_flag {
             stems = true;
+        } else if part == split_flag {
+            stems = true;
+            each_track = true;
         } else if part == rows_flag {
             let count = parts.next().and_then(|n| n.parse().ok());
             rows = Some(count.filter(|n| *n > 0).ok_or(LineError::Render)?);
@@ -444,6 +490,7 @@ fn render(argument: &str) -> Result<Line, LineError> {
         rows,
         tail,
         stems,
+        each_track,
     })
 }
 
@@ -537,7 +584,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 37] = [
+pub const COMMANDS: [Command; 38] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -793,6 +840,12 @@ pub const COMMANDS: [Command; 37] = [
         },
     },
     Command {
+        name: "group",
+        meaning: "Put tracks in a group, or take them out",
+        takes: Takes::Words(&["off"]),
+        parse: group,
+    },
+    Command {
         name: "name",
         meaning: "Name this track",
         takes: Takes::Nothing,
@@ -935,6 +988,31 @@ mod tests {
     }
 
     #[test]
+    fn group_takes_a_group_or_off_and_tracks() {
+        let group = |group, tracks| Ok(Line::Group { group, tracks });
+        assert_eq!(parse("group 1 1-4"), group(Some(1), Some((1, 4))));
+        assert_eq!(parse("group 4 3"), group(Some(4), Some((3, 3))));
+        assert_eq!(
+            parse("group 2 6-5"),
+            group(Some(2), Some((5, 6))),
+            "either way round"
+        );
+        assert_eq!(parse("group 2"), group(Some(2), None), "the cursor's track");
+        assert_eq!(parse("group off"), group(None, None));
+        assert_eq!(parse("group off 2-3"), group(None, Some((2, 3))));
+        for wrong in [
+            "group",
+            "group 0 1",
+            "group 5 1",
+            "group 1 0-2",
+            "group 1 a-b",
+            "group 1 1 2",
+        ] {
+            assert_eq!(parse(wrong), Err(LineError::Group), "{wrong}");
+        }
+    }
+
+    #[test]
     fn commands_parse() {
         assert_eq!(parse("w"), Ok(Line::Write(None)));
         assert_eq!(parse("w a/b"), Ok(Line::Write(Some("a/b".into()))));
@@ -948,6 +1026,7 @@ mod tests {
                 rows: Some(8),
                 tail: true,
                 stems: false,
+                each_track: false,
             })
         );
         assert_eq!(
@@ -957,7 +1036,19 @@ mod tests {
                 rows: None,
                 tail: false,
                 stems: true,
+                each_track: false,
             })
+        );
+        assert_eq!(
+            parse("render out --split"),
+            Ok(Line::Render {
+                path: Some("out".into()),
+                rows: None,
+                tail: false,
+                stems: true,
+                each_track: true,
+            }),
+            "a stem of each track is stems"
         );
         assert_eq!(
             parse("render --tail"),
@@ -966,6 +1057,7 @@ mod tests {
                 rows: None,
                 tail: true,
                 stems: false,
+                each_track: false,
             }),
             "the explorer chooses where"
         );

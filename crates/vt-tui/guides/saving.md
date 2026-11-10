@@ -132,11 +132,15 @@ gets a number, as `dusty-breakdown-2.wav`, so an earlier render isn't written ov
 |---|---|
 | `--rows 8` | Render 8 rows instead of the whole loop |
 | `--tail` | Keep going until delay and reverb die away |
-| `--stems` | Write one file per track, with the path as a folder |
+| `--stems` | A file per group and per track in none, in the path as a folder |
+| `--split` | Stems of each track, those in groups too |
 
 `:render out --stems` writes `01-BD.wav`, `02.wav` and so on, one for each track
-that would be heard. Each keeps its own delay and reverb, with the limiter off,
-so together they add up to the loop, and they all end together.
+that would be heard, and `G1.wav` for a group, with all its tracks through its
+slots, in place of a file for each of them. Each keeps its own delay and reverb,
+with the limiter off, so together they add up to the loop, and they all end
+together. `--split` writes each track in a group on its own instead, still
+through its group's slots.
 
 The file starts with every track at its start, and is as long as the `:reset`
 if there is one, or else the longest track. Tracks that don't divide that

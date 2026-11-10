@@ -243,6 +243,9 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
         Control::Base(TrackControl::Pitch) => hex(track.pitch),
+        Control::Group => track
+            .group
+            .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
         Control::Choke => track
             .choke
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),

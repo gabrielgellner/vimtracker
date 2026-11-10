@@ -6,7 +6,9 @@ use std::sync::Arc;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl, edit};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_TRACK_RESET, TRACK_ENVELOPES};
+use vt_model::constants::{
+    BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TRACK_ENVELOPES,
+};
 use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
@@ -99,6 +101,8 @@ pub enum Control {
     Groove,
     /// The choke group it's in, or none.
     Choke,
+    /// The group it plays through, or none for the master.
+    Group,
     /// How much of its last pulse a note lasts, as a percentage.
     GateLength,
     /// How long its steps are, as a note division.
@@ -232,14 +236,14 @@ pub const SAMPLE_ROWS: [&[Control]; 13] = [
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), base(TrackControl::Pitch)],
-    &[Control::Setting(4), Control::Groove],
-    &[Control::FilterType, Control::Choke],
-    &[Control::FilterMode, Control::GateLength],
-    &[base(TrackControl::Cutoff), Control::Speed],
-    &[base(TrackControl::Resonance), Control::Reset],
-    &[base(TrackControl::Drive), Control::Glide],
-    &[base(TrackControl::LowCut)],
+    &[Control::Setting(3), Control::Group],
+    &[Control::Setting(4), base(TrackControl::Pitch)],
+    &[Control::FilterType, Control::Groove],
+    &[Control::FilterMode, Control::Choke],
+    &[base(TrackControl::Cutoff), Control::GateLength],
+    &[base(TrackControl::Resonance), Control::Speed],
+    &[base(TrackControl::Drive), Control::Reset],
+    &[base(TrackControl::LowCut), Control::Glide],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
@@ -249,14 +253,14 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), base(TrackControl::Pitch)],
-    &[Control::FilterType, Control::Groove],
-    &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Reset],
-    &[base(TrackControl::LowCut), Control::Glide],
-    &[base(TrackControl::HighCut)],
+    &[Control::Setting(3), Control::Group],
+    &[Control::FilterType, base(TrackControl::Pitch)],
+    &[Control::FilterMode, Control::Groove],
+    &[base(TrackControl::Cutoff), Control::Choke],
+    &[base(TrackControl::Resonance), Control::GateLength],
+    &[base(TrackControl::Drive), Control::Speed],
+    &[base(TrackControl::LowCut), Control::Reset],
+    &[base(TrackControl::HighCut), Control::Glide],
 ];
 /// The same for a synth with more than four, whose later settings carry on down the left.
 pub const SYNTH8_ROWS: [&[Control]; 16] = [
@@ -264,36 +268,43 @@ pub const SYNTH8_ROWS: [&[Control]; 16] = [
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), base(TrackControl::Pitch)],
-    &[Control::Setting(4), Control::Groove],
-    &[Control::Setting(5), Control::Choke],
-    &[Control::Setting(6), Control::GateLength],
-    &[Control::Setting(7), Control::Speed],
-    &[Control::FilterType, Control::Reset],
-    &[Control::FilterMode, Control::Glide],
-    &[base(TrackControl::Cutoff)],
+    &[Control::Setting(3), Control::Group],
+    &[Control::Setting(4), base(TrackControl::Pitch)],
+    &[Control::Setting(5), Control::Groove],
+    &[Control::Setting(6), Control::Choke],
+    &[Control::Setting(7), Control::GateLength],
+    &[Control::FilterType, Control::Speed],
+    &[Control::FilterMode, Control::Reset],
+    &[base(TrackControl::Cutoff), Control::Glide],
     &[base(TrackControl::Resonance)],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
-/// The same for a synth with three, whose fifth row has only its pitch, on the right.
+/// The same for a synth with three, whose fifth row has only its group, on the right.
 pub const SYNTH3_ROWS: [&[Control]; 12] = [
     &[Control::Machine, Control::Level],
     &[Control::Setting(0), base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
-    &[base(TrackControl::Pitch)],
-    &[Control::FilterType, Control::Groove],
-    &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Reset],
-    &[base(TrackControl::LowCut), Control::Glide],
-    &[base(TrackControl::HighCut)],
+    &[Control::Group],
+    &[Control::FilterType, base(TrackControl::Pitch)],
+    &[Control::FilterMode, Control::Groove],
+    &[base(TrackControl::Cutoff), Control::Choke],
+    &[base(TrackControl::Resonance), Control::GateLength],
+    &[base(TrackControl::Drive), Control::Speed],
+    &[base(TrackControl::LowCut), Control::Reset],
+    &[base(TrackControl::HighCut), Control::Glide],
 ];
 /// The Sound page of a return, which has no machine or filter.
 pub const RETURN_ROWS: [&[Control]; 2] = [&[Control::Level], &[base(TrackControl::Pan)]];
+/// The Sound page of a group, which sends to the returns as well.
+pub const GROUP_ROWS: [&[Control]; 4] = [
+    &[Control::Level],
+    &[base(TrackControl::Pan)],
+    &[base(TrackControl::SendA)],
+    &[base(TrackControl::SendB)],
+];
 /// The Sound page of the master.
 pub const MASTER_ROWS: [&[Control]; 1] = [&[Control::Level]];
 /// The Mod page's rows, top to bottom.
@@ -375,6 +386,7 @@ impl Control {
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",
             Self::Choke => "Choke",
+            Self::Group => "Group",
             Self::GateLength => "Gate",
             Self::Speed => "Speed",
             Self::Reset => "Reset",
@@ -448,6 +460,7 @@ impl Control {
             Self::Level
             | Self::Groove
             | Self::Choke
+            | Self::Group
             | Self::GateLength
             | Self::Speed
             | Self::Reset
@@ -525,13 +538,17 @@ impl Control {
         }
     }
 
-    /// Whether this track has the setting: a slot only has the settings of what's in it, a fixed
-    /// track sends nowhere, and the master can't be panned, muted or soloed.
+    /// Whether this track has the setting: a slot only has the settings of what's in it, only a
+    /// sound track or a group sends, and the master can't be panned, muted or soloed.
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
-            Self::Base(TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch)
+            Self::Base(TrackControl::SendA | TrackControl::SendB) => {
+                track.is_sound() || track.is_group()
+            }
+            Self::Base(TrackControl::Pitch)
             | Self::Choke
+            | Self::Group
             | Self::GateLength
             | Self::Speed
             | Self::Reset
@@ -683,6 +700,7 @@ impl App {
         let track = self.song().tracks.get(self.cursor.track);
         let kind = track.map_or(TrackKind::Sound, |track| track.kind);
         match (self.track_page, kind) {
+            (Page::Sound, TrackKind::Group(_)) => &GROUP_ROWS,
             (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
             (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
             (Page::Mod, kind) if kind != TrackKind::Sound => &FIXED_MOD_ROWS,
@@ -698,6 +716,15 @@ impl App {
             .get(self.cursor.track)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Put the track in a group, or take it out of any.
+    fn set_group_here(&mut self, group: Option<u8>) {
+        self.apply(&Action::SetTrackGroup {
+            first: self.cursor.track,
+            last: self.cursor.track,
+            group,
+        });
     }
 
     fn set_lfo(&mut self, slot: usize, lfo: Lfo) {
@@ -863,6 +890,12 @@ impl App {
                     track: self.cursor.track,
                     choke: (moved > 0).then_some(moved),
                 });
+            }
+            Control::Group => {
+                let from = i64::from(track.group.unwrap_or(0));
+                let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
+                    .clamp(0, MAX_GROUPS as i64) as u8;
+                self.set_group_here((moved > 0).then_some(moved));
             }
             Control::GateLength => {
                 let size = if large { GATE_JUMP } else { 1 };
@@ -1380,6 +1413,8 @@ impl App {
                 });
             }
             Control::Choke => {}
+            Control::Group if track.group.is_some() => self.set_group_here(None),
+            Control::Group => {}
             Control::GateLength if track.gate_length.is_some() => {
                 self.apply(&Action::SetTrackGateLength {
                     track: self.cursor.track,
@@ -2059,6 +2094,16 @@ impl App {
                 }
                 _ => self.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
             },
+            Control::Group if text.eq_ignore_ascii_case("off") => self.set_group_here(None),
+            Control::Group => {
+                let number = text.trim_start_matches(['G', 'g']).parse::<u8>();
+                match number {
+                    Ok(group) if (1..=MAX_GROUPS).contains(&usize::from(group)) => {
+                        self.set_group_here(Some(group));
+                    }
+                    _ => self.status = format!("Group is a group from 1 to {MAX_GROUPS}, or off"),
+                }
+            }
             Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
                 Ok(percent) if (1..=100).contains(&percent) => {
                     self.apply(&Action::SetTrackGateLength {

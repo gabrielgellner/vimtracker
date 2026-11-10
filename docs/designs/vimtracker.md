@@ -241,8 +241,8 @@ file doesn't hold up the screen.
 | Published::after: bank entries |  old versions, buffers    |   sequencing, FX            |
 |   compiled into Playables      |  and files, freed here    | sound tracks: machine,      |
 | saving, autosave, :render      |<--------------------------|   filters, inserts, sends   |
-| ratatui drawing, kitty images  |  telemetry, scope,        | returns -> master -> limit  |
-|                                |  jam changes              |                             |
+| ratatui drawing, kitty images  |  telemetry, scope,        | groups -> returns -> master |
+|                                |  jam changes              |   -> limit                  |
 |                                |<--------------------------|                             |
 +--------------------------------+                           +-----------------------------+
       |  ^              |  ^
@@ -350,14 +350,16 @@ Song                               song.ron, refused unless format_version is FO
  |   '- SampleEdit                 timeline (one whole file for now), points, play
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
  |       '- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
- |- tracks[]                       sound tracks, then Return A, Return B and Master
- |   |- kind, name, mute, solo
+ |- tracks[]                       sound tracks, then the groups G1 to G4, Return A, Return B
+ |   |                             and Master
+ |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
  |   |- machine                    Sampler, or Plaits(voice)
  |   |- settings{id}, fine{id}     machine settings changed from their defaults
  |   |- filter, filter_mode, cutoff, resonance, drive, low_cut, high_cut
  |   |- inserts[3], bypassed[3]    an effect and its settings in each slot
  |   |- level, pan, send_a, send_b
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
+ |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
  |   |- lfos[2], envelopes[2]
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
@@ -367,11 +369,15 @@ Song                               song.ron, refused unless format_version is FO
  '- sections[]                     Section: chains[one per track], length, repeat, start, reset
 ```
 
-*   **Tracks.** Up to `MAX_SOUND_TRACKS` (64) sound tracks, then three fixed tracks every song has:
-    the returns `A` and `B`, which start with a delay and a reverb in their first slot, and the
-    master `M`. Every kind has steps, inserts and a page, and only a sound track has a machine. A
-    sound track's level scales what it sends, `send_a` and `send_b` feed the returns, and the sound
-    tracks and returns feed the master.
+*   **Tracks.** Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
+    `MAX_GROUPS` (4) groups, `G1` to `G4`, the returns `A` and `B`, which start with a delay and a
+    reverb in their first slot, and the master `M`. Every kind has steps, inserts and a page, and
+    only a sound track has a machine. A sound track's level scales what it sends, and `send_a` and
+    `send_b` feed the returns. A sound track whose `group` is set plays into that group, which
+    plays the sum through its own slots, level and pan, and sends from there; the other sound
+    tracks, the groups and the returns feed the master. A group can't be in a group, so the order
+    stays fixed. `ensure_fixed_tracks` puts in any fixed track a song lacks, so raising
+    `MAX_GROUPS` keeps saved songs loading.
 *   **Machines and their settings.** A `Machine` is the `Sampler`, which plays the bank entry its
     `Sample` setting or a step's `SMP` chooses, or `Plaits(voice)`, one of the synth voices. The
     track's own controls are fields. A machine's settings are a map by `SettingId`, saved by key,
@@ -411,7 +417,8 @@ Song                               song.ron, refused unless format_version is FO
     such as where kits are, the audio choice and the command history, is in the config folder, and
     sample analyses are in the cache folder.
 
-**Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105 and 111;
+**Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111 and
+123;
 the [M9](#m9-design-fx-inserts), [M10](#m10-design-tracks-that-process),
 [M12](#m12-design-lanes) and [M13](#m13-design-pulses) designs, and [song-flow.md](song-flow.md) for
 sections; and the [FX interpreter](#fx-interpreter) for LFOs and envelopes.
@@ -593,8 +600,10 @@ These need no terminal and no sound device, so they run anywhere.
     delays and reverbs, then every track goes back to its start for the pass that's kept, so a loop
     joins up in Ableton. A missing sample is an error, rather than a render without it. `--rows`,
     `--seed` and `--tail` change its length, its seed and whether it rings out, and `--stems` writes
-    one file for each sound track that's heard, with the limiter off so they add up to the whole.
-    `:render` does the same from the program, on the edit thread, for the song as it is.
+    one file for each group and each sound track in none that's heard, with the limiter off so they
+    add up to the whole; `--split` writes one for each sound track, those in groups too. Each is a
+    render with that track or group soloed. `:render` does the same from the program, on the edit
+    thread, for the song as it is.
 *   **`vimtracker bench <project>`** (`run::bench`) plays a project through an `Engine` on this
     thread, in blocks the size a device asks for, stopped and then playing, and prints the share of
     a core it takes and its worst block, as the status line's CPU figure measures it.
@@ -607,7 +616,7 @@ These need no terminal and no sound device, so they run anywhere.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 
-**Decisions:** 13, 68, 110 and 113, with CUJ 7 and #190 for `bench`.
+**Decisions:** 13, 68, 110, 113 and 123, with CUJ 7 and #190 for `bench`.
 
 ### Testing
 
@@ -758,7 +767,8 @@ and `00` is silent, so every `10` in hex is 4 dB. Anything entered above `F8` sn
 Polyend Tracker's gain tables and Ableton Live's fader, which run about -36 to +6 dB and -70 to +6 dB. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
 once those exist. Transposed notes clamp to the note range.
 
-Tracks feed a mixer with shared delay and reverb sends, then a
+Tracks feed a mixer with shared delay and reverb sends, a track in a group through its group's
+slots, level and pan, then a
 safety limiter: nothing changes up to full level, and anything above it clips hard, since the fix for hearing it is
 the mix. A non-finite sample becomes silence. `:set limiter=off` lets a float render keep levels over full, and the
 live output clips at full either way. Processing is 32-bit float at the device's sample rate. Samples are converted to that

@@ -70,8 +70,10 @@ pub struct RenderRequest {
     pub rows: Option<usize>,
     pub seed: Option<u64>,
     pub tail: bool,
-    /// Write one file per track, into `out` as a folder.
+    /// Write one file per group, and per track in none, into `out` as a folder.
     pub stems: bool,
+    /// Write one file per track instead, those in groups too.
+    pub split: bool,
 }
 
 /// What a stem render reports.
@@ -80,7 +82,8 @@ pub fn stems_written(count: usize, folder: &Path) -> String {
     format!("Rendered {count} {stems} to {}", folder.display())
 }
 
-/// Write one file per track that would be heard, as `01-BD.wav` or `02.wav`, and return how many.
+/// Write one file per stem that would be heard, as `01-BD.wav` or `02.wav` for a track and
+/// `G1.wav` or `G1-DR.wav` for a group, and return how many.
 pub fn write_stems(
     version: &Published,
     folder: &Path,
@@ -90,12 +93,18 @@ pub fn write_stems(
     std::fs::create_dir_all(folder)?;
     let stems = render_stems(version, rate, options);
     for stem in &stems {
-        let name = &version.song.tracks[stem.track].name;
-        let number = stem.track + 1;
-        let file = if name.is_empty() {
-            format!("{number:02}.wav")
+        let track = &version.song.tracks[stem.track];
+        let name = &track.name;
+        // A group's named for its letter, and for its own name if it's been given one.
+        let number = if track.is_sound() {
+            format!("{:02}", stem.track + 1)
         } else {
-            format!("{number:02}-{name}.wav")
+            track.kind.letter()
+        };
+        let file = if name.is_empty() || *name == number {
+            format!("{number}.wav")
+        } else {
+            format!("{number}-{name}.wav")
         };
         write_wav(&folder.join(file), rate, &stem.samples)?;
     }
@@ -132,8 +141,9 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
     let options = RenderOptions {
         rows: request.rows,
         tail: request.tail,
+        each_track: request.split,
     };
-    if request.stems {
+    if request.stems || request.split {
         let count = write_stems(&version, &request.out, request.rate, options)?;
         println!("{}", stems_written(count, &request.out));
         return Ok(());

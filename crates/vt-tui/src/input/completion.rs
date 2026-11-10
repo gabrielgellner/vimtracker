@@ -555,7 +555,7 @@ mod tests {
         );
         assert_eq!(
             texts(&complete("render out.wav --tail ", places)),
-            ["--rows", "--stems"],
+            ["--rows", "--stems", "--split"],
             "a flag given isn't offered again"
         );
         assert!(
