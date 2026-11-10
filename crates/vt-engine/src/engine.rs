@@ -1740,7 +1740,14 @@ impl Engine {
             track.retrigger = None;
             return;
         };
-        let gain = (note.gain * retrigger.factor).clamp(0.0, 1.0);
+        // `Acid` has no level but its accent, as a 303 has none, so each hit plays at the note's
+        // own level, plain or accented, and `RET`'s fade and swell leave it alone (decision 124).
+        // The accent carries on to every hit with the rest of the note.
+        let gain = if note.synth == Some(SynthVoice::Acid) {
+            note.gain
+        } else {
+            (note.gain * retrigger.factor).clamp(0.0, 1.0)
+        };
         let next = NoteOn {
             gain,
             note: moved.unwrap_or(note.note),
@@ -2690,7 +2697,7 @@ fn velocity_gain(velocity: u8) -> f32 {
 }
 
 /// How much `RET`'s first digit changes the level on each retrigger. `0` is no change, 1-7 are
-/// 10% to 70% quieter, and 8-F are 10% to 80% louder, compounding.
+/// 10% to 70% quieter, and 8-F are 10% to 80% louder, compounding. `Acid` ignores it.
 fn retrigger_factor(digit: u8) -> f32 {
     match digit {
         0 => 1.0,

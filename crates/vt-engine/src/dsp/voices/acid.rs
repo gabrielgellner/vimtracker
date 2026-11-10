@@ -64,22 +64,34 @@ const ACCENT_RELEASE_MS: f32 = 50.0;
 /// The filter envelope also reaches the level, through 47k and 33 nF on a 303, which softens it.
 const ENVELOPE_TO_LEVEL: f32 = 0.45;
 const SOFTENING_MS: f32 = 1.55;
-/// How much the accent sweep adds to the level, against the level envelope's 1. Open303 adds 4;
-/// with an accent's filter envelope as short as a 303's, which this pulse rides on, it takes 5 for
-/// a full accent to sound about 4.5 dB over a plain note, as on Acid V (decision 117).
-const ACCENT_TO_LEVEL: f32 = 5.0;
-/// How far the accent sweep moves the cutoff at its height, in octaves. The pulse falls with the
-/// accent's short envelope, so it's at its height only for the first few milliseconds.
-const ACCENT_OCTAVES: f32 = 5.0;
-/// The Accent knob's taper: how far it's turned, to this power, is how strong the accent is, so
-/// it builds slowly over the first half and most over the second, as Acid V's does.
-const ACCENT_TAPER: f32 = 2.0;
+/// How much the accent sweep adds to the level with `Accent` full, against the level envelope,
+/// which rises to one. Open303 adds 4; with an accent's filter envelope as short as a 303's,
+/// which this pulse rides on, it takes 5.7 for an accent's first 60 ms to sound about 4.7 dB over
+/// a plain note's at noon and 9.8 dB full, as Acid V's do, from 3.9 to 4.7 dB at noon and 9 to
+/// 10 dB full. Full, the soft clip rounds its peaks off, so they're only about 5.6 dB over a
+/// plain note's, where Acid V's reach 12 (decision 124).
+const ACCENT_TO_LEVEL: f32 = 5.7;
+/// The Accent knob's taper for the level: how far it's turned, squared, is how much louder an
+/// accent is, so it's about even in dB from a quarter of the way up, as Acid V's is.
+const ACCENT_LEVEL_TAPER: f32 = 2.0;
+/// How far the accent sweep moves the cutoff at its height with `Accent` full, in octaves. The
+/// pulse falls with the accent's short envelope, so it's at its height only for the first few
+/// milliseconds.
+const ACCENT_OCTAVES: f32 = 3.25;
+/// The Accent knob's taper for the cutoff, steeper than the level's, and the share of the sweep
+/// left with the knob at `00`. Acid V's accent grows louder from a quarter of the way up but
+/// brighter only over the top half, and even at `00` it's about as bright at its start as a
+/// plain note, which an accent's shorter envelope alone would leave darker.
+const ACCENT_SWEEP_TAPER: f32 = 3.3;
+const ACCENT_SWEEP_LEAST: f32 = 0.18;
 /// The accent sweep's capacitor charges through a diode and 147k, and drains through 100k, on
 /// 1 µF. It drains more slowly than accents come, so they build up.
 const SWEEP_CHARGE_MS: f32 = 147.0;
 const SWEEP_DRAIN_MS: f32 = 100.0;
-/// What brings the capacitor's level up to the pulse's, where the two balance.
-const SWEEP_GAIN: f32 = (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
+/// What brings the capacitor's level up to the pulse's, where the two balance, and then 3.5
+/// times that, so accents a sixteenth apart build up about as much as Acid V's while accents an
+/// eighth apart hardly do.
+const SWEEP_GAIN: f32 = 3.5 * (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
 /// A slide's time constant, as a share of its time, so it's nearly there when its time is up.
 const SLIDE_SHARE: f32 = 1.0 / 3.0;
 /// The high-pass before the filter, in Hz, as Open303 measured a 303's.
@@ -346,11 +358,12 @@ impl Acid {
         }
 
         // The filter envelope, and the accent's pulse from it into the sweep's capacitor, which
-        // charges through a diode.
+        // charges through a diode. Both are as if `Accent` were full, and the knob scales what
+        // they add to the level and the cutoff, each on its own taper.
         self.envelope *= self.decay;
         self.softened += (self.envelope - self.softened) * self.softening;
         let pulse = if self.accented && self.gate {
-            values[ACCENT].powf(ACCENT_TAPER) * self.envelope
+            self.envelope
         } else {
             0.0
         };
@@ -358,6 +371,11 @@ impl Acid {
         // Resonance turns the same knob as the sweep's: low, the cutoff follows the pulse, and
         // high, the capacitor's slower swell.
         let accent = pulse + (self.sweep * SWEEP_GAIN - pulse) * resonance;
+        let knob = values[ACCENT];
+        let accent_level = ACCENT_TO_LEVEL * knob.powf(ACCENT_LEVEL_TAPER) * accent;
+        let accent_octaves = ACCENT_OCTAVES
+            * (ACCENT_SWEEP_LEAST + (1.0 - ACCENT_SWEEP_LEAST) * knob.powf(ACCENT_SWEEP_TAPER))
+            * accent;
 
         // The level envelope, with the filter envelope and accent added while the note's held.
         if self.gate {
@@ -378,7 +396,7 @@ impl Acid {
             self.open *= release;
         }
         let amplitude = (self.level
-            + self.open * (ENVELOPE_TO_LEVEL * self.softened + ACCENT_TO_LEVEL * accent))
+            + self.open * (ENVELOPE_TO_LEVEL * self.softened + accent_level))
             / (1.0 + ENVELOPE_TO_LEVEL);
         self.amplitude += (amplitude - self.amplitude) * self.declick;
 
@@ -392,7 +410,7 @@ impl Acid {
         let scale = ((1.0 - knob) * low + knob * high)
             * (SWEEP_LEAST + (SWEEP_MOST - SWEEP_LEAST) * amount);
         let centre = (0.0483 * knob + 0.2944) * CENTRE_SHARE;
-        let octaves = scale * (self.envelope - centre) + ACCENT_OCTAVES * accent;
+        let octaves = scale * (self.envelope - centre) + accent_octaves;
         // `acid_cutoff_hz`, in octaves, so one power of two does both.
         let knob_octaves = knob * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).log2();
         self.cutoff =
@@ -563,14 +581,14 @@ mod tests {
 
     #[test]
     fn an_accent_is_louder_and_brighter() {
-        // With `Accent` at noon an accent is about a dB louder, as on Acid V, whose knob does
-        // most over its top half; full, it's about 4.5 dB.
-        for (accent, least) in [(0.5, 0.5), (1.0, 3.0)] {
+        // As on Acid V, an accent is hardly louder with `Accent` at 00, about 4 dB at noon and
+        // about 10 dB full, where the soft clip rounds its peaks off (decision 124).
+        for (accent, least, most) in [(0.0, -1.0, 1.5), (0.5, 3.0, 6.0), (1.0, 8.0, 11.5)] {
             let settings = places([0.0, 0.5, 0.5, 0.5, 0.5, accent, 0.0, 0.0]);
             let plain_note = note(false, settings, 4_800);
             let accented = note(true, settings, 4_800);
             let louder = 20.0 * (rms(&accented) / rms(&plain_note)).log10();
-            assert!(louder > least, "{louder} dB at {accent}");
+            assert!(louder > least && louder < most, "{louder} dB at {accent}");
         }
         // The cutoff over the note's first 20 ms is higher with `Accent` full. After that, an
         // accent's short filter envelope has it darker than a plain note, as on a 303.
@@ -616,21 +634,30 @@ mod tests {
         assert!(accented.envelope() < plain_note.envelope() * 0.1);
     }
 
-    /// The highest cutoff over each of `notes` accented notes, a sixteenth apart at 120 BPM.
-    fn accent_peaks(notes: usize, settings: Settings) -> Vec<f32> {
+    /// The highest cutoff over each of `notes` accented notes, `apart` frames apart, each held
+    /// for half a sixteenth at 120 BPM.
+    fn accent_peaks_apart(notes: usize, settings: Settings, apart: usize) -> Vec<f32> {
         let mut acid = Acid::new(RATE);
-        let sixteenth = RATE as usize / 8;
+        let held = RATE as usize / 16;
         (0..notes)
             .map(|_| {
                 acid.trigger(true);
-                (0..sixteenth)
-                    .map(|_| {
+                (0..apart)
+                    .map(|frame| {
+                        if frame == held {
+                            acid.release();
+                        }
                         acid.next(hertz(55.0), settings);
                         acid.cutoff()
                     })
                     .fold(0.0, f32::max)
             })
             .collect()
+    }
+
+    /// The same, a sixteenth apart.
+    fn accent_peaks(notes: usize, settings: Settings) -> Vec<f32> {
+        accent_peaks_apart(notes, settings, RATE as usize / 8)
     }
 
     #[test]
@@ -643,6 +670,22 @@ mod tests {
         let open = places([0.0, 0.3, 0.0, 0.0, 0.5, 1.0, 0.0, 0.0]);
         let peaks = accent_peaks(4, open);
         assert!(peaks[3] < peaks[0] * 1.1, "{peaks:?}");
+    }
+
+    #[test]
+    fn accents_a_sixteenth_apart_build_up_and_an_eighth_apart_hardly_do() {
+        // With every knob at noon but `Accent` full, as Acid V's do: four accents in a row peak
+        // about an octave higher by the last, and four with a sixteenth's rest between them build
+        // far less, as the capacitor drains in the rest (decision 124).
+        let settings = places([0.0, 0.25, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0]);
+        let built = |peaks: Vec<f32>| (peaks[3] / peaks[0]).log2();
+        let in_a_row = built(accent_peaks_apart(4, settings, RATE as usize / 8));
+        let apart = built(accent_peaks_apart(4, settings, RATE as usize / 4));
+        assert!(in_a_row > 0.8, "{in_a_row} octaves in a row");
+        assert!(
+            apart < 0.4 && apart < in_a_row / 3.0,
+            "{apart} octaves apart"
+        );
     }
 
     #[test]

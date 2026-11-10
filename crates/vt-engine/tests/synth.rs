@@ -359,13 +359,11 @@ fn pitch_of(out: &[f32], from: usize, to: usize) -> f32 {
 #[test]
 fn acid_ignores_velocity_but_for_the_accent() {
     // As on a 303, every plain note sounds the same whatever its velocity, and so does every
-    // accent (decision 121). With the voice's `Accent` full, as at noon an accent adds only a
-    // little, as Acid V's does (decision 117).
+    // accent (decision 121). The voice's `Accent` starts at noon, where an accent is about 4 dB
+    // louder over its first step, as Acid V's is (decision 124).
     let at = |velocity: &str| {
         let note = format!("C-2 {velocity}");
-        let mut song = on(SynthVoice::Acid, &[&note, REST]);
-        song.tracks[0].set_machine_value(5, 0xFF);
-        play(song, 2)
+        play(on(SynthVoice::Acid, &[&note, REST]), 2)
     };
     let plain = at("10");
     for velocity in ["40", "64", "6F"] {
@@ -378,7 +376,7 @@ fn acid_ignores_velocity_but_for_the_accent() {
     );
     // Measured on average, as a resonant wave's peaks come and go with its filter.
     let louder = 20.0 * (rms(&accented, 0) / rms(&plain, 0)).log10();
-    assert!(louder > 3.0, "{louder} dB");
+    assert!(louder > 3.0 && louder < 6.0, "{louder} dB");
 }
 
 #[test]
@@ -400,6 +398,67 @@ fn every_other_voice_is_as_loud_as_its_velocity() {
             "{voice:?}: {ratio} against {expected}"
         );
     }
+}
+
+/// How loud each of a step's six units is on average, on the left channel.
+fn unit_levels(out: &[f32]) -> Vec<f32> {
+    let unit = STEP / 6;
+    out[..STEP * 2]
+        .chunks(unit * 2)
+        .map(|part| {
+            let left = part.iter().step_by(2);
+            (left.map(|sample| sample * sample).sum::<f32>() / unit as f32).sqrt()
+        })
+        .collect()
+}
+
+#[test]
+fn acid_retriggers_every_hit_at_the_notes_level_while_other_voices_fade() {
+    // `RET` every two units, steady, fading by half and swelling by 60% a hit. As on a 303, an
+    // `Acid` note has no level but its accent, so each hit plays at the note's own, plain or
+    // accented, and the fade and swell change nothing (decision 124).
+    let with = |voice, velocity: &str, retrigger: &str| {
+        let note = format!("C-2 {velocity} ret:{retrigger}");
+        play(on(voice, &[&note, REST]), 2)
+    };
+    for velocity in ["64", "7F"] {
+        let steady = with(SynthVoice::Acid, velocity, "02");
+        for retrigger in ["52", "D2"] {
+            assert!(
+                with(SynthVoice::Acid, velocity, retrigger) == steady,
+                "ret:{retrigger} changed an Acid note at {velocity}"
+            );
+        }
+    }
+    // Every hit is still a new note: the accent carries on to each, so an accented note's last
+    // hit is as much louder than a plain one's as its first.
+    let plain = unit_levels(&with(SynthVoice::Acid, "64", "02"));
+    let accented = unit_levels(&with(SynthVoice::Acid, "7F", "02"));
+    for unit in [0, 4] {
+        assert!(
+            accented[unit] > plain[unit] * 1.3,
+            "unit {unit}: {} against {}",
+            accented[unit],
+            plain[unit]
+        );
+    }
+    // Another voice still fades and swells.
+    let steady = unit_levels(&with(SynthVoice::VirtualAnalog, "64", "02"));
+    let fading = unit_levels(&with(SynthVoice::VirtualAnalog, "64", "52"));
+    let swelling = unit_levels(&with(SynthVoice::VirtualAnalog, "40", "D2"));
+    let swelling_steady = unit_levels(&with(SynthVoice::VirtualAnalog, "40", "02"));
+    assert!(
+        fading[4] < steady[4] * 0.5,
+        "{} against {}",
+        fading[4],
+        steady[4]
+    );
+    assert!(
+        swelling[4] > swelling_steady[4] * 1.5,
+        "{} against {}",
+        swelling[4],
+        swelling_steady[4]
+    );
 }
 
 #[test]
