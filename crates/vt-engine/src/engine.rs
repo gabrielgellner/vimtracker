@@ -18,7 +18,7 @@ use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{
-    ChainPosition, Launch, Machine, Section, SectionStart, Song, Track, level_gain,
+    ChainPosition, Launch, Machine, Section, SectionStart, Song, SynthVoice, Track, level_gain,
 };
 use vt_model::speed::Speed;
 use vt_model::step::{
@@ -40,6 +40,11 @@ use vt_model::samples::SampleId;
 
 /// How often LFOs are worked out, in frames. Their values are smoothed in between.
 const LFO_UPDATE_FRAMES: u32 = 32;
+
+/// The velocity every plain `Acid` note plays at, whatever its own: 99, where decision 117 fitted
+/// its level, so a note there sounds as it did before velocity was taken away from it. Every
+/// accented note plays at `ACCENT_VELOCITY`, where decision 117 fitted the accent (decision 121).
+const ACID_PLAIN_VELOCITY: u8 = 99;
 
 /// Where a track is heard, as its own steps count.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -1414,9 +1419,11 @@ impl Engine {
             .start(track, on, state.synth_settings(), self.rate);
     }
 
-    /// A note at a velocity, which sets its level and whether it's accented. A sampler plays the
-    /// bank entry its `SMP` is on as the note starts, the slice of it its `SLI` is on, as its
-    /// `STA`, `SLEN` and `PLY` cut it then, and has nothing to play with no entry.
+    /// A note at a velocity, which sets its level and whether it's accented. `Acid` has no velocity,
+    /// as a 303 has none: its velocity only says whether it's accented, and every plain note it
+    /// plays sounds the same, as does every accent (decision 121). A sampler plays the bank entry
+    /// its `SMP` is on as the note starts, the slice of it its `SLI` is on, as its `STA`, `SLEN`
+    /// and `PLY` cut it then, and has nothing to play with no entry.
     fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
@@ -1440,16 +1447,22 @@ impl Engine {
             }
             Machine::Plaits(voice) => (0, None, 0, None, Cut::default(), Some(voice)),
         };
+        let accent = velocity >= ACCENT_VELOCITY;
+        let heard = match synth {
+            Some(SynthVoice::Acid) if accent => ACCENT_VELOCITY,
+            Some(SynthVoice::Acid) => ACID_PLAIN_VELOCITY,
+            _ => velocity,
+        };
         Some(NoteOn {
             sample,
             synth,
             note,
-            gain: velocity_gain(velocity),
+            gain: velocity_gain(heard),
             entry,
             slice,
             span,
             cut,
-            accent: velocity >= ACCENT_VELOCITY,
+            accent,
             shape,
             release_after: None,
         })

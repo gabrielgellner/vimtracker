@@ -5,7 +5,7 @@ by matplotlib, the plots embedded as PNGs, and the measurements in tables.
 and how to lay it out:
 
     [report]
-    kind = "response"     # response, harmonics, oscillation, static, timing, distortion or knob
+    kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob or velocity
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -30,6 +30,8 @@ The kinds:
   3rd harmonics against the input level.
 - `knob`: one knob swept on both sides, each step's spectral centroid and peak level, or with
   `measure` its filter's peak and bass, its brightness's decay, or its accents (see `Knob`).
+- `velocity`: one render of notes at different velocities, each note's level and brightness
+  against the first's, for how a voice answers velocity (see `Velocity`).
 """
 
 from __future__ import annotations
@@ -1197,6 +1199,89 @@ class Knob(Report):
             "numbers note": notes[self.kind],
         }
 
+class Velocity(Report):
+    """Notes at different velocities in one render, each far enough from the last to start from
+    rest, measured one by one: its level over its first 60 ms and its peak over its first 250 ms,
+    both against the first note's, and its brightness over its first 40 ms."""
+
+    reading = (
+        "Each point is one note, placed by its MIDI velocity. The left panel is its RMS level over "
+        "its first 60 ms against the first note's, which says how loud it sounds; the middle its "
+        "peak over its first 250 ms against the first note's; the right its brightness, the "
+        "spectral centroid over its first 40 ms. A voice whose level follows velocity climbs "
+        "across the left panel; one that only accents is flat, then steps up where its accent "
+        "starts."
+    )
+    # How long after a note starts its peak is looked for.
+    PEAK_SECONDS = 0.25
+
+    def notes(self, samples) -> list[dict]:
+        rate, notes = self.spec.rate, self.spec.data.get("notes", [])
+        starts = [note["time"] for note in notes]
+        marks = measure.note_marks(samples, rate, starts)
+        signal = measure.mono(samples)
+        out = []
+        for note, mark in zip(notes, marks):
+            start = int(note["time"] * rate)
+            part = signal[start : start + int(self.PEAK_SECONDS * rate)]
+            out.append({
+                "velocity": int(note.get("velocity", 100)),
+                "RMS dBFS": mark["RMS dBFS"],
+                "peak dBFS": measure.db(float(np.abs(part).max(initial=0.0))),
+                "bright Hz": mark["bright Hz"],
+            })
+        for value in out:
+            value["RMS dB"] = value["RMS dBFS"] - out[0]["RMS dBFS"]
+            value["peak dB"] = value["peak dBFS"] - out[0]["peak dBFS"]
+        return out
+
+    def build(self):
+        columns = [
+            ("RMS dB", "Level over the first note's, dB", False),
+            ("peak dB", "Peak over the first note's, dB", False),
+            ("bright Hz", "Brightness, Hz", True),
+        ]
+        rows, summary = [], []
+        figure, panels = plt.subplots(1, len(columns), figsize=(5.0 * len(columns), 3.2))
+        for r in self.rendered:
+            for side, name, colour, samples in self.sides(r):
+                found = self.notes(samples)
+                velocities = [n["velocity"] for n in found]
+                for (key, label, log), panel in zip(columns, panels):
+                    panel.plot(velocities, [n[key] for n in found], color=colour, marker="o", markersize=3.5)
+                    if log:
+                        panel.set_yscale("log")
+                        panel.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+                        panel.yaxis.set_minor_formatter(NullFormatter())
+                    panel.set_ylabel(label)
+                    panel.set_xlabel("Velocity")
+                    panel.set_xlim(0, 128)
+                for n in found:
+                    rows.append([
+                        name,
+                        str(n["velocity"]),
+                        number(n["RMS dBFS"], 1),
+                        number(n["RMS dB"], 2, sign=True),
+                        number(n["peak dBFS"], 1),
+                        number(n["peak dB"], 2, sign=True),
+                        f"{n['bright Hz']:.0f}",
+                    ])
+                levels = [n["RMS dB"] for n in found]
+                summary.append(html.escape(
+                    f"{name}: from velocity {velocities[0]} to {velocities[-1]}, its level runs from "
+                    f"{number(min(levels), 2, sign=True)} to {number(max(levels), 2, sign=True)} dB "
+                    f"over the first note's."
+                ))
+        figure.tight_layout()
+        return {
+            "keys": [(c, "marker", w) for c, _, w in self.keys()],
+            "summary": summary,
+            "figures": [image(figure)],
+            "numbers": table(["Side", "Velocity", "RMS dBFS", "RMS over the first dB", "Peak dBFS", "Peak over the first dB", "Brightness Hz"], rows, numeric_from=1),
+            "numbers note": "Each note's RMS is over its first 60 ms, its peak over its first 250 ms and its brightness over its first 40 ms.",
+        }
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -1205,6 +1290,7 @@ KINDS = {
     "timing": Timing,
     "distortion": Distortion,
     "knob": Knob,
+    "velocity": Velocity,
 }
 
 STYLE = """

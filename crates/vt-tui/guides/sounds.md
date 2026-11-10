@@ -35,10 +35,12 @@ through a diode ladder filter, with the 303's accent and slide, for acid lines. 
 note at a time, and each note carries on from the last one's filter, as a 303 does. Try
 notes around `C-2`, with `Resonance` well up.
 
-- **Accent** comes from velocity. A note at `70` or above is accented: louder, with more
-  filter envelope and a shorter decay. Notes are written at `64`, so one step up the
-  velocity ladder, to `74`, accents a note, and so does `7F`. Accents close together build
-  up, swelling higher each time, the more so with `Resonance` up.
+- **Accent** comes from velocity, and it's all velocity does here, as a 303 has no
+  velocity. A note at `70` or above is accented: louder, with more filter envelope and a
+  shorter decay. Below `70`, every note sounds the same, whether it's at `10` or `6F`, and
+  every accent sounds the same from `70` to `7F`. Notes are written at `64`, so one step up
+  the velocity ladder, to `74`, accents a note, and so does `7F`. Accents close together
+  build up, swelling higher each time, the more so with `Resonance` up.
 - **Slide** is the `HLD` gate, on the row that slides away, as a 303's slide is on the
   step it leaves. A note held into the next row's glides to its pitch, with neither
   envelope starting again. `Slide` sets how long it takes, unless the track's `Glide`
