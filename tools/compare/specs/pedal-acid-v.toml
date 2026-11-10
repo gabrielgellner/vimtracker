@@ -1,0 +1,79 @@
+# Our Acid through Distort's pedals against Arturia's Acid V through its own distortion, on a held,
+# open note, so the distortion is heard with the filter out of the way (#361). Acid V's distortion
+# is inside the voice, so it can't be given our Acid's sound: what compares is the change each
+# makes to its own voice's note, which `dry` gives on both sides.
+#
+#   uv run run.py specs/pedal-acid-v.toml --report out/pedal-acid-v.html
+
+rate = 48000
+duration = 1.3
+
+[[notes]]
+time = 0.0
+length = 1.2
+note = 45
+velocity = 99
+accent = false
+
+[ours]
+machine = "acid"
+effects = ["distort"]
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0xFF
+acid.resonance = 0x00
+acid.envmod = 0x00
+acid.decay = 0xFF
+acid.accent = 0x00
+1.distort.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 1.0
+resonance = 0.0
+envelope_mod = 0.0
+decay = 1.0
+accent = 0.0
+distortion_dry_wet = 100.0
+
+[report]
+kind = "harmonics"
+title = "Our Acid through the pedals against Acid V's own distortion"
+window = [0.6, 1.1]
+about = """
+A held A-2, the filter fully open with no resonance or envelope, on our Acid through a Distort \
+slot and on Arturia's Acid V through its own distortion, whose algorithms include an `Overdrive` \
+and a `Distorsion`. Acid V's distortion is inside its voice, so the two voices' notes differ a \
+little to begin with: `dry` shows them with no distortion on either side, and the other cases show \
+what each distortion does to its own voice's sawtooth, at its drive's middle.
+
+Acid V's `Overdrive` and `Distorsion` are its own waveshapers, not a Tube Screamer or a RAT, so \
+this records how far apart they are rather than a fit.
+"""
+
+[[cases]]
+name = "dry"
+ours = { 1.distort.mix = 0x00 }
+reference = { distortion_dry_wet = 0.0 }
+
+[[cases]]
+name = "overdrive-50"
+ours = { 1.distort.type = "Overdrive", 1.distort.amount = 0x80 }
+reference = { distortion_algorithm = "Overdrive", distortion_drive = 50.0 }
+
+[[cases]]
+name = "distortion-50"
+ours = { 1.distort.type = "Distortion", 1.distort.amount = 0x80 }
+reference = { distortion_algorithm = "Distorsion", distortion_drive = 50.0 }

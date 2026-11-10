@@ -1,7 +1,7 @@
 //! The `Distort` effect. Most of its shapes come from Vital's `distortion.cpp`, by Matt Tytel, GPL 3
 //! or later: Copyright 2013-2019 Matt Tytel. `Soft` comes from Plaits' `dsp/fx/overdrive.h`, by Emilie
 //! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
-//! program's own.
+//! program's own. The guitar pedals, `Overdrive` and `Distortion`, are in [`super::pedal`].
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
@@ -15,6 +15,7 @@ use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
 use crate::dsp::effects::memory::{Memory, MemoryPool, SILENT};
+use crate::dsp::effects::pedal::Pedal;
 use crate::dsp::effects::phaser::Phaser as AllPasses;
 use crate::dsp::filters::lpg::LowPassGate as Gate;
 use crate::dsp::filters::vowel::Formants;
@@ -56,6 +57,8 @@ pub struct InsertState {
     gate: Gate,
     /// A vowel filter's formants, small enough as well.
     vowel: Formants,
+    /// A guitar pedal's filters and oversampling, small enough as well.
+    pedal: Pedal,
     /// How far the slot is switched in: `1` in, `0` bypassed. It crossfades in a straight line
     /// over [`BYPASS_FADE_MS`], so switching doesn't click.
     on: Smoothed,
@@ -81,6 +84,7 @@ impl Default for InsertState {
             phaser: AllPasses::default(),
             gate: Gate::default(),
             vowel: Formants::default(),
+            pedal: Pedal::default(),
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
         }
@@ -161,7 +165,11 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
             let adjusted = driven * -0.25 + 0.5;
             ((adjusted - adjusted.floor()) * std::f32::consts::TAU).sin()
         }
-        DistortType::Crush | DistortType::Down => driven,
+        // These don't shape at the higher rate here: the pedals have their own.
+        DistortType::Crush
+        | DistortType::Down
+        | DistortType::Overdrive
+        | DistortType::Distortion => driven,
     }
 }
 
@@ -268,6 +276,15 @@ impl InsertState {
             self.vowel.follow(settings);
             if fresh {
                 self.vowel.settle();
+            }
+        }
+        if let Insert::Distort(settings) = insert
+            && settings.kind.is_pedal()
+        {
+            let fresh = !same_effect(self.insert, insert);
+            self.pedal.follow(f32::from(settings.tone) / 255.0);
+            if fresh {
+                self.pedal.settle();
             }
         }
         self.insert = insert;
@@ -420,6 +437,7 @@ impl InsertState {
         self.mix.settle();
         self.gain.settle();
         self.phaser.settle();
+        self.pedal.settle();
     }
 
     /// One frame through the slot, faded toward what came in as it's bypassed.
@@ -563,6 +581,9 @@ impl InsertState {
                     self.held = input;
                 }
                 self.held
+            }
+            DistortType::Overdrive | DistortType::Distortion => {
+                self.pedal.process(kind, input, amount, smoothing, rate)
             }
             DistortType::Soft => {
                 let (pre, post) = overdrive_gains(amount);

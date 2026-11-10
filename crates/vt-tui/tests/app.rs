@@ -7099,7 +7099,15 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert!(fx_line(&app, 0).contains("Type      Hard"));
     press(&mut app, "-");
     press(&mut app, "-");
-    assert!(fx_line(&app, 0).contains("Type      Down"), "it goes round");
+    let line = fx_line(&app, 0);
+    assert!(
+        line.contains("Type      Distortion"),
+        "it goes round: {line}"
+    );
+    // A pedal has a tone control as well.
+    assert!(line.contains("Tone      80 ▕"), "{line}");
+    press(&mut app, "-");
+    assert!(fx_line(&app, 0).contains("Type      Overdrive"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     press(&mut app, "fold");

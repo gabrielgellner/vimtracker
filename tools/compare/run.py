@@ -94,9 +94,22 @@ def print_sides(sides: list[tuple[str, dict]]) -> None:
         print(line)
 
 
+def make_input(spec, case, binary) -> None:
+    """Render the file an input names `made_by`, if it does: that spec's case, our side, written
+    where the input reads it, so a riff our voice plays can go through an effect on every side."""
+    given = spec.input(case) or {}
+    made_by = given.get("made_by") if given.get("signal") == "file" else None
+    if not made_by:
+        return
+    target = (spec.folder / given["path"]).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    probe(binary, spec.folder / made_by["spec"], target, made_by.get("case"))
+
+
 def compare_case(spec, case, binary, folder, references, quiet=False) -> Rendered:
     name = case or "probe"
     ours_path = folder / f"{name}-ours.wav"
+    make_input(spec, case, binary)
     given = spec.input(case) or {}
     input_path = folder / f"{name}-input.wav" if given else None
     response_path = folder / f"{name}-drawn.csv" if given.get("signal") == "sweep" else None

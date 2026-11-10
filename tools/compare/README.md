@@ -99,6 +99,11 @@ reference plugin.
 | `nuance-extremes` | every knob at its bottom or top, 32 ways, two plain notes and two accents | Acid V and ABL3 | as `nuance-accents` |
 | `nuance-chirp` | one plain or accented C-2 at Res 75, 85, 95 and 100%, Env Mod 50 and 100%, Cutoff low and mid, Decay short and long, 64 ways | Acid V and ABL3 | the resonant peak over time: its place, its height over the fundamental and the passband, the skirt an octave over it, and the note's start (`chirp`) |
 | `nuance-chirp-riff` | the Blade riff's Acid line from `confusion-pump-panel`, once through | Acid V and ABL3 | the same, note by note along the riff |
+| `pedal-distortion-harmonics` | Distort's `Distortion` at `Amount` `40`, `80` and `FF`, stepped levels at 110 Hz and 1 kHz | Dist OPAMP-21, `Modern`, at 25, 50 and 100% `Drive` | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `pedal-distortion-response` | `Distortion` given a sweep too quiet to clip, `Tone` open and at its default | Dist OPAMP-21, `Modern` and `Normal` | the EQ around the clip (`response`) |
+| `pedal-riff` | `nuance-chirp-riff`'s Blade riff as our Acid plays it, through `Distortion` at three drives | Dist OPAMP-21, the same samples in | the long-term spectrum's shape, level, crest factor and level over time (`spectrum`) |
+| `pedal-overdrive` | Distort's `Overdrive` at stepped levels at 110 Hz and 1 kHz, four drives | none, as no reference is a Tube Screamer | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `pedal-acid-v` | our Acid's held, open note through `Overdrive` and `Distortion` | Acid V through its own `Overdrive` and `Distorsion` | a held note's harmonics (`harmonics`), against each side's own note with no distortion |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -151,6 +156,23 @@ says how the filter falls past its resonance, and the note's first 20 ms over th
 harmonics are read at each side's own tuning, the layout's `tuning` in cents, as the sweeping
 filter's phase moves the pitch a tracker reads: on held notes with nothing sweeping, ours and
 Acid V play MIDI 36 at 65.41 Hz and ABL3 at 65.55, 3.8 cents sharp.
+
+A `spectrum` report puts a whole passage through an effect on every side, such as a riff through
+a pedal (#361), and reads each side as a whole (`measure.passage`): its long-term spectrum in
+third-octave bands, each band's power against the side's own total, so the shape is compared with
+the levels taken out; its RMS, peak and crest factor; and its level over 10 ms windows, whose 10th
+and 90th percentiles, over the windows within 40 dB of the loudest, are its quiet and loud
+moments. Against a reference it gives how far apart the shapes are, as the RMS of their
+difference over the bands from 40 Hz to 16 kHz, and the levels over time once their overall
+difference is taken out. Its input is usually a `file` that `made_by` renders first: our side of
+another spec's case, such as `nuance-chirp-riff`'s riff, written where the input reads it, so
+every side is given the same samples and only the effect differs.
+
+The Arturia distortions are started from their `Default` preset as Acid V is. Dist OPAMP-21, after
+Tech 21's SansAmp, is compared in its `Modern` mode, which Arturia describes as having no colouring
+or EQ, with its post EQ off, so its clip is heard alone, and in its `Normal` mode, the SansAmp's own
+voicing, for its EQ. Its output falls back from an offset over about 120 ms once a note stops, as
+a coupling capacitor of about 1.3 Hz would.
 
 ### The consensus
 
@@ -291,7 +313,7 @@ A spec has `notes` for a voice or an `input` for an effect, not both. An effect'
 
 | `signal` | Fields | What it is |
 |---|---|---|
-| `file` | `path` | a file, from the spec's folder, at the spec's rate; give it at that rate, as the two sides resample differently |
+| `file` | `path`, and `made_by` if `run.py` makes it | a file, from the spec's folder, at the spec's rate; give it at that rate, as the two sides resample differently. With `made_by = { spec = "...", case = "..." }`, `run.py` first renders our side of that spec's case into it |
 | `sine` | `frequency`, `level`, `seconds` | a steady sine |
 | `sweep` | `from`, `to`, `level`, `seconds` | Farina's exponential sweep |
 | `steps` | `frequency`, `from`, `to`, `step` (1 if not given), `hold` | a sine at levels from `from` to `to` dB, each held `hold` seconds, its phase running on |

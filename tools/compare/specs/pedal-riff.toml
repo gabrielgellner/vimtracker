@@ -1,0 +1,71 @@
+# The Blade riff, our Acid's render of `nuance-chirp-riff`, through Distort's `Distortion` pedal
+# and through Arturia's Dist OPAMP-21, the same samples into both, for the spectrum and dynamics a
+# pedal gives a 303 line (#361). The riff is rendered first, into `out/inputs/`, by `run.py`.
+#
+#   uv run run.py specs/pedal-riff.toml --report out/pedal-riff.html
+
+rate = 48000
+
+[input]
+signal = "file"
+path = "../out/inputs/blade-acid.wav"
+made_by = { spec = "nuance-chirp-riff.toml", case = "blade" }
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Distortion"
+1.distort.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Dist OPAMP-21.vst3"
+buffer_size = 512
+preset = "Default"
+
+[reference.parameters]
+post_eq_on = false
+dry_wet = 100.0
+presence = 0.0
+high = 100.0
+output_db = 0.0
+input_hpf_hz = 20.0
+input_lpf_hz = 20000.0
+
+[report]
+kind = "spectrum"
+title = "The Blade riff through Distortion and Dist OPAMP-21"
+about = """
+The Acid line of `confusion-pump-panel`, the Blade riff, as our Acid plays it in \
+`nuance-chirp-riff`, put through our Distort slot's `Distortion` and through Arturia's Dist \
+OPAMP-21, the same samples into both. `Amount`'s place is OPAMP-21's `Drive`.
+
+With our `Tone` fully open, it's against OPAMP-21's `Modern` mode, which has no EQ, so the clip \
+alone is compared. At our default `Tone`, `80`, it's against OPAMP-21's `Normal` mode, the \
+SansAmp's own voicing, whose amp and speaker roll off the highs much more steeply than our tone's \
+12 dB an octave.
+
+Our `Distortion` comes out about 3 dB louder than OPAMP-21 by design: its ceiling is raised so the \
+riff comes out as loud as it went in at the defaults. The shape and the level over time are \
+compared with that taken out.
+"""
+
+[[cases]]
+name = "drive-25-modern"
+ours = { 1.distort.amount = 0x40, 1.distort.tone = 0xFF }
+reference = { drive = 25.0, mode = "Modern" }
+
+[[cases]]
+name = "drive-50-modern"
+ours = { 1.distort.amount = 0x80, 1.distort.tone = 0xFF }
+reference = { drive = 50.0, mode = "Modern" }
+
+[[cases]]
+name = "drive-100-modern"
+ours = { 1.distort.amount = 0xFF, 1.distort.tone = 0xFF }
+reference = { drive = 100.0, mode = "Modern" }
+
+[[cases]]
+name = "drive-50-normal"
+ours = { 1.distort.amount = 0x80, 1.distort.tone = 0x80 }
+reference = { drive = 50.0, mode = "Normal" }
