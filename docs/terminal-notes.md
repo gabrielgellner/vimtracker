@@ -276,6 +276,29 @@ The rounded corners are box-drawing characters, which both terminals draw themse
 cell's exact size, so they join the lines beside them; ratatui's `BorderType::Rounded` draws
 them, through `views::window_border`.
 
+### Beat and bar rules, and finer curves (decision 106)
+
+The phrase grid marks where each beat and bar begins with a rule under the row before it, which
+is an underline in a colour of its own: SGR 4 with SGR 58 for the colour, which crossterm writes
+and kitty and Ghostty both draw. It takes no row and no column. `kitten @ get-text --ansi` on
+kitty 0.50 showed `58:2:81:87:109;4` on the rows before a beat and `58:2:115:121:148;4` on the
+row before a bar, and the grid's text where it was. The screenshots draw it as a one-pixel line
+two pixels under the text.
+
+**Octants and sextants.** Both terminals draw them themselves, as they do box drawing, checked on
+2026-11-09 without installing anything:
+
+*   kitty 0.50: `kitty +runpy` calling `fast_data_types.render_box_char` drew U+1FB00 and U+1FB3B
+    (sextants) and U+1CD00, U+1CD10 and U+1CDE5 (octants) as the right blocks of a 2×3 and 2×4
+    grid, and logged nothing, where it logs `Unknown box drawing character` for a letter.
+*   Ghostty 1.4: `ghostty +show-face --config-default-files=false` said each of those, and
+    `┃ ┅ ╍ ━ ─`, "is handled by Ghostty's internal sprites".
+
+Nothing uses them. Every curve, the envelopes, the filter, the EQ, the compressor, the scope and
+the waveforms, is already a kitty image, the track page's drawn on 6×12 dots a cell and the
+sample page's at the screen's own pixels, so an octant's 2×4 would be coarser. The meters' eighth
+blocks are finer up and down than an octant's quarters too.
+
 ## Still to check by hand
 
 *   The `--when-focus-on` lines above on a real keyboard: that `Cmd-l` adjusts in vimtracker's
