@@ -177,8 +177,9 @@ pub fn project_preview(item: usize, folder: &Path) -> Shown {
 
 impl App {
     /// The folders the explorer starts from for a purpose, at the top of its list: the recent
-    /// ones, then the project's, the settings' own, where the program was run from and the home
-    /// folder. Each is listed once, and one that isn't there is passed over.
+    /// ones, then the project's, the settings' own, for samples the kit folders and the sample
+    /// library too, where the program was run from and the home folder. Each is listed once, and
+    /// one that isn't there is passed over.
     pub(crate) fn places(&self, purpose: Purpose) -> Vec<Root> {
         let mut found: Vec<(PathBuf, &str)> = self
             .recent_places
@@ -188,14 +189,23 @@ impl App {
             .collect();
         let project = self.folder.clone();
         match purpose {
+            // The kits open like folders to their sounds, and the library is the one they play
+            // from, which is large, so it comes last.
             Purpose::Sample => {
                 found.extend(project.map(|folder| (folder, "project")));
+                found.extend(
+                    self.settings
+                        .kit_folders()
+                        .into_iter()
+                        .map(|folder| (folder, "kits")),
+                );
                 found.extend(
                     self.settings
                         .sample_folders()
                         .into_iter()
                         .map(|folder| (folder, "samples")),
                 );
+                found.extend(self.library.clone().map(|folder| (folder, "library")));
             }
             Purpose::Kit => {
                 found.extend(
@@ -419,7 +429,7 @@ impl App {
             return None;
         }
         match &picker.current()?.pick {
-            Pick::Sample(path) => Some(path.clone()),
+            Pick::Sample(path) | Pick::KitSound { path, .. } => Some(path.clone()),
             _ => None,
         }
     }

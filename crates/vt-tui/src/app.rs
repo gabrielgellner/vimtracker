@@ -209,6 +209,9 @@ pub struct App {
     pub audio_row: usize,
     /// Where this machine keeps its kits and samples.
     pub settings: Settings,
+    /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
+    /// one: found as the program starts, and none in tests.
+    pub library: Option<PathBuf>,
     pub mode: Mode,
     pub view: View,
     /// The track page's row and setting.
@@ -437,6 +440,7 @@ impl App {
             audio: AudioState::default(),
             audio_request: None,
             settings: Settings::none(),
+            library: None,
             audio_row: 0,
             track_fine: false,
             recent_views: View::ALL.to_vec(),

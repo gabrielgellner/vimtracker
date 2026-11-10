@@ -252,10 +252,20 @@ note on the track rings out, or lock it on a step for one hard hit.
 ## Choosing a sample
 
 Press `Space 5`, or type `:sample`, to choose a WAV, AIFF or FLAC file from a tree of
-folders: the last few you chose from, the project's folder, your sample folders, where
-you ran the program from and your home folder. It opens on the track's own sample.
+folders: the last few you chose from, the project's folder, your kit folders, your
+sample folders, Ableton Live's sample library if it's installed, where you ran the
+program from and your home folder. It opens on the track's own sample.
 `l` opens a folder, `h` closes it, and `l` or `Enter` on a file puts it in the project's
 bank and has the current track play it. **Navigation** has the rest of the keys.
+
+A kit opens like a folder, named by the kit, to list its sounds by label and name,
+so `kits`, `Ableton`, `Drum Machines`, `909 Core Kit`, `BD` reaches a kick. Choosing
+one is the same as choosing it from the kit in use, below. A sound with variants or
+layers has an arrow: `Enter` chooses the sound itself, and `l` opens it to list its own
+file, its variants and its velocity layers, softest first, any of which can be chosen
+in its place. A sound whose file has gone is still listed, and its preview says why.
+`library` is the `Samples` folder of the newest Live in `/Applications`, with its
+`Loops`, `One Shots` and `Multisamples`, which the imported kits play from.
 
 Moving onto a sample plays it through the current track, as an Elektron's or the M8's
 browser does, and `A` stops that or starts it again. Beside the list is its waveform,
@@ -362,8 +372,9 @@ A sound joins the bank with its label, its name, its gain and its tune, which
 it keeps on whatever track plays it, and its track takes its choke group,
 whether `:kit 909 all` puts it there or `Space 5` chooses it. A sound already
 in the bank, the same file played the same way, isn't added twice, while one
-file tuned two ways, as a kit's toms can be, is two samples. Variants and
-layers are kept for now, and don't yet change what you hear.
+file tuned two ways, as a kit's toms can be, is two samples. A variant or a
+layer can be chosen in its sound's place from `Space 5`, opening the kit's file
+there; otherwise they don't yet change what you hear.
 
 | Command | Does |
 |---|---|
