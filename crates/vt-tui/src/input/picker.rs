@@ -413,7 +413,8 @@ pub struct Picker {
     /// Whether `zz` or `zt` showed space after the last row, which moving then keeps.
     past_end: bool,
     room: usize,
-    /// A hint for keys this list has beyond the usual, drawn under it.
+    /// A hint for keys this list has beyond the usual, drawn under it. The explorer's `P` and
+    /// `A` follow it there, each with its switch showing whether it's on.
     pub hint: Option<&'static str>,
     items: Vec<Item>,
     categories: Vec<Category>,

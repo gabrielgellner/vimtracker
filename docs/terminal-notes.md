@@ -173,6 +173,20 @@ tried:
     `rowcolumn-diacritics.txt`, in the same order. `graphics_image.zig` decompresses `o=z` before
     decoding a PNG, and reads shared memory where its limits allow it.
 
+## Nerd Font symbols
+
+The program needs the Nerd Font symbols, and uses them for icons and switches (decision 101). kitty
+ships them as `Symbols Nerd Font Mono` and Ghostty embeds them, each as a fallback for the
+codepoints the font in use doesn't have, so they show with any font and nothing needs setting up.
+A font that is itself patched with Nerd Font symbols draws its own copies, which are the same icons.
+A `symbol_map` in `kitty.conf` that sends those codepoints to a font without them, or a
+`font-codepoint-map` in Ghostty's config that does, shows a box or a blank in their place. Each
+glyph is a constant in `glyphs.rs` named after its Nerd Font name and codepoint, such as
+`nf-fa-toggle_on`, U+F205.
+
+The manual's screenshots name ordinary monospace fonts, so a screenshot with a glyph in it would
+need a Nerd Font where it's read. None has one yet.
+
 ## Still to check by hand
 
 *   The `--when-focus-on` lines above on a real keyboard: that `Cmd-l` adjusts in vimtracker's

@@ -2413,7 +2413,10 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         })
         .collect();
     assert!(text.contains("┌ Kits ─"), "{text}");
-    assert!(text.contains("Enter use   L on tracks"), "{text}");
+    assert!(
+        text.contains("Enter use  L on tracks  H hidden  P \u{f205} preview"),
+        "{text}"
+    );
     assert!(text.contains("│ 909"), "{text}");
     let bd = text.lines().find(|line| line.contains(" BD  ")).unwrap();
     assert!(bd.contains('\u{10EEEE}'), "its waveform beside it: {bd}");
@@ -9283,6 +9286,75 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     assert!(picker.preview.is_none());
     press(&mut app, "P");
     assert!(app.picker.as_ref().unwrap().preview.is_some());
+    std::fs::remove_dir_all(&library).unwrap();
+}
+
+#[test]
+fn the_sample_explorers_hint_shows_whether_p_and_a_are_on_with_switches() {
+    let (mut app, _realtime) = app();
+    let library = sample_library(&mut app);
+    press(&mut app, " 5l");
+    let on = vt_tui::glyphs::SWITCH_ON;
+    let off = vt_tui::glyphs::SWITCH_OFF;
+    let hint = |app: &App| {
+        let text = picker_text(app, 163, 42);
+        text.lines()
+            .find(|line| line.contains("Enter choose"))
+            .unwrap()
+            .to_owned()
+    };
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!(
+            "└ Enter choose  H hidden  P {on} preview  A {on} audition ─"
+        )),
+        "both on, whole: {line}"
+    );
+    // Each switch is green while it's on, and faint while it's off.
+    let switch_colour = |app: &App, glyph: char, after: &str| {
+        let backend = ratatui::backend::TestBackend::new(163, 42);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let mut picker = app.picker.clone().unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let area = buffer.area;
+        (0..area.height)
+            .flat_map(|y| (0..area.width).map(move |x| (x, y)))
+            .find(|&(x, y)| {
+                buffer[(x, y)].symbol() == glyph.to_string()
+                    && (1..=after.len() as u16)
+                        .map(|i| buffer[(x + 1 + i, y)].symbol())
+                        .collect::<String>()
+                        == after
+            })
+            .map(|cell| buffer[cell].fg)
+            .unwrap()
+    };
+    assert_eq!(switch_colour(&app, on, "preview"), vt_tui::theme::GREEN);
+    // With the preview off the box is at its narrowest, and the hint still fits.
+    press(&mut app, "P");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!(
+            "└ Enter choose  H hidden  P {off} preview  A {on} audition ─┘"
+        )),
+        "{line}"
+    );
+    assert_eq!(switch_colour(&app, off, "preview"), vt_tui::theme::OVERLAY0);
+    press(&mut app, "A");
+    let line = hint(&app);
+    assert!(
+        line.contains(&format!("P {off} preview  A {off} audition")),
+        "{line}"
+    );
+    assert_eq!(
+        switch_colour(&app, off, "audition"),
+        vt_tui::theme::OVERLAY0
+    );
+    press(&mut app, "PA");
+    assert_eq!(switch_colour(&app, on, "audition"), vt_tui::theme::GREEN);
     std::fs::remove_dir_all(&library).unwrap();
 }
 

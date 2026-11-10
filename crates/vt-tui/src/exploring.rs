@@ -244,11 +244,12 @@ impl App {
     /// Open the explorer, with these at the top, on a file or folder if it's listed.
     pub(crate) fn open_explorer(&mut self, purpose: Purpose, roots: Vec<Root>, on: Option<&Path>) {
         self.count = None;
+        // `P` and `A` are drawn after these, with their switches.
         let hint = match purpose {
-            Purpose::Sample => "Enter choose   H hidden   P preview   A audition",
-            Purpose::Kit => "Enter use   L on tracks   H hidden   P preview",
-            Purpose::Project => "Enter open   H hidden   P preview",
-            Purpose::Save | Purpose::Render => "l open   Enter choose   H hidden",
+            Purpose::Sample => "Enter choose  H hidden",
+            Purpose::Kit => "Enter use  L on tracks  H hidden",
+            Purpose::Project => "Enter open  H hidden",
+            Purpose::Save | Purpose::Render => "l open  Enter choose  H hidden",
         };
         let mut picker = Picker::explorer(purpose, roots, home_folder())
             .following(on)
