@@ -1,0 +1,64 @@
+# Arturia's Acid V against our Acid: one held C-2 at five cutoffs, from the knob's bottom to its
+# top, with the other knobs at noon. Acid V's distortion and sub oscillator are turned off, as our
+# Acid has neither, and its output is at 0 dB.
+#
+#   uv run run.py specs/acid-cutoff.toml
+
+rate = 48000
+duration = 1.0
+
+[[notes]]
+time = 0.05
+length = 0.6
+note = 36          # C-2 in the program, as MIDI numbers it
+velocity = 100     # under an accent, which starts at 0x70
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.resonance = 0x80
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+acid.drive = 0x00
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+
+[reference.parameters]
+master_volume_db = 0.0
+osc_waveform = 0.0
+resonance = 0.5
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+
+[[cases]]
+name = "cutoff-00"
+ours = { acid.cutoff = 0x00 }
+reference = { cutoff = 0.0 }
+
+[[cases]]
+name = "cutoff-40"
+ours = { acid.cutoff = 0x40 }
+reference = { cutoff = 0.25 }
+
+[[cases]]
+name = "cutoff-80"
+ours = { acid.cutoff = 0x80 }
+reference = { cutoff = 0.5 }
+
+[[cases]]
+name = "cutoff-C0"
+ours = { acid.cutoff = 0xC0 }
+reference = { cutoff = 0.75 }
+
+[[cases]]
+name = "cutoff-FF"
+ours = { acid.cutoff = 0xFF }
+reference = { cutoff = 1.0 }
