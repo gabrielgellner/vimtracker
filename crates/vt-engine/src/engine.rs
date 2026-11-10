@@ -57,6 +57,19 @@ pub struct TrackPlace {
     pub accumulated: Option<u8>,
 }
 
+/// How many voices of one track the sample page can show a playhead for: the track's note and
+/// its tail, and two of the preview voices playing through it.
+pub const PLAYHEADS: usize = 4;
+
+/// Where a voice playing a sample through a track is in it, for the sample page's playhead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Playhead {
+    /// The bank entry it plays, or none for a one-off file, as the sample page plays.
+    pub entry: Option<u8>,
+    /// The frame it's at, in the pool's frames, counted from the first whichever way it plays.
+    pub frame: u64,
+}
+
 /// Whether the sequencer is moving.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
@@ -1261,13 +1274,21 @@ impl Engine {
     }
 
     /// Play a one-off file through a track on a preview voice, to its end or until another is
-    /// played or it's stopped, as a sample browser plays the file its cursor moves onto. It's
-    /// handed over whole, so nothing is loaded or freed here. What's given back is for the edit
-    /// thread to free: the file it replaces, or this one if the track can't play it.
-    pub fn play_file(&mut self, track: usize, file: Arc<SampleData>) -> Option<Arc<SampleData>> {
+    /// played or it's stopped, as a sample browser plays the file its cursor moves onto. With a
+    /// span, only that much of it plays, the way the span goes, with its gain, pan, tune and fades,
+    /// as the sample page plays a slice or from its cursor. It's handed over whole, so nothing is
+    /// loaded or freed here. What's given back is for the edit thread to free: the file it
+    /// replaces, or this one if the track can't play it.
+    pub fn play_file(
+        &mut self,
+        track: usize,
+        file: Arc<SampleData>,
+        span: Option<Span>,
+    ) -> Option<Arc<SampleData>> {
         self.play_one_off(
             track,
             file,
+            span,
             velocity_gain(DEFAULT_NOTE_VELOCITY),
             Envelope::note_shape(),
         )
@@ -1282,13 +1303,14 @@ impl Engine {
             release_ms: 0,
             ..Envelope::note_shape()
         };
-        self.play_one_off(track, input, 1.0, unshaped)
+        self.play_one_off(track, input, None, 1.0, unshaped)
     }
 
     fn play_one_off(
         &mut self,
         track: usize,
         file: Arc<SampleData>,
+        span: Option<Span>,
         gain: f32,
         shape: Envelope,
     ) -> Option<Arc<SampleData>> {
@@ -1304,6 +1326,10 @@ impl Engine {
         for id in FILE_SAMPLES {
             self.previews.fade_sample(id);
         }
+        // A span is of this file, whatever length it was worked out for, so it turns round at
+        // the file's own end when it's reversed.
+        let frames = file.frames.len() as u64;
+        let span = span.map(|span| Span { frames, ..span });
         // The other place, as the last file may still be fading out of this one.
         let place = 1 - self.file_place;
         self.file_place = place;
@@ -1315,7 +1341,7 @@ impl Engine {
             gain,
             entry: None,
             slice: 0,
-            span: None,
+            span,
             cut: Cut::default(),
             accent: false,
             shape,
@@ -1342,6 +1368,29 @@ impl Engine {
     /// How many preview voices are sounding.
     pub fn previews_sounding(&self) -> usize {
         self.previews.count()
+    }
+
+    /// Where each voice playing a sample through a track is in it, for the sample page's
+    /// playheads: the track's own note and its tail, then the preview voices, as many as there's
+    /// room for. A synth's note has no place in a sample, and a one-off file has no entry.
+    pub fn playheads(&self, track: usize) -> [Option<Playhead>; PLAYHEADS] {
+        let mut found = [None; PLAYHEADS];
+        let Some(state) = self.tracks.get(track) else {
+            return found;
+        };
+        let voices = [&state.voice, &state.tail]
+            .into_iter()
+            .chain(self.previews.on(track));
+        let heads = voices.filter_map(|voice| {
+            let frame = voice.frame()?;
+            let file = FILE_SAMPLES.contains(&voice.sample());
+            let entry = if file { None } else { Some(voice.entry()?) };
+            Some(Playhead { entry, frame })
+        });
+        for (slot, head) in found.iter_mut().zip(heads) {
+            *slot = Some(head);
+        }
+        found
     }
 
     fn start_preview(&mut self, track: usize, note: u8, velocity: u8, release_after: Option<u32>) {

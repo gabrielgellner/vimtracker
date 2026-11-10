@@ -15,9 +15,9 @@ use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 
 use crate::dsp::memory::{Memory, MemoryCount};
-use crate::engine::{Engine, TrackPlace, Transport};
+use crate::engine::{Engine, PLAYHEADS, Playhead, TrackPlace, Transport};
 use crate::mixer::Reading;
-use crate::published::Published;
+use crate::published::{Published, Span};
 use crate::track_state::LiveValues;
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
@@ -128,6 +128,8 @@ pub struct Telemetry {
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
+    /// Where each voice playing a sample through the track watched is in it.
+    pub playheads: [Option<Playhead>; PLAYHEADS],
 }
 
 /// The edit thread's end.
@@ -142,8 +144,9 @@ pub struct Handle {
     pending: Option<Arc<Published>>,
     memories: Producer<Memory>,
     freed: Consumer<Memory>,
-    /// One-off files to hear, and those the callback is done with, to be freed here.
-    files: Producer<Arc<SampleData>>,
+    /// One-off files to hear, each with how much of it plays, and those the callback is done
+    /// with, to be freed here.
+    files: Producer<(Arc<SampleData>, Option<Span>)>,
     heard: Consumer<Arc<SampleData>>,
     /// Long buffers that can't go until there's room in the queue. A version waits for them.
     unsent: Vec<Memory>,
@@ -163,7 +166,7 @@ pub struct Realtime {
     jam: Producer<(usize, JamState)>,
     memories: Consumer<Memory>,
     freed: Producer<Memory>,
-    files: Consumer<Arc<SampleData>>,
+    files: Consumer<(Arc<SampleData>, Option<Span>)>,
     heard: Producer<Arc<SampleData>>,
     /// What the edit thread has been told about each track.
     reported: [JamState; MAX_TRACKS],
@@ -313,11 +316,12 @@ impl Handle {
     }
 
     /// Play a one-off file through a track, loaded on this thread, as the sample browser plays
-    /// the file its cursor is on. The callback only plays it, and gives it back to be freed here.
+    /// the file its cursor is on: the whole of it, or only a span, the way the span goes, as the
+    /// sample page plays a slice. The callback only plays it, and gives it back to be freed here.
     /// If the queue is full, which means audio has stopped, it's dropped here.
-    pub fn play_file(&mut self, track: usize, file: Arc<SampleData>) -> bool {
+    pub fn play_file(&mut self, track: usize, file: Arc<SampleData>, span: Option<Span>) -> bool {
         self.pump();
-        self.files.push(file).is_ok() && self.send(Command::PlayFile { track })
+        self.files.push((file, span)).is_ok() && self.send(Command::PlayFile { track })
     }
 
     /// The newest report from the callback, if there is one. Its reading covers every report
@@ -416,8 +420,8 @@ impl Realtime {
                 // Taken only when what it replaces can be sent back, so nothing is freed here.
                 Command::PlayFile { track } => {
                     if !self.heard.is_full()
-                        && let Ok(file) = self.files.pop()
-                        && let Some(done) = self.engine.play_file(track, file)
+                        && let Ok((file, span)) = self.files.pop()
+                        && let Some(done) = self.engine.play_file(track, file, span)
                     {
                         let _ = self.heard.push(done);
                     }
@@ -455,6 +459,7 @@ impl Realtime {
             tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,
             live: self.engine.live(self.watched),
+            playheads: self.engine.playheads(self.watched),
         });
         // A change that doesn't fit stays different, so it goes in a later block.
         for (track, reported) in self.reported.iter_mut().enumerate() {

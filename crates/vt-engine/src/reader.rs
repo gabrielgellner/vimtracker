@@ -228,6 +228,12 @@ impl Reader {
         self.span
     }
 
+    /// The frame of its sample it's at, for a playhead: counted from the first, whichever way it
+    /// plays.
+    pub fn frame(&self) -> u64 {
+        self.region.frame(self.place).max(0.0) as u64
+    }
+
     /// Whether it plays on past its slice's end, so the span it follows is the one that does.
     pub fn thru(&self) -> bool {
         self.cut.mode == PlayMode::Thru

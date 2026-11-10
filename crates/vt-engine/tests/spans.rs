@@ -471,3 +471,20 @@ fn golden_spans_stay_the_same() {
         golden(name, &render(song, frames));
     }
 }
+
+#[test]
+fn a_tracks_note_says_where_it_is_in_its_entry_for_the_playhead() {
+    let song = song("ramp", points, &["C-4 -- --- --- ---"]);
+    let version = Arc::new(Published::new(Arc::new(song), pool()));
+    let mut engine = Engine::new(RATE, version);
+    assert!(engine.playheads(0).iter().all(Option::is_none), "stopped");
+    engine.play_from(0);
+    let mut out = vec![0.0; 2000 * 2];
+    engine.process(&mut out);
+    let heads = engine.playheads(0);
+    let head = heads[0].expect("the note's playhead");
+    assert_eq!(head.entry, Some(1), "it plays entry 01");
+    // From the start, 0.25 s in, 2000 frames on.
+    assert_eq!(head.frame, 14_000);
+    assert!(heads[1..].iter().all(Option::is_none), "{heads:?}");
+}

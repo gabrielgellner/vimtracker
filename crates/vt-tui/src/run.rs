@@ -432,7 +432,7 @@ pub fn draw_screen(
         View::Song => views::song::draw(frame, view, app),
     }
     // Inside the box the track page has while the keyboard plays it.
-    let free = if app.mode == Mode::Keys {
+    let free = if app.mode == Mode::Keys && app.view == View::Track {
         view.inner(Margin::new(1, 1))
     } else {
         view

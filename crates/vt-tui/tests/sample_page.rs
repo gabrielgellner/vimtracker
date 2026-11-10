@@ -13,7 +13,7 @@ use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::crossterm::terminal::WindowSize;
 use ratatui::style::Color;
-use vt_engine::engine::Engine;
+use vt_engine::engine::{Engine, PLAYHEADS, Playhead, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::action::Action;
@@ -26,7 +26,7 @@ use vt_model::song::{Machine, Song};
 use vt_model::step::FxCommand;
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
-use vt_tui::input::mode::View;
+use vt_tui::input::mode::{Mode, View};
 use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
 use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
@@ -1514,4 +1514,283 @@ fn the_ruler_puts_the_letters_after_their_slices_mark() {
     let last = 1 + (line + 1) / 3;
     let letters: String = ruler.chars().skip(last + 1).take(2).collect();
     assert_eq!(letters, "ab", "{ruler}");
+}
+
+/// Play this many frames of audio, and take in the callback's report.
+fn play(realtime: &mut Realtime, app: &mut App, frames: usize) {
+    let mut out = vec![0.0; frames * 2];
+    realtime.process(&mut out);
+    app.tick();
+}
+
+/// Where the first track's voices are in their samples, as the engine has them.
+fn heads(realtime: &Realtime) -> Vec<Playhead> {
+    realtime
+        .engine()
+        .playheads(0)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn semicolon_plays_the_slice_under_the_cursor_and_its_playhead_follows() {
+    let (mut app, mut realtime) = on_page();
+    command(&mut app, "slice 4");
+    keys(&mut app, "2 G l l l");
+    assert!(cursor(&app) > QUARTERS[2]);
+    keys(&mut app, ";");
+    play(&mut realtime, &mut app, 1000);
+    assert_eq!(
+        heads(&realtime),
+        [Playhead {
+            entry: None,
+            frame: QUARTERS[2] + 1000
+        }],
+        "from the slice's start, not the cursor"
+    );
+    let shown = app.sample_shown().unwrap();
+    assert_eq!(app.sample_playheads(&shown), [QUARTERS[2] + 1000]);
+    // A tap plays to the slice's end, and no further.
+    play(
+        &mut realtime,
+        &mut app,
+        (QUARTERS[3] - QUARTERS[2]) as usize - 1500,
+    );
+    assert_eq!(realtime.engine().previews_sounding(), 1, "a tap plays on");
+    play(&mut realtime, &mut app, 1000);
+    assert!(heads(&realtime).is_empty(), "it ends with the slice");
+    assert!(app.sample_playheads(&shown).is_empty());
+}
+
+#[test]
+fn semicolon_held_plays_until_let_go_and_tapped_plays_out() {
+    let (mut app, mut realtime) = on_page();
+    let key = parse_sequence(";").unwrap()[0];
+    let at = Instant::now();
+    app.key(key, at);
+    play(&mut realtime, &mut app, 1000);
+    assert_eq!(realtime.engine().previews_sounding(), 1);
+    // Its repeats while it's held don't start it again.
+    app.key_repeated(key, at + Duration::from_millis(200));
+    play(&mut realtime, &mut app, 1000);
+    assert_eq!(heads(&realtime)[0].frame, 1000 + 2000);
+    app.key_released(key, at + Duration::from_millis(400));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(realtime.engine().previews_sounding(), 0, "held, it stops");
+    // Tapped, it plays on.
+    app.key(key, at + Duration::from_secs(1));
+    app.key_released(key, at + Duration::from_millis(1100));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(
+        realtime.engine().previews_sounding(),
+        1,
+        "tapped, it plays on"
+    );
+    // Esc lets go of it.
+    app.key(Key::new(KeyCode::Esc), at + Duration::from_secs(2));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(realtime.engine().previews_sounding(), 0);
+}
+
+#[test]
+fn space_c_plays_from_the_cursor_to_the_end_and_tab_stays_the_songs() {
+    let (mut app, mut realtime) = on_page();
+    keys(&mut app, "} l");
+    let from = cursor(&app);
+    keys(&mut app, "Space c");
+    play(&mut realtime, &mut app, 500);
+    assert_eq!(
+        heads(&realtime),
+        [Playhead {
+            entry: None,
+            frame: from + 500
+        }]
+    );
+    // It plays to the entry's end at 90 000, not on to the file's.
+    play(&mut realtime, &mut app, (90_000 - from) as usize - 1000);
+    assert_eq!(realtime.engine().previews_sounding(), 1);
+    play(&mut realtime, &mut app, 1200);
+    assert_eq!(realtime.engine().previews_sounding(), 0);
+    keys(&mut app, "Tab");
+    play(&mut realtime, &mut app, 100);
+    assert_eq!(app.transport, Transport::Playing, "Tab plays the song");
+}
+
+#[test]
+fn the_keys_mode_plays_slices_in_order_from_the_home_row_and_moves_the_cursor() {
+    let (mut app, mut realtime) = on_page();
+    command(&mut app, "slice 20");
+    keys(&mut app, "i");
+    assert_eq!(app.mode, Mode::Keys);
+    assert_eq!(app.key_scope(), Mode::Sample);
+    let shown = app.sample_shown().unwrap();
+    for (name, number) in [("a", 0), ("s", 1), ("k", 7), ("q", 8), ("i", 15), ("d", 2)] {
+        keys(&mut app, name);
+        assert_eq!(cursor(&app), shown.slice(number).start, "{name}");
+        play(&mut realtime, &mut app, 100);
+        assert_eq!(
+            heads(&realtime)[0].frame,
+            shown.slice(number).start + 100,
+            "{name} plays slice {number}"
+        );
+    }
+    // `>` and `<` go a page of sixteen on and back, and no further than the last slice.
+    keys(&mut app, "> a");
+    assert_eq!(cursor(&app), shown.slice(16).start);
+    keys(&mut app, "> f");
+    assert_eq!(cursor(&app), shown.slice(19).start);
+    keys(&mut app, "g");
+    assert!(app.status.contains("No slice 14"), "{}", app.status);
+    keys(&mut app, "< <");
+    assert_eq!(app.sample_page.pads_from, 0);
+    // Other keys work on the page as they do, and Esc leaves.
+    keys(&mut app, "0");
+    assert_eq!(cursor(&app), shown.slice(19).start);
+    keys(&mut app, "Esc");
+    assert_eq!(app.mode, Mode::Normal);
+    keys(&mut app, "a");
+    assert_eq!(cursor(&app), shown.slice(19).start, "a plays nothing now");
+}
+
+#[test]
+fn a_pad_held_stops_when_let_go_and_the_next_pad_takes_its_place() {
+    let (mut app, mut realtime) = on_page();
+    command(&mut app, "slice 4");
+    keys(&mut app, "i");
+    let at = Instant::now();
+    let [a, s] = ["a", "s"].map(|name| parse_sequence(name).unwrap()[0]);
+    app.key(a, at);
+    play(&mut realtime, &mut app, 1000);
+    app.key(s, at + Duration::from_millis(400));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(
+        heads(&realtime)[0].frame,
+        QUARTERS[1] + 4800,
+        "s took a's place"
+    );
+    // Letting go of a, held long, doesn't stop s.
+    app.key_released(a, at + Duration::from_millis(600));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(realtime.engine().previews_sounding(), 1);
+    app.key_released(s, at + Duration::from_millis(900));
+    play(&mut realtime, &mut app, 4800);
+    assert_eq!(realtime.engine().previews_sounding(), 0, "s held, let go");
+}
+
+/// Where each placement of an image was placed, by placement id, from the waveform's left in the
+/// 3-pixel characters `draw` gives.
+fn placements(sent: &str, id: &str) -> BTreeMap<u32, i64> {
+    let mut placed = BTreeMap::new();
+    let mut from = 0;
+    while let Some(at) = sent[from..].find("\x1b_Ga=p,") {
+        let start = from + at;
+        let end = start + sent[start..].find(';').unwrap();
+        let controls = &sent[start + 3..end];
+        from = end;
+        if control(controls, "i") != Some(id) {
+            continue;
+        }
+        let placement: u32 = control(controls, "p").unwrap().parse().unwrap();
+        let offset: i64 = control(controls, "X").unwrap().parse().unwrap();
+        // The cursor jump just before the command says the character.
+        let jump = &sent[sent[..start].rfind("\x1b[").unwrap()..start];
+        let column: i64 = jump
+            .split(';')
+            .nth(1)
+            .unwrap()
+            .trim_end_matches('H')
+            .parse()
+            .unwrap();
+        placed.insert(placement, (column - 2) * 3 + offset);
+    }
+    placed
+}
+
+/// The id of the image stored in the playhead's green, its line.
+fn playhead_id(sent: &str) -> Option<String> {
+    sent.split("\x1b_G")
+        .filter_map(|command| command.split_once(';'))
+        .find(|(controls, data)| {
+            controls.starts_with("a=t,")
+                && STANDARD
+                    .decode(data.split("\x1b\\").next().unwrap_or_default())
+                    .is_ok_and(|png| png.windows(3).any(|rgb| rgb == [0xa6, 0xd1, 0x89]))
+        })
+        .and_then(|(controls, _)| control(controls, "i").map(str::to_owned))
+}
+
+#[test]
+fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_nothing_plays() {
+    let (mut app, _realtime) = on_page();
+    let mut graphics = Graphics::new();
+    draw(&mut app, &mut graphics, 163, 42);
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(
+        sent.is_empty(),
+        "nothing plays, so nothing's sent: {sent:?}"
+    );
+    // The track's note of the entry, and what the page played, each have a line. A note of
+    // another entry doesn't.
+    app.sample_page.heard = app.sample_page.shown;
+    app.playheads[0] = Some(Playhead {
+        entry: Some(1),
+        frame: FIT * 10,
+    });
+    app.playheads[1] = Some(Playhead {
+        entry: Some(2),
+        frame: FIT * 20,
+    });
+    app.playheads[2] = Some(Playhead {
+        entry: None,
+        frame: FIT * 30 + 400,
+    });
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    let id = playhead_id(&sent).expect("the line is stored once");
+    assert_eq!(
+        placements(&sent, &id),
+        BTreeMap::from([(1, 30), (2, 92)]),
+        "{sent:?}"
+    );
+    // Moving one places only it again, a pixel along.
+    app.playheads[0] = Some(Playhead {
+        entry: Some(1),
+        frame: FIT * 10 + 200,
+    });
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(playhead_id(&sent).is_none(), "not stored again");
+    assert_eq!(placements(&sent, &id), BTreeMap::from([(1, 31)]));
+    assert!(sent.len() < 100, "{} bytes: {sent:?}", sent.len());
+    // When it stops, its lines are taken off, and then nothing more is sent.
+    app.playheads = [None; PLAYHEADS];
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert_eq!(sent.matches(&format!("a=d,d=i,i={id},")).count(), 2);
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(sent.is_empty(), "{sent:?}");
+}
+
+#[test]
+fn as_its_column_a_playhead_is_its_columns_background() {
+    let (mut app, _realtime) = on_page();
+    app.playheads[0] = Some(Playhead {
+        entry: Some(1),
+        frame: FIT * 10 + 5,
+    });
+    let green = vt_tui::views::sample::playhead_column();
+    let green_columns = |terminal: &Terminal<TestBackend>| {
+        let buffer = terminal.backend().buffer();
+        (0..163)
+            .filter(|x| buffer[(*x, 10)].bg == green)
+            .collect::<Vec<u16>>()
+    };
+    // With the pictures drawn and the cursor a line, it's a line, so no column is green.
+    let mut graphics = Graphics::new();
+    draw(&mut app, &mut graphics, 163, 42);
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(green_columns(&terminal).is_empty());
+    // As the cursor's column, `zc`, it's its column too: the waveform's 11th, the screen's 12th.
+    keys(&mut app, "z c");
+    let (terminal, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(sent.contains("a=d,d=i"), "the line is taken off");
+    assert_eq!(green_columns(&terminal), [11]);
 }

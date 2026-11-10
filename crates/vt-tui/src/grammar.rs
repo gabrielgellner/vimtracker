@@ -15,7 +15,7 @@ use vt_model::step::{FxCommand, Note, Step};
 use crate::app::{App, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::shaping::ShapePanel;
 
 /// The register that holds the last copy. A cut doesn't touch it.
@@ -86,6 +86,10 @@ impl App {
             self.reset_pending();
             if self.mode.is_visual() || self.mode == Mode::OperatorPending {
                 self.mode = Mode::Normal;
+            }
+            // On the sample page it also lets go of what the page is playing.
+            if self.view == View::Sample {
+                self.stop_sample_audition();
             }
             return;
         }

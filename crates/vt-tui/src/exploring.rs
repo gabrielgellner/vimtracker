@@ -455,8 +455,13 @@ impl App {
         match self.loader.want(&path) {
             Some(Ok(loaded)) => {
                 let track = self.cursor.track;
-                if self.handle.play_file(track, Arc::clone(&loaded.sample)) {
+                if self
+                    .handle
+                    .play_file(track, Arc::clone(&loaded.sample), None)
+                {
                     self.file_playing = Some(path);
+                    // It takes the place of anything the sample page was playing.
+                    self.sample_page.heard = None;
                 }
             }
             // It won't play, and the preview says why.
