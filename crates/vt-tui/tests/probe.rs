@@ -131,11 +131,13 @@ fn an_input_with_no_effects_comes_out_as_it_went_in() {
 #[test]
 fn an_effect_changes_its_input() {
     let dry = rendered(&sine_through(""), None);
-    let quieter = rendered(
-        &sine_through("effects = [\"comp\"]\nsettings = { 1.comp.gain = 0x80 }"),
+    let louder = rendered(
+        &sine_through(
+            "effects = [\"comp\"]\nsettings = { 1.comp.threshold = 0xFF, 1.comp.makeup = 0x80 }",
+        ),
         None,
     );
-    assert!(peak(&quieter) < peak(&dry) * 0.9);
+    assert!(peak(&louder) > peak(&dry) * 1.5);
 }
 
 #[test]

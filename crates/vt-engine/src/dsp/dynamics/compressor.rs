@@ -10,9 +10,13 @@
 //! for ducking.
 //!
 //! `Bus` is in [`super::bus`].
+//!
+//! Every type's `Auto` and `Makeup` come after it, on what it turned down and before the mix, so
+//! a new type has them with nothing of its own: `Auto` matches how loud it comes out to how loud
+//! it went in, and `Makeup` turns it up from there.
 
 use vt_model::insert::{
-    Compressor as Settings, CompressorType, attack_ms, ratio, release_ms, threshold_db,
+    Compressor as Settings, CompressorType, attack_ms, makeup_db, ratio, release_ms, threshold_db,
 };
 
 use super::bus::{self, Bus};
@@ -31,14 +35,25 @@ const AUTO_QUIET: f32 = 1e-8;
 /// The most Auto gives, in dB, however hard it's turned down.
 const AUTO_MOST: f32 = 60.0;
 
-/// A compressor of one of the types, with its own state.
+/// A compressor of one of the types, with its own state, and the `Auto` and `Makeup` every type
+/// shares.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Compressor {
+    kind: Kind,
+    auto: AutoGain,
+    /// `Makeup` as a gain, gliding to where it's set, and the value it was worked out from.
+    makeup: Smoothed,
+    makeup_from: Option<u8>,
+}
+
+/// The type's own state.
 #[derive(Debug, Clone, Copy)]
-pub enum Compressor {
+enum Kind {
     Clean(Clean),
     Bus(Bus),
 }
 
-impl Default for Compressor {
+impl Default for Kind {
     fn default() -> Self {
         Self::Clean(Clean::default())
     }
@@ -47,14 +62,15 @@ impl Default for Compressor {
 impl Compressor {
     /// How far it's turning down now, in dB, for a meter.
     pub fn reduction(&self) -> f32 {
-        match self {
-            Self::Clean(clean) => clean.reduction,
-            Self::Bus(bus) => bus.reduction(),
+        match &self.kind {
+            Kind::Clean(clean) => clean.reduction,
+            Kind::Bus(bus) => bus.reduction(),
         }
     }
 
-    /// One frame turned down by what `key` asks for, all wet, as its type does. `key` is the frame
-    /// itself unless it hears another track. Changing type starts the new one afresh.
+    /// One frame turned down by what `key` asks for, as its type does, then turned up by `Auto`
+    /// and `Makeup`, all wet. `key` is the frame itself unless it hears another track. Changing
+    /// type starts the new one afresh.
     #[inline]
     pub fn process(
         &mut self,
@@ -64,17 +80,85 @@ impl Compressor {
         smoothing: f32,
         rate: u32,
     ) -> [f32; 2] {
-        match (&mut *self, settings.kind) {
-            (Self::Clean(clean), CompressorType::Clean) => {
-                return clean.process(input, key, settings, smoothing, rate);
+        let turned = match (&mut self.kind, settings.kind) {
+            (Kind::Clean(clean), CompressorType::Clean) => {
+                clean.process(input, key, settings, smoothing, rate)
             }
-            (Self::Bus(bus), CompressorType::Bus) => {
-                return bus.process(input, key, settings, smoothing, rate);
+            (Kind::Bus(bus), CompressorType::Bus) => {
+                bus.process(input, key, settings, smoothing, rate)
             }
-            (_, CompressorType::Clean) => *self = Self::Clean(Clean::default()),
-            (_, CompressorType::Bus) => *self = Self::Bus(Bus::default()),
+            (_, CompressorType::Clean) => {
+                self.kind = Kind::Clean(Clean::default());
+                return self.process(input, key, settings, smoothing, rate);
+            }
+            (_, CompressorType::Bus) => {
+                self.kind = Kind::Bus(Bus::default());
+                return self.process(input, key, settings, smoothing, rate);
+            }
+        };
+        if self.makeup_from != Some(settings.makeup) {
+            self.makeup.target = 10_f32.powf(makeup_db(f32::from(settings.makeup)) / 20.0);
+            if self.makeup_from.is_none() {
+                self.makeup.settle();
+            }
+            self.makeup_from = Some(settings.makeup);
         }
-        self.process(input, key, settings, smoothing, rate)
+        let gain = self
+            .auto
+            .gain(input, turned, settings.auto > 0, smoothing, rate)
+            * self.makeup.next(smoothing);
+        turned.map(|sample| sample * gain)
+    }
+}
+
+/// What `Auto` gives back: how much quieter a type comes out than it went in, each measured over
+/// about a second, so it follows the sound's level and not each hit.
+#[derive(Debug, Clone, Copy, Default)]
+struct AutoGain {
+    /// How loud it's been going in lately, and coming out of the type, as power.
+    heard: f32,
+    left: f32,
+    /// What it gives back, in dB: the difference between those two.
+    makeup: f32,
+    /// How much of `makeup` it gives back: all of it with Auto on, none with it off.
+    on: Smoothed,
+    /// The rate its time was worked out for, and how much of the last power it keeps each frame.
+    keeps: Option<(u32, f32)>,
+}
+
+impl AutoGain {
+    /// The gain it gives back this frame, for what went in and what came out of the type.
+    #[inline]
+    fn gain(
+        &mut self,
+        input: [f32; 2],
+        turned: [f32; 2],
+        on: bool,
+        smoothing: f32,
+        rate: u32,
+    ) -> f32 {
+        self.on.target = if on { 1.0 } else { 0.0 };
+        let kept = match self.keeps {
+            Some((was, kept)) if was == rate => kept,
+            _ => {
+                if self.keeps.is_none() {
+                    self.on.settle();
+                }
+                let kept = keeps(AUTO_MS, rate);
+                self.keeps = Some((rate, kept));
+                kept
+            }
+        };
+        // It matches how loud it comes out to how loud it went in, so switching it in or out
+        // compares like with like, however hard it's turned down.
+        let power = |frame: [f32; 2]| (frame[0] * frame[0] + frame[1] * frame[1]) / 2.0;
+        self.heard = kept * self.heard + (1.0 - kept) * power(input);
+        self.left = kept * self.left + (1.0 - kept) * power(turned);
+        if self.heard > AUTO_QUIET {
+            let difference = 10.0 * (self.heard / self.left.max(AUTO_QUIET * 1e-6)).log10();
+            self.makeup = difference.clamp(0.0, AUTO_MOST);
+        }
+        10_f32.powf(self.makeup * self.on.next(smoothing) / 20.0)
     }
 }
 
@@ -85,19 +169,12 @@ pub struct Clean {
     reduction: f32,
     /// What the release lets go of, before the attack smooths it, in dB.
     released: f32,
-    /// How loud it's been going in lately, and coming out before Auto, as power.
-    heard: f32,
-    left: f32,
-    /// What Auto gives back, in dB: the difference between those two.
-    makeup: f32,
     threshold: Smoothed,
     /// One over the ratio, so a limiter is `0`.
     slope: Smoothed,
-    /// How much of `makeup` it gives back: all of it with Auto on, none with it off.
-    auto: Smoothed,
     /// The settings the times were worked out from, and how much of the last value each keeps:
-    /// the attack, the release and Auto's.
-    times: Option<(Settings, [f32; 3])>,
+    /// the attack and the release.
+    times: Option<(Settings, [f32; 2])>,
 }
 
 /// How much of the last value a one-pole smoother keeps, for a time in ms at a rate.
@@ -118,7 +195,7 @@ fn computed(level: f32, threshold: f32, slope: f32) -> f32 {
     }
 }
 
-/// How loud a steady level comes out, in dB, once it's settled, before `Auto`, `Mix` and `Gain`:
+/// How loud a steady level comes out, in dB, once it's settled, before `Auto`, `Makeup` and `Mix`:
 /// the static curve of the type it's set to, for drawing, worked out as the compressor does.
 pub fn curve_db(level: f32, settings: Settings) -> f32 {
     match settings.kind {
@@ -133,7 +210,7 @@ pub fn curve_db(level: f32, settings: Settings) -> f32 {
 
 impl Clean {
     /// Take what's set now, jumping to it the first time.
-    fn follow(&mut self, settings: Settings, rate: u32) -> [f32; 3] {
+    fn follow(&mut self, settings: Settings, rate: u32) -> [f32; 2] {
         if let Some((was, times)) = self.times
             && was == settings
         {
@@ -141,16 +218,13 @@ impl Clean {
         }
         self.threshold.target = threshold_db(f32::from(settings.threshold));
         self.slope.target = 1.0 / ratio(f32::from(settings.ratio));
-        self.auto.target = if settings.auto > 0 { 1.0 } else { 0.0 };
         if self.times.is_none() {
             self.threshold.settle();
             self.slope.settle();
-            self.auto.settle();
         }
         let times = [
             keeps(attack_ms(f32::from(settings.attack)), rate),
             keeps(release_ms(f32::from(settings.release)), rate),
-            keeps(AUTO_MS, rate),
         ];
         self.times = Some((settings, times));
         times
@@ -167,7 +241,7 @@ impl Clean {
         smoothing: f32,
         rate: u32,
     ) -> [f32; 2] {
-        let [attack, release, auto] = self.follow(settings, rate);
+        let [attack, release] = self.follow(settings, rate);
         let threshold = self.threshold.next(smoothing);
         let slope = self.slope.next(smoothing);
         let peak = key[0].abs().max(key[1].abs()).max(FLOOR);
@@ -177,18 +251,7 @@ impl Clean {
         // through its troughs, and the attack smooths what it holds.
         self.released = wanted.max(release * self.released + (1.0 - release) * wanted);
         self.reduction = attack * self.reduction + (1.0 - attack) * self.released;
-        let turned = 10_f32.powf(-self.reduction / 20.0);
-        // Auto matches how loud it comes out to how loud it went in, so switching it in or out
-        // compares like with like, however hard it's turned down.
-        let power = (input[0] * input[0] + input[1] * input[1]) / 2.0;
-        self.heard = auto * self.heard + (1.0 - auto) * power;
-        self.left = auto * self.left + (1.0 - auto) * power * turned * turned;
-        if self.heard > AUTO_QUIET {
-            let difference = 10.0 * (self.heard / self.left.max(AUTO_QUIET * 1e-6)).log10();
-            self.makeup = difference.clamp(0.0, AUTO_MOST);
-        }
-        let given = self.makeup * self.auto.next(smoothing);
-        let gain = turned * 10_f32.powf(given / 20.0);
+        let gain = 10_f32.powf(-self.reduction / 20.0);
         input.map(|sample| sample * gain)
     }
 }
@@ -246,7 +309,7 @@ mod tests {
 
     /// How loud a steady level comes out once it's settled, in dB, with what's set.
     fn comes_out(level_db: f32, settings: Settings) -> f32 {
-        let mut compressor = Clean::default();
+        let mut compressor = Compressor::default();
         let level = 10_f32.powf(level_db / 20.0);
         let mut out = [0.0; 2];
         for _ in 0..RATE * 8 {
@@ -289,7 +352,7 @@ mod tests {
                 release: 0x60,
                 ..settings(threshold, ratio)
             };
-            let mut compressor = Clean::default();
+            let mut compressor = Compressor::default();
             let (mut went_in, mut came_out) = (Vec::new(), Vec::new());
             for frame in 0..RATE as usize * 6 {
                 let sample = hit(frame);

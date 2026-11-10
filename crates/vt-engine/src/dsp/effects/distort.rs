@@ -234,7 +234,6 @@ impl InsertState {
             Insert::Delay(Delay { mix, gain, .. })
             | Insert::Reverb(Reverb { mix, gain, .. })
             | Insert::Chorus(Chorus { mix, gain, .. })
-            | Insert::Compressor(Compressor { mix, gain, .. })
             | Insert::Limit(Limiter { mix, gain, .. })
             | Insert::Phaser(Phaser { mix, gain, .. })
             | Insert::Flanger(Flanger { mix, gain, .. })
@@ -247,6 +246,8 @@ impl InsertState {
             | Insert::Reso(Resonator { mix, gain, .. })
             | Insert::Comb(Comb { mix, gain, .. })
             | Insert::Vowel(Vowel { mix, gain, .. }) => (0, mix, gain),
+            // A compressor's makeup is its own, on what it turned down, with nothing after the mix.
+            Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -472,12 +473,13 @@ impl InsertState {
                 let key = settings
                     .source_track(keys.sounds)
                     .map_or(input, |track| keys.of(track));
+                // Its makeup is in what comes out wet, so compressing in parallel turns up only
+                // what it turned down.
                 let wet = self.dynamics.process(input, key, settings, smoothing, rate);
                 let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
                 return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                    wet[0] * mix + input[0] * (1.0 - mix),
+                    wet[1] * mix + input[1] * (1.0 - mix),
                 ];
             }
             Insert::Lpg(settings) => {
