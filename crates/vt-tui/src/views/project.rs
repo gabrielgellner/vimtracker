@@ -15,9 +15,10 @@ use crate::explorer::place_name;
 use crate::input::mode::Mode;
 use crate::project_page::{PROJECT_ROWS, ProjectControl};
 use crate::theme;
-use crate::views::meter::{EIGHTHS, hanging_cell};
 use crate::views::status::grid_name;
-use crate::views::table::{Columns, blank_row, take_top};
+use crate::views::widgets::meter::{EIGHTHS, hanging_cell};
+use crate::views::widgets::setting;
+use crate::views::widgets::table::{Columns, blank_row, take_top};
 
 /// Room for a setting's name, and where the right column starts.
 const LABEL: u16 = 10;
@@ -134,20 +135,11 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
         cells.to(control.column() * 2);
         let is_here = *control == here;
         let on_fine = is_here && app.project_fine;
-        let text = if is_here && typing && !on_fine {
-            format!("{}_", app.entry.text)
-        } else {
-            value(app, *control)
-        };
-        let style = if is_here && !on_fine {
-            theme::cursor(app.mode)
-        } else if *control == ProjectControl::Root && !app.scale.on
-            || *control == ProjectControl::Folder && app.folder.is_none()
-        {
-            theme::dim()
-        } else {
-            Style::new()
-        };
+        let on_value = is_here && !on_fine;
+        let text = setting::text(app, on_value, || value(app, *control));
+        let default = *control == ProjectControl::Root && !app.scale.on
+            || *control == ProjectControl::Folder && app.folder.is_none();
+        let style = setting::style(app, on_value, default);
         // An action is its own name, so the cursor is on that rather than a value beside it, and
         // what it does is in the value's place.
         let mut spans = Vec::new();
@@ -163,12 +155,7 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
             } else {
                 fine(app.song().millibpm)
             };
-            let style = if on_fine {
-                theme::cursor(app.mode)
-            } else {
-                theme::dim()
-            };
-            spans.push(Span::styled(digits, style));
+            spans.push(Span::styled(digits, setting::style(app, on_fine, true)));
         }
         if let Some(note) = after(app, *control) {
             if !spans.is_empty() {
@@ -206,7 +193,6 @@ fn groove_columns(steps: usize) -> Columns {
 fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
     let (_, groove) = app.shown_groove();
     let here = app.project_control();
-    let typing = app.mode == Mode::Insert;
     let steps = groove.steps();
     // Each tick sits over the last digit of its value.
     let tick = |filled: usize, late: bool| {
@@ -241,21 +227,12 @@ fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
         for step in 0..steps {
             let field = control(step as u8);
             let is_here = field == here;
-            let text = if is_here && typing {
-                format!("{}_", app.entry.text)
-            } else {
-                value(app, field)
-            };
-            let style = if is_here {
-                theme::cursor(app.mode)
-            } else if field == ProjectControl::Push(0)
-                || matches!(field, ProjectControl::Velocity(_)) && text == FULL_VELOCITY.to_string()
-            {
-                // What's left on the grid or at full velocity matters less.
-                theme::dim()
-            } else {
-                Style::new()
-            };
+            let text = setting::text(app, is_here, || value(app, field));
+            // What's left on the grid or at full velocity matters less.
+            let default = field == ProjectControl::Push(0)
+                || matches!(field, ProjectControl::Velocity(_))
+                    && text == FULL_VELOCITY.to_string();
+            let style = setting::style(app, is_here, default);
             cells.cell(Line::styled(text, style).right_aligned());
         }
         cells.skip(1).cell(Line::styled(units, theme::dim()));

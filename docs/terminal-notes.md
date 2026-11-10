@@ -284,7 +284,7 @@ grid itself never moves, as the terminal counts each symbol as one cell either w
 
 The rounded corners are box-drawing characters, which both terminals draw themselves at the
 cell's exact size, so they join the lines beside them; ratatui's `BorderType::Rounded` draws
-them, through `views::window_border`.
+them, through `views::widgets::window_border`.
 
 ### Beat and bar rules, and finer curves (decision 106)
 

@@ -10,7 +10,7 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use crate::app::App;
 use crate::theme;
-use crate::views;
+use crate::views::widgets;
 
 /// How long a prefix waits before showing what can come next.
 pub const POPUP_DELAY: Duration = Duration::from_millis(300);
@@ -35,7 +35,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
     };
     frame.render_widget(Clear, popup);
     frame.render_widget(
-        Paragraph::new(lines).block(views::window_border().style(theme::window())),
+        Paragraph::new(lines).block(widgets::window_border().style(theme::window())),
         popup,
     );
 }
@@ -51,7 +51,7 @@ pub fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Clear, area);
     frame.render_widget(
         Paragraph::new(lines).block(
-            views::window_border()
+            widgets::window_border()
                 .style(theme::window())
                 .title("Keys: j and k scroll, any other key closes")
                 .title_style(Style::new().add_modifier(Modifier::BOLD)),

@@ -16,9 +16,10 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use crate::explorer::Icon;
 use crate::glyphs;
 use crate::input::picker::{Picker, Row};
-use crate::kitty;
 use crate::theme;
-use crate::views;
+use crate::views::widgets;
+use crate::views::widgets::hint::{Switch, hint_line};
+use crate::views::widgets::image;
 
 /// The list's width, inside its border, at least and at most.
 const MIN_LIST_WIDTH: usize = 32;
@@ -91,11 +92,11 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
             theme::dim(),
         ));
     }
-    let mut block = views::window_border()
+    let mut block = widgets::window_border()
         .style(theme::window())
         .title(Line::from(title));
     if let Some(hint) = picker.hint {
-        block = block.title_bottom(hint_line(picker, hint));
+        block = block.title_bottom(self::hint(picker, hint));
     }
     let inner = block.inner(window);
     frame.render_widget(Clear, window);
@@ -124,33 +125,20 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
     }
 }
 
-/// The hint under the list, and in the explorer its `H`, `P` and `A` after it, each with a switch
-/// that shows whether it's on: green when it is, and faint when it isn't. The gaps are two spaces,
-/// so the sample explorer's fits under its list with the preview off.
-fn hint_line(picker: &Picker, hint: &str) -> Line<'static> {
-    let mut spans = vec![Span::styled(format!(" {hint}"), theme::dim())];
+/// The hint under the list, and in the explorer its `H`, `P` and `A` after it, each with a switch.
+fn hint(picker: &Picker, hint: &str) -> Line<'static> {
+    let mut switches = Vec::new();
     if let Some(tree) = picker.tree() {
-        let mut switch = |key: char, on: bool, name: &str| {
-            let (glyph, style) = if on {
-                (glyphs::SWITCH_ON, theme::active())
-            } else {
-                (glyphs::SWITCH_OFF, theme::faint())
-            };
-            spans.push(Span::styled(format!("  {key} "), theme::dim()));
-            spans.push(Span::styled(glyph.to_string(), style));
-            let space = glyphs::ICON_SPACE;
-            spans.push(Span::styled(format!("{space}{name}"), theme::dim()));
-        };
-        switch('H', tree.hidden, "hidden");
+        let switch = |key, on, name| Switch { key, on, name };
+        switches.push(switch('H', tree.hidden, "hidden"));
         if tree.purpose.previews() {
-            switch('P', tree.preview, "preview");
+            switches.push(switch('P', tree.preview, "preview"));
         }
         if tree.purpose.auditions() {
-            switch('A', tree.audition, "audition");
+            switches.push(switch('A', tree.audition, "audition"));
         }
     }
-    spans.push(Span::raw(" "));
-    Line::from(spans)
+    hint_line(hint, &switches)
 }
 
 /// Draw the list of matches the command line's Tab shows, as a small box that sits on the status
@@ -174,7 +162,7 @@ pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Pi
         width,
         height,
     };
-    let block = views::window_border()
+    let block = widgets::window_border()
         .style(theme::window())
         .title(Line::from(vec![
             Span::styled(
@@ -447,9 +435,8 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
     if shown.wave.is_some()
         && let Some(id) = picker.preview_wave
     {
-        let style = Style::new().fg(kitty::id_color(id));
-        for row in kitty::placeholder_lines(PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT) {
-            lines.push(Line::from(vec![Span::raw(" "), Span::styled(row, style)]));
+        for row in image::rows(id, PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT) {
+            lines.push(Line::from(vec![Span::raw(" "), row]));
         }
     }
     let room = usize::from(area.height).saturating_sub(lines.len());
@@ -460,7 +447,6 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
         room
     };
     let name_width = width.saturating_sub(PREVIEW_LABEL_WIDTH + PREVIEW_WAVE_WIDTH + GAP);
-    let wave = &kitty::placeholder_lines(PREVIEW_WAVE_WIDTH, PREVIEW_WAVE_HEIGHT)[0];
     for (at, line) in shown.lines.iter().take(fits).enumerate() {
         let name: String = line.name.chars().take(name_width).collect();
         let mut spans = vec![
@@ -469,10 +455,7 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
             Span::raw(" ".repeat(GAP)),
         ];
         if let Some(Some(id)) = picker.preview_images.get(at) {
-            spans.push(Span::styled(
-                wave.clone(),
-                Style::new().fg(kitty::id_color(*id)),
-            ));
+            spans.extend(image::rows(*id, PREVIEW_WAVE_WIDTH, PREVIEW_WAVE_HEIGHT));
         }
         lines.push(Line::from(spans));
     }

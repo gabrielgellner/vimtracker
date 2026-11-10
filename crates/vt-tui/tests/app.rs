@@ -2033,7 +2033,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
 
 #[test]
 fn bars_show_where_a_value_is() {
-    use vt_tui::views::bar::{centre_bar, level_bar};
+    use vt_tui::views::widgets::bar::{centre_bar, level_bar};
     assert_eq!(level_bar(0x00, 9), "         ");
     assert_eq!(level_bar(0x01, 9), "▏        ");
     assert_eq!(level_bar(0x40, 9), "██▎      ");
@@ -2053,7 +2053,7 @@ fn bars_show_where_a_value_is() {
 fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
     use ratatui::style::Style;
     use vt_tui::theme;
-    use vt_tui::views::bar::ValueBar;
+    use vt_tui::views::widgets::bar::ValueBar;
     let bar_spans =
         |set, live, centred| ValueBar::new(set, 9).playing(live).centred(centred).spans();
     let text = |spans: &[ratatui::text::Span]| {
@@ -2095,7 +2095,7 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
 
 #[test]
 fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
-    use vt_tui::views::bar::{ValueBar, level_bar};
+    use vt_tui::views::widgets::bar::{ValueBar, level_bar};
     let text = |set, live| -> String {
         ValueBar::new(set, 9)
             .playing(live)

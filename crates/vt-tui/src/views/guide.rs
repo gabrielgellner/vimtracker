@@ -7,7 +7,7 @@ use ratatui::widgets::{Clear, Paragraph};
 
 use crate::guides::Guide;
 use crate::theme;
-use crate::views;
+use crate::views::widgets;
 
 /// The widest the window gets, since long lines are hard to read.
 const WIDTH: u16 = 100;
@@ -40,7 +40,7 @@ pub fn draw(frame: &mut Frame, area: Rect, guide: Guide, scroll: usize) {
     frame.render_widget(Clear, window);
     frame.render_widget(
         Paragraph::new(lines).block(
-            views::window_border()
+            widgets::window_border()
                 .style(theme::window())
                 .title(format!(" {} ", guide.title()))
                 .title_bottom(" j k scroll  C-d C-u page  g G ends  ? guides  q close ")

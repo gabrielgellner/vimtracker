@@ -11,7 +11,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::shaping::{ShapePanel, ShapeRow};
 use crate::theme;
-use crate::views;
+use crate::views::widgets;
 
 const WIDTH: u16 = 38;
 /// The border, the heading and the keys, beyond the rows.
@@ -104,7 +104,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     frame.render_widget(Clear, window);
     frame.render_widget(
         Paragraph::new(lines).block(
-            views::window_border()
+            widgets::window_border()
                 .style(theme::window())
                 .title(" Shape ")
                 .title_bottom(" Enter keep  Esc cancel ")
