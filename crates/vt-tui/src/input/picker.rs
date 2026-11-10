@@ -410,6 +410,8 @@ pub struct Picker {
     /// The first row shown, which stays put until the cursor comes within the margin of an edge,
     /// and the rows the list had room for when last drawn.
     first_shown: usize,
+    /// Whether `zz` or `zt` showed space after the last row, which moving then keeps.
+    past_end: bool,
     room: usize,
     /// A hint for keys this list has beyond the usual, drawn under it.
     pub hint: Option<&'static str>,
@@ -481,6 +483,7 @@ impl Picker {
             focus: Focus::List,
             selected: 0,
             first_shown: 0,
+            past_end: false,
             room: 0,
             hint: None,
             items,
@@ -1131,17 +1134,35 @@ impl Picker {
         self.scroll(self.first_shown);
     }
 
-    /// Show the list from a row, or as near it as keeps the margin round the cursor, with no
-    /// space after the last row. Before it's drawn, it waits to know its room.
+    /// Show the list from a row, or as near it as keeps the margin round the cursor. Moving
+    /// leaves no space after the last row, unless `zz` or `zt` already put some there. Before
+    /// it's drawn, it waits to know its room.
     fn scroll(&mut self, first: usize) {
+        let last = self.rows.len().saturating_sub(self.room);
+        let end = if self.past_end {
+            last.max(self.first_shown)
+        } else {
+            last
+        };
+        self.scroll_until(first, end);
+        self.past_end = self.first_shown > last;
+    }
+
+    /// `zz` and `zt`: show the list from a row even past its end, as Vim shows the space after
+    /// a buffer's last line, so the last rows can sit in the middle or at the top.
+    fn scroll_past_end(&mut self, first: usize) {
+        self.scroll_until(first, usize::MAX);
+        self.past_end = self.first_shown > self.rows.len().saturating_sub(self.room);
+    }
+
+    fn scroll_until(&mut self, first: usize, end: usize) {
         if self.room == 0 {
             return;
         }
         let margin = SCROLL_MARGIN.min((self.room - 1) / 2);
         let lowest = (self.selected + margin + 1).saturating_sub(self.room);
         let highest = self.selected.saturating_sub(margin);
-        let last = self.rows.len().saturating_sub(self.room);
-        self.first_shown = first.max(lowest).min(highest).min(last);
+        self.first_shown = first.max(lowest).min(highest).min(end);
     }
 
     /// `C-d` and `C-u`: the cursor and the view half the list down or up, as in Vim.
@@ -1171,8 +1192,9 @@ impl Picker {
         }
     }
 
-    /// Work out the rows again.
+    /// Work out the rows again. Space `zz` or `zt` left after the last row goes with them.
     fn rebuild(&mut self) {
+        self.past_end = false;
         if self.tree.is_some() {
             (self.rows, self.matched) = self.tree_rows();
         } else if self.is_searching() {
@@ -1300,12 +1322,12 @@ impl Picker {
             // The cursor's row to the middle, top or bottom, as Vim's `zz`, `zt` and `zb` put it,
             // keeping the margin and the list's ends.
             KeyCode::Char('z') if after_z => {
-                self.scroll(
+                self.scroll_past_end(
                     self.selected
                         .saturating_sub(self.room.saturating_sub(1) / 2),
                 );
             }
-            KeyCode::Char('t') if after_z => self.scroll(self.selected),
+            KeyCode::Char('t') if after_z => self.scroll_past_end(self.selected),
             KeyCode::Char('b') if after_z => {
                 self.scroll((self.selected + 1).saturating_sub(self.room))
             }
@@ -1964,17 +1986,34 @@ mod tests {
         press(&mut picker, "jk");
         assert_eq!(view(&picker), (13, 20), "and it stays there");
         assert_eq!(picker.focus, Focus::List, "none of them search");
-        // At the ends, the list doesn't scroll past them.
+        // Nothing shows before the first row.
         press(&mut picker, "gg");
         press(&mut picker, "zz");
         assert_eq!(view(&picker), (0, 0));
         press(&mut picker, "zb");
         assert_eq!(view(&picker), (0, 0));
+        // But `zz` and `zt` show space after the last, as Vim does after a buffer's last line,
+        // and moving keeps it until the margin needs the view back.
         press(&mut picker, "G");
+        assert_eq!(view(&picker), (24, 39), "moving leaves no space after it");
         press(&mut picker, "zz");
-        assert_eq!(view(&picker), (24, 39));
+        assert_eq!(view(&picker), (32, 39), "in the middle");
         press(&mut picker, "zt");
-        assert_eq!(view(&picker), (24, 39));
+        assert_eq!(view(&picker), (36, 39), "at the top but for the margin");
+        press(&mut picker, "k");
+        assert_eq!(
+            view(&picker),
+            (35, 38),
+            "the margin above pulls it back a row"
+        );
+        press(&mut picker, "zb");
+        assert_eq!(view(&picker), (26, 38));
+        press(&mut picker, "G");
+        assert_eq!(
+            view(&picker),
+            (26, 39),
+            "and moving doesn't push it past the end"
+        );
         // A `z` waiting is let go by `Esc` rather than closing the list.
         assert_eq!(press(&mut picker, "z<Esc>"), Outcome::Stay);
     }

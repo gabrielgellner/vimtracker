@@ -78,7 +78,8 @@ rest closed. The title shows how many items match, out of how many there are.
 
 A long list scrolls before the cursor reaches its edge, keeping three rows beyond it in
 view, as Vim's `scrolloff` does, so you can see what's coming. It stays where it is as the
-cursor turns round, and `zt` and `zb` keep those three rows too.
+cursor turns round, and `zt` and `zb` keep those three rows too. `zz` and `zt` can scroll
+past the end of the list, as in Vim, so the last rows can sit in the middle or at the top.
 
 Any other letter starts a search with itself: on Machine, `K` then `pl` finds `Plaits`.
 A name that starts with one of the keys above, such as `ladder` or `zap`, needs `/` first. A
