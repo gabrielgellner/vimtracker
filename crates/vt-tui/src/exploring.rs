@@ -93,6 +93,11 @@ pub fn taken_in(folder: &Path) -> HashSet<String> {
         .collect()
 }
 
+/// Whether `:render`'s flags ask for stems, into a folder rather than a file.
+fn is_stems(flags: &str) -> bool {
+    flags.contains("--stems") || flags.contains("--split")
+}
+
 /// The commands whose line ends in a name, which `C-r` can roll.
 const NAMED_BY: [&str; 3] = ["w", "new", "render"];
 
@@ -122,7 +127,7 @@ pub fn rolled_line(line: &str, name_in: impl FnOnce(&str) -> String) -> Option<S
     };
     let extension = match last.rfind('.') {
         Some(at) if at > 0 => &last[at..],
-        _ if last.is_empty() && command == "render" && !flags.contains("--stems") => ".wav",
+        _ if last.is_empty() && command == "render" && !is_stems(flags) => ".wav",
         _ => "",
     };
     let name = name_in(folder);
@@ -304,7 +309,7 @@ impl App {
         match naming.purpose {
             Purpose::Render => {
                 let stem = numbered(&self.project_name(), is_taken);
-                if naming.after.contains("--stems") {
+                if is_stems(&naming.after) {
                     stem
                 } else {
                     format!("{stem}.wav")

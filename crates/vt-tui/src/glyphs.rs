@@ -67,6 +67,8 @@ pub const SAMPLER: char = '\u{f147d}';
 pub const SYNTH: char = '\u{f067d}';
 /// A drum voice: `nf-fa-drum`, U+EE32.
 pub const DRUM: char = '\u{ee32}';
+/// A group, where its tracks are summed: `nf-md-call_merge`, U+F00F8.
+pub const GROUP: char = '\u{f00f8}';
 /// A return, where sends come back: `nf-md-arrow_u_left_top`, U+F17B3.
 pub const RETURN: char = '\u{f17b3}';
 /// The master, which is what's heard: `nf-md-speaker`, U+F04C3.
@@ -89,6 +91,7 @@ pub fn machine(machine: Machine) -> char {
 pub fn track(track: &Track) -> char {
     match track.kind {
         TrackKind::Sound => machine(track.machine),
+        TrackKind::Group(_) => GROUP,
         TrackKind::ReturnA | TrackKind::ReturnB => RETURN,
         TrackKind::Master => MASTER,
     }

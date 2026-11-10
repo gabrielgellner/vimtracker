@@ -33,9 +33,12 @@ enum Command {
         /// Let sound ring out after the end, up to 10 seconds.
         #[arg(long)]
         tail: bool,
-        /// Write one file per track, with the output as a folder.
+        /// Write one file per group, and per track in none, with the output as a folder.
         #[arg(long)]
         stems: bool,
+        /// Write stems of each track instead, splitting the groups.
+        #[arg(long)]
+        split: bool,
     },
     /// Play one voice or one effect with no song, offline, from a spec that the reference side in
     /// tools/compare reads too, to a WAV file.
@@ -106,6 +109,7 @@ fn main() -> std::process::ExitCode {
             seed,
             tail,
             stems,
+            split,
         }) => vt_tui::run::render(&vt_tui::run::RenderRequest {
             project,
             out,
@@ -114,6 +118,7 @@ fn main() -> std::process::ExitCode {
             seed,
             tail,
             stems,
+            split,
         })
         .map_err(|e| e.to_string()),
         Some(Command::Probe {

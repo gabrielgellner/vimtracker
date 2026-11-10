@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_frames, render_stems};
+use vt_model::constants::MAX_GROUPS;
 use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -16,10 +17,10 @@ const STEP: usize = 6000;
 const ECHO: usize = 18_100;
 /// When the hit itself is sounding.
 const HIT: usize = 100;
-/// Where the fixed tracks are, after the one track that plays.
-const RETURN_A: usize = 1;
-const RETURN_B: usize = 2;
-const MASTER: usize = 3;
+/// Where the fixed tracks are, after the one track that plays and the groups.
+const RETURN_A: usize = 1 + MAX_GROUPS;
+const RETURN_B: usize = RETURN_A + 1;
+const MASTER: usize = RETURN_A + 2;
 
 fn pool() -> Arc<SamplePool> {
     let mut pool = SamplePool::default();

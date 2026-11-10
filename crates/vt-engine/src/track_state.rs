@@ -1776,6 +1776,35 @@ impl TrackState {
         out
     }
 
+    /// What a group adds to the mix for the sum of its tracks, as a return does, and what it sends
+    /// to the returns from there, after its level and pan.
+    #[inline]
+    pub fn process_group(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> ShapedFrame {
+        let dry = self.process_return(input, smoothing, fast, rate, keys);
+        let keeping_up = |target: SettingId| {
+            if self.offsets[target.index()] == 0.0 {
+                smoothing
+            } else {
+                fast
+            }
+        };
+        let (to_a, to_b) = (keeping_up(SettingId::SEND_A), keeping_up(SettingId::SEND_B));
+        let send_a = self.send_a_gain.next(to_a);
+        let send_b = self.send_b_gain.next(to_b);
+        ShapedFrame {
+            dry,
+            send_a: [dry[0] * send_a, dry[1] * send_a],
+            send_b: [dry[0] * send_b, dry[1] * send_b],
+        }
+    }
+
     /// The master's slots and level, for the whole mix.
     #[inline]
     pub fn process_master(

@@ -2581,6 +2581,33 @@ impl App {
         }
     }
 
+    /// Put tracks in a group, or take them out of any, as one undo step: those numbered from the
+    /// first to the last, counted from 1, or the cursor's.
+    fn set_group(&mut self, group: Option<u8>, tracks: Option<(usize, usize)>) {
+        let sounds = self.song().sound_tracks();
+        let (first, last) = match tracks {
+            Some((first, last)) => (first - 1, last - 1),
+            None => (self.cursor.track, self.cursor.track),
+        };
+        if last >= sounds {
+            self.status = match tracks {
+                Some(_) => format!("There are {sounds} tracks that play sounds"),
+                None => "Only tracks that play sounds go in a group".to_owned(),
+            };
+            return;
+        }
+        self.apply(&Action::SetTrackGroup { first, last, group });
+        let which = if first == last {
+            format!("Track {:02}", first + 1)
+        } else {
+            format!("Tracks {:02}-{:02}", first + 1, last + 1)
+        };
+        self.status = match group {
+            Some(group) => format!("{which} in group {group}"),
+            None => format!("{which} in no group"),
+        };
+    }
+
     /// Run a command line.
     pub fn line(&mut self, line: Line) {
         self.status.clear();
@@ -2639,11 +2666,13 @@ impl App {
                 }
             }
             Line::Chain(chain) => self.set_track_chain(chain),
+            Line::Group { group, tracks } => self.set_group(group, tracks),
             Line::Render {
                 path: None,
                 rows,
                 tail,
                 stems,
+                each_track,
             } => {
                 // The flags are kept, after the name.
                 let mut after = String::new();
@@ -2656,6 +2685,9 @@ impl App {
                 if stems {
                     after.push_str(" --stems");
                 }
+                if each_track {
+                    after.push_str(" --split");
+                }
                 self.open_naming_explorer(Purpose::Render, "render", after);
             }
             Line::Render {
@@ -2663,7 +2695,15 @@ impl App {
                 rows,
                 tail,
                 stems: true,
-            } => self.render_stems(&path, rows, tail),
+                each_track,
+            } => self.render_stems(
+                &path,
+                RenderOptions {
+                    rows,
+                    tail,
+                    each_track,
+                },
+            ),
             Line::Render {
                 path: Some(path),
                 rows,
@@ -2754,7 +2794,12 @@ impl App {
     fn render(&mut self, path: &Path, rows: Option<usize>, tail: bool) {
         self.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
-        let samples = render_loop(Arc::new(version), self.rate, RenderOptions { rows, tail });
+        let options = RenderOptions {
+            rows,
+            tail,
+            ..RenderOptions::default()
+        };
+        let samples = render_loop(Arc::new(version), self.rate, options);
         self.status = match write_wav(path, self.rate, &samples) {
             Ok(()) => format!(
                 "Rendered {} ({:.2} s)",
@@ -2765,11 +2810,11 @@ impl App {
         };
     }
 
-    /// Render one file per track that would be heard, into a folder.
-    fn render_stems(&mut self, folder: &Path, rows: Option<usize>, tail: bool) {
+    /// Render one file per group, and per track in none, that would be heard, into a folder, or
+    /// one per track if asked.
+    fn render_stems(&mut self, folder: &Path, options: RenderOptions) {
         self.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
-        let options = RenderOptions { rows, tail };
         self.status = match crate::run::write_stems(&version, folder, self.rate, options) {
             Ok(count) => crate::run::stems_written(count, folder),
             Err(error) => format!("Couldn't write {}: {error}", folder.display()),

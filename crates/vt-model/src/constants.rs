@@ -10,8 +10,11 @@ pub const MAX_LEVEL: u8 = 0xF8;
 pub const DB_PER_LEVEL: f32 = 0.25;
 /// Tracks that play sounds a song can have.
 pub const MAX_SOUND_TRACKS: usize = 64;
-/// The tracks every song has after those: two returns and the master.
-pub const FIXED_TRACKS: usize = 3;
+/// The group tracks every song has after those, each summing the tracks put in it (decision 123).
+/// They're saved in the song's list of tracks, so raising this only means raising the number.
+pub const MAX_GROUPS: usize = 4;
+/// The tracks every song has after those: the groups, two returns and the master.
+pub const FIXED_TRACKS: usize = MAX_GROUPS + 3;
 /// Tracks the engine prepares state for. Raising this does not affect saved songs.
 pub const MAX_TRACKS: usize = MAX_SOUND_TRACKS + FIXED_TRACKS;
 /// Tracks in a new project.

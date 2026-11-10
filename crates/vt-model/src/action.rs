@@ -8,8 +8,9 @@ use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
 use crate::bank::{BankEntry, Points};
 use crate::constants::{
-    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_LEVEL, MAX_MILLIBPM, MAX_PROJECT_NAME_CHARS,
-    MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM, MIN_TRANSPOSE,
+    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_LEVEL, MAX_MILLIBPM,
+    MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
+    MIN_TRANSPOSE,
 };
 use crate::envelope::Envelope;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
@@ -261,6 +262,13 @@ pub enum Action {
     SetTrackChoke {
         track: usize,
         choke: Option<u8>,
+    },
+    /// Put the sound tracks from `first` to `last` in a group, from 1 to `MAX_GROUPS`, or take
+    /// them out of any, as one change.
+    SetTrackGroup {
+        first: usize,
+        last: usize,
+        group: Option<u8>,
     },
     /// Give a track its own `Gate`, on the `00` to `FF` scale, or `None` for its machine's.
     SetTrackGateLength {
@@ -576,6 +584,10 @@ pub enum EditError {
     Lfo,
     #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
     Choke(u8),
+    #[error("group {0} isn't one of 1 to {MAX_GROUPS}")]
+    Group(u8),
+    #[error("only tracks that play sounds go in a group")]
+    GroupMember,
     #[error(
         "an accumulator's limits go from 1 to {MOST_DEGREES}, and its loops from 1 to {MOST_LOOPS}"
     )]
@@ -965,6 +977,19 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .choke = *choke;
+        }
+        Action::SetTrackGroup { first, last, group } => {
+            if let Some(group) = *group
+                && !(1..=MAX_GROUPS).contains(&usize::from(group))
+            {
+                return Err(EditError::Group(group));
+            }
+            if first > last || *last >= next.sound_tracks() {
+                return Err(EditError::GroupMember);
+            }
+            for track in &mut next.tracks[*first..=*last] {
+                track.group = *group;
+            }
         }
         Action::SetTrackGateLength { track, gate_length } => {
             next.tracks

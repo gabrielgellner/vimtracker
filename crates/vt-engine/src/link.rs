@@ -602,6 +602,48 @@ mod tests {
     }
 
     #[test]
+    fn groups_never_allocate_in_the_callback() {
+        let pool = samples();
+        let bus = Insert::Compressor(vt_model::insert::Compressor {
+            kind: vt_model::insert::CompressorType::Bus,
+            ..vt_model::insert::Compressor::DEFAULT
+        });
+        let grouped = |round: usize| {
+            let mut next = song(8, 16);
+            for (track, sound) in next.tracks.iter_mut().take(8).enumerate() {
+                sound.group = (track + round % 3 < 6).then_some((1 + track % 4) as u8);
+                sound.send_a = 0x80;
+            }
+            for group in 8..8 + vt_model::constants::MAX_GROUPS {
+                next.tracks[group].inserts = [bus, COMB, LIMIT];
+                next.tracks[group].send_b = 0x80;
+            }
+            next
+        };
+        let engine = Engine::new(48_000, published(grouped(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        handle.pump();
+        let mut violations = blocks(&mut rt, 8);
+        for round in 0..200 {
+            handle.publish(published(grouped(round), &pool));
+            let group = 8 + round % 4;
+            handle.send(Command::SetMute {
+                track: group,
+                mute: round % 5 == 1,
+            });
+            handle.send(Command::SetSolo {
+                track: if round % 2 == 0 { group } else { round % 8 },
+                solo: round % 3 == 0,
+            });
+            handle.pump();
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
     fn publishing_never_allocates_or_frees_in_the_callback() {
         let pool = samples();
         let engine = Engine::new(48_000, published(song(8, 16), &pool));

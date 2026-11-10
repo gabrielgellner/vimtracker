@@ -8,12 +8,14 @@ use ratatui::style::Color;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::constants::{FIXED_TRACKS, MAX_GROUPS};
 use vt_model::groove::GrooveId;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::samples::SamplePool;
 use vt_model::settings::{SettingId, gate_value};
 use vt_model::song::{
     Chain, ChainEntry, FilterType, Launch, Machine, Phrase, SectionStart, Song, SynthVoice,
+    TrackKind,
 };
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
@@ -564,9 +566,13 @@ fn track_keys_move_and_keep_the_section_position() {
     assert_eq!(app.cursor.track, 1);
     assert_eq!(app.cursor.step, 3);
     assert_eq!(app.phrase_id(), Some(0), "its own first phrase");
-    press(&mut app, "WWWW");
-    assert_eq!(app.cursor.track, 4, "the master stops the cursor");
-    press(&mut app, "BBBBB");
+    press(&mut app, &"W".repeat(3 + MAX_GROUPS));
+    assert_eq!(
+        app.cursor.track,
+        4 + MAX_GROUPS,
+        "the master stops the cursor"
+    );
+    press(&mut app, &"B".repeat(5 + MAX_GROUPS));
     assert_eq!(app.cursor.track, 0);
 }
 
@@ -575,7 +581,7 @@ fn added_tracks_save_load_and_play() {
     let (mut app, mut rt) = app();
     command(&mut app, "track add 3");
     assert_eq!(app.song().sound_tracks(), 5);
-    assert_eq!(app.levels.len(), 8);
+    assert_eq!(app.levels.len(), 5 + FIXED_TRACKS);
     press(&mut app, "WWWW");
     assert_eq!(app.cursor.track, 4);
     press(&mut app, "ia");
@@ -604,52 +610,56 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     assert!(app.status.contains("at least one"));
     press(&mut app, "uj");
     assert_eq!(app.song().sound_tracks(), 2);
-    assert_eq!(app.levels.len(), 5);
+    assert_eq!(app.levels.len(), 2 + FIXED_TRACKS);
 }
 
 #[test]
 fn the_fixed_tracks_stay_after_new_ones_and_cant_be_removed() {
     let (mut app, _rt) = app();
-    press(&mut app, "WWWW");
-    assert_eq!(app.cursor.track, 4);
+    let master = 4 + MAX_GROUPS;
+    press(&mut app, &"W".repeat(master));
+    assert_eq!(app.cursor.track, master);
     command(&mut app, "track add 2");
-    assert_eq!(app.cursor.track, 6, "still on the master");
-    assert_eq!(app.song().tracks[6].name, "M");
+    assert_eq!(app.cursor.track, master + 2, "still on the master");
+    assert_eq!(app.song().tracks[master + 2].name, "M");
     assert_eq!(app.song().sound_tracks(), 4);
     command(&mut app, "track del");
-    assert_eq!(app.cursor.track, 5, "still on the master");
-    assert_eq!(app.song().tracks[5].name, "M");
+    assert_eq!(app.cursor.track, master + 1, "still on the master");
+    assert_eq!(app.song().tracks[master + 1].name, "M");
 }
 
 #[test]
 fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
     let (mut app, _rt) = app();
-    press(&mut app, "WW");
+    let return_a = 2 + MAX_GROUPS;
+    press(&mut app, &"W".repeat(return_a));
     assert_eq!(app.song().tracks[app.cursor.track].name, "A");
     press(&mut app, " m");
-    assert!(app.levels[2].mute);
+    assert!(app.levels[return_a].mute);
     command(&mut app, "track add");
-    assert!(app.levels[3].mute, "return A is here now");
+    assert!(app.levels[return_a + 1].mute, "return A is here now");
     assert!(!app.levels[2].mute, "and the new track isn't muted");
     command(&mut app, "track del");
-    assert!(app.levels[2].mute);
+    assert!(app.levels[return_a].mute);
 }
 
 #[test]
 fn the_master_cant_be_muted_or_soloed() {
     let (mut app, _rt) = app();
-    press(&mut app, "WWWW");
+    let master = 4 + MAX_GROUPS;
+    press(&mut app, &"W".repeat(master));
     press(&mut app, " m");
-    assert!(!app.levels[4].mute);
+    assert!(!app.levels[master].mute);
     assert!(app.status.contains("master"), "{}", app.status);
     press(&mut app, " s");
-    assert!(!app.levels[4].solo);
+    assert!(!app.levels[master].solo);
 }
 
 #[test]
 fn a_fixed_tracks_pages_only_show_what_it_has() {
     let (mut app, _rt) = app();
-    press(&mut app, "WW 4");
+    press(&mut app, &"W".repeat(2 + MAX_GROUPS));
+    press(&mut app, " 4");
     let lines = track_page_text(&app);
     let fixed = format!("{} Return A", vt_tui::glyphs::RETURN);
     assert!(lines[0].starts_with(&fixed), "{}", lines[0]);
@@ -667,15 +677,25 @@ fn a_fixed_tracks_pages_only_show_what_it_has() {
 #[test]
 fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
     let (mut app, _rt) = app();
+    let return_a = 2 + MAX_GROUPS;
     press(&mut app, " 6");
-    press(&mut app, "lljj");
-    assert_eq!(app.cursor.track, 2);
+    press(&mut app, &"l".repeat(return_a));
+    press(&mut app, "jj");
+    assert_eq!(app.cursor.track, return_a);
     press(&mut app, "i40");
-    assert_eq!(app.song().tracks[2].send_a, 0, "a return sends nowhere");
+    assert_eq!(
+        app.song().tracks[return_a].send_a,
+        0,
+        "a return sends nowhere"
+    );
     press(&mut app, "ll");
-    assert_eq!(app.cursor.track, 4);
+    assert_eq!(app.cursor.track, return_a + 2);
     press(&mut app, "ki40");
-    assert_eq!(app.song().tracks[4].pan, 0x80, "the master has no pan");
+    assert_eq!(
+        app.song().tracks[return_a + 2].pan,
+        0x80,
+        "the master has no pan"
+    );
 }
 
 #[test]
@@ -686,6 +706,9 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "ll");
     assert_eq!(app.cursor.track, 2);
+    assert_eq!(column_name(&app), "Send A", "a group sends");
+    press(&mut app, &"l".repeat(MAX_GROUPS));
+    assert_eq!(app.cursor.track, 2 + MAX_GROUPS);
     assert_eq!(
         column_name(&app),
         "Pan",
@@ -699,7 +722,7 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     assert_eq!(column_name(&app), "Level", "the master only has its level");
     press(&mut app, "jG");
     assert_eq!(column_name(&app), "Level");
-    press(&mut app, "hhhh");
+    press(&mut app, &"h".repeat(4 + MAX_GROUPS));
     assert_eq!(app.cursor.track, 0);
     assert_eq!(column_name(&app), "Level", "where it went is where it is");
     press(&mut app, "jjl");
@@ -711,7 +734,8 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, "$");
     assert_eq!(
         (app.cursor.track, column_name(&app)),
-        (1, "Send A".to_owned())
+        (1 + MAX_GROUPS, "Send A".to_owned()),
+        "the last group"
     );
     press(&mut app, "0");
     assert_eq!(
@@ -721,13 +745,13 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, "k$");
     assert_eq!(
         (app.cursor.track, column_name(&app)),
-        (3, "Pan".to_owned()),
+        (3 + MAX_GROUPS, "Pan".to_owned()),
         "B, as M has none"
     );
     press(&mut app, "k$");
     assert_eq!(
         (app.cursor.track, column_name(&app)),
-        (4, "Level".to_owned())
+        (4 + MAX_GROUPS, "Level".to_owned())
     );
 }
 
@@ -1881,7 +1905,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         "{text:?}"
     );
     assert!(
-        text[6].contains("Pitch"),
+        text[6].contains("Group") && !text[6].contains("Saw"),
         "a voice of three settings: {text:?}"
     );
     assert!(
@@ -1903,7 +1927,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, "kll");
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "jjj");
-    assert_eq!(column_name(&app), "Pitch", "the row with only its pitch");
+    assert_eq!(column_name(&app), "Group", "the row with only its group");
     press(&mut app, "ggh-");
     assert_eq!(
         app.song().tracks[0].machine,
@@ -3727,18 +3751,18 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     let track = |app: &App| app.song().tracks[0].clone();
     let lines = track_page_text(&app);
     assert!(
-        lines[6].contains("Pitch") && lines[6].contains("80"),
+        lines[7].contains("Pitch") && lines[7].contains("80"),
         "{}",
-        lines[6]
+        lines[7]
     );
     assert!(
-        lines[9].contains("Choke") && lines[9].contains("Off"),
+        lines[10].contains("Choke") && lines[10].contains("Off"),
         "{}",
-        lines[9]
+        lines[10]
     );
 
-    // Beside Length.
-    press(&mut app, "kkkk$");
+    // Beside Play.
+    press(&mut app, "kkk$");
     assert_eq!(app.track_control().label(), "Pitch");
     press(&mut app, "i8C");
     assert_eq!(track(&app).pitch, 0x8C);
@@ -3759,7 +3783,7 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     typed(&mut app, "17");
     assert_eq!(track(&app).choke, Some(16));
     assert!(app.status.contains("1 to 16"), "{}", app.status);
-    assert!(track_page_text(&app)[9].contains("16"));
+    assert!(track_page_text(&app)[10].contains("16"));
     typed(&mut app, "off");
     assert_eq!(track(&app).choke, None);
     press(&mut app, "u");
@@ -3787,8 +3811,8 @@ fn the_track_page_sets_how_long_notes_last() {
         line(&app)
     );
 
-    // Beside Mode, above Cut.
-    press(&mut app, "k$");
+    // Beside Cut.
+    press(&mut app, "$");
     assert_eq!(app.track_control().label(), "Gate");
     assert_eq!(value_shown(&app).as_deref(), Some("100 %"));
     press(&mut app, "-");
@@ -3814,7 +3838,7 @@ fn the_track_page_sets_how_long_notes_last() {
     press(&mut app, "x");
 
     // `Acid`'s own is 50%, as a 303's is.
-    press(&mut app, "kkkkkkkhK");
+    press(&mut app, "kkkkkkkkhK");
     press(&mut app, "/acid");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
@@ -4321,7 +4345,7 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     press(&mut app, "ggl");
     press(&mut app, "+");
     assert_eq!(track(&app).level, 0xF0);
-    press(&mut app, "jjjjj+");
+    press(&mut app, "jjjjjj+");
     assert_eq!(
         track(&app).groove,
         GrooveId::from_index(1),
@@ -4442,11 +4466,11 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let at = (0..80)
-            .position(|x| buffer[(x, 7)].symbol() == "G")
+            .position(|x| buffer[(x, 9)].symbol() == "G")
             .unwrap() as u16
             + 10;
-        let text: String = (at..at + 8).map(|x| buffer[(x, 7)].symbol()).collect();
-        (text, buffer[(at, 7)].fg)
+        let text: String = (at..at + 8).map(|x| buffer[(x, 9)].symbol()).collect();
+        (text, buffer[(at, 9)].fg)
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].groove, None);
@@ -4454,7 +4478,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
-    press(&mut app, "kkk$=");
+    press(&mut app, "kk$=");
     assert_eq!(app.song().tracks[0].groove, GrooveId::swing(62));
     press(&mut app, "k");
     assert_eq!(groove_cell(&app), ("Swing 62".to_owned(), Color::Reset));
@@ -4499,7 +4523,7 @@ fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
     // A choice's name starts where the bars do, and a word beside it keeps to its column.
     let play = line(&app, "Play");
     assert!(
-        play.starts_with("Play      00   One-shot             Groove    Straight"),
+        play.starts_with("Play      00   One-shot             Pitch     8000 ▕    │    ▏"),
         "{play}"
     );
 }
@@ -4545,14 +4569,16 @@ fn the_track_page_shows_its_settings_in_columns() {
         "{}",
         lines[6]
     );
-    assert!(lines[6].contains("Pitch"), "{}", lines[6]);
+    assert!(lines[6].contains("Group     Off"), "{}", lines[6]);
     assert!(lines[7].starts_with("Play") && lines[7].contains("One-shot"));
-    assert!(lines[7].contains("Groove") && lines[7].contains("Straight"));
+    assert!(lines[7].contains("Pitch"), "{}", lines[7]);
     assert!(lines[8].trim().is_empty(), "{}", lines[8]);
-    assert!(lines[9].starts_with("Filter") && lines[9].contains("Choke"));
+    assert!(lines[9].starts_with("Filter") && lines[9].contains("Groove"));
+    assert!(lines[9].contains("Straight"), "{}", lines[9]);
     assert!(lines[10].starts_with("Mode") && lines[10].contains("12 dB"));
+    assert!(lines[10].contains("Choke"), "{}", lines[10]);
     assert!(lines[11].starts_with("Cut") && lines[11].contains("FF00 ▕█████████▏"));
-    assert!(lines[12].starts_with("Res") && lines[12].contains("Reset"));
+    assert!(lines[12].starts_with("Res") && lines[12].contains("Speed"));
 }
 
 #[test]
@@ -4560,7 +4586,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
     use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
-    press(&mut app, "gg$jjjjj");
+    press(&mut app, "gg$jjjjjj");
     assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
@@ -5065,7 +5091,7 @@ fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
     assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
     assert_eq!(app.status, "Kit 909: 3 tracks");
     assert_eq!(app.song().sound_tracks(), 3, "it added the track it needed");
-    assert_eq!(app.levels.len(), 6);
+    assert_eq!(app.levels.len(), 3 + FIXED_TRACKS);
     assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
 
     press(&mut app, "u");
@@ -5319,7 +5345,7 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     assert_eq!(app.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 3, "B, the last with a mute");
+    assert_eq!(app.cursor.track, 3 + MAX_GROUPS, "B, the last with a mute");
     press(&mut app, "gg");
     assert_eq!(column_name(&app), "Level");
 }
@@ -5369,7 +5395,7 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
         mixer_text(&app)[2]
     );
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 34);
+    assert_eq!(app.cursor.track, 31 + FIXED_TRACKS);
     let names = &mixer_text(&app)[2];
     assert!(names.contains("32"), "{names}");
     assert!(names.contains(" A ") && names.contains(" M"), "{names}");
@@ -8585,10 +8611,10 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "HHlgg");
     assert_eq!(app.track_control(), Control::Level);
     press(&mut app, "jjjj");
-    assert_eq!(app.track_control().label(), "Pitch");
+    assert_eq!(app.track_control().label(), "Group");
     press(&mut app, "jjj");
     press(&mut app, "kkk");
-    assert_eq!(app.track_control().label(), "Pitch");
+    assert_eq!(app.track_control().label(), "Group");
     press(&mut app, "Ggg");
     assert_eq!(app.track_control(), Control::Level, "G and gg keep it too");
 }
@@ -10580,7 +10606,7 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
             .unwrap_or_default()
     };
     assert!(line(&app).contains("1/16"), "{}", line(&app));
-    press(&mut app, "gg$jjjjjjjj");
+    press(&mut app, "gg$jjjjjjjjj");
     assert_eq!(app.track_control(), Control::Speed);
     assert_eq!(value_shown(&app).as_deref(), Some("1/16"));
     press(&mut app, "=");
@@ -10614,7 +10640,7 @@ fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
             .unwrap_or_default()
     };
     assert!(line(&app).contains("Off"), "{}", line(&app));
-    press(&mut app, "gg$jjjjjjjjj");
+    press(&mut app, "gg$jjjjjjjjjj");
     assert_eq!(app.track_control(), Control::Reset);
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -10727,7 +10753,7 @@ fn space_a_on_a_return_says_it_has_no_chain() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
-    let returns = app.song().sound_tracks();
+    let returns = app.song().sound_tracks() + MAX_GROUPS;
     app.cursor.track = returns;
     tap(&mut app, " a");
     assert_eq!(app.status, "Return A plays no chain to realign");
@@ -11671,8 +11697,8 @@ fn the_track_page_sets_how_long_a_tie_glides() {
     };
     assert!(line(&app).contains("Off"), "{}", line(&app));
 
-    // Beside Drive.
-    press(&mut app, "jj$");
+    // Beside Low cut.
+    press(&mut app, "jjj$");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -11710,7 +11736,7 @@ fn the_track_page_sets_how_long_a_tie_glides() {
         Machine::Plaits(SynthVoice::Acid)
     );
     assert!(line(&app).contains("Slide"), "{}", line(&app));
-    press(&mut app, "gg$jjjjjjjjjj");
+    press(&mut app, "gg$jjjjjjjjjjj");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -12123,4 +12149,108 @@ fn a_view_with_nothing_to_lay_out_in_time_looks_as_it_did() {
     let timeline = screen(&app);
     press(&mut app, "za");
     assert_eq!(screen(&app), timeline);
+}
+
+#[test]
+fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
+    let (mut app, _realtime) = app();
+    let groups = |app: &App| {
+        app.song().tracks[..4]
+            .iter()
+            .map(|track| track.group)
+            .collect::<Vec<_>>()
+    };
+    command(&mut app, "track add 2");
+    command(&mut app, "group 1 1-3");
+    assert_eq!(groups(&app), [Some(1), Some(1), Some(1), None]);
+    assert!(
+        app.status.contains("Tracks 01-03 in group 1"),
+        "{}",
+        app.status
+    );
+    press(&mut app, "u");
+    assert_eq!(groups(&app), [None; 4], "one undo takes them all out");
+    app.key(
+        Key {
+            ctrl: true,
+            ..Key::char('r')
+        },
+        Instant::now(),
+    );
+    assert_eq!(groups(&app), [Some(1), Some(1), Some(1), None]);
+
+    command(&mut app, "group 2");
+    assert_eq!(groups(&app)[0], Some(2), "the cursor's track");
+    command(&mut app, "group off 2-3");
+    assert_eq!(groups(&app), [Some(2), None, None, None]);
+    command(&mut app, "group off");
+    assert_eq!(groups(&app), [None; 4]);
+    assert!(
+        app.status.contains("Track 01 in no group"),
+        "{}",
+        app.status
+    );
+
+    let sounds = app.song().sound_tracks();
+    command(&mut app, &format!("group 1 1-{}", sounds + 1));
+    assert_eq!(
+        groups(&app),
+        [None; 4],
+        "past the last track, nothing changes"
+    );
+    assert!(
+        app.status.contains(&format!("{sounds} tracks")),
+        "{}",
+        app.status
+    );
+    command(&mut app, "group 5 1");
+    assert!(app.status.contains(":group takes"), "{}", app.status);
+
+    // A group can't join a group.
+    let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    press(&mut app, &"W".repeat(group));
+    assert_eq!(app.cursor.track, group);
+    command(&mut app, "group 2");
+    assert_eq!(app.song().tracks[group].group, None);
+    assert!(app.status.contains("Only tracks"), "{}", app.status);
+}
+
+#[test]
+fn the_track_page_puts_a_track_in_a_group_and_a_group_has_its_own_page() {
+    let (mut app, _realtime) = on_track_page();
+    let group = |app: &App| app.song().tracks[0].group;
+    // Under Send B, where the track's output is.
+    press(&mut app, "kkkk$");
+    assert_eq!(app.track_control().label(), "Group");
+    assert!(track_page_text(&app)[6].contains("Group     Off"));
+    press(&mut app, "=");
+    assert_eq!(group(&app), Some(1));
+    assert!(track_page_text(&app)[6].contains("G1"));
+    press(&mut app, "9=");
+    assert_eq!(group(&app), Some(4), "4 is the last");
+    typed(&mut app, "g2");
+    assert_eq!(group(&app), Some(2));
+    typed(&mut app, "5");
+    assert_eq!(group(&app), Some(2));
+    assert!(app.status.contains("1 to 4"), "{}", app.status);
+    typed(&mut app, "off");
+    assert_eq!(group(&app), None);
+    press(&mut app, "u");
+    assert_eq!(group(&app), Some(2));
+    press(&mut app, "x");
+    assert_eq!(group(&app), None);
+
+    // A group's own page has its level, pan and sends.
+    let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
+    press(&mut app, &"W".repeat(at));
+    assert_eq!(app.cursor.track, at);
+    let lines = track_page_text(&app);
+    assert!(lines[0].contains("Group 2"), "{}", lines[0]);
+    for (line, label) in [(2, "Level"), (3, "Pan"), (4, "Send A"), (5, "Send B")] {
+        assert!(lines[line].starts_with(label), "{}", lines[line]);
+    }
+    press(&mut app, "ggjjj");
+    assert_eq!(app.track_control().label(), "Send B");
+    typed(&mut app, "60");
+    assert_eq!(app.song().tracks[at].send_b, 0x60);
 }

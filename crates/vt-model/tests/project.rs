@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points, SliceParams};
-use vt_model::constants::FORMAT_VERSION;
+use vt_model::constants::{FIXED_TRACKS, FORMAT_VERSION, MAX_GROUPS};
+use vt_model::insert::{Compressor, CompressorType, Insert};
 use vt_model::project::{
     ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
     save_song,
@@ -12,7 +13,7 @@ use vt_model::project::{
 use vt_model::sample::{SampleError, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice};
+use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice, TrackKind};
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -402,7 +403,36 @@ fn a_song_from_before_the_fixed_tracks_loads_with_them() {
     save_song(&dir, &song).unwrap();
     let loaded = load_song(&dir).unwrap();
     assert_eq!(loaded.sound_tracks(), 2);
-    assert_eq!(loaded.tracks.len(), 5);
-    assert_eq!(loaded.sections[0].chains.len(), 5);
-    assert_eq!(loaded.tracks[2].name, "A");
+    assert_eq!(loaded.tracks.len(), 2 + FIXED_TRACKS);
+    assert_eq!(loaded.sections[0].chains.len(), 2 + FIXED_TRACKS);
+    assert_eq!(loaded.tracks[2].name, "G1");
+    assert_eq!(loaded.tracks[2 + MAX_GROUPS].name, "A");
+}
+
+#[test]
+fn groups_and_what_is_in_them_round_trip() {
+    let dir = folder();
+    let mut song = Song::new(4);
+    song.tracks[0].group = Some(1);
+    song.tracks[1].group = Some(1);
+    song.tracks[3].group = Some(MAX_GROUPS as u8);
+    let group = song.fixed_track(TrackKind::Group(1)).unwrap();
+    song.tracks[group].level = 0xC0;
+    song.tracks[group].pan = 0x60;
+    song.tracks[group].send_b = 0x50;
+    song.tracks[group].mute = true;
+    song.tracks[group].inserts[0] = Insert::Compressor(Compressor {
+        kind: CompressorType::Bus,
+        ..Compressor::DEFAULT
+    });
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert!(
+        text.contains("kind: Group(1)"),
+        "in the list of tracks: {text}"
+    );
+    let loaded = load_song(&dir).unwrap();
+    assert_eq!(loaded, song);
+    assert_eq!(loaded.group_track_of(0), Some(group));
+    assert_eq!(loaded.group_track_of(2), None);
 }

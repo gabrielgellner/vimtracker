@@ -267,6 +267,7 @@ fn a_render_captures_every_track_from_its_start() {
     let options = RenderOptions {
         rows: Some(24),
         tail: false,
+        ..RenderOptions::default()
     };
     let out = render_loop(version(sixteen_and_seven(), samples), 48_000, options);
     assert_eq!(fired_steps(&out, 24), [0, 7, 14, 21]);

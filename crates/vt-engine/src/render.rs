@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use vt_model::constants::{MAX_MILLIBPM, MIN_MILLIBPM, TICKS_PER_STEP};
-use vt_model::song::{Song, Track};
+use vt_model::song::Song;
 
 use crate::engine::{Engine, sample_of_tick};
 use crate::published::Published;
@@ -22,6 +22,8 @@ pub struct RenderOptions {
     pub rows: Option<usize>,
     /// Let sound ring out after the last step, ending at silence.
     pub tail: bool,
+    /// Render a stem of each track, rather than each group as one.
+    pub each_track: bool,
 }
 
 /// Play a version from the top and return interleaved stereo frames.
@@ -71,29 +73,47 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
     out
 }
 
-/// Stop sequencing and keep what rings until it stays silent, up to the limit.
-/// One track's part of a song.
+/// One part of a song: a track's, or a group's with its tracks.
 #[derive(Debug)]
 pub struct Stem {
+    /// The track it's of: a sound track, or a group's track.
     pub track: usize,
     pub samples: Vec<f32>,
 }
 
-/// Render each track that plays sounds and would be heard, on its own, with the limiter off so the
-/// stems add up to the whole. Each keeps what it sends to the returns, and they all end together.
+/// The tracks a stem render makes a stem of, in order: each sound track that would be heard, or,
+/// unless asked for each track, each group with a track that would be heard in place of its
+/// tracks.
+pub fn stem_tracks(song: &Song, each_track: bool) -> Vec<usize> {
+    let sounds = song.sound_tracks();
+    let mut tracks: Vec<usize> = (0..sounds)
+        .filter(|track| song.heard(*track))
+        .map(|track| match song.group_track_of(track) {
+            Some(group) if !each_track => group,
+            _ => track,
+        })
+        .collect();
+    tracks.sort_unstable();
+    tracks.dedup();
+    tracks
+}
+
+/// Render each stem on its own, with the limiter off so the stems add up to the whole: each track
+/// that plays sounds and would be heard, or by default each group as one, in place of its tracks.
+/// Each keeps what it sends to the returns, and they all end together.
 pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> Vec<Stem> {
     let song = &version.song;
-    let sounds = song.sound_tracks();
-    let any_solo = song.tracks[..sounds].iter().any(|track| track.solo);
-    let heard = |track: &Track| if any_solo { track.solo } else { !track.mute };
-    let mut stems: Vec<Stem> = (0..sounds)
-        .filter(|index| heard(&song.tracks[*index]))
+    let mut stems: Vec<Stem> = stem_tracks(song, options.each_track)
+        .into_iter()
         .map(|index| {
             let mut alone = Song::clone(song);
             alone.limiter = false;
+            // Soloed, it plays, through its group if it's in one, and a group plays its tracks
+            // that aren't muted themselves. The returns stay as they are, as what it sends goes
+            // through them.
+            let group = song.group_track_of(index);
             for (other, track) in alone.tracks.iter_mut().enumerate() {
-                // The fixed tracks stay as they are, as what this one sends goes through them.
-                if other < sounds {
+                if other == index || Some(other) == group {
                     track.mute = false;
                 }
                 track.solo = other == index;
@@ -116,6 +136,7 @@ pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> V
     stems
 }
 
+/// Stop sequencing and keep what rings until it stays silent, up to the limit.
 fn append_tail(engine: &mut Engine, rate: u32, out: &mut Vec<f32>) {
     engine.let_ring();
     let quiet_limit = (SILENT_SECONDS * rate as f32) as usize;

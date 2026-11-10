@@ -668,6 +668,7 @@ impl App {
                     rows: None,
                     tail: false,
                     stems: false,
+                    each_track: false,
                 });
             }
             ProjectControl::Open => return self.line(Line::Edit(None)),
