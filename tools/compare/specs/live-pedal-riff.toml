@@ -1,0 +1,60 @@
+# The Blade riff, our Acid's render of `nuance-chirp-riff`, through Distort's `Overdrive` and
+# `Distortion` and through Ableton Live's Pedal in the same two modes, the same samples into both,
+# for the spectrum and dynamics each pedal gives a 303 line, as pedal-riff does against Dist
+# OPAMP-21 (#364). The riff is rendered first, into `out/inputs/`, by `run.py`.
+#
+#   uv run run.py specs/live-pedal-riff.toml --report out/live-pedal-riff.html
+
+rate = 48000
+
+[input]
+signal = "file"
+path = "../out/inputs/blade-acid.wav"
+made_by = { spec = "nuance-chirp-riff.toml", case = "blade" }
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.mix = 0xFF
+
+[reference]
+live = "Pedal"
+
+[reference.parameters]
+Output = "0 dB"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "spectrum"
+title = "The Blade riff through our pedals and Live's Pedal"
+about = """
+The Acid line of `confusion-pump-panel`, the Blade riff, as our Acid plays it in \
+`nuance-chirp-riff`, put through our Distort slot's `Overdrive` and `Distortion` and through \
+Ableton Live's Pedal in its Overdrive and Distortion modes, the same samples into both, Pedal fully \
+wet with its output at 0 dB and its Bass, Mid and Treble where they load.
+
+Our `Tone` is at its default, `80`, and `Amount` at its default, `40`, and its top, against \
+Pedal's Gain at 25 and 100%, unfitted. The shape and the level over time are compared with the \
+overall level difference taken out.
+"""
+
+[[cases]]
+name = "overdrive-40"
+ours = { 1.distort.type = "Overdrive", 1.distort.amount = 0x40 }
+reference = { Type = "Overdrive", Gain = "25 %" }
+
+[[cases]]
+name = "overdrive-FF"
+ours = { 1.distort.type = "Overdrive", 1.distort.amount = 0xFF }
+reference = { Type = "Overdrive", Gain = "100 %" }
+
+[[cases]]
+name = "distortion-40"
+ours = { 1.distort.type = "Distortion", 1.distort.amount = 0x40 }
+reference = { Type = "Distortion", Gain = "25 %" }
+
+[[cases]]
+name = "distortion-FF"
+ours = { 1.distort.type = "Distortion", 1.distort.amount = 0xFF }
+reference = { Type = "Distortion", Gain = "100 %" }

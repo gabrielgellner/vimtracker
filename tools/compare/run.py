@@ -1,8 +1,8 @@
 """Render a spec through both sides, ours with `vimtracker probe` and the reference with its plugin,
 print a first comparison of the two, and write a report of it as a web page.
 
-Usage: run.py <spec.toml> [--case NAME ...] [--binary PATH] [--out FOLDER] [--report PAGE]
-       run.py --suite NAME [--binary PATH]
+Usage: run.py <spec.toml> [--case NAME ...] [--binary PATH] [--out FOLDER] [--report PAGE] [--fresh-live]
+       run.py --suite NAME [--binary PATH] [--fresh-live]
 
 Every case is rendered unless some are named. The WAVs go in `out/<spec>/` beside this script,
 as `<case>-ours.wav` and `<case>-<reference>.wav` for each of the spec's references. Each case
@@ -10,6 +10,10 @@ prints every side's peak, RMS and spectral centroid; a sweep's input adds the ma
 in octave bands, and stepped levels add the static curve, the output level at each input level. A
 spec with no reference renders ours alone. `--report` writes one self-contained page with every
 side plotted and measured, laid out as the spec's `[report]` says (see `report.py`).
+
+A reference can be one of Ableton Live's devices, rendered through Live in real time by
+`live_bridge.py`, which needs Live open with the bridge; each render is cached in
+`out/live-cache/`, so a spec runs again without Live, unless `--fresh-live` asks for new ones.
 
 `--suite nuance` runs every `specs/nuance-*.toml`, writes each one's report into `out/nuance/`,
 and an `index.html` there ranking our biggest gaps from the references' consensus first
@@ -209,7 +213,12 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, help="where the WAVs go")
     parser.add_argument("--report", type=Path, help="write a report of the spec to this page")
+    parser.add_argument("--fresh-live", action="store_true", help="render Live's devices again, not from the cache")
     args = parser.parse_args()
+    if args.fresh_live:
+        import live_bridge
+
+        live_bridge.FRESH = True
     if not args.binary.exists():
         raise SystemExit(f"{args.binary} isn't there: run `cargo build --release` first")
     if args.suite:

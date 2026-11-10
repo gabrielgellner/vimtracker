@@ -10,6 +10,14 @@ run *args:
 live *args:
     scripts/live.sh {{args}}
 
+# Link the comparison harness's bridge into Ableton Live's User Library, for its devices as references
+live-bridge-install:
+    tools/compare/live/install.sh
+
+# Remove the bridge's link from Ableton Live's User Library
+live-bridge-uninstall:
+    tools/compare/live/install.sh uninstall
+
 # Make the manual's screenshots of the interface, as SVGs in docs/manual/src/images
 screenshots:
     cargo run --release -q -p vt-tui --example screenshots

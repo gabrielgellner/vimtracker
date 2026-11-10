@@ -628,7 +628,8 @@ These need no terminal and no sound device, so they run anywhere.
 *   **`vimtracker probe <spec> <out.wav>`** (`dsp_probe.rs`) plays one voice or one effect through a
     track with no song, from a TOML spec, whose cases can each play notes of their own.
     `tools/compare/` renders the same spec through one or more reference plugins hosted by
-    Spotify's pedalboard, compares the outputs, and writes a report page for each spec, with the
+    Spotify's pedalboard, or Ableton Live's own devices through a control surface script in Live
+    (`tools/compare/live/`), compares the outputs, and writes a report page for each spec, with the
     references' consensus where they agree and a flag where they don't; `run.py --suite nuance`
     runs the Acid's nuance suite against Acid V and ABL3 and ranks our gaps. `--response` also
     writes the track filter's response as the Sound page draws it. The Python side doesn't run in
@@ -637,7 +638,7 @@ These need no terminal and no sound device, so they run anywhere.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 
-**Decisions:** 13, 68, 110, 113, 123 and 125, with CUJ 7 and #190 for `bench`.
+**Decisions:** 13, 68, 110, 113, 123, 125 and 133, with CUJ 7 and #190 for `bench`.
 
 ### Testing
 

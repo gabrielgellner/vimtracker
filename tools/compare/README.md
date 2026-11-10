@@ -1,9 +1,10 @@
 # Comparing against reference plugins
 
 One spec renders through both our code, with `vimtracker probe`, and one or more reference
-plugins, hosted by Spotify's [pedalboard](https://github.com/spotify/pedalboard), so a test is
-written once and rendered on every side (#186, decisions 110, 113 and 125). Only the outputs are
-compared: nothing here looks inside a plugin. None of it runs in CI.
+plugins, hosted by Spotify's [pedalboard](https://github.com/spotify/pedalboard), or Ableton
+Live's own devices through a bridge, so a test is written once and rendered on every side (#186,
+#364, decisions 110, 113, 125 and 133). Only the outputs are compared: nothing here looks inside a
+plugin or a device. None of it runs in CI.
 
 ## Setting up
 
@@ -104,6 +105,12 @@ reference plugin.
 | `pedal-riff` | `nuance-chirp-riff`'s Blade riff as our Acid plays it, through `Distortion` at three drives | Dist OPAMP-21, the same samples in | the long-term spectrum's shape, level, crest factor and level over time (`spectrum`) |
 | `pedal-overdrive` | Distort's `Overdrive` at stepped levels at 110 Hz and 1 kHz, four drives | none, as no reference is a Tube Screamer | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `pedal-acid-v` | our Acid's held, open note through `Overdrive` and `Distortion` | Acid V through its own `Overdrive` and `Distorsion` | a held note's harmonics (`harmonics`), against each side's own note with no distortion |
+| `live-glue-static` | the compressor's `Bus` type at 2, 4 and 10:1 | Live's Glue Compressor, Bus FORCE | static curve |
+| `live-glue-attack` | `Bus`'s attacks | Glue Compressor, Bus FORCE | attack, as `comp-bus-attack` |
+| `live-glue-release` | `Bus`'s set releases and its Auto | Glue Compressor | release after short and long bursts |
+| `live-pedal-overdrive` | Distort's `Overdrive`, stepped levels at 110 Hz and 1 kHz | Live's Pedal, Overdrive | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
+| `live-pedal-riff` | the Blade riff through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -240,6 +247,114 @@ preset, read from `/Library/Arturia/Presets/<plugin>/`, with `preset = "Default"
 settings that aren't parameters with `state`, such as `state = { Sequencer_OnOff = 0 }`
 (`arturia.py`). These are the plugin's saved settings, as a host keeps them in a project, changed
 by name. Acid V takes them only when given them twice, which `render_reference.py` does.
+
+## Ableton Live's devices
+
+Live's built-in devices aren't plugins, so pedalboard can't host them. A bridge renders through
+them instead (#364): a control surface script running inside Live 12, `live/VimtrackerBridge`,
+which takes requests from the harness on `127.0.0.1:47364` and nowhere else, and
+`live_bridge.py` on this side. Rendering is real time and needs Live open; each render is cached in
+`out/live-cache/`, so a spec runs again without Live, and `run.py --fresh-live` renders anew.
+
+A spec names a Live device by the name Live shows, and sets its parameters by Live's names, with
+values as Live shows them. A number can carry its unit or not (`-20` means what Live shows as
+`-20.0 dB`), a list's item is named (`"Overdrive"`, or `"A"` for Glue's Auto release), a switch is
+`true` or `false`, and `"min"`, `"max"` and `"default"` mean what they say. The bridge loads the
+device fresh for every case, so whatever a spec leaves out is where Live loads it.
+
+```toml
+[[references]]
+name = "Glue"
+live = "Glue Compressor"
+marker_gap = 1.0            # optional: seconds between the marker and the input
+tail = 1.0                  # optional: seconds of silence after the input, to ring out
+[references.parameters]
+Threshold = "-20 dB"
+Ratio = 4
+Attack = "10 ms"
+Release = "A"
+"Dry/Wet" = "100 %"
+```
+
+A case changes them under `references` or `reference`, as for a plugin. A Live device takes an
+input; Live's instruments aren't bridged.
+
+### How it renders
+
+The bridge keeps two audio tracks in the open set, and makes them if they aren't there:
+`vt bridge source`, which plays the test file as an unwarped clip through the device under test,
+its only device, and `vt bridge sink`, armed, monitoring off, recording `vt bridge source` at
+`Post FX`, after its devices and before its fader and pan. For each case `live_bridge.py`:
+
+1. writes what Live plays into `out/live-cache/`: a quarter second of silence, a marker of one
+   sample at -30 dBFS, a second of silence, the input, and a second more of silence;
+2. asks the bridge to load the device on the source track, alone and fresh (`Track.insert_device`,
+   Live 12.3 and later, or the browser before that), and to set each parameter. A continuous
+   parameter is set by searching its range with `str_for_value` for the values that show what's
+   asked and taking the middle of them; a list's by its items. What Live then shows is sent back
+   and checked against the spec, to the shown value's rounding, so a render where Glue's Threshold
+   showed `-19.5 dB` is refused rather than compared;
+3. asks it to render: it puts the file in the source track's first clip slot
+   (`ClipSlot.create_audio_clip`), turns its warping and looping off, sets launch quantization to
+   none, fires the sink's empty slot, which records, and the source's, waits the file's length and
+   half a second, stops the transport, and answers with the recorded clip's `file_path` once Live
+   has finished writing it;
+4. reads the recording, refusing it if it isn't at the spec's rate, finds the marker, the loudest
+   sample before the input could arrive, and cuts the recording from the input's start plus that
+   lag. The lag is Live's delay from playing to recording and the device's latency, which Live
+   reports as `latency_in_samples` and is kept beside the render.
+
+The marker is quiet so a compressor or a pedal passes it as it is, and the second of silence lets
+a compressor recover before the input. A device with a linear-phase filter puts its impulse's peak
+at its latency, and a minimum-phase one a few samples after its start, so the lag can be a few
+samples long for a device that filters; ours isn't moved.
+
+`uv run live_bridge.py null` checks the path: a sweep at -6 dBFS through the probe with no device,
+which should come back at the same level, within 0.01 dB, and the same to under -90 dBFS once
+lined up. The other commands are `ping` and `params <device>`, which lists a device's parameters,
+their ranges and items, for writing a spec.
+
+The specs: `live-glue-static`, `live-glue-attack` and `live-glue-release` set our `Bus` against
+Glue Compressor, which is modelled on the same SSL G-bus and has its ratios, attacks and set
+releases, and its Auto release, the first reference for ours; the first two have Bus FORCE beside
+it. `live-pedal-overdrive`, `live-pedal-distortion` and `live-pedal-riff` set Distort's
+`Overdrive` and `Distortion` against Pedal's two modes, its Gain at the same place as our
+`Amount`, unfitted, with Dist OPAMP-21 beside `Distortion`. `uv run run.py --suite live` runs them
+all, about 5 minutes of Live's time.
+
+### Setting it up
+
+```sh
+just live-bridge-install        # or tools/compare/live/install.sh
+just live-bridge-uninstall      # takes it away again
+```
+
+The install makes one thing, `~/Music/Ableton/User Library/Remote Scripts/VimtrackerBridge`, a
+symbolic link to `tools/compare/live/VimtrackerBridge`, and the `Remote Scripts` folder if there
+isn't one; `ABLETON_USER_LIBRARY` names another library. `install.sh --copy` copies the script
+there instead, marked as the bridge's, for a Live that won't follow the link, and `install.sh
+status` says what's there. Uninstalling removes only the link or the marked copy. Live writes its
+compiled `__pycache__` beside the script, which git ignores.
+
+Then restart Live, open a new set, and in Settings, Link, Tempo & MIDI choose `VimtrackerBridge`
+as a Control Surface, with no input or output; Live's status bar says `vimtracker bridge listening
+on 127.0.0.1:47364`. Set Live's sample rate to the specs' 48000 Hz in Settings, Audio, and its
+recordings to 32-bit in Settings, Record, Warp & Launch, so nothing is clipped or rounded. Live's
+log, `~/Library/Preferences/Ableton/Live 12.*/Log.txt`, has the bridge's lines.
+
+The tests, which need no Live, drive the bridge with stand-ins for Live's objects:
+
+```sh
+uv run python -m unittest discover tests
+```
+
+### If Live won't do it this way
+
+The route kept in reserve is Max for Live: a source device playing the file with `sfplay~` before
+the device under test and a sink recording with `sfrecord~` after it, on one track, commanded over
+`udpreceive`, so the recording is written by Max as 32-bit float and doesn't depend on Live's
+session recording. The `.amxd` files would have to be generated from a readable patcher in the
+repo, as Max can't be opened here, which is why Live's own clip and recording API came first.
 
 ## A spec
 
