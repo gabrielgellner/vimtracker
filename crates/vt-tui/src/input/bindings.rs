@@ -635,6 +635,7 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         Cmd::Sample(SampleKey::CursorStyle),
         "The cursor as a line, or as its column",
     ),
+    (";", Cmd::Audition, "Hear the slice; held, until let go"),
 ];
 
 const AUDIO: &[(&str, Cmd, &str)] = &[

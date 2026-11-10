@@ -23,6 +23,9 @@ pub struct Playable {
     pub frames: Arc<SampleData>,
     /// What it can play, by slice number: the whole entry alone, if it has no slices.
     pub spans: Box<[Span]>,
+    /// The whole entry from its start to its end, as it plays with no slice's own settings, which
+    /// the sample page plays from its cursor.
+    pub whole: Span,
     /// Where the whole entry starts and ends, which a slice played on through, `Thru`, plays to.
     pub start: u64,
     pub end: u64,
@@ -148,6 +151,7 @@ impl Playable {
             sample,
             frames,
             spans,
+            whole: span(start, end, &SliceParams::default(), false),
             start,
             end,
             marks,

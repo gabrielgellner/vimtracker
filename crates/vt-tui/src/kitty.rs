@@ -17,6 +17,7 @@ use ratatui::style::Color;
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
+use vt_engine::engine::PLAYHEADS;
 use vt_model::bank::{BankEntry, ContentHash, Points};
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
@@ -27,6 +28,7 @@ use vt_model::song::{FilterMode, FilterType, Machine, Track};
 use crate::app::App;
 use crate::input::mode::View;
 use crate::input::picker::Shown;
+use crate::sample_page::SamplePage;
 use crate::sample_wave::Drawing;
 use crate::theme;
 use crate::track_page::{Control, Page};
@@ -36,7 +38,9 @@ use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
     PREVIEW_WAVE_WIDTH,
 };
-use crate::views::sample::{MarkKind, WAVE_ROWS, mark_reach, marks_placed, overlaid};
+use crate::views::sample::{
+    MarkKind, WAVE_ROWS, WaveOnScreen, lines_placed, mark_reach, marks_placed, overlaid,
+};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
@@ -756,6 +760,9 @@ struct WaveKey {
 /// How wide the sample page's cursor is as a line, in pixels.
 const CURSOR_LINE_PIXELS: usize = 2;
 
+/// How wide each of the sample page's playheads is as a line, in pixels, as wide as the cursor's.
+const PLAYHEAD_LINE_PIXELS: usize = 2;
+
 /// A character's size in pixels until the terminal says: the author's screen's, kitty full screen
 /// on a MacBook.
 pub const DEFAULT_CELL: (usize, usize) = (15, 39);
@@ -916,6 +923,11 @@ pub struct Graphics {
     cursor_line: Option<(usize, u32)>,
     /// Where the line is placed, if it's on screen.
     cursor_placed: Option<Placement>,
+    /// The image of the sample page's playhead as a line, and how tall it is in pixels, placed once
+    /// for each playhead.
+    playhead_line: Option<(usize, u32)>,
+    /// Where each playhead's line is placed, by its placement id less one.
+    playheads_placed: [Option<Placement>; PLAYHEADS],
     /// The images of the ruler's marks, one for each kind of point in [`MarkKind::ALL`]'s order,
     /// and the character size they're drawn for.
     mark_images: Option<((usize, usize), [u32; MarkKind::ALL.len()])>,
@@ -947,6 +959,8 @@ impl Graphics {
             sample_overview: None,
             cursor_line: None,
             cursor_placed: None,
+            playhead_line: None,
+            playheads_placed: [None; PLAYHEADS],
             mark_images: None,
             marks_placed: BTreeMap::new(),
             cell: DEFAULT_CELL,
@@ -977,6 +991,9 @@ impl Graphics {
             self.retired
                 .extend(self.cursor_line.take().map(|(_, id)| id));
             self.cursor_placed = None;
+            self.retired
+                .extend(self.playhead_line.take().map(|(_, id)| id));
+            self.playheads_placed = [None; PLAYHEADS];
             self.retired
                 .extend(self.mark_images.take().into_iter().flat_map(|(_, ids)| ids));
             self.marks_placed.clear();
@@ -1010,6 +1027,7 @@ impl Graphics {
                     .as_ref()
                     .is_some_and(|image| image.1 == id)
                 || self.cursor_line.is_some_and(|image| image.1 == id)
+                || self.playhead_line.is_some_and(|image| image.1 == id)
                 || self.mark_images.is_some_and(|(_, ids)| ids.contains(&id))
                 || self
                     .preview
@@ -1054,13 +1072,80 @@ impl Graphics {
     }
 
     /// Place what the terminal places itself rather than through placeholders, once the screen
-    /// is drawn: the sample page's ruler marks and its cursor as a line. After the drawing, so
-    /// they go where the page is now, and so a clear as the window changes size has already
-    /// happened.
+    /// is drawn: the sample page's ruler marks, its playheads and its cursor as lines, the
+    /// cursor's last so it's over a playhead it meets. After the drawing, so they go where the
+    /// page is now, and so a clear as the window changes size has already happened.
     pub fn place(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
         self.sync_marks(app, out)?;
+        self.sync_playheads(app, out)?;
         self.sync_cursor_line(app, out)?;
         out.flush()
+    }
+
+    /// Where a line at a frame goes on the sample page's waveform: at its pixel's character, the
+    /// pixel's place in it across, the waveform's height down. None if it's out of view.
+    fn line_at(&self, page: &SamplePage, screen: &WaveOnScreen, frame: u64) -> Option<Placement> {
+        let across = self.cell.0 as u128;
+        let after = frame.checked_sub(page.first_frame())?;
+        let pixels = u128::from(after) * across / u128::from(page.zoom.max(1));
+        let column = i32::try_from(i128::from(screen.left) + (pixels / across) as i128).ok()?;
+        screen.columns.contains(&column).then(|| Placement {
+            column: column as u16,
+            row: screen.top,
+            offset: (pixels % across) as usize,
+            height: usize::from(screen.rows) * self.cell.1,
+        })
+    }
+
+    /// Place the sample page's playheads as thin green lines at their frames, as the cursor's line
+    /// is placed, or take them away when nothing plays, they're out of view, or the cursor is shown
+    /// as its column, when they're their columns too. One image is placed once for each, so a
+    /// playhead moving is placing it again, about 60 bytes, and nothing is sent while nothing
+    /// moves, so a page with nothing playing sends nothing.
+    fn sync_playheads(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        let page = &app.sample_page;
+        let mut wanted = [None; PLAYHEADS];
+        if let Some(screen) = &page.on_screen
+            && lines_placed(app, std::time::Instant::now())
+        {
+            let placed = screen
+                .playheads
+                .iter()
+                .filter_map(|frame| self.line_at(page, screen, *frame));
+            for (slot, at) in wanted.iter_mut().zip(placed) {
+                *slot = Some(at);
+            }
+        }
+        if wanted == self.playheads_placed {
+            return Ok(());
+        }
+        let height = usize::from(WAVE_ROWS) * self.cell.1;
+        let id = match self.playhead_line.take() {
+            Some((drawn, id)) if drawn == height => id,
+            old => {
+                // Drawn for another size: the old one goes, with its placements.
+                if let Some((_, id)) = old {
+                    command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
+                }
+                self.playheads_placed = [None; PLAYHEADS];
+                let id = self.new_id();
+                let mut line = Picture::new(PLAYHEAD_LINE_PIXELS, height, vec![rgb(theme::GREEN)]);
+                line.pixels.fill(1);
+                store(out, id, &line.png())?;
+                id
+            }
+        };
+        self.playhead_line = Some((height, id));
+        for (index, (at, was)) in wanted.iter().zip(&self.playheads_placed).enumerate() {
+            let placement = index as u32 + 1;
+            match at {
+                Some(at) if was != &Some(*at) => place_at(out, id, placement, *at)?,
+                None if was.is_some() => unplace(out, id, placement)?,
+                _ => {}
+            }
+        }
+        self.playheads_placed = wanted;
+        Ok(())
     }
 
     /// Send the waveforms in the picker's preview, if the terminal lacks them, and forget those of a
@@ -1329,7 +1414,6 @@ impl Graphics {
     fn sync_cursor_line(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
         let page = &app.sample_page;
         let height = usize::from(WAVE_ROWS) * self.cell.1;
-        let across = self.cell.0 as u128;
         let wanted = match &page.on_screen {
             Some(screen)
                 if app.view == View::Sample
@@ -1337,15 +1421,7 @@ impl Graphics {
                     && app.sample_images.is_some()
                     && !overlaid(app, std::time::Instant::now()) =>
             {
-                let pixels = u128::from(page.cursor.saturating_sub(page.first_frame())) * across
-                    / u128::from(page.zoom.max(1));
-                let column = screen.left + (pixels / across) as i32;
-                screen.columns.contains(&column).then(|| Placement {
-                    column: column as u16,
-                    row: screen.top,
-                    offset: (pixels % across) as usize,
-                    height: usize::from(screen.rows) * self.cell.1,
-                })
+                self.line_at(page, screen, page.cursor.max(page.first_frame()))
             }
             _ => None,
         };
@@ -1517,6 +1593,7 @@ impl Graphics {
             .chain(&self.sample_overview)
             .map(|image| &image.1)
             .chain(self.cursor_line.iter().map(|image| &image.1))
+            .chain(self.playhead_line.iter().map(|image| &image.1))
             .chain(self.mark_images.iter().flat_map(|(_, ids)| ids));
         for id in held
             .chain(filter)

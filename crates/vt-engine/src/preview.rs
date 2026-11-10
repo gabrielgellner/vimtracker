@@ -289,6 +289,14 @@ impl Previews {
         sounding
     }
 
+    /// The voices sounding through a track, for where each is in its sample.
+    pub fn on(&self, track: usize) -> impl Iterator<Item = &Voice> {
+        self.voices
+            .iter()
+            .filter(move |preview| preview.track == track && preview.voice.active())
+            .map(|preview| &preview.voice)
+    }
+
     /// Whether any of these voices is sounding through a track.
     pub fn on_track(&self, sounding: &Sounding, track: usize) -> bool {
         sounding.places().iter().any(|&place| {

@@ -493,6 +493,13 @@ impl Voice {
         self.reader.respan(span);
     }
 
+    /// The frame of its sample it's at, for a playhead, while it's sounding a sample: not a
+    /// synth's note, and not one fading out after something cut it or took its place.
+    pub fn frame(&self) -> Option<u64> {
+        let sounding = matches!(self.stage, Stage::Held { .. } | Stage::Released { .. });
+        (sounding && self.synth.is_none()).then(|| self.reader.frame())
+    }
+
     /// The slice of its entry it's playing, and whether on past its end.
     pub fn slice(&self) -> (u8, bool) {
         (self.slice, self.reader.thru())

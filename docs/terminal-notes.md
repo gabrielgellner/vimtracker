@@ -106,8 +106,8 @@ What `kitty.rs` uses of the protocol:
 | Unicode placeholders | `U+10EEEE` with row and column diacritics, all 297 of them, so an image covers up to 297 characters across and down; the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
 | Delete | `a=d,d=I,i=<id>,q=2`, by id, freeing the data, when an image is replaced and on quitting |
 | Query | `a=q,i=31,f=100` at start, as above |
-| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, and its ruler's marks, one image for each kind of point, which the program places itself |
-| Place directly | `a=p,i=<id>,p=<placement>,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it. The cursor's line is `p=1`, and each of a kind's marks has a `p` of its own |
+| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, its playhead as a line, and its ruler's marks, one image for each kind of point, which the program places itself |
+| Place directly | `a=p,i=<id>,p=<placement>,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it. The cursor's line is `p=1`, each playhead's line `p=1` to `p=4` of the playhead's image, and each of a kind's marks has a `p` of its own |
 | Take off | `a=d,d=i,i=<id>,p=<placement>,q=2` for one placement, or without `p` for all of an image's, which keeps the data to place again |
 
 In kitty 0.50 on 2026-11-08, `scripts/live.sh` with the program run under `script` to record what
@@ -154,7 +154,8 @@ image over cells whose background is a selection, a cursor, and a playhead that 
 to check by eye. The author checked it full screen on 2026-11-09, in kitty 0.50.0 and Ghostty
 1.4.0: the waveform fills its cells past the 28th column, the selection, cursor and playhead show
 through it, and the playhead moves smoothly with nothing left behind. A cell background fills whole
-cells, so the playhead is a character wide; a finer one is an idea for the sample page (#274).
+cells, so the playhead is a character wide; the sample page's is a line placed directly instead
+(decision 114), as its cursor is.
 
 **A line placed directly** (decision 102). The sample page's cursor can be a 2-pixel line at its
 frame rather than its character's background: an image of its own, sent once with `a=t` and placed

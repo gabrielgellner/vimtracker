@@ -17,7 +17,7 @@ use crate::meter::Meter;
 use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
-use vt_engine::engine::{TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
@@ -129,9 +129,13 @@ pub struct TrackLive {
 /// Polyend's Tracker takes a button as held after 333 ms.
 pub const HOLD_TIME: Duration = Duration::from_millis(300);
 
+/// How long the playheads stay without a report from the audio thread, after which audio has
+/// stopped and nothing is playing.
+const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
+
 /// What a key started that lasts while it's down, and is undone or ended when it's let go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Momentary {
+pub(crate) enum Momentary {
     /// A track's mute or solo was switched from this.
     Mute {
         track: usize,
@@ -151,6 +155,10 @@ enum Momentary {
     AuditionNote {
         track: usize,
         note: u8,
+    },
+    /// The sample page is playing a slice or from its cursor, its count of what it's played then.
+    SampleAudition {
+        hearing: u64,
     },
 }
 
@@ -237,6 +245,9 @@ pub struct App {
     pub sample_images: Option<(u32, u32)>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
+    /// Where each voice playing a sample through the cursor's track is in it, for the sample
+    /// page's playheads.
+    pub playheads: [Option<Playhead>; PLAYHEADS],
     watched: usize,
     pub track_row: usize,
     pub track_field: usize,
@@ -331,7 +342,7 @@ pub struct App {
     /// What the key that's down started that lasts while it's held.
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
-    started: Option<Momentary>,
+    pub(crate) started: Option<Momentary>,
     pub entry: Entry,
     /// The first step on screen, and how many fit.
     pub top: usize,
@@ -438,6 +449,7 @@ impl App {
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             live: None,
+            playheads: [None; PLAYHEADS],
             watched: 0,
             track_row: 0,
             track_field: 0,
@@ -611,7 +623,10 @@ impl App {
                         track.solo = was;
                     }
                 }
-                Momentary::Fill { .. } | Momentary::Audition | Momentary::AuditionNote { .. } => {}
+                Momentary::Fill { .. }
+                | Momentary::Audition
+                | Momentary::AuditionNote { .. }
+                | Momentary::SampleAudition { .. } => {}
             }
         }
         Arc::new(song)
@@ -827,6 +842,14 @@ impl App {
             self.realigning = report.realigning;
             self.realigning_tracks = report.realigning_tracks;
             self.live = (report.watched == track).then_some(report.live);
+            self.playheads = if report.watched == track {
+                report.playheads
+            } else {
+                [None; PLAYHEADS]
+            };
+        } else if now.saturating_duration_since(self.report_at) > PLAYHEADS_KEPT {
+            // Audio has stopped, so nothing is playing.
+            self.playheads = [None; PLAYHEADS];
         }
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;
@@ -979,6 +1002,12 @@ impl App {
             Momentary::AuditionNote { track, note } => {
                 self.handle.send(Command::FinishPreview { track, note });
             }
+            // Only what it played itself, so a later one carries on.
+            Momentary::SampleAudition { hearing } => {
+                if long && hearing == self.sample_page.hearings {
+                    self.handle.send(Command::StopFile);
+                }
+            }
         }
     }
 
@@ -1097,6 +1126,10 @@ impl App {
     /// while every other key works on the page as it does, so settings change as it plays. A note
     /// lasts as long as its key is down.
     fn keys_key(&mut self, key: Key, now: Instant) {
+        if self.view == View::Sample {
+            self.sample_keys_key(key, now);
+            return;
+        }
         let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
         match key.code {
             KeyCode::Esc | KeyCode::Char(';') if self.pending.is_empty() => {
@@ -1145,6 +1178,7 @@ impl App {
     pub fn key_scope(&self) -> Mode {
         match (self.mode, self.view) {
             (Mode::Keys, View::Track) => Mode::Track,
+            (Mode::Keys, View::Sample) => Mode::Sample,
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,

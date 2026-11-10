@@ -96,6 +96,13 @@ pub struct SamplePage {
     pub cell_width: Option<usize>,
     /// The `h` or `l` being held, if one is.
     held_step: Option<HeldStep>,
+    /// The bank entry and content the page last played, while what it played is the one-off
+    /// file the preview voices have, so its playhead is shown over this entry and no other.
+    pub heard: Option<(u8, ContentHash)>,
+    /// How many times the page has played something, so a key let go stops only what it started.
+    pub hearings: u64,
+    /// The slice the keys mode's first key plays, a multiple of [`PADS`](crate::auditioning::PADS).
+    pub pads_from: usize,
 }
 
 /// A run of `h` or `l` as it's held, which speeds up from a pixel a repeat to a column, as an
@@ -123,6 +130,9 @@ impl Default for SamplePage {
             cell_width: None,
             held_step: None,
             pinned: None,
+            heard: None,
+            hearings: 0,
+            pads_from: 0,
         }
     }
 }
@@ -274,7 +284,12 @@ impl SamplePage {
 
     /// The cursor's column on screen, counted from the view's left, if it's in view.
     pub fn cursor_on_screen(&self) -> Option<usize> {
-        let column = self.column_of(self.cursor).checked_sub(self.column)?;
+        self.on_screen_column(self.cursor)
+    }
+
+    /// A frame's column on screen, counted from the view's left, if it's in view.
+    pub fn on_screen_column(&self, frame: u64) -> Option<usize> {
+        let column = self.column_of(frame).checked_sub(self.column)?;
         (column < self.columns as u64).then_some(column as usize)
     }
 
@@ -283,6 +298,7 @@ impl SamplePage {
         self.shown = Some((shown.number, shown.analysis.hash));
         self.zoom = self.fit(shown.length());
         self.column = 0;
+        self.pads_from = 0;
         self.cursor = shown
             .entry
             .edit
@@ -600,7 +616,10 @@ impl App {
             Cmd::NarrowGrid => zoom_by(page, times, true, length),
             Cmd::WidenGrid => zoom_by(page, times, false, length),
             Cmd::Sample(key) => self.run_sample_key(key, &shown, times),
-            Cmd::EnterInsert | Cmd::Replace | Cmd::Substitute => {
+            Cmd::Audition => self.audition_slice(&shown),
+            Cmd::PlayFromCursor => self.audition_from_cursor(&shown),
+            Cmd::EnterInsert => self.start_pads(&shown),
+            Cmd::Replace | Cmd::Substitute => {
                 self.status = "The sample page only shows the sample for now".to_owned();
             }
             Cmd::Operator(_) | Cmd::VisualField | Cmd::VisualStep | Cmd::Reselect => {
@@ -769,6 +788,9 @@ fn is_sample_motion(cmd: Cmd) -> bool {
             | Cmd::NarrowGrid
             | Cmd::WidenGrid
             | Cmd::Sample(_)
+            | Cmd::Audition
+            | Cmd::PlayFromCursor
+            | Cmd::EnterInsert
     )
 }
 

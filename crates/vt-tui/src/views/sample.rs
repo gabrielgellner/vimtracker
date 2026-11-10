@@ -54,6 +54,8 @@ pub struct WaveOnScreen {
     pub rows: u16,
     /// The ruler's marks, in view or not, in the order they're drawn.
     pub marks: Vec<Mark>,
+    /// The frames the playheads are at, in view or not.
+    pub playheads: Vec<u64>,
 }
 
 /// What kind of point a mark in the ruler is for, which gives it its colour and its tip's width.
@@ -161,6 +163,13 @@ pub fn marks_placed(app: &App, now: Instant) -> bool {
         && app.sample_images.is_some()
         && app.sample_page.cell_width.is_some()
         && !overlaid(app, now)
+}
+
+/// Whether the terminal places the cursor and the playheads as thin lines at their frames' pixels,
+/// rather than the page drawing their columns' backgrounds: when the marks are placed and the
+/// cursor is a line, as `zc` has it, so the playheads follow the cursor's style.
+pub fn lines_placed(app: &App, now: Instant) -> bool {
+    marks_placed(app, now) && app.sample_page.cursor_line
 }
 
 /// The page's size in this much room: at least the author's screen's.
@@ -285,6 +294,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             columns: start..end,
             rows,
             marks: shown.as_ref().map(marks).unwrap_or_default(),
+            playheads: shown
+                .as_ref()
+                .map(|shown| app.sample_playheads(shown))
+                .unwrap_or_default(),
         });
     }
 }
@@ -327,12 +340,24 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
     if let Some((wave, overview)) = app.sample_images {
         let style = Style::new().fg(kitty::id_color(wave));
         let cursor = state.cursor_on_screen().filter(|_| !state.cursor_line);
+        // The playheads as their columns, where the terminal isn't placing them as lines.
+        let playheads: Vec<usize> = if lines_placed(app, Instant::now()) {
+            Vec::new()
+        } else {
+            app.sample_playheads(shown)
+                .into_iter()
+                .filter_map(|frame| state.on_screen_column(frame))
+                .collect()
+        };
         for (y, line) in kitty::placeholder_lines(state.columns, usize::from(WAVE_ROWS))
             .iter()
             .enumerate()
         {
             let y = WAVE_TOP + y as u16;
             buffer.set_string(MARGIN, y, line, style);
+            for column in &playheads {
+                buffer[(MARGIN + *column as u16, y)].set_bg(playhead_column());
+            }
             if let Some(column) = cursor {
                 buffer[(MARGIN + column as u16, y)].set_bg(cursor_column());
             }
@@ -356,6 +381,12 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
 /// set back so the waveform reads over it.
 pub fn cursor_column() -> Color {
     theme::dimmed(theme::ROSEWATER)
+}
+
+/// The background of a playhead's column, where it isn't a line: the playhead's green, set back
+/// as the cursor's column is.
+pub fn playhead_column() -> Color {
+    theme::dimmed(theme::GREEN)
 }
 
 /// The ruler: each point's mark in its colour, over the column it's in, each slice's number in
