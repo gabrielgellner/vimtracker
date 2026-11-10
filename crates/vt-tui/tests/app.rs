@@ -6903,6 +6903,8 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         labels
     };
@@ -7078,6 +7080,8 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         found
     };
@@ -7139,6 +7143,8 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         found
     };
@@ -7219,10 +7225,10 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     press(&mut app, "1 mi");
     assert_eq!(picker(&app).focus, Focus::Search);
     assert_eq!(current(&app), "1 Mix");
-    // Esc clears it and goes back to the tree, on what it found.
+    // Esc goes back to the list, keeping what it found, as Esc leaves Insert mode.
     special(&mut app, KeyCode::Esc);
     assert_eq!(picker(&app).focus, Focus::List);
-    assert!(picker(&app).query.is_empty());
+    assert_eq!(picker(&app).query, "1 mi");
     assert_eq!(current(&app), "1 Mix");
     special(&mut app, KeyCode::Enter);
     assert_eq!(

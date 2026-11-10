@@ -1386,12 +1386,9 @@ impl Picker {
             KeyCode::Down => self.move_highlight(1),
             KeyCode::Up => self.move_highlight(-1),
             KeyCode::Enter => return self.enter(false, true),
-            // Clearing the search goes back to the list, on what was found.
-            KeyCode::Esc if !self.query.is_empty() => {
-                self.set_query(String::new());
-                self.focus = Focus::List;
-            }
-            KeyCode::Esc => return Outcome::Close,
+            // Back to the list, as `Esc` leaves Insert mode, keeping what's found so `j` and `k`
+            // move through it. Only the list's own `Esc` closes.
+            KeyCode::Esc => self.focus = Focus::List,
             KeyCode::Backspace => {
                 let mut query = self.query.clone();
                 query.pop();
@@ -1647,7 +1644,7 @@ mod tests {
             picker.rows().is_empty(),
             "not fuzzy: no c, s and d in a row"
         );
-        press(&mut picker, "<Esc>/eep");
+        press(&mut picker, "<Esc>eep");
         assert!(picker.rows().is_empty(), "kicks hasn't been read");
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -1701,7 +1698,7 @@ mod tests {
         assert_eq!(label(&picker), "drums", "l opens");
         press(&mut picker, "A");
         assert_eq!(picker.query, "A", "nothing plays, so A searches");
-        press(&mut picker, "<Esc>l");
+        press(&mut picker, "<Backspace><Esc>l");
         assert_eq!(
             press(&mut picker, "<Enter>"),
             Outcome::Choose(Pick::Folder(root.join("drums"))),
@@ -1820,10 +1817,15 @@ mod tests {
         assert!(picker.rows().iter().all(|row| matches!(row, Row::Item(_))));
         assert_eq!(picker.matched(0), [0, 1], "the letters it matched");
         // j and k type in the search, and a category's name counts.
-        press(&mut picker, "<Esc>/amp");
+        press(&mut picker, "<Esc>amp");
         assert_eq!(picker.matching(), 2);
+        // `Esc` leaves the search for the list, keeping what it found, as `Esc` leaves Insert.
         press(&mut picker, "<Esc>");
         assert_eq!(picker.focus, Focus::List);
+        assert_eq!(picker.query, "amp");
+        assert_eq!(picker.matching(), 2);
+        // Typing again starts a new search, which emptied shows the whole list.
+        press(&mut picker, "/<Backspace><Backspace><Backspace><Esc>");
         assert!(picker.query.is_empty());
         assert_eq!(
             label(&picker),
@@ -2050,7 +2052,8 @@ mod tests {
         assert_eq!(picker.rows().len(), 1);
         assert_eq!(view(&picker), (0, 0));
         press(&mut picker, "<Esc>");
-        assert_eq!(view(&picker), (0, 7), "back on what it found");
+        assert_eq!(picker.rows().len(), 1, "Esc keeps the search");
+        assert_eq!(view(&picker), (0, 0));
         // Closing a long category from far down it.
         let mut items: Vec<Item> = (0..5)
             .map(|at| Item::new(format!("{at}"), Pick::Track(at)))

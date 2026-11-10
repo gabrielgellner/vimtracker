@@ -74,7 +74,7 @@ rest closed. The title shows how many items match, out of how many there are.
 | `l` `Enter` | Open a category and go into it, or choose |
 | `h` | Close the category, from inside it or on it |
 | `/` | Search |
-| `Esc` | Clear the search, then close |
+| `Esc` | Close, or leave the search for the list |
 
 A long list scrolls before the cursor reaches its edge, keeping three rows beyond it in
 view, as Vim's `scrolloff` does, so you can see what's coming. It stays where it is as the
@@ -86,7 +86,9 @@ A name that starts with one of the keys above, such as `ladder` or `zap`, needs 
 search looks through every category, ranks the best match first, shows each match's
 category beside it, and picks out the letters it matched. Digits then `Enter` choose by
 number, as for a chain or a phrase. The tracks and the FX commands open on their search
-instead, as they're usually found by name, and `Esc` goes from the search to the list.
+instead, as they're usually found by name. `Esc` goes from the search to the list, keeping
+what it found so `j`, `k` and `zz` move through it, as `Esc` leaves Insert mode, and a second
+`Esc` closes the list. Typing a letter in the list starts a new search.
 
 ## Files
 
