@@ -39,9 +39,9 @@ pub const LOOP_COLOR: Color = theme::BLUE;
 pub const SLICE_COLOR: Color = theme::PEACH;
 
 /// How wide a point's line is, in pixels.
-const POINT_PIXELS: usize = 2;
+pub const POINT_PIXELS: usize = 2;
 /// How wide a slice's line is, thinner than the points', as there can be many.
-const SLICE_PIXELS: usize = 1;
+pub const SLICE_PIXELS: usize = 1;
 /// The fewest pixels a frame has to itself for it to be drawn as a dot as well as a line.
 const DOT_SPACING: f64 = 6.0;
 /// How far a dot reaches from its frame, in pixels, either way.
