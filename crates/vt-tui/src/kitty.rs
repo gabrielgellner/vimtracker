@@ -999,6 +999,8 @@ impl Graphics {
             }
         }
         if app.view == View::Sample {
+            // So `h` and `l` move the cursor's line by a pixel of these.
+            app.sample_page.cell_width = Some(self.cell.0);
             self.sync_sample(app, out)?;
         } else {
             app.sample_images = None;

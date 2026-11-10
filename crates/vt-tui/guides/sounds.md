@@ -342,7 +342,7 @@ motion takes a count.
 
 | Keys | Move to |
 |---|---|
-| `h` `l` | A column earlier or later, at the zoom shown |
+| `h` `l` | A pixel earlier or later, or a frame closer in; faster as it's held |
 | `0` `$` | The start or end of the slice |
 | `^` `g_` | Its first or last sound, above -60 dBFS |
 | `gg` `G` | The start or end of the sample; with a count, a slice |
@@ -360,6 +360,10 @@ motion takes a count.
 | `C-e` `C-y` | A column later or earlier |
 | `zz` `zs` `ze` | The cursor in the middle, at the left or at the right |
 | `zc` | The cursor as a thin line at its frame, or as its column |
+
+Held, `h` and `l` speed up from a pixel a repeat to a column in half a second.
+As its column, after `zc`, the cursor can only show columns, so they move a
+column.
 
 Closer than a frame a pixel, the waveform is a line from frame to frame with a
 dot on each, so a zero crossing is where the line crosses the faint one in the
