@@ -118,7 +118,7 @@ impl App {
 
     /// The rate an entry's file was recorded at, and its length in the file's frames, if it's
     /// loaded.
-    fn file_of(&self, entry: &BankEntry) -> Option<(u32, u64)> {
+    pub(crate) fn file_of(&self, entry: &BankEntry) -> Option<(u32, u64)> {
         let id = self.samples.id_of(&entry.source()?.path)?;
         let loaded = self.samples.get(id)?.frames.len() as u64;
         // One made at the program's rate, as a recording is, is at the program's rate.

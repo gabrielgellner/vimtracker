@@ -369,6 +369,13 @@ impl App {
             {
                 self.open_sample_lock_picker(slot);
             }
+            // And a slice lock's is one of the slices of the sample the step plays.
+            Field::FxValue(slot)
+                if self.current_slot(slot).and_then(|s| s.command)
+                    == Some(FxCommand::Set(SettingId::SLICE)) =>
+            {
+                self.open_slice_lock_picker(slot);
+            }
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
             }
@@ -476,6 +483,10 @@ impl App {
         let has_value = current.is_some_and(|s| s.command.is_some());
         if command == FxCommand::Set(SettingId::SAMPLE) && !has_value {
             self.open_sample_lock_picker(slot);
+            return;
+        }
+        if command == FxCommand::Set(SettingId::SLICE) && !has_value {
+            self.open_slice_lock_picker(slot);
             return;
         }
         if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {
@@ -671,6 +682,7 @@ impl App {
                 });
             }
             Pick::SampleLock { slot, number } => self.pick_sample_lock(slot, number),
+            Pick::SliceLock { slot, number } => self.pick_slice_lock(slot, number),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

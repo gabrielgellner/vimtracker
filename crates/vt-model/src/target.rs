@@ -105,9 +105,12 @@ impl SettingId {
             (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
-            (Owner::Sampler, 1) => "Where in the sample a note starts".to_owned(),
-            (Owner::Sampler, 2) => "How much of the sample a note plays".to_owned(),
-            (Owner::Sampler, _) => "Once through, round its loop, or ping-pong".to_owned(),
+            (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
+            (Owner::Sampler, 2) => "Where in the slice a note starts".to_owned(),
+            (Owner::Sampler, 3) => "How much of the slice a note plays".to_owned(),
+            (Owner::Sampler, _) => {
+                "Once through, round its loop, ping-pong, or on through the slices after".to_owned()
+            }
         }
     }
 

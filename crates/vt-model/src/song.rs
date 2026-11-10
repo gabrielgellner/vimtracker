@@ -1620,6 +1620,57 @@ impl Song {
         used
     }
 
+    /// Have every step that locks a slice of an entry by number lock the one it's now numbered,
+    /// from what each old number became, so patterns keep their chops as the entry is sliced
+    /// again. A step plays the entry its own `SMP` locks, or else its track's `Sample`. A number
+    /// past the last slice played the last, so it follows the last. An LFO's depth on `SLI` is a
+    /// distance rather than a slice, so it's left as it is.
+    pub fn renumber_slices(&mut self, number: u8, renumbered: &[u8]) {
+        let Some(last) = renumbered.len().checked_sub(1) else {
+            return;
+        };
+        let renumber = |slot: &mut FxSlot| {
+            let old = usize::from(slot.coarse()).min(last);
+            slot.value = (u16::from(renumbered[old]) << 8) | u16::from(slot.fine());
+        };
+        let is_slice = |slot: &FxSlot| slot.command == Some(FxCommand::Set(SettingId::SLICE));
+        for track in &mut self.tracks {
+            if track.machine != Machine::Sampler || !track.is_sound() {
+                continue;
+            }
+            let own = track.sample();
+            for phrase in track.phrases.values_mut() {
+                let plays = |step: &Step| {
+                    let locked = step
+                        .fx
+                        .iter()
+                        .rev()
+                        .find(|slot| slot.command == Some(FxCommand::Set(SettingId::SAMPLE)));
+                    locked.map_or(own, |slot| slot.coarse()) == number
+                };
+                let touched = phrase
+                    .steps()
+                    .iter()
+                    .any(|step| plays(step) && step.fx.iter().any(is_slice));
+                if !touched {
+                    continue;
+                }
+                let phrase = Arc::make_mut(phrase);
+                for at in 0..phrase.steps().len() {
+                    let Some(step) = phrase.step_mut(at) else {
+                        continue;
+                    };
+                    if plays(step) {
+                        step.fx
+                            .iter_mut()
+                            .filter(|slot| is_slice(slot))
+                            .for_each(&renumber);
+                    }
+                }
+            }
+        }
+    }
+
     /// How many tracks play sounds. They come first, and then the fixed tracks.
     pub fn sound_tracks(&self) -> usize {
         self.tracks.len().saturating_sub(FIXED_TRACKS)

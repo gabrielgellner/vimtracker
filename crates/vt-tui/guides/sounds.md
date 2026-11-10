@@ -291,12 +291,14 @@ any of them:
 
 | Setting | Step | Does |
 |---|---|---|
+| `Slice` | `SLI` | Which slice plays, once it's sliced: see **Slices** |
 | `Start` | `STA` | Where a note starts: `80` is half way in |
 | `Length` | `SLEN` | How much plays from there. `FF` is all of it |
-| `Play` | `PLY` | `One-shot`, round its `Loop`, or `Ping-pong` |
+| `Play` | `PLY` | `One-shot`, round its `Loop`, `Ping-pong`, or `Thru` |
 
 `Loop` and `Ping-pong` go round the sample's own loop, or round all that plays if it
-has none, until the note ends. `Start` and `Length` are shares of the whole, counted
+has none, until the note ends. `Thru` plays once from the slice on to the sample's
+end. `Start` and `Length` are shares of the slice, or of the whole, counted
 from where the sample starts playing, so on a reversed sample they count back from
 its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
@@ -324,31 +326,67 @@ keeps from the first frame above -60 dBFS to the last, setting the start and end
 that `:sample start` and `:sample end` set, and leaves its loop where it is. The
 track's `Start` and `Length` then count from what it kept.
 
+## Slices
+
+A sample can be cut into slices, numbered from `00` by where they start, as
+Vim numbers lines. Each plays from its start to the next one's, and the last
+to the sample's end. The track's `Slice`, under `Sample` on the Sound page and
+`SLI` on a step, chooses which one a note plays, so `SLI 00` to `0F` down a
+phrase plays a loop cut in 16 back in order, and a lock plays another slice for
+one note. Past the last slice it plays the last, and a sample with no slices
+plays whole. An LFO or an envelope can sweep through them, a slice for each
+step of depth.
+
+| Command | Does |
+|---|---|
+| `:slice 16` | Cut it into 16 of the same length |
+| `:slice clear` | Play it whole again |
+| `:slice gain -3` | This slice's own gain, in dB |
+| `:slice pan -25` | Its own pan, from -50 at the left to 50 at the right |
+| `:slice tune 7` | Its own tune, in semitones |
+| `:slice reverse on` | Play it backwards, or `off` forwards |
+| `:slice fade 10ms 0.2` | Its own fades in and out |
+
+Each of a slice's own settings on its own, as `:slice gain`, plays it as the
+sample does again; one it doesn't have is the sample's. They change the slice
+the sample page's cursor is in, or, elsewhere, the one the track's `Slice` is
+on. Slicing again moves each step's `SLI` to the new slice holding the sound it
+played, so a pattern keeps its chops, and `u` takes back the slices and the
+steps together. `Play`'s `Thru` plays from the slice on past its end to the
+sample's, as tracker-ce's Play Thru does.
+
+`K` on `Slice`, or on a step's `SLI`, lists the slices with where each starts,
+and `g d` on a step's `SLI` shows that slice on the sample page; `C-o` comes
+back.
+
 ## The sample page
 
 `Space 0` shows the current track's sample as a big waveform, left above right,
 or `g d` on the Sound page's `Sample` row; `C-o` comes back. `W` and `B` show the
 next or previous track's. It only shows the sample for now: the points are set
-with `:sample start`, `:sample end` and `:sample loop` as above.
+with `:sample start`, `:sample end` and `:sample loop` as above, and the slices
+with `:slice`.
 
 The start is marked in teal, the end in red and the loop in blue, each as a line
-at its frame and a mark in the ruler above, which has the time too. Sound
-outside the start and end, which doesn't play, is dimmer. The row below the
-waveform is the whole sample, with the part in view behind it.
+at its frame and a mark in the ruler above, which has the time too. Each slice
+starts at a thinner line in peach, with its number in the ruler. Sound outside
+the start and end, which doesn't play, is dimmer. The row below the waveform is
+the whole sample, with the part in view behind it. The row below that counts
+the slices, and the last says which slice the cursor is in.
 
-A sample is like a line of text, a column of the waveform is a character, and
-the entry from its start to its end is one slice until slicing comes. Every
-motion takes a count.
+A sample is like a text, a column of the waveform is a character, and a slice
+is a line; the sample from its start to its end is one slice until it's
+sliced. Every motion takes a count.
 
 | Keys | Move to |
 |---|---|
 | `h` `l` | A pixel earlier or later, or a frame closer in; faster as it's held |
 | `0` `$` | The start or end of the slice |
 | `^` `g_` | Its first or last sound, above -60 dBFS |
-| `gg` `G` | The start or end of the sample; with a count, a slice |
+| `gg` `G` | The start or end of the sample; with a count, a slice, as `3G` |
 | `j` `k` | The next or previous slice |
 | `}` `{` | The next or previous beat at the song's tempo, from the start |
-| `]]` `[[` | The next or previous point: the start, the end or the loop's |
+| `]]` `[[` | The next or previous point: a slice, the start, the end or the loop's |
 | `H` `M` `L` | The left, middle or right of the view |
 
 | Keys | View |

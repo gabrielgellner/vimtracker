@@ -341,6 +341,13 @@ pub enum Action {
         number: u8,
         entry: Option<BankEntry>,
     },
+    /// Cut a bank entry into slices starting at these frames of its file, or into none, as
+    /// [`Points::reslice`](crate::bank::Points::reslice) does, and have the steps that chose a
+    /// slice of it by number choose the one holding the sound they played, as one change.
+    SetSlices {
+        number: u8,
+        starts: Vec<u64>,
+    },
     /// Name a track, or leave it with no name.
     SetTrackName {
         track: usize,
@@ -517,6 +524,8 @@ pub enum EditError {
     CustomGroove,
     #[error("no track {0}")]
     NoTrack(usize),
+    #[error("the bank has no sample {0:02X}")]
+    NoSample(u8),
     #[error("a reset needs at least 1 step")]
     Reset,
     #[error("a track's reset is from 1 to {MAX_TRACK_RESET} steps, or off")]
@@ -1019,6 +1028,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         }
         Action::SetBankEntry { number, entry } => {
             next.bank.set(*number, entry.clone());
+        }
+        Action::SetSlices { number, starts } => {
+            let mut entry = next
+                .bank
+                .get(*number)
+                .cloned()
+                .ok_or(EditError::NoSample(*number))?;
+            let renumbered = entry.edit.points.reslice(starts);
+            next.bank.set(*number, Some(entry));
+            if let Some(renumbered) = renumbered {
+                next.renumber_slices(*number, &renumbered);
+            }
         }
         Action::SetTrackName { track, name } => {
             let owner = next

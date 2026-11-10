@@ -82,6 +82,9 @@ pub struct SamplePage {
     pub cursor_line: bool,
     /// Where the waveform was last drawn on screen, if it was.
     pub on_screen: Option<WaveOnScreen>,
+    /// A bank entry shown in place of a track's own, while that track is the cursor's, as `g d`
+    /// on a step's `SLI` under an `SMP` of its own shows the sample the step plays.
+    pub pinned: Option<(usize, u8)>,
     /// A character's width in pixels, as the waveform and the cursor's line are drawn for, so `h`
     /// and `l` can move the line a pixel. None until the pictures are drawn, as in a render, where
     /// they move a column.
@@ -114,6 +117,7 @@ impl Default for SamplePage {
             on_screen: None,
             cell_width: None,
             held_step: None,
+            pinned: None,
         }
     }
 }
@@ -142,43 +146,66 @@ impl Shown {
 
     /// One past the last frame that plays.
     pub fn end(&self) -> u64 {
-        let points = &self.entry.edit.points;
-        points.end.unwrap_or(self.length()).min(self.length())
+        self.entry.edit.points.end_in(self.length())
     }
 
-    /// Where each slice starts, in order. Until slices come (#270), the entry is one slice, from
-    /// its start to its end.
+    /// Where each slice starts, in order: the entry's start alone, as one slice, if it has none.
     pub fn slice_starts(&self) -> Vec<u64> {
-        vec![self.entry.edit.points.start.min(self.length())]
+        let points = &self.entry.edit.points;
+        if points.slices.is_empty() {
+            return vec![points.start.min(self.length())];
+        }
+        points
+            .slices
+            .iter()
+            .map(|slice| slice.start.min(self.length()))
+            .collect()
+    }
+
+    /// How many slices it has to choose from: the entry as one, if it has none.
+    pub fn slice_count(&self) -> usize {
+        self.entry.edit.points.slice_count()
     }
 
     /// The slice a frame is in, by its number, and the frames it covers. A frame before the first
     /// slice is in the first.
     pub fn slice_at(&self, frame: u64) -> (usize, std::ops::Range<u64>) {
-        let starts = self.slice_starts();
-        let number = starts
-            .iter()
-            .rposition(|start| *start <= frame)
-            .unwrap_or(0);
+        let number = self.entry.edit.points.slice_at(frame);
         (number, self.slice(number))
     }
 
-    /// The frames of a slice by its number, clamped to the last.
+    /// The frames of a slice by its number, clamped to the last: from its start to the next one's
+    /// or the entry's end, as it plays.
     pub fn slice(&self, number: usize) -> std::ops::Range<u64> {
-        let starts = self.slice_starts();
-        let number = number.min(starts.len() - 1);
-        let end = starts.get(number + 1).copied().unwrap_or(self.end());
-        starts[number]..end.max(starts[number])
+        let points = &self.entry.edit.points;
+        if points.slices.is_empty() {
+            let start = points.start.min(self.length());
+            return start..self.end().max(start);
+        }
+        let number = number.min(points.slices.len() - 1);
+        let start = points.slices[number].start.min(self.length());
+        let end = points
+            .slices
+            .get(number + 1)
+            .map_or(self.end(), |next| next.start.min(self.length()));
+        start..end.max(start)
     }
 
-    /// Every point, in order: the start, the end and the loop's, and the slices once they come.
+    /// Every point, in order: the start, the end, the loop's, and where each slice starts.
     pub fn points(&self) -> Vec<u64> {
-        let Points { start, end, loop_ } = &self.entry.edit.points;
+        let Points {
+            start,
+            end,
+            loop_,
+            slices,
+            ..
+        } = &self.entry.edit.points;
         let mut points = vec![*start];
         points.extend(end);
         if let Some(looped) = loop_ {
             points.extend([looped.start, looped.end]);
         }
+        points.extend(slices.iter().map(|slice| slice.start));
         points.retain(|point| *point <= self.length());
         points.sort_unstable();
         points.dedup();
@@ -368,6 +395,13 @@ impl SamplePage {
         self.go(to, length);
     }
 
+    /// Put the cursor on a frame with the view in the middle of it, as a jump to it lands.
+    pub fn show_frame(&mut self, frame: u64, length: u64) {
+        self.cursor = frame.min(length.saturating_sub(1));
+        self.middle_on_cursor();
+        self.clamp_view(length);
+    }
+
     /// Put the cursor on a frame, inside the sample, and the view on it.
     fn go(&mut self, frame: u64, length: u64) {
         self.cursor = frame.min(length.saturating_sub(1));
@@ -405,14 +439,18 @@ impl SamplePage {
 }
 
 impl App {
-    /// The bank entry the cursor's track plays, with its analysis, or why the page can't show it.
+    /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
+    /// why the page can't show it.
     pub fn sample_shown(&self) -> Result<Shown, String> {
         let track = self.cursor.track;
-        let number = self
-            .song()
-            .tracks
-            .get(track)
-            .map_or(0, |track| track.sample());
+        let number = match self.sample_page.pinned {
+            Some((pinned, number)) if pinned == track => number,
+            _ => self
+                .song()
+                .tracks
+                .get(track)
+                .map_or(0, |track| track.sample()),
+        };
         let Some(entry) = self.song().bank.get(number) else {
             return Err(format!(
                 "Track {:02} plays no sample. Space 5 chooses one",

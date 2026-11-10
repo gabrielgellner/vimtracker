@@ -1198,6 +1198,13 @@ impl TrackState {
         self.sampler_value(SettingId::SAMPLE).round() as u8
     }
 
+    /// The slice of its entry a sampler's note starting now plays, by number: the held `SLI`, or
+    /// a lock over it, moved by what modulation adds, in whole slices. The entry clamps it to its
+    /// last.
+    pub fn slice_number(&self) -> u8 {
+        self.sampler_value(SettingId::SLICE).round() as u8
+    }
+
     /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:
     /// where in it the note starts and how much of it plays, as shares, and how. Modulation moves
     /// the start and the length, and the play mode is chosen.

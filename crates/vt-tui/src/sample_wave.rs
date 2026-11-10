@@ -5,7 +5,8 @@
 //! transients can be found by eye. Each lane has a faint line at zero.
 //!
 //! Its colours each mean something: the sound that plays, the sound outside the start and end that
-//! doesn't, zero, and the start, end and loop points, each a line two pixels wide at its frame. The
+//! doesn't, zero, and the start, end and loop points, each a line two pixels wide at its frame,
+//! and where each slice starts, a line one pixel wide, under the others where they meet. The
 //! cursor, the selection and the playhead aren't in it: they're drawn over it or under it, so they
 //! move without it being sent again.
 
@@ -28,15 +29,19 @@ pub const ZERO: u8 = 3;
 pub const START: u8 = 4;
 pub const END: u8 = 5;
 pub const LOOP: u8 = 6;
+pub const SLICE: u8 = 7;
 
 /// The theme's colours for the points, which the ruler and the settings row use too, so each
 /// point's colour means the same wherever it's shown.
 pub const START_COLOR: Color = theme::TEAL;
 pub const END_COLOR: Color = theme::RED;
 pub const LOOP_COLOR: Color = theme::BLUE;
+pub const SLICE_COLOR: Color = theme::PEACH;
 
 /// How wide a point's line is, in pixels.
 const POINT_PIXELS: usize = 2;
+/// How wide a slice's line is, thinner than the points', as there can be many.
+const SLICE_PIXELS: usize = 1;
 /// The fewest pixels a frame has to itself for it to be drawn as a dot as well as a line.
 const DOT_SPACING: f64 = 6.0;
 /// How far a dot reaches from its frame, in pixels, either way.
@@ -51,6 +56,7 @@ pub fn colors() -> Vec<[u8; 3]> {
         START_COLOR,
         END_COLOR,
         LOOP_COLOR,
+        SLICE_COLOR,
     ]
     .map(rgb)
     .to_vec()
@@ -242,21 +248,30 @@ impl Drawing<'_> {
         }
     }
 
-    /// The start, the end and the loop, each a line at its frame from top to bottom. The start
-    /// is drawn last, so it shows where points meet.
+    /// Each slice's start, then the loop, the end and the start, each a line at its frame from top
+    /// to bottom. The start is drawn last, so it shows where points meet, and the slices first,
+    /// under the rest.
     fn draw_points(&self, picture: &mut Picture) {
-        let mut lines = Vec::new();
+        let mut lines: Vec<(u64, u8, usize)> = self
+            .points
+            .slices
+            .iter()
+            .map(|slice| (slice.start, SLICE, SLICE_PIXELS))
+            .collect();
         if let Some(looped) = self.points.loop_ {
-            lines.extend([(looped.start, LOOP), (looped.end, LOOP)]);
+            lines.extend([
+                (looped.start, LOOP, POINT_PIXELS),
+                (looped.end, LOOP, POINT_PIXELS),
+            ]);
         }
         if let Some(end) = self.points.end {
-            lines.push((end, END));
+            lines.push((end, END, POINT_PIXELS));
         }
-        lines.push((self.points.start, START));
+        lines.push((self.points.start, START, POINT_PIXELS));
         let width = picture.width as i64;
-        for (frame, color) in lines {
+        for (frame, color, pixels) in lines {
             let x = self.x_of(frame);
-            for at in x..x + POINT_PIXELS as i64 {
+            for at in x..x + pixels as i64 {
                 if (0..width).contains(&at) {
                     for row in 0..picture.height {
                         picture.pixels[row * picture.width + at as usize] = color;
@@ -329,7 +344,7 @@ mod tests {
     #[test]
     fn each_point_is_a_line_at_its_frame_in_its_colour() {
         let (analysis, data) = sine();
-        let points = Points {
+        let mut points = Points {
             start: 1000,
             end: Some(30_000),
             loop_: Some(Loop {
@@ -337,7 +352,9 @@ mod tests {
                 end: 20_000,
                 crossfade: 0,
             }),
+            ..Points::default()
         };
+        points.reslice(&[1000, 5000, 20_000, 25_000]);
         // 100 frames a column of 10 pixels: 10 frames a pixel.
         let drawing = Drawing {
             analysis: &analysis,
@@ -358,10 +375,22 @@ mod tests {
             assert!(column(&picture, x + 1).iter().all(|pixel| *pixel == color));
             assert!(!column(&picture, x + 2).contains(&color), "{frame}");
         }
+        // A slice's line is a pixel wide, and under the points where they meet.
+        assert!(column(&picture, 500).iter().all(|pixel| *pixel == SLICE));
+        assert!(!column(&picture, 501).contains(&SLICE));
+        assert!(column(&picture, 2500).iter().all(|pixel| *pixel == SLICE));
+        assert!(
+            !column(&picture, 2000).contains(&SLICE),
+            "the loop's end is over it"
+        );
+        assert!(
+            !column(&picture, 100).contains(&SLICE),
+            "the start is over the first"
+        );
         // Before the start, the sound doesn't play, and after it, it does.
         assert!(column(&picture, 50).contains(&OUTSIDE));
         assert!(!column(&picture, 50).contains(&WAVE));
-        assert!(column(&picture, 500).contains(&WAVE));
+        assert!(column(&picture, 600).contains(&WAVE));
         // Each lane has its zero line, seen where the wave is near its peak.
         assert_eq!(picture.pixels[10 * 4000 + 120], ZERO);
         assert_eq!(picture.pixels[30 * 4000 + 120], ZERO);

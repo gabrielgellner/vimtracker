@@ -12,17 +12,20 @@ use ratatui::crossterm::terminal::WindowSize;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::action::Action;
 use vt_model::analysis::Analysis;
 use vt_model::bank::{BankEntry, ContentHash, Loop, Points};
 use vt_model::sample::{Decoded, SampleData};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song};
-use vt_tui::app::App;
+use vt_model::step::FxCommand;
+use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::View;
 use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
+use vt_tui::views::status::value_shown;
 
 const RATE: u32 = 48_000;
 /// Two seconds.
@@ -61,6 +64,7 @@ fn points() -> Points {
             end: 72_000,
             crossfade: 0,
         }),
+        ..Points::default()
     }
 }
 
@@ -422,8 +426,102 @@ fn first_and_last_sound_are_where_it_rises_above_silence() {
     assert_eq!(cursor(&app), SOUND.start);
 }
 
+/// Type a command line and run it.
+fn command(app: &mut App, line: &str) {
+    keys(app, ":");
+    for c in line.chars() {
+        app.key(Key::new(KeyCode::Char(c)), Instant::now());
+    }
+    app.key(Key::new(KeyCode::Enter), Instant::now());
+}
+
+/// Where the first sample's four slices start, from its start at 1000 to its end at 90 000.
+const QUARTERS: [u64; 4] = [1000, 23_250, 45_500, 67_750];
+
 #[test]
-fn j_k_and_a_count_g_go_by_slice_which_is_the_whole_entry_until_slices_come() {
+fn j_k_and_a_count_g_go_by_real_slices_and_brackets_stop_at_each() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    assert!(app.status.contains("4 slices of 0.464 s"), "{}", app.status);
+    let starts: Vec<u64> = app
+        .song()
+        .bank
+        .get(1)
+        .unwrap()
+        .edit
+        .points
+        .slices
+        .iter()
+        .map(|s| s.start)
+        .collect();
+    assert_eq!(starts, QUARTERS);
+    keys(&mut app, "j");
+    assert_eq!(cursor(&app), QUARTERS[1]);
+    keys(&mut app, "2 j");
+    assert_eq!(cursor(&app), QUARTERS[3]);
+    keys(&mut app, "k");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    keys(&mut app, "l $");
+    assert_eq!(cursor(&app), QUARTERS[3] - 1, "the slice's last frame");
+    keys(&mut app, "0");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    keys(&mut app, "1 G");
+    assert_eq!(cursor(&app), QUARTERS[1]);
+    keys(&mut app, "9 g g");
+    assert_eq!(cursor(&app), QUARTERS[3], "past the last is the last");
+    // The slices are points too, between the start, the loop and the end.
+    keys(&mut app, "g g ] ] ] ] ] ] ] ]");
+    assert_eq!(cursor(&app), 48_000);
+    keys(&mut app, "[ [");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    // `:slice clear` makes it one again, and `u` brings the slices back.
+    command(&mut app, "slice clear");
+    assert_eq!(app.sample_shown().unwrap().slice_count(), 1);
+    keys(&mut app, "u");
+    assert_eq!(app.sample_shown().unwrap().slice_count(), 4);
+}
+
+#[test]
+fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    let mut graphics = Graphics::new();
+    draw(&mut app, &mut graphics, 163, 42);
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
+    let ruler = row(&terminal, 2);
+    // At 597 frames a column, slice 01 is in the waveform's column 38, the screen's 39, with its
+    // number in the two before it.
+    let column = |frame: u64| 1 + (frame / FIT) as usize;
+    for (number, start) in QUARTERS.iter().enumerate().skip(1) {
+        let at = column(*start);
+        let shown: String = ruler.chars().skip(at - 2).take(3).collect();
+        assert_eq!(shown, format!("{number:02X}▾"), "{ruler}");
+    }
+    // Slice 00 is under the start, with its number after it at the left edge.
+    let first: String = ruler.chars().skip(column(1000)).take(3).collect();
+    assert_eq!(first, "▾00", "{ruler}");
+    let settings = (0..42)
+        .map(|y| row(&terminal, y))
+        .find(|line| line.contains("Slices"));
+    assert!(settings.unwrap().contains("Slices 4"));
+    // The cursor's row names the slice it's in, with the slice's own settings.
+    keys(&mut app, "j");
+    command(&mut app, "slice gain -3");
+    command(&mut app, "slice pan -25");
+    assert!(
+        app.status.contains("slice 01 plays panned 25 L"),
+        "{}",
+        app.status
+    );
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
+    let cursor_row = (0..42)
+        .map(|y| row(&terminal, y))
+        .find(|line| line.contains("Cursor"));
+    assert!(cursor_row.unwrap().contains("slice 01  -3.0 dB  25 L"));
+}
+
+#[test]
+fn j_k_and_a_count_g_go_by_slice_which_is_the_whole_entry_with_none() {
     let (mut app, _realtime) = on_page();
     keys(&mut app, "G k");
     assert_eq!(cursor(&app), 1000);
@@ -797,4 +895,116 @@ fn every_key_on_the_page_is_listed() {
             "{keys}"
         );
     }
+}
+
+/// Put a step's text on the first track's first phrase, with the cursor on its second FX value.
+fn step_with(app: &mut App, step: usize, text: &str) {
+    app.apply(&Action::SetStep {
+        track: 0,
+        phrase: 0,
+        step,
+        value: text.parse().unwrap(),
+    });
+    app.cursor.step = step;
+    app.cursor.field = Field::FxValue(1);
+}
+
+#[test]
+fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    step_with(&mut app, 2, "C-4 -- --- sampler.slice:02 ---");
+    let shown = value_shown(&app).unwrap_or_default();
+    assert!(shown.contains("02 of 4: from 0.948 s"), "{shown}");
+    keys(&mut app, "g d");
+    assert_eq!(app.view, View::Sample);
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    assert_eq!(app.sample_shown().unwrap().number, 1);
+    keys(&mut app, "C-o");
+    assert_eq!(app.view, View::Phrase);
+    // Under an `SMP` of its own, it's that sample's slice, and `Space 0` is the track's again.
+    let mut sliced = app.song().bank.get(2).unwrap().clone();
+    sliced.edit.points.reslice(&[0, 48_000]);
+    app.apply(&Action::SetBankEntry {
+        number: 2,
+        entry: Some(sliced),
+    });
+    step_with(&mut app, 3, "C-4 -- sampler.sample:02 sampler.slice:01 ---");
+    keys(&mut app, "g d");
+    assert_eq!(app.sample_shown().unwrap().number, 2);
+    assert_eq!(cursor(&app), 48_000);
+    keys(&mut app, "C-o Space 0");
+    assert_eq!(app.sample_shown().unwrap().number, 1);
+    // Elsewhere in the phrase, it says where it works.
+    keys(&mut app, "C-o");
+    app.cursor.field = Field::Note;
+    keys(&mut app, "g d");
+    assert_eq!(app.view, View::Phrase);
+    assert!(app.status.contains("SLI"), "{}", app.status);
+}
+
+#[test]
+fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    step_with(&mut app, 0, "C-4 -- --- sampler.slice:01 ---");
+    keys(&mut app, "K");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .expect("the slices are listed")
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(
+        labels,
+        ["00  0.021 s", "01  0.484 s", "02  0.948 s", "03  1.411 s"]
+    );
+    keys(&mut app, "j Enter");
+    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    assert_eq!(slot.command, Some(FxCommand::Set(SettingId::SLICE)));
+    assert_eq!(slot.coarse(), 2);
+    // The Sound page's `Slice` lists them too, for the track's own.
+    keys(&mut app, "Space 4 g g j j K j j j Enter");
+    assert_eq!(app.song().tracks[0].setting(SettingId::SLICE), 3);
+}
+
+#[test]
+fn a_slices_own_settings_need_slices_and_a_count_has_a_limit() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice gain -3");
+    assert!(app.status.contains("has no slices"), "{}", app.status);
+    command(&mut app, "slice 1000");
+    assert!(app.status.contains(":slice takes"), "{}", app.status);
+    command(&mut app, "slice 4");
+    // Off the sample page, it's the slice the track's `Slice` is on.
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SLICE,
+        value: 3,
+    });
+    command(&mut app, "slice reverse on");
+    command(&mut app, "slice tune -12");
+    let over = app.song().bank.get(1).unwrap().edit.points.slices[3].over;
+    assert_eq!((over.reverse, over.tune), (Some(true), Some(-12)));
+    command(&mut app, "slice tune");
+    let over = app.song().bank.get(1).unwrap().edit.points.slices[3].over;
+    assert_eq!(over.tune, None, "alone, it plays as the sample");
+}
+
+#[test]
+fn slicing_again_moves_the_steps_locks_with_their_sound_and_one_u_takes_both_back() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    step_with(&mut app, 0, "C-4 -- --- sampler.slice:03 ---");
+    let depth = app.history.undo_depth();
+    command(&mut app, "slice 8");
+    assert!(app.status.contains("SLI locks follow"), "{}", app.status);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    let lock = |app: &App| app.phrase_here().unwrap().steps()[0].fx[1].coarse();
+    assert_eq!(lock(&app), 6);
+    keys(&mut app, "u");
+    assert_eq!(lock(&app), 3);
+    assert_eq!(app.sample_shown().unwrap().slice_count(), 4);
 }

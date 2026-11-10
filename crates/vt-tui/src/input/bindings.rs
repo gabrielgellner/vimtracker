@@ -363,6 +363,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "Record notes played in Insert, while playing",
     ),
     ("K", Cmd::PickValue, "Choose this field from a list"),
+    (
+        "g d",
+        Cmd::OpenItem,
+        "On an SLI's value, open the sample page on its slice",
+    ),
     ("g r r", Cmd::ListUses, "List where this phrase plays"),
     ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
     ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
@@ -563,12 +568,12 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
     (
         "] ]",
         Cmd::Sample(SampleKey::NextPoint),
-        "Next point: start, end or loop",
+        "Next point: a slice, the start, end or loop",
     ),
     (
         "[ [",
         Cmd::Sample(SampleKey::PreviousPoint),
-        "Previous point: start, end or loop",
+        "Previous point: a slice, the start, end or loop",
     ),
     ("H", Cmd::ViewTop, "Cursor to the left of the view"),
     ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),

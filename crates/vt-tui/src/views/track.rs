@@ -324,7 +324,12 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             used += 2;
             spans.push(Span::raw("  "));
         }
-        if let Some(name) = choice_name(*control, track) {
+        let name = if control.setting_on(track) == Some(SettingId::SLICE) {
+            Some(app.slice_choice(track))
+        } else {
+            choice_name(*control, track)
+        };
+        if let Some(name) = name {
             // A patch number says nothing as a bar, so its name takes the bar's place.
             used += 1 + name.chars().count();
             spans.push(Span::raw(" "));

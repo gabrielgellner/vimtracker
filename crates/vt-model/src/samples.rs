@@ -28,10 +28,12 @@ impl Rates {
     /// The same rate on both sides, for a sample made at the program's rate.
     pub const SAME: Self = Self { file: 1, loaded: 1 };
 
-    /// The pool's frame for a frame of the file, to the nearest.
+    /// The pool's frame for a frame of the file, to the nearest, or the last there could be for
+    /// one too far on to count.
     pub fn loaded_frame(self, frame: u64) -> u64 {
         let file = u128::from(self.file.max(1));
-        ((u128::from(frame) * u128::from(self.loaded) + file / 2) / file) as u64
+        let loaded = (u128::from(frame) * u128::from(self.loaded) + file / 2) / file;
+        u64::try_from(loaded).unwrap_or(u64::MAX)
     }
 
     /// The file's frame for a frame of the pool's, to the nearest.
