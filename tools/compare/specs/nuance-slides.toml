@@ -1,0 +1,132 @@
+# Slides up and down by a semitone, a fifth and an octave, against Arturia's Acid V and
+# AudioRealism's ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-slides.toml --report out/nuance-slides.html
+
+rate = 48000
+duration = 0.8
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0x80
+acid.resonance = 0x40
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.5
+resonance = 0.25
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.5
+resonance = 0.25
+envmod = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "transition"
+title = "Slides up and down, against Acid V and ABL3"
+columns = 3
+about = """
+Two notes, the first held into the second with its slide on, so each side glides from one \
+to the other: up from C-2 and down to it, by a semitone, a fifth and an octave, a quarter \
+of a second each. Cutoff, Env Mod, Decay and Accent are at noon and Res at a quarter, so \
+the pitch is easy to track. A 303's slide is an RC lag of a fixed time, so it should take \
+as long by a semitone as by an octave.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "up-semitone"
+notes = [
+  { time = 0.05, length = 0.25, note = 36, slide = true },
+  { time = 0.3, length = 0.3, note = 37 },
+]
+
+[[cases]]
+name = "down-semitone"
+notes = [
+  { time = 0.05, length = 0.25, note = 37, slide = true },
+  { time = 0.3, length = 0.3, note = 36 },
+]
+
+[[cases]]
+name = "up-fifth"
+notes = [
+  { time = 0.05, length = 0.25, note = 36, slide = true },
+  { time = 0.3, length = 0.3, note = 43 },
+]
+
+[[cases]]
+name = "down-fifth"
+notes = [
+  { time = 0.05, length = 0.25, note = 43, slide = true },
+  { time = 0.3, length = 0.3, note = 36 },
+]
+
+[[cases]]
+name = "up-octave"
+notes = [
+  { time = 0.05, length = 0.25, note = 36, slide = true },
+  { time = 0.3, length = 0.3, note = 48 },
+]
+
+[[cases]]
+name = "down-octave"
+notes = [
+  { time = 0.05, length = 0.25, note = 48, slide = true },
+  { time = 0.3, length = 0.3, note = 36 },
+]

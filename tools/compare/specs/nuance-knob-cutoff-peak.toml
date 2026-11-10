@@ -1,0 +1,187 @@
+# Decision 117's `acid-cutoff-peak` against both references, Arturia's Acid V and AudioRealism's
+# ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-knob-cutoff-peak.toml --report out/nuance-knob-cutoff-peak.html
+
+rate = 48000
+duration = 2.5
+
+[[notes]]
+time = 0.05
+length = 2.4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.resonance = 0xE6
+acid.envmod = 0x00
+acid.decay = 0x00
+acid.accent = 0x80
+acid.drive = 0x00
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+resonance = 0.9
+envelope_mod = 0.0
+decay = 0.0
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+resonance = 0.9
+envmod = 0.0
+decay = 0.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's cutoff knob against Acid V's and ABL3's, at Res 90%"
+knob = "acid.cutoff"
+reference_knob = { "Acid V" = "cutoff", ABL3 = "cutoff" }
+measure = "filter"
+window = [1, 2]
+about = """
+Our Acid's Cutoff and Acid V's, each turned from bottom to top in sixteen even steps, with Res
+at 90% and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-2 and reads
+the filter's shape from its harmonics a second in. The peak's frequency is where the filter
+rings, which shows the knob's taper and range; under about 200 Hz it falls between the note's
+harmonics and reads as the nearest one.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so
+a plain note is played at 99 and an accent at 0x70.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "cutoff-00"
+ours = { acid.cutoff = 0x00 }
+references = { "Acid V" = { cutoff = 0 }, ABL3 = { cutoff = 0.0 } }
+
+[[cases]]
+name = "cutoff-10"
+ours = { acid.cutoff = 0x10 }
+references = { "Acid V" = { cutoff = 0.0625 }, ABL3 = { cutoff = 0.06 } }
+
+[[cases]]
+name = "cutoff-20"
+ours = { acid.cutoff = 0x20 }
+references = { "Acid V" = { cutoff = 0.125 }, ABL3 = { cutoff = 0.12 } }
+
+[[cases]]
+name = "cutoff-30"
+ours = { acid.cutoff = 0x30 }
+references = { "Acid V" = { cutoff = 0.1875 }, ABL3 = { cutoff = 0.19 } }
+
+[[cases]]
+name = "cutoff-40"
+ours = { acid.cutoff = 0x40 }
+references = { "Acid V" = { cutoff = 0.25 }, ABL3 = { cutoff = 0.25 } }
+
+[[cases]]
+name = "cutoff-50"
+ours = { acid.cutoff = 0x50 }
+references = { "Acid V" = { cutoff = 0.3125 }, ABL3 = { cutoff = 0.31 } }
+
+[[cases]]
+name = "cutoff-60"
+ours = { acid.cutoff = 0x60 }
+references = { "Acid V" = { cutoff = 0.375 }, ABL3 = { cutoff = 0.38 } }
+
+[[cases]]
+name = "cutoff-70"
+ours = { acid.cutoff = 0x70 }
+references = { "Acid V" = { cutoff = 0.4375 }, ABL3 = { cutoff = 0.44 } }
+
+[[cases]]
+name = "cutoff-80"
+ours = { acid.cutoff = 0x80 }
+references = { "Acid V" = { cutoff = 0.5 }, ABL3 = { cutoff = 0.5 } }
+
+[[cases]]
+name = "cutoff-8F"
+ours = { acid.cutoff = 0x8F }
+references = { "Acid V" = { cutoff = 0.5625 }, ABL3 = { cutoff = 0.56 } }
+
+[[cases]]
+name = "cutoff-9F"
+ours = { acid.cutoff = 0x9F }
+references = { "Acid V" = { cutoff = 0.625 }, ABL3 = { cutoff = 0.62 } }
+
+[[cases]]
+name = "cutoff-AF"
+ours = { acid.cutoff = 0xAF }
+references = { "Acid V" = { cutoff = 0.6875 }, ABL3 = { cutoff = 0.69 } }
+
+[[cases]]
+name = "cutoff-BF"
+ours = { acid.cutoff = 0xBF }
+references = { "Acid V" = { cutoff = 0.75 }, ABL3 = { cutoff = 0.75 } }
+
+[[cases]]
+name = "cutoff-CF"
+ours = { acid.cutoff = 0xCF }
+references = { "Acid V" = { cutoff = 0.8125 }, ABL3 = { cutoff = 0.81 } }
+
+[[cases]]
+name = "cutoff-DF"
+ours = { acid.cutoff = 0xDF }
+references = { "Acid V" = { cutoff = 0.875 }, ABL3 = { cutoff = 0.88 } }
+
+[[cases]]
+name = "cutoff-EF"
+ours = { acid.cutoff = 0xEF }
+references = { "Acid V" = { cutoff = 0.9375 }, ABL3 = { cutoff = 0.94 } }
+
+[[cases]]
+name = "cutoff-FF"
+ours = { acid.cutoff = 0xFF }
+references = { "Acid V" = { cutoff = 1 }, ABL3 = { cutoff = 1.0 } }

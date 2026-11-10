@@ -422,3 +422,88 @@ def rings_on(samples: np.ndarray, rate: int, until: float, around: float, span: 
     # is a / sqrt(2).
     amplitude = 4.0 * np.sqrt(spectrum[inside].sum()) / (end - start)
     return db(amplitude / math.sqrt(2.0)) > floor
+
+
+def level_envelope(samples: np.ndarray, rate: int, width: float = 0.002, hop: float = 0.0005):
+    """A signal's level over time: the RMS over `width` seconds every `hop`, in dBFS, as the
+    windows' centre times and their levels."""
+    signal = mono(samples)
+    size, step = max(1, int(width * rate)), max(1, int(hop * rate))
+    squares = np.concatenate([[0.0], np.cumsum(signal**2)])
+    starts = np.arange(0, max(1, signal.size - size), step)
+    power = (squares[starts + size] - squares[starts]) / size
+    levels = 10.0 * np.log10(np.maximum(power, 10.0 ** (FLOOR_DB / 10.0)))
+    return (starts + size / 2) / rate, levels
+
+
+def crossing(times: np.ndarray, values: np.ndarray, after: float, level: float, rising: bool) -> float:
+    """The first time from `after` that values reach `level`, rising to it or falling to it, read
+    between the two points either side, or NaN if they never do."""
+    inside = np.where(times >= after)[0]
+    if inside.size == 0:
+        return float("nan")
+    part, at = values[inside], times[inside]
+    reached = np.where(part >= level if rising else part <= level)[0]
+    reached = reached[np.isfinite(part[reached])]
+    if reached.size == 0:
+        return float("nan")
+    index = int(reached[0])
+    if index == 0 or not math.isfinite(part[index - 1]) or part[index] == part[index - 1]:
+        return float(at[index])
+    share = (level - part[index - 1]) / (part[index] - part[index - 1])
+    return float(at[index - 1] + share * (at[index] - at[index - 1]))
+
+
+def median(values: np.ndarray, width: int) -> np.ndarray:
+    """A running median over `width` points, an odd number, leaving NaNs out, and NaN where all
+    of a point's neighbours are."""
+    half = width // 2
+    padded = np.pad(values.astype(np.float64), half, constant_values=np.nan)
+    windows = np.lib.stride_tricks.sliding_window_view(padded, width)
+    out = np.full(values.shape, np.nan)
+    finite = np.isfinite(windows).any(axis=1)
+    out[finite] = np.nanmedian(windows[finite], axis=1)
+    return out
+
+
+def pitch_track(samples: np.ndarray, rate: int, start: float, end: float, low: float, high: float,
+                hop: float = 0.001, span: float = 0.02, threshold: float = 0.15):
+    """A note's pitch over time between two times, by de Cheveigné and Kawahara's YIN: each frame,
+    `span` seconds long and `hop` apart, is compared with itself shifted by every period from one
+    over `high` to one over `low` Hz, and the first period whose normalized difference dips under
+    `threshold` is taken, or the deepest, read between samples by a parabola. Gives the frames'
+    centre times and their frequencies in Hz, NaN where a frame is too quiet to have one."""
+    signal = mono(samples)
+    width = int(span * rate)
+    shortest, longest = max(2, int(rate / high)), int(rate / low) + 2
+    step = max(1, int(hop * rate))
+    first, last = int(start * rate), min(int(end * rate), signal.size - width - longest - 1)
+    size = 1 << int(math.ceil(math.log2(width + longest + 1)))
+    loudest = float(np.abs(signal[first : last + width]).max(initial=0.0)) if last > first else 0.0
+    lags = np.arange(longest + 1)
+    times, found = [], []
+    for at in range(first, max(first, last), step):
+        frame = signal[at : at + width + longest + 1]
+        head = frame[:width]
+        times.append((at + width / 2) / rate)
+        if np.abs(head).max(initial=0.0) < loudest * 1e-3:
+            found.append(float("nan"))
+            continue
+        correlation = np.fft.irfft(np.conj(np.fft.rfft(head, size)) * np.fft.rfft(frame, size), size)[: longest + 1]
+        squares = np.concatenate([[0.0], np.cumsum(frame**2)])
+        difference = squares[width] + (squares[lags + width] - squares[lags]) - 2.0 * correlation
+        difference[0] = 0.0
+        normal = np.ones(longest + 1)
+        normal[1:] = difference[1:] * lags[1:] / np.maximum(np.cumsum(difference[1:]), 1e-30)
+        below = np.where(normal[shortest:longest] < threshold)[0]
+        if below.size:
+            lag = shortest + int(below[0])
+            while lag + 1 < longest and normal[lag + 1] < normal[lag]:
+                lag += 1
+        else:
+            lag = shortest + int(np.argmin(normal[shortest:longest]))
+        y0, y1, y2 = normal[lag - 1], normal[lag], normal[lag + 1]
+        bend = y0 - 2.0 * y1 + y2
+        shift = min(max(0.5 * (y0 - y2) / bend, -1.0), 1.0) if bend > 0 else 0.0
+        found.append(rate / (lag + shift))
+    return np.array(times), np.array(found)

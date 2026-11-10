@@ -1,9 +1,9 @@
 # Comparing against reference plugins
 
-One spec renders through both our code, with `vimtracker probe`, and a reference plugin, hosted by
-Spotify's [pedalboard](https://github.com/spotify/pedalboard), so a test is written once and
-rendered twice (#186, decisions 110 and 113). Only the outputs are compared: nothing here looks
-inside a plugin. None of it runs in CI.
+One spec renders through both our code, with `vimtracker probe`, and one or more reference
+plugins, hosted by Spotify's [pedalboard](https://github.com/spotify/pedalboard), so a test is
+written once and rendered on every side (#186, decisions 110, 113 and 125). Only the outputs are
+compared: nothing here looks inside a plugin. None of it runs in CI.
 
 ## Setting up
 
@@ -18,13 +18,14 @@ uv run run.py specs/comp-static.toml --case ratio-4
 ```
 
 `run.py` renders every case of a spec, or those named with `--case`, into `out/<spec>/` as
-`<case>-ours.wav` and `<case>-reference.wav`, and prints both sides' peak, RMS and spectral
-centroid. A sweep's input adds the magnitude response in octave bands, and stepped levels add the
-static curve. It checks the effect's input it made against the probe's own, which should differ by
-0. A spec with no `[reference]` renders ours alone.
+`<case>-ours.wav` and `<case>-<reference>.wav` for each reference, such as `<case>-acid-v.wav`,
+and prints every side's peak, RMS and spectral centroid. A sweep's input adds the magnitude
+response in octave bands, and stepped levels add the static curve. It checks the effect's input it
+made against the probe's own, which should differ by 0. A spec with no reference renders ours
+alone.
 
 `--report page.html` writes one self-contained web page for the spec: what the test is, what each
-line is, what differs most, both sides plotted together by matplotlib, and the numbers in tables
+line is, what differs most, every side plotted together by matplotlib, and the numbers in tables
 (`report.py`). Every spec at once:
 
 ```sh
@@ -33,11 +34,27 @@ for spec in specs/*.toml; do uv run run.py "$spec" --report "out/$(basename "$sp
 
 The pages are about 0.1 to 2 MB each, so they stay in `out/`, which git ignores.
 
-Each side can be rendered alone:
+### The nuance suite
+
+M27's specs, `specs/nuance-*.toml`, render the Acid against two references at once, Arturia's
+Acid V and AudioRealism's ABL3 (#347, decision 125). One command runs them all:
+
+```sh
+uv run run.py --suite nuance     # about 3 minutes
+```
+
+It writes each spec's report into `out/nuance/`, with `index.html` beside them ranking our
+biggest gaps from the references' consensus first, the measures the references disagree on, and a
+link to each page, and the same as `consensus.json`. The specs are written by `nuance_specs.py`,
+which reads decision 117's `acid-*` knob specs for the single knobs, so it's run again only to
+change them.
+
+Each side can be rendered alone, a reference by its name, or the first if none is given:
 
 ```sh
 ../../target/release/vimtracker probe specs/acid-cutoff.toml ours.wav --case cutoff-88
 uv run render_reference.py specs/acid-cutoff.toml reference.wav --case cutoff-88
+uv run render_reference.py specs/nuance-slides.toml abl3.wav --case up-fifth --reference ABL3
 ```
 
 `probe --response drawn.csv` also writes the track filter's response as the Sound page draws it,
@@ -74,6 +91,12 @@ reference plugin.
 | `comp-bus-attack`, `comp-bus-release` | `Bus`'s attacks and set releases | Bus FORCE | attack and release, short and long bursts |
 | `comp-bus-auto` | `Bus`'s Auto release | none | release after bursts from 20 ms to 2 s |
 | `comp-bus-harmonics` | `Bus` at stepped levels, 100 Hz and 1 kHz | Bus FORCE | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `nuance-knob-*` | decision 117's seven `acid-*` knob specs | Acid V and ABL3 | as the `acid-*` specs, with the consensus |
+| `nuance-accents` | `AAAA`, `A.A.` and `AA..` twice through after a plain note, at Res 0, 50% and 90% | Acid V and ABL3 | each note's brightness and level over the plain note's, the first accent's and the build-up (`notes`) |
+| `nuance-slides` | slides up and down by a semitone, a fifth and an octave | Acid V and ABL3 | the pitch over time, the glide's times, the dip and the brightening (`transition`) |
+| `nuance-legato` | two notes 60 ms apart to 20 ms overlapping, and slid | Acid V and ABL3 | the same, for where legato turns to a retrigger |
+| `nuance-gate` | one note held from a 128th to a quarter | Acid V and ABL3 | its level as it's held and its release (`gate`) |
+| `nuance-extremes` | every knob at its bottom or top, 32 ways, two plain notes and two accents | Acid V and ABL3 | as `nuance-accents` |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -94,7 +117,9 @@ beside it and `/Library/Arturia/<plugin>/tmp/plugin.pref.xml`, and print their l
 (`## LogInRelease : 0` and so on); u-he's write a cache.
 
 Acid V accents a note from velocity 100 and ours from `0x70`, 112, so the Acid specs play a plain
-note at 99 and an accent at `0x70`, which both sides read the same way. They also turn Acid V's hiss
+note at 99 and an accent at `0x70`, which both sides read the same way. A reference's
+`accent_from` gives its threshold, so a note's `accent = true` reaches each side at or over its
+own, and `accent = false` under all of them. They also turn Acid V's hiss
 off, `noise_db = -100`, which would otherwise brighten a quiet note's centroid.
 
 A `knob` report's `measure` says what each step is measured by: `note`, the whole render's centroid
@@ -102,9 +127,71 @@ and peak; `filter`, a held note's harmonics read as `harmonics` reads them; `dec
 fitted to the note's brightness; or `accents`, each note of a pattern of a plain note and then
 accents. The summary gives how far apart the two curves are on average over the knob.
 
+A `notes` report plays a pattern in each case, a plain note first, and reads each note's
+brightness and level as `accents` does, against the first note's. A `transition` report plays
+two notes in each case and reads the change between them: the pitch over time, by YIN, the time
+a held note takes to glide 90% of the way and from 10 to 90%, the level's dip, and how much
+brighter the second note starts than the first ended, which a retriggered envelope raises. A
+`gate` report holds one note for a different length in each case and reads its level at its end
+and its release, 20 and 40 dB down. Their levels are the RMS over one cycle of the note, which a
+wave's phase doesn't move.
+
+### The consensus
+
+A report whose kind gives its measurements, `knob`, `notes`, `transition` and `gate`, has a
+consensus view (`consensus.py`). For each measure and case: where the references agree within a
+tolerance, their mean is the target, and our gap is ours less it; where they disagree, both are
+shown and the measure is flagged. Hz and ms are compared by their ratio, in octaves, and the rest
+by their difference. The tolerances, two independent emulations of one circuit being only so
+close: 1/6 octave (two semitones) for Hz, a quarter of an octave (about 19%) for ms, 1 dB, 0.1
+octaves of brightness, a quarter of a semitone, and 25 cents. A gap's size over its tolerance
+ranks gaps in different units against each other, on the report and across a suite's index,
+where a measure the references agree on in fewer than a quarter of its cases, or only one, comes
+after the ranked ones, as what they agree on there is too thin to stand for the measure.
+Levels each side sets for itself, such as a knob sweep's peak, are compared against the same
+side's at the knob's bottom. With one reference, it's the target alone.
+
 A `velocity` report has no cases: one render plays notes at different velocities, far enough apart
 for each to start from rest. Each note's RMS over its first 60 ms and its peak over its first
 250 ms are read against the first note's, with its brightness over its first 40 ms.
+
+### ABL3
+
+AudioRealism's ABL3 3.3.5 (`/Library/Audio/Plug-Ins/VST3/ABL3x.vst3`) is the second Acid
+reference, set up as a stock 303. What it does, measured on 2026-11-10 from its output alone,
+with its manual's word for its settings:
+
+- **Its MIDI mode** is in its state, not a parameter: `MidiMode = 0`, the Pattern mode it loads
+  in, plays one of its 128 patterns for each key, transposed, on the host's clock, so a note's
+  length and velocity change nothing. `MidiMode = 1` is its Note mode, where MIDI notes play it.
+  `SyncMode` changed nothing heard. The state is JUCE's XML, whose outermost element's
+  attributes a spec's `state` sets by name (`plugin_state.py`).
+- **It wakes on a middle C:** after a reset, in Note mode, it stays silent until it's played MIDI
+  60. Every note after one plays, at any pitch; before one, none does. And for the first 90 ms
+  after a reset it puts out a burst of its own, about −25 dBFS. So it renders after a second's
+  pre-roll that starts with a tenth of a second's middle C, `preroll = 1.0` and `wake_note = 60`,
+  cut off before anything's measured; the pre-roll is rounded up to whole buffers so its buffers
+  fall where they would without it.
+- **Its output is mono,** `channels = 1`; pedalboard refuses two.
+- **Tuning:** it plays MIDI 36 at 65.5 Hz and 48 at 131.0, as ours does, so it needs no
+  transposing, where Acid V needs `osc_pitch_st = 12`. Its `tuning` stays at 0.
+- **Accent:** a note is accented from velocity 101: a sweep from 1 to 127 found 100 and under all
+  the same, and 101 and over all accented, about 9 dB louder and 1.5 octaves brighter at full
+  Accent. The manual says both "100 or greater" and "over 100"; the output says over. So its
+  `accent_from = 101`, and plain notes at 99 and accents at `0x70` mean the same on all three
+  sides.
+- **Slide:** notes that overlap slide, from 1 ms of overlap, with the gate held: a fifth's glide
+  reaches 90% in about 50 ms. A note starting just as the last ends, or after it, is played afresh.
+  The spec's `slide = true` holds a note 1 ms into the next, so it slides on all three sides.
+- **MIDI timing** is to the sample: a note's onset moved with its time within a buffer.
+- **Stock settings:** its hardware mods' trims, `reso_trim`, `gate_trim`, `vcf_trim`,
+  `bass_boost`, `treble_boost`, `detune` and `vco_base`, at the 50% they load at, which the manual
+  says is matched to a TB-303, and `pregain` at its 0; no `drive`, `distort` or `highpass`;
+  `noise_level`, the VCA's noise, and `vco_shift`, the VCO's flutter, at 0, as Acid V's hiss is
+  off; and in its state `VCAClicks = 0`, an extra click in the attack the manual says is there to
+  help it cut through, which a 303 hasn't (2 dB on a note's first 5 ms), and `OutputClipping = 0`,
+  as our limiter is off, though nothing measured reached it.
+- It loads in about a tenth of a second and renders the same samples every time.
 
 Always give pedalboard a host's buffer size: Arturia's plugins put out silence at its default of
 8192, so a spec's `buffer_size` is 512 unless it says otherwise.
@@ -154,6 +241,18 @@ state = { Sequencer_OnOff = 0 }   # optional: saved settings that aren't paramet
 [reference.parameters]      # by pedalboard's names, in the plugin's own units
 cutoff = 0.5
 
+# Or several references, each with a name, which reports and file names use:
+# [[references]]
+# name = "ABL3"
+# plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+# channels = 1              # how many it puts out, 2 if not given
+# accent_from = 101         # the velocity it accents from, so `accent` means the same to it
+# preroll = 1.0             # seconds played first and cut, for a plugin with a sound of its own
+# wake_note = 60            # a note played at the pre-roll's start, for one that needs waking
+# state = { MidiMode = 1 }  # its saved settings, Arturia's archive or JUCE's XML, by name
+# [references.parameters]
+# cutoff = 0.5
+
 [report]                    # how report.py lays it out; see its docstring
 kind = "knob"
 knob = "acid.cutoff"
@@ -164,7 +263,13 @@ name = "cutoff-00"
 ours = { acid.cutoff = 0x00 }
 reference = { cutoff = 0.0 }
 input = { level = -20.0 }   # optional: the input's fields it changes, or another signal
+# references = { "Acid V" = { cutoff = 0.0 }, ABL3 = { cutoff = 0.0 } }   # each reference's
+# notes = [{ time = 0.05, length = 0.25, note = 36, slide = true }, ...]  # its own notes
 ```
+
+A case's `reference` changes every reference's parameters, and its `references` each one's by
+name, after it. A case's `notes` replace the spec's, so a spec can leave out its own when every
+case has some.
 
 A spec has `notes` for a voice or an `input` for an effect, not both. An effect's input is one of:
 

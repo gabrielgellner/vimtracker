@@ -5,8 +5,8 @@ by matplotlib, the plots embedded as PNGs, and the measurements in tables.
 and how to lay it out:
 
     [report]
-    kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity
-                          # or taper
+    kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity,
+                          # taper, notes, transition or gate
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -14,9 +14,11 @@ and how to lay it out:
     column = "cut"        # and each column
     line = []             # and each line within a panel, with neither side's own (ours alone)
     window = [1.0, 2.0]   # seconds to measure a held note or a ringing filter over
-    knob = "acid.cutoff"  # our knob a knob sweep turns, and the reference's
-    reference_knob = "cutoff"
+    knob = "acid.cutoff"  # our knob a knob sweep turns, and the references', one name for all or a
+    reference_knob = "cutoff"   # table by reference: { "Acid V" = "envelope_mod", ABL3 = "envmod" }
     measure = "note"      # what a knob sweep measures: note, filter, decay or accents
+    columns = 3           # how many panels go in a row, for notes, transition and gate
+    step = 0.125          # a step's length in seconds, for notes, so rests show
 
 The kinds:
 
@@ -35,6 +37,16 @@ The kinds:
   against the first's, for how a voice answers velocity (see `Velocity`).
 - `taper`: a filter's Res knob in steps, each a sweep: its peak's height and place, its bass loss
   and where it starts to self-oscillate, at each Cut (see `Taper`).
+- `notes`: a pattern of notes in each case, each note's brightness and level against the first's,
+  for accents in a row and knobs' extremes (see `Notes`).
+- `transition`: two notes in each case, the glide, dip and retrigger between them, for slides and
+  legato (see `Transition`).
+- `gate`: one note in each case, its level as it's held and its release (see `Gate`).
+
+Every side is drawn on the same plots: ours, and each of the spec's references. A kind that gives
+its measurements as `measures` gets a consensus view as well (`consensus.py`): where the
+references agree, that's the target, and our gaps from it are ranked; where they disagree, both
+are shown and the measure is flagged.
 """
 
 from __future__ import annotations
@@ -56,10 +68,14 @@ from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter  # noqa: 
 
 import measure  # noqa: E402
 
-# Each side's colour, the same on every plot: ours blue and the reference orange, which stay apart
-# for colour-blind readers too. Ours alone, its lines take the categorical colours in this order.
+# Each side's colour, the same on every plot: ours blue, the first reference orange and the second
+# green, which stay apart for colour-blind readers too. Ours alone, its lines take the categorical
+# colours in this order.
 OURS = "#2a78d6"
 REFERENCE = "#eb6834"
+REFERENCES = [REFERENCE, "#1baf7a", "#eda100", "#6250d6"]
+# The references' consensus, where they agree, drawn as a band under the sides.
+CONSENSUS = "#b8b6b0"
 CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 # Steps of one blue, light to dark, for a setting's levels such as Res 0, 50% and 90%.
 SEQUENTIAL = ["#8fbcee", "#2a78d6", "#123f75"]
@@ -267,9 +283,14 @@ def settings_table(spec) -> str:
 
     for key, value in specs.flatten(ours.get("settings", {})).items():
         rows.append(["ours", key, f"0x{value:02X}" if isinstance(value, int) else value])
-    if spec.has_reference:
-        for key, value in (spec.data["reference"].get("parameters") or {}).items():
-            rows.append(["reference", key, value])
+    for name, section in spec._references():
+        for key in ("channels", "accent_from", "preroll", "wake_note"):
+            if key in section:
+                rows.append([name, key, section[key]])
+        for key, value in (section.get("state") or {}).items():
+            rows.append([name, f"state {key}", value])
+        for key, value in (section.get("parameters") or {}).items():
+            rows.append([name, key, value])
     if not rows:
         return ""
     return table(["Side", "Setting", "Value"], rows, numeric_from=3)
@@ -284,14 +305,28 @@ def cases_table(spec) -> str:
             f"{k} = {f'0x{v:02X}' if isinstance(v, int) else v}" for k, v in specs.flatten(case.get("ours", {})).items()
         )
         theirs = ", ".join(f"{k} = {v}" for k, v in (case.get("reference") or {}).items())
+        for name, values in (case.get("references") or {}).items():
+            theirs += ("; " if theirs else "") + f"{name}: " + ", ".join(f"{k} = {v}" for k, v in values.items())
         given = ", ".join(f"{k} = {v}" for k, v in (case.get("input") or {}).items())
+        if "notes" in case:
+            given = (given + "; " if given else "") + notes_text(case["notes"])
         rows.append([case["name"], ours, theirs, given] if spec.has_reference else [case["name"], ours, given])
     if not rows:
         return ""
-    headers = ["Case", "Ours", "Reference", "Input"] if spec.has_reference else ["Case", "Ours", "Input"]
+    headers = ["Case", "Ours", "References", "Input"] if spec.has_reference else ["Case", "Ours", "Input"]
     if not any(row[-1] for row in rows):
         headers, rows = headers[:-1], [row[:-1] for row in rows]
     return table(headers, rows, numeric_from=len(headers))
+
+
+def notes_text(notes: list) -> str:
+    """A case's notes, short: each one's MIDI note, start and length in ms, and its accent (A) or
+    slide (S)."""
+    parts = []
+    for note in notes:
+        marks = ("A" if note.get("accent") else "") + ("S" if note.get("slide") else "")
+        parts.append(f"{note['note']} at {note['time'] * 1000:g} ms for {note['length'] * 1000:g}{(' ' + marks) if marks else ''}")
+    return "notes " + ", ".join(parts)
 
 
 def log_frequency_axis(axes, low=20.0, high=20_000.0):
@@ -321,9 +356,11 @@ class Report:
         self.spec = spec
         self.rendered = rendered
         self.layout = spec.report
-        self.reference_name = (
-            Path(spec.data["reference"]["plugin"]).stem if spec.has_reference else None
-        )
+        # The references by name, in the spec's order. The kinds that compare ours with one
+        # reference compare it with the first, and plot them all.
+        self.reference_names = spec.reference_names
+        self.reference_name = self.reference_names[0] if self.reference_names else None
+        self.first = self.reference_name
         # Our settings, and the input's fields as `input.level` and so on, so a layout can lay
         # cases out by either.
         self.settings = {
@@ -334,20 +371,39 @@ class Report:
         self.parameters = {
             r.name: (spec.reference(r.case)["parameters"] if spec.has_reference else {}) for r in rendered
         }
+        # Each reference's parameters for each case.
+        self.reference_parameters = {
+            r.name: {name: spec.reference(r.case, name)["parameters"] for name in self.reference_names}
+            for r in rendered
+        }
         self.inputs = {r.name: spec.input(r.case) for r in rendered}
 
     def sides(self, r):
-        """Each side's samples with its name and colour."""
+        """Each side's key, name, colour and samples: ours, then each reference by its name."""
         out = [("ours", "vimtracker", OURS, r.ours)]
-        if r.reference is not None:
-            out.append(("reference", self.reference_name, REFERENCE, r.reference))
+        for name, samples in r.references.items():
+            out.append((name, name, self.colour(name), samples))
         return out
+
+    def colour(self, side: str) -> str:
+        if side == "ours":
+            return OURS
+        return REFERENCES[self.reference_names.index(side) % len(REFERENCES)]
+
+    def label(self, side: str) -> str:
+        return "vimtracker" if side == "ours" else side
 
     def keys(self) -> list[tuple[str, str, str]]:
         entries = [(OURS, "solid", "vimtracker (ours)")]
-        if self.reference_name:
-            entries.append((REFERENCE, "solid", f"{self.reference_name} (the reference)"))
+        for name in self.reference_names:
+            entries.append((self.colour(name), "solid", f"{name} (a reference)"))
         return entries
+
+    def reference_knob(self, name: str) -> str | None:
+        """The knob a knob sweep turns on a reference: the layout's `reference_knob`, one name for
+        every reference or a table of them by reference."""
+        knob = self.layout.get("reference_knob")
+        return knob.get(name) if isinstance(knob, dict) else knob
 
 
 class Response(Report):
@@ -456,7 +512,7 @@ class Response(Report):
                     values = sorted({self.settings[n].get(line_keys[0]) for n in names}, key=lambda v: (isinstance(v, str), v))
                     line_index = values.index(settings.get(line_keys[0]))
                 for side, (f, g, _) in entry["sides"].items():
-                    colour = (OURS if side == "ours" else REFERENCE) if not line_keys else SEQUENTIAL[line_index % len(SEQUENTIAL)]
+                    colour = self.colour(side) if not line_keys else SEQUENTIAL[line_index % len(SEQUENTIAL)]
                     shown = np.maximum(g, LOWEST_DB)
                     label = setting_label(line_keys[0], settings.get(line_keys[0])) if line_keys else None
                     panel.plot(f, shown, color=colour, label=label)
@@ -488,7 +544,7 @@ class Response(Report):
             if self.reference_name:
                 worst_peak = worst_height = worst_bass = None
                 for name in names:
-                    ours, theirs = results[name]["sides"]["ours"][2], results[name]["sides"]["reference"][2]
+                    ours, theirs = results[name]["sides"]["ours"][2], results[name]["sides"][self.first][2]
                     if math.isfinite(ours["peak Hz"]) and math.isfinite(theirs["peak Hz"]):
                         off = measure.cents(ours["peak Hz"], theirs["peak Hz"])
                         if worst_peak is None or abs(off) > abs(worst_peak[0]):
@@ -542,7 +598,7 @@ class Response(Report):
                         title if side == "ours" else "",
                         setting_label(column_key, settings.get(column_key)) if side == "ours" else "",
                         setting_label(row_key, settings.get(row_key)) if side == "ours" else "",
-                        "vimtracker" if side == "ours" else self.reference_name,
+                        self.label(side),
                         hertz(values["peak Hz"]),
                         number(values["peak dB"], 1, True),
                         number(values["at Cut dB"], 1, True),
@@ -644,7 +700,7 @@ class Harmonics(Report):
             settings = self.settings[name]
             panel = axes[rows.index(settings.get(row_key))][columns.index(settings.get(column_key))]
             for side, values in measured[name].items():
-                colour = OURS if side == "ours" else REFERENCE
+                colour = self.colour(side)
                 levels = values["levels"]
                 panel.plot(levels[:, 0], np.maximum(levels[:, 1], LOWEST_DB), color=colour, marker="o", markersize=2.0, linewidth=1.0)
             log_frequency_axis(panel, 30.0, 16_000.0)
@@ -662,7 +718,7 @@ class Harmonics(Report):
                 table_rows.append([
                     setting_label(column_key, settings[column_key]) if side == "ours" else "",
                     setting_label(row_key, settings[row_key]) if side == "ours" else "",
-                    "vimtracker" if side == "ours" else self.reference_name,
+                    self.label(side),
                     f"{values['fundamental']:.1f}",
                     hertz(values["peak Hz"]),
                     number(values["peak dB"], 1, True),
@@ -675,19 +731,15 @@ class Harmonics(Report):
                     name = next((n for n in names if self.settings[n].get(column_key) == column and self.settings[n].get(row_key) == row), None)
                     if name is None or row == 0:
                         continue
-                    ours, theirs = measured[name]["ours"], measured[name]["reference"]
-                    summary.append(
-                        html.escape(
-                            f"{setting_label(column_key, column)}, {setting_label(row_key, row)}: ours peaks at "
-                            f"{hertz(ours['peak Hz'])} ({number(ours['peak dB'], 1, True)} dB) and keeps "
-                            f"{number(ours['bass dB'], 1, True)} dB of its bass; {self.reference_name} peaks at "
-                            f"{hertz(theirs['peak Hz'])} ({number(theirs['peak dB'], 1, True)} dB) and keeps "
-                            f"{number(theirs['bass dB'], 1, True)} dB."
-                        )
-                    )
+                    parts = [
+                        f"{'ours' if side == 'ours' else side} peaks at {hertz(values['peak Hz'])} "
+                        f"({number(values['peak dB'], 1, True)} dB) and keeps {number(values['bass dB'], 1, True)} dB of its bass"
+                        for side, values in measured[name].items()
+                    ]
+                    summary.append(html.escape(f"{setting_label(column_key, column)}, {setting_label(row_key, row)}: " + "; ".join(parts) + "."))
         fundamentals = {side: [measured[n][side]["fundamental"] for n in names] for side in measured[names[0]]}
         notes = "; ".join(
-            f"{'vimtracker' if side == 'ours' else self.reference_name} plays it at {np.median(values):.1f} Hz"
+            f"{self.label(side)} plays it at {np.median(values):.1f} Hz"
             for side, values in fundamentals.items()
         )
         return {
@@ -735,30 +787,33 @@ class Oscillation(Report):
                 points.append({
                     "case": r.name,
                     "side": side,
-                    "line": group_label(line_keys, settings) if side == "ours" else self.reference_name,
-                    "knob": settings.get("cut") if side == "ours" else self.parameters[r.name].get(knob),
+                    "line": group_label(line_keys, settings) if side == "ours" else side,
+                    "knob": settings.get("cut") if side == "ours" else self.reference_parameters[r.name][side].get(knob),
                     "nominal": cut_hz(settings.get("cut", 255)) if side == "ours" else float("nan"),
                     "frequency": frequency,
                     "level": level,
                     "rings": level > RINGING_DB,
                 })
         fit_note = ""
-        theirs = [p for p in points if p["side"] == "reference" and p["rings"]]
-        if self.layout.get("reference_knob_is") == "midi":
-            # The reference's knob is a MIDI note number, so it says its own frequency.
-            for p in points:
-                if p["side"] == "reference":
-                    p["nominal"] = 440.0 * 2.0 ** ((p["knob"] - 69.0) / 12.0)
-            fit_note = f"{self.reference_name}'s {knob} is a MIDI note number, so it's set to that note's frequency."
-        elif len(theirs) >= 2:
-            slope, offset = np.polyfit([p["knob"] for p in theirs], [math.log2(p["frequency"]) for p in theirs], 1)
-            for p in points:
-                if p["side"] == "reference":
-                    p["nominal"] = 2.0 ** (offset + slope * p["knob"])
-            fit_note = (
-                f"{self.reference_name}'s fitted line: {2 ** offset:.1f} Hz at {knob} 0, rising "
-                f"{slope:.2f} octaves over its knob's whole turn."
-            )
+        notes = []
+        for reference in self.reference_names:
+            theirs = [p for p in points if p["side"] == reference and p["rings"]]
+            if self.layout.get("reference_knob_is") == "midi":
+                # The reference's knob is a MIDI note number, so it says its own frequency.
+                for p in points:
+                    if p["side"] == reference:
+                        p["nominal"] = 440.0 * 2.0 ** ((p["knob"] - 69.0) / 12.0)
+                notes.append(f"{reference}'s {knob} is a MIDI note number, so it's set to that note's frequency.")
+            elif len(theirs) >= 2:
+                slope, offset = np.polyfit([p["knob"] for p in theirs], [math.log2(p["frequency"]) for p in theirs], 1)
+                for p in points:
+                    if p["side"] == reference:
+                        p["nominal"] = 2.0 ** (offset + slope * p["knob"])
+                notes.append(
+                    f"{reference}'s fitted line: {2 ** offset:.1f} Hz at {knob} 0, rising "
+                    f"{slope:.2f} octaves over its knob's whole turn."
+                )
+        fit_note = " ".join(notes)
         for p in points:
             p["cents"] = measure.cents(p["frequency"], p["nominal"]) if p["rings"] else float("nan")
 
@@ -767,7 +822,7 @@ class Oscillation(Report):
         for index, line in enumerate(lines):
             chosen = [p for p in points if p["line"] == line]
             ours_only = not self.reference_name
-            colour = CATEGORICAL[index % len(CATEGORICAL)] if ours_only else (OURS if chosen[0]["side"] == "ours" else REFERENCE)
+            colour = CATEGORICAL[index % len(CATEGORICAL)] if ours_only else self.colour(chosen[0]["side"])
             ringing = [p for p in chosen if p["rings"]]
             left.plot([p["nominal"] for p in ringing], [p["cents"] for p in ringing], color=colour, marker="o", markersize=3.5, label=line)
             right.plot([p["nominal"] for p in chosen if math.isfinite(p["nominal"])], [p["level"] for p in chosen if math.isfinite(p["nominal"])], color=colour, marker="o", markersize=3.5, label=line)
@@ -860,8 +915,8 @@ class Static(Report):
                 ])
             panel.set_title(r.name, loc="left")
             panel.set_xlabel("Input, dBFS")
-            if len(found) == 2:
-                ours, theirs = found["ours"], found["reference"]
+            if self.first in found:
+                ours, theirs = found["ours"], found[self.first]
                 apart = measure.curve_distance(
                     measure.static_curve(given, r.ours, self.spec.rate),
                     measure.static_curve(given, r.reference, self.spec.rate),
@@ -941,7 +996,7 @@ class Timing(Report):
         for name in names:
             parts = []
             for side, found in timings[name].items():
-                who = "ours" if side == "ours" else self.reference_name
+                who = "ours" if side == "ours" else side
                 parts.append(
                     f"{who} attacks in {number(found['attack 63% ms'], 1)} ms and releases in "
                     f"{number(found['release 63% ms'], 0)} ms (to 63%), reducing {number(found['reduction dB'], 1)} dB"
@@ -961,7 +1016,7 @@ class Timing(Report):
                 for side in timings[name]:
                     short = timings[name][side]["release 63% ms"]
                     long = timings[other][side]["release 63% ms"]
-                    who = "ours" if side == "ours" else self.reference_name
+                    who = "ours" if side == "ours" else side
                     parts.append(f"{who} {number(short, 0)} ms against {number(long, 0)} ms")
                 summary.append(html.escape(
                     f"Program dependence, {name} against {other} (release to 63% after a "
@@ -1016,7 +1071,7 @@ class Distortion(Report):
             panel.set_xlabel("Input, dBFS")
             parts = []
             for side, f in worst.items():
-                who = "ours" if side == "ours" else self.reference_name
+                who = "ours" if side == "ours" else side
                 parts.append(
                     f"{who} at most {number(f['THD dB'], 1)} dB at {number(f['level'], 0)} dBFS, "
                     f"its 2nd harmonic {number(f['harmonics dB'][0], 1)} dB and 3rd {number(f['harmonics dB'][1], 1)} dB"
@@ -1035,7 +1090,7 @@ class Distortion(Report):
 
 
 class Knob(Report):
-    """One knob swept on both sides, measured as the spec's `[report] measure` says:
+    """One knob swept on every side, measured as the spec's `[report] measure` says:
 
     - `note`, the default: the whole render's spectral centroid and peak level.
     - `filter`: a held note's filter read from its harmonics over `window`, as `harmonics` does:
@@ -1044,29 +1099,36 @@ class Knob(Report):
     - `accents`: a pattern's notes, a plain one first and then accents: the first accent's
       brightness and level over the plain note's, and how much the last accent builds over the
       first.
+
+    A reference's knob is the layout's `reference_knob`, one name for all of them or a table by
+    reference, as Acid V's Env Mod is `envelope_mod` and ABL3's `envmod`.
     """
 
-    # Each measure's columns: (name, axis label, whether it's read in octaves, digits).
+    # Each measure's columns: (name, axis label, whether it's read in octaves, digits, the unit
+    # the consensus compares it in).
     COLUMNS = {
         "note": [
-            ("centroid Hz", "Spectral centroid, Hz", True, 0),
-            ("peak dBFS", "Peak level, dBFS", False, 1),
+            ("centroid Hz", "Spectral centroid, Hz", True, 0, "Hz"),
+            ("peak dBFS", "Peak level, dBFS", False, 1, "dB"),
         ],
         "filter": [
-            ("peak Hz", "Filter peak, Hz", True, 0),
-            ("peak dB", "Peak over the bass, dB", False, 1),
-            ("bass dB", "Bass against the knob's bottom, dB", False, 1),
+            ("peak Hz", "Filter peak, Hz", True, 0, "Hz"),
+            ("peak dB", "Peak over the bass, dB", False, 1, "dB"),
+            ("bass dB", "Bass against the knob's bottom, dB", False, 1, "dB"),
         ],
         "decay": [
-            ("decay ms", "Brightness decay, ms", True, 0),
-            ("fall octaves", "Brightness fall, octaves", False, 2),
+            ("decay ms", "Brightness decay, ms", True, 0, "ms"),
+            ("fall octaves", "Brightness fall, octaves", False, 2, "octaves"),
         ],
         "accents": [
-            ("accent octaves", "First accent over the plain note, octaves", False, 2),
-            ("accent dB", "First accent over the plain note, dB", False, 1),
-            ("build octaves", "Last accent over the first, octaves", False, 2),
+            ("accent octaves", "First accent over the plain note, octaves", False, 2, "octaves"),
+            ("accent dB", "First accent over the plain note, dB", False, 1, "dB"),
+            ("build octaves", "Last accent over the first, octaves", False, 2, "octaves"),
         ],
     }
+    # Measures each side has its own level for, so the consensus compares them against the same
+    # side's at the knob's bottom.
+    ABSOLUTE = {"peak dBFS"}
     READINGS = {
         "note": (
             "The left panel is the spectral centroid of the whole note, the centre of its "
@@ -1101,14 +1163,15 @@ class Knob(Report):
     def reading(self) -> str:
         return (
             "Each point is one step of the knob, placed by how far it's turned: ours from 00 to "
-            "FF, the reference's from 0 to 1. "
+            "FF, the references' from 0 to 1. "
             + self.READINGS[self.kind]
-            + " Where the two curves part is where the knobs map differently; the summary gives "
-            "how far apart they are on average over the knob's steps."
+            + " Where the curves part is where the knobs map differently; the summary gives how "
+            "far apart ours and each reference are on average over the knob's steps. The grey "
+            "band under them is the references' consensus, where they agree."
         )
 
-    def measured(self, samples) -> dict:
-        rate, notes = self.spec.rate, self.spec.data.get("notes", [])
+    def measured(self, samples, case) -> dict:
+        rate, notes = self.spec.rate, self.spec.notes(case)
         if self.kind == "filter":
             start, end = self.layout.get("window", [1.0, 2.0])
             expected = 440.0 * 2.0 ** ((notes[0]["note"] - 69) / 12)
@@ -1130,29 +1193,57 @@ class Knob(Report):
 
     def build(self):
         ours_knob = self.layout["knob"]
-        their_knob = self.layout.get("reference_knob")
         columns = self.COLUMNS[self.kind]
+        sides = ["ours"] + self.reference_names
+        # Each step: its case, and each side's knob and measures.
         points = []
         for r in self.rendered:
-            values = {side: self.measured(samples) for side, _, _, samples in self.sides(r)}
-            points.append((r.name, self.settings[r.name][ours_knob], self.parameters[r.name].get(their_knob), values))
+            values = {side: self.measured(samples, r.case) for side, _, _, samples in self.sides(r)}
+            knobs = {"ours": self.settings[r.name][ours_knob]}
+            for name in self.reference_names:
+                knobs[name] = self.reference_parameters[r.name][name].get(self.reference_knob(name))
+            points.append((r.name, knobs, values))
         if self.kind == "filter":
             # The bass against the same side's at the knob's bottom.
-            for side in ("ours", "reference"):
-                chosen = [p[3][side] for p in points if side in p[3]]
-                if chosen:
-                    bottom = chosen[0]["bass dB"]
-                    for values in chosen:
-                        values["bass dB"] -= bottom
+            for side in sides:
+                bottom = points[0][2][side]["bass dB"]
+                for _, _, values in points:
+                    values[side]["bass dB"] -= bottom
+
+        def x_of(knobs, side):
+            return knobs[side] / 255.0 if side == "ours" else knobs[side]
+
+        # The consensus's records, with absolute levels against each side's first step.
+        records, by_step = [], {}
+        for key, label, _, _, unit in columns:
+            for name, _, values in points:
+                record = {}
+                for side in sides:
+                    value = values[side][key]
+                    if key in self.ABSOLUTE:
+                        value -= points[0][2][side][key]
+                    record[side] = value
+                shown_label = label.replace(", dBFS", ", dB against the knob's bottom") if key in self.ABSOLUTE else label
+                records.append({"measure": shown_label, "case": name, "unit": unit, "values": record})
+                by_step[key, name] = records[-1]
+
+        import consensus
 
         figure, panels = plt.subplots(1, len(columns), figsize=(5.0 * len(columns), 3.2))
-        for (key, label, octaves, _), panel in zip(columns, panels):
-            for side, colour in (("ours", OURS), ("reference", REFERENCE)):
-                chosen = [p for p in points if side in p[3]]
-                if not chosen:
-                    continue
-                x = [p[1] / 255.0 if side == "ours" else p[2] for p in chosen]
-                panel.plot(x, [p[3][side][key] for p in chosen], color=colour, marker="o", markersize=3.5)
+        panels = np.atleast_1d(panels)
+        for (key, label, octaves, _, unit), panel in zip(columns, panels):
+            # The band where the references agree, but not for a level each side sets for itself.
+            if len(self.reference_names) > 1 and key not in self.ABSOLUTE:
+                targets = []
+                for name, knobs, values in points:
+                    verdict = consensus.judge(by_step[key, name], self.reference_names)
+                    targets.append(verdict["target"] if verdict["status"] == "agree" else float("nan"))
+                panel.plot([x_of(p[1], "ours") for p in points], targets, color=CONSENSUS, linewidth=7, alpha=0.6, solid_capstyle="round", zorder=0)
+            for side in sides:
+                panel.plot(
+                    [x_of(p[1], side) for p in points], [p[2][side][key] for p in points],
+                    color=self.colour(side), marker="o", markersize=3.5,
+                )
             if octaves:
                 panel.set_yscale("log")
                 panel.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 3.0, 5.0, 7.0)))
@@ -1167,39 +1258,40 @@ class Knob(Report):
             return number(value, digits) if digits else (f"{value:.0f}" if math.isfinite(value) else "–")
 
         rows = []
-        for name, ours_value, their_value, values in points:
-            row = [name, f"0x{ours_value:02X}"] + [shown(values["ours"][key], digits) for key, _, _, digits in columns]
-            if "reference" in values:
-                row += [f"{their_value:g}"] + [shown(values["reference"][key], digits) for key, _, _, digits in columns]
+        for name, knobs, values in points:
+            row = [name]
+            for side in sides:
+                knob = knobs[side]
+                row += [f"0x{knob:02X}" if side == "ours" else (f"{knob:g}" if knob is not None else "–")]
+                row += [shown(values[side][key], digits) for key, _, _, digits, _ in columns]
             rows.append(row)
 
         summary = []
-        for key, label, octaves, digits in columns:
+        for key, label, octaves, digits, _ in columns:
             unit = "octaves" if octaves else label.rsplit(", ", 1)[-1]
             ends = []
-            for side in ("ours", "reference"):
-                chosen = [p[3][side][key] for p in points if side in p[3]]
-                if chosen:
-                    who = "ours" if side == "ours" else self.reference_name
-                    ends.append(f"{who} from {shown(chosen[0], digits)} to {shown(chosen[-1], digits)}")
+            for side in sides:
+                chosen = [p[2][side][key] for p in points]
+                ends.append(f"{'ours' if side == 'ours' else side} from {shown(chosen[0], digits)} to {shown(chosen[-1], digits)}")
             line = f"{label}: {', '.join(ends)}."
-            if self.reference_name:
+            for reference in self.reference_names:
                 apart = []
-                for _, _, _, values in points:
-                    a, b = values["ours"][key], values["reference"][key]
+                for _, _, values in points:
+                    a, b = values["ours"][key], values[reference][key]
                     if math.isfinite(a) and math.isfinite(b) and (not octaves or (a > 0 and b > 0)):
                         apart.append(abs(math.log2(a / b)) if octaves else abs(a - b))
                 if apart:
                     line += (
-                        f" The two are {number(float(np.mean(apart)), 2)} {unit} apart on average over "
+                        f" Ours and {reference} are {number(float(np.mean(apart)), 2)} {unit} apart on average over "
                         f"{len(apart)} steps, {number(max(apart), 2)} at most."
                     )
             summary.append(html.escape(line))
 
-        names = [label for _, label, _, _ in columns]
-        headers = ["Case", f"Ours {ours_knob}"] + names
-        if self.reference_name:
-            headers += [f"{self.reference_name} {their_knob}"] + names
+        names = [label for _, label, _, _, _ in columns]
+        headers = ["Case"]
+        for side in sides:
+            knob = ours_knob if side == "ours" else self.reference_knob(side)
+            headers += [f"{self.label(side)} {knob}"] + names
         notes = {
             "note": "The centroid and peak are of the whole render.",
             "filter": "Measured over the held note's harmonics; a dash where no harmonic stands a decibel over the bass.",
@@ -1207,12 +1299,14 @@ class Knob(Report):
             "accents": "From each note's first 40 ms for its brightness and the RMS of its first 60 ms for its level.",
         }
         return {
-            "keys": [(c, "marker", w) for c, _, w in self.keys()],
+            "keys": [(c, "marker", w) for c, _, w in self.keys()] + ([(CONSENSUS, "solid", "the references' consensus")] if len(self.reference_names) > 1 else []),
             "summary": summary,
             "figures": [image(figure)],
             "numbers": table(headers, rows, numeric_from=1),
             "numbers note": notes[self.kind],
+            "measures": records,
         }
+
 
 class Velocity(Report):
     """Notes at different velocities in one render, each far enough from the last to start from
@@ -1325,8 +1419,8 @@ class Taper(Report):
         if side == "ours":
             return self.settings[name].get(self.layout.get("knob", "res"))
         for key in as_list(self.layout.get("reference_knob")):
-            if key in self.parameters[name]:
-                return self.parameters[name][key]
+            if key in self.reference_parameters[name][side]:
+                return self.reference_parameters[name][side][key]
         return None
 
     def measured(self, r, samples, nominal, dip_or_band, high) -> dict:
@@ -1408,7 +1502,7 @@ class Taper(Report):
                     passes = math.isfinite(base[key]) and base[key] > -3.0
                     values["bass loss dB"] = values[key] - base[key] if passes and not values["rings"] else float("nan")
 
-        sides = ["ours"] + (["reference"] if self.reference_name else [])
+        sides = ["ours"] + self.reference_names
         figures, summary, rows_out = [], [], []
         self.gaps = {}
         for key, names in groups.items():
@@ -1423,7 +1517,7 @@ class Taper(Report):
                 steps = sorted((n for n in names if self.settings[n].get(column_key) == cut), key=lambda n: self.settings[n].get(knob))
                 x = np.array([self.settings[n].get(knob) / 255.0 for n in steps])
                 for side in sides:
-                    colour = OURS if side == "ours" else REFERENCE
+                    colour = self.colour(side)
                     chosen = [results[n]["sides"][side] for n in steps]
                     for row, measure_key in enumerate((height, "peak cents", "bass loss dB")):
                         axes[row][j].plot(x, [v[measure_key] for v in chosen], color=colour, marker="o", markersize=2.5)
@@ -1439,10 +1533,10 @@ class Taper(Report):
                     # the knob's taper sets, while the filters' shapes set where they start.
                     first = results[steps[0]]["sides"]
                     for n in steps:
-                        a, b = results[n]["sides"]["ours"][height], results[n]["sides"]["reference"][height]
+                        a, b = results[n]["sides"]["ours"][height], results[n]["sides"][self.first][height]
                         if math.isfinite(a) and math.isfinite(b):
                             gaps.append((abs(a - b), a - b, n))
-                            change = (a - first["ours"][height]) - (b - first["reference"][height])
+                            change = (a - first["ours"][height]) - (b - first[self.first][height])
                             if math.isfinite(change):
                                 changes.append((abs(change), change, n))
                 axes[0][j].set_title(setting_label(column_key, cut), loc="left")
@@ -1462,7 +1556,8 @@ class Taper(Report):
 
             parts = [f"ours self-oscillates {onset_text('ours')}"]
             if self.reference_name:
-                parts.append(f"{self.reference_name} {onset_text('reference')}")
+                for reference in self.reference_names:
+                    parts.append(f"{reference} {onset_text(reference)}")
                 if gaps:
                     unit = "octaves" if by_width else "dB"
                     mean = float(np.mean([g[0] for g in gaps]))
@@ -1495,7 +1590,7 @@ class Taper(Report):
                     row = [
                         title if side == "ours" else "",
                         setting_label(column_key, self.settings[n].get(column_key)) if side == "ours" else "",
-                        "vimtracker" if side == "ours" else self.reference_name,
+                        self.label(side),
                         shown_knob,
                         hertz(v["peak Hz"]),
                         number(v["peak dB"], 1, True),
@@ -1532,6 +1627,413 @@ class Taper(Report):
         return ", ".join(setting_label(k, settings.get(k)) for k in (self.layout.get("column", "cut"), self.layout.get("knob", "res")))
 
 
+def panel_grid(count: int, columns: int, width: float = 3.2, height: float = 2.2, sharey: bool = True):
+    """A figure of `count` panels, `columns` to a row, with the spares hidden."""
+    columns = max(1, min(columns, count))
+    rows = math.ceil(count / columns)
+    figure, axes = plt.subplots(rows, columns, figsize=(width * columns, height * rows + 0.3), squeeze=False, sharey=sharey)
+    for extra in range(count, rows * columns):
+        axes[extra // columns][extra % columns].set_visible(False)
+    return figure, [axes[i // columns][i % columns] for i in range(count)]
+
+
+def midi_hz(note: float) -> float:
+    return 440.0 * 2.0 ** ((note - 69.0) / 12.0)
+
+
+class Notes(Report):
+    """A pattern of notes in each case, each note measured as `accents` measures them: its
+    brightness, the centroid over its first 40 ms, and its level, the RMS over its first 60 ms,
+    both against the case's first note, which is plain. For accents in a row and apart, and for
+    knobs' extremes.
+
+    Each case gives the consensus: the first note's brightness, and its level against the first
+    case; the first accent's brightness and level over the first note; the last accent's over the
+    first accent's, which is the accent sweep building up; and the plain notes after the first,
+    over it. The layout's `columns` says how many panels go in a row, 3 if not given.
+    """
+
+    reading = (
+        "Each panel is one case, and each point one of its notes, in order; a filled point is an "
+        "accent and a hollow one a plain note, and a missing step a rest. The top figure is each "
+        "note's brightness, the centroid over its first 40 ms, in octaves over the case's first "
+        "note; the bottom its level, the RMS over its first 60 ms, in dB over the first note's. "
+        "A 303's accents a sixteenth apart build on each other, the accent sweep's capacitor "
+        "charging, which shows as each accent brighter than the last."
+    )
+
+    def per_note(self, samples, notes) -> list[dict]:
+        marks = measure.note_marks(samples, self.spec.rate, [note["time"] for note in notes])
+        first = marks[0]
+        return [
+            {
+                "bright Hz": mark["bright Hz"],
+                "RMS dBFS": mark["RMS dBFS"],
+                "octaves": math.log2(mark["bright Hz"] / first["bright Hz"]),
+                "dB": mark["RMS dBFS"] - first["RMS dBFS"],
+                "accent": bool(note.get("accent")),
+            }
+            for mark, note in zip(marks, notes)
+        ]
+
+    def build(self):
+        sides = ["ours"] + self.reference_names
+        found = {}
+        for r in self.rendered:
+            notes = sorted(self.spec.notes(r.case), key=lambda note: note["time"])
+            found[r.name] = (notes, {side: self.per_note(samples, notes) for side, _, _, samples in self.sides(r)})
+        names = [r.name for r in self.rendered]
+        first_case = names[0]
+
+        records = []
+
+        def add(measure_name, case, unit, values):
+            records.append({"measure": measure_name, "case": case, "unit": unit, "values": values})
+
+        for name in names:
+            notes, per_side = found[name]
+            add("first note's brightness, Hz", name, "Hz", {s: per_side[s][0]["bright Hz"] for s in sides})
+            if len(names) > 1:
+                add(
+                    "first note's level, dB against the first case", name, "dB",
+                    {s: per_side[s][0]["RMS dBFS"] - found[first_case][1][s][0]["RMS dBFS"] for s in sides},
+                )
+            accents = [i for i, note in enumerate(notes) if note.get("accent")]
+            plains = [i for i, note in enumerate(notes) if not note.get("accent") and i > 0]
+            if accents:
+                a = accents[0]
+                add("first accent, octaves over the first note", name, "octaves", {s: per_side[s][a]["octaves"] for s in sides})
+                add("first accent, dB over the first note", name, "dB", {s: per_side[s][a]["dB"] for s in sides})
+            if len(accents) > 1:
+                a, b = accents[0], accents[-1]
+                add(
+                    "last accent over the first, octaves", name, "octaves",
+                    {s: math.log2(per_side[s][b]["bright Hz"] / per_side[s][a]["bright Hz"]) for s in sides},
+                )
+                add(
+                    "last accent over the first, dB", name, "dB",
+                    {s: per_side[s][b]["RMS dBFS"] - per_side[s][a]["RMS dBFS"] for s in sides},
+                )
+            if plains:
+                add(
+                    "later plain notes, octaves over the first note", name, "octaves",
+                    {s: float(np.mean([per_side[s][i]["octaves"] for i in plains])) for s in sides},
+                )
+                add(
+                    "later plain notes, dB over the first note", name, "dB",
+                    {s: float(np.mean([per_side[s][i]["dB"] for i in plains])) for s in sides},
+                )
+
+        columns = int(self.layout.get("columns", 3))
+        figures = []
+        for key, label in (("octaves", "Brightness over the first note, octaves"), ("dB", "Level over the first note, dB")):
+            figure, panels = panel_grid(len(names), columns)
+            for name, panel in zip(names, panels):
+                notes, per_side = found[name]
+                # Each note at its step, so rests show.
+                steps = self.steps(notes, self.layout.get("step"))
+                for side in sides:
+                    values = [n[key] for n in per_side[side]]
+                    colour = self.colour(side)
+                    panel.plot(steps, values, color=colour, linewidth=1.0)
+                    filled = [i for i, n in enumerate(per_side[side]) if n["accent"]]
+                    hollow = [i for i, n in enumerate(per_side[side]) if not n["accent"]]
+                    panel.plot([steps[i] for i in filled], [values[i] for i in filled], linestyle="none", marker="o", markersize=3.5, color=colour)
+                    panel.plot([steps[i] for i in hollow], [values[i] for i in hollow], linestyle="none", marker="o", markersize=3.5, markerfacecolor="white", color=colour)
+                panel.set_title(name, loc="left")
+                panel.axhline(0.0, color=MUTED, linewidth=0.6)
+            for panel in panels[-columns:]:
+                panel.set_xlabel("Step")
+            panels[0].set_ylabel(label)
+            figure.tight_layout()
+            figures.append(f"<h3>{html.escape(label.split(',')[0])}</h3>{image(figure)}")
+
+        rows = []
+        for name in names:
+            notes, per_side = found[name]
+            for side in sides:
+                rows.append([
+                    name if side == "ours" else "",
+                    self.label(side),
+                    " ".join(("A" if n["accent"] else "·") for n in per_side[side]),
+                    f"{per_side[side][0]['bright Hz']:.0f}",
+                    " ".join(number(n["octaves"], 2, True) for n in per_side[side][1:]),
+                    " ".join(number(n["dB"], 1, True) for n in per_side[side][1:]),
+                ])
+        import consensus
+
+        summary = []
+        for row in consensus.summarize([consensus.judge(r, self.reference_names) for r in records]):
+            if "score" not in row:
+                continue
+            unit = row["gap unit"]
+            summary.append(html.escape(
+                f"{row['measure']}: ours is {number(row['mean gap'], 2)} {unit} from the target on average, "
+                f"{'higher' if row['mean signed gap'] > 0 else 'lower'}, over the {row['agreed']} cases the references agree on."
+            ))
+        return {
+            "keys": [(c, "marker", w) for c, _, w in self.keys()],
+            "summary": summary[:8],
+            "figures": figures,
+            "numbers": table(["Case", "Side", "Notes", "First note's brightness Hz", "Each later note, octaves over the first", "And dB over it"], rows, numeric_from=3),
+            "numbers note": "Brightness is the centroid over each note's first 40 ms, from 2 ms in; level the RMS over its first 60 ms.",
+            "measures": records,
+        }
+
+    @staticmethod
+    def steps(notes, step: float | None = None) -> list[float]:
+        """Each note's step from the first, where a step is the layout's `step` in seconds, or the
+        shortest gap between notes' starts, so a rest leaves a gap."""
+        starts = [note["time"] for note in notes]
+        gaps = [b - a for a, b in zip(starts, starts[1:]) if b - a > 1e-6]
+        step = step or (min(gaps) if gaps else 1.0)
+        return [round((start - starts[0]) / step, 3) for start in starts]
+
+
+class Transition(Report):
+    """Two notes in each case, and how the voice goes from the first to the second: whether it
+    glides, how long that takes, whether the second note starts its envelopes again, and the dip
+    in level between them. For slides, and for legato against retriggered notes at different
+    gaps.
+
+    Each case gives the consensus: for a first note held into the second, the time from the
+    second note's start until the pitch has gone 90% of the way, and from 10 to 90%; the level's
+    dip around the change, against the level just before it; the brightness just after the
+    change over just before, which a retrigger raises; and the second note's level over the
+    first's. The layout's `columns` says how many panels go in a row, 3 if not given.
+    """
+
+    reading = (
+        "Each panel is one case, the time in ms from the second note's start. The top figure is "
+        "the pitch in semitones from the first note, tracked by YIN over 20 ms frames, each frame "
+        "placed at its centre, so a jump shows 10 ms early; the bottom the level, the RMS over "
+        "one cycle of the lower note. A slide glides from one pitch to the other with the gate held, so the level doesn't "
+        "dip and the envelopes aren't started again; a retriggered note jumps, and its level dips "
+        "as the gate closes and opens."
+    )
+    # Around the change: how long before it the level and brightness are read, in seconds.
+    BEFORE = (0.032, 0.002)
+    AFTER = (0.002, 0.032)
+    # The deepest a dip is read, in dB under the level before it.
+    DEEPEST_DIP_DB = -60.0
+
+    def transition(self, samples, notes) -> dict:
+        rate = self.spec.rate
+        first, second = notes[0], notes[1]
+        change = second["time"]
+        end = first["time"] + first["length"]
+        held = end > change or bool(first.get("slide"))
+        # Where the first note was last left alone: its end, or the change if it's held into it.
+        last = min(end, change) if not first.get("slide") else change
+        low, high = sorted((midi_hz(first["note"]), midi_hz(second["note"])))
+        times, hertz = measure.pitch_track(samples, rate, change - 0.08, change + 0.25, low / 1.6, high * 1.6)
+        # A median over 7 ms, so a frame that tracks an octave out doesn't count as a crossing.
+        semitones = measure.median(12.0 * np.log2(hertz / midi_hz(first["note"])), 7)
+        interval = second["note"] - first["note"]
+        values = {"times": times - change, "semitones": semitones}
+        # The first note's pitch over the 30 ms before it was last left alone, the frames placed
+        # at their centres, so none reaches past it.
+        before_change = (times > last - 0.04) & (times < last - 0.01)
+        values["pitch cents"] = 100.0 * float(np.nanmedian(semitones[before_change])) if before_change.any() else float("nan")
+        # The RMS over one cycle of the lower note, which a periodic wave's phase doesn't move.
+        env_times, levels = measure.level_envelope(samples, rate, width=1.0 / low)
+        values["envelope"] = (env_times - change, levels)
+        before = (env_times >= last - 0.015) & (env_times < last - 0.005)
+        around = (env_times >= last - 0.005) & (env_times <= change + 0.015)
+        level_before = float(np.mean(levels[before])) if before.any() else float("nan")
+        # No deeper than the floor, as a note that has died away has nothing more to lose.
+        dip = float(np.min(levels[around])) - level_before if around.any() else float("nan")
+        values["dip dB"] = max(dip, self.DEEPEST_DIP_DB)
+        bright_before = measure.windowed_centroid(samples, rate, last - self.BEFORE[0], last - self.BEFORE[1])
+        bright_after = measure.windowed_centroid(samples, rate, change + self.AFTER[0], change + self.AFTER[1])
+        values["retrigger octaves"] = math.log2(bright_after / bright_before) if bright_before > 0 and bright_after > 0 else float("nan")
+        marks = measure.note_marks(samples, rate, [first["time"], second["time"]])
+        values["level dB"] = marks[1]["RMS dBFS"] - marks[0]["RMS dBFS"]
+        values["glide 90 ms"] = values["glide 10-90 ms"] = float("nan")
+        if held and interval:
+            rising = interval > 0
+            at = lambda share: measure.crossing(times - change, semitones, -0.02, share * interval, rising)  # noqa: E731
+            ten, ninety = at(0.1), at(0.9)
+            values["glide 90 ms"] = ninety * 1000.0
+            values["glide 10-90 ms"] = (ninety - ten) * 1000.0
+        values["held"] = held
+        return values
+
+    def build(self):
+        sides = ["ours"] + self.reference_names
+        names = [r.name for r in self.rendered]
+        found = {}
+        for r in self.rendered:
+            notes = sorted(self.spec.notes(r.case), key=lambda note: note["time"])
+            found[r.name] = (notes, {side: self.transition(samples, notes) for side, _, _, samples in self.sides(r)})
+
+        records = []
+        measures = [
+            ("pitch cents", "the first note's pitch, cents off its note", "cents"),
+            ("glide 90 ms", "a held note's glide to 90% of the way, ms", "ms"),
+            ("glide 10-90 ms", "a held note's glide from 10 to 90%, ms", "ms"),
+            ("dip dB", "the level's dip at the change, dB", "dB"),
+            ("retrigger octaves", "brightness just after the change over just before, octaves", "octaves"),
+            ("level dB", "second note's level over the first's, dB", "dB"),
+        ]
+        for name in names:
+            _, per_side = found[name]
+            for key, label, unit in measures:
+                values = {s: per_side[s][key] for s in sides}
+                if all(not math.isfinite(v) for v in values.values()):
+                    continue
+                records.append({"measure": label, "case": name, "unit": unit, "values": values})
+
+        columns = int(self.layout.get("columns", 3))
+        figures = []
+        for what in ("pitch", "level"):
+            figure, panels = panel_grid(len(names), columns, sharey=what == "level")
+            for name, panel in zip(names, panels):
+                notes, per_side = found[name]
+                for side in sides:
+                    values = per_side[side]
+                    if what == "pitch":
+                        panel.plot(values["times"] * 1000.0, values["semitones"], color=self.colour(side), linewidth=1.1)
+                    else:
+                        t, levels = values["envelope"]
+                        shown = (t >= -0.08) & (t <= 0.2)
+                        panel.plot(t[shown] * 1000.0, np.maximum(levels[shown], -80.0), color=self.colour(side), linewidth=1.0)
+                panel.axvline(0.0, color=MUTED, linewidth=0.6)
+                end = (notes[0]["time"] + notes[0]["length"] - notes[1]["time"]) * 1000.0
+                if abs(end) > 0.5:
+                    panel.axvline(end, color=MUTED, linewidth=0.6, linestyle=":")
+                panel.set_title(name, loc="left")
+                panel.set_xlim(-80, 200)
+            for panel in panels[-columns:]:
+                panel.set_xlabel("ms from the second note")
+            panels[0].set_ylabel("Semitones from the first note" if what == "pitch" else "Level, dBFS")
+            figure.tight_layout()
+            heading = "Pitch" if what == "pitch" else "Level"
+            figures.append(f"<h3>{heading}</h3>{image(figure)}")
+
+        rows = []
+        for name in names:
+            _, per_side = found[name]
+            for side in sides:
+                v = per_side[side]
+                rows.append([
+                    name if side == "ours" else "",
+                    self.label(side),
+                    number(v["glide 90 ms"], 1),
+                    number(v["glide 10-90 ms"], 1),
+                    number(v["dip dB"], 1, True),
+                    number(v["retrigger octaves"], 2, True),
+                    number(v["level dB"], 1, True),
+                ])
+        summary = []
+        for name in names:
+            _, per_side = found[name]
+            parts = []
+            for side in sides:
+                v = per_side[side]
+                glide = f"glides to 90% in {number(v['glide 90 ms'], 0)} ms, " if math.isfinite(v["glide 90 ms"]) else ""
+                parts.append(f"{'ours' if side == 'ours' else side} {glide}dips {number(v['dip dB'], 1, True)} dB and brightens {number(v['retrigger octaves'], 2, True)} octaves")
+            summary.append(html.escape(f"{name}: " + "; ".join(parts) + "."))
+        return {
+            "keys": self.keys() + [(MUTED, "solid", "the second note's start"), (MUTED, "dotted", "the first note's end")],
+            "summary": summary,
+            "figures": figures,
+            "numbers": table(["Case", "Side", "Glide to 90% ms", "Glide 10 to 90% ms", "Dip dB", "Brightening octaves", "Second over first dB"], rows, numeric_from=2),
+            "numbers note": (
+                "A glide is timed only where the first note is held into the second. The dip is the "
+                "lowest level, the RMS over a cycle, down to 60 dB under, from 5 ms before the first note's end, or the change if it's "
+                "held, to 15 ms after the change, against the 10 ms before that; the brightening, "
+                "the centroid over the 30 ms after the change over the 30 ms before it."
+            ),
+            "measures": records,
+        }
+
+
+class Gate(Report):
+    """One note in each case, held for a different length: how its level falls while it's held,
+    and how quickly it dies once let go, which is the gate's and the VCA's timing.
+
+    Each case gives the consensus: the level just before the note's end, under its first 60 ms;
+    and the time from its end until it's 20 and 40 dB under that. The layout's `columns` says how
+    many panels go in a row, 3 if not given.
+    """
+
+    reading = (
+        "Each panel is one case, a note held for the length its name gives. The curves are the "
+        "level, the RMS over one cycle of the note, against the time from the note's start; the dotted line is "
+        "where it's let go. A 303's VCA holds a note's level while its gate is open, falling "
+        "slowly, and lets go within a few milliseconds."
+    )
+
+    def released(self, samples, note) -> dict:
+        rate = self.spec.rate
+        start, end = note["time"], note["time"] + note["length"]
+        times, levels = measure.level_envelope(samples, rate, width=1.0 / midi_hz(note["note"]))
+        early = (times >= start) & (times < start + 0.06)
+        late = (times >= end - 0.01) & (times < end)
+        first = float(10.0 * np.log10(np.mean(10.0 ** (levels[early] / 10.0))))
+        at_end = float(10.0 * np.log10(np.mean(10.0 ** (levels[late] / 10.0)))) if late.any() else float("nan")
+        found = {"envelope": (times - start, levels), "held dB": at_end - first}
+        for drop in (20, 40):
+            when = measure.crossing(times, levels, end, at_end - drop, rising=False)
+            found[f"release {drop} ms"] = (when - end) * 1000.0 if math.isfinite(when) else float("nan")
+        return found
+
+    def build(self):
+        sides = ["ours"] + self.reference_names
+        names = [r.name for r in self.rendered]
+        found = {}
+        for r in self.rendered:
+            note = sorted(self.spec.notes(r.case), key=lambda n: n["time"])[0]
+            found[r.name] = (note, {side: self.released(samples, note) for side, _, _, samples in self.sides(r)})
+        records = []
+        for name in names:
+            _, per_side = found[name]
+            for key, label, unit in (
+                ("held dB", "level at the note's end under its start, dB", "dB"),
+                ("release 20 ms", "release to 20 dB under the note's end, ms", "ms"),
+                ("release 40 ms", "release to 40 dB under the note's end, ms", "ms"),
+            ):
+                records.append({"measure": label, "case": name, "unit": unit, "values": {s: per_side[s][key] for s in sides}})
+        columns = int(self.layout.get("columns", 3))
+        figure, panels = panel_grid(len(names), columns)
+        for name, panel in zip(names, panels):
+            note, per_side = found[name]
+            for side in sides:
+                t, levels = per_side[side]["envelope"]
+                shown = (t >= -0.01) & (t <= note["length"] + 0.15)
+                panel.plot(t[shown] * 1000.0, np.maximum(levels[shown], -90.0), color=self.colour(side), linewidth=1.0)
+            panel.axvline(note["length"] * 1000.0, color=MUTED, linewidth=0.6, linestyle=":")
+            panel.set_title(name, loc="left")
+        for panel in panels[-columns:]:
+            panel.set_xlabel("ms from the note's start")
+        panels[0].set_ylabel("Level, dBFS")
+        figure.tight_layout()
+        rows = []
+        for name in names:
+            _, per_side = found[name]
+            for side in sides:
+                v = per_side[side]
+                rows.append([name if side == "ours" else "", self.label(side), number(v["held dB"], 1, True), number(v["release 20 ms"], 1), number(v["release 40 ms"], 1)])
+        summary = []
+        for name in names:
+            _, per_side = found[name]
+            parts = [
+                f"{'ours' if side == 'ours' else side} {number(per_side[side]['held dB'], 1, True)} dB by its end, "
+                f"then 20 dB down in {number(per_side[side]['release 20 ms'], 1)} ms"
+                for side in sides
+            ]
+            summary.append(html.escape(f"{name}: " + "; ".join(parts) + "."))
+        return {
+            "keys": self.keys() + [(MUTED, "dotted", "the note's end")],
+            "summary": summary,
+            "figures": [image(figure)],
+            "numbers": table(["Case", "Side", "At its end, dB under its start", "20 dB down, ms", "40 dB down, ms"], rows, numeric_from=2),
+            "numbers note": "Levels are the RMS over one cycle of the note, every half a millisecond; the start's over the note's first 60 ms, the end's over its last 10 ms.",
+            "measures": records,
+        }
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -1542,6 +2044,9 @@ KINDS = {
     "knob": Knob,
     "velocity": Velocity,
     "taper": Taper,
+    "notes": Notes,
+    "transition": Transition,
+    "gate": Gate,
 }
 
 STYLE = """
@@ -1570,7 +2075,11 @@ code { font: 12.5px ui-monospace, Menlo, monospace; }
 """
 
 
-def write(spec, rendered, path: Path) -> None:
+def write(spec, rendered, path: Path) -> dict:
+    """Write a spec's report page, and give what was built for it, with its consensus's summary
+    under `consensus` for a suite's index."""
+    import consensus
+
     layout = spec.report
     kind = layout.get("kind")
     if kind not in KINDS:
@@ -1579,13 +2088,19 @@ def write(spec, rendered, path: Path) -> None:
     built = report.build()
     title = layout.get("title") or spec.path.stem
     about = "".join(f"<p>{html.escape(part.strip())}</p>" for part in layout.get("about", "").split("\n\n") if part.strip())
+    sections = dict(spec._references())
     reference = (
-        f"{report.reference_name} ({html.escape(spec.data['reference']['plugin'])}), hosted by pedalboard"
-        if report.reference_name
+        ", ".join(f"{html.escape(name)} ({html.escape(sections[name]['plugin'])})" for name in report.reference_names)
+        + ", hosted by pedalboard"
+        if report.reference_names
         else "none: ours is measured against its own drawing"
     )
+    agreed, built["consensus"] = ("", [])
+    if built.get("measures") and report.reference_names:
+        agreed, built["consensus"] = consensus.section(built["measures"], report.reference_names)
+    consensus_html = f"<h2>The consensus</h2>{agreed}" if agreed else ""
     meta = (
-        f"Spec <code>{html.escape(spec.path.name)}</code> · reference: {reference} · "
+        f"Spec <code>{html.escape(spec.path.name)}</code> · {'references' if len(report.reference_names) > 1 else 'reference'}: {reference} · "
         f"{spec.rate} Hz · made {datetime.date.today().isoformat()}"
     )
     page = f"""<!doctype html>
@@ -1603,7 +2118,7 @@ def write(spec, rendered, path: Path) -> None:
 <h2>The test</h2>
 {about}
 <p>{html.escape(describe_input(spec.input(rendered[0].case), spec.data.get("notes")))} Only the
-outputs are compared: nothing here looks inside either side.</p>
+outputs are compared: nothing here looks inside any side.</p>
 <details><summary>Settings every case shares, and what each case changes</summary>
 {settings_table(spec)}
 {cases_table(spec)}
@@ -1613,6 +2128,7 @@ outputs are compared: nothing here looks inside either side.</p>
 <p>{html.escape(report.reading)}</p>
 <h2>What differs</h2>
 {bullets(built["summary"])}
+{consensus_html}
 <h2>Plots</h2>
 {"".join(built["figures"])}
 <h2>Numbers</h2>
@@ -1624,3 +2140,4 @@ outputs are compared: nothing here looks inside either side.</p>
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(page)
+    return built

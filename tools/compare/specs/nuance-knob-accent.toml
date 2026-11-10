@@ -1,0 +1,215 @@
+# Decision 117's `acid-accent` against both references, Arturia's Acid V and AudioRealism's
+# ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-knob-accent.toml --report out/nuance-knob-accent.html
+
+rate = 48000
+duration = 1.35
+
+[[notes]]
+time = 0.05
+length = 0.0625
+note = 36
+velocity = 99
+accent = false
+
+[[notes]]
+time = 0.3
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.425
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.55
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[[notes]]
+time = 0.675
+length = 0.0625
+note = 36
+velocity = 112
+accent = true
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0x40
+acid.resonance = 0x80
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.drive = 0x00
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.25
+resonance = 0.5
+envelope_mod = 0.5
+decay = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.25
+resonance = 0.5
+envmod = 0.5
+decay = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Accent knob against Acid V's and ABL3's, accents in a row"
+knob = "acid.accent"
+reference_knob = { "Acid V" = "accent", ABL3 = "accent" }
+measure = "accents"
+about = """
+Our Acid's Accent and Acid V's, each turned from bottom to top in sixteen even steps, with the
+cutoff at a quarter and the other knobs at noon. Each step plays a plain C-2, a sixteenth's
+rest, then four accents in a row, a sixteenth apart at 120 BPM. On a 303 an accent shortens the
+filter envelope and adds a sweep from a capacitor that drains more slowly than accents come, so
+accents in a row build up and accents apart don't.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so
+a plain note is played at 99 and an accent at 0x70.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "accent-00"
+ours = { acid.accent = 0x00 }
+references = { "Acid V" = { accent = 0 }, ABL3 = { accent = 0.0 } }
+
+[[cases]]
+name = "accent-10"
+ours = { acid.accent = 0x10 }
+references = { "Acid V" = { accent = 0.0625 }, ABL3 = { accent = 0.06 } }
+
+[[cases]]
+name = "accent-20"
+ours = { acid.accent = 0x20 }
+references = { "Acid V" = { accent = 0.125 }, ABL3 = { accent = 0.12 } }
+
+[[cases]]
+name = "accent-30"
+ours = { acid.accent = 0x30 }
+references = { "Acid V" = { accent = 0.1875 }, ABL3 = { accent = 0.19 } }
+
+[[cases]]
+name = "accent-40"
+ours = { acid.accent = 0x40 }
+references = { "Acid V" = { accent = 0.25 }, ABL3 = { accent = 0.25 } }
+
+[[cases]]
+name = "accent-50"
+ours = { acid.accent = 0x50 }
+references = { "Acid V" = { accent = 0.3125 }, ABL3 = { accent = 0.31 } }
+
+[[cases]]
+name = "accent-60"
+ours = { acid.accent = 0x60 }
+references = { "Acid V" = { accent = 0.375 }, ABL3 = { accent = 0.38 } }
+
+[[cases]]
+name = "accent-70"
+ours = { acid.accent = 0x70 }
+references = { "Acid V" = { accent = 0.4375 }, ABL3 = { accent = 0.44 } }
+
+[[cases]]
+name = "accent-80"
+ours = { acid.accent = 0x80 }
+references = { "Acid V" = { accent = 0.5 }, ABL3 = { accent = 0.5 } }
+
+[[cases]]
+name = "accent-8F"
+ours = { acid.accent = 0x8F }
+references = { "Acid V" = { accent = 0.5625 }, ABL3 = { accent = 0.56 } }
+
+[[cases]]
+name = "accent-9F"
+ours = { acid.accent = 0x9F }
+references = { "Acid V" = { accent = 0.625 }, ABL3 = { accent = 0.62 } }
+
+[[cases]]
+name = "accent-AF"
+ours = { acid.accent = 0xAF }
+references = { "Acid V" = { accent = 0.6875 }, ABL3 = { accent = 0.69 } }
+
+[[cases]]
+name = "accent-BF"
+ours = { acid.accent = 0xBF }
+references = { "Acid V" = { accent = 0.75 }, ABL3 = { accent = 0.75 } }
+
+[[cases]]
+name = "accent-CF"
+ours = { acid.accent = 0xCF }
+references = { "Acid V" = { accent = 0.8125 }, ABL3 = { accent = 0.81 } }
+
+[[cases]]
+name = "accent-DF"
+ours = { acid.accent = 0xDF }
+references = { "Acid V" = { accent = 0.875 }, ABL3 = { accent = 0.88 } }
+
+[[cases]]
+name = "accent-EF"
+ours = { acid.accent = 0xEF }
+references = { "Acid V" = { accent = 0.9375 }, ABL3 = { accent = 0.94 } }
+
+[[cases]]
+name = "accent-FF"
+ours = { acid.accent = 0xFF }
+references = { "Acid V" = { accent = 1 }, ABL3 = { accent = 1.0 } }

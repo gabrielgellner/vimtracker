@@ -1,0 +1,187 @@
+# Decision 117's `acid-resonance` against both references, Arturia's Acid V and AudioRealism's
+# ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-knob-resonance.toml --report out/nuance-knob-resonance.html
+
+rate = 48000
+duration = 2.5
+
+[[notes]]
+time = 0.05
+length = 2.4
+note = 36
+velocity = 99
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.cutoff = 0xFF
+acid.envmod = 0x00
+acid.decay = 0x00
+acid.accent = 0x80
+acid.drive = 0x00
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 1.0
+envelope_mod = 0.0
+decay = 0.0
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 1.0
+envmod = 0.0
+decay = 0.0
+accent = 0.5
+
+[report]
+kind = "knob"
+title = "Acid's Resonance knob against Acid V's and ABL3's"
+knob = "acid.resonance"
+reference_knob = { "Acid V" = "resonance", ABL3 = "resonance" }
+measure = "filter"
+window = [1, 2]
+about = """
+Our Acid's Resonance and Acid V's, each turned from bottom to top in sixteen even steps, with
+the cutoff at the top and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a
+C-2 and reads the filter's shape from its harmonics a second in: where it peaks, how far the
+peak stands over the bass, and how much bass the resonance thins against the knob's bottom. A
+303's resonance thins its bass as it rises, and its peak climbs with the knob.
+
+Acid V opens with whatever preset it last had, so each case starts from its factory Default
+preset with its sequencer switched off. It plays MIDI 36 an octave under ours, so its oscillator
+is raised 12 semitones to play the same pitch. Its distortion and sub oscillator are off, as our
+Acid has neither, and so is its hiss. It accents a note from velocity 100 and ours from 0x70, so
+a plain note is played at 99 and an accent at 0x70.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "res-00"
+ours = { acid.resonance = 0x00 }
+references = { "Acid V" = { resonance = 0 }, ABL3 = { resonance = 0.0 } }
+
+[[cases]]
+name = "res-10"
+ours = { acid.resonance = 0x10 }
+references = { "Acid V" = { resonance = 0.0625 }, ABL3 = { resonance = 0.06 } }
+
+[[cases]]
+name = "res-20"
+ours = { acid.resonance = 0x20 }
+references = { "Acid V" = { resonance = 0.125 }, ABL3 = { resonance = 0.12 } }
+
+[[cases]]
+name = "res-30"
+ours = { acid.resonance = 0x30 }
+references = { "Acid V" = { resonance = 0.1875 }, ABL3 = { resonance = 0.19 } }
+
+[[cases]]
+name = "res-40"
+ours = { acid.resonance = 0x40 }
+references = { "Acid V" = { resonance = 0.25 }, ABL3 = { resonance = 0.25 } }
+
+[[cases]]
+name = "res-50"
+ours = { acid.resonance = 0x50 }
+references = { "Acid V" = { resonance = 0.3125 }, ABL3 = { resonance = 0.31 } }
+
+[[cases]]
+name = "res-60"
+ours = { acid.resonance = 0x60 }
+references = { "Acid V" = { resonance = 0.375 }, ABL3 = { resonance = 0.38 } }
+
+[[cases]]
+name = "res-70"
+ours = { acid.resonance = 0x70 }
+references = { "Acid V" = { resonance = 0.4375 }, ABL3 = { resonance = 0.44 } }
+
+[[cases]]
+name = "res-80"
+ours = { acid.resonance = 0x80 }
+references = { "Acid V" = { resonance = 0.5 }, ABL3 = { resonance = 0.5 } }
+
+[[cases]]
+name = "res-8F"
+ours = { acid.resonance = 0x8F }
+references = { "Acid V" = { resonance = 0.5625 }, ABL3 = { resonance = 0.56 } }
+
+[[cases]]
+name = "res-9F"
+ours = { acid.resonance = 0x9F }
+references = { "Acid V" = { resonance = 0.625 }, ABL3 = { resonance = 0.62 } }
+
+[[cases]]
+name = "res-AF"
+ours = { acid.resonance = 0xAF }
+references = { "Acid V" = { resonance = 0.6875 }, ABL3 = { resonance = 0.69 } }
+
+[[cases]]
+name = "res-BF"
+ours = { acid.resonance = 0xBF }
+references = { "Acid V" = { resonance = 0.75 }, ABL3 = { resonance = 0.75 } }
+
+[[cases]]
+name = "res-CF"
+ours = { acid.resonance = 0xCF }
+references = { "Acid V" = { resonance = 0.8125 }, ABL3 = { resonance = 0.81 } }
+
+[[cases]]
+name = "res-DF"
+ours = { acid.resonance = 0xDF }
+references = { "Acid V" = { resonance = 0.875 }, ABL3 = { resonance = 0.88 } }
+
+[[cases]]
+name = "res-EF"
+ours = { acid.resonance = 0xEF }
+references = { "Acid V" = { resonance = 0.9375 }, ABL3 = { resonance = 0.94 } }
+
+[[cases]]
+name = "res-FF"
+ours = { acid.resonance = 0xFF }
+references = { "Acid V" = { resonance = 1 }, ABL3 = { resonance = 1.0 } }

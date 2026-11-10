@@ -1,0 +1,149 @@
+# Legato against retriggered notes, two notes from 60 ms apart to overlapping, against
+# Arturia's Acid V and AudioRealism's ABL3, for the nuance suite (#347). Written by
+# nuance_specs.py.
+#
+#   uv run run.py specs/nuance-legato.toml --report out/nuance-legato.html
+
+rate = 48000
+duration = 0.8
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0x80
+acid.resonance = 0x40
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.5
+resonance = 0.25
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.5
+resonance = 0.25
+envmod = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "transition"
+title = "Legato against retriggered notes, against Acid V and ABL3"
+columns = 3
+about = """
+Two notes, a C-2 and then a D-2 starting at 0.3 s, with the first ending 60, 20, 5 and \
+1 ms before the second, just as it starts, or overlapping it by 1 and 20 ms, and last \
+held into it with its slide on. On a 303, and in a MIDI-played one, notes that overlap \
+slide and keep the envelopes going, and notes that don't are played afresh: the gate \
+closes and opens, so the level dips and the filter's envelope starts again. Where that \
+changes over, and how deep the dip is at each gap, is what this measures. Knobs as in \
+the slides.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "gap-60"
+notes = [
+  { time = 0.05, length = 0.19, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "gap-20"
+notes = [
+  { time = 0.05, length = 0.23, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "gap-5"
+notes = [
+  { time = 0.05, length = 0.245, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "gap-1"
+notes = [
+  { time = 0.05, length = 0.249, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "gap-0"
+notes = [
+  { time = 0.05, length = 0.25, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "overlap-1"
+notes = [
+  { time = 0.05, length = 0.251, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "overlap-20"
+notes = [
+  { time = 0.05, length = 0.27, note = 36 },
+  { time = 0.3, length = 0.3, note = 38 },
+]
+
+[[cases]]
+name = "slide"
+notes = [
+  { time = 0.05, length = 0.25, note = 36, slide = true },
+  { time = 0.3, length = 0.3, note = 38 },
+]

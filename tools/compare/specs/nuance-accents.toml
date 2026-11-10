@@ -1,0 +1,209 @@
+# Accents in a row, `AAAA`, `A.A.` and `AA..`, at Res 0, 50% and 90%, against Arturia's Acid V
+# and AudioRealism's ABL3, for the nuance suite (#347). Written by nuance_specs.py.
+#
+#   uv run run.py specs/nuance-accents.toml --report out/nuance-accents.html
+
+rate = 48000
+duration = 1.7000000000000002
+
+[ours]
+machine = "acid"
+
+[ours.settings]
+acid.wave = "Saw"
+acid.drive = 0x00
+acid.cutoff = 0x40
+acid.envmod = 0x80
+acid.decay = 0x80
+acid.accent = 0x80
+
+[[references]]
+name = "Acid V"
+plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
+buffer_size = 512
+accent_from = 100
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
+
+[references.parameters]
+master_volume_db = 0.0
+osc_pitch_st = 12.0
+osc_waveform = 0.0
+distortion_dry_wet = 0.0
+sub_osc_volume_db = -70.0
+noise_db = -100.0
+cutoff = 0.25
+envelope_mod = 0.5
+decay = 0.5
+accent = 0.5
+
+[[references]]
+name = "ABL3"
+plugin = "/Library/Audio/Plug-Ins/VST3/ABL3x.vst3"
+buffer_size = 512
+channels = 1
+accent_from = 101
+preroll = 1.0
+wake_note = 60
+state = { MidiMode = 1, VCAClicks = 0, OutputClipping = 0 }
+
+[references.parameters]
+waveform = "303 Saw"
+volume = 0.75
+highpass = 0.0
+drive = 0.0
+distort = 0.0
+reso_trim = 0.5
+gate_trim = 0.5
+vcf_trim = 0.5
+bass_boost = 0.5
+treble_boost = 0.5
+detune = 0.5
+pregain = 0.0
+vco_base = 0.5
+noise_level = 0.0
+vco_shift = 0.0
+cutoff = 0.25
+envmod = 0.5
+decay = 0.5
+accent = 0.5
+
+[report]
+kind = "notes"
+title = "Accents in a row and apart, against Acid V and ABL3"
+columns = 3
+step = 0.125
+about = """
+A plain C-2, then a pattern of accents twice through, a sixteenth a step at 120 BPM: \
+`AAAA`, four accents in a row; `A.A.`, an accent every other step with a rest between; \
+and `AA..`, two accents and two rests. Each pattern plays at Res 0, 50% and 90%, with \
+Cutoff a quarter up and Env Mod, Decay and Accent at noon. A 303's accents build on each \
+other when they're close, its accent sweep's capacitor charging from one to the next, so \
+`AAAA` should brighten over its steps, and `A.A.` less.
+
+Every case renders on three sides: our Acid, Arturia's Acid V on its Default preset with its \
+sequencer off, and AudioRealism's ABL3 set up as a stock 303, in its Note mode. Where Acid V \
+and ABL3 agree, that's the target; where they disagree, both are shown. Acid V accents a note \
+from velocity 100, ABL3 from 101 and ours from 0x70, so a plain note plays at 99 and an \
+accent at 0x70 on every side.
+"""
+
+[[cases]]
+name = "AAAA-res00"
+ours = { acid.resonance = 0x00 }
+references = { "Acid V" = { resonance = 0.0 }, ABL3 = { resonance = 0.0 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.675, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.175, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "AAAA-res80"
+ours = { acid.resonance = 0x80 }
+references = { "Acid V" = { resonance = 0.5 }, ABL3 = { resonance = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.675, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.175, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "AAAA-resE6"
+ours = { acid.resonance = 0xE6 }
+references = { "Acid V" = { resonance = 0.9 }, ABL3 = { resonance = 0.9 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.675, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.175, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "A.A.-res00"
+ours = { acid.resonance = 0x00 }
+references = { "Acid V" = { resonance = 0.0 }, ABL3 = { resonance = 0.0 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "A.A.-res80"
+ours = { acid.resonance = 0x80 }
+references = { "Acid V" = { resonance = 0.5 }, ABL3 = { resonance = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "A.A.-resE6"
+ours = { acid.resonance = 0xE6 }
+references = { "Acid V" = { resonance = 0.9 }, ABL3 = { resonance = 0.9 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.55, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 1.05, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "AA..-res00"
+ours = { acid.resonance = 0x00 }
+references = { "Acid V" = { resonance = 0.0 }, ABL3 = { resonance = 0.0 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "AA..-res80"
+ours = { acid.resonance = 0x80 }
+references = { "Acid V" = { resonance = 0.5 }, ABL3 = { resonance = 0.5 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
+
+[[cases]]
+name = "AA..-resE6"
+ours = { acid.resonance = 0xE6 }
+references = { "Acid V" = { resonance = 0.9 }, ABL3 = { resonance = 0.9 } }
+notes = [
+  { time = 0.05, length = 0.0625, note = 36, velocity = 99, accent = false },
+  { time = 0.3, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.425, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.8, length = 0.0625, note = 36, velocity = 112, accent = true },
+  { time = 0.925, length = 0.0625, note = 36, velocity = 112, accent = true },
+]
