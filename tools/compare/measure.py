@@ -507,3 +507,70 @@ def pitch_track(samples: np.ndarray, rate: int, start: float, end: float, low: f
         shift = min(max(0.5 * (y0 - y2) / bend, -1.0), 1.0) if bend > 0 else 0.0
         found.append(rate / (lag + shift))
     return np.array(times), np.array(found)
+
+
+def resonance_track(samples: np.ndarray, rate: int, start: float, end: float, fundamental: float,
+                    hop: float = 0.002, periods: int = 2, lowest_db: float = 1.0) -> dict:
+    """A held note's resonant peak over time, from pitch-synchronous short-time spectra: every
+    `hop` seconds from `start` to `end`, `periods` cycles of the note through a Hann window, a
+    length that puts each harmonic on its neighbours' zeros, so none leaks into the next. Each
+    harmonic up to 16 kHz is read at its own frequency and taken times its number, so a sawtooth's
+    are level and what's left is the filter's shape.
+
+    A frame's peak is the loudest of those harmonics above the fundamental, its place and height
+    read between harmonics by a parabola through it and its neighbours in dB. As a peak sweeps
+    across the harmonics, its height still wavers by about a dB, more where it's sharp, as a
+    harmonic falls on it and then either side of it. It counts only when it stands
+    `lowest_db` over the fundamental and isn't the highest harmonic read, so a resonance at or
+    under the fundamental gives none. Gives arrays over the frames: `times`, their centres in
+    seconds; `Hz`, the peak's frequency; `over fundamental`, its height over the fundamental in
+    dB; `over passband`, its height over the mean power of the harmonics an octave and more under
+    it, or over the fundamental when there are none; `skirt`, the level an octave over the peak,
+    read between harmonics, under the peak, which says how the filter falls past its resonance;
+    and `level`, the frame's RMS in dBFS. Each but the level is NaN where there's no peak, and the
+    skirt where an octave over the peak is past the harmonics read."""
+    signal = mono(samples)
+    size = int(round(periods * rate / fundamental))
+    window = np.hanning(size)
+    count = int(min(16_000.0, rate * 0.45) // fundamental)
+    numbers = np.arange(1, count + 1)
+    turns = np.exp(-2j * np.pi * np.outer(numbers * fundamental / rate, np.arange(size))) * window
+    scale = 2.0 / window.sum()
+    step = max(1, int(round(hop * rate)))
+    first = max(0, int(round(start * rate)))
+    last = min(signal.size - size, int(round(end * rate)) - size)
+    starts = np.arange(first, last + 1, step)
+    if starts.size == 0:
+        empty = np.array([])
+        return {"times": empty, "Hz": empty, "over fundamental": empty, "over passband": empty, "skirt": empty, "level": empty}
+    frames = np.lib.stride_tricks.sliding_window_view(signal, size)[starts]
+    amplitude = np.abs(frames @ turns.T) * scale * numbers
+    flattened = 20.0 * np.log10(np.maximum(amplitude, 1e-12))
+    levels = 10.0 * np.log10(np.maximum(np.mean(frames**2, axis=1), 10.0 ** (FLOOR_DB / 10.0)))
+    hertz = np.full(starts.size, np.nan)
+    over_fundamental = np.full(starts.size, np.nan)
+    over_passband = np.full(starts.size, np.nan)
+    skirt = np.full(starts.size, np.nan)
+    for index, row in enumerate(flattened):
+        top = 1 + int(np.argmax(row[1:]))
+        if top >= count - 1 or row[top] - row[0] < lowest_db:
+            continue
+        y0, y1, y2 = row[top - 1 : top + 2]
+        bend = y0 - 2.0 * y1 + y2
+        shift = min(max(0.5 * (y0 - y2) / bend, -0.5), 0.5) if bend < 0 else 0.0
+        hertz[index] = (top + 1 + shift) * fundamental
+        crest = y1 - 0.25 * (y0 - y2) * shift
+        over_fundamental[index] = crest - row[0]
+        under = row[: max(1, (top + 1) // 2)]
+        over_passband[index] = crest - 10.0 * np.log10(np.mean(10.0 ** (under / 10.0)))
+        octave = 2.0 * (top + 1 + shift)
+        if octave <= count:
+            skirt[index] = float(np.interp(octave, numbers, row)) - crest
+    return {
+        "times": (starts + size / 2) / rate,
+        "Hz": hertz,
+        "over fundamental": over_fundamental,
+        "over passband": over_passband,
+        "skirt": skirt,
+        "level": levels,
+    }

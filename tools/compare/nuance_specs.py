@@ -13,6 +13,9 @@ The specs are written into `specs/`, and kept there, so this is only run again t
 - `nuance-legato`: two notes from 60 ms apart to overlapping, and slid, against each other.
 - `nuance-gate`: one note held from a sixty-fourth to a quarter note.
 - `nuance-extremes`: every knob at its bottom or top, with every other's, 32 cases.
+- `nuance-chirp`: one note at high Res over the knobs that shape its sweep, 64 cases, for the
+  resonant peak over time (#348, #349).
+- `nuance-chirp-riff`: the Blade riff's Acid line, from `confusion-pump-panel`, the same way.
 
 ABL3 is set up as a stock 303 (README, "The plugins"): its hardware mods' trims at their stock
 50%, no drive, distortion or extra high-pass, its noise and flutter off, and in its Note mode,
@@ -390,6 +393,95 @@ def extremes_spec() -> None:
     )
 
 
+# Each side's tuning, in cents, as a held note's harmonics read with no sweep: ours and Acid V
+# play MIDI 36 at 65.41 Hz, ABL3 at 65.55.
+CHIRP_TUNING = {ABL3: 3.8}
+CHIRP_ABOUT = (
+    "The chirp: with Res high and Env Mod up, the filter's resonant peak sweeps down as the \\\n"
+    "envelope falls, the 303's squelch. Each note's peak is tracked over time from \\\n"
+    "pitch-synchronous spectra, two cycles of the note at a time, every 2 ms: where it is, and \\\n"
+    "how far it stands over the fundamental and over the harmonics an octave and more under it."
+)
+
+
+def chirp_spec() -> None:
+    """One note at high resonance, over the knobs that shape its sweep."""
+    body = header(0.75, *knobs(0.5, 0.75, 0.5, 0.5, 0.5))
+    body += report(
+        {"kind": "chirp", "title": "The resonant chirp at high Res, against Acid V and ABL3", "columns": 8, "tuning": CHIRP_TUNING},
+        CHIRP_ABOUT + "\n\nOne plain or accented C-2 from rest in each case, held for 0.45 s: Res at \\\n"
+        "75, 85, 95 and 100%, Env Mod at 50 and 100%, Cutoff low, 20%, and mid, 50%, and Decay \\\n"
+        "short, 20%, and long, 80%, with Accent at noon. A case's name gives each: `R95-E100-Clow-\\\n"
+        "Dlong-accent` has Res at 95%, Env Mod full, Cutoff low and Decay long, accented.\n\n"
+        + ABOUT_REFERENCES,
+    )
+    for resonance in (0.75, 0.85, 0.95, 1.0):
+        for envmod in (0.5, 1.0):
+            for cutoff, cutoff_name in ((0.2, "low"), (0.5, "mid")):
+                for decay, decay_name in ((0.2, "short"), (0.8, "long")):
+                    for accent in (False, True):
+                        ours, acid_v, abl3 = knobs(cutoff, resonance, envmod, decay, 0.5)
+                        name = (
+                            f"R{round(resonance * 100)}-E{round(envmod * 100)}-C{cutoff_name}"
+                            f"-D{decay_name}-{'accent' if accent else 'plain'}"
+                        )
+                        body += case(name, ours, acid_v, abl3, [note(0.05, 0.45, 36, accent=accent)])
+    write(
+        "nuance-chirp",
+        "The resonant chirp at high Res, against Arturia's Acid V and AudioRealism's ABL3, for #348\n"
+        "and #349. Written by nuance_specs.py.",
+        body,
+    )
+
+
+# The Blade riff, as `confusion-pump-panel` plays it: its Acid track's two phrases, each row its
+# note, whether it's accented (`7F`, or plain `64`), its gate and its pulses.
+RIFF_BPM = 136.0
+RIFF_KNOBS = {"cutoff": 64, "resonance": 208, "envmod": 200, "decay": 104, "accent": 200}
+RIFF_ROWS = [
+    ("G#3", True, "SGL", 2), ("G#3", True, "SGL", 1), ("G#3", True, "HLD", 3), ("E-1", False, "HLD", 4),
+    ("G-1", False, "SGL", 3), ("G-2", False, "SGL", 1), ("A-2", False, "SGL", 2),
+    ("A-1", True, "HLD", 3), ("G-1", True, "HLD", 1), ("F-1", True, "HLD", 1), ("D#1", False, "SGL", 1),
+    ("G-2", False, "SGL", 4), ("A-2", True, "SGL", 2), ("A-2", True, "SGL", 4),
+]
+NOTE_NAMES = ["C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"]
+
+
+def midi_of(name: str) -> int:
+    """A note's MIDI number by the program's name for it, where C-4 is 60."""
+    return 12 * (int(name[2]) + 1) + NOTE_NAMES.index(name[:2])
+
+
+def riff_spec() -> None:
+    """The Blade riff's notes, as the song plays them, on every side."""
+    step = 60.0 / RIFF_BPM / 4.0
+    shares = {k: v / 255.0 for k, v in RIFF_KNOBS.items()}
+    ours, acid_v, abl3 = knobs(shares["cutoff"], shares["resonance"], shares["envmod"], shares["decay"], shares["accent"])
+    notes, time = [], 0.05
+    for name, accent, gate, pulses in RIFF_ROWS:
+        # A `SGL` closes halfway through its last pulse, at the Acid's 50% gate; a `HLD` ties on
+        # into the next row's note, which the harness plays as a slide.
+        held = gate == "HLD"
+        length = pulses * step if held else (pulses - 0.5) * step
+        notes.append(note(time, length, midi_of(name), accent=accent, slide=held))
+        time += pulses * step
+    body = header(round(time + 0.4, 3), ours, acid_v, abl3)
+    body += report(
+        {"kind": "chirp", "title": "The Blade riff's chirp, against Acid V and ABL3", "columns": 1, "tuning": CHIRP_TUNING},
+        CHIRP_ABOUT + "\n\nThe Acid line of `confusion-pump-panel`, the Blade riff, once through its \\\n"
+        "two phrases at 136 BPM with its knobs: Cutoff `40`, Res `D0`, Env Mod `C8`, Decay `68` \\\n"
+        "and Accent `C8`. A `SGL` row is held to halfway through its last step, the Acid's 50% \\\n"
+        "gate, and a `HLD` row slides into the next.\n\n" + ABOUT_REFERENCES,
+    )
+    body += case("blade", notes=notes)
+    write(
+        "nuance-chirp-riff",
+        "The Blade riff's notes, from confusion-pump-panel, against Arturia's Acid V and AudioRealism's\n"
+        "ABL3, for the chirp (#348, #349). Written by nuance_specs.py.",
+        body,
+    )
+
+
 def main() -> None:
     knob_specs()
     accents_spec()
@@ -397,6 +489,8 @@ def main() -> None:
     legato_spec()
     gate_spec()
     extremes_spec()
+    chirp_spec()
+    riff_spec()
 
 
 if __name__ == "__main__":
