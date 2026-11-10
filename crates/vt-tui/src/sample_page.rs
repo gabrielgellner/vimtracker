@@ -1,12 +1,14 @@
 //! The sample page, `Space 0`: the sample the cursor's track plays, as a big waveform to move over
-//! with Vim's motions. A sample is a buffer and a cell column is a character, so `h` and `l` move a
-//! column at the zoom shown, `0` and `$` go to the slice's ends, and `zi` and `zo` zoom on the
-//! cursor. It only shows the bank entry for now: editing its points comes with #276.
+//! with Vim's motions. A sample is a buffer and a cell column is a character, but the cursor is a
+//! line placed to the pixel, so `h` and `l` move a pixel at the zoom shown, speeding up to a column
+//! as they're held, `0` and `$` go to the slice's ends, and `zi` and `zo` zoom on the cursor. It
+//! only shows the bank entry for now: editing its points comes with #276.
 //!
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use vt_model::analysis::{Analysis, Pyramid, SILENCE_DB};
 use vt_model::bank::{BankEntry, ContentHash, Points};
@@ -21,6 +23,18 @@ use crate::views::sample::WaveOnScreen;
 /// How many columns the waveform has until the page is first drawn: the author's screen, 163
 /// characters across, less a column either side.
 pub const DEFAULT_COLUMNS: usize = 161;
+
+/// How soon after a step a press of the same key still counts as the terminal repeating it, as
+/// kitty on macOS has sent a held key's repeats as presses.
+pub const REPEAT_PRESS: Duration = Duration::from_millis(60);
+
+/// How long a held `h` or `l` can go between repeats and keep its speed. A longer gap starts it
+/// again from a pixel.
+pub const REPEAT_GAP: Duration = Duration::from_millis(250);
+
+/// How long a held `h` or `l` takes to build from a pixel a repeat to a column, counted from its
+/// first repeat.
+pub const SPEED_UP: Duration = Duration::from_millis(500);
 
 /// A key of the sample page's own, beside the motions it shares with the other views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +82,24 @@ pub struct SamplePage {
     pub cursor_line: bool,
     /// Where the waveform was last drawn on screen, if it was.
     pub on_screen: Option<WaveOnScreen>,
+    /// A character's width in pixels, as the waveform and the cursor's line are drawn for, so `h`
+    /// and `l` can move the line a pixel. None until the pictures are drawn, as in a render, where
+    /// they move a column.
+    pub cell_width: Option<usize>,
+    /// The `h` or `l` being held, if one is.
+    held_step: Option<HeldStep>,
+}
+
+/// A run of `h` or `l` as it's held, which speeds up from a pixel a repeat to a column, as an
+/// encoder's steps grow the faster it's turned on the Polyend Tracker and the Deluge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HeldStep {
+    /// Whether it's `l` rather than `h`.
+    later: bool,
+    /// When it last stepped.
+    last: Instant,
+    /// When its first repeat came, from which it speeds up.
+    repeating_since: Option<Instant>,
 }
 
 impl Default for SamplePage {
@@ -80,6 +112,8 @@ impl Default for SamplePage {
             columns: DEFAULT_COLUMNS,
             cursor_line: true,
             on_screen: None,
+            cell_width: None,
+            held_step: None,
         }
     }
 }
@@ -260,6 +294,80 @@ impl SamplePage {
         self.column = self.column_of(self.cursor).saturating_sub(half);
     }
 
+    /// Move the cursor for `h` or `l`: by a pixel at the zoom shown, or `times` pixels with a count,
+    /// and as a key is held, by more each repeat, up to a column. Closer than a frame a pixel, a
+    /// pixel is a frame. As its column's background, or with no pictures drawn, the cursor can only
+    /// show columns, so it moves a column.
+    fn step(
+        &mut self,
+        later: bool,
+        count: Option<usize>,
+        repeating: bool,
+        now: Instant,
+        length: u64,
+    ) {
+        let times = count.unwrap_or(1).max(1) as u64;
+        let held = self.held_step.take();
+        let zoom = self.zoom.max(1);
+        let cell = match self.cell_width {
+            Some(cell) if self.cursor_line && cell > 1 => cell as u64,
+            _ => {
+                let by = times.saturating_mul(zoom);
+                let to = if later {
+                    self.cursor.saturating_add(by)
+                } else {
+                    self.cursor.saturating_sub(by)
+                };
+                self.go(to, length);
+                return;
+            }
+        };
+        let pixels = if count.is_some() {
+            1
+        } else {
+            // A repeat, or a press of the same key straight after, carries the run on.
+            let carried = held.filter(|held| {
+                let since = now.saturating_duration_since(held.last);
+                held.later == later && since <= REPEAT_GAP && (repeating || since <= REPEAT_PRESS)
+            });
+            let repeating_since = carried.map(|held| held.repeating_since.unwrap_or(now));
+            self.held_step = Some(HeldStep {
+                later,
+                last: now,
+                repeating_since,
+            });
+            repeating_since.map_or(1, |since| {
+                held_pixels(cell, now.saturating_duration_since(since))
+            })
+        };
+        let to = if zoom < cell {
+            // Several pixels to a frame: a frame a step, or a count of them, or as many as a
+            // held key's pixels cover, so it still builds to a column.
+            let frames =
+                (u128::from(pixels) * u128::from(zoom) + u128::from(cell / 2)) / u128::from(cell);
+            let by = times.saturating_mul((frames as u64).max(1));
+            if later {
+                self.cursor.saturating_add(by)
+            } else {
+                self.cursor.saturating_sub(by)
+            }
+        } else {
+            // To the first frame of the pixel that many along, so each step moves the line by
+            // exactly that many pixels, wherever in its pixel the cursor was.
+            let pixel = u128::from(self.cursor) * u128::from(cell) / u128::from(zoom);
+            let by = u128::from(times.saturating_mul(pixels));
+            let pixel = if later {
+                pixel.saturating_add(by)
+            } else {
+                pixel.saturating_sub(by)
+            };
+            (pixel * u128::from(zoom))
+                .div_ceil(u128::from(cell))
+                .min(u128::from(u64::MAX)) as u64
+        };
+        self.go(to, length);
+    }
+
     /// Put the cursor on a frame, inside the sample, and the view on it.
     fn go(&mut self, frame: u64, length: u64) {
         self.cursor = frame.min(length.saturating_sub(1));
@@ -365,12 +473,19 @@ impl App {
         let times = count.unwrap_or(1).max(1) as u64;
         let length = shown.length();
         let beat = beat_frames(shown.rate(), self.song().millibpm);
+        let (repeating, now) = (self.repeating, self.now);
         let page = &mut self.sample_page;
         let zoom = page.zoom;
         let columns = page.columns as u64;
+        // Any other key ends a held `h` or `l`'s run.
+        if !matches!(cmd, Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right)) {
+            page.held_step = None;
+        }
         match cmd {
-            Cmd::Move(Motion::Left) => page.go(page.cursor.saturating_sub(times * zoom), length),
-            Cmd::Move(Motion::Right) => page.go(page.cursor.saturating_add(times * zoom), length),
+            Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
+                let later = cmd == Cmd::Move(Motion::Right);
+                page.step(later, count, repeating, now, length);
+            }
             Cmd::Move(Motion::RowStart) => page.go(shown.slice_at(page.cursor).1.start, length),
             Cmd::Move(Motion::RowEnd) => {
                 let slice = shown.slice_at(page.cursor).1;
@@ -565,6 +680,14 @@ fn zoom_by(page: &mut SamplePage, times: u64, closer: bool, length: u64) {
         };
     }
     page.zoom_to(zoom, length);
+}
+
+/// How many pixels a held `h` or `l` moves each repeat, this long after its first repeat: one at
+/// first, building on a square's curve to a character's width, a column, after [`SPEED_UP`], so it
+/// creeps for fine placing and then crosses the sample.
+pub fn held_pixels(cell: u64, held: Duration) -> u64 {
+    let along = (held.as_secs_f64() / SPEED_UP.as_secs_f64()).min(1.0);
+    1 + (cell.saturating_sub(1) as f64 * along * along).round() as u64
 }
 
 /// How many of a file's frames a beat lasts at a tempo, in thousandths of a beat a minute.

@@ -318,6 +318,9 @@ pub struct App {
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
     pub(crate) repeats_ignored: bool,
+    /// Whether the key being acted on is the terminal repeating one that's held, for the sample
+    /// page's `h` and `l`, which speed up as they're held.
+    pub(crate) repeating: bool,
     /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
     /// they play a chord.
     held_notes: Vec<HeldNote>,
@@ -493,6 +496,7 @@ impl App {
             realigning_tracks: [false; MAX_TRACKS],
             key_down: None,
             repeats_ignored: false,
+            repeating: false,
             held_notes: Vec::new(),
             held_flags: Vec::new(),
             last_written: None,
@@ -905,7 +909,9 @@ impl App {
         {
             return;
         }
+        self.repeating = true;
         self.press(key, now);
+        self.repeating = false;
     }
 
     /// A key let go: its held note ends, leaving any others held, and so does what it started

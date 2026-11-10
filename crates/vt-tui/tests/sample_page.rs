@@ -3,7 +3,7 @@
 //! the author's screen and in a smaller window.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -158,7 +158,7 @@ fn w_and_b_show_the_next_and_previous_tracks_sample_afresh() {
 }
 
 #[test]
-fn h_and_l_move_a_column_at_the_zoom_shown_with_counts() {
+fn with_no_pictures_drawn_h_and_l_move_a_column_at_the_zoom_shown_with_counts() {
     let (mut app, _realtime) = on_page();
     keys(&mut app, "l");
     assert_eq!(cursor(&app), 1000 + FIT);
@@ -181,6 +181,216 @@ fn h_and_l_move_a_column_at_the_zoom_shown_with_counts() {
     // Never past either end.
     keys(&mut app, "g g h");
     assert_eq!(cursor(&app), 0);
+}
+
+/// A character's width in pixels, as on the author's screen.
+const CELL: u64 = 15;
+
+/// The pixel of the waveform, from the file's start, that the cursor's line is in.
+fn pixel(app: &App) -> u64 {
+    cursor(app) * CELL / app.sample_page.zoom
+}
+
+/// Tap a key at a moment: pressed, and let go straight after.
+fn tap(app: &mut App, name: &str, at: Instant) {
+    let key = parse_sequence(name).unwrap()[0];
+    app.key(key, at);
+    app.key_released(key, at);
+}
+
+/// The app on the sample page, with its pictures drawn for the author's characters.
+fn on_page_in_pixels() -> (App, Realtime) {
+    let (mut app, realtime) = on_page();
+    app.sample_page.cell_width = Some(CELL as usize);
+    (app, realtime)
+}
+
+#[test]
+fn h_and_l_move_the_line_a_pixel_at_every_zoom() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    let mut at = Instant::now();
+    for zoom in [FIT, 512, 64, 16] {
+        while app.sample_page.zoom > zoom {
+            keys(&mut app, "z i");
+        }
+        assert_eq!(app.sample_page.zoom, zoom);
+        keys(&mut app, "M");
+        // Taps apart, so none is taken for a repeat.
+        for key in ["l", "h"] {
+            for _ in 0..20 {
+                let (was, frame) = (pixel(&app), cursor(&app));
+                at += Duration::from_millis(200);
+                tap(&mut app, key, at);
+                let wanted = if key == "l" { was + 1 } else { was - 1 };
+                assert_eq!(pixel(&app), wanted, "{key} at {zoom} frames a column");
+                // A pixel's frames, give or take the one the cursor was part way through.
+                let moved = cursor(&app).abs_diff(frame);
+                assert!(moved <= zoom.div_ceil(CELL), "{moved} at {zoom}");
+            }
+        }
+    }
+}
+
+#[test]
+fn closer_than_a_frame_a_pixel_h_and_l_move_a_frame() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    keys(&mut app, "M 7 z i");
+    assert_eq!(app.sample_page.zoom, 8);
+    let mut at = Instant::now();
+    let here = cursor(&app);
+    for _ in 0..5 {
+        at += Duration::from_millis(200);
+        tap(&mut app, "l", at);
+    }
+    assert_eq!(cursor(&app), here + 5);
+    at += Duration::from_millis(200);
+    tap(&mut app, "h", at);
+    assert_eq!(cursor(&app), here + 4);
+    keys(&mut app, "3 z i");
+    assert_eq!(app.sample_page.zoom, 1);
+    let here = cursor(&app);
+    at += Duration::from_millis(200);
+    tap(&mut app, "h", at);
+    assert_eq!(cursor(&app), here - 1);
+}
+
+#[test]
+fn a_count_moves_that_many_pixels_or_close_in_frames() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    let was = pixel(&app);
+    keys(&mut app, "3 l");
+    assert_eq!(pixel(&app), was + 3);
+    keys(&mut app, "1 0 h");
+    assert_eq!(pixel(&app), was - 7);
+    keys(&mut app, "7 z i");
+    assert_eq!(app.sample_page.zoom, 8);
+    let here = cursor(&app);
+    keys(&mut app, "4 l");
+    assert_eq!(cursor(&app), here + 4);
+}
+
+/// Hold a key: pressed at a moment, then repeated after a delay, at a rate, as kitty does. Says
+/// how many pixels each press and repeat moved the line.
+fn hold(app: &mut App, name: &str, at: Instant, repeats: usize, every: Duration) -> Vec<u64> {
+    let key = parse_sequence(name).unwrap()[0];
+    let mut moved = Vec::new();
+    let mut was = pixel(app);
+    app.key(key, at);
+    moved.push(pixel(app).abs_diff(was));
+    // macOS's shortest delay before repeating.
+    let mut at = at + Duration::from_millis(225);
+    for _ in 0..repeats {
+        was = pixel(app);
+        app.key_repeated(key, at);
+        moved.push(pixel(app).abs_diff(was));
+        at += every;
+    }
+    app.key_released(key, at);
+    moved
+}
+
+#[test]
+fn a_held_l_builds_from_a_pixel_a_repeat_to_a_column() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    keys(&mut app, "z i z i g g");
+    // kitty's own repeat, every 30 ms, for 0.9 s.
+    let moved = hold(&mut app, "l", Instant::now(), 30, Duration::from_millis(30));
+    assert_eq!(&moved[..3], &[1, 1, 1], "{moved:?}");
+    assert!(moved.windows(2).all(|pair| pair[0] <= pair[1]), "{moved:?}");
+    // A column a repeat from half a second after the first repeat.
+    let full = moved.iter().position(|&pixels| pixels == CELL).unwrap();
+    assert!((15..=19).contains(&full), "{full} {moved:?}");
+    assert!(moved[full..].iter().all(|&pixels| pixels == CELL));
+    // Building smoothly, never by more than a few pixels a repeat.
+    assert!(
+        moved.windows(2).all(|pair| pair[1] - pair[0] <= 3),
+        "{moved:?}"
+    );
+    // Back the other way it starts again from a pixel.
+    let moved = hold(&mut app, "h", Instant::now(), 2, Duration::from_millis(30));
+    assert_eq!(moved, [1, 1, 1]);
+}
+
+#[test]
+fn presses_straight_after_each_other_count_as_a_held_key() {
+    // kitty on macOS has sent a held key's repeats as presses, which may come with releases.
+    let (mut app, _realtime) = on_page_in_pixels();
+    keys(&mut app, "z i z i g g");
+    let mut at = Instant::now();
+    let mut moved = Vec::new();
+    for _ in 0..40 {
+        let was = pixel(&app);
+        tap(&mut app, "l", at);
+        moved.push(pixel(&app) - was);
+        at += Duration::from_millis(30);
+    }
+    assert_eq!(moved[..2], [1, 1]);
+    assert_eq!(*moved.last().unwrap(), CELL, "{moved:?}");
+}
+
+#[test]
+fn another_key_a_gap_or_a_count_starts_a_held_key_again_from_a_pixel() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    keys(&mut app, "z i z i g g");
+    let start = Instant::now();
+    let every = Duration::from_millis(30);
+    let moved = hold(&mut app, "l", start, 30, every);
+    assert_eq!(*moved.last().unwrap(), CELL);
+    let l = parse_sequence("l").unwrap()[0];
+    let mut at = start + Duration::from_secs(2);
+    // Held for a while, and up to speed.
+    app.key(l, at);
+    for _ in 0..30 {
+        at += every;
+        app.key_repeated(l, at);
+    }
+    let was = pixel(&app);
+    at += every;
+    app.key_repeated(l, at);
+    assert_eq!(pixel(&app) - was, CELL);
+    // Another key between repeats.
+    keys(&mut app, "z z");
+    let was = pixel(&app);
+    at += every;
+    app.key_repeated(l, at);
+    assert_eq!(pixel(&app) - was, 1, "after another key");
+    // A gap in the repeats.
+    for _ in 0..30 {
+        at += every;
+        app.key_repeated(l, at);
+    }
+    let was = pixel(&app);
+    at += Duration::from_millis(400);
+    app.key_repeated(l, at);
+    assert_eq!(pixel(&app) - was, 1, "after a gap");
+    // A count steps that many pixels, however long the key's held, and the run starts again.
+    for _ in 0..30 {
+        at += every;
+        app.key_repeated(l, at);
+    }
+    keys(&mut app, "2");
+    let was = pixel(&app);
+    at += every;
+    app.key_repeated(l, at);
+    assert_eq!(pixel(&app) - was, 2, "with a count");
+    let was = pixel(&app);
+    at += every;
+    app.key_repeated(l, at);
+    assert_eq!(pixel(&app) - was, 1, "after a count");
+}
+
+#[test]
+fn as_its_column_the_cursor_moves_a_column() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    keys(&mut app, "z c z i M");
+    let zoom = app.sample_page.zoom;
+    let here = cursor(&app);
+    keys(&mut app, "l");
+    assert_eq!(cursor(&app), here + zoom);
+    keys(&mut app, "3 h");
+    assert_eq!(cursor(&app), here - 2 * zoom);
+    let moved = hold(&mut app, "l", Instant::now(), 30, Duration::from_millis(30));
+    assert!(moved.iter().all(|&pixels| pixels == CELL), "{moved:?}");
 }
 
 #[test]
@@ -419,6 +629,56 @@ fn the_pictures_are_sent_for_the_zoom_and_view_but_never_for_the_cursor_alone() 
     keys(&mut app, "C-e");
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert_eq!(sent.matches("a=T").count(), 1);
+}
+
+/// The pixel, counted from the waveform's left, where the cursor's line was last placed, in the
+/// 3-pixel characters `draw` gives.
+fn placed(sent: &str) -> Option<i64> {
+    let place = sent.rfind("\x1b_Ga=p,")?;
+    let jump = sent[..place].rfind("\x1b[")?;
+    let column: i64 = sent[jump..place]
+        .split(';')
+        .nth(1)?
+        .trim_end_matches('H')
+        .parse()
+        .ok()?;
+    let offset = sent[place..]
+        .split("X=")
+        .nth(1)?
+        .split(',')
+        .next()?
+        .parse::<i64>()
+        .ok()?;
+    // The waveform's first column is the screen's second, which is 2 counted from 1.
+    Some((column - 2) * 3 + offset)
+}
+
+#[test]
+fn each_l_places_the_line_a_pixel_along_wherever_in_its_pixel_the_cursor_is() {
+    let (mut app, _realtime) = on_page();
+    let mut graphics = Graphics::new();
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert_eq!(app.sample_page.cell_width, Some(3));
+    let mut was = placed(&sent).expect("the line is placed");
+    assert_eq!(was, 5, "frame 1000 at 597 a column of 3 pixels");
+    let mut at = Instant::now();
+    for (key, by) in [("l", 1), ("h", -1)] {
+        for _ in 0..12 {
+            at += Duration::from_millis(200);
+            tap(&mut app, key, at);
+            let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+            let now = placed(&sent).expect("the line moved");
+            assert_eq!(now, was + by, "{key}");
+            was = now;
+        }
+    }
+    // Part way into a pixel, the line is in that pixel.
+    keys(&mut app, "^");
+    let page = &app.sample_page;
+    assert_ne!((page.cursor * 3) % page.zoom, 0, "between pixels");
+    let wanted = ((page.cursor - page.first_frame()) * 3 / page.zoom) as i64;
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert_eq!(placed(&sent), Some(wanted));
 }
 
 #[test]

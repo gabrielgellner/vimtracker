@@ -520,11 +520,12 @@ const SONG: &[(&str, Cmd, &str)] = &[
     (";", Cmd::Audition, "Hear the start of this section"),
 ];
 
-/// Keys for the sample page. A sample is a buffer and a cell column a character, so `h` and `l` move
-/// a column at the zoom shown, and the slice is the line.
+/// Keys for the sample page. A sample is a buffer and a cell column a character, and the slice is
+/// the line, but the cursor is a line placed to the pixel, so `h` and `l` move a pixel at the zoom
+/// shown, speeding up as they're held.
 const SAMPLE: &[(&str, Cmd, &str)] = &[
-    ("h", Cmd::Move(Motion::Left), "A column earlier"),
-    ("l", Cmd::Move(Motion::Right), "A column later"),
+    ("h", Cmd::Move(Motion::Left), "A pixel earlier, faster held"),
+    ("l", Cmd::Move(Motion::Right), "A pixel later, faster held"),
     ("0", Cmd::Move(Motion::RowStart), "Start of the slice"),
     ("$", Cmd::Move(Motion::RowEnd), "End of the slice"),
     (
