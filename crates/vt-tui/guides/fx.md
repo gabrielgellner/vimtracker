@@ -115,7 +115,8 @@ the note starts, after the groove and the row's nudge, and so does `CHA`, which
 goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
-gets louder. Use `:seed 7` to choose which results `CHA` gives.
+gets louder, except on an `Acid`, whose hits all play at the note's own level.
+Use `:seed 7` to choose which results `CHA` gives.
 
 ## Conditions
 

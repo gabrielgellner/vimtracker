@@ -39,8 +39,13 @@ notes around `C-2`, with `Resonance` well up.
   velocity. A note at `70` or above is accented: louder, with more filter envelope and a
   shorter decay. Below `70`, every note sounds the same, whether it's at `10` or `6F`, and
   every accent sounds the same from `70` to `7F`. Notes are written at `64`, so one step up
-  the velocity ladder, to `74`, accents a note, and so does `7F`. Accents close together
-  build up, swelling higher each time, the more so with `Resonance` up.
+  the velocity ladder, to `74`, accents a note, and so does `7F`. `Accent` sets how much:
+  hardly any louder at `00`, about 4.5 dB at noon and about 10 dB at `FF`, brightening
+  mostly over its top half. Accents a sixteenth apart build up, swelling higher each time,
+  the more so with `Resonance` up, while accents with a rest between them hardly do.
+- **Retriggers.** `RET` repeats a note at its own level, plain or accented, as a 303 has
+  no other: its fade and swell, the first digit, do nothing here, and every hit of an
+  accented note is accented.
 - **Slide** is the `HLD` gate, on the row that slides away, as a 303's slide is on the
   step it leaves. A note held into the next row's glides to its pitch, with neither
   envelope starting again. `Slide` sets how long it takes, unless the track's `Glide`
