@@ -1,6 +1,6 @@
 # Song flow and session workflow
 
-**Status:** built on 2026-11-06, with its choices approved by the author after a review. How it feels in play is still to be judged. See "Choices to judge in play". **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and Decisions 10 to 13.
+**Status:** built on 2026-11-06, with its choices approved by the author after a review. How it feels in play is still to be judged. See "Choices to judge in play". **Milestones:** M8d, then M8c, between M8b and M9 in [the main design](vimtracker.md). **Builds on:** that document's M8 and M8b designs and [Decisions 10 to 13](decisions.md).
 
 **Replaces:** the main design's carry rule and default, launches waiting for a chain's end, its limits on playheads, `gd` on `--` opening a chain, and captured rows having no set length. Where the two documents differ, this one wins. Tests that pin the old behaviour change with it, such as `tests/sections.rs:116`, which pins carry as the default.
 
@@ -56,7 +56,7 @@ Each track owns its chains and phrases. A chain is a list of phrases, each with 
 ## Non-goals
 
 *   A linear timeline, or clips placed freely over rows.
-*   Time signatures in the model. See Decision 12 in the main design.
+*   Time signatures in the model. See [Decision 12](decisions.md) in the main design.
 *   Jumps between rows and chance on rows for now. See "Later".
 *   Actions that move one track through its chains on its own.
 *   Per-track speed and grooves, which stay in After the milestones.

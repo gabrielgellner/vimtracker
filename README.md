@@ -8,7 +8,8 @@ Dirtywave M8, Elektron sequencers and Jeskola Buzz, but it is a separate program
 not affiliated with any of them.
 
 It is early, and the design and implementation plan are in
-[docs/designs/vimtracker.md](docs/designs/vimtracker.md).
+[docs/designs/vimtracker.md](docs/designs/vimtracker.md), with its numbered decisions in
+[docs/designs/decisions.md](docs/designs/decisions.md).
 
 The manual is at <https://gabrielgellner.github.io/vimtracker/>, and its source is in
 [docs/manual](docs/manual/src/SUMMARY.md). With [mdBook](https://rust-lang.github.io/mdBook/)
