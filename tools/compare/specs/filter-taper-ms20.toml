@@ -1,0 +1,1043 @@
+# The MS20 types' Res knob against Cytomic's The Drop's MS1, the MS-20's first Korg 35, with its hard clipper, at two poles and
+# no drive, over 33 steps at three cutoffs (#333). Written by taper_specs.py.
+#
+#   uv run run.py specs/filter-taper-ms20.toml --report out/filter-taper-ms20.html
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/The Drop.vst3"
+buffer_size = 512
+
+[reference.parameters]
+lp_drive = 0.0
+hp_drive = 0.0
+lp_hd = true
+hp_hd = true
+lp_safe_res = false
+hp_safe_res = false
+lp_resmax = 125.0
+hp_resmax = 125.0
+lp_keytrack = false
+hp_keytrack = false
+mod_active = false
+glide = "0.000 mS"
+mix = 100.0
+pad = 0.0
+
+[report]
+kind = "taper"
+title = "MS20 types' Res against The Drop's MS1"
+figure = ["filter", "mode"]
+column = "cut"
+knob = "res"
+reference_knob = ["hp_res", "lp_res"]
+width = []
+about = """
+Our track filter's MS20 LP and MS20 HP, Korg 35s, against the MS1 circuit of Cytomic's The \
+Drop, the MS-20's first Korg 35, with its hard clipper, at two poles and no drive.
+
+Res is turned in 33 steps, 00 to FF, at three cutoffs, about 200 Hz, 988 Hz and 5 kHz, with \
+the same quiet sine sweep as the other filter reports. The Drop's resonance runs from 0 to \
+125% and self-oscillates above 100, so our knob's first 85%, 00 to D9, is set against its 0 to \
+100%, and the last 15% against 100 to 125%.
+"""
+
+[[cases]]
+name = "ms20lp-55-res00"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0 }
+
+[[cases]]
+name = "ms20lp-55-res08"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 3.69 }
+
+[[cases]]
+name = "ms20lp-55-res10"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 7.38 }
+
+[[cases]]
+name = "ms20lp-55-res18"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 11.07 }
+
+[[cases]]
+name = "ms20lp-55-res20"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 14.76 }
+
+[[cases]]
+name = "ms20lp-55-res28"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 18.45 }
+
+[[cases]]
+name = "ms20lp-55-res30"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 22.15 }
+
+[[cases]]
+name = "ms20lp-55-res38"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 25.84 }
+
+[[cases]]
+name = "ms20lp-55-res40"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 29.53 }
+
+[[cases]]
+name = "ms20lp-55-res48"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 33.22 }
+
+[[cases]]
+name = "ms20lp-55-res50"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 36.91 }
+
+[[cases]]
+name = "ms20lp-55-res58"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 40.6 }
+
+[[cases]]
+name = "ms20lp-55-res60"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 44.29 }
+
+[[cases]]
+name = "ms20lp-55-res68"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 47.98 }
+
+[[cases]]
+name = "ms20lp-55-res70"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 51.67 }
+
+[[cases]]
+name = "ms20lp-55-res78"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 55.36 }
+
+[[cases]]
+name = "ms20lp-55-res80"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 59.05 }
+
+[[cases]]
+name = "ms20lp-55-res88"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 62.75 }
+
+[[cases]]
+name = "ms20lp-55-res90"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 66.44 }
+
+[[cases]]
+name = "ms20lp-55-res98"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 70.13 }
+
+[[cases]]
+name = "ms20lp-55-resA0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 73.82 }
+
+[[cases]]
+name = "ms20lp-55-resA8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 77.51 }
+
+[[cases]]
+name = "ms20lp-55-resB0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 81.2 }
+
+[[cases]]
+name = "ms20lp-55-resB8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 84.89 }
+
+[[cases]]
+name = "ms20lp-55-resC0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 88.58 }
+
+[[cases]]
+name = "ms20lp-55-resC8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 92.27 }
+
+[[cases]]
+name = "ms20lp-55-resD0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.96 }
+
+[[cases]]
+name = "ms20lp-55-resD8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 99.65 }
+
+[[cases]]
+name = "ms20lp-55-resE0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 104.74 }
+
+[[cases]]
+name = "ms20lp-55-resE8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 109.97 }
+
+[[cases]]
+name = "ms20lp-55-resF0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 115.2 }
+
+[[cases]]
+name = "ms20lp-55-resF8"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 120.42 }
+
+[[cases]]
+name = "ms20lp-55-resFF"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 125.0 }
+
+[[cases]]
+name = "ms20lp-90-res00"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 0.0 }
+
+[[cases]]
+name = "ms20lp-90-res08"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 3.69 }
+
+[[cases]]
+name = "ms20lp-90-res10"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 7.38 }
+
+[[cases]]
+name = "ms20lp-90-res18"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 11.07 }
+
+[[cases]]
+name = "ms20lp-90-res20"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 14.76 }
+
+[[cases]]
+name = "ms20lp-90-res28"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 18.45 }
+
+[[cases]]
+name = "ms20lp-90-res30"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 22.15 }
+
+[[cases]]
+name = "ms20lp-90-res38"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 25.84 }
+
+[[cases]]
+name = "ms20lp-90-res40"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 29.53 }
+
+[[cases]]
+name = "ms20lp-90-res48"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 33.22 }
+
+[[cases]]
+name = "ms20lp-90-res50"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 36.91 }
+
+[[cases]]
+name = "ms20lp-90-res58"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 40.6 }
+
+[[cases]]
+name = "ms20lp-90-res60"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 44.29 }
+
+[[cases]]
+name = "ms20lp-90-res68"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 47.98 }
+
+[[cases]]
+name = "ms20lp-90-res70"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 51.67 }
+
+[[cases]]
+name = "ms20lp-90-res78"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 55.36 }
+
+[[cases]]
+name = "ms20lp-90-res80"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 59.05 }
+
+[[cases]]
+name = "ms20lp-90-res88"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 62.75 }
+
+[[cases]]
+name = "ms20lp-90-res90"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 66.44 }
+
+[[cases]]
+name = "ms20lp-90-res98"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 70.13 }
+
+[[cases]]
+name = "ms20lp-90-resA0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 73.82 }
+
+[[cases]]
+name = "ms20lp-90-resA8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 77.51 }
+
+[[cases]]
+name = "ms20lp-90-resB0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 81.2 }
+
+[[cases]]
+name = "ms20lp-90-resB8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 84.89 }
+
+[[cases]]
+name = "ms20lp-90-resC0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 88.58 }
+
+[[cases]]
+name = "ms20lp-90-resC8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 92.27 }
+
+[[cases]]
+name = "ms20lp-90-resD0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 95.96 }
+
+[[cases]]
+name = "ms20lp-90-resD8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 99.65 }
+
+[[cases]]
+name = "ms20lp-90-resE0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 104.74 }
+
+[[cases]]
+name = "ms20lp-90-resE8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 109.97 }
+
+[[cases]]
+name = "ms20lp-90-resF0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 115.2 }
+
+[[cases]]
+name = "ms20lp-90-resF8"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 120.42 }
+
+[[cases]]
+name = "ms20lp-90-resFF"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.89, lp_res = 125.0 }
+
+[[cases]]
+name = "ms20lp-CC-res00"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 0.0 }
+
+[[cases]]
+name = "ms20lp-CC-res08"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 3.69 }
+
+[[cases]]
+name = "ms20lp-CC-res10"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 7.38 }
+
+[[cases]]
+name = "ms20lp-CC-res18"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 11.07 }
+
+[[cases]]
+name = "ms20lp-CC-res20"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 14.76 }
+
+[[cases]]
+name = "ms20lp-CC-res28"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 18.45 }
+
+[[cases]]
+name = "ms20lp-CC-res30"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 22.15 }
+
+[[cases]]
+name = "ms20lp-CC-res38"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 25.84 }
+
+[[cases]]
+name = "ms20lp-CC-res40"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 29.53 }
+
+[[cases]]
+name = "ms20lp-CC-res48"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 33.22 }
+
+[[cases]]
+name = "ms20lp-CC-res50"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 36.91 }
+
+[[cases]]
+name = "ms20lp-CC-res58"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 40.6 }
+
+[[cases]]
+name = "ms20lp-CC-res60"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 44.29 }
+
+[[cases]]
+name = "ms20lp-CC-res68"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 47.98 }
+
+[[cases]]
+name = "ms20lp-CC-res70"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 51.67 }
+
+[[cases]]
+name = "ms20lp-CC-res78"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 55.36 }
+
+[[cases]]
+name = "ms20lp-CC-res80"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 59.05 }
+
+[[cases]]
+name = "ms20lp-CC-res88"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 62.75 }
+
+[[cases]]
+name = "ms20lp-CC-res90"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 66.44 }
+
+[[cases]]
+name = "ms20lp-CC-res98"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 70.13 }
+
+[[cases]]
+name = "ms20lp-CC-resA0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 73.82 }
+
+[[cases]]
+name = "ms20lp-CC-resA8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 77.51 }
+
+[[cases]]
+name = "ms20lp-CC-resB0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 81.2 }
+
+[[cases]]
+name = "ms20lp-CC-resB8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 84.89 }
+
+[[cases]]
+name = "ms20lp-CC-resC0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 88.58 }
+
+[[cases]]
+name = "ms20lp-CC-resC8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 92.27 }
+
+[[cases]]
+name = "ms20lp-CC-resD0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 95.96 }
+
+[[cases]]
+name = "ms20lp-CC-resD8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 99.65 }
+
+[[cases]]
+name = "ms20lp-CC-resE0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 104.74 }
+
+[[cases]]
+name = "ms20lp-CC-resE8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 109.97 }
+
+[[cases]]
+name = "ms20lp-CC-resF0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 115.2 }
+
+[[cases]]
+name = "ms20lp-CC-resF8"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 120.42 }
+
+[[cases]]
+name = "ms20lp-CC-resFF"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.77, lp_res = 125.0 }
+
+[[cases]]
+name = "ms20hp-55-res00"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }
+
+[[cases]]
+name = "ms20hp-55-res08"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 3.69 }
+
+[[cases]]
+name = "ms20hp-55-res10"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 7.38 }
+
+[[cases]]
+name = "ms20hp-55-res18"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 11.07 }
+
+[[cases]]
+name = "ms20hp-55-res20"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 14.76 }
+
+[[cases]]
+name = "ms20hp-55-res28"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 18.45 }
+
+[[cases]]
+name = "ms20hp-55-res30"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 22.15 }
+
+[[cases]]
+name = "ms20hp-55-res38"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 25.84 }
+
+[[cases]]
+name = "ms20hp-55-res40"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 29.53 }
+
+[[cases]]
+name = "ms20hp-55-res48"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 33.22 }
+
+[[cases]]
+name = "ms20hp-55-res50"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 36.91 }
+
+[[cases]]
+name = "ms20hp-55-res58"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 40.6 }
+
+[[cases]]
+name = "ms20hp-55-res60"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 44.29 }
+
+[[cases]]
+name = "ms20hp-55-res68"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 47.98 }
+
+[[cases]]
+name = "ms20hp-55-res70"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 51.67 }
+
+[[cases]]
+name = "ms20hp-55-res78"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 55.36 }
+
+[[cases]]
+name = "ms20hp-55-res80"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 59.05 }
+
+[[cases]]
+name = "ms20hp-55-res88"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 62.75 }
+
+[[cases]]
+name = "ms20hp-55-res90"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 66.44 }
+
+[[cases]]
+name = "ms20hp-55-res98"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 70.13 }
+
+[[cases]]
+name = "ms20hp-55-resA0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 73.82 }
+
+[[cases]]
+name = "ms20hp-55-resA8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 77.51 }
+
+[[cases]]
+name = "ms20hp-55-resB0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 81.2 }
+
+[[cases]]
+name = "ms20hp-55-resB8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 84.89 }
+
+[[cases]]
+name = "ms20hp-55-resC0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 88.58 }
+
+[[cases]]
+name = "ms20hp-55-resC8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 92.27 }
+
+[[cases]]
+name = "ms20hp-55-resD0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.96 }
+
+[[cases]]
+name = "ms20hp-55-resD8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 99.65 }
+
+[[cases]]
+name = "ms20hp-55-resE0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 104.74 }
+
+[[cases]]
+name = "ms20hp-55-resE8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 109.97 }
+
+[[cases]]
+name = "ms20hp-55-resF0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 115.2 }
+
+[[cases]]
+name = "ms20hp-55-resF8"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 120.42 }
+
+[[cases]]
+name = "ms20hp-55-resFF"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 125.0 }
+
+[[cases]]
+name = "ms20hp-90-res00"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 0.0 }
+
+[[cases]]
+name = "ms20hp-90-res08"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 3.69 }
+
+[[cases]]
+name = "ms20hp-90-res10"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 7.38 }
+
+[[cases]]
+name = "ms20hp-90-res18"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 11.07 }
+
+[[cases]]
+name = "ms20hp-90-res20"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 14.76 }
+
+[[cases]]
+name = "ms20hp-90-res28"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 18.45 }
+
+[[cases]]
+name = "ms20hp-90-res30"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 22.15 }
+
+[[cases]]
+name = "ms20hp-90-res38"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 25.84 }
+
+[[cases]]
+name = "ms20hp-90-res40"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 29.53 }
+
+[[cases]]
+name = "ms20hp-90-res48"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 33.22 }
+
+[[cases]]
+name = "ms20hp-90-res50"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 36.91 }
+
+[[cases]]
+name = "ms20hp-90-res58"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 40.6 }
+
+[[cases]]
+name = "ms20hp-90-res60"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 44.29 }
+
+[[cases]]
+name = "ms20hp-90-res68"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 47.98 }
+
+[[cases]]
+name = "ms20hp-90-res70"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 51.67 }
+
+[[cases]]
+name = "ms20hp-90-res78"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 55.36 }
+
+[[cases]]
+name = "ms20hp-90-res80"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 59.05 }
+
+[[cases]]
+name = "ms20hp-90-res88"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 62.75 }
+
+[[cases]]
+name = "ms20hp-90-res90"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 66.44 }
+
+[[cases]]
+name = "ms20hp-90-res98"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 70.13 }
+
+[[cases]]
+name = "ms20hp-90-resA0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 73.82 }
+
+[[cases]]
+name = "ms20hp-90-resA8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 77.51 }
+
+[[cases]]
+name = "ms20hp-90-resB0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 81.2 }
+
+[[cases]]
+name = "ms20hp-90-resB8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 84.89 }
+
+[[cases]]
+name = "ms20hp-90-resC0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 88.58 }
+
+[[cases]]
+name = "ms20hp-90-resC8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 92.27 }
+
+[[cases]]
+name = "ms20hp-90-resD0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 95.96 }
+
+[[cases]]
+name = "ms20hp-90-resD8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 99.65 }
+
+[[cases]]
+name = "ms20hp-90-resE0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 104.74 }
+
+[[cases]]
+name = "ms20hp-90-resE8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 109.97 }
+
+[[cases]]
+name = "ms20hp-90-resF0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 115.2 }
+
+[[cases]]
+name = "ms20hp-90-resF8"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 120.42 }
+
+[[cases]]
+name = "ms20hp-90-resFF"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.89, hp_res = 125.0 }
+
+[[cases]]
+name = "ms20hp-CC-res00"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 0.0 }
+
+[[cases]]
+name = "ms20hp-CC-res08"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 3.69 }
+
+[[cases]]
+name = "ms20hp-CC-res10"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 7.38 }
+
+[[cases]]
+name = "ms20hp-CC-res18"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 11.07 }
+
+[[cases]]
+name = "ms20hp-CC-res20"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 14.76 }
+
+[[cases]]
+name = "ms20hp-CC-res28"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 18.45 }
+
+[[cases]]
+name = "ms20hp-CC-res30"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 22.15 }
+
+[[cases]]
+name = "ms20hp-CC-res38"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 25.84 }
+
+[[cases]]
+name = "ms20hp-CC-res40"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 29.53 }
+
+[[cases]]
+name = "ms20hp-CC-res48"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 33.22 }
+
+[[cases]]
+name = "ms20hp-CC-res50"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 36.91 }
+
+[[cases]]
+name = "ms20hp-CC-res58"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 40.6 }
+
+[[cases]]
+name = "ms20hp-CC-res60"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 44.29 }
+
+[[cases]]
+name = "ms20hp-CC-res68"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 47.98 }
+
+[[cases]]
+name = "ms20hp-CC-res70"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 51.67 }
+
+[[cases]]
+name = "ms20hp-CC-res78"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 55.36 }
+
+[[cases]]
+name = "ms20hp-CC-res80"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 59.05 }
+
+[[cases]]
+name = "ms20hp-CC-res88"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 62.75 }
+
+[[cases]]
+name = "ms20hp-CC-res90"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 66.44 }
+
+[[cases]]
+name = "ms20hp-CC-res98"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 70.13 }
+
+[[cases]]
+name = "ms20hp-CC-resA0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 73.82 }
+
+[[cases]]
+name = "ms20hp-CC-resA8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 77.51 }
+
+[[cases]]
+name = "ms20hp-CC-resB0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 81.2 }
+
+[[cases]]
+name = "ms20hp-CC-resB8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 84.89 }
+
+[[cases]]
+name = "ms20hp-CC-resC0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 88.58 }
+
+[[cases]]
+name = "ms20hp-CC-resC8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 92.27 }
+
+[[cases]]
+name = "ms20hp-CC-resD0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 95.96 }
+
+[[cases]]
+name = "ms20hp-CC-resD8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 99.65 }
+
+[[cases]]
+name = "ms20hp-CC-resE0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 104.74 }
+
+[[cases]]
+name = "ms20hp-CC-resE8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 109.97 }
+
+[[cases]]
+name = "ms20hp-CC-resF0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 115.2 }
+
+[[cases]]
+name = "ms20hp-CC-resF8"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 120.42 }
+
+[[cases]]
+name = "ms20hp-CC-resFF"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.77, hp_res = 125.0 }

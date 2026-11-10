@@ -56,6 +56,10 @@ reference plugin.
 | `filter-ours` | every other type and mode | the Sound page's drawing | the same |
 | `filter-ringing` | Ladder at full Res | Filter M12, LP4P | pitch of its self-oscillation, in cents |
 | `filter-ringing-ours` | Diode, MS20 LP and HP, Dirty | none | the same |
+| `filter-taper-svf` | the clean LP, HP, BP and notch at 12 dB, Res in 33 steps | The Drop's OSR | the peak's height over the passband, or a band's width, its place, the bass and where it starts to ring, at 3 cutoffs (#333) |
+| `filter-taper-ladder` | Ladder, LP24, the same | The Drop's PRD, 4 poles | the same |
+| `filter-taper-ms20`, `filter-taper-ms20-ms2` | MS20 LP and HP, the same | The Drop's MS1, and MS2 | the same |
+| `filter-taper-ours` | Diode and Dirty, the same | the Sound page's drawing | the same |
 | `acid-filter` | Acid's diode ladder | Acid V | a held note's harmonics |
 | `acid-cutoff` | Acid's Cutoff, 16 steps | Acid V's | centroid and peak against the knob (#295) |
 | `acid-cutoff-peak` | Acid's Cutoff at Res 90%, 17 steps | Acid V's | where the filter rings, its height and the bass |
@@ -70,6 +74,12 @@ reference plugin.
 | `comp-bus-attack`, `comp-bus-release` | `Bus`'s attacks and set releases | Bus FORCE | attack and release, short and long bursts |
 | `comp-bus-auto` | `Bus`'s Auto release | none | release after bursts from 20 ms to 2 s |
 | `comp-bus-harmonics` | `Bus` at stepped levels, 100 Hz and 1 kHz | Bus FORCE | THD and the 2nd and 3rd harmonics (`distortion`) |
+
+The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
+The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
+100 to 125%, where it self-oscillates. Their `taper` report reads each step's sweep for how far the
+peak stands over the passband three octaves away, and whether the filter is ringing by itself near
+Cut as the sweep ends, two octaves and more past it.
 
 The Acid's filter is inside the voice, where the probe can't feed it a sweep, so `acid-filter`
 reads its shape from a held sawtooth's harmonics on both sides. The track filter's `Diode` type is

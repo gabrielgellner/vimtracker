@@ -369,3 +369,56 @@ def note_marks(samples: np.ndarray, rate: int, starts: list[float], bright=(0.00
             "RMS dBFS": db(float(np.sqrt(np.mean(part.astype(np.float64) ** 2))) if part.size else 0.0),
         })
     return marks
+
+
+def highest(bins: np.ndarray, gains: np.ndarray, around: float, octaves: float = 1.0):
+    """The highest bin within so many octaves of a frequency, as (Hz, dB), wherever it is, so a
+    response with no peak yet gives the top of its slope, and a knob's first steps are read the
+    same way as its last."""
+    inside = np.where((bins >= around * 2.0**-octaves) & (bins <= around * 2.0**octaves))[0]
+    if inside.size == 0:
+        return float("nan"), float("nan")
+    at = inside[np.argmax(gains[inside])]
+    return float(bins[at]), float(gains[at])
+
+
+def width(bins: np.ndarray, gains: np.ndarray, around: float, dip: bool, by: float = 3.0) -> float:
+    """How wide a band-pass's peak is, in octaves, where it's `by` dB under its top, or a notch's
+    dip, where it's `by` dB under 0 dB, around the highest or lowest bin within an octave of a
+    frequency."""
+    inside = np.where((bins >= around / 2.0) & (bins <= around * 2.0))[0]
+    if inside.size == 0:
+        return float("nan")
+    at = inside[np.argmin(gains[inside])] if dip else inside[np.argmax(gains[inside])]
+    within = gains <= -by if dip else gains >= gains[at] - by
+    if not within[at]:
+        return 0.0
+    low = at
+    while low > 0 and within[low - 1]:
+        low -= 1
+    high = at
+    while high < bins.size - 1 and within[high + 1]:
+        high += 1
+    if low == 0 or high == bins.size - 1:
+        return float("nan")
+    return math.log2(bins[high] / bins[low])
+
+
+def rings_on(samples: np.ndarray, rate: int, until: float, around: float, span: float = 0.1, floor: float = -60.0) -> bool:
+    """Whether a filter is ringing by itself near `around` Hz as a sweep ends at `until` seconds:
+    over the sweep's last `span` seconds, which are at the top of its range, the output within an
+    octave of `around` is louder than `floor` dBFS. The sweep passed there long before, so a
+    resonance that dies away has died away by then. It's read before the sweep ends, as our probe
+    stops the track with its input."""
+    signal = mono(samples)
+    start, end = int((until - span) * rate), int(until * rate)
+    if start < 0 or end > signal.size:
+        return False
+    part = signal[start:end] * np.hanning(end - start)
+    spectrum = np.abs(np.fft.rfft(part)) ** 2
+    bins = np.fft.rfftfreq(end - start, 1.0 / rate)
+    inside = (bins >= around / 2.0) & (bins <= around * 2.0)
+    # The power of a sine of amplitude a comes out as (a N / 4)^2 under a Hann window, and its RMS
+    # is a / sqrt(2).
+    amplitude = 4.0 * np.sqrt(spectrum[inside].sum()) / (end - start)
+    return db(amplitude / math.sqrt(2.0)) > floor
