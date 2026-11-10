@@ -132,7 +132,34 @@ impl App {
         self.started = Some(Momentary::SampleAudition {
             hearing: page.hearings,
         });
+        // It plays through the track, so its mute and the solos silence it as they do the track's
+        // notes. The page shows neither, so it says so rather than playing in silence.
+        if let Some(why) = self.why_silent(track) {
+            self.status = why;
+        }
         true
+    }
+
+    /// Why a track plays what it's given in silence, if it does: it's muted, or another track is
+    /// soloed, as the engine has it.
+    fn why_silent(&self, track: usize) -> Option<String> {
+        let sounds = self.song().sound_tracks().min(self.levels.len());
+        let live = self.levels.get(track)?;
+        if live.mute {
+            return Some(format!(
+                "Track {:02} is muted, so it plays silently. Space m unmutes it",
+                track + 1
+            ));
+        }
+        let soloed = self.levels[..sounds].iter().position(|other| other.solo);
+        match soloed {
+            Some(other) if !live.solo => Some(format!(
+                "Track {:02} is soloed, so Track {:02} plays silently. Space M clears the solos",
+                other + 1,
+                track + 1
+            )),
+            _ => None,
+        }
     }
 
     /// Esc on the sample page: let go of what it's playing.
@@ -142,29 +169,32 @@ impl App {
         }
     }
 
-    /// `i` on the sample page: its keys mode, where two rows of keys play the slices.
-    pub(crate) fn start_pads(&mut self, shown: &Shown) {
+    /// `i` on the sample page: its keys mode, where two rows of keys play the slices. The status
+    /// line says `PADS` while it's on, and what the keys play under it.
+    pub(crate) fn start_pads(&mut self) {
         self.mode = Mode::Keys;
-        self.say_pads(shown);
+        self.status.clear();
     }
 
-    /// What the keys play, on the status line.
-    fn say_pads(&mut self, shown: &Shown) {
+    /// What the keys mode's keys play, and how to leave it, for under the status line while it's
+    /// on. `h`, `j` and `k` are pads here, so it says that `Esc` gives them back.
+    pub fn pads_hint(&self, shown: &Shown) -> String {
         let from = self.sample_page.pads_from;
         let count = shown.slice_count();
         let last = (from + PADS).min(count).saturating_sub(1);
         let rows = PAD_ROWS.map(|row| row.chars().map(String::from).collect::<Vec<_>>().join(" "));
-        self.status = if count <= PADS {
+        if count <= PADS {
             format!(
-                "{} play slices 00 to 07, {} 08 to 0F; Esc leaves",
+                "{} play slices 00 to 07, {} 08 to 0F; Esc leaves, for h j k l to move again",
                 rows[0], rows[1]
             )
         } else {
             format!(
-                "{} {} play slices {from:02X} to {last:02X}; < > the next or last {PADS}, Esc leaves",
+                "{} {} play slices {from:02X} to {last:02X}; < > the next or last {PADS}, Esc \
+                 leaves, for h j k l to move again",
                 rows[0], rows[1]
             )
-        };
+        }
     }
 
     /// A key in the sample page's keys mode. The pads play their slices, `<` and `>` go a page of
@@ -180,6 +210,7 @@ impl App {
                 self.status.clear();
             }
             (KeyCode::Char(c @ ('<' | '>')), Ok(shown)) if plain => {
+                self.status.clear();
                 let from = self.sample_page.pads_from;
                 let last = shown.slice_count().saturating_sub(1) / PADS * PADS;
                 self.sample_page.pads_from = if c == '>' {
@@ -187,7 +218,6 @@ impl App {
                 } else {
                     from.saturating_sub(PADS)
                 };
-                self.say_pads(&shown);
             }
             (KeyCode::Char(c), Ok(shown)) if plain && pad_key(c).is_some() => {
                 self.count = None;

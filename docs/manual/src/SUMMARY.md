@@ -19,5 +19,6 @@
 - [FX commands](guides/fx.md)
 - [The track page, envelopes and LFOs](guides/tracks.md)
 - [Sounds, samples and kits](guides/sounds.md)
+- [The sample editor](guides/sample-editor.md)
 - [The meter](guides/meter.md)
 - [Saving and rendering](guides/saving.md)

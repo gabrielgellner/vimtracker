@@ -375,7 +375,12 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
                 buffer[(MARGIN + *column as u16, y)].set_bg(playhead_column());
             }
             if let Some(column) = cursor {
-                buffer[(MARGIN + column as u16, y)].set_bg(cursor_column());
+                let color = if state.setting.is_some() && app.mode != Mode::Keys {
+                    theme::dimmed(cursor_column())
+                } else {
+                    cursor_column()
+                };
+                buffer[(MARGIN + column as u16, y)].set_bg(color);
             }
         }
         let y = WAVE_TOP + WAVE_ROWS;

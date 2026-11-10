@@ -380,12 +380,10 @@ impl App {
     }
 
     /// A setting chosen from `K` on the waveform: the focus goes to it on the rows.
+    /// The status line says `SETTINGS` while it's there, and how to change it under that.
     pub(crate) fn pick_sample_setting(&mut self, setting: SampleSetting) {
         self.sample_page.setting = Some(setting);
-        self.status = format!(
-            "{}: = - + _ change it, K lists, x puts it back, h l the next, Esc the waveform",
-            setting.name()
-        );
+        self.status.clear();
     }
 
     /// A value chosen from `K` on the rows.
@@ -411,6 +409,14 @@ impl App {
         } else {
             here.saturating_sub(times)
         };
+        // At either end it says so, so `h` and `l` there don't seem to do nothing.
+        if to == here {
+            let end = if later { "last" } else { "first" };
+            self.status = format!(
+                "{} is the {end} setting. Esc goes back to the waveform, where h and l move",
+                settings[here].name()
+            );
+        }
         self.sample_page.setting = Some(settings[to]);
     }
 }

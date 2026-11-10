@@ -26,7 +26,7 @@ use vt_model::sample::SampleData;
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
-use crate::input::mode::View;
+use crate::input::mode::{Mode, View};
 use crate::input::picker::Shown;
 use crate::sample_page::SamplePage;
 use crate::sample_wave::Drawing;
@@ -934,6 +934,8 @@ pub struct Graphics {
     cursor_line: Option<(usize, u32)>,
     /// Where the line is placed, if it's on screen.
     cursor_placed: Option<Placement>,
+    /// Whether the line's image is set back, as it is while the focus is on the settings rows.
+    cursor_dimmed: bool,
     /// The image of the sample page's playhead as a line, and how tall it is in pixels, placed once
     /// for each playhead.
     playhead_line: Option<(usize, u32)>,
@@ -970,6 +972,7 @@ impl Graphics {
             sample_overview: None,
             cursor_line: None,
             cursor_placed: None,
+            cursor_dimmed: false,
             playhead_line: None,
             playheads_placed: [None; PLAYHEADS],
             mark_images: None,
@@ -1436,7 +1439,10 @@ impl Graphics {
             }
             _ => None,
         };
-        if wanted == self.cursor_placed {
+        // With the focus on the settings rows, `h` and `l` go along them, so the line is set back
+        // to show it isn't what moves.
+        let dimmed = page.setting.is_some() && app.mode != Mode::Keys;
+        if wanted == self.cursor_placed && dimmed == self.cursor_dimmed {
             return Ok(());
         }
         let Some(at) = wanted else {
@@ -1447,18 +1453,23 @@ impl Graphics {
             return Ok(());
         };
         let id = match self.cursor_line.take() {
-            Some((drawn, id)) if drawn == height => id,
+            Some((drawn, id)) if drawn == height && dimmed == self.cursor_dimmed => id,
             old => {
                 self.retired.extend(old.map(|(_, id)| id));
                 let id = self.new_id();
-                let mut line =
-                    Picture::new(CURSOR_LINE_PIXELS, height, vec![rgb(theme::ROSEWATER)]);
+                let color = if dimmed {
+                    theme::dimmed(theme::ROSEWATER)
+                } else {
+                    theme::ROSEWATER
+                };
+                let mut line = Picture::new(CURSOR_LINE_PIXELS, height, vec![rgb(color)]);
                 line.pixels.fill(1);
                 store(out, id, &line.png())?;
                 id
             }
         };
         self.cursor_line = Some((height, id));
+        self.cursor_dimmed = dimmed;
         place_at(out, id, 1, at)?;
         self.cursor_placed = Some(at);
         Ok(())

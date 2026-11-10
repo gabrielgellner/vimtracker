@@ -376,9 +376,16 @@ pub fn right_spans(app: &App) -> Vec<Span<'static>> {
 
 /// Draw the status line and the message or command line below it.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+    // The sample page's modes in their own colours: the keys mode's, Visual's, and with the focus
+    // on the settings rows, the cursor's, as the setting it's on is drawn.
+    let badge = match app.sample_mode() {
+        Some("SETTINGS") => Some(theme::ROSEWATER),
+        Some(mode) if mode == Mode::VisualField.label() => Some(theme::MAUVE),
+        _ => None,
+    };
     let mode_style = Style::new()
         .fg(theme::BASE)
-        .bg(match app.mode {
+        .bg(badge.unwrap_or(match app.mode {
             Mode::Normal
             | Mode::OperatorPending
             | Mode::Chain
@@ -394,7 +401,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Jump => theme::TEAL,
             Mode::Replace | Mode::Restore => theme::RED,
             Mode::Keys => theme::YELLOW,
-        })
+        }))
         .add_modifier(Modifier::BOLD);
     let pending = if app.pending().is_empty() {
         String::new()
@@ -457,11 +464,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled(
             format!(
                 " {} ",
-                if app.mode == Mode::Keys {
+                // The sample page's modes keep its keys, but each is named, so `h` is never a
+                // pad or a setting's move without the badge saying so.
+                if let Some(mode) = app.sample_mode() {
+                    mode
+                } else if app.mode == Mode::Keys {
                     Mode::Keys.label()
-                } else if app.view == View::Sample && app.sample_page.anchor.is_some() {
-                    // Selecting frames on the sample page keeps its keys, but is Visual.
-                    Mode::VisualField.label()
                 } else {
                     app.key_scope().label()
                 }
@@ -487,6 +495,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         format!(":{}", app.command_line)
     } else if let Some(jump) = &app.field_jump {
         format!("/{}", jump.query)
+    } else if app.status.is_empty()
+        && let Some(hint) = app.sample_mode_hint()
+    {
+        hint
     } else {
         app.status.clone()
     };

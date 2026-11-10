@@ -2142,3 +2142,185 @@ fn every_point_editing_key_is_listed() {
         );
     }
 }
+
+/// The loudness of this many frames of audio, as the root of their mean square, after taking in
+/// the callback's report.
+fn loudness(realtime: &mut Realtime, app: &mut App, frames: usize) -> f32 {
+    let mut out = vec![0.0; frames * 2];
+    realtime.process(&mut out);
+    app.tick();
+    (out.iter().map(|sample| sample * sample).sum::<f32>() / out.len() as f32).sqrt()
+}
+
+/// A stereo file at 44.1 kHz, a 441 Hz sine at half of full scale for a second, so it's loaded
+/// at the engine's 48 kHz as a file from a library is.
+fn sine_file(path: &std::path::Path) {
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    for at in 0..44_100 {
+        let phase = at as f32 * 441.0 / 44_100.0 * std::f32::consts::TAU;
+        let value = (16_384.0 * phase.sin()) as i16;
+        writer.write_sample(value).unwrap();
+        writer.write_sample(value).unwrap();
+    }
+    writer.finalize().unwrap();
+}
+
+#[test]
+fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
+    let folder = std::env::temp_dir().join(format!("vt-sample-heard-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let file = folder.join("sine.wav");
+    sine_file(&file);
+    let song = Song::new(2);
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, mut realtime) = connect(Engine::new(RATE, version));
+    let mut app = App::new(song, None, samples, handle, RATE);
+    command(&mut app, &format!("sample {}", file.display()));
+    // The page shows it once it's analysed, on a thread of its own.
+    let started = Instant::now();
+    while app.sample_shown().is_err() && started.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(Duration::from_millis(10));
+        app.tick();
+    }
+    keys(&mut app, "Space 0");
+    assert_eq!(app.view, View::Sample);
+    assert!(
+        loudness(&mut realtime, &mut app, 4800) < 1e-6,
+        "silent at first"
+    );
+    for audition in [";", "Space c"] {
+        keys(&mut app, audition);
+        let heard = loudness(&mut realtime, &mut app, 4800);
+        // A sine at half of full scale is about 0.35, less the track's level and the note's.
+        assert!(heard > 0.05, "{audition} is heard: {heard} {}", app.status);
+        let shown = app.sample_shown().unwrap();
+        assert!(
+            !app.sample_playheads(&shown).is_empty(),
+            "{audition}'s playhead"
+        );
+        assert!(app.status.is_empty(), "{audition}: {}", app.status);
+        keys(&mut app, "Esc");
+        loudness(&mut realtime, &mut app, RATE as usize / 2);
+    }
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+#[test]
+fn an_audition_a_mute_or_a_solo_silences_says_so() {
+    let (mut app, mut realtime) = on_page();
+    keys(&mut app, ";");
+    assert!(loudness(&mut realtime, &mut app, 4800) > 0.05);
+    assert!(app.status.is_empty(), "{}", app.status);
+    keys(&mut app, "Esc");
+    // It plays through the track, so the track's mute silences it, and the page says so.
+    keys(&mut app, "Space m");
+    loudness(&mut realtime, &mut app, RATE as usize / 2);
+    keys(&mut app, ";");
+    assert!(loudness(&mut realtime, &mut app, 4800) < 1e-6, "muted");
+    assert_eq!(
+        app.status,
+        "Track 01 is muted, so it plays silently. Space m unmutes it"
+    );
+    // Another track soloed silences it too.
+    keys(&mut app, "Esc Space m");
+    app.cursor.track = 1;
+    keys(&mut app, "Space s");
+    app.cursor.track = 0;
+    loudness(&mut realtime, &mut app, RATE as usize / 2);
+    keys(&mut app, "Space c");
+    assert!(loudness(&mut realtime, &mut app, 4800) < 1e-6, "soloed out");
+    assert_eq!(
+        app.status,
+        "Track 02 is soloed, so Track 01 plays silently. Space M clears the solos"
+    );
+    keys(&mut app, "Esc Space M");
+    loudness(&mut realtime, &mut app, RATE as usize / 2);
+    keys(&mut app, ";");
+    assert!(
+        loudness(&mut realtime, &mut app, 4800) > 0.05,
+        "heard again"
+    );
+    assert!(app.status.is_empty(), "{}", app.status);
+}
+
+/// The status line's badge and the line under it.
+fn status_lines(app: &mut App) -> (String, String) {
+    let mut terminal = Terminal::new(TestBackend::new(163, 42)).unwrap();
+    terminal
+        .draw(|frame| draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    (row(&terminal, 40), row(&terminal, 41))
+}
+
+#[test]
+fn each_mode_of_the_page_names_itself_on_the_badge_and_esc_leaves_it() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    let (badge, _) = status_lines(&mut app);
+    assert!(badge.starts_with(" SAMPLE "), "{badge}");
+    // The keys mode: h, j and k are pads there, so it says so, and that Esc gives them back.
+    keys(&mut app, "i");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" PADS "), "{badge}");
+    assert!(
+        hint.contains("Esc leaves, for h j k l to move again"),
+        "{hint}"
+    );
+    // It stays named after a pad plays.
+    keys(&mut app, "s");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" PADS "), "{badge}");
+    assert!(hint.contains("play slices 00 to 07"), "{hint}");
+    keys(&mut app, "Esc");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" SAMPLE "), "{badge}");
+    assert!(hint.trim().is_empty(), "{hint}");
+    // The settings rows: h and l go along them, so it says so, and h at the first says that Esc
+    // goes back to the waveform.
+    keys(&mut app, "K Enter");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" SETTINGS "), "{badge}");
+    assert!(hint.contains("Esc goes back to the waveform"), "{hint}");
+    let before = cursor(&app);
+    keys(&mut app, "h");
+    assert_eq!(cursor(&app), before, "h goes along the settings");
+    assert!(
+        app.status.contains("is the first setting. Esc goes back"),
+        "{}",
+        app.status
+    );
+    keys(&mut app, "Esc");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" SAMPLE "), "{badge}");
+    assert!(hint.trim().is_empty(), "{hint}");
+    // Visual says how it ends.
+    keys(&mut app, "v");
+    let (badge, hint) = status_lines(&mut app);
+    assert!(badge.starts_with(" VISUAL "), "{badge}");
+    assert!(hint.contains("v or Esc ends it"), "{hint}");
+    keys(&mut app, "Esc");
+    let (badge, _) = status_lines(&mut app);
+    assert!(badge.starts_with(" SAMPLE "), "{badge}");
+}
+
+#[test]
+fn with_the_focus_on_the_settings_the_cursors_line_is_set_back() {
+    let (mut app, _realtime) = on_page();
+    let mut graphics = Graphics::new();
+    draw(&mut app, &mut graphics, 163, 42);
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert!(!sent.contains("a=t,"), "nothing new to send");
+    keys(&mut app, "K Enter");
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert_eq!(sent.matches("a=t,").count(), 1, "a dimmer line");
+    keys(&mut app, "Esc");
+    let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
+    assert_eq!(sent.matches("a=t,").count(), 1, "the line as it was");
+}
