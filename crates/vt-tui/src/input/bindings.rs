@@ -131,6 +131,8 @@ pub enum Cmd {
     WidenGrid,
     /// Turn the scale on or off.
     ToggleScale,
+    /// Collapse the phrase view to a line a row, or lay it out in time again.
+    ToggleTimeline,
     /// Move a value, and a note by a semitone whatever the scale.
     IncreaseChromatic,
     DecreaseChromatic,
@@ -357,6 +359,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ),
     ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
     ("M-s", Cmd::ToggleScale, "Scale on or off"),
+    (
+        "z a",
+        Cmd::ToggleTimeline,
+        "Collapse the timeline to a line a row, or open it again",
+    ),
     ("Space p d", Cmd::Double, "Double this phrase"),
     (
         "Space r",

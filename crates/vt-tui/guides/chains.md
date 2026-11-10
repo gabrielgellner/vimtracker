@@ -17,8 +17,21 @@ from the top lines everything up.
 In the phrase view, the notes beside your track are every track's own phrase,
 in order, each with its own `>`. Your track is among them, with its number
 marked in green. Row `00` is each track's loop start, and a
-column ends where its track ends. Notes on one row don't always sound
-together, so follow the `>` marks to see how tracks line up.
+column ends where its track ends.
+
+The view is laid out in time. A line is one of your track's steps, so a row
+lasting several pulses takes a line for each, the ones after its first dim, and
+each column beside it shows the note its track starts in that line's time. A
+slower track leaves lines blank, and where a faster one starts more than one
+note in a line, the first shows with `⋮` before it. `j`, `k` and counts still
+go by rows.
+
+| Keys | Does |
+|---|---|
+| `z a` | Collapse the view to a line a row, or lay it out in time again |
+
+Collapsed, the columns go by row number, so notes on one row don't always
+sound together: follow the `>` marks to see how tracks line up.
 
 To bring them back together on a schedule, set a reset:
 

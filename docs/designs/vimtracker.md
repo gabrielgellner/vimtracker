@@ -480,7 +480,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the history, the engine's `Handle`, the last `Published`, the sample
 pool, the view and the mode, the cursor, the picker, the sample page and much more: over 80 fields,
-and 23 feature files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
+and 24 feature files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
 `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs` and `sample_page.rs`.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
@@ -523,6 +523,16 @@ built from, so a new page uses them rather than working out its layout again:
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
+**The phrase view's timeline** (`timeline.rs`). The phrase view draws lines, not rows: a row of the
+loop takes a line for each of its pulses, a line being one step of the track's `Speed`, unless
+`z a` has collapsed it to a line a row (`App::rows_collapsed`). `timeline::lines` lays the rows out,
+each line with its row, its pulse and when it starts, and `views/phrase.rs` draws a row's own line,
+its dim continuation lines and the lines past the phrase from that, the beat rules from each line's
+start, and the other tracks' columns from the ticks each line covers (`timeline::starting_in`).
+The cursor, counts, selections and `App::top` stay in rows, so only scrolling counts lines: the
+row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`, `Ctrl-d`, `Ctrl-u` and the
+view's furthest scroll go by.
+
 **Where it's going** (#320, not built yet). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
 chain views among them, with `fn key(&mut self, key, ctx: &mut Ctx) -> Outcome` and
@@ -535,7 +545,7 @@ screenshots unchanged. `SamplePage` is already half there: it keeps its own curs
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
-**Decisions:** 49 to 53, 73 to 75, 100 to 104 and 108, with #320 and #330.
+**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108 and 122, with #320 and #330.
 
 ### Graphics
 

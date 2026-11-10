@@ -15,6 +15,7 @@ use crate::glyphs;
 use crate::loading::Loader;
 use crate::meter::Meter;
 use crate::places::RecentPlaces;
+use crate::timeline;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
 use vt_engine::engine::{PLAYHEADS, Playhead, TrackPlace, Transport};
@@ -346,9 +347,11 @@ pub struct App {
     /// What the press being handled started, for [`App::press`] to tie to its key.
     pub(crate) started: Option<Momentary>,
     pub entry: Entry,
-    /// The first step on screen, and how many fit.
+    /// The first step on screen, and how many lines fit.
     pub top: usize,
     pub view_height: usize,
+    /// The phrase view is collapsed to a line a row, rather than laid out in time (decision 122).
+    pub rows_collapsed: bool,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -523,6 +526,7 @@ impl App {
             entry: Entry::default(),
             top: 0,
             view_height: 16,
+            rows_collapsed: false,
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -1400,6 +1404,7 @@ impl App {
             }
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
+            Cmd::ToggleTimeline => self.toggle_timeline(),
             Cmd::NarrowGrid => self.change_grid(false),
             Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
@@ -1658,48 +1663,62 @@ impl App {
     }
 
     /// The furthest the view can scroll: to the end of what is stored, or with the loop's start at
-    /// the top, so a slide can keep row `00` still on a screen with room to spare.
+    /// the top, so a slide can keep row `00` still on a screen with room to spare. Rows taking
+    /// several lines in the timeline count each of them.
     fn last_top(&self) -> usize {
-        let extent = self.extent();
-        extent
-            .stored
-            .saturating_sub(self.view_height)
-            .max(extent.start)
+        let counts = self.row_line_counts();
+        timeline::row_lines_before(&counts, counts.len(), self.view_height).max(self.extent().start)
     }
 
-    /// Keep the cursor on screen, moving the view rather than the cursor.
+    /// Keep the cursor's row on screen, moving the view rather than the cursor.
     pub fn follow_cursor(&mut self, height: usize) {
         self.view_height = height.max(1);
         let last_top = self.last_top();
+        let counts = self.row_line_counts();
         if self.cursor.step < self.top {
             self.top = self.cursor.step;
-        } else if self.cursor.step >= self.top + self.view_height {
-            self.top = self.cursor.step + 1 - self.view_height;
+        } else {
+            let end = self.cursor.step + 1;
+            self.top = self
+                .top
+                .max(timeline::row_lines_before(&counts, end, self.view_height))
+                .min(self.cursor.step);
         }
         self.top = self.top.min(last_top);
     }
 
     fn view_cursor(&mut self, cmd: Cmd) {
-        let height = self.view_height.min(self.stored_steps().max(1));
-        self.cursor.step = self.top
-            + match cmd {
-                Cmd::ViewTop => 0,
-                Cmd::ViewMiddle => height / 2,
-                _ => height - 1,
-            };
+        let counts = self.row_line_counts();
+        let all = timeline::lines_over(&counts, 0..self.stored_steps().max(1));
+        let height = self.view_height.min(all);
+        // The bottom is the last row whose lines all fit, so the view doesn't move to show it.
+        self.cursor.step = match cmd {
+            Cmd::ViewTop => self.top,
+            Cmd::ViewMiddle => timeline::row_at_line(&counts, self.top, height / 2),
+            _ => timeline::row_at_line(&counts, self.top, height)
+                .saturating_sub(1)
+                .max(self.top),
+        };
         self.clamp_cursor();
     }
 
     fn half_page(&mut self, sign: isize) {
-        let half = (self.view_height / 2).max(1) as isize;
-        self.move_step(sign * half);
-        self.top = self.cursor.step.saturating_sub(self.view_height / 2);
+        let counts = self.row_line_counts();
+        let half = (self.view_height / 2).max(1);
+        let rows = timeline::rows_over(&counts, self.cursor.step, half, sign > 0).max(1);
+        self.move_step(sign * rows as isize);
+        let counts = self.row_line_counts();
+        self.top = timeline::row_lines_before(&counts, self.cursor.step, self.view_height / 2);
     }
 
     /// Scroll the view. The cursor only moves if it would leave the screen.
     fn scroll(&mut self, by: isize) {
         self.top = self.top.saturating_add_signed(by).min(self.last_top());
-        let bottom = self.top + self.view_height.saturating_sub(1);
+        let counts = self.row_line_counts();
+        // The last row whose lines all fit, or the top's own if it doesn't.
+        let bottom = timeline::row_at_line(&counts, self.top, self.view_height)
+            .saturating_sub(1)
+            .max(self.top);
         self.cursor.step = self.cursor.step.clamp(self.top, bottom);
         self.clamp_cursor();
     }
