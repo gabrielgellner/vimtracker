@@ -1,52 +1,26 @@
-//! Effects, one per file so each can be tested alone.
+//! The sound itself: voices, filters, effects and dynamics, one per file so each can be tested
+//! alone, on shared building blocks.
+//!
+//! - [`voices`] make a track's sound from its notes.
+//! - [`filters`] shape it: the track's filter and the character filters it switches between,
+//!   and the slot effects that are filters.
+//! - [`effects`] are the other slot effects, with what plays a slot and the long buffers they take.
+//! - [`dynamics`] are the mixing tools: compressor, limiter and EQ.
+//! - [`blocks`] are the small parts the others share, which use nothing else here.
 
-pub mod acid;
-pub mod additive;
-pub mod chiptune;
-pub mod chord;
-mod chord_bank;
-pub mod chorus;
-pub mod comb;
-pub mod compressor;
-pub mod delay;
-pub mod diode_filter;
-pub mod dirty_filter;
-pub mod distort;
-pub mod drums;
-pub mod eq;
-pub mod filter;
-pub mod flanger;
-pub mod fm;
-pub mod grain;
-pub mod granular;
-pub mod kick;
-pub mod korg35;
-pub mod limiter;
-pub mod lpg;
-pub mod memory;
-pub mod modal;
-pub mod noise;
-pub mod oversampler;
-pub mod particle;
-pub mod phase_distortion;
-pub mod phaser;
-pub mod pitch_shifter;
-mod plaits_parts;
-pub mod plate;
-pub mod resonator;
-pub mod reverb;
-mod sine_table;
-pub mod six_op;
-pub mod smoother;
-pub mod string_model;
-pub mod swarm;
-pub mod tape;
-mod variable_shape;
-pub mod virtual_analog;
-pub mod virtual_analog_vcf;
-pub mod vowel;
-pub mod warps;
-pub mod wave_terrain;
-pub mod waveshaping;
-mod waveshaping_tables;
-pub mod wavetable;
+pub mod blocks;
+pub mod dynamics;
+pub mod effects;
+pub mod filters;
+pub mod voices;
+
+// What the rest of the engine and vt-tui use, at the paths they had before the folder was grouped.
+pub use blocks::smoother;
+pub use dynamics::{compressor, eq};
+pub use effects::{distort, memory};
+pub use filters::filter;
+pub use voices::{
+    acid, additive, chiptune, chord, drums, fm, grain, kick, modal, noise, particle,
+    phase_distortion, six_op, string_model, swarm, virtual_analog, virtual_analog_vcf,
+    wave_terrain, waveshaping, wavetable,
+};
