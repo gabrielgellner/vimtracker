@@ -1,6 +1,8 @@
 //! The mixer: a strip for each track, with its level meter, its fader, its sends, mute and solo, laid
 //! out as Polyend Tracker's mixer is. The sound tracks, the groups, and the returns and master each
-//! stand apart, and a group's strip and the tracks in it share its colour (decision 126).
+//! stand apart, and a group's strip and the tracks in it share its colour (decision 126). A folded
+//! group's tracks are left out, with its name marked, and an empty group is folded away unless it's
+//! opened (decision 128).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -55,14 +57,15 @@ fn fader_cell(row: usize, rows: usize, level: u8) -> Span<'static> {
 
 /// The strips shown, and where the gaps between the parts go.
 struct Strips {
-    shown: std::ops::Range<usize>,
+    /// The tracks drawn, in order, with those folded away left out (decision 128).
+    shown: Vec<usize>,
     /// Where the groups start, and the returns.
     groups: usize,
     returns: usize,
 }
 
 impl Strips {
-    fn new(song: &Song, shown: std::ops::Range<usize>) -> Self {
+    fn new(song: &Song, shown: Vec<usize>) -> Self {
         let groups = song.sound_tracks();
         Self {
             shown,
@@ -71,16 +74,21 @@ impl Strips {
         }
     }
 
-    /// Whether a strip starts a part, after another shown before it.
-    fn gap_before(&self, index: usize) -> bool {
-        index > self.shown.start && (index == self.groups || index == self.returns)
+    /// Which part a track is in: the sound tracks, the groups, or the returns and the master.
+    fn part(&self, index: usize) -> usize {
+        usize::from(index >= self.groups) + usize::from(index >= self.returns)
+    }
+
+    /// Whether the strip at this place starts a part, after another shown before it.
+    fn gap_before(&self, place: usize) -> bool {
+        place > 0 && self.part(self.shown[place]) != self.part(self.shown[place - 1])
     }
 
     /// The columns: the labels' two, then each strip's, with a gap's before each part.
     fn columns(&self) -> Columns {
         let mut widths = vec![MARK_WIDTH, LABEL_WIDTH - MARK_WIDTH];
-        for index in self.shown.clone() {
-            if self.gap_before(index) {
+        for place in 0..self.shown.len() {
+            if self.gap_before(place) {
                 widths.push(SECTION_GAP);
             }
             widths.push(STRIP_WIDTH);
@@ -94,8 +102,8 @@ impl Strips {
         cells: &mut Cells<'_>,
         mut cell: impl FnMut(usize) -> L,
     ) {
-        for index in self.shown.clone() {
-            if self.gap_before(index) {
+        for (place, &index) in self.shown.iter().enumerate() {
+            if self.gap_before(place) {
                 cells.skip(1);
             }
             cells.cell(cell(index));
@@ -104,7 +112,7 @@ impl Strips {
 }
 
 /// A strip's name: a sound track's number and name, or a fixed track's icon and name, a group's in
-/// its colour, faint while nothing's in it.
+/// its colour, faint while nothing's in it, and marked while its tracks are folded into it.
 fn name_cell(app: &App, index: usize) -> Line<'static> {
     let song = app.song();
     let track = &song.tracks[index];
@@ -128,6 +136,10 @@ fn name_cell(app: &App, index: usize) -> Line<'static> {
             track.name
         )
     };
+    if app.folds.holds(song, index) {
+        let mark = [glyphs::FOLDED, glyphs::ICON_SPACE];
+        return Line::styled(name.chars().chain(mark).collect::<String>(), style);
+    }
     Line::styled(name, style)
 }
 
@@ -139,12 +151,7 @@ fn routing_cell(song: &Song, index: usize) -> Line<'static> {
         let members: Vec<usize> = song.group_members(index).collect();
         return Line::styled(group::runs(&members), theme::dim());
     }
-    match (group::number(song, index), group::style(song, index)) {
-        (Some(number), Some(style)) if track.is_sound() => {
-            Line::styled(format!("G{number}"), style)
-        }
-        _ => Line::default(),
-    }
+    group::mark(song, index).map_or_else(Line::default, Line::from)
 }
 
 /// One row of the meters, counting rows up from the bottom.
@@ -191,8 +198,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // Room is kept for both gaps, whether or not they're in view.
     let room = area.width.saturating_sub(LABEL_WIDTH + 2 * SECTION_GAP);
     let count = usize::from(room / STRIP_WIDTH).max(1);
-    let first = first_shown(app.cursor.track, song.tracks.len(), count);
-    let strips = Strips::new(song, first..(first + count).min(song.tracks.len()));
+    let tracks: Vec<usize> = app.folds.shown(song).collect();
+    let at = tracks.partition_point(|&track| track < app.cursor.track);
+    let first = first_shown(at, tracks.len(), count);
+    let strips = Strips::new(
+        song,
+        tracks[first..(first + count).min(tracks.len())].to_vec(),
+    );
     let columns = strips.columns();
 
     let mut rest = area;

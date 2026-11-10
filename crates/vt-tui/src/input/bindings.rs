@@ -133,6 +133,10 @@ pub enum Cmd {
     ToggleScale,
     /// Collapse the phrase view to a line a row, or lay it out in time again.
     ToggleTimeline,
+    /// Fold the group the cursor is on or in, or open it, in the song view and the mixer.
+    ToggleFold,
+    /// Fold every group, or open every one.
+    FoldAll(bool),
     /// Move a value, and a note by a semitone whatever the scale.
     IncreaseChromatic,
     DecreaseChromatic,
@@ -804,6 +808,22 @@ const MIXER: &[(&str, Cmd, &str)] = &[
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
 ];
 
+/// Keys for the views that fold a group's tracks into it, the song view and the mixer, after Vim's
+/// folds (decision 128).
+const FOLDS: &[(&str, Cmd, &str)] = &[
+    (
+        "z a",
+        Cmd::ToggleFold,
+        "Fold this group, or the one this track is in, or open it",
+    ),
+    ("z M", Cmd::FoldAll(true), "Fold every group"),
+    (
+        "z R",
+        Cmd::FoldAll(false),
+        "Open every group, the empty ones too",
+    ),
+];
+
 /// Keys that act on a selection.
 const VISUAL: &[(&str, Cmd, &str)] = &[
     ("W", Cmd::NextTrack, "Reach the next track"),
@@ -905,9 +925,11 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Track, ADJUST);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Song, SONG);
+    add(Mode::Song, FOLDS);
     add(Mode::Song, ADJUST);
     add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MIXER);
+    add(Mode::Mixer, FOLDS);
     add(Mode::Mixer, ADJUST);
     add(Mode::Mixer, EVERY_VIEW);
     add(Mode::Audio, AUDIO);

@@ -283,7 +283,7 @@ fn item_spans(
         }
     ))];
     let label_length = item.label.chars().count();
-    spans.extend(matched_spans(&item.label, 0, matched, Style::new()));
+    spans.extend(matched_spans(&item.label, 0, matched, item.style));
     let mut used = GUTTER + if nested { INDENT } else { 0 } + label_length;
     if !item.meaning.is_empty() {
         // Meanings line up whether their items are in a category or not.

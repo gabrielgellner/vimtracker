@@ -991,7 +991,7 @@ impl App {
         self.mode = Mode::Normal;
         self.anchor = None;
         self.anchor_track = None;
-        self.move_track(selection.tracks.first as isize - self.cursor.track as isize);
+        self.go_to_track_at(selection.tracks.first);
         self.selection_scope = None;
         self.clamp_cursor();
     }
@@ -1004,7 +1004,7 @@ impl App {
         self.anchor = Some((selection.range.first, selection.scope));
         self.anchor_track = Some(selection.tracks.last);
         self.selection_scope = Some(selection.scope);
-        self.move_track(selection.tracks.first as isize - self.cursor.track as isize);
+        self.go_to_track_at(selection.tracks.first);
         self.cursor.step = selection.range.last;
         self.mode = if selection.scope.is_whole() {
             Mode::VisualStep

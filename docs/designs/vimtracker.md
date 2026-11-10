@@ -532,8 +532,8 @@ built from, so a new page uses them rather than working out its layout again:
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
 *   `group`: a group's colour, from `theme::group`, the tracks it sums as runs such as `01-04 07`,
-    and whether a track's mute or solo is its own or its group's, for the mixer, the track page
-    and the phrase view's titles.
+    the `G1` mark a grouped track carries, and whether a track's mute or solo is its own or its
+    group's, for the mixer, the song view, the track page and the phrase and chain views.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -547,6 +547,15 @@ The cursor, counts, selections and `App::top` stay in rows, so only scrolling co
 row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`, `Ctrl-d`, `Ctrl-u` and the
 view's furthest scroll go by.
 
+**Folding groups** (`folding.rs`). `App::folds` says which groups are folded, `z a`, `zM` and `zR`
+setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
+view, the mixer and the phrase view's overview leave out: a folded group's tracks, and a folded
+group with none. Those views draw `Folds::shown` rather than every track, and the moves between
+tracks go through `Folds::step`, so they step over what's hidden. After each key,
+`App::keep_cursor_shown` puts a song view or mixer cursor left on a hidden track on what
+`Folds::stand_in` gives, its group or the next shown. Folds are view state: not in the song, not
+saved, and reset when another project opens.
+
 **Where it's going** (#320, not built yet). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
 chain views among them, with `fn key(&mut self, key, ctx: &mut Ctx) -> Outcome` and
@@ -559,7 +568,7 @@ screenshots unchanged. `SamplePage` is already half there: it keeps its own curs
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
-**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122 and 126, with #320 and #330.
+**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126 and 128, with #320 and #330.
 
 ### Graphics
 

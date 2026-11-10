@@ -24,8 +24,27 @@ const LARGE_REPEAT: i64 = 4;
 const LARGE_CHAIN: i64 = 0x10;
 
 impl App {
+    /// The columns shown: Length, Rpt and Start, then each track's that isn't folded away.
+    fn song_columns(&self) -> Vec<usize> {
+        let tracks = self.folds.shown(self.song());
+        (0..COLUMNS_BEFORE_TRACKS)
+            .chain(tracks.map(|track| COLUMNS_BEFORE_TRACKS + track))
+            .collect()
+    }
+
+    /// The column as many shown along from the cursor's as `by`, stepping over folded tracks.
+    fn step_song_column(&self, by: isize) -> usize {
+        let columns = self.song_columns();
+        let at = columns.partition_point(|&column| column < self.song_column);
+        let to = at.saturating_add_signed(by).min(columns.len() - 1);
+        columns[to]
+    }
+
     fn last_song_column(&self) -> usize {
-        COLUMNS_BEFORE_TRACKS + self.song().tracks.len() - 1
+        self.song_columns()
+            .last()
+            .copied()
+            .unwrap_or(COLUMNS_BEFORE_TRACKS)
     }
 
     /// The track the cursor's column belongs to, if it's a track's.
@@ -51,10 +70,8 @@ impl App {
             Cmd::Move(Motion::Up) => self.go_to_section(section.saturating_sub(times)),
             Cmd::Move(Motion::First) => self.go_to_section(0),
             Cmd::Move(Motion::Last) => self.go_to_section(usize::MAX),
-            Cmd::Move(Motion::Left) => self.song_column = self.song_column.saturating_sub(times),
-            Cmd::Move(Motion::Right) => {
-                self.song_column = (self.song_column + times).min(self.last_song_column());
-            }
+            Cmd::Move(Motion::Left) => self.song_column = self.step_song_column(-(times as isize)),
+            Cmd::Move(Motion::Right) => self.song_column = self.step_song_column(times as isize),
             Cmd::Move(Motion::RowStart) => self.song_column = 0,
             Cmd::Move(Motion::RowEnd) => self.song_column = self.last_song_column(),
             Cmd::Increase => self.adjust_song(times as i64, false),

@@ -10,6 +10,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::tree::ChainColumn;
+use crate::views::widgets::group;
 
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
@@ -20,14 +21,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let song = app.song();
     let shared = if app.chain_uses() > 1 { "*" } else { "" };
     let bold = Style::new().add_modifier(Modifier::BOLD);
+    // A track in a group carries its mark, in the group's colour, as on the mixer.
+    let mut title = vec![Span::raw(format!("Track {:02}", app.cursor.track + 1))];
+    if let Some(mark) = group::mark(song, app.cursor.track) {
+        title.extend([Span::raw(" "), mark]);
+    }
+    title.push(Span::raw(format!("  Chain {chain:02X}{shared}")));
     let mut lines = vec![
-        Line::styled(
-            format!(
-                "Track {:02}  Chain {chain:02X}{shared}",
-                app.cursor.track + 1
-            ),
-            bold,
-        ),
+        Line::from(title).style(bold),
         Line::styled("Slot    Phrase  Trans  Steps", bold),
     ];
     let playing = app
