@@ -359,6 +359,35 @@ sample's, as tracker-ce's Play Thru does.
 and `g d` on a step's `SLI` shows that slice on the sample page; `C-o` comes
 back.
 
+## Marks
+
+A letter, `a` to `z`, can name a slice, as Vim's marks name lines, and a step
+can lock a slice by its letter, `SLI 'a`, rather than its number. The letter
+stays with its slice as slices before it come and go and its number changes,
+so the step keeps playing the same chop. One letter names one slice, and a
+slice can have several. The slice here is the one the sample page's cursor is
+in, or elsewhere the one the track's `Slice` is on.
+
+| Command | Does |
+|---|---|
+| `:mark a` | Name the slice here `a` |
+| `:mark a 03` | Name slice `03` `a`, its number in hex as `SLI` shows it |
+| `:marks` | List the letters in the order of their slices, to go to one |
+| `:delmarks a-c` | Take letters off, as `a b`, `abc` or `a-c` |
+| `:delmarks!` | Take every letter off |
+
+Slicing again moves each letter to the new slice holding its slice's start, and
+`:slice clear` takes them all off. Splitting a slice leaves its letters on the
+part before, and joining two gives the one left the other's letters. Each is
+one undo step with the slicing.
+
+`K` on a step's `SLI` lists the letters first, as `'a  03  0.214 s`, to lock by,
+and then the slices by number, each with its letters. A step's `SLI 'a` shows
+as `'a`, and `=` and `-` move it to the next or previous letter. If no slice is
+named `a`, the step keeps the letter and plays the track's own `Slice`, as if
+it had no `SLI`; the status line says so. Two hex digits typed over it lock by
+number again.
+
 ## The sample page
 
 `Space 0` shows the current track's sample as a big waveform, left above right,
@@ -369,10 +398,12 @@ with `:slice`.
 
 The start is marked in teal, the end in red and the loop in blue, each as a line
 at its frame and a mark in the ruler above, which has the time too. Each slice
-starts at a thinner line in peach, with its number in the ruler. Sound outside
+starts at a thinner line in peach, with its number in the ruler, and the letters
+naming it after its mark, in mauve, as `03▾a`. Sound outside
 the start and end, which doesn't play, is dimmer. The row below the waveform is
 the whole sample, with the part in view behind it. The row below that counts
-the slices, and the last says which slice the cursor is in.
+the slices and lists the letters naming them, and the last says which slice the
+cursor is in, and its letters.
 
 A sample is like a text, a column of the waveform is a character, and a slice
 is a line; the sample from its start to its end is one slice until it's
@@ -387,6 +418,8 @@ sliced. Every motion takes a count.
 | `j` `k` | The next or previous slice |
 | `}` `{` | The next or previous beat at the song's tempo, from the start |
 | `]]` `[[` | The next or previous point: a slice, the start, the end or the loop's |
+| `'a` | The slice named `a`, as a jump `C-o` comes back from |
+| `]'` `['` | The next or previous slice a letter names, as a jump |
 | `H` `M` `L` | The left, middle or right of the view |
 
 | Keys | View |

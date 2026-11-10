@@ -32,6 +32,10 @@ pub struct Place {
     track_row: usize,
     track_field: usize,
     mixer_row: usize,
+    /// Where on the sample page, and the entry it showed in place of the track's own, as a jump
+    /// can land on another slice.
+    sample_cursor: u64,
+    sample_pinned: Option<(usize, u8)>,
 }
 
 impl App {
@@ -56,6 +60,8 @@ impl App {
             track_row: self.track_row,
             track_field: self.track_field,
             mixer_row: self.mixer_row,
+            sample_cursor: self.sample_page.cursor,
+            sample_pinned: self.sample_page.pinned,
         }
     }
 
@@ -80,6 +86,12 @@ impl App {
         }
         if place.view == View::Mixer {
             self.mixer_row = place.mixer_row;
+        }
+        if place.view == View::Sample {
+            self.sample_page.pinned = place.sample_pinned;
+            if let Ok(shown) = self.sample_page_here() {
+                self.sample_page.go(place.sample_cursor, shown.length());
+            }
         }
     }
 

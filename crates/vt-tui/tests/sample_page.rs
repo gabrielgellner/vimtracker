@@ -926,7 +926,9 @@ fn a_track_with_no_sample_says_so() {
 fn every_key_on_the_page_is_listed() {
     let (app, _realtime) = on_page();
     let rows = app.help_rows();
-    for keys in ["z i", "z o", "z O", "z v", "z c", "g _", "] ]", "[ ["] {
+    for keys in [
+        "z i", "z o", "z O", "z v", "z c", "g _", "] ]", "[ [", "'", "] '", "[ '",
+    ] {
         assert!(
             rows.iter().any(|row| row.trim_start().starts_with(keys)),
             "{keys}"
@@ -1304,4 +1306,212 @@ fn a_scroll_places_only_the_marks_in_view() {
         measured.push((slices, app.sample_page.zoom, steps));
     }
     eprintln!("bytes placing marks and marks in view, a scroll at a time: {measured:?}");
+}
+
+/// Each letter naming a slice of the first sample, with the slice's number.
+fn marked(app: &App) -> Vec<(char, usize)> {
+    app.song().bank.get(1).unwrap().edit.points.marks_in_order()
+}
+
+#[test]
+fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "mark a");
+    assert!(app.status.contains("has no slices"), "{}", app.status);
+    command(&mut app, "slice 4");
+    let depth = app.history.undo_depth();
+    command(&mut app, "mark a 2");
+    assert!(app.status.contains("'a names slice 02"), "{}", app.status);
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    // With no number, the slice the cursor's in.
+    keys(&mut app, "G");
+    command(&mut app, "mark b");
+    command(&mut app, "mark c 9");
+    assert!(app.status.contains("slices 00 to 03"), "{}", app.status);
+    assert_eq!(marked(&app), [('a', 2), ('b', 3)]);
+    // `'a` goes to its slice's start, and `C-o` back to where the cursor was.
+    keys(&mut app, "g g");
+    keys(&mut app, "' a");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    keys(&mut app, "C-o");
+    assert_eq!((app.view, cursor(&app)), (View::Sample, 0));
+    keys(&mut app, "' z");
+    assert!(app.status.contains("is named z"), "{}", app.status);
+    assert_eq!(cursor(&app), 0, "a letter naming nothing goes nowhere");
+    // `]'` and `['` go by the named slices, with counts, as jumps.
+    keys(&mut app, "] '");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    keys(&mut app, "] '");
+    assert_eq!(cursor(&app), QUARTERS[3]);
+    keys(&mut app, "] '");
+    assert!(app.status.contains("further"), "{}", app.status);
+    keys(&mut app, "[ '");
+    assert_eq!(cursor(&app), QUARTERS[2]);
+    keys(&mut app, "g g 2 ] '");
+    assert_eq!(cursor(&app), QUARTERS[3]);
+    keys(&mut app, "C-o");
+    assert_eq!(cursor(&app), 0);
+    // A letter moves to the slice it's put on, and `u` puts it back.
+    command(&mut app, "mark a 1");
+    assert!(app.status.contains("not 02"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(marked(&app), [('a', 2), ('b', 3)]);
+    // From elsewhere, `'a` from `:marks` opens the page on it.
+    keys(&mut app, "Space 3");
+    command(&mut app, "marks");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .expect("the marks are listed")
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(labels, ["'a  02  0.948 s", "'b  03  1.411 s"]);
+    keys(&mut app, "j Enter");
+    assert_eq!((app.view, cursor(&app)), (View::Sample, QUARTERS[3]));
+    keys(&mut app, "C-o");
+    assert_eq!(app.view, View::Phrase);
+}
+
+#[test]
+fn delmarks_takes_letters_off_and_slicing_moves_them() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    for (letter, slice) in [('a', 0), ('b', 1), ('c', 2), ('x', 3)] {
+        command(&mut app, &format!("mark {letter} {slice}"));
+    }
+    command(&mut app, "delmarks a-b x");
+    assert!(app.status.contains("Took 'a 'b 'x off"), "{}", app.status);
+    assert_eq!(marked(&app), [('c', 2)]);
+    keys(&mut app, "u");
+    assert_eq!(marked(&app).len(), 4);
+    command(&mut app, "delmarks!");
+    assert!(marked(&app).is_empty());
+    command(&mut app, "delmarks!");
+    assert!(app.status.contains("No such marks"), "{}", app.status);
+    keys(&mut app, "u");
+    // Slicing into 8 keeps each old start, so each mark follows its sound.
+    command(&mut app, "slice 8");
+    assert_eq!(marked(&app), [('a', 0), ('b', 2), ('c', 4), ('x', 6)]);
+    command(&mut app, "slice clear");
+    assert!(marked(&app).is_empty(), "clearing drops them");
+    command(&mut app, "marks");
+    assert!(app.status.contains("No slice"), "{}", app.status);
+}
+
+#[test]
+fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    command(&mut app, "mark b 2");
+    command(&mut app, "mark a 2");
+    command(&mut app, "mark d 3");
+    step_with(&mut app, 0, "C-4 -- --- sampler.slice:01 ---");
+    keys(&mut app, "K");
+    let labels: Vec<String> = app
+        .picker
+        .as_ref()
+        .expect("the slices are listed")
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "'a  02  0.948 s",
+            "'b  02  0.948 s",
+            "'d  03  1.411 s",
+            "00      0.021 s",
+            "01      0.484 s",
+            "02  ab  0.948 s",
+            "03  d   1.411 s",
+        ]
+    );
+    // It opens on the slice locked now, and `g g` goes to the first letter.
+    keys(&mut app, "g g Enter");
+    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    assert_eq!(slot.slice_mark(), Some('a'));
+    let shown = value_shown(&app).unwrap_or_default();
+    assert!(shown.contains("'a names 02 of 4"), "{shown}");
+    // The grid shows the letter.
+    let mut graphics = Graphics::new();
+    keys(&mut app, "Space 3");
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
+    let grid = (0..42).map(|y| row(&terminal, y)).collect::<Vec<_>>();
+    assert!(
+        grid.iter().any(|line| line.contains("SLI   'a")),
+        "{}",
+        grid.join("\n")
+    );
+    // Slices added before it leave the step as it is, and the letter names the same sound.
+    app.apply(&Action::SplitSlice {
+        number: 1,
+        at: 10_000,
+    });
+    let shown = value_shown(&app).unwrap_or_default();
+    assert!(shown.contains("'a names 03 of 5"), "{shown}");
+    // With the letter gone, the step keeps it, and the track's own `Slice` plays.
+    command(&mut app, "delmarks a");
+    assert_eq!(
+        app.phrase_here().unwrap().steps()[0].fx[1].slice_mark(),
+        Some('a')
+    );
+    let shown = value_shown(&app).unwrap_or_default();
+    assert!(
+        shown.contains("'a names no slice of 01 one, so the track's own plays: 00 of 5"),
+        "{shown}"
+    );
+    // Two digits typed over it lock by number again.
+    keys(&mut app, "r 0 3");
+    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    assert_eq!((slot.slice_mark(), slot.coarse()), (None, 3));
+}
+
+#[test]
+fn the_ruler_puts_the_letters_after_their_slices_mark() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    command(&mut app, "mark a 2");
+    command(&mut app, "mark b 2");
+    command(&mut app, "mark z 1");
+    let column = |frame: u64| 1 + (frame / FIT) as usize;
+    let mut text = Terminal::new(TestBackend::new(163, 42)).unwrap();
+    app.sample_images = None;
+    app.sample_page.cell_width = None;
+    text.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    let ruler = row(&text, 2);
+    let shown: String = ruler
+        .chars()
+        .skip(column(QUARTERS[2]) - 2)
+        .take(5)
+        .collect();
+    assert_eq!(shown, "02▾ab", "{ruler}");
+    let shown: String = ruler
+        .chars()
+        .skip(column(QUARTERS[1]) - 2)
+        .take(4)
+        .collect();
+    assert_eq!(shown, "01▾z", "{ruler}");
+    // The settings row lists them in the order of their slices, and the cursor's row names its
+    // slice's.
+    keys(&mut app, "2 G");
+    text.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    let rows: Vec<String> = (0..42).map(|y| row(&text, y)).collect();
+    let settings = rows.iter().find(|line| line.contains("Slices")).unwrap();
+    assert!(settings.contains("Marks zab"), "{settings}");
+    let cursor_row = rows.iter().find(|line| line.contains("Cursor")).unwrap();
+    assert!(cursor_row.contains("slice 02  'a 'b"), "{cursor_row}");
+    // With the pictures drawn, the letters keep clear of the columns the placed mark covers.
+    let mut graphics = Graphics::new();
+    draw(&mut app, &mut graphics, 163, 42);
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
+    let ruler = row(&terminal, 2);
+    let line = (QUARTERS[2] * 3 / FIT) as usize;
+    let last = 1 + (line + 1) / 3;
+    let letters: String = ruler.chars().skip(last + 1).take(2).collect();
+    assert_eq!(letters, "ab", "{ruler}");
 }

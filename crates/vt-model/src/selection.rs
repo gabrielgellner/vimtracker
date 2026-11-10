@@ -1,6 +1,7 @@
 //! Motions, targets and what operators do to the steps they cover. No terminal is needed here.
 
 use crate::accumulator::{MOST_DEGREES, amount, amount_value};
+use crate::bank::MARK_LETTERS;
 use crate::condition::Condition;
 use crate::constants::BEAT_STEPS;
 use crate::scale::Scale;
@@ -416,6 +417,14 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
         let from = amount(coarse).map_or(0, i32::from);
         let moved = (from + by * if large { 7 } else { 1 }).clamp(-most, most);
         return u16::from(amount_value(moved as i8)) << 8;
+    }
+    // An `SLI` by a letter moves through the letters, as Vim's `CTRL-A` does on a letter with
+    // `nrformats` taking `alpha`, and stops at `a` and `z`.
+    if let Some(letter) = slot.slice_mark() {
+        let first = *MARK_LETTERS.start() as i32;
+        let last = *MARK_LETTERS.end() as i32;
+        let moved = (letter as i32 + by).clamp(first, last);
+        return u16::from(moved as u8);
     }
     let by = if large { by * LARGE_HEX } else { by };
     let moved = i32::from(coarse) + by;

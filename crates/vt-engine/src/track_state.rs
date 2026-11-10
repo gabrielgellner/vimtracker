@@ -9,12 +9,13 @@ use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
 use vt_model::lfo::{
     LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
 };
+use vt_model::playable::Playable;
 use vt_model::settings::{
     Effect, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta,
     gate_share, glide_ms,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
-use vt_model::step::{FxSlot, Mark};
+use vt_model::step::{FxSlot, Mark, slice_letter};
 
 use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
@@ -1200,9 +1201,22 @@ impl TrackState {
 
     /// The slice of its entry a sampler's note starting now plays, by number: the held `SLI`, or
     /// a lock over it, moved by what modulation adds, in whole slices. The entry clamps it to its
-    /// last.
-    pub fn slice_number(&self) -> u8 {
-        self.sampler_value(SettingId::SLICE).round() as u8
+    /// last. An `SLI` by a letter plays the slice the entry's mark names, or, with no such mark,
+    /// the track's own: the held `SLI` under the lock, or `own`, the track's setting, if what's
+    /// held is a letter too.
+    pub fn slice_number(&self, playable: &Playable, own: u8) -> u8 {
+        let layers = &self.values[SettingId::SLICE.index()];
+        let Some(named) = slice_letter(layers.lock.unwrap_or(layers.base)) else {
+            return self.sampler_value(SettingId::SLICE).round() as u8;
+        };
+        let slice = playable
+            .marked(named)
+            .unwrap_or_else(|| match slice_letter(layers.base) {
+                Some(_) => own,
+                None => (layers.base >> 8) as u8,
+            });
+        let moved = f32::from(slice) + self.offsets[SettingId::SLICE.index()] * 255.0;
+        moved.clamp(0.0, 255.0).round() as u8
     }
 
     /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:

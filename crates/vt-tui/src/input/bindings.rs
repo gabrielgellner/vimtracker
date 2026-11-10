@@ -575,6 +575,21 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         Cmd::Sample(SampleKey::PreviousPoint),
         "Previous point: a slice, the start, end or loop",
     ),
+    (
+        "'",
+        Cmd::Sample(SampleKey::Mark),
+        "Then a letter: the slice it names, as a jump",
+    ),
+    (
+        "] '",
+        Cmd::Sample(SampleKey::NextMark),
+        "Next slice a letter names, as a jump",
+    ),
+    (
+        "[ '",
+        Cmd::Sample(SampleKey::PreviousMark),
+        "Previous slice a letter names, as a jump",
+    ),
     ("H", Cmd::ViewTop, "Cursor to the left of the view"),
     ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),
     ("L", Cmd::ViewBottom, "Cursor to the right of the view"),

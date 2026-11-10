@@ -5,11 +5,12 @@
 //!
 //! It's built from an entry's [`SampleEdit`](crate::bank::SampleEdit) on the edit thread, so the
 //! engine never reads an edit: a new field there changes how a span is worked out here, and the
-//! engine plays the span as it always has. A slice's settings so cost the voice nothing.
+//! engine plays the span as it always has. A slice's settings so cost the voice nothing, and its
+//! marks are each letter's slice number, so an `SLI 'a` is looked up rather than searched for.
 
 use std::sync::Arc;
 
-use crate::bank::{BankEntry, PlayParams, SliceParams};
+use crate::bank::{BankEntry, MARK_COUNT, MARK_LETTERS, PlayParams, SliceParams, mark_index};
 use crate::sample::SampleData;
 use crate::samples::{SampleId, SamplePool};
 
@@ -25,6 +26,8 @@ pub struct Playable {
     /// Where the whole entry starts and ends, which a slice played on through, `Thru`, plays to.
     pub start: u64,
     pub end: u64,
+    /// The number of the slice each letter names, `a` first, or none for a letter naming none.
+    pub marks: [Option<u8>; MARK_COUNT],
 }
 
 /// A stretch of a sample and how it plays, in the pool's frames, at the program's rate.
@@ -137,13 +140,23 @@ impl Playable {
                 })
                 .collect()
         };
+        let mut marks = [None; MARK_COUNT];
+        for (letter, slot) in MARK_LETTERS.zip(marks.iter_mut()) {
+            *slot = points.marked(letter).map(|number| number as u8);
+        }
         Some(Self {
             sample,
             frames,
             spans,
             start,
             end,
+            marks,
         })
+    }
+
+    /// The number of the slice a letter names, if it names one.
+    pub fn marked(&self, letter: char) -> Option<u8> {
+        self.marks[mark_index(letter)?]
     }
 
     /// The span a note plays: its slice's, by number, clamped to the last, or with `Thru`, on

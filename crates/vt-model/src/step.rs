@@ -212,6 +212,21 @@ impl FxSlot {
         (self.value & 0xFF) as u8
     }
 
+    /// An `SLI` locking a slice by the letter that names it, `SLI 'a`, rather than by its number,
+    /// with a value's mark.
+    pub fn slice_by_mark(letter: char, mark: Mark) -> Self {
+        Self {
+            command: Some(FxCommand::Set(SettingId::SLICE)),
+            value: u16::from(letter as u8),
+            mark,
+        }
+    }
+
+    /// The letter an `SLI` locks its slice by, if it locks one by a letter rather than a number.
+    pub fn slice_mark(self) -> Option<char> {
+        slice_letter(self.value).filter(|_| self.command == Some(FxCommand::Set(SettingId::SLICE)))
+    }
+
     /// Whether this is a value, which has a mark, rather than an event or nothing.
     pub fn is_value(self) -> bool {
         self.command.is_some_and(FxCommand::holds)
@@ -227,6 +242,13 @@ impl FxSlot {
         };
         Self { mark, ..self }
     }
+}
+
+/// The letter an `SLI` value locks its slice by, if it's one by a letter: it's in the fine byte,
+/// which `SLI`, a list, otherwise never has.
+pub fn slice_letter(value: u16) -> Option<char> {
+    let letter = char::from((value & 0xFF) as u8);
+    crate::bank::is_mark(letter).then_some(letter)
 }
 
 /// How a row's note behaves over its pulses, as on Metropolix.

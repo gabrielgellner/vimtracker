@@ -119,10 +119,12 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
         } else {
             "  ".to_owned()
         };
-        text.push_str(&format!(
-            " {name:<COMMAND_WIDTH$}{:02X}{fine} {mark}",
-            slot.coarse()
-        ));
+        // An `SLI` by a letter shows the letter, as `'a`, in its two digits' place.
+        let value = match slot.slice_mark() {
+            Some(letter) => format!("'{letter}"),
+            None => format!("{:02X}", slot.coarse()),
+        };
+        text.push_str(&format!(" {name:<COMMAND_WIDTH$}{value}{fine} {mark}"));
     }
     text
 }

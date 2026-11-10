@@ -46,6 +46,11 @@ pub enum SampleKey {
     /// `]]` and `[[`: the next or previous point of any kind.
     NextPoint,
     PreviousPoint,
+    /// `'` and a letter: the slice the letter names, as a jump.
+    Mark,
+    /// `]'` and `['`: the next or previous slice a letter names, as a jump.
+    NextMark,
+    PreviousMark,
     /// `zz`, `zs` and `ze`: the view placed with the cursor in its middle, at its left or at its
     /// right.
     CursorMiddle,
@@ -403,7 +408,7 @@ impl SamplePage {
     }
 
     /// Put the cursor on a frame, inside the sample, and the view on it.
-    fn go(&mut self, frame: u64, length: u64) {
+    pub(crate) fn go(&mut self, frame: u64, length: u64) {
         self.cursor = frame.min(length.saturating_sub(1));
         self.follow(length);
     }
@@ -655,6 +660,10 @@ impl App {
                     Some(frame) => page.go(frame, length),
                     None => self.status = "No point further that way".to_owned(),
                 }
+            }
+            SampleKey::Mark => self.awaiting_mark = true,
+            SampleKey::NextMark | SampleKey::PreviousMark => {
+                self.jump_to_next_mark(key == SampleKey::NextMark, times as usize);
             }
             SampleKey::CursorMiddle => {
                 page.middle_on_cursor();

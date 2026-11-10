@@ -11,6 +11,7 @@
 <text x="603" y="52" fill="#ef9f76" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">03</text>
 <text x="675" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╵0.8</text>
 <text x="819" y="52" fill="#ef9f76" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">04</text>
+<text x="855" y="52" fill="#ca9ee6" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">a</text>
 <text x="1026" y="52" fill="#ef9f76" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">05</text>
 <text x="1179" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╵1.4</text>
 <text x="1242" y="52" fill="#ef9f76" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">06</text>
@@ -51,7 +52,9 @@
 <text x="279" y="641" fill="#8caaee" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Loop </text>
 <text x="324" y="641" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2.000 s to 3.000 s   </text>
 <text x="513" y="641" fill="#ef9f76" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slices </text>
-<text x="576" y="641" fill="#c6d0f5" textLength="891" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16                                                                                                 </text>
+<text x="576" y="641" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16   </text>
+<text x="621" y="641" fill="#ca9ee6" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Marks </text>
+<text x="675" y="641" fill="#c6d0f5" textLength="792" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ab                                                                                      </text>
 <text x="9" y="660" fill="#f2d5cf" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cursor </text>
 <text x="72" y="660" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0.085 s  frame 4060  </text>
 <text x="261" y="660" fill="#ef9f76" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">slice 00</text>

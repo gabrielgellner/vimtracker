@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
+use vt_model::bank::is_mark;
 use vt_model::selection::{
     Block, FIRST_FX_ORDER, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
 };
@@ -88,6 +89,14 @@ impl App {
             }
             return;
         }
+        if self.awaiting_mark {
+            self.awaiting_mark = false;
+            match key.code {
+                KeyCode::Char(c) if is_mark(c) && !key.ctrl && !key.alt => self.jump_to_mark(c),
+                _ => self.status = "Marks are a to z: :marks lists them".to_owned(),
+            }
+            return;
+        }
         if self.awaiting_register {
             self.awaiting_register = false;
             if let KeyCode::Char(c) = key.code
@@ -146,6 +155,7 @@ impl App {
         self.operator = None;
         self.register = None;
         self.awaiting_register = false;
+        self.awaiting_mark = false;
     }
 
     /// Run a resolved command that belongs to the grammar. Returns false if it isn't one.

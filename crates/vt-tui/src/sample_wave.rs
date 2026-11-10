@@ -37,6 +37,8 @@ pub const START_COLOR: Color = theme::TEAL;
 pub const END_COLOR: Color = theme::RED;
 pub const LOOP_COLOR: Color = theme::BLUE;
 pub const SLICE_COLOR: Color = theme::PEACH;
+/// The letters naming slices, which aren't points of their own but stand beside their slices'.
+pub const MARK_COLOR: Color = theme::MAUVE;
 
 /// How wide a point's line is, in pixels.
 pub const POINT_PIXELS: usize = 2;

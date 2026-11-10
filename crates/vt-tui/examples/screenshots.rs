@@ -331,6 +331,9 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
             .map(|half| (half * beat / 2).max(beat / 16))
             .collect();
         entry.edit.points.reslice(&halves);
+        // Letters naming two of them, as `:mark a 04` and `:mark b 0C` would.
+        entry.edit.points.set_mark('a', 4);
+        entry.edit.points.set_mark('b', 12);
         let number = song.bank.add(entry).expect("room in the bank");
         song.tracks[0].machine = Machine::Sampler;
         song.tracks[0].set_setting(SettingId::SAMPLE, number);

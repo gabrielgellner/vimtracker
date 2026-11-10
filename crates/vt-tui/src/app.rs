@@ -350,6 +350,8 @@ pub struct App {
     pub(crate) operator_count: Option<usize>,
     pub(crate) register: Option<char>,
     pub(crate) awaiting_register: bool,
+    /// Whether `'` on the sample page waits for the letter naming the slice to go to.
+    pub(crate) awaiting_mark: bool,
     pub(crate) registers: HashMap<char, Block>,
     pub(crate) anchor: Option<(usize, Scope)>,
     /// How far a selection reaches across tracks from the cursor's.
@@ -518,6 +520,7 @@ impl App {
             operator_count: None,
             register: None,
             awaiting_register: false,
+            awaiting_mark: false,
             registers: HashMap::new(),
             anchor: None,
             anchor_track: None,
@@ -2206,7 +2209,8 @@ impl App {
                     return;
                 };
                 // Typed over the same setting, the coarse digits change and the fine part stays.
-                let fine = if current.command == Some(command) {
+                // Typed over an `SLI` by a letter, it's by the number typed.
+                let fine = if current.command == Some(command) && command.has_fine() {
                     current.fine()
                 } else {
                     0
@@ -2540,6 +2544,9 @@ impl App {
             Line::Sample(None) => self.open_default_sample_picker(),
             Line::SampleChange(change) => self.change_sample(change),
             Line::Slice(change) => self.change_slices(change),
+            Line::Mark { letter, slice } => self.set_mark(letter, slice),
+            Line::Marks => self.open_marks_picker(),
+            Line::DelMarks(letters) => self.delete_marks(letters.as_deref()),
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_model::action::{Action, edit};
 use vt_model::bank::{BankEntry, ContentHash, MOST_PAN, SliceParams};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -177,4 +178,46 @@ fn an_entry_with_no_slices_ignores_sli() {
     };
     let (left, _) = channels(&render(song("ramp", whole, &[&slice_row(3)]), STEP));
     assert!((read_at(left[1000], through) - 1000.0).abs() < 2.0);
+}
+
+#[test]
+fn sli_by_a_letter_keeps_playing_its_chop_as_slices_are_added_before_it() {
+    let through = through();
+    // `a` names slice 05, from 30 000.
+    let named = |entry: &mut BankEntry| {
+        assert!(entry.edit.points.set_mark('a', 5));
+    };
+    let first = song("ramp", named, &["C-4 -- sampler.slice:'a --- ---"]);
+    let (left, _) = channels(&render(first.clone(), STEP));
+    assert!((read_at(left[1000], through) - 31_000.0).abs() < 2.0);
+    // Two splits before it make it slice 07, and the step plays the same sound unchanged.
+    let mut next = Arc::new(first);
+    for at in [1000, 9000] {
+        next = edit(&next, &Action::SplitSlice { number: 1, at }).unwrap();
+    }
+    assert_eq!(next.bank.get(1).unwrap().edit.points.marked('a'), Some(7));
+    let step = &next.tracks[0].phrases[&0].steps()[0];
+    assert_eq!(
+        step.fx[0].slice_mark(),
+        Some('a'),
+        "the step isn't rewritten"
+    );
+    let (left, _) = channels(&render((*next).clone(), STEP));
+    assert!((read_at(left[1000], through) - 31_000.0).abs() < 2.0);
+}
+
+#[test]
+fn sli_by_a_letter_naming_no_slice_plays_the_tracks_own() {
+    let through = through();
+    let rest = "--- -- --- --- ---";
+    let none = "C-4 -- sampler.slice:'z --- ---";
+    let rows = [none, rest, "C-4 -- sampler.slice:03h --- ---", rest, none];
+    let mut song = song("ramp", |_| {}, &rows);
+    song.tracks[0].set_setting(SettingId::SLICE, 2);
+    let (left, _) = channels(&render(song, 5 * STEP));
+    // The track's `Slice`, 02, from 12 000.
+    assert!((read_at(left[1000], through) - 13_000.0).abs() < 2.0);
+    // Once 03 is held, it's the track's own under the lock.
+    let held = read_at(left[4 * STEP + 1000], through);
+    assert!((held - 19_000.0).abs() < 2.0, "{held}");
 }
