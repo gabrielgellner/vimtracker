@@ -1,0 +1,93 @@
+# Our Ladder at full resonance against Arturia's Filter M12 in its four-pole low-pass at full
+# resonance, each ringing on its own after one click, at eight cutoffs an eighth of our knob's
+# turn apart: the pitch each rings at, in cents off where it's set. M12's cutoff is in semitones,
+# as MIDI numbers notes, so it's set to the note nearest our Cut, and its cents are off that note.
+# Filter MINI would be the closer circuit, but it doesn't ring on its own: at full resonance, with
+# its limiter off, a click dies away within half a second (checked on 2026-11-10).
+#
+#   uv run run.py specs/filter-ringing.toml --report out/filter-ringing.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -20.0
+seconds = 2.0
+
+[ours]
+
+[ours.settings]
+filter = "Ladder"
+mode = "LP24"
+res = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter M12.vst3"
+buffer_size = 512
+
+[reference.parameters]
+filter_routing = "A Only"
+filter_a_type = "LP4P"
+filter_a_resonance = 63.0
+limit_resonance = false
+dry_wet = 100.0
+
+[report]
+kind = "oscillation"
+title = "Ladder self-oscillation against Filter M12"
+line = ["filter"]
+reference_knob = "filter_a_cutoff"
+reference_knob_is = "midi"
+window = [1.0, 2.0]
+about = """
+At full resonance a ladder filter rings on its own as a sine, and its pitch follows its cutoff, \
+so it can be played as an oscillator. Our Ladder at Res 0xFF, and Arturia's Filter M12 in its \
+four-pole low-pass at full resonance with its limiter off, are each given a single click and \
+then silence, and the pitch of what rings is measured a second later, over a second.
+
+Our Cut has a frequency, 20 Hz times a thousand to the power of how far it's turned, so ours is in \
+cents off that. M12's cutoff is in semitones, as MIDI numbers notes, so it's set to the note \
+nearest our Cut and its cents are off that note's frequency; our top Cut, 13.3 kHz, is past its \
+top note, 127, at 12.5 kHz. Filter MINI, the Moog ladder the response report compares against, \
+doesn't ring on its own: at full resonance a click dies away within half a second.
+"""
+
+[[cases]]
+name = "ladder-10"
+ours = { cut = 0x10 }
+reference = { filter_a_cutoff = 23.0 }
+
+[[cases]]
+name = "ladder-30"
+ours = { cut = 0x30 }
+reference = { filter_a_cutoff = 38.0 }
+
+[[cases]]
+name = "ladder-50"
+ours = { cut = 0x50 }
+reference = { filter_a_cutoff = 53.0 }
+
+[[cases]]
+name = "ladder-70"
+ours = { cut = 0x70 }
+reference = { filter_a_cutoff = 68.0 }
+
+[[cases]]
+name = "ladder-90"
+ours = { cut = 0x90 }
+reference = { filter_a_cutoff = 83.0 }
+
+[[cases]]
+name = "ladder-B0"
+ours = { cut = 0xB0 }
+reference = { filter_a_cutoff = 98.0 }
+
+[[cases]]
+name = "ladder-D0"
+ours = { cut = 0xD0 }
+reference = { filter_a_cutoff = 113.0 }
+
+[[cases]]
+name = "ladder-F0"
+ours = { cut = 0xF0 }
+reference = { filter_a_cutoff = 127.0 }

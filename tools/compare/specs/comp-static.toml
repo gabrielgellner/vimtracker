@@ -3,7 +3,7 @@
 # -20 dB on their own scales, with ratios of about 2, 4 and 8 to 1 on ours against a quarter, half
 # and three quarters of Comp VCA-65's Compression knob, whose mapping is what the comparison shows.
 #
-#   uv run run.py specs/comp-static.toml
+#   uv run run.py specs/comp-static.toml --report out/comp-static.html
 
 rate = 48000
 
@@ -36,6 +36,20 @@ release_time = 0.5
 auto_att_rel = false
 output_gain_db = 0.0
 mix = 100.0
+
+[report]
+kind = "static"
+title = "Compressor static curve against Comp VCA-65"
+about = """
+Our compressor in a track's first slot against Arturia's Comp VCA-65, a model of the dbx 165A, by \
+its static curve: a 1 kHz sine stepped from -60 to 0 dBFS a decibel at a time, each level held a \
+quarter of a second, with the output read once each step has settled.
+
+Both thresholds are at -20 on their own scales. Our ratios of 2, 4 and 8 to 1 are set against a \
+quarter, half and three quarters of Comp VCA-65's Compression knob, which has no ratio printed on \
+it, so the ratio measured is its mapping. Our attack is 1 ms and our release 100 ms; Comp VCA-65's \
+attack and release knobs are at noon, with its automatic attack and release off.
+"""
 
 [[cases]]
 name = "ratio-2"

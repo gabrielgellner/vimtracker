@@ -18,6 +18,7 @@ import numpy as np
 import pedalboard
 from scipy.io import wavfile
 
+import arturia
 import spec as specs
 
 # Arturia's plugins put out silence at pedalboard's default buffer size of 8192 (#186), so a host's
@@ -29,10 +30,21 @@ class Reference:
     """A loaded plugin, kept between cases, with the values its parameters had as it loaded so each
     case starts from them."""
 
-    def __init__(self, path: str, plugin_name: str | None = None):
+    def __init__(self, path: str, plugin_name: str | None = None, preset=None, state=None):
         self.path = path
         self.plugin = pedalboard.load_plugin(path, plugin_name=plugin_name)
+        if preset or state:
+            # Acid V, at least, plays from a state only once it's been given it a second time: the
+            # first leaves it silent (found on 2026-11-10).
+            for _ in range(2):
+                arturia.start_from(self.plugin, path, preset, state)
         self.loaded = {}
+
+    @classmethod
+    def of(cls, section: dict) -> "Reference":
+        """The plugin a spec's `[reference]` names, started from its preset and state if it gives
+        them."""
+        return cls(section["plugin"], section.get("plugin_name"), section.get("preset"), section.get("state"))
 
     def set(self, parameters: dict) -> None:
         known = self.plugin.parameters
@@ -54,7 +66,7 @@ def render(spec: specs.Spec, case: str | None, reference: Reference | None = Non
     """The reference's output for a spec, or one of its cases, as stereo samples (2, frames)."""
     section = spec.reference(case)
     if reference is None:
-        reference = Reference(section["plugin"], section.get("plugin_name"))
+        reference = Reference.of(section)
     reference.set(section["parameters"])
     buffer_size = int(section.get("buffer_size", DEFAULT_BUFFER_SIZE))
     plugin, rate = reference.plugin, spec.rate
@@ -69,7 +81,7 @@ def render(spec: specs.Spec, case: str | None, reference: Reference | None = Non
             reset=True,
         )
     else:
-        given = specs.signal(spec)
+        given = specs.signal(spec, case)
         frames = specs.duration_frames(spec, given.shape[1])
         padded = np.zeros((2, frames), dtype=np.float32)
         padded[:, : min(frames, given.shape[1])] = given[:, :frames]

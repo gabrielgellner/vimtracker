@@ -1,8 +1,9 @@
-# Arturia's Acid V against our Acid: one held C-2 at five cutoffs, from the knob's bottom to its
-# top, with the other knobs at noon. Acid V's distortion and sub oscillator are turned off, as our
-# Acid has neither, and its output is at 0 dB.
+# Arturia's Acid V against our Acid: one held C-2 with the cutoff knob in sixteen steps, from the
+# knob's bottom to its top, with the other knobs at noon, for the knob-mapping view #295 needs.
+# Acid V's distortion and sub oscillator are turned off, as our Acid has neither, and its output
+# is at 0 dB.
 #
-#   uv run run.py specs/acid-cutoff.toml
+#   uv run run.py specs/acid-cutoff.toml --report out/acid-cutoff.html
 
 rate = 48000
 duration = 1.0
@@ -27,9 +28,14 @@ acid.drive = 0x00
 [reference]
 plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
 buffer_size = 512
+# Acid V opens with whatever preset it last had, so each case starts from its factory Default,
+# with its sequencer off so a held key plays one note rather than a pattern (arturia.py).
+preset = "Default"
+state = { Sequencer_OnOff = 0 }
 
 [reference.parameters]
 master_volume_db = 0.0
+osc_pitch_st = 12.0        # Acid V plays MIDI 36 at 32.7 Hz, an octave under ours
 osc_waveform = 0.0
 resonance = 0.5
 envelope_mod = 0.5
@@ -38,25 +44,101 @@ accent = 0.5
 distortion_dry_wet = 0.0
 sub_osc_volume_db = -70.0
 
+[report]
+kind = "knob"
+title = "Acid's cutoff knob against Acid V's"
+knob = "acid.cutoff"
+reference_knob = "cutoff"
+about = """
+Our Acid's Cutoff and Arturia's Acid V's, each turned from bottom to top in sixteen even steps, \
+00 to FF on ours and 0 to 1 on Acid V, with the other knobs at noon. Each step plays one C-2 for \
+0.6 s, and the whole render's spectral centroid and peak level are measured: the centroid says \
+how bright the note is, the peak how loud its resonance gets.
+
+This is the knob-mapping view for #295. Nothing here fits or changes our mapping; it shows where \
+the two curves part.
+
+Acid V opens with whatever preset it last had, which here was a sequence that plays its own \
+pattern from a held key, so each case starts from its factory Default preset with its sequencer \
+switched off. It plays MIDI 36 an octave under ours, at 32.7 Hz, so its oscillator is raised 12 \
+semitones to play the same pitch. Its distortion and sub oscillator are off, as our Acid has \
+neither.
+"""
+
 [[cases]]
 name = "cutoff-00"
 ours = { acid.cutoff = 0x00 }
 reference = { cutoff = 0.0 }
 
 [[cases]]
-name = "cutoff-40"
-ours = { acid.cutoff = 0x40 }
-reference = { cutoff = 0.25 }
+name = "cutoff-11"
+ours = { acid.cutoff = 0x11 }
+reference = { cutoff = 0.0667 }
 
 [[cases]]
-name = "cutoff-80"
-ours = { acid.cutoff = 0x80 }
-reference = { cutoff = 0.5 }
+name = "cutoff-22"
+ours = { acid.cutoff = 0x22 }
+reference = { cutoff = 0.1333 }
 
 [[cases]]
-name = "cutoff-C0"
-ours = { acid.cutoff = 0xC0 }
-reference = { cutoff = 0.75 }
+name = "cutoff-33"
+ours = { acid.cutoff = 0x33 }
+reference = { cutoff = 0.2 }
+
+[[cases]]
+name = "cutoff-44"
+ours = { acid.cutoff = 0x44 }
+reference = { cutoff = 0.2667 }
+
+[[cases]]
+name = "cutoff-55"
+ours = { acid.cutoff = 0x55 }
+reference = { cutoff = 0.3333 }
+
+[[cases]]
+name = "cutoff-66"
+ours = { acid.cutoff = 0x66 }
+reference = { cutoff = 0.4 }
+
+[[cases]]
+name = "cutoff-77"
+ours = { acid.cutoff = 0x77 }
+reference = { cutoff = 0.4667 }
+
+[[cases]]
+name = "cutoff-88"
+ours = { acid.cutoff = 0x88 }
+reference = { cutoff = 0.5333 }
+
+[[cases]]
+name = "cutoff-99"
+ours = { acid.cutoff = 0x99 }
+reference = { cutoff = 0.6 }
+
+[[cases]]
+name = "cutoff-AA"
+ours = { acid.cutoff = 0xAA }
+reference = { cutoff = 0.6667 }
+
+[[cases]]
+name = "cutoff-BB"
+ours = { acid.cutoff = 0xBB }
+reference = { cutoff = 0.7333 }
+
+[[cases]]
+name = "cutoff-CC"
+ours = { acid.cutoff = 0xCC }
+reference = { cutoff = 0.8 }
+
+[[cases]]
+name = "cutoff-DD"
+ours = { acid.cutoff = 0xDD }
+reference = { cutoff = 0.8667 }
+
+[[cases]]
+name = "cutoff-EE"
+ours = { acid.cutoff = 0xEE }
+reference = { cutoff = 0.9333 }
 
 [[cases]]
 name = "cutoff-FF"

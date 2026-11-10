@@ -2,10 +2,30 @@
 
 use std::path::PathBuf;
 
-use vt_tui::dsp_probe::{self, Input, Loaded, ProbeError, frames_in, parse, prepare, render};
+use vt_model::song::FilterType;
+use vt_tui::dsp_probe::{
+    self, Input, Loaded, ProbeError, drawn_response, frames_in, parse, prepare, render,
+};
 
 const ACID_SPEC: &str = include_str!("../../../tools/compare/specs/acid-cutoff.toml");
 const COMP_SPEC: &str = include_str!("../../../tools/compare/specs/comp-static.toml");
+const LADDER_SPEC: &str = include_str!("../../../tools/compare/specs/filter-ladder.toml");
+const TIMING_SPEC: &str = include_str!("../../../tools/compare/specs/comp-timing.toml");
+/// Every spec in tools/compare, which must all parse and prepare.
+const SPECS: [&str; 12] = [
+    ACID_SPEC,
+    include_str!("../../../tools/compare/specs/acid-filter.toml"),
+    COMP_SPEC,
+    include_str!("../../../tools/compare/specs/comp-static-force.toml"),
+    TIMING_SPEC,
+    include_str!("../../../tools/compare/specs/comp-timing-force.toml"),
+    include_str!("../../../tools/compare/specs/filter-clean.toml"),
+    LADDER_SPEC,
+    include_str!("../../../tools/compare/specs/filter-ladder-level.toml"),
+    include_str!("../../../tools/compare/specs/filter-ours.toml"),
+    include_str!("../../../tools/compare/specs/filter-ringing.toml"),
+    include_str!("../../../tools/compare/specs/filter-ringing-ours.toml"),
+];
 
 fn loaded(text: &str) -> Loaded {
     Loaded {
@@ -50,7 +70,7 @@ fn sine_through(ours: &str) -> String {
 
 #[test]
 fn the_example_specs_parse_and_every_case_prepares() {
-    for text in [ACID_SPEC, COMP_SPEC] {
+    for text in SPECS {
         let loaded = loaded(text);
         assert!(!loaded.spec.cases.is_empty());
         for case in &loaded.spec.cases {
@@ -61,10 +81,10 @@ fn the_example_specs_parse_and_every_case_prepares() {
 
 #[test]
 fn a_probe_renders_the_same_every_time() {
-    let first = rendered(ACID_SPEC, Some("cutoff-80"));
+    let first = rendered(ACID_SPEC, Some("cutoff-88"));
     assert_eq!(first.len(), 48_000 * 2, "the spec's duration, in stereo");
     assert!(peak(&first) > 0.01, "the note sounds");
-    assert_eq!(first, rendered(ACID_SPEC, Some("cutoff-80")));
+    assert_eq!(first, rendered(ACID_SPEC, Some("cutoff-88")));
 
     let short_steps = COMP_SPEC.replace("hold = 0.25", "hold = 0.02");
     let compressed = rendered(&short_steps, Some("ratio-4"));
@@ -209,6 +229,141 @@ fn a_spec_names_known_machines_effects_and_cases() {
         panic!("an unknown case is refused");
     };
     assert!(message.contains("no case called cutoff-01"), "{message}");
+}
+
+/// A quiet sine sweep through the track's filter, with these settings.
+fn swept(settings: &str) -> String {
+    format!(
+        "[input]\nsignal = \"sweep\"\nfrom = 20.0\nto = 20000.0\nlevel = -30.0\nseconds = 0.2\n\
+         [ours]\nsettings = {{ {settings} }}\n"
+    )
+}
+
+#[test]
+fn a_spec_sets_the_tracks_filter_type_by_its_name() {
+    let probe = prepare(&loaded(&swept("filter = \"ladder\", cut = 0x80")), None).unwrap();
+    assert_eq!(probe.song.tracks[0].filter, FilterType::Ladder);
+    let probe = prepare(&loaded(&swept("filter = \"MS20 HP\"")), None).unwrap();
+    assert_eq!(probe.song.tracks[0].filter, FilterType::Ms20HighPass);
+
+    let clean = rendered(&swept("filter = \"LP\", cut = 0x80, res = 0xE6"), None);
+    let ladder = rendered(&swept("filter = \"Ladder\", cut = 0x80, res = 0xE6"), None);
+    assert_ne!(clean, ladder, "the type changes the sound");
+    assert_eq!(
+        ladder,
+        rendered(&swept("filter = \"Ladder\", cut = 0x80, res = 0xE6"), None),
+        "and renders the same every time"
+    );
+
+    let message = refused(&swept("filter = \"Moog\""));
+    assert!(
+        message.contains("no filter type called Moog") && message.contains("Ladder, Diode"),
+        "{message}"
+    );
+    let message = refused(&swept("filter = 3"));
+    assert!(message.contains("takes a filter type's name"), "{message}");
+}
+
+#[test]
+fn a_case_can_set_the_filter_type() {
+    let text = format!(
+        "{}[[cases]]\nname = \"diode\"\nours = {{ filter = \"Diode\" }}\n",
+        swept("cut = 0x80")
+    );
+    let probe = prepare(&loaded(&text), Some("diode")).unwrap();
+    assert_eq!(probe.song.tracks[0].filter, FilterType::Diode);
+}
+
+#[test]
+fn an_impulse_is_one_sample_then_silence() {
+    let input = Input::Impulse {
+        level: -20.0,
+        seconds: 0.1,
+    };
+    let frames = dsp_probe::signal(&input, 48_000, &PathBuf::new()).unwrap();
+    assert_eq!(frames.len(), frames_in(0.1, 48_000));
+    assert!((frames[0][0] - 0.1).abs() < 1e-6, "-20 dB");
+    assert!(frames[1..].iter().all(|frame| *frame == [0.0; 2]));
+}
+
+#[test]
+fn a_ladder_at_full_resonance_rings_from_an_impulse() {
+    let text = "[input]\nsignal = \"impulse\"\nlevel = -20.0\nseconds = 0.5\n\
+                [ours]\nsettings = { filter = \"Ladder\", cut = 0x90, res = 0xFF }\n";
+    let out = rendered(text, None);
+    assert!(
+        peak(&out[out.len() / 2..]) > 0.01,
+        "still ringing a quarter of a second on"
+    );
+}
+
+#[test]
+fn a_case_changes_the_input_or_replaces_it() {
+    let timing = loaded(TIMING_SPEC);
+    let long = prepare(&timing, Some("fast-long")).unwrap();
+    let short = prepare(&timing, Some("fast-short")).unwrap();
+    assert_eq!(
+        long.frames - short.frames,
+        frames_in(0.5, 48_000) - frames_in(0.05, 48_000),
+        "the short burst's case is that much shorter"
+    );
+
+    let text = format!(
+        "{}[[cases]]\nname = \"click\"\ninput = {{ signal = \"impulse\", level = 0.0, seconds = 0.1 }}\n",
+        sine_through("")
+    );
+    let probe = prepare(&loaded(&text), Some("click")).unwrap();
+    assert_eq!(
+        probe.frames,
+        frames_in(0.1, 48_000),
+        "another signal replaces the input"
+    );
+
+    let text = format!(
+        "{}[[cases]]\nname = \"wrong\"\ninput = {{ frequency = \"loud\" }}\n",
+        sine_through("")
+    );
+    let message = refused(&text);
+    assert!(message.contains("in the case wrong"), "{message}");
+    let text = format!(
+        "{}[[cases]]\nname = \"notes\"\ninput = {{ level = 0.0 }}\n",
+        acid("")
+    );
+    let message = refused(&text);
+    assert!(message.contains("plays notes"), "{message}");
+}
+
+#[test]
+fn the_drawn_response_is_the_sound_pages() {
+    let probe = prepare(&loaded(&swept("cut = 0x90")), None).unwrap();
+    let drawn = drawn_response(&probe);
+    let at = |hertz: f32| {
+        drawn
+            .iter()
+            .min_by(|a, b| {
+                (a.0 / hertz)
+                    .ln()
+                    .abs()
+                    .total_cmp(&(b.0 / hertz).ln().abs())
+            })
+            .map(|point| point.1)
+            .unwrap()
+    };
+    assert!((drawn[0].0 - 20.0).abs() < 1e-3);
+    assert!((drawn[drawn.len() - 1].0 - 20_000.0).abs() < 1.0);
+    assert!(at(100.0).abs() < 0.5, "flat well under its cutoff");
+    assert!((at(988.0) + 3.0).abs() < 1.0, "3 dB down at it");
+    assert!(at(10_000.0) < -30.0, "and falling well over it");
+}
+
+#[test]
+fn the_ladder_spec_renders_the_same_every_time() {
+    let short = LADDER_SPEC
+        .replace("seconds = 2.0", "seconds = 0.1")
+        .replace("duration = 2.5", "duration = 0.2");
+    let first = rendered(&short, Some("ladder-90-res90"));
+    assert!(peak(&first) > 0.001);
+    assert_eq!(first, rendered(&short, Some("ladder-90-res90")));
 }
 
 #[test]

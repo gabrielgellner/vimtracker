@@ -1,0 +1,794 @@
+# Every type and mode of our track filter that filter-clean and filter-ladder don't compare with a
+# plugin, by a sine sweep's magnitude response at three cutoffs and Res 0, 50% and 90%: the clean
+# types at 24 dB, the ladder's other modes, the diode ladder's low cuts, the Korg 35s and Vital's
+# Dirty. There's no reference: each is measured against what the Sound page draws for it, from
+# `vimtracker probe --response`.
+#
+#   uv run run.py specs/filter-ours.toml --report out/filter-ours.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[report]
+kind = "response"
+title = "Our other filters against their drawings"
+figure = ["filter", "mode"]
+row = ""
+column = "cut"
+line = ["res"]
+about = """
+Every type and mode of our track filter that has no reference plugin here: the clean types at \
+24 dB, the ladder's other modes, the diode ladder with each of its low cuts, the Korg 35 low-pass \
+and high-pass from the MS-20, and Vital's Dirty filter in each of its modes. Each is given the same \
+quiet sine sweep as the other filter reports, and the response is the output's spectrum over the \
+input's.
+
+With nothing to compare against, each is measured against its own drawing: the curve the Sound \
+page draws for the same settings, which is worked out from the filter's equations rather than \
+heard. Where the two part, the page shows something other than what plays.
+"""
+
+[[cases]]
+name = "lp-24-55-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "lp-24-55-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "lp-24-55-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "lp-24-90-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "lp-24-90-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "lp-24-90-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "lp-24-CC-res0"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "lp-24-CC-res50"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "lp-24-CC-res90"
+ours = { filter = "LP", mode = "24 dB", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "hp-24-55-res0"
+ours = { filter = "HP", mode = "24 dB", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "hp-24-55-res50"
+ours = { filter = "HP", mode = "24 dB", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "hp-24-55-res90"
+ours = { filter = "HP", mode = "24 dB", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "hp-24-90-res0"
+ours = { filter = "HP", mode = "24 dB", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "hp-24-90-res50"
+ours = { filter = "HP", mode = "24 dB", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "hp-24-90-res90"
+ours = { filter = "HP", mode = "24 dB", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "hp-24-CC-res0"
+ours = { filter = "HP", mode = "24 dB", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "hp-24-CC-res50"
+ours = { filter = "HP", mode = "24 dB", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "hp-24-CC-res90"
+ours = { filter = "HP", mode = "24 dB", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "bp-24-55-res0"
+ours = { filter = "BP", mode = "24 dB", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "bp-24-55-res50"
+ours = { filter = "BP", mode = "24 dB", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "bp-24-55-res90"
+ours = { filter = "BP", mode = "24 dB", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "bp-24-90-res0"
+ours = { filter = "BP", mode = "24 dB", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "bp-24-90-res50"
+ours = { filter = "BP", mode = "24 dB", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "bp-24-90-res90"
+ours = { filter = "BP", mode = "24 dB", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "bp-24-CC-res0"
+ours = { filter = "BP", mode = "24 dB", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "bp-24-CC-res50"
+ours = { filter = "BP", mode = "24 dB", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "bp-24-CC-res90"
+ours = { filter = "BP", mode = "24 dB", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "notch-24-55-res0"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "notch-24-55-res50"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "notch-24-55-res90"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "notch-24-90-res0"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "notch-24-90-res50"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "notch-24-90-res90"
+ours = { filter = "Notch", mode = "24 dB", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "notch-24-CC-res0"
+ours = { filter = "Notch", mode = "24 dB", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "notch-24-CC-res50"
+ours = { filter = "Notch", mode = "24 dB", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "notch-24-CC-res90"
+ours = { filter = "Notch", mode = "24 dB", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ladder-lp12-55-res0"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ladder-lp12-55-res50"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ladder-lp12-55-res90"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ladder-lp12-90-res0"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ladder-lp12-90-res50"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ladder-lp12-90-res90"
+ours = { filter = "Ladder", mode = "LP12", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ladder-lp12-CC-res0"
+ours = { filter = "Ladder", mode = "LP12", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ladder-lp12-CC-res50"
+ours = { filter = "Ladder", mode = "LP12", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ladder-lp12-CC-res90"
+ours = { filter = "Ladder", mode = "LP12", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ladder-bp-55-res0"
+ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ladder-bp-55-res50"
+ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ladder-bp-55-res90"
+ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ladder-bp-90-res0"
+ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ladder-bp-90-res50"
+ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ladder-bp-90-res90"
+ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ladder-bp-CC-res0"
+ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ladder-bp-CC-res50"
+ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ladder-bp-CC-res90"
+ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp12-55-res0"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp12-55-res50"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp12-55-res90"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp12-90-res0"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp12-90-res50"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp12-90-res90"
+ours = { filter = "Ladder", mode = "HP12", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp12-CC-res0"
+ours = { filter = "Ladder", mode = "HP12", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp12-CC-res50"
+ours = { filter = "Ladder", mode = "HP12", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp12-CC-res90"
+ours = { filter = "Ladder", mode = "HP12", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp24-55-res0"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp24-55-res50"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp24-55-res90"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp24-90-res0"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp24-90-res50"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp24-90-res90"
+ours = { filter = "Ladder", mode = "HP24", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ladder-hp24-CC-res0"
+ours = { filter = "Ladder", mode = "HP24", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ladder-hp24-CC-res50"
+ours = { filter = "Ladder", mode = "HP24", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ladder-hp24-CC-res90"
+ours = { filter = "Ladder", mode = "HP24", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ladder-notch-55-res0"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ladder-notch-55-res50"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ladder-notch-55-res90"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ladder-notch-90-res0"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ladder-notch-90-res50"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ladder-notch-90-res90"
+ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ladder-notch-CC-res0"
+ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ladder-notch-CC-res50"
+ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ladder-notch-CC-res90"
+ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "diode-full-55-res0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "diode-full-55-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "diode-full-55-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "diode-full-90-res0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "diode-full-90-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "diode-full-90-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "diode-full-CC-res0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "diode-full-CC-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "diode-full-CC-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "diode-m3oct-55-res0"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "diode-m3oct-55-res50"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "diode-m3oct-55-res90"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "diode-m3oct-90-res0"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "diode-m3oct-90-res50"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "diode-m3oct-90-res90"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "diode-m3oct-CC-res0"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "diode-m3oct-CC-res50"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "diode-m3oct-CC-res90"
+ours = { filter = "Diode", mode = "-3 oct", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "diode-m2oct-55-res0"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "diode-m2oct-55-res50"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "diode-m2oct-55-res90"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "diode-m2oct-90-res0"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "diode-m2oct-90-res50"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "diode-m2oct-90-res90"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "diode-m2oct-CC-res0"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "diode-m2oct-CC-res50"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "diode-m2oct-CC-res90"
+ours = { filter = "Diode", mode = "-2 oct", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "diode-m1oct-55-res0"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "diode-m1oct-55-res50"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "diode-m1oct-55-res90"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "diode-m1oct-90-res0"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "diode-m1oct-90-res50"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "diode-m1oct-90-res90"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "diode-m1oct-CC-res0"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "diode-m1oct-CC-res50"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "diode-m1oct-CC-res90"
+ours = { filter = "Diode", mode = "-1 oct", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ms20lp-55-res0"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ms20lp-55-res50"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ms20lp-55-res90"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ms20lp-90-res0"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ms20lp-90-res50"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ms20lp-90-res90"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ms20lp-CC-res0"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ms20lp-CC-res50"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ms20lp-CC-res90"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "ms20hp-55-res0"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "ms20hp-55-res50"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "ms20hp-55-res90"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "ms20hp-90-res0"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "ms20hp-90-res50"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "ms20hp-90-res90"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "ms20hp-CC-res0"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "ms20hp-CC-res50"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "ms20hp-CC-res90"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp24-55-res0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp24-55-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp24-55-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp24-90-res0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp24-90-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp24-90-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp24-CC-res0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp24-CC-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp24-CC-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp12-55-res0"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp12-55-res50"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp12-55-res90"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp12-90-res0"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp12-90-res50"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp12-90-res90"
+ours = { filter = "Dirty", mode = "LP12", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-lp12-CC-res0"
+ours = { filter = "Dirty", mode = "LP12", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-lp12-CC-res50"
+ours = { filter = "Dirty", mode = "LP12", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-lp12-CC-res90"
+ours = { filter = "Dirty", mode = "LP12", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-bp-55-res0"
+ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-bp-55-res50"
+ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-bp-55-res90"
+ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-bp-90-res0"
+ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-bp-90-res50"
+ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-bp-90-res90"
+ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-bp-CC-res0"
+ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-bp-CC-res50"
+ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-bp-CC-res90"
+ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp12-55-res0"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp12-55-res50"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp12-55-res90"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp12-90-res0"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp12-90-res50"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp12-90-res90"
+ours = { filter = "Dirty", mode = "HP12", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp12-CC-res0"
+ours = { filter = "Dirty", mode = "HP12", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp12-CC-res50"
+ours = { filter = "Dirty", mode = "HP12", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp12-CC-res90"
+ours = { filter = "Dirty", mode = "HP12", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp24-55-res0"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp24-55-res50"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp24-55-res90"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp24-90-res0"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp24-90-res50"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp24-90-res90"
+ours = { filter = "Dirty", mode = "HP24", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-hp24-CC-res0"
+ours = { filter = "Dirty", mode = "HP24", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-hp24-CC-res50"
+ours = { filter = "Dirty", mode = "HP24", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-hp24-CC-res90"
+ours = { filter = "Dirty", mode = "HP24", cut = 0xCC, res = 0xE6 }
+
+[[cases]]
+name = "dirty-notch-55-res0"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-notch-55-res50"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-notch-55-res90"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0xE6 }
+
+[[cases]]
+name = "dirty-notch-90-res0"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-notch-90-res50"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-notch-90-res90"
+ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0xE6 }
+
+[[cases]]
+name = "dirty-notch-CC-res0"
+ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-notch-CC-res50"
+ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-notch-CC-res90"
+ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0xE6 }

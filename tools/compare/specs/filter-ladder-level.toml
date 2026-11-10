@@ -1,0 +1,68 @@
+# Our Ladder against Arturia's Filter MINI at Res 90% and Cut 988 Hz, swept at five levels from
+# -60 to -10 dBFS: how much each side's saturation flattens its resonance as the input grows. The
+# settings are filter-ladder's, and each case changes only the sweep's level.
+#
+#   uv run run.py specs/filter-ladder-level.toml --report out/filter-ladder-level.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[ours.settings]
+filter = "Ladder"
+mode = "LP24"
+cut = 0x90
+res = 0xE6
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter MINI.vst3"
+buffer_size = 512
+
+[reference.parameters]
+output_volume = 0.343
+drive = 0.0
+dry_wet = 1.0
+limit_resonance = false
+cutoff = 0.504
+resonance = 0.9
+
+[report]
+kind = "response"
+title = "Ladder against Filter MINI, by input level"
+figure = ["filter", "mode"]
+row = ""
+column = "input.level"
+about = """
+A ladder saturates, so its resonance depends on how loud it's played. Our Ladder at Res 90% and \
+Cut 988 Hz, and Arturia's Filter MINI at the same settings as in the ladder report, are each \
+swept at -60, -40, -30, -20 and -10 dBFS. At the quietest the ladders are near their small-signal \
+shape; as the level rises, the resonant peak flattens as the saturation pulls the feedback down.
+"""
+
+[[cases]]
+name = "level-60"
+input = { level = -60.0 }
+
+[[cases]]
+name = "level-40"
+input = { level = -40.0 }
+
+[[cases]]
+name = "level-30"
+input = { level = -30.0 }
+
+[[cases]]
+name = "level-20"
+input = { level = -20.0 }
+
+[[cases]]
+name = "level-10"
+input = { level = -10.0 }

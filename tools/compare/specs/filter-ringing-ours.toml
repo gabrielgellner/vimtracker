@@ -1,0 +1,157 @@
+# Our other filters that self-oscillate, at full resonance, ringing on their own after one click,
+# at eight cutoffs an eighth of the knob's turn apart: the pitch each rings at, in cents off its
+# Cut. There's no reference plugin for these.
+#
+#   uv run run.py specs/filter-ringing-ours.toml --report out/filter-ringing-ours.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -20.0
+seconds = 2.0
+
+[ours]
+
+[ours.settings]
+res = 0xFF
+
+[report]
+kind = "oscillation"
+title = "Our other filters' self-oscillation"
+line = ["filter"]
+window = [1.0, 2.0]
+about = """
+At full resonance the diode ladder, the Korg 35 low-pass and high-pass, and Vital's Dirty filter \
+can each ring on their own, and the pitch they ring at should follow Cut. Each is given a single \
+click and then silence at Res 0xFF, and the pitch of what rings is measured a second later, over a \
+second, in cents off the frequency Cut is set to. There's no reference plugin for these.
+"""
+
+[[cases]]
+name = "diode-10"
+ours = { filter = "Diode", cut = 0x10 }
+
+[[cases]]
+name = "diode-30"
+ours = { filter = "Diode", cut = 0x30 }
+
+[[cases]]
+name = "diode-50"
+ours = { filter = "Diode", cut = 0x50 }
+
+[[cases]]
+name = "diode-70"
+ours = { filter = "Diode", cut = 0x70 }
+
+[[cases]]
+name = "diode-90"
+ours = { filter = "Diode", cut = 0x90 }
+
+[[cases]]
+name = "diode-B0"
+ours = { filter = "Diode", cut = 0xB0 }
+
+[[cases]]
+name = "diode-D0"
+ours = { filter = "Diode", cut = 0xD0 }
+
+[[cases]]
+name = "diode-F0"
+ours = { filter = "Diode", cut = 0xF0 }
+
+[[cases]]
+name = "ms20lp-10"
+ours = { filter = "MS20 LP", cut = 0x10 }
+
+[[cases]]
+name = "ms20lp-30"
+ours = { filter = "MS20 LP", cut = 0x30 }
+
+[[cases]]
+name = "ms20lp-50"
+ours = { filter = "MS20 LP", cut = 0x50 }
+
+[[cases]]
+name = "ms20lp-70"
+ours = { filter = "MS20 LP", cut = 0x70 }
+
+[[cases]]
+name = "ms20lp-90"
+ours = { filter = "MS20 LP", cut = 0x90 }
+
+[[cases]]
+name = "ms20lp-B0"
+ours = { filter = "MS20 LP", cut = 0xB0 }
+
+[[cases]]
+name = "ms20lp-D0"
+ours = { filter = "MS20 LP", cut = 0xD0 }
+
+[[cases]]
+name = "ms20lp-F0"
+ours = { filter = "MS20 LP", cut = 0xF0 }
+
+[[cases]]
+name = "ms20hp-10"
+ours = { filter = "MS20 HP", cut = 0x10 }
+
+[[cases]]
+name = "ms20hp-30"
+ours = { filter = "MS20 HP", cut = 0x30 }
+
+[[cases]]
+name = "ms20hp-50"
+ours = { filter = "MS20 HP", cut = 0x50 }
+
+[[cases]]
+name = "ms20hp-70"
+ours = { filter = "MS20 HP", cut = 0x70 }
+
+[[cases]]
+name = "ms20hp-90"
+ours = { filter = "MS20 HP", cut = 0x90 }
+
+[[cases]]
+name = "ms20hp-B0"
+ours = { filter = "MS20 HP", cut = 0xB0 }
+
+[[cases]]
+name = "ms20hp-D0"
+ours = { filter = "MS20 HP", cut = 0xD0 }
+
+[[cases]]
+name = "ms20hp-F0"
+ours = { filter = "MS20 HP", cut = 0xF0 }
+
+[[cases]]
+name = "dirty-10"
+ours = { filter = "Dirty", cut = 0x10 }
+
+[[cases]]
+name = "dirty-30"
+ours = { filter = "Dirty", cut = 0x30 }
+
+[[cases]]
+name = "dirty-50"
+ours = { filter = "Dirty", cut = 0x50 }
+
+[[cases]]
+name = "dirty-70"
+ours = { filter = "Dirty", cut = 0x70 }
+
+[[cases]]
+name = "dirty-90"
+ours = { filter = "Dirty", cut = 0x90 }
+
+[[cases]]
+name = "dirty-B0"
+ours = { filter = "Dirty", cut = 0xB0 }
+
+[[cases]]
+name = "dirty-D0"
+ours = { filter = "Dirty", cut = 0xD0 }
+
+[[cases]]
+name = "dirty-F0"
+ours = { filter = "Dirty", cut = 0xF0 }

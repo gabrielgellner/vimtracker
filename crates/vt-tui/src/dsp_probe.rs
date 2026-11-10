@@ -12,13 +12,17 @@
 //! A note is played as the keyboard plays one, held through the track for its length, so the
 //! track's sound, filter and effects are all heard and nothing is sequenced. An effect's input is
 //! played through the track as it is, at full level with no fades.
+//!
+//! A spec's `[report]` says how `tools/compare/report.py` lays out its measurements, and isn't read
+//! here either.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use vt_engine::dsp::filter::track_response_db;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::write_wav;
@@ -28,7 +32,7 @@ use vt_model::project;
 use vt_model::sample::{SampleData, SampleError, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::settings::{Effect, Kind, Owner, SettingId, voice_key};
-use vt_model::song::{FilterMode, Machine, Song, SynthVoice, Track};
+use vt_model::song::{FilterMode, FilterType, Machine, Song, SynthVoice, Track};
 use vt_model::step::{ACCENT_VELOCITY, MAX_VELOCITY};
 
 /// The rate a spec renders at unless it says.
@@ -43,6 +47,11 @@ const LONGEST_SECONDS: f64 = 600.0;
 pub enum ProbeError {
     #[error("couldn't read {path}: {source}")]
     Read {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("couldn't write {path}: {source}")]
+    WriteText {
         path: String,
         source: std::io::Error,
     },
@@ -80,6 +89,8 @@ pub struct Spec {
     /// Versions of the spec, each changing some settings, rendered one at a time.
     #[serde(default)]
     pub cases: Vec<Case>,
+    /// How the report lays out what's measured, which only the reference side reads.
+    pub report: Option<toml::Table>,
 }
 
 fn default_rate() -> u32 {
@@ -114,6 +125,10 @@ pub struct Case {
     /// The reference's parameters it changes or adds, which only the reference side reads.
     #[serde(default)]
     pub reference: toml::Table,
+    /// The input's fields it changes, such as a burst's `on`, or a whole input of another
+    /// `signal`.
+    #[serde(default)]
+    pub input: toml::Table,
 }
 
 /// A note, held for its length.
@@ -150,7 +165,7 @@ impl NoteSpec {
 
 /// What an effect is given: a file, or a signal made the same way on both sides. Levels are in dB
 /// of full scale at the peak, times in seconds and frequencies in Hz.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "signal", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Input {
     /// A file, from the spec's folder, made stereo at the spec's rate.
@@ -190,6 +205,9 @@ pub enum Input {
     },
     /// Nothing, for a voice or an effect that rings on its own.
     Silence { seconds: f64 },
+    /// One sample at `level`, then nothing, for `seconds` in all: a kick for a filter to ring
+    /// from, as one that self-oscillates has nothing to start it in silence.
+    Impulse { level: f64, seconds: f64 },
 }
 
 fn one_db() -> f64 {
@@ -277,9 +295,65 @@ pub fn parse(text: &str) -> Result<Spec, ProbeError> {
     check_settings(&settings(&spec.ours.settings)?, machine, &effects)?;
     for case in &spec.cases {
         check_settings(&settings(&case.ours)?, machine, &effects)
+            .and_then(|()| input_for(&spec, Some(case)).map(drop))
             .map_err(|error| wrong(format!("in the case {}: {error}", case.name)))?;
     }
     Ok(spec)
+}
+
+/// The input a spec, or one of its cases, gives: the spec's, with the case's fields over it, or
+/// the case's alone if it names another `signal`.
+fn input_for(spec: &Spec, case: Option<&Case>) -> Result<Option<Input>, ProbeError> {
+    let changes = case
+        .map(|case| &case.input)
+        .filter(|input| !input.is_empty());
+    let (Some(input), Some(changes)) = (&spec.input, changes) else {
+        return match (&spec.input, changes) {
+            (None, Some(_)) => Err(wrong(
+                "a case changes the input, but the spec plays notes rather than an input",
+            )),
+            (input, _) => Ok(input.clone()),
+        };
+    };
+    let mut table = match toml::Value::try_from(input) {
+        Ok(toml::Value::Table(table)) => table,
+        _ => toml::Table::new(),
+    };
+    if changes
+        .get("signal")
+        .is_some_and(|signal| table.get("signal") != Some(signal))
+    {
+        table.clear();
+    }
+    table.extend(changes.clone());
+    toml::Value::Table(table)
+        .try_into()
+        .map(Some)
+        .map_err(|error: toml::de::Error| wrong(format!("its input: {}", error.message())))
+}
+
+/// The key that sets the track's filter type, which a song keeps on the track rather than as a
+/// setting, so it has no [`SettingId`].
+const FILTER_KEY: &str = "filter";
+
+/// The filter type a spec names, by the name the Sound page shows.
+fn filter_of(given: &Given) -> Result<FilterType, ProbeError> {
+    let names = || FilterType::ALL.map(FilterType::name).join(", ");
+    let Given::Choice(name) = given else {
+        return Err(wrong(format!(
+            "{FILTER_KEY} takes a filter type's name: {}",
+            names()
+        )));
+    };
+    FilterType::ALL
+        .into_iter()
+        .find(|kind| kind.name().eq_ignore_ascii_case(name))
+        .ok_or_else(|| {
+            wrong(format!(
+                "there's no filter type called {name}; there are {}",
+                names()
+            ))
+        })
 }
 
 /// The machine a spec names, if any.
@@ -485,6 +559,10 @@ fn check_settings(
     effects: &[Effect],
 ) -> Result<(), ProbeError> {
     for (key, given) in settings {
+        if key == FILTER_KEY {
+            filter_of(given)?;
+            continue;
+        }
         let id = setting_of(key, machine, effects)?;
         value_of(key, id, given)?;
     }
@@ -646,12 +724,16 @@ pub fn signal(input: &Input, rate: u32, folder: &Path) -> Result<Vec<[f32; 2]>, 
             )
         }
         Input::Silence { seconds } => vec![[0.0; 2]; frames_in(*seconds, rate)],
+        Input::Impulse { level, seconds } => {
+            let mut frames = vec![[0.0; 2]; frames_in(*seconds, rate).max(1)];
+            frames[0] = [gain_of(*level) as f32; 2];
+            frames
+        }
     })
 }
 
-/// The spec's settings with a case's, by name, over them.
-fn chosen_settings(spec: &Spec, case: Option<&str>) -> Result<BTreeMap<String, Given>, ProbeError> {
-    let mut chosen = settings(&spec.ours.settings)?;
+/// The case a spec renders, by name: none for a spec without cases, which must have one chosen.
+fn chosen_case<'a>(spec: &'a Spec, case: Option<&str>) -> Result<Option<&'a Case>, ProbeError> {
     let names = || {
         spec.cases
             .iter()
@@ -660,26 +742,33 @@ fn chosen_settings(spec: &Spec, case: Option<&str>) -> Result<BTreeMap<String, G
             .join(", ")
     };
     match (case, spec.cases.is_empty()) {
-        (None, true) => {}
-        (None, false) => {
-            return Err(wrong(format!(
-                "this spec has cases, so choose one with --case: {}",
-                names()
-            )));
-        }
-        (Some(name), _) => {
-            let found = spec
-                .cases
-                .iter()
-                .find(|case| case.name == name)
-                .ok_or_else(|| {
-                    wrong(format!(
-                        "there's no case called {name}; there are {}",
-                        names()
-                    ))
-                })?;
-            chosen.extend(settings(&found.ours)?);
-        }
+        (None, true) => Ok(None),
+        (None, false) => Err(wrong(format!(
+            "this spec has cases, so choose one with --case: {}",
+            names()
+        ))),
+        (Some(name), _) => spec
+            .cases
+            .iter()
+            .find(|case| case.name == name)
+            .map(Some)
+            .ok_or_else(|| {
+                wrong(format!(
+                    "there's no case called {name}; there are {}",
+                    names()
+                ))
+            }),
+    }
+}
+
+/// The spec's settings with a case's over them.
+fn chosen_settings(
+    spec: &Spec,
+    case: Option<&Case>,
+) -> Result<BTreeMap<String, Given>, ProbeError> {
+    let mut chosen = settings(&spec.ours.settings)?;
+    if let Some(case) = case {
+        chosen.extend(settings(&case.ours)?);
     }
     Ok(chosen)
 }
@@ -718,13 +807,18 @@ pub fn prepare(loaded: &Loaded, case: Option<&str>) -> Result<Probe, ProbeError>
     for (slot, effect) in effects.iter().enumerate() {
         track.inserts[slot] = fresh(*effect);
     }
+    let case = chosen_case(spec, case)?;
     for (key, given) in chosen_settings(spec, case)? {
+        if key == FILTER_KEY {
+            track.filter = filter_of(&given)?;
+            continue;
+        }
         let id = setting_of(&key, machine, &effects)?;
         set_on(track, id, value_of(&key, id, &given)?);
     }
-    let (play, length) = match &spec.input {
+    let (play, length) = match input_for(spec, case)? {
         Some(input) => {
-            let frames = signal(input, spec.rate, &loaded.folder)?;
+            let frames = signal(&input, spec.rate, &loaded.folder)?;
             let length = frames.len();
             (Play::Input(Arc::new(SampleData { frames })), length)
         }
@@ -825,6 +919,27 @@ pub struct ProbeRequest {
     pub case: Option<String>,
     /// Where to write the generated input too, so the reference side's can be checked against it.
     pub write_input: Option<PathBuf>,
+    /// Where to write the track filter's response as the Sound page draws it, as CSV.
+    pub response: Option<PathBuf>,
+}
+
+/// How many points a drawn response has to an octave, from 20 Hz to 20 kHz.
+const RESPONSE_POINTS_PER_OCTAVE: u32 = 48;
+
+/// The track filter's response as the Sound page draws it, from `track_response_db`, as pairs of
+/// Hz and dB, so what's measured can be checked against what's drawn.
+pub fn drawn_response(probe: &Probe) -> Vec<(f32, f32)> {
+    let octaves = 1000_f32.log2();
+    let points = (octaves * RESPONSE_POINTS_PER_OCTAVE as f32).round() as u32;
+    (0..=points)
+        .map(|point| {
+            let hertz = 20.0 * (octaves * point as f32 / points as f32).exp2();
+            (
+                hertz,
+                track_response_db(&probe.song.tracks[0], probe.rate, hertz),
+            )
+        })
+        .collect()
 }
 
 /// `vimtracker probe`: render a spec, or one of its cases, to a WAV file.
@@ -834,6 +949,16 @@ pub fn run(request: &ProbeRequest) -> Result<(), ProbeError> {
     if let (Some(path), Play::Input(input)) = (&request.write_input, &probe.play) {
         let interleaved: Vec<f32> = input.frames.iter().flatten().copied().collect();
         write_wav(path, probe.rate, &interleaved)?;
+    }
+    if let Some(path) = &request.response {
+        let mut text = String::from("hertz,db\n");
+        for (hertz, db) in drawn_response(&probe) {
+            text.push_str(&format!("{hertz},{db}\n"));
+        }
+        std::fs::write(path, text).map_err(|source| ProbeError::WriteText {
+            path: path.display().to_string(),
+            source,
+        })?;
     }
     let rate = probe.rate;
     let samples = render(probe);
