@@ -1265,6 +1265,33 @@ impl Engine {
     /// handed over whole, so nothing is loaded or freed here. What's given back is for the edit
     /// thread to free: the file it replaces, or this one if the track can't play it.
     pub fn play_file(&mut self, track: usize, file: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        self.play_one_off(
+            track,
+            file,
+            velocity_gain(DEFAULT_NOTE_VELOCITY),
+            Envelope::note_shape(),
+        )
+    }
+
+    /// Play audio through a track as it is, at full level from its first frame to its last with no
+    /// fade in or out, so what comes out is what the track's filter and effects make of it, for
+    /// `vimtracker probe`. Otherwise it goes as [`Engine::play_file`] does.
+    pub fn play_input(&mut self, track: usize, input: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        let unshaped = Envelope {
+            attack_ms: 0,
+            release_ms: 0,
+            ..Envelope::note_shape()
+        };
+        self.play_one_off(track, input, 1.0, unshaped)
+    }
+
+    fn play_one_off(
+        &mut self,
+        track: usize,
+        file: Arc<SampleData>,
+        gain: f32,
+        shape: Envelope,
+    ) -> Option<Arc<SampleData>> {
         let plays = self
             .current
             .song
@@ -1285,13 +1312,13 @@ impl Engine {
             sample: FILE_SAMPLES[place],
             synth: None,
             note: 60,
-            gain: velocity_gain(DEFAULT_NOTE_VELOCITY),
+            gain,
             entry: None,
             slice: 0,
             span: None,
             cut: Cut::default(),
             accent: false,
-            shape: Envelope::note_shape(),
+            shape,
             release_after: None,
         };
         let sounding = self.previews.sounding();

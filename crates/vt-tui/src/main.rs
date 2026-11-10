@@ -37,6 +37,18 @@ enum Command {
         #[arg(long)]
         stems: bool,
     },
+    /// Play one voice or one effect with no song, offline, from a spec that the reference side in
+    /// tools/compare reads too, to a WAV file.
+    Probe {
+        spec: PathBuf,
+        out: PathBuf,
+        /// Which of the spec's cases to render, if it has them.
+        #[arg(long)]
+        case: Option<String>,
+        /// Also write an effect's input as the probe made it, to check the reference side's against.
+        #[arg(long)]
+        write_input: Option<PathBuf>,
+    },
     /// Make and manage kits.
     Kits {
         #[command(subcommand)]
@@ -99,6 +111,18 @@ fn main() -> std::process::ExitCode {
             seed,
             tail,
             stems,
+        })
+        .map_err(|e| e.to_string()),
+        Some(Command::Probe {
+            spec,
+            out,
+            case,
+            write_input,
+        }) => vt_tui::dsp_probe::run(&vt_tui::dsp_probe::ProbeRequest {
+            spec,
+            out,
+            case,
+            write_input,
         })
         .map_err(|e| e.to_string()),
         None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),

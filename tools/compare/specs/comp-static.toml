@@ -1,0 +1,53 @@
+# Arturia's Comp VCA-65 against our compressor in slot 1: a 1 kHz sine stepped from -60 to 0 dBFS a
+# dB at a time, each level held a quarter of a second, for the static curve. Both thresholds are at
+# -20 dB on their own scales, with ratios of about 2, 4 and 8 to 1 on ours against a quarter, half
+# and three quarters of Comp VCA-65's Compression knob, whose mapping is what the comparison shows.
+#
+#   uv run run.py specs/comp-static.toml
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -60.0
+to = 0.0
+step = 1.0
+hold = 0.25
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.threshold = 0xAA   # -20 dB
+1.comp.attack = 0x55      # 1 ms
+1.comp.release = 0x80     # 100 ms
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Comp VCA-65.vst3"
+buffer_size = 512
+
+[reference.parameters]
+threshold = -20.0
+attack_time = 0.5
+release_time = 0.5
+auto_att_rel = false
+output_gain_db = 0.0
+mix = 100.0
+
+[[cases]]
+name = "ratio-2"
+ours = { 1.comp.ratio = 0x3B }   # 2.0:1
+reference = { compression = 0.25 }
+
+[[cases]]
+name = "ratio-4"
+ours = { 1.comp.ratio = 0x65 }   # 4.0:1
+reference = { compression = 0.5 }
+
+[[cases]]
+name = "ratio-8"
+ours = { 1.comp.ratio = 0x9B }   # 8.0:1
+reference = { compression = 0.75 }

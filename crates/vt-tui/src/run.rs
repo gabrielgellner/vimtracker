@@ -50,14 +50,14 @@ pub enum RunError {
     MissingSample(String),
     #[error(
         "this terminal doesn't offer the kitty keyboard protocol, which says when a key is held \
-         and let go. vimtracker runs in kitty and Ghostty, and not inside tmux. `render`, `bench` \
-         and `probe-keys` run anywhere"
+         and let go. vimtracker runs in kitty and Ghostty, and not inside tmux. `render`, `bench`, \
+         `probe` and `probe-keys` run anywhere"
     )]
     NoKeyboardProtocol,
     #[error(
         "this terminal doesn't draw images with the kitty graphics protocol, which shows the \
          envelopes and the filter's curve. vimtracker runs in kitty and Ghostty, and not inside \
-         tmux. `render`, `bench` and `probe-keys` run anywhere"
+         tmux. `render`, `bench`, `probe` and `probe-keys` run anywhere"
     )]
     NoGraphicsProtocol,
 }

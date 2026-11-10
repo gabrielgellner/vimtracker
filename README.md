@@ -38,8 +38,8 @@ says when a key is held and let go. The Option keys, such as `Option-1`, need ki
 `kitty.conf` frees them; [docs/terminal-notes.md](docs/terminal-notes.md#cmd-keys) has the lines.
 
 It also needs the kitty graphics protocol, as small drawings such as envelopes and the filter's
-curve are images. `vimtracker probe-keys` says whether a terminal has both, and `render`, `bench`
-and `probe-keys` run in any terminal.
+curve are images. `vimtracker probe-keys` says whether a terminal has both, and `render`, `bench`,
+`probe` and `probe-keys` run in any terminal.
 
 ## Quick start
 
@@ -94,7 +94,9 @@ without a terminal or sound device. `vimtracker probe-keys` shows what your term
 the kitty keyboard protocol on as the program has it, and runs in any terminal.
 `vimtracker bench <project> [--rate n] [--block n] [--seconds n]` measures how much of a core a
 project takes to play, stopped and playing. `cargo build --profile profiling` builds with symbols
-for a profiler.
+for a profiler. `vimtracker probe <spec.toml> <out.wav> [--case name]` plays one voice or effect
+with no song, from a spec that [tools/compare](tools/compare/README.md) also renders through a
+reference plugin, to compare the two.
 
 Unsaved work is written to `song.autosave.ron` every minute once the project has a folder,
 and is offered back the next time you open it after a crash.

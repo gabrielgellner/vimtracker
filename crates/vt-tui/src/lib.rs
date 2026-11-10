@@ -10,6 +10,7 @@ pub mod autosave;
 pub mod banking;
 pub mod command_line;
 pub mod config;
+pub mod dsp_probe;
 pub mod explorer;
 pub mod exploring;
 pub mod glyphs;

@@ -105,3 +105,29 @@ fn a_file_crosses_to_the_callback_and_comes_back_to_be_freed() {
     realtime.process(&mut later);
     assert!(later[later.len() - 2].abs() < 1e-4, "stopped");
 }
+
+#[test]
+fn an_input_plays_through_a_track_as_it_is_with_no_fades() {
+    let mut engine = engine();
+    let ramp: Vec<[f32; 2]> = (0..2000)
+        .map(|frame| {
+            let value = 0.25 + frame as f32 / 8000.0;
+            [value, -value]
+        })
+        .collect();
+    let input = Arc::new(SampleData {
+        frames: ramp.clone(),
+    });
+    assert!(engine.play_input(0, input).is_none());
+    let mut out = vec![0.0; 2100 * 2];
+    engine.process(&mut out);
+    for (frame, [left, right]) in ramp.iter().enumerate() {
+        // Within a float's rounding of the track's unity level.
+        assert!(
+            (out[frame * 2] - left).abs() < 1e-6,
+            "frame {frame}, from the first, at full level"
+        );
+        assert!((out[frame * 2 + 1] - right).abs() < 1e-6);
+    }
+    assert_eq!(out[2000 * 2], 0.0, "and it stops at its end, with no tail");
+}

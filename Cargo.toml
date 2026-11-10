@@ -27,6 +27,7 @@ flate2 = "=1.1.10"
 roxmltree = "=0.21.2"
 libc = "=0.2.191"
 xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
+toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "serde"] }
 
 # A release build with symbols, for a profiler.
 [profile.profiling]
