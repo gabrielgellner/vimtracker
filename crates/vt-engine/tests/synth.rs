@@ -48,6 +48,16 @@ fn peak(out: &[f32], step: usize) -> f32 {
         .fold(0.0, |peak: f32, sample| peak.max(sample.abs()))
 }
 
+/// How loud a step is on average, on the left channel.
+fn rms(out: &[f32], step: usize) -> f32 {
+    let left: Vec<f32> = out[step * STEP * 2..(step + 1) * STEP * 2]
+        .iter()
+        .step_by(2)
+        .copied()
+        .collect();
+    (left.iter().map(|sample| sample * sample).sum::<f32>() / left.len() as f32).sqrt()
+}
+
 const NOTE: &str = "C-2 7F --- --- ---";
 const REST: &str = "--- -- --- --- ---";
 
@@ -351,7 +361,8 @@ fn acid_accents_a_note_from_its_velocity() {
     // Velocities either side of the line sound nearly as loud as each other, but for the accent.
     let plain = play(on(SynthVoice::Acid, &["C-2 6F", REST]), 2);
     let accented = play(on(SynthVoice::Acid, &["C-2 70", REST]), 2);
-    let louder = 20.0 * (peak(&accented, 0) / peak(&plain, 0)).log10();
+    // Measured on average, as a resonant wave's peaks come and go with its filter.
+    let louder = 20.0 * (rms(&accented, 0) / rms(&plain, 0)).log10();
     assert!(louder > 3.0, "{louder} dB");
 }
 
@@ -373,10 +384,10 @@ fn acid_slides_into_the_note_after_a_hold() {
     // Struck again, its envelopes start over, so it's louder and brighter at the second note than
     // when it slides there.
     assert!(
-        peak(&struck, 1) > peak(&slid, 1) * 1.1,
+        rms(&struck, 1) > rms(&slid, 1) * 1.1,
         "{} {}",
-        peak(&struck, 1),
-        peak(&slid, 1)
+        rms(&struck, 1),
+        rms(&slid, 1)
     );
 }
 

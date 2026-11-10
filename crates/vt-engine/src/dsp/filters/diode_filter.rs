@@ -25,7 +25,7 @@
 const LEAST_RESONANCE: f32 = 0.7;
 const MOST_RESONANCE: f32 = 17.0;
 /// The corner of the high-pass in the feedback loop, in Hz.
-const FEEDBACK_HIGH_PASS: f32 = 20.0;
+pub const FEEDBACK_HIGH_PASS: f32 = 20.0;
 /// Where it resonates, as a share of the cutoff it's given. Its four stages load each other, so
 /// their poles spread out: with no resonance, it starts to fall well under the cutoff, and the
 /// resonance peaks at about this share of it.
@@ -98,7 +98,12 @@ fn clip(value: f32) -> f32 {
 
 /// The coefficient of the high-pass in the feedback loop, for a filter running at this rate, in Hz.
 pub fn feedback_coefficient(rate: f32) -> f32 {
-    coefficient(FEEDBACK_HIGH_PASS / rate)
+    feedback_coefficient_at(FEEDBACK_HIGH_PASS, rate)
+}
+
+/// The same with the high-pass's corner somewhere else, in Hz.
+pub fn feedback_coefficient_at(corner: f32, rate: f32) -> f32 {
+    coefficient(corner / rate)
 }
 
 /// A diode ladder's state.

@@ -29,10 +29,21 @@ const LADDER_MIN_SLOPE: f32 = 0.01;
 const DIODE_INPUT: f32 = 0.5;
 const DIODE_OUTPUT: f32 = 1.04;
 /// How much higher the diode ladder's cutoff is set for each fraction of its rate. Its stages hear
-/// each other a sample late, which pulls its resonance flat as the cutoff rises.
-const DIODE_HIGH_TUNING: f32 = 2.2;
-/// How far its feedback high-pass pulls its resonance sharp near the bottom, in Hz.
-const DIODE_LOW_TUNING: f32 = 12.0;
+/// each other a sample late, which pulls its resonance flat as the cutoff rises, and much more so
+/// near the top, which the second term follows: `1 + 2.1 s + 100 s^5`, fitted to where it rings at
+/// full resonance.
+const DIODE_HIGH_TUNING: f32 = 2.1;
+const DIODE_TOP_TUNING: f32 = 100.0;
+/// The highest its feedback high-pass's corner goes, as a share of the cutoff. Vital's sits at
+/// 20 Hz, which near the bottom of the range takes so much of the loop's gain that it wouldn't ring
+/// on its own under about 100 Hz (#333). So under 400 Hz the corner moves down with the cutoff,
+/// which keeps the loop the same shape and its ringing as quick to start, in cycles, all the way
+/// down.
+const DIODE_FEEDBACK_SHARE: f32 = 0.05;
+/// How far its feedback high-pass pulls its resonance sharp, which the cutoff is set that much
+/// lower to undo: by `1 + 10.4 x^2`, for the corner `x` as a share of the cutoff, fitted to where
+/// it rings at full resonance.
+const DIODE_LOW_TUNING: f32 = 10.4;
 /// What the rational `tanh` is good for.
 const TANH_RANGE: f32 = 4.0;
 /// The damping of the second filter a clean low-pass or high-pass goes through for 24 dB, which has
@@ -125,6 +136,7 @@ impl Coefficients {
         let a1 = 1.0 / (1.0 + g * (g + k));
         let double_g = (std::f32::consts::PI * nyquist_safe / (2.0 * rate as f32)).tan();
         let ladder_k = resonance * LADDER_FEEDBACK;
+        let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
         let dirty = dirty_filter::Tuning::new(double_g / (1.0 + double_g), resonance);
         Self {
             g,
@@ -135,10 +147,11 @@ impl Coefficients {
             ladder_k,
             diode_cutoff: {
                 let share = frequency / RESONANT_SHARE / (2.0 * rate as f32);
-                let low = (1.0 - DIODE_LOW_TUNING / frequency).max(0.5);
-                share * (1.0 + DIODE_HIGH_TUNING * share) * low
+                let high = 1.0 + DIODE_HIGH_TUNING * share + DIODE_TOP_TUNING * share.powi(5);
+                let low = 1.0 + DIODE_LOW_TUNING * (diode_corner / frequency).powi(2);
+                share * high / low
             },
-            diode_feedback: diode_filter::feedback_coefficient(2.0 * rate as f32),
+            diode_feedback: diode_filter::feedback_coefficient_at(diode_corner, 2.0 * rate as f32),
             resonance,
             korg_coefficient: double_g / (1.0 + double_g),
             korg_feedback: resonance * korg35::MOST_FEEDBACK,
@@ -859,11 +872,39 @@ mod tests {
     }
 
     #[test]
-    fn the_diode_self_oscillates_near_its_cutoff() {
-        for cut in [200.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0] {
-            let pitch = ringing_at(FilterType::Diode, cut, 1.0);
-            let cents = 1200.0 * (pitch / cut).log2();
-            assert!(cents.abs() < 50.0, "{cut} rang at {pitch}");
+    fn the_diode_self_oscillates_at_its_cutoff_across_the_range() {
+        // At full resonance, one quiet click and then silence, at every sixteenth of Cut's turn up
+        // to 13 kHz. Under 100 Hz it used to die away, and elsewhere it rang 34 cents flat to 42
+        // sharp (#333).
+        for rate in [44_100, 48_000] {
+            for knob in (0x00..=0xF0).step_by(0x10) {
+                let value = knob as f32 / 255.0;
+                let hertz = 20.0 * 1000_f32.powf(value);
+                let c = Coefficients::new(value, 1.0, rate);
+                let mut channel = Channel::default();
+                channel.process(0.01, FilterType::Diode, 0.0, &c);
+                let frames = rate as usize * 3;
+                let out: Vec<f32> = (0..frames)
+                    .map(|_| channel.process(0.0, FilterType::Diode, 0.0, &c))
+                    .collect();
+                // It's ringing steadily over the last second, at a sure level.
+                let last = &out[rate as usize * 2..];
+                let peak = last
+                    .iter()
+                    .fold(0.0_f32, |high, sample| high.max(sample.abs()));
+                assert!(peak > 0.05, "{hertz} Hz at {rate}: {peak}");
+                // Its pitch, from where it crosses zero rising, found between frames.
+                let rising: Vec<f32> = last
+                    .windows(2)
+                    .enumerate()
+                    .filter(|(_, pair)| pair[0] <= 0.0 && pair[1] > 0.0)
+                    .map(|(frame, pair)| frame as f32 + pair[0] / (pair[0] - pair[1]))
+                    .collect();
+                let span = rising[rising.len() - 1] - rising[0];
+                let pitch = (rising.len() - 1) as f32 * rate as f32 / span;
+                let cents = 1200.0 * (pitch / hertz).log2();
+                assert!(cents.abs() < 15.0, "{hertz} Hz at {rate} rang at {pitch}");
+            }
         }
     }
 

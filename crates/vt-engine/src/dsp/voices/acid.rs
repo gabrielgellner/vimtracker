@@ -79,6 +79,12 @@ const SETTLED: f32 = 1e-4;
 const DECLICK_HZ: f32 = 200.0;
 /// The highest cutoff the envelope and accent can take it to, as on the Devil Fish.
 const HIGHEST_HZ: f32 = 20_000.0;
+/// How loud the saw goes into the filter, which is made up again after it. The ladder passes the
+/// bass at up to 1.9 times at no resonance, and a low note's saw swings to about ±1.6 once it's
+/// high-passed, so at full scale its last stage was clipped flat for up to a third of each cycle,
+/// which cut deep notches into the harmonics that moved with the note (#332). At this level it
+/// stays under the clip with `Drive` at 0, and `Drive` still pushes it into the clip.
+const FILTER_LEVEL: f32 = 0.3;
 
 /// How many decibels double a level.
 const DECIBELS_PER_OCTAVE: f32 = 6.020_6;
@@ -376,9 +382,9 @@ impl Acid {
         // The filter resonates under the cutoff it's given, and Open303's are where a 303 resonates.
         let cutoff = self.cutoff / RESONANT_SHARE / (self.rate * 2.0);
         let (filter, feedback) = (&mut self.filter, self.feedback);
-        let filtered = self.oversampler.process(input, |sample| {
+        let filtered = self.oversampler.process(input * FILTER_LEVEL, |sample| {
             filter.next(sample, cutoff, resonance, drive, feedback, HIGH_PASS_RATIO)
-        });
+        }) / FILTER_LEVEL;
         soft_clip(filtered * self.amplitude * LEVEL)
     }
 }
@@ -442,6 +448,57 @@ mod tests {
                 (measured - note).abs() <= note * 0.03,
                 "{measured} for {note} Hz"
             );
+        }
+    }
+
+    /// The level of each of a sound's first `count` harmonics in dB, times its number, so a saw's
+    /// come out level and what's left is the filter's shape. Each is read at its own frequency
+    /// through a Hann window.
+    fn harmonics(samples: &[f32], fundamental: f32, count: usize) -> Vec<f32> {
+        let length = samples.len() as f32;
+        (1..=count)
+            .map(|number| {
+                let turn = std::f32::consts::TAU * hertz(fundamental) * number as f32;
+                let (mut real, mut imaginary) = (0.0_f32, 0.0_f32);
+                for (frame, sample) in samples.iter().enumerate() {
+                    let at = frame as f32;
+                    let window = 0.5 - 0.5 * (std::f32::consts::TAU * at / length).cos();
+                    real += sample * window * (turn * at).cos();
+                    imaginary += sample * window * (turn * at).sin();
+                }
+                20.0 * (real.hypot(imaginary) * number as f32).log10()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_held_saws_harmonics_follow_the_filter_without_notches() {
+        // A held saw, once the filter envelope has died away, through the filter at its bottom,
+        // middle and top, with no resonance and with half. Its harmonics should follow the
+        // filter's smooth slope, as Acid V's do: none falls far under its two neighbours. The
+        // ladder's last stage clipping a full-scale saw cut 20 to 34 dB notches here, at a
+        // harmonic that moved with the note (#332).
+        for note in [32.7, 65.4, 98.0, 130.8] {
+            for cutoff in [0.0, 0.5, 1.0] {
+                for resonance in [0.0, 0.5] {
+                    let settings = places([0.0, cutoff, resonance, 0.0, 0.0, 0.5, 0.0, 0.0]);
+                    let mut acid = Acid::new(RATE);
+                    acid.trigger(false);
+                    let out: Vec<f32> = (0..RATE as usize * 3 / 2)
+                        .map(|_| acid.next(hertz(note), settings))
+                        .collect();
+                    let levels = harmonics(&out[RATE as usize..], note, 16);
+                    for number in 2..16 {
+                        let neighbours = (levels[number - 2] + levels[number]) / 2.0;
+                        let dip = neighbours - levels[number - 1];
+                        assert!(
+                            dip < 6.0,
+                            "harmonic {number} is {dip} dB under its neighbours at {note} Hz, \
+                             cutoff {cutoff}, resonance {resonance}: {levels:?}"
+                        );
+                    }
+                }
+            }
         }
     }
 
