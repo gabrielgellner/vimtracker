@@ -434,14 +434,14 @@ pub fn draw_screen(
     if let Some(panel) = &app.shape {
         views::shape::draw(frame, view, app, panel);
     }
-    if let Some(picker) = &app.picker {
+    if let Some(picker) = &mut app.picker {
         views::picker::draw(frame, body, picker);
     }
-    if let Some(menu) = &app.command_menu
+    if let Some(menu) = &mut app.command_menu
         && app.mode == Mode::Command
     {
         // Under the names it finishes, after the `:`.
         let column = 1 + menu.column(&app.command_line);
-        views::picker::draw_menu(frame, status, column, &menu.picker);
+        views::picker::draw_menu(frame, status, column, &mut menu.picker);
     }
 }

@@ -50,7 +50,7 @@ const INDENT: usize = 2;
 const GAP: usize = 2;
 
 /// Draw the window over whatever is underneath.
-pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
+pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
     let columns = Columns::of(picker);
     let preview = picker.has_previews();
     let explorer = picker.tree().is_some();
@@ -100,6 +100,8 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
         width: inner.width.min(list_width as u16),
         ..inner
     };
+    // Under the search line.
+    picker.scroll_within(usize::from(list_area.height).saturating_sub(1));
     frame.render_widget(Paragraph::new(list(picker, &columns, list_area)), list_area);
     if preview && inner.width > list_area.width {
         let preview_area = Rect {
@@ -122,7 +124,7 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &Picker) {
 /// line, above the command line in the bottom row of `status`, with its names under the word
 /// they finish, which starts `column` characters in. It's after Vim's popup menu, with no search
 /// line, as the command line is its search.
-pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &Picker) {
+pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Picker) {
     let area = frame.area();
     let columns = Columns::of(picker);
     let list_width =
@@ -152,6 +154,7 @@ pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &Picker
     let inner = block.inner(window);
     frame.render_widget(Clear, window);
     frame.render_widget(block, window);
+    picker.scroll_within(usize::from(inner.height));
     let lines = rows(
         picker,
         &columns,
@@ -190,7 +193,7 @@ impl Columns {
     }
 }
 
-/// The search line and the rows that fit, scrolled just enough to keep the cursor in view.
+/// The search line and the rows that fit, from the picker's first row shown.
 fn list(picker: &Picker, columns: &Columns, area: Rect) -> Vec<Line<'static>> {
     let query = if picker.focus == crate::input::picker::Focus::Search {
         Line::raw(format!("> {}_", picker.query))
@@ -203,11 +206,16 @@ fn list(picker: &Picker, columns: &Columns, area: Rect) -> Vec<Line<'static>> {
     lines
 }
 
-/// The rows that fit in `room`, scrolled just enough to keep the cursor in view.
+/// The rows that fit in `room`, from the picker's first row shown.
 fn rows(picker: &Picker, columns: &Columns, width: usize, room: usize) -> Vec<Line<'static>> {
-    let first = (picker.selected + 1).saturating_sub(room);
     let mut lines = Vec::new();
-    for (at, row) in picker.rows().iter().enumerate().skip(first).take(room) {
+    for (at, row) in picker
+        .rows()
+        .iter()
+        .enumerate()
+        .skip(picker.first_shown())
+        .take(room)
+    {
         let spans = match row {
             Row::Item(item) if picker.tree().is_some() => tree_spans(picker, at, *item, width),
             Row::Category(category) => {
@@ -421,4 +429,70 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
         ));
     }
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+
+    use crate::input::keys::Key;
+    use crate::input::picker::{Item, Pick, Picker};
+
+    fn sounds(count: usize) -> Picker {
+        let items = (0..count)
+            .map(|at| Item::new(format!("{at:02} sound"), Pick::Track(at)))
+            .collect();
+        Picker::new("Sounds", items)
+    }
+
+    /// The screen's text, a line to a row.
+    fn text(terminal: &Terminal<TestBackend>) -> String {
+        let buffer = terminal.backend().buffer();
+        let width = usize::from(buffer.area.width);
+        buffer
+            .content
+            .chunks(width)
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>() + "\n")
+            .collect()
+    }
+
+    #[test]
+    fn the_list_shows_rows_below_the_cursor_as_it_goes_down() {
+        let mut picker = sounds(40);
+        let mut terminal = Terminal::new(TestBackend::new(163, 42)).unwrap();
+        terminal
+            .draw(|frame| super::draw(frame, frame.area(), &mut picker))
+            .unwrap();
+        for c in "13j".chars() {
+            picker.key(Key::char(c));
+        }
+        terminal
+            .draw(|frame| super::draw(frame, frame.area(), &mut picker))
+            .unwrap();
+        let shown = text(&terminal);
+        assert!(shown.contains("13 sound"), "the cursor's row\n{shown}");
+        assert!(shown.contains("16 sound"), "three rows under it\n{shown}");
+        assert!(!shown.contains("00 sound"), "scrolled by one\n{shown}");
+        assert!(!shown.contains("17 sound"));
+    }
+
+    #[test]
+    fn the_command_lines_list_keeps_the_same_margin() {
+        let mut picker = sounds(20);
+        picker.selected = 9;
+        let mut terminal = Terminal::new(TestBackend::new(163, 42)).unwrap();
+        let status = Rect::new(0, 40, 163, 2);
+        terminal
+            .draw(|frame| super::draw_menu(frame, status, 0, &mut picker))
+            .unwrap();
+        let shown = text(&terminal);
+        assert!(shown.contains("12 sound"), "three rows under it\n{shown}");
+        assert!(
+            shown.contains("03 sound"),
+            "ten rows from the fourth\n{shown}"
+        );
+        assert!(!shown.contains("02 sound"));
+    }
 }

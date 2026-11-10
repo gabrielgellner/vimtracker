@@ -69,13 +69,19 @@ rest closed. The title shows how many items match, out of how many there are.
 | `j` `k` | Down or up. A count goes further, as in `3j` |
 | `gg` `G` | The first row or the last. `5G` goes to the fifth |
 | `C-n` `C-p` | Down or up, in the search too |
+| `C-d` `C-u` | Half the list down or up, in the search too |
+| `zz` `zt` `zb` | Scroll the cursor's row to the middle, top or bottom |
 | `l` `Enter` | Open a category and go into it, or choose |
 | `h` | Close the category, from inside it or on it |
 | `/` | Search |
 | `Esc` | Clear the search, then close |
 
+A long list scrolls before the cursor reaches its edge, keeping three rows beyond it in
+view, as Vim's `scrolloff` does, so you can see what's coming. It stays where it is as the
+cursor turns round, and `zt` and `zb` keep those three rows too.
+
 Any other letter starts a search with itself: on Machine, `K` then `pl` finds `Plaits`.
-A name that starts with one of the keys above, such as `ladder`, needs `/` first. A
+A name that starts with one of the keys above, such as `ladder` or `zap`, needs `/` first. A
 search looks through every category, ranks the best match first, shows each match's
 category beside it, and picks out the letters it matched. Digits then `Enter` choose by
 number, as for a chain or a phrase. The tracks and the FX commands open on their search
