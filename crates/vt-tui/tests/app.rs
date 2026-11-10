@@ -5298,14 +5298,23 @@ fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
 }
 
 fn mixer_text(app: &App) -> Vec<String> {
-    let backend = ratatui::backend::TestBackend::new(80, 16);
+    mixer_text_at(app, 80)
+}
+
+/// The mixer's text, drawn this many columns wide.
+fn mixer_text_at(app: &App, width: u16) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(width, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..16)
-        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
         .collect()
 }
 
@@ -5398,8 +5407,103 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
     assert_eq!(app.cursor.track, 31 + FIXED_TRACKS);
     let names = &mixer_text(&app)[2];
     assert!(names.contains("32"), "{names}");
-    assert!(names.contains(" A ") && names.contains(" M"), "{names}");
+    assert!(
+        names.contains("\u{a0}A ") && names.contains("\u{a0}M"),
+        "{names}"
+    );
     assert!(!names.contains("01"), "{names}");
+}
+
+/// The colour a mixer's text is drawn in where some text starts on a row.
+fn mixer_color(app: &App, row: usize, text: &str) -> ratatui::style::Color {
+    let backend = ratatui::backend::TestBackend::new(160, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let line: String = (0..160).map(|x| buffer[(x, row as u16)].symbol()).collect();
+    let column = line[..line.find(text).unwrap()].chars().count();
+    buffer[(column as u16, row as u16)].fg
+}
+
+#[test]
+fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
+    use vt_tui::glyphs::{GROUP, ICON_SPACE};
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 4");
+    command(&mut app, "group 1 1-3");
+    command(&mut app, "group 2 5");
+    press(&mut app, " 6");
+    let text = mixer_text_at(&app, 160);
+    let (names, routing) = (&text[2], &text[3]);
+    // G1's strip has its icon and name, and under it the tracks in it.
+    let g1 = format!("{GROUP}{ICON_SPACE}G1");
+    assert!(names.contains(&g1), "{names}");
+    let column = |line: &str, text: &str| line[..line.find(text).unwrap()].chars().count();
+    let under = routing.chars().skip(column(names, &g1)).collect::<String>();
+    assert!(under.starts_with("01-03"), "{routing}");
+    // Each track in a group is marked with it, under its name, and one in none isn't.
+    let marks: Vec<String> = routing.split_whitespace().map(String::from).collect();
+    assert_eq!(marks, ["G1", "G1", "G1", "G2", "01-03", "05"], "{routing}");
+    // A gap parts the sound tracks from the groups, and the groups from the returns.
+    let strip = |name: &str| column(names, name);
+    assert_eq!(strip(&g1) - strip("06"), 7 + 2, "{names}");
+    assert_eq!(
+        strip("\u{a0}A") - 1 - strip(&format!("{GROUP}{ICON_SPACE}G4")),
+        7 + 2
+    );
+    // A group and its tracks share its colour, and an empty group is faint.
+    let blue = vt_tui::theme::group(1);
+    assert_eq!(mixer_color(&app, 2, &g1), blue);
+    assert_eq!(mixer_color(&app, 3, "G1"), blue);
+    assert_eq!(mixer_color(&app, 3, "G2"), vt_tui::theme::group(2));
+    let g3 = format!("{GROUP}{ICON_SPACE}G3");
+    assert_eq!(mixer_color(&app, 2, &g3), vt_tui::theme::OVERLAY0);
+}
+
+#[test]
+fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
+    use vt_tui::glyphs::{MUTE, SOLO};
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 2");
+    command(&mut app, "group 1 1-2");
+    let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    press(&mut app, " 6");
+    app.levels[group].mute = true;
+    app.levels[2].mute = true;
+    let mutes = mixer_line(&app, "Mute");
+    let shown: Vec<&str> = mutes.split_whitespace().skip(1).collect();
+    let mute = MUTE.to_string();
+    assert_eq!(
+        shown[..5],
+        [&mute, &mute, &mute, "-", &mute],
+        "01 to 04, and G1: {mutes}"
+    );
+    // The track's own in the active colour, its group's in the group's.
+    let (blue, green) = (vt_tui::theme::group(1), vt_tui::theme::GREEN);
+    assert_eq!(mixer_colors(&app, "Mute", MUTE), [blue, blue, green, green]);
+    app.levels[group].mute = false;
+    app.levels[group].solo = true;
+    assert_eq!(mixer_colors(&app, "Solo", SOLO), [blue, blue, green]);
+    assert!(mixer_colors(&app, "Mute", MUTE) == [green], "only 03's own");
+}
+
+/// The colour of each of a glyph on the mixer's row of a setting, from the left.
+fn mixer_colors(app: &App, name: &str, glyph: char) -> Vec<ratatui::style::Color> {
+    let backend = ratatui::backend::TestBackend::new(160, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let row = (0..16)
+        .find(|&y| buffer[(0, y)].symbol() == &name[..1] && buffer[(1, y)].symbol() == &name[1..2])
+        .unwrap();
+    (0..160)
+        .filter(|&x| buffer[(x, row)].symbol() == glyph.to_string())
+        .map(|x| buffer[(x, row)].fg)
+        .collect()
 }
 
 #[test]
@@ -5440,8 +5544,8 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
     let text = mixer_text(&app);
     assert!(text[2].starts_with("       01"), "{}", text[2]);
     assert!(text[2].contains("08"), "eight strips fit: {}", text[2]);
-    // The meter's left channel is full, and the right empty.
-    let bars = &text[3..10];
+    // Under the names and the groups, the meter's left channel is full, and the right empty.
+    let bars = &text[4..10];
     let left = |line: &String| line.chars().nth(7).unwrap();
     let right = |line: &String| line.chars().nth(8).unwrap();
     assert_eq!(left(&bars[bars.len() - 1]), '█', "{bars:?}");
@@ -5452,7 +5556,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
     assert_ne!(fader(&bars[bars.len() - 1], 1), ' ');
     // Turning a fader down lowers only that strip's.
     let filled = |text: &[String], strip: usize| {
-        text[3..10]
+        text[4..10]
             .iter()
             .filter(|line| fader(line, strip) != ' ')
             .count()
@@ -12240,17 +12344,76 @@ fn the_track_page_puts_a_track_in_a_group_and_a_group_has_its_own_page() {
     press(&mut app, "x");
     assert_eq!(group(&app), None);
 
-    // A group's own page has its level, pan and sends.
+    // A group's own page has its level, pan and sends, on the right where a track's output is.
     let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
     press(&mut app, &"W".repeat(at));
     assert_eq!(app.cursor.track, at);
     let lines = track_page_text(&app);
     assert!(lines[0].contains("Group 2"), "{}", lines[0]);
+    let output = lines[2].find("Level").unwrap();
+    assert!(output > 30, "{}", lines[2]);
     for (line, label) in [(2, "Level"), (3, "Pan"), (4, "Send A"), (5, "Send B")] {
-        assert!(lines[line].starts_with(label), "{}", lines[line]);
+        assert_eq!(lines[line].find(label), Some(output), "{}", lines[line]);
     }
     press(&mut app, "ggjjj");
     assert_eq!(app.track_control().label(), "Send B");
     typed(&mut app, "60");
     assert_eq!(app.song().tracks[at].send_b, 0x60);
+}
+
+#[test]
+fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
+    let (mut app, _realtime) = on_track_page();
+    command(&mut app, "track add 6");
+    command(&mut app, "group 1 2-4");
+    let at = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    press(&mut app, &"W".repeat(at));
+    let lines = track_page_text(&app);
+    assert!(lines[2].starts_with("Tracks    02"), "{}", lines[2]);
+    assert!(lines[3].starts_with("          03"), "{}", lines[3]);
+    assert!(lines[4].starts_with("          04"), "{}", lines[4]);
+    assert!(!lines[5].contains("05"), "{}", lines[5]);
+    // The output stays beside the list.
+    assert!(lines[2].contains("Level"), "{}", lines[2]);
+    app.levels[2].mute = true;
+    assert!(
+        track_page_text(&app)[3].contains(vt_tui::glyphs::MUTE),
+        "{}",
+        track_page_text(&app)[3]
+    );
+    // An empty group says so.
+    let empty = app.song().fixed_track(TrackKind::Group(2)).unwrap();
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, empty);
+    assert!(track_page_text(&app)[2].starts_with("Tracks    None"));
+}
+
+#[test]
+fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
+    let (mut app, _realtime) = on_track_page();
+    command(&mut app, "group 2");
+    let color = vt_tui::theme::group(2);
+    let cell_color = |app: &App, text: &str| {
+        let backend = ratatui::backend::TestBackend::new(120, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let lines: Vec<String> = (0..24)
+            .map(|y| (0..120).map(|x| buffer[(x, y)].symbol()).collect())
+            .collect();
+        let (y, line) = lines
+            .iter()
+            .enumerate()
+            .find(|(_, line)| line.contains(text))
+            .unwrap();
+        let column = line[..line.find(text).unwrap()].chars().count();
+        buffer[(column as u16, y as u16)].fg
+    };
+    assert_eq!(cell_color(&app, "G2"), color, "the track's Group");
+    let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
+    press(&mut app, &"W".repeat(at));
+    let icon = vt_tui::glyphs::GROUP.to_string();
+    assert_eq!(cell_color(&app, &icon), color, "the group's icon");
 }

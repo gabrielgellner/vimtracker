@@ -822,7 +822,8 @@ impl Engine {
     }
 
     /// Note which tracks a compressor, Warps or a low-pass gate hears. One that's muted keeps playing, silently, so
-    /// a muted kick can still duck a bass, and one that no longer is heard stops.
+    /// a muted kick can still duck a bass, and one that no longer is heard stops. A group that's
+    /// heard has its tracks heard too, so a muted kit can still duck a bass through its group.
     fn find_listened(&mut self) {
         let song = &self.current.song;
         let sounds = song.sound_tracks();
@@ -838,6 +839,13 @@ impl Engine {
                 && let Some(listened) = listened.get_mut(track)
             {
                 *listened = true;
+            }
+        }
+        for track in 0..sounds.min(MAX_TRACKS) {
+            if let Some(group) = song.group_track_of(track)
+                && listened.get(group) == Some(&true)
+            {
+                listened[track] = true;
             }
         }
         if listened != self.listened {
@@ -1264,6 +1272,17 @@ impl Engine {
             && (!any_solo || state.solo || group.is_some_and(|group| group.solo))
     }
 
+    /// Whether a sound track plays into its group, as it's heard but leaving out what the group
+    /// decides for itself: its own mute, and solos outside it. Only a track soloed in the same
+    /// group, and the group not soloed, keeps its other tracks out. With the group's own fade
+    /// after, what's heard is the same as by `heard_with`.
+    fn feeds_with(&self, index: usize, group: usize, any_solo: bool) -> bool {
+        let state = &self.tracks[index];
+        let lit =
+            || (0..self.sounds()).any(|t| self.tracks[t].solo && self.group_of(t) == Some(group));
+        !state.mute && (!any_solo || state.solo || self.tracks[group].solo || !lit())
+    }
+
     /// Whether a group is heard, given whether anything's soloed: not muted, and, while something
     /// is soloed, soloed itself or holding a soloed track.
     fn group_heard_with(&self, group: usize, any_solo: bool) -> bool {
@@ -1279,9 +1298,16 @@ impl Engine {
         let (sounds, returns) = (self.sounds(), self.returns());
         for index in 0..sounds {
             let heard = self.heard_with(index, any_solo);
+            // A group a compressor or Warps hears decides for itself whether it's heard, and its
+            // tracks play into it all the same.
+            let feeds = match self.group_of(index) {
+                Some(group) if self.listened[group] => self.feeds_with(index, group, any_solo),
+                _ => heard,
+            };
             let track = &mut self.tracks[index];
             // One a compressor or Warps hears keeps playing, faded out of the mix and the sends.
             track.heard.target = if heard { 1.0 } else { 0.0 };
+            track.feeds.target = if feeds { 1.0 } else { 0.0 };
             if !heard && !self.listened[index] {
                 track.cut_to_tail();
             }
@@ -2655,11 +2681,12 @@ impl Engine {
             *lit = self.tracks[groups + group].solo;
         }
         let mut count = 0;
-        for (index, track) in self.tracks.iter().enumerate() {
+        for index in 0..self.tracks.len() {
             if (groups..=master_track).contains(&index) {
                 continue;
             }
             let route = self.group_of(index).map(|group| group - groups);
+            let track = &self.tracks[index];
             if let Some(group) = route
                 && track.solo
             {
@@ -2668,6 +2695,11 @@ impl Engine {
             let previewing = self.previews.on_track(&previews, index);
             if !track.sounding() && !previewing && !track.ringing(self.rate) {
                 self.keys.frames[index] = [0.0; 2];
+                // Silent, a mute's fade has nothing to fade, so a note it plays later while a
+                // compressor hears it doesn't start with the end of one.
+                let track = &mut self.tracks[index];
+                track.heard.settle();
+                track.feeds.settle();
             } else {
                 playing[count] = index;
                 routes[count] = route;
@@ -2703,17 +2735,22 @@ impl Engine {
                 // Muted but heard by a compressor or Warps, it plays on, faded out of the mix and
                 // sends.
                 let heard = track.heard.next(self.smoothing);
+                let feeds = track.feeds.next(self.smoothing);
                 let dry = shaped.dry.map(|sample| sample * heard);
                 track.reading.add(dry, dry);
-                // A track in a group always goes to it, and the group decides what's heard.
-                let into = match route {
-                    Some(group) => Some(&mut buses[group]),
-                    None if !wet_only || track.solo => Some(&mut mix),
-                    None => None,
-                };
-                if let Some(into) = into {
-                    into[0] += dry[0];
-                    into[1] += dry[1];
+                // A track in a group always goes to it, and the group decides what's heard. What
+                // it gives the group may be more than what's heard of it, while the group's heard
+                // by a compressor and is silent itself.
+                match route {
+                    Some(group) => {
+                        buses[group][0] += shaped.dry[0] * feeds;
+                        buses[group][1] += shaped.dry[1] * feeds;
+                    }
+                    None if !wet_only || track.solo => {
+                        mix[0] += dry[0];
+                        mix[1] += dry[1];
+                    }
+                    None => {}
                 }
                 send_a[0] += shaped.send_a[0] * heard;
                 send_a[1] += shaped.send_a[1] * heard;

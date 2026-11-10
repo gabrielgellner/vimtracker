@@ -117,3 +117,13 @@ fn mix(from: Color, to: Color, share: f32) -> Color {
 pub fn active() -> Style {
     Style::new().fg(GREEN)
 }
+
+/// Each group's colour, `G1` first, which its strip's name and the mark on each of its tracks
+/// share, so a track is seen to be in it. Neighbours are far apart on the wheel, and none is the
+/// green of what's active.
+const GROUP_COLORS: [Color; 4] = [BLUE, PEACH, TEAL, MAUVE];
+
+/// A group's colour, by its number from 1. Past the fourth they come round again.
+pub fn group(number: u8) -> Color {
+    GROUP_COLORS[usize::from(number.saturating_sub(1)) % GROUP_COLORS.len()]
+}

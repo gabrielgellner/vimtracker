@@ -1,12 +1,14 @@
 //! The mixer: a strip for each track, with its level meter, its fader, its sends, mute and solo, laid
-//! out as Polyend Tracker's mixer is.
+//! out as Polyend Tracker's mixer is. The sound tracks, the groups, and the returns and master each
+//! stand apart, and a group's strip and the tracks in it share its colour (decision 126).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row};
-use vt_model::song::level_gain;
+use vt_model::constants::MAX_GROUPS;
+use vt_model::song::{Song, level_gain};
 
 use crate::app::App;
 use crate::glyphs;
@@ -14,9 +16,10 @@ use crate::meter::{height_of, to_db};
 use crate::theme;
 use crate::track_page::{Control, MIXER};
 use crate::views::track::value;
+use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
-use crate::views::widgets::table::{Columns, take_top};
+use crate::views::widgets::table::{Cells, Columns, take_top};
 
 /// Room for the names of the settings, at the left. Beside the meters it holds the scale's mark,
 /// with a gap after it.
@@ -24,8 +27,12 @@ const LABEL_WIDTH: u16 = 7;
 const MARK_WIDTH: u16 = 5;
 /// How wide a track's strip is: its name fits, and eight strips fit beside the main meter at 80.
 const STRIP_WIDTH: u16 = 7;
-/// The rows that aren't the meters: the title, a gap and the track names.
-const ROWS_ABOVE_METERS: u16 = 3;
+/// The room before the first group's strip and before the first return's, so the sound tracks,
+/// the groups and the returns with the master read as three parts.
+const SECTION_GAP: u16 = 2;
+/// The rows that aren't the meters: the title, a gap, the track names, and under them the group a
+/// track is in, or the tracks a group sums.
+const ROWS_ABOVE_METERS: u16 = 4;
 
 /// The first track shown, keeping the cursor's in view.
 fn first_shown(cursor: usize, tracks: usize, strips: usize) -> usize {
@@ -46,11 +53,105 @@ fn fader_cell(row: usize, rows: usize, level: u8) -> Span<'static> {
     )
 }
 
+/// The strips shown, and where the gaps between the parts go.
+struct Strips {
+    shown: std::ops::Range<usize>,
+    /// Where the groups start, and the returns.
+    groups: usize,
+    returns: usize,
+}
+
+impl Strips {
+    fn new(song: &Song, shown: std::ops::Range<usize>) -> Self {
+        let groups = song.sound_tracks();
+        Self {
+            shown,
+            groups,
+            returns: groups + MAX_GROUPS,
+        }
+    }
+
+    /// Whether a strip starts a part, after another shown before it.
+    fn gap_before(&self, index: usize) -> bool {
+        index > self.shown.start && (index == self.groups || index == self.returns)
+    }
+
+    /// The columns: the labels' two, then each strip's, with a gap's before each part.
+    fn columns(&self) -> Columns {
+        let mut widths = vec![MARK_WIDTH, LABEL_WIDTH - MARK_WIDTH];
+        for index in self.shown.clone() {
+            if self.gap_before(index) {
+                widths.push(SECTION_GAP);
+            }
+            widths.push(STRIP_WIDTH);
+        }
+        Columns::new(widths)
+    }
+
+    /// Put a cell in each strip's column, from the left, leaving the gaps empty.
+    fn fill<L: Into<Line<'static>>>(
+        &self,
+        cells: &mut Cells<'_>,
+        mut cell: impl FnMut(usize) -> L,
+    ) {
+        for index in self.shown.clone() {
+            if self.gap_before(index) {
+                cells.skip(1);
+            }
+            cells.cell(cell(index));
+        }
+    }
+}
+
+/// A strip's name: a sound track's number and name, or a fixed track's icon and name, a group's in
+/// its colour, faint while nothing's in it.
+fn name_cell(app: &App, index: usize) -> Line<'static> {
+    let song = app.song();
+    let track = &song.tracks[index];
+    let mut style = if track.is_sound() {
+        Style::new()
+    } else if group::is_empty(song, index) {
+        theme::faint()
+    } else {
+        group::style(song, index).unwrap_or_default()
+    };
+    if index == app.cursor.track {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    let name = if track.is_sound() {
+        format!("{:02} {}", index + 1, track.name)
+    } else {
+        format!(
+            "{}{}{}",
+            glyphs::track(track),
+            glyphs::ICON_SPACE,
+            track.name
+        )
+    };
+    Line::styled(name, style)
+}
+
+/// Under a strip's name: the group a sound track plays through, in that group's colour, or the
+/// tracks a group sums.
+fn routing_cell(song: &Song, index: usize) -> Line<'static> {
+    let track = &song.tracks[index];
+    if track.is_group() {
+        let members: Vec<usize> = song.group_members(index).collect();
+        return Line::styled(group::runs(&members), theme::dim());
+    }
+    match (group::number(song, index), group::style(song, index)) {
+        (Some(number), Some(style)) if track.is_sound() => {
+            Line::styled(format!("G{number}"), style)
+        }
+        _ => Line::default(),
+    }
+}
+
 /// One row of the meters, counting rows up from the bottom.
 fn meter_row(
     app: &App,
     columns: &Columns,
-    shown: std::ops::Range<usize>,
+    strips: &Strips,
     row: usize,
     rows: usize,
 ) -> Row<'static> {
@@ -60,7 +161,7 @@ fn meter_row(
     cells
         .cell(Line::styled(mark, theme::dim()).right_aligned())
         .skip(1);
-    for index in shown {
+    strips.fill(&mut cells, |index| {
         let meter = app.track_meters.get(index).copied().unwrap_or_default();
         let channel = |side: usize| {
             let channel = meter.channels[side];
@@ -73,13 +174,13 @@ fn meter_row(
                 1,
             )
         };
-        cells.cell(vec![
+        vec![
             channel(0),
             channel(1),
             Span::raw(" "),
             fader_cell(row, rows, app.song().tracks[index].level),
-        ]);
-    }
+        ]
+    });
     cells.done()
 }
 
@@ -87,13 +188,12 @@ fn meter_row(
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = app.song();
-    let room = area.width.saturating_sub(LABEL_WIDTH);
-    let strips = usize::from(room / STRIP_WIDTH).max(1);
-    let first = first_shown(app.cursor.track, song.tracks.len(), strips);
-    let shown = first..(first + strips).min(song.tracks.len());
-    let mut widths = vec![MARK_WIDTH, LABEL_WIDTH - MARK_WIDTH];
-    widths.extend(std::iter::repeat_n(STRIP_WIDTH, shown.len()));
-    let columns = Columns::new(widths);
+    // Room is kept for both gaps, whether or not they're in view.
+    let room = area.width.saturating_sub(LABEL_WIDTH + 2 * SECTION_GAP);
+    let count = usize::from(room / STRIP_WIDTH).max(1);
+    let first = first_shown(app.cursor.track, song.tracks.len(), count);
+    let strips = Strips::new(song, first..(first + count).min(song.tracks.len()));
+    let columns = strips.columns();
 
     let mut rest = area;
     frame.render_widget(
@@ -102,26 +202,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     );
     let mut names = columns.row();
     names.skip(2);
-    for index in shown.clone() {
-        let track = &song.tracks[index];
-        let name = if track.is_sound() {
-            format!("{:02} {}", index + 1, track.name)
-        } else {
-            track.name.clone()
-        };
-        let style = if index == app.cursor.track {
-            bold
-        } else {
-            Style::new()
-        };
-        names.cell(Line::styled(name, style));
-    }
-    let mut rows = vec![names.done()];
+    strips.fill(&mut names, |index| name_cell(app, index));
+    let mut routing = columns.row();
+    routing.skip(2);
+    strips.fill(&mut routing, |index| routing_cell(song, index));
+    let mut rows = vec![names.done(), routing.done()];
 
     let settings = MIXER.len() as u16;
     let meter_rows = usize::from(area.height.saturating_sub(ROWS_ABOVE_METERS + settings));
     for row in (0..meter_rows).rev() {
-        rows.push(meter_row(app, &columns, shown.clone(), row, meter_rows));
+        rows.push(meter_row(app, &columns, &strips, row, meter_rows));
     }
 
     let current = app.track_control();
@@ -129,39 +219,38 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let mut cells = columns.row();
         let labels = jump_label(app, control);
         cells.span(name_line(app, control.label(), &labels, LABEL_WIDTH), 2);
-        for index in shown.clone() {
+        strips.fill(&mut cells, |index| {
             let track = &song.tracks[index];
-            let live = app.levels.get(index).copied().unwrap_or_default();
+            let muted = group::muted(app, index);
             let here = index == app.cursor.track;
             let selected = here && control == current;
-            // A mute or solo that's on is its glyph, in the active colour.
+            // A mute or solo that's on is its glyph: in the active colour for the track's own, and
+            // in its group's colour for its group's.
             let switched = match control {
-                Control::Mute => Some((live.mute, glyphs::MUTE)),
-                Control::Solo => Some((live.solo, glyphs::SOLO)),
+                Control::Mute => Some((muted, glyphs::MUTE)),
+                Control::Solo => Some((group::soloed(app, index), glyphs::SOLO)),
                 _ => None,
             };
             let text = match (control, switched) {
                 _ if !control.exists_on(track) => String::new(),
-                (_, Some((true, glyph))) => glyph.to_string(),
-                (_, Some((false, _))) => "-".to_owned(),
+                (_, Some((Switched::Off, _))) => "-".to_owned(),
+                (_, Some((_, glyph))) => glyph.to_string(),
                 _ => setting::text(app, selected, || value(control, track, song)),
             };
-            let style = if selected {
-                theme::cursor(app.mode)
-            } else if switched.is_some_and(|(on, _)| on) {
-                theme::active()
-            } else if live.mute {
-                theme::dim()
-            } else {
-                Style::new()
+            let style = match switched {
+                _ if selected => theme::cursor(app.mode),
+                Some((why, _)) if why.is_on() => why.style(),
+                _ if muted.is_on() => theme::dim(),
+                _ if group::is_empty(song, index) => theme::faint(),
+                _ => Style::new(),
             };
             // A jump's labels go on the cursor's track, which it stays on.
             if here {
-                cells.cell(value_spans(app, control, text, style));
+                Line::from(value_spans(app, control, text, style))
             } else {
-                cells.cell(Line::styled(text, style));
+                Line::styled(text, style)
             }
-        }
+        });
         rows.push(cells.done());
     }
     columns.stack(frame, &mut rest, rows);

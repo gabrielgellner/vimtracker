@@ -290,3 +290,86 @@ fn the_returns_come_after_every_group() {
     assert_eq!(place(&song, TrackKind::Group(1)), 1);
     assert_eq!(place(&song, TrackKind::ReturnA), 1 + MAX_GROUPS);
 }
+
+/// A compressor that turns all the way down whatever's over nothing, at once, hearing a source.
+fn keyed(source: u8) -> Insert {
+    Insert::Compressor(Compressor {
+        threshold: 0x00,
+        ratio: 0xFF,
+        attack: 0x00,
+        source,
+        ..Compressor::DEFAULT
+    })
+}
+
+/// Where `Source` names a group, after the sound tracks and the returns.
+fn group_source(group: u8) -> u8 {
+    vt_model::insert::SOURCE_NAMES
+        .iter()
+        .position(|name| *name == format!("G{group}"))
+        .unwrap() as u8
+}
+
+#[test]
+fn a_compressor_hearing_a_group_ducks_under_it_while_the_group_is_muted_or_soloed_out() {
+    // A kit of two in G1, and a bass on the third track, all on the first step.
+    let mut kit = song(&[0, 0, 0]);
+    kit.tracks[0].group = Some(1);
+    kit.tracks[1].group = Some(1);
+    let mut ducked = kit.clone();
+    ducked.tracks[2].inserts[0] = keyed(group_source(1));
+    let group = place(&kit, TrackKind::Group(1));
+    let at = STEP / 2;
+    for (how, set) in [
+        (
+            "muted",
+            (|engine: &mut Engine, group| engine.set_mute(group, true)) as fn(&mut Engine, usize),
+        ),
+        ("soloed out", |engine: &mut Engine, _| {
+            engine.set_solo(2, true)
+        }),
+    ] {
+        let plain = render_with(kit.clone(), |engine, _| set(engine, group));
+        let under = render_with(ducked.clone(), |engine, _| set(engine, group));
+        assert!(loudest(&plain, at) > 0.3, "{how}: the bass alone");
+        assert!(
+            loudest(&under, at) < loudest(&plain, at) * 0.2,
+            "{how}: the kit still ducks it, {} {}",
+            loudest(&under, at),
+            loudest(&plain, at)
+        );
+    }
+}
+
+#[test]
+fn a_muted_group_a_compressor_hears_is_still_silent() {
+    let mut kit = song(&[0, 0, 0]);
+    kit.tracks[0].group = Some(1);
+    kit.tracks[1].group = Some(1);
+    kit.tracks[2].inserts[0] = keyed(group_source(1));
+    // The bass plays nothing, so all that could be heard is the kit.
+    let phrase = Arc::make_mut(kit.tracks[2].phrases.get_mut(&0).unwrap());
+    *phrase.step_mut(0).unwrap() = vt_model::step::Step::default();
+    let group = place(&kit, TrackKind::Group(1));
+    let heard = render(kit.clone());
+    assert!(loudest(&heard, FIRST) > 0.5, "the kit, unmuted");
+    // Muted while it's silent, as it is before playing, it's silent from the first hit.
+    let muted = render_with(kit, |engine, _| {
+        engine.set_mute(group, true);
+        engine.process(&mut [0.0; 64]);
+    });
+    assert!(muted.iter().all(|frame| *frame == [0.0, 0.0]), "nothing");
+}
+
+#[test]
+fn a_group_nobody_hears_plays_as_it_did() {
+    // The same song with a compressor hearing an empty group, which can't change what's heard
+    // of G1's muted tracks.
+    let mut kit = song(&[0, 0, 0]);
+    kit.tracks[0].group = Some(1);
+    let mut listening = kit.clone();
+    listening.tracks[2].inserts[0] = keyed(group_source(2));
+    let group = place(&kit, TrackKind::Group(1));
+    let mute = |engine: &mut Engine, _: &Song| engine.set_mute(group, true);
+    assert_eq!(render_with(listening, mute), render_with(kit, mute));
+}

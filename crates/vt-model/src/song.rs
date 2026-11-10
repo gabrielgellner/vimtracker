@@ -1739,6 +1739,11 @@ impl Song {
         self.fixed_track(TrackKind::Group(group))
     }
 
+    /// The sound tracks a group track sums, in order, or none for any other track.
+    pub fn group_members(&self, group: usize) -> impl Iterator<Item = usize> + '_ {
+        (0..self.sound_tracks()).filter(move |&track| self.group_track_of(track) == Some(group))
+    }
+
     /// Whether a track is heard, by the mutes and solos saved with the song: a sound track by its
     /// own and its group's, and a group while any of its tracks is. Soloing a track keeps its
     /// group heard, and soloing a group plays all its tracks. The returns and the master are
@@ -1748,8 +1753,7 @@ impl Song {
             return false;
         };
         if this.is_group() {
-            return (0..self.sound_tracks())
-                .any(|member| self.group_track_of(member) == Some(track) && self.heard(member));
+            return self.group_members(track).any(|member| self.heard(member));
         }
         if !this.is_sound() {
             return true;
