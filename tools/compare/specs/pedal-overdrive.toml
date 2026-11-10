@@ -1,0 +1,57 @@
+# Distort's `Overdrive` pedal, a Tube Screamer's circuit, measured alone, as no reference here is
+# one (#361): the harmonics it adds to a sine at stepped levels, at its lowest, default, middle
+# and highest `Amount`, at 110 Hz, under the 720 Hz where its gain branch starts, and at 1 kHz,
+# over it, which it clips far sooner: the mid hump.
+#
+#   uv run run.py specs/pedal-overdrive.toml --report out/pedal-overdrive.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -54.0
+to = 0.0
+step = 6.0
+hold = 0.4
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Overdrive"
+1.distort.tone = 0x80
+1.distort.mix = 0xFF
+
+[report]
+kind = "distortion"
+title = "Overdrive's harmonics"
+about = """
+Our Distort slot's `Overdrive` type, a Tube Screamer: its op-amp clips only what's over 720 Hz, \
+softly, with diodes across its feedback, and adds that back to the clean sound. So a 1 kHz sine \
+clips from far quieter than a 110 Hz one, and even fully clipped the 110 Hz one keeps its clean \
+part: the Tube Screamer's mid hump, and why its bass stays tight. None of the reference plugins \
+is a Tube Screamer, so it's measured alone; its structure and values are the published circuit's.
+"""
+
+[[cases]]
+name = "amount-00-1kHz"
+ours = { 1.distort.amount = 0x00 }
+
+[[cases]]
+name = "amount-40-1kHz"
+ours = { 1.distort.amount = 0x40 }
+
+[[cases]]
+name = "amount-FF-1kHz"
+ours = { 1.distort.amount = 0xFF }
+
+[[cases]]
+name = "amount-40-110Hz"
+ours = { 1.distort.amount = 0x40 }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-FF-110Hz"
+ours = { 1.distort.amount = 0xFF }
+input = { frequency = 110.0 }

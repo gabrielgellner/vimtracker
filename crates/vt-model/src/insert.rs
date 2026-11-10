@@ -33,7 +33,8 @@ pub enum Insert {
     Vowel(Vowel),
 }
 
-/// What a distortion does to the sound.
+/// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
+/// are each modelled on a pedal's circuit and tuned against a reference (#361).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistortType {
     #[default]
@@ -43,18 +44,31 @@ pub enum DistortType {
     Sine,
     Crush,
     Down,
+    /// A Tube Screamer's: the mids clipped softly by diodes in an op-amp's feedback and added back
+    /// to the clean sound, then a tone control.
+    Overdrive,
+    /// An op-amp distortion's, as a RAT's or a SansAmp's: high gain and hard clipping, then a tone
+    /// low-pass.
+    Distortion,
 }
 
 impl DistortType {
     /// Every type, in the order `+` goes through them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::Soft,
         Self::Hard,
         Self::Fold,
         Self::Sine,
         Self::Crush,
         Self::Down,
+        Self::Overdrive,
+        Self::Distortion,
     ];
+
+    /// Whether it's one of the guitar pedals, which have a `Tone`.
+    pub fn is_pedal(self) -> bool {
+        matches!(self, Self::Overdrive | Self::Distortion)
+    }
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
@@ -299,7 +313,16 @@ pub const MAX_PARAMS: usize = 10;
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
 pub const MAX_KEPT_PARAMS: usize = 16;
 
-const DISTORT_TYPE_NAMES: [&str; 6] = ["Soft", "Hard", "Fold", "Sine", "Crush", "Down"];
+const DISTORT_TYPE_NAMES: [&str; 8] = [
+    "Soft",
+    "Hard",
+    "Fold",
+    "Sine",
+    "Crush",
+    "Down",
+    "Overdrive",
+    "Distortion",
+];
 const TYPE_PARAM: Param = Param {
     name: "Type",
     key: "type",
@@ -357,18 +380,37 @@ const RATE_PARAM: Param = Param {
     wraps: false,
     default: 0x40,
 };
+/// A pedal's tone control: from dark at `00` to bright at `FF`.
+const PEDAL_TONE_PARAM: Param = Param {
+    name: "Tone",
+    key: "tone",
+    label: Some("TONE"),
+    setting: Setting::Tone,
+    choices: &[],
+    wraps: false,
+    default: 0x80,
+};
 /// Every setting a distortion has in any of its modes, in the order songs number them. Each mode
 /// shows only its own.
-pub(crate) const DISTORT_PARAMS: [Param; 6] = [
+pub(crate) const DISTORT_PARAMS: [Param; 7] = [
     TYPE_PARAM,
     AMOUNT_PARAM,
     BITS_PARAM,
     RATE_PARAM,
     MIX_PARAM,
     GAIN_PARAM,
+    PEDAL_TONE_PARAM,
 ];
 /// What the shaping modes have: how hard it drives.
 const SHAPING_PARAMS: [Param; 4] = [TYPE_PARAM, AMOUNT_PARAM, MIX_PARAM, GAIN_PARAM];
+/// The pedals have a tone control as well.
+const PEDAL_PARAMS: [Param; 5] = [
+    TYPE_PARAM,
+    AMOUNT_PARAM,
+    PEDAL_TONE_PARAM,
+    MIX_PARAM,
+    GAIN_PARAM,
+];
 /// `Crush` has whole bits in place of an `Amount`.
 const CRUSH_PARAMS: [Param; 4] = [TYPE_PARAM, BITS_PARAM, MIX_PARAM, GAIN_PARAM];
 /// `Down` has how long it holds each sample.
@@ -1540,7 +1582,7 @@ impl Insert {
     pub fn meaning(self) -> &'static str {
         match self {
             Self::Empty => "Nothing here",
-            Self::Distort(_) => "Clips, folds or crushes the sound",
+            Self::Distort(_) => "Clips, folds or crushes the sound, or drives it as a pedal",
             Self::Delay(_) => "Repeats the sound, bouncing side to side",
             Self::Reverb(_) => "Puts the sound in a room",
             Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
@@ -1568,6 +1610,7 @@ impl Insert {
             Self::Distort(distort) => match distort.kind {
                 DistortType::Crush => &CRUSH_PARAMS,
                 DistortType::Down => &DOWN_PARAMS,
+                DistortType::Overdrive | DistortType::Distortion => &PEDAL_PARAMS,
                 _ => &SHAPING_PARAMS,
             },
             Self::Delay(_) => &DELAY_PARAMS,
@@ -1727,6 +1770,7 @@ impl Insert {
             Setting::Rate => distort.rate,
             Setting::Mix => distort.mix,
             Setting::Gain => distort.gain,
+            Setting::Tone => distort.tone,
             _ => return None,
         })
     }
@@ -1767,6 +1811,7 @@ impl Insert {
             Setting::Rate => distort.rate = whole,
             Setting::Mix => distort.mix = whole,
             Setting::Gain => distort.gain = whole,
+            Setting::Tone => distort.tone = whole,
             _ => {}
         }
         Self::Distort(distort)
@@ -1804,6 +1849,9 @@ pub struct Distort {
     /// down as `Amount` makes it louder.
     #[serde(default = "unity_gain")]
     pub gain: u8,
+    /// The pedals' tone control, from dark at `00` to bright at `FF`.
+    #[serde(default = "default_tone")]
+    pub tone: u8,
 }
 
 /// A delay's settings. One a file doesn't have starts as new.
@@ -3105,6 +3153,10 @@ fn default_rate() -> u8 {
     RATE_PARAM.default
 }
 
+fn default_tone() -> u8 {
+    PEDAL_TONE_PARAM.default
+}
+
 impl Distort {
     /// As it starts.
     pub const DEFAULT: Self = Self {
@@ -3114,6 +3166,7 @@ impl Distort {
         rate: RATE_PARAM.default,
         mix: MIX_PARAM.default,
         gain: GAIN_PARAM.default,
+        tone: PEDAL_TONE_PARAM.default,
     };
 }
 
@@ -3425,6 +3478,10 @@ mod tests {
         assert_eq!(names(DistortType::Fold), ["Type", "Amount", "Mix", "Gain"]);
         assert_eq!(names(DistortType::Crush), ["Type", "Bits", "Mix", "Gain"]);
         assert_eq!(names(DistortType::Down), ["Type", "Rate", "Mix", "Gain"]);
+        for pedal in [DistortType::Overdrive, DistortType::Distortion] {
+            assert!(pedal.is_pedal());
+            assert_eq!(names(pedal), ["Type", "Amount", "Tone", "Mix", "Gain"]);
+        }
         // Bits read as their names, and every one goes there and back.
         let bits = distort(DistortType::Crush).params()[1];
         assert_eq!(bits.choices[usize::from(bits.default)], "9");

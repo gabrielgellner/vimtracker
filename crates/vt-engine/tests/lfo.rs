@@ -638,7 +638,10 @@ fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
         0x80,
         2,
     )[0];
-    assert_eq!(kind, 3, "half way up the 5 steps from the first");
+    assert_eq!(
+        kind, 4,
+        "half way up the 7 steps from the first, 3.5, rounded"
+    );
 }
 
 #[test]

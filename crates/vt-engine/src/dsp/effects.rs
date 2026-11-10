@@ -8,6 +8,7 @@ pub mod distort;
 pub mod flanger;
 pub mod granular;
 pub mod memory;
+pub mod pedal;
 pub mod phaser;
 pub mod pitch_shifter;
 pub mod plate;

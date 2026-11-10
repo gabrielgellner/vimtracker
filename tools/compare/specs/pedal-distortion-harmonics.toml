@@ -1,0 +1,73 @@
+# Distort's `Distortion` pedal against Arturia's Dist OPAMP-21 in its `Modern` mode, which has no
+# EQ of its own, so only the op-amp's gain and clip are heard: the harmonics each adds to a sine
+# held at stepped levels, at three drives (#361). `Amount` is fitted so its place is OPAMP-21's
+# `Drive`: `40` is 25%, `80` 50% and `FF` 100%.
+#
+#   uv run run.py specs/pedal-distortion-harmonics.toml --report out/pedal-distortion-harmonics.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 110.0
+from = -54.0
+to = 0.0
+step = 6.0
+hold = 0.4
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Distortion"
+1.distort.tone = 0xFF
+1.distort.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Dist OPAMP-21.vst3"
+buffer_size = 512
+preset = "Default"
+
+[reference.parameters]
+mode = "Modern"
+post_eq_on = false
+dry_wet = 100.0
+presence = 0.0
+high = 100.0
+output_db = 0.0
+input_hpf_hz = 20.0
+input_lpf_hz = 20000.0
+
+[report]
+kind = "distortion"
+title = "Distortion's clip against Dist OPAMP-21"
+about = """
+Our Distort slot's `Distortion` type, an op-amp distortion, against Arturia's Dist OPAMP-21, after \
+Tech 21's SansAmp, in its `Modern` mode, which has no tone stack or EQ, with its post EQ off: the \
+harmonics each adds to a 110 Hz or 1 kHz sine held at -54 to 0 dBFS, 6 dB apart. Our `Tone` is \
+fully open, at 12 kHz.
+
+Both clip hard and evenly, so their harmonics are odd, and once clipped they hold the same ceiling. \
+Where the THD jumps is where each starts to clip, which `Amount` moves as OPAMP-21's `Drive` does.
+"""
+
+[[cases]]
+name = "drive-25"
+ours = { 1.distort.amount = 0x40 }
+reference = { drive = 25.0 }
+
+[[cases]]
+name = "drive-50"
+ours = { 1.distort.amount = 0x80 }
+reference = { drive = 50.0 }
+
+[[cases]]
+name = "drive-100"
+ours = { 1.distort.amount = 0xFF }
+reference = { drive = 100.0 }
+
+[[cases]]
+name = "drive-50-1kHz"
+ours = { 1.distort.amount = 0x80 }
+reference = { drive = 50.0 }
+input = { frequency = 1000.0 }

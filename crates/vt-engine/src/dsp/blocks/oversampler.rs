@@ -45,6 +45,23 @@ impl Oversampler {
     }
 }
 
+/// Going to four times the rate and back, as two of the halfbands in a row, for a clip so hard or
+/// driven so far that twice the rate still aliases.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct QuadrupleOversampler {
+    outer: Oversampler,
+    inner: Oversampler,
+}
+
+impl QuadrupleOversampler {
+    /// One sample at the normal rate, with `step` run four times at the higher one, in order.
+    #[inline]
+    pub(crate) fn process(&mut self, input: f32, mut step: impl FnMut(f32) -> f32) -> f32 {
+        let Self { outer, inner } = self;
+        outer.process(input, |twice| inner.process(twice, &mut step))
+    }
+}
+
 /// The same with two sounds going up together, for what mixes them before it comes back down.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct PairOversampler {

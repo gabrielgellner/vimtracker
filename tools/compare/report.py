@@ -6,7 +6,7 @@ and how to lay it out:
 
     [report]
     kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity,
-                          # taper, notes, transition, gate or chirp
+                          # taper, notes, transition, gate, chirp or spectrum
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -44,6 +44,8 @@ The kinds:
 - `gate`: one note in each case, its level as it's held and its release (see `Gate`).
 - `chirp`: each note's resonant peak over time, its place and its height, as the filter envelope
   sweeps it, for the 303's squelch at high Res (see `Chirp`).
+- `spectrum`: a whole passage through an effect, such as a riff through a pedal: its long-term
+  spectrum's shape in third octaves, and its level, crest factor and dynamics (see `Spectrum`).
 
 Every side is drawn on the same plots: ours, and each of the spec's references. A kind that gives
 its measurements as `measures` gets a consensus view as well (`consensus.py`): where the
@@ -270,6 +272,13 @@ def describe_input(given: dict | None, notes: list | None) -> str:
         return (
             f"The input is one sample at {given['level']:g} dBFS, then silence, for "
             f"{given['seconds']:g} s: a click for the filter to ring from."
+        )
+    if kind == "file" and given.get("made_by"):
+        made_by = given["made_by"]
+        return (
+            f"The input is our side's render of {made_by['spec']}"
+            + (f", case {made_by['case']}" if made_by.get("case") else "")
+            + ", the same samples given to every side."
         )
     return f"The input is a {kind}."
 
@@ -2232,6 +2241,89 @@ class Chirp(Report):
         }
 
 
+class Spectrum(Report):
+    """A whole passage through an effect on every side, such as a riff through a pedal: its
+    long-term spectrum's shape and its level and dynamics (see `measure.passage`)."""
+
+    reading = (
+        "Each case has two panels. The first is each side's long-term spectrum in third-octave "
+        "bands, each against its own overall level, so it shows the shape alone: where a pedal "
+        "puts its weight, its mid hump and how far its highs reach. The second is each side's "
+        "level over time, the RMS over 10 ms in dBFS, which shows how the pedal holds a riff's "
+        "notes and accents together. The input is drawn faint under both."
+    )
+
+    def build(self):
+        names = [r.name for r in self.rendered]
+        figure, axes = plt.subplots(len(names), 2, figsize=(10.0, 3.0 * len(names)), squeeze=False)
+        rows, summary, records = [], [], []
+        for index, r in enumerate(self.rendered):
+            shape_panel, level_panel = axes[index]
+            found = {}
+            if r.given is not None:
+                given = measure.passage(r.given, self.spec.rate)
+                shape_panel.semilogx(given["bands Hz"], given["shape dB"], color=MUTED, alpha=0.5, linewidth=1.0)
+                level_panel.plot(given["times"], given["level dBFS"], color=MUTED, alpha=0.4, linewidth=0.8)
+            for side, name, colour, samples in self.sides(r):
+                found[side] = measure.passage(samples, self.spec.rate)
+                shape_panel.semilogx(found[side]["bands Hz"], found[side]["shape dB"], color=colour)
+                level_panel.plot(found[side]["times"], found[side]["level dBFS"], color=colour, linewidth=0.9)
+            shape_panel.set_title(f"{r.name}: spectrum's shape", loc="left")
+            shape_panel.set_xlabel("Hz")
+            shape_panel.set_ylabel("dB against its level")
+            shape_panel.set_ylim(-60, 10)
+            log_frequency_axis(shape_panel)
+            level_panel.set_title(f"{r.name}: level", loc="left")
+            level_panel.set_xlabel("seconds")
+            level_panel.set_ylabel("dBFS, RMS over 10 ms")
+            level_panel.set_ylim(-60, 6)
+            ours = found["ours"]
+            for side, f in found.items():
+                apart = measure.passage_gaps(ours, f) if side != "ours" else {}
+                rows.append([
+                    r.name if side == "ours" else "",
+                    self.label(side),
+                    number(f["RMS dBFS"], 1),
+                    number(f["peak dBFS"], 1),
+                    number(f["crest dB"], 1),
+                    number(f["quiet dBFS"], 1),
+                    number(f["loud dBFS"], 1),
+                    number(f["centroid Hz"], 0),
+                    number(apart.get("shape dB", float("nan")), 1) if apart else "",
+                    number(apart.get("level dB", float("nan")), 1) if apart else "",
+                ])
+                if side == "ours":
+                    continue
+                summary.append(html.escape(
+                    f"{r.name}, against {side}: the spectrum's shape is {number(apart['shape dB'], 1)} dB apart "
+                    f"(RMS over the bands from 40 Hz to 16 kHz), most at {hertz(apart['worst Hz'])} "
+                    f"({number(apart['worst dB'], 1, sign=True)} dB); ours is {number(apart['louder dB'], 1, sign=True)} dB "
+                    f"louder overall, its crest factor {number(apart['crest dB'], 1, sign=True)} dB, its loud and quiet "
+                    f"moments {number(apart['loud dB'], 1, sign=True)} and {number(apart['quiet dB'], 1, sign=True)} dB, "
+                    f"and its level over time {number(apart['level dB'], 1)} dB apart once the overall difference is "
+                    f"taken out."
+                ))
+                records.append({"case": r.name, "reference": side, **{k: v for k, v in apart.items() if k != "worst Hz"}})
+        figure.tight_layout()
+        return {
+            "keys": self.keys() + [(MUTED, "solid", "the input, faint")],
+            "summary": summary,
+            "figures": [image(figure)],
+            "numbers": table(
+                ["Case", "Side", "RMS dBFS", "Peak dBFS", "Crest dB", "Quiet dBFS", "Loud dBFS", "Centroid Hz", "Shape apart dB", "Level apart dB"],
+                rows,
+                numeric_from=2,
+            ),
+            "numbers note": (
+                "Quiet and loud are the 10th and 90th percentiles of the level over 10 ms, over the "
+                "frames within 40 dB of the loudest, so silences between notes don't count. Shape apart "
+                "is the RMS of the difference of the two spectra's shapes over the third-octave bands "
+                "from 40 Hz to 16 kHz; level apart is the RMS of the difference of the two levels over "
+                "time once their overall difference is taken out."
+            ),
+        }
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -2246,6 +2338,7 @@ KINDS = {
     "transition": Transition,
     "gate": Gate,
     "chirp": Chirp,
+    "spectrum": Spectrum,
 }
 
 STYLE = """

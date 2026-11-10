@@ -463,7 +463,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, and `Clean`), `bus` (its `Bus` type), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `smoother`, `sine_table`, `plaits_parts` |
 
@@ -1595,7 +1595,8 @@ Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert 
 
 | Setting | Values | Default |
 |---|---|---|
-| `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down` | `Soft` |
+| `Type` | `Soft`, `Hard`, `Fold`, `Sine`, `Crush`, `Down`, and the guitar pedals `Overdrive` and `Distortion` (#361, decision 130) | `Soft` |
+| `Tone` | The pedals only: `00` dark to `FF` bright | `80` |
 | `Amount` | `00` to `FF`, more of what `Type` does. `Crush` has `Bits` here | `40` |
 | `Mix` | `00` dry to `FF` wet | `FF` |
 | `Gain` | On the level scale, after `Mix` | `E0`, which is 0 dB |

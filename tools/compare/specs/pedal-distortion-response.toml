@@ -1,0 +1,62 @@
+# Distort's `Distortion` pedal against Arturia's Dist OPAMP-21 at half its `Drive`, given a sweep
+# too quiet to clip, so what's heard is the EQ around the clip: OPAMP-21's `Modern` mode, which has
+# none, and its `Normal` mode, whose amp's EQ and speaker roll off the highs, against our `Tone`
+# fully open and at its default (#361).
+#
+#   uv run run.py specs/pedal-distortion-response.toml --report out/pedal-distortion-response.html
+
+rate = 48000
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -60.0
+seconds = 4.0
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Distortion"
+1.distort.amount = 0x80
+1.distort.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Dist OPAMP-21.vst3"
+buffer_size = 512
+preset = "Default"
+
+[reference.parameters]
+drive = 50.0
+post_eq_on = false
+dry_wet = 100.0
+presence = 0.0
+high = 100.0
+output_db = 0.0
+input_hpf_hz = 20.0
+input_lpf_hz = 20000.0
+
+[report]
+kind = "response"
+title = "Distortion's EQ against Dist OPAMP-21"
+figure = ["1.distort.type"]
+row = "1.distort.amount"
+column = "1.distort.tone"
+about = """
+Our `Distortion` at `Amount` `80` against Dist OPAMP-21 at 50% `Drive`, given a sweep at -60 dBFS, \
+which neither clips, so the curves are the gain and EQ around the clip. Our `Tone` fully open, \
+`FF`, is against OPAMP-21's `Modern` mode, which has no EQ; our default, `80`, a 12 dB an octave \
+low-pass at 2.5 kHz, is against its `Normal` mode, whose amp's EQ and speaker roll off far more \
+steeply.
+"""
+
+[[cases]]
+name = "open-modern"
+ours = { 1.distort.tone = 0xFF }
+reference = { mode = "Modern" }
+
+[[cases]]
+name = "default-normal"
+ours = { 1.distort.tone = 0x80 }
+reference = { mode = "Normal" }

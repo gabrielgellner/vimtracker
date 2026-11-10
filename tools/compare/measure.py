@@ -574,3 +574,78 @@ def resonance_track(samples: np.ndarray, rate: int, start: float, end: float, fu
         "skirt": skirt,
         "level": levels,
     }
+
+
+# Third-octave bands' centres, from 25 Hz to 20 kHz, and the ones a passage's shape is compared
+# over: from 40 Hz, under which a riff has little, to 16 kHz, where references start to roll off
+# for their own anti-aliasing.
+THIRD_OCTAVES = 1000.0 * 2.0 ** (np.arange(-16, 14) / 3.0)
+SHAPE_FROM_HZ, SHAPE_TO_HZ = 40.0, 16_000.0
+# The window a passage's level over time is read over, and how far under its loudest a frame
+# still counts as playing.
+PASSAGE_WINDOW = 0.01
+PLAYING_DB = 40.0
+
+
+def passage(samples: np.ndarray, rate: int) -> dict:
+    """A whole passage, such as a riff through a pedal: its long-term spectrum's power in
+    third-octave bands against its own overall level, so the shape alone; its level, peak and
+    crest factor; its level over time, the RMS over 10 ms; and the 10th and 90th percentiles of
+    that level over the frames within 40 dB of the loudest."""
+    signal = mono(samples)
+    window = np.hanning(8192)
+    hop = 4096
+    frames = [signal[at : at + window.size] * window for at in range(0, max(1, signal.size - window.size), hop)]
+    power = np.mean([np.abs(np.fft.rfft(frame)) ** 2 for frame in frames], axis=0)
+    bins = np.fft.rfftfreq(window.size, 1.0 / rate)
+    bands = []
+    for centre in THIRD_OCTAVES:
+        inside = (bins >= centre * 2.0 ** (-1 / 6)) & (bins < centre * 2.0 ** (1 / 6))
+        bands.append(float(power[inside].sum()) if inside.any() else 0.0)
+    bands = np.array(bands)
+    total = max(float(bands.sum()), 1e-30)
+    shape = 10.0 * np.log10(np.maximum(bands / total, 1e-15))
+    size = max(1, int(PASSAGE_WINDOW * rate))
+    count = signal.size // size
+    levels = 10.0 * np.log10(np.maximum(np.mean(signal[: count * size].reshape(count, size) ** 2, axis=1), 1e-15))
+    playing = levels[levels >= levels.max(initial=-150.0) - PLAYING_DB]
+    rms = float(np.sqrt(np.mean(signal**2)))
+    peak = float(np.abs(signal).max(initial=0.0))
+    return {
+        "bands Hz": THIRD_OCTAVES,
+        "shape dB": shape,
+        "times": (np.arange(count) + 0.5) * size / rate,
+        "level dBFS": levels,
+        "RMS dBFS": db(rms),
+        "peak dBFS": db(peak),
+        "crest dB": db(peak) - db(rms),
+        "quiet dBFS": float(np.percentile(playing, 10)) if playing.size else FLOOR_DB,
+        "loud dBFS": float(np.percentile(playing, 90)) if playing.size else FLOOR_DB,
+        "centroid Hz": centroid(samples, rate),
+    }
+
+
+def passage_gaps(ours: dict, theirs: dict) -> dict:
+    """How far apart two passages are, ours less theirs: the RMS of their shapes' difference over
+    the bands compared and where it's widest, their overall levels, crest factors and loud and
+    quiet moments, and the RMS of their levels' difference over time once the overall difference
+    is taken out, over the frames where either is playing."""
+    bands = (THIRD_OCTAVES >= SHAPE_FROM_HZ) & (THIRD_OCTAVES <= SHAPE_TO_HZ)
+    apart = ours["shape dB"][bands] - theirs["shape dB"][bands]
+    worst = int(np.argmax(np.abs(apart)))
+    louder = ours["RMS dBFS"] - theirs["RMS dBFS"]
+    count = min(ours["level dBFS"].size, theirs["level dBFS"].size)
+    a, b = ours["level dBFS"][:count], theirs["level dBFS"][:count]
+    playing = np.maximum(a, b) >= max(a.max(initial=-150.0), b.max(initial=-150.0)) - PLAYING_DB
+    over_time = (a - b)[playing]
+    over_time = over_time - np.mean(over_time) if over_time.size else over_time
+    return {
+        "shape dB": float(np.sqrt(np.mean(apart**2))),
+        "worst Hz": float(THIRD_OCTAVES[bands][worst]),
+        "worst dB": float(apart[worst]),
+        "louder dB": louder,
+        "crest dB": ours["crest dB"] - theirs["crest dB"],
+        "loud dB": ours["loud dBFS"] - theirs["loud dBFS"],
+        "quiet dB": ours["quiet dBFS"] - theirs["quiet dBFS"],
+        "level dB": float(np.sqrt(np.mean(over_time**2))) if over_time.size else float("nan"),
+    }

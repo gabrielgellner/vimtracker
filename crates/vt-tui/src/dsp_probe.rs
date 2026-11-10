@@ -177,8 +177,13 @@ impl NoteSpec {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "signal", rename_all = "lowercase", deny_unknown_fields)]
 pub enum Input {
-    /// A file, from the spec's folder, made stereo at the spec's rate.
-    File { path: PathBuf },
+    /// A file, from the spec's folder, made stereo at the spec's rate. `made_by` names another
+    /// spec and its case whose render this is, which only `tools/compare` reads: it renders that
+    /// case there first, so a riff can be put through an effect on every side.
+    File {
+        path: PathBuf,
+        made_by: Option<toml::Table>,
+    },
     /// A steady sine.
     Sine {
         frequency: f64,
@@ -674,7 +679,7 @@ pub fn signal(input: &Input, rate: u32, folder: &Path) -> Result<Vec<[f32; 2]>, 
     };
     let mono = |samples: Vec<f64>| samples.into_iter().map(|x| [x as f32; 2]).collect();
     Ok(match input {
-        Input::File { path } => load_sample(&folder.join(path), rate)?.frames,
+        Input::File { path, .. } => load_sample(&folder.join(path), rate)?.frames,
         Input::Sine {
             frequency,
             level,
