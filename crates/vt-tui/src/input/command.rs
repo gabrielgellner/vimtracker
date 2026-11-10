@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
-use vt_model::bank::{MAX_CENTS, MIN_NORMALIZE};
+use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN};
 use vt_model::constants::MAX_LABEL_CHARS;
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
@@ -28,6 +28,8 @@ pub enum Line {
     Sample(Option<PathBuf>),
     /// Change where the sample this track plays starts, ends or loops, or how it plays.
     SampleChange(SampleChange),
+    /// Slice the sample this track plays, or change how one of its slices plays.
+    Slice(SliceChange),
     /// Make a kit's sounds the ones to choose from, by name or path, or choose a kit.
     Kit(Option<PathBuf>),
     /// List the bank, to choose what this track plays.
@@ -114,6 +116,29 @@ pub enum SampleChange {
 /// The words `:sample` takes to change the track's sample, rather than a file to load.
 pub const SAMPLE_WORDS: [&str; 7] = ["start", "end", "loop", "reverse", "fade", "gain", "tune"];
 
+/// A change to the slices of the sample the current track plays, from `:slice`. A slice's own
+/// setting that's none plays as the entry does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliceChange {
+    /// Cut it into this many slices of the same length, as `:slice 16` does.
+    Even(usize),
+    /// Take its slices away, so it plays as one.
+    Clear,
+    /// The slice's gain, in hundredths of a dB.
+    Gain(Option<i32>),
+    /// Its pan, from 50 to the left, below 0, to 50 to the right.
+    Pan(Option<i8>),
+    /// Its tune, in semitones.
+    Tune(Option<i8>),
+    /// Whether it plays reversed.
+    Reverse(Option<bool>),
+    /// How long it fades in and out, in microseconds.
+    Fade(Option<(u64, u64)>),
+}
+
+/// The words `:slice` takes, beside a number of slices.
+pub const SLICE_WORDS: [&str; 6] = ["clear", "gain", "pan", "tune", "reverse", "fade"];
+
 /// The most an entry's gain can be moved by `:sample gain`, in dB either way.
 pub const MOST_SAMPLE_DB: f32 = 24.0;
 
@@ -181,6 +206,47 @@ fn sample(argument: &str) -> Result<Line, LineError> {
         .ok_or(LineError::SampleChange)
 }
 
+/// Read `:slice`'s arguments: a number of slices, `clear`, or one of a slice's own settings and
+/// its value, where no value plays it as the entry does.
+fn slice(argument: &str) -> Result<Line, LineError> {
+    let words: Vec<&str> = argument.split_whitespace().collect();
+    let change = match &words[..] {
+        [count] if steps(count).is_some() => steps(count)
+            .filter(|count| *count <= MAX_SLICES)
+            .map(SliceChange::Even),
+        ["clear"] => Some(SliceChange::Clear),
+        ["gain"] => Some(SliceChange::Gain(None)),
+        ["gain", db] => db
+            .trim_end_matches("dB")
+            .parse::<f32>()
+            .ok()
+            .filter(|db| db.abs() <= MOST_SAMPLE_DB)
+            .map(|db| SliceChange::Gain(Some((db * 100.0).round() as i32))),
+        ["pan"] => Some(SliceChange::Pan(None)),
+        ["pan", pan] => pan
+            .parse::<i8>()
+            .ok()
+            .filter(|pan| pan.abs() <= MOST_PAN)
+            .map(|pan| SliceChange::Pan(Some(pan))),
+        ["tune"] => Some(SliceChange::Tune(None)),
+        ["tune", semitones] => semitones
+            .parse::<i8>()
+            .ok()
+            .filter(|semitones| semitones.abs() <= MAX_TUNE)
+            .map(|semitones| SliceChange::Tune(Some(semitones))),
+        ["reverse"] => Some(SliceChange::Reverse(None)),
+        ["reverse", "on"] => Some(SliceChange::Reverse(Some(true))),
+        ["reverse", "off"] => Some(SliceChange::Reverse(Some(false))),
+        ["fade"] => Some(SliceChange::Fade(None)),
+        ["fade", "off"] => Some(SliceChange::Fade(Some((0, 0)))),
+        ["fade", fade_in, fade_out] => time(fade_in)
+            .zip(time(fade_out))
+            .map(|fades| SliceChange::Fade(Some(fades))),
+        _ => None,
+    };
+    change.map(Line::Slice).ok_or(LineError::Slice)
+}
+
 /// Why a command line was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum LineError {
@@ -204,6 +270,10 @@ pub enum LineError {
         ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB or tune st [ct], with times as 1.5 or 250ms"
     )]
     SampleChange,
+    #[error(
+        ":slice takes a number of slices up to 256, clear, or gain dB, pan -50 to 50, tune st, reverse on or off, or fade in out, each alone to play as the sample"
+    )]
+    Slice,
     #[error(":normalize takes a peak level in dBFS from -60 to 0, such as -0.3, or off")]
     Normalize,
     #[error(":track takes add [n] or del")]
@@ -402,7 +472,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 32] = [
+pub const COMMANDS: [Command; 33] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -444,6 +514,12 @@ pub const COMMANDS: [Command; 32] = [
         meaning: "Load a sample on this track, or set where it starts, ends and loops",
         takes: Takes::Sample,
         parse: sample,
+    },
+    Command {
+        name: "slice",
+        meaning: "Slice this track's sample into so many, or clear, or set how a slice plays",
+        takes: Takes::Words(&SLICE_WORDS),
+        parse: slice,
     },
     Command {
         name: "kit",
@@ -898,6 +974,36 @@ mod tests {
         assert_eq!(parse("normalize -61"), Err(LineError::Normalize));
         assert_eq!(parse("normalize loud"), Err(LineError::Normalize));
         assert_eq!(parse("trim"), Ok(Line::Trim));
+    }
+
+    #[test]
+    fn slice_takes_a_count_clear_or_a_slices_own_setting() {
+        let slice = |change| Ok(Line::Slice(change));
+        assert_eq!(parse("slice 16"), slice(SliceChange::Even(16)));
+        assert_eq!(parse("slice 0x40"), slice(SliceChange::Even(64)));
+        assert_eq!(parse("slice 256"), slice(SliceChange::Even(256)));
+        assert_eq!(parse("slice 257"), Err(LineError::Slice));
+        assert_eq!(parse("slice 0"), Err(LineError::Slice));
+        assert_eq!(parse("slice clear"), slice(SliceChange::Clear));
+        assert_eq!(
+            parse("slice gain -4.5"),
+            slice(SliceChange::Gain(Some(-450)))
+        );
+        assert_eq!(parse("slice gain"), slice(SliceChange::Gain(None)));
+        assert_eq!(parse("slice pan -50"), slice(SliceChange::Pan(Some(-50))));
+        assert_eq!(parse("slice pan 51"), Err(LineError::Slice));
+        assert_eq!(parse("slice tune 7"), slice(SliceChange::Tune(Some(7))));
+        assert_eq!(
+            parse("slice reverse off"),
+            slice(SliceChange::Reverse(Some(false)))
+        );
+        assert_eq!(parse("slice reverse"), slice(SliceChange::Reverse(None)));
+        assert_eq!(
+            parse("slice fade 10ms 0.2"),
+            slice(SliceChange::Fade(Some((10_000, 200_000))))
+        );
+        assert_eq!(parse("slice fade"), slice(SliceChange::Fade(None)));
+        assert_eq!(parse("slice"), Err(LineError::Slice));
     }
 
     #[test]

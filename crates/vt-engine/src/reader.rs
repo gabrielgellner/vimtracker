@@ -101,7 +101,8 @@ impl Region {
         let fade_in = f64::from(span.fade_in);
         let fade_out = f64::from(span.fade_out);
         let looping = match cut.mode {
-            PlayMode::OneShot => None,
+            // On through is once, over a span the entry has already carried on to its end.
+            PlayMode::OneShot | PlayMode::Thru => None,
             mode => {
                 let own = span.loop_.map(|found| {
                     let (start, end) = if span.reverse {
@@ -225,6 +226,11 @@ impl Reader {
     /// The span it's reading.
     pub fn span(&self) -> Option<Span> {
         self.span
+    }
+
+    /// Whether it plays on past its slice's end, so the span it follows is the one that does.
+    pub fn thru(&self) -> bool {
+        self.cut.mode == PlayMode::Thru
     }
 
     /// Carry on with a span that's changed, as moving a point does, from the same frame. A note

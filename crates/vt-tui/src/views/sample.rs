@@ -18,7 +18,8 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::kitty;
 use crate::sample_page::{SamplePage, Shown};
-use crate::sample_wave::{END_COLOR, LOOP_COLOR, START_COLOR};
+use crate::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
+use crate::slicing::pan_text;
 use crate::theme;
 use crate::views::help::POPUP_DELAY;
 
@@ -243,29 +244,50 @@ pub fn cursor_column() -> Color {
     theme::dimmed(theme::ROSEWATER)
 }
 
-/// The ruler: each point's mark in its colour, over the column it's in, and the time at round
-/// steps where there's room, faint.
+/// The ruler: each point's mark in its colour, over the column it's in, each slice's number in
+/// hex before its mark where there's room, as Vim numbers lines, and the time at round steps
+/// where there's room after that, faint.
 fn ruler(app: &App, shown: &Shown) -> Line<'static> {
     let state = &app.sample_page;
     let columns = state.columns;
     let mut cells: Vec<(char, Style)> = vec![(' ', Style::new()); columns];
     let mut taken = vec![false; columns];
+    let on_screen = |frame: u64| {
+        let column = state.column_of(frame).checked_sub(state.column)? as usize;
+        (column < columns).then_some(column)
+    };
     let mut mark = |frame: u64, color: Color| {
-        let column = state.column_of(frame).checked_sub(state.column);
-        if let Some(column) = column.map(|column| column as usize)
-            && column < columns
-        {
+        if let Some(column) = on_screen(frame) {
             cells[column] = (POINT_MARK, Style::new().fg(color));
             taken[column] = true;
         }
     };
     let points = &shown.entry.edit.points;
+    for slice in &points.slices {
+        mark(slice.start, SLICE_COLOR);
+    }
     if let Some(looped) = points.loop_ {
         mark(looped.start, LOOP_COLOR);
         mark(looped.end, LOOP_COLOR);
     }
     mark(shown.end(), END_COLOR);
     mark(points.start, START_COLOR);
+    // Each slice's number, in the two columns before its mark, or after it at the ruler's left
+    // edge, if they're free.
+    for (number, slice) in points.slices.iter().enumerate() {
+        let Some(column) = on_screen(slice.start) else {
+            continue;
+        };
+        let from = column.checked_sub(2).unwrap_or(column + 1);
+        if from + 2 > columns || taken[from..from + 2].iter().any(|taken| *taken) {
+            continue;
+        }
+        let style = Style::new().fg(SLICE_COLOR);
+        for (at, c) in (from..from + 2).zip(format!("{number:02X}").chars()) {
+            cells[at] = (c, style);
+            taken[at] = true;
+        }
+    }
     let rate = f64::from(shown.rate().max(1));
     let (step, decimals) = tick_step(state.zoom as f64 / rate);
     let first = state.first_frame() as f64 / rate;
@@ -330,10 +352,38 @@ fn settings(shown: &Shown) -> Line<'static> {
         }
         None => spans.push(Span::raw("off")),
     }
+    spans.push(Span::raw("   "));
+    spans.push(named("Slices", SLICE_COLOR));
+    spans.push(Span::raw(match points.slices.len() {
+        0 => "none".to_owned(),
+        count => count.to_string(),
+    }));
     Line::from(spans)
 }
 
-/// Where the cursor is: its time, its frame and its slice.
+/// What a slice's own settings are, where it doesn't play as its entry does, as `-3.0 dB  25 L`.
+fn slice_own(shown: &Shown, slice: usize) -> Option<String> {
+    let over = shown.entry.edit.points.slices.get(slice)?.over;
+    let rate = shown.rate();
+    let mut said = Vec::new();
+    said.extend(over.gain_db.map(|db| format!("{db:+.1} dB")));
+    said.extend(over.pan.map(pan_text));
+    said.extend(over.tune.map(|tune| format!("{tune:+} st")));
+    said.extend(
+        over.reverse
+            .map(|reverse| if reverse { "reversed" } else { "forward" }.to_owned()),
+    );
+    if let (Some(fade_in), Some(fade_out)) = (over.fade_in, over.fade_out) {
+        said.push(format!(
+            "fades {} {}",
+            time(u64::from(fade_in), rate),
+            time(u64::from(fade_out), rate)
+        ));
+    }
+    (!said.is_empty()).then(|| said.join("  "))
+}
+
+/// Where the cursor is: its time, its frame and its slice, with the slice's own settings.
 fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
     let (slice, _) = shown.slice_at(state.cursor);
     let style = if state.cursor_line {
@@ -341,15 +391,23 @@ fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
     } else {
         "its column"
     };
-    Line::from(vec![
+    let mut spans = vec![
         Span::styled("Cursor ", Style::new().fg(theme::ROSEWATER)),
         Span::raw(format!(
-            "{}  frame {}  slice {slice:02X}",
+            "{}  frame {}  ",
             time(state.cursor, shown.rate()),
             state.cursor
         )),
-        Span::styled(format!("   drawn as {style}, zc to switch"), theme::faint()),
-    ])
+        Span::styled(format!("slice {slice:02X}"), Style::new().fg(SLICE_COLOR)),
+    ];
+    if let Some(own) = slice_own(shown, slice) {
+        spans.push(Span::raw(format!("  {own}")));
+    }
+    spans.push(Span::styled(
+        format!("   drawn as {style}, zc to switch"),
+        theme::faint(),
+    ));
+    Line::from(spans)
 }
 
 #[cfg(test)]

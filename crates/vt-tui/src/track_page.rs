@@ -225,19 +225,21 @@ const fn base(control: TrackControl) -> Control {
 }
 
 /// The Sound page of a track playing a sample, top to bottom, with output on the right: its
-/// `Sample`, then the sampler's `Start`, `Length` and `Play`, as a synth's settings are.
-pub const SAMPLE_ROWS: [&[Control]; 12] = [
+/// `Sample`, then the sampler's `Slice`, `Start`, `Length` and `Play`, as a synth's settings are,
+/// with the filter below them as on a synth with more than four.
+pub const SAMPLE_ROWS: [&[Control]; 13] = [
     &[Control::Machine, Control::Level],
     &[Control::Sample, base(TrackControl::Pan)],
     &[Control::Setting(1), base(TrackControl::SendA)],
     &[Control::Setting(2), base(TrackControl::SendB)],
     &[Control::Setting(3), base(TrackControl::Pitch)],
-    &[Control::FilterType, Control::Groove],
-    &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Reset],
-    &[base(TrackControl::LowCut), Control::Glide],
+    &[Control::Setting(4), Control::Groove],
+    &[Control::FilterType, Control::Choke],
+    &[Control::FilterMode, Control::GateLength],
+    &[base(TrackControl::Cutoff), Control::Speed],
+    &[base(TrackControl::Resonance), Control::Reset],
+    &[base(TrackControl::Drive), Control::Glide],
+    &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
 /// The Sound page of a track playing a synth with four settings: its settings down the left, and
@@ -1566,6 +1568,10 @@ impl App {
         }
         if self.track_control() == Control::Sample {
             self.open_bank_picker();
+            return;
+        }
+        if self.track_control().setting_on(&self.page_track()) == Some(SettingId::SLICE) {
+            self.open_slice_picker();
             return;
         }
         if let Control::Insert(slot) = control {

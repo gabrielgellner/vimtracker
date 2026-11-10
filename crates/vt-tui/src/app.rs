@@ -1301,7 +1301,13 @@ impl App {
             }
             Cmd::StartLoopHere => self.start_loop_here(),
             Cmd::EndLoopHere => self.end_loop_here(),
-            Cmd::ShowView(view) => self.jump_to_view(view),
+            Cmd::ShowView(view) => {
+                // `Space 0` shows the track's own sample, whatever a jump showed last.
+                if view == View::Sample {
+                    self.sample_page.pinned = None;
+                }
+                self.jump_to_view(view);
+            }
             Cmd::Picker => self.open_view_picker(),
             Cmd::TrackPicker => self.open_track_picker(),
             Cmd::Help => {
@@ -2533,6 +2539,7 @@ impl App {
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
             Line::SampleChange(change) => self.change_sample(change),
+            Line::Slice(change) => self.change_slices(change),
             Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),

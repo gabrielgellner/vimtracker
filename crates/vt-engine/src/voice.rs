@@ -180,8 +180,10 @@ impl Synth {
 pub struct Voice {
     stage: Stage,
     sample: SampleId,
-    /// The bank entry it plays, if it's a sampler's, which it follows as the entry changes.
+    /// The bank entry it plays, if it's a sampler's, which it follows as the entry changes, and
+    /// which of its slices.
     entry: Option<u8>,
+    slice: u8,
     /// Where it is in its sample, and how it reads on.
     reader: Reader,
     increment: f64,
@@ -195,6 +197,10 @@ pub struct Voice {
     /// after the entry's gain changes.
     gain: f32,
     gain_target: f32,
+    /// What its slice's pan multiplies the left and the right by, and where that's heading after
+    /// the slice's pan changes.
+    pan: [f32; 2],
+    pan_target: [f32; 2],
     level: f32,
     shape: Envelope,
     rate: u32,
@@ -215,6 +221,7 @@ impl Default for Voice {
             stage: Stage::Idle,
             sample: 0,
             entry: None,
+            slice: 0,
             reader: Reader::default(),
             increment: 1.0,
             gliding: None,
@@ -223,6 +230,8 @@ impl Default for Voice {
             pitch_slew: 1.0,
             gain: 0.0,
             gain_target: 0.0,
+            pan: [1.0, 1.0],
+            pan_target: [1.0, 1.0],
             level: 0.0,
             shape: Envelope::note_shape(),
             rate: 48_000,
@@ -244,8 +253,9 @@ pub struct NoteOn {
     /// MIDI note. `C-4` plays at original pitch.
     pub note: u8,
     pub gain: f32,
-    /// The bank entry it plays, if it's a sampler's.
+    /// The bank entry it plays, if it's a sampler's, and which of its slices.
     pub entry: Option<u8>,
+    pub slice: u8,
     /// What it plays of its sample, with its own gain and tune, or none for the whole sample as it
     /// is, as a synth's and a file's are.
     pub span: Option<Span>,
@@ -268,6 +278,11 @@ impl NoteOn {
     fn sample_gain(&self) -> f32 {
         self.gain * self.span.map_or(1.0, |span| span.gain)
     }
+
+    /// What its slice's pan multiplies the left and the right by.
+    fn pan(&self) -> [f32; 2] {
+        self.span.map_or([1.0, 1.0], |span| span.pan)
+    }
 }
 
 impl Voice {
@@ -281,6 +296,7 @@ impl Voice {
             stage: Stage::Held { from },
             sample: note.sample,
             entry: note.entry,
+            slice: note.slice,
             reader: Reader::new(note.span, note.cut),
             increment: note.increment(),
             gliding: None,
@@ -289,6 +305,8 @@ impl Voice {
             pitch_slew: f64::from(fast_coefficient(rate)),
             gain: note.sample_gain(),
             gain_target: note.sample_gain(),
+            pan: note.pan(),
+            pan_target: note.pan(),
             level: from,
             shape: note.shape,
             rate,
@@ -471,7 +489,13 @@ impl Voice {
         if span.gain != old.gain && old.gain != 0.0 {
             self.gain_target = self.gain_target / old.gain * span.gain;
         }
+        self.pan_target = span.pan;
         self.reader.respan(span);
+    }
+
+    /// The slice of its entry it's playing, and whether on past its end.
+    pub fn slice(&self) -> (u8, bool) {
+        (self.slice, self.reader.thru())
     }
 
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.
@@ -504,8 +528,19 @@ impl Voice {
                 self.gain = self.gain_target;
             }
         }
+        if self.pan != self.pan_target {
+            for (pan, target) in self.pan.iter_mut().zip(self.pan_target) {
+                *pan += (target - *pan) * self.pitch_slew as f32;
+                if (*pan - target).abs() < 1e-6 {
+                    *pan = target;
+                }
+            }
+        }
         let level = self.level * self.gain;
-        let frame = [source[0] * level, source[1] * level];
+        let frame = [
+            source[0] * level * self.pan[0],
+            source[1] * level * self.pan[1],
+        ];
         self.pitch += (self.pitch_target - self.pitch) * self.pitch_slew;
         let more = self.synth.is_some() || self.reader.advance(self.increment * self.pitch);
         if let Some(gliding) = self.gliding {

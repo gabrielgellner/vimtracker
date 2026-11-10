@@ -1001,9 +1001,24 @@ pub const BANK_CHOICES: [&str; 256] = {
     choices
 };
 
-/// How a sampler's note plays its sample: through once, round its loop, or back and forth in it,
-/// as [`PlayMode`] says.
-pub const PLAY_CHOICES: [&str; 3] = ["One-shot", "Loop", "Ping-pong"];
+/// What a sampler's `Slice` can be: a slice's number, `00` to `FF`, as the sample page's ruler
+/// shows it.
+pub const SLICE_CHOICES: [&str; 256] = {
+    let mut choices = [""; 256];
+    let mut at = 0;
+    while at < 256 {
+        choices[at] = match std::str::from_utf8(&BANK_DIGITS[at]) {
+            Ok(digits) => digits,
+            Err(_) => panic!("hex digits are text"),
+        };
+        at += 1;
+    }
+    choices
+};
+
+/// How a sampler's note plays its sample: through once, round its loop, back and forth in it, or
+/// on through the slices after its own, as [`PlayMode`] says.
+pub const PLAY_CHOICES: [&str; 4] = ["One-shot", "Loop", "Ping-pong", "Thru"];
 
 /// How a sampler's note plays its sample, its `Play`. A loop is the entry's own if it has one,
 /// or else the whole of what plays.
@@ -1016,6 +1031,9 @@ pub enum PlayMode {
     Loop,
     /// From its start, then back and forth in its loop.
     PingPong,
+    /// From its slice's start on past the slice's end, to the entry's, once, as tracker-ce's Play
+    /// Thru and Simpler's Thru do. Reversed, it plays back past the slice's start to the entry's.
+    Thru,
 }
 
 impl PlayMode {
@@ -1024,7 +1042,8 @@ impl PlayMode {
         match index {
             0 => Self::OneShot,
             1 => Self::Loop,
-            _ => Self::PingPong,
+            2 => Self::PingPong,
+            _ => Self::Thru,
         }
     }
 }
@@ -1048,13 +1067,23 @@ const fn share(key: &'static str, name: &'static str, label: &'static str, defau
 pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
-const SAMPLER: [Entry; 4] = [
+const SAMPLER: [Entry; 5] = [
     Entry {
         key: "sample",
         name: "Sample",
         label: Some("SMP"),
         kind: Kind::Stepped {
             choices: &BANK_CHOICES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "slice",
+        name: "Slice",
+        label: Some("SLI"),
+        kind: Kind::Stepped {
+            choices: &SLICE_CHOICES,
             wraps: false,
         },
         default: 0,
@@ -1347,12 +1376,14 @@ impl SettingId {
     pub const GLIDE: Self = Self(12);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
-    /// Where in its sample a sampler's note starts, as a share of the whole.
-    pub const SAMPLE_START: Self = Self(SAMPLER_START as u16 + 1);
-    /// How much of its sample a sampler's note plays from its start, as a share of the whole.
-    pub const SAMPLE_LENGTH: Self = Self(SAMPLER_START as u16 + 2);
+    /// Which of its entry's slices a sampler plays, by number, clamped to the last.
+    pub const SLICE: Self = Self(SAMPLER_START as u16 + 1);
+    /// Where in its slice a sampler's note starts, as a share of the whole.
+    pub const SAMPLE_START: Self = Self(SAMPLER_START as u16 + 2);
+    /// How much of its slice a sampler's note plays from its start, as a share of the whole.
+    pub const SAMPLE_LENGTH: Self = Self(SAMPLER_START as u16 + 3);
     /// How a sampler's note plays: a place in [`PLAY_CHOICES`].
-    pub const PLAY: Self = Self(SAMPLER_START as u16 + 3);
+    pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
     pub const COUNT: usize = SAMPLER_START + SAMPLER.len();
@@ -1647,7 +1678,7 @@ mod tests {
         }
         let mut seen = HashSet::new();
         let sampler = labels((0..SAMPLER.len()).filter_map(SettingId::sampler));
-        assert_eq!(sampler, ["SMP", "STA", "SLEN", "PLY"]);
+        assert_eq!(sampler, ["SMP", "SLI", "STA", "SLEN", "PLY"]);
         for label in track_and_events().chain(sampler) {
             assert!(seen.insert(label.clone()), "{label} twice on the sampler");
         }

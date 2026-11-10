@@ -32,6 +32,7 @@ pub mod sample_wave;
 pub mod scope;
 pub mod screenshot;
 pub mod shaping;
+pub mod slicing;
 pub mod song_view;
 pub mod theme;
 pub mod track_page;

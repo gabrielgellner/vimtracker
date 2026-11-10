@@ -399,7 +399,7 @@ fn only_a_changed_entry_is_worked_out_again() {
         old[1].as_ref().unwrap(),
         new[1].as_ref().unwrap()
     ));
-    assert_eq!(new[1].as_ref().unwrap().span().start, 100);
+    assert_eq!(new[1].as_ref().unwrap().span(0, false).start, 100);
 }
 
 #[test]

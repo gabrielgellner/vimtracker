@@ -317,7 +317,13 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
                 end: beat * 6,
                 crossfade: 0,
             }),
+            ..Points::default()
         };
+        // A slice on each half beat, as `:slice 16` would nearly cut it.
+        let halves: Vec<u64> = (0..16)
+            .map(|half| (half * beat / 2).max(beat / 16))
+            .collect();
+        entry.edit.points.reslice(&halves);
         let number = song.bank.add(entry).expect("room in the bank");
         song.tracks[0].machine = Machine::Sampler;
         song.tracks[0].set_setting(SettingId::SAMPLE, number);

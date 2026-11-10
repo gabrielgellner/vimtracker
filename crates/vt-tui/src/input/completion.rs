@@ -483,7 +483,7 @@ mod tests {
         assert_eq!(found.title, "Commands");
         assert_eq!(
             texts(&found),
-            ["sample", "set", "scale", "swing", "solo", "seed"]
+            ["sample", "slice", "set", "scale", "swing", "solo", "seed"]
         );
         assert_eq!(
             found.candidates[0].meaning,

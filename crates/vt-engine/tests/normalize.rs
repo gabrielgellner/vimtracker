@@ -109,8 +109,8 @@ fn an_entry_is_worked_out_again_when_its_analysis_comes_in() {
     let first = Published::new(Arc::clone(&song), waiting);
     let next = Published::after(song, Arc::new(analysed), Some(&first));
     let (old, new) = (&first.bank, &next.bank);
-    assert_eq!(old[1].as_ref().unwrap().span().gain, 1.0);
-    let gain = new[1].as_ref().unwrap().span().gain;
+    assert_eq!(old[1].as_ref().unwrap().span(0, false).gain, 1.0);
+    let gain = new[1].as_ref().unwrap().span(0, false).gain;
     let wanted = 10_f32.powf(-6.0 / 20.0) / 0.5;
     assert!((gain - wanted).abs() < 1e-4, "the peak came in: {gain}");
     assert!(

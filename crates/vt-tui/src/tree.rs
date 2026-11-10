@@ -116,7 +116,12 @@ impl App {
             View::Track => {
                 self.status = "g d opens the sample page from the Sample row".to_owned();
             }
-            View::Phrase | View::Mixer | View::Audio | View::Project | View::Sample => {}
+            View::Phrase => {
+                if !self.open_slice_of_step() {
+                    self.status = "g d opens the sample page from an SLI's value".to_owned();
+                }
+            }
+            View::Mixer | View::Audio | View::Project | View::Sample => {}
         }
     }
 

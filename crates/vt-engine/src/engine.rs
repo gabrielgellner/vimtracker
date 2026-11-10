@@ -16,7 +16,7 @@ use vt_model::insert::Insert;
 use vt_model::order::Dealer;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
-use vt_model::settings::SettingId;
+use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{
     ChainPosition, Launch, Machine, Section, SectionStart, Song, Track, level_gain,
 };
@@ -1287,6 +1287,7 @@ impl Engine {
             note: 60,
             gain: velocity_gain(DEFAULT_NOTE_VELOCITY),
             entry: None,
+            slice: 0,
             span: None,
             cut: Cut::default(),
             accent: false,
@@ -1338,27 +1339,30 @@ impl Engine {
     }
 
     /// A note at a velocity, which sets its level and whether it's accented. A sampler plays the
-    /// bank entry its `SMP` is on as the note starts, as its `STA`, `SLEN` and `PLY` cut it then,
-    /// and has nothing to play with none.
+    /// bank entry its `SMP` is on as the note starts, the slice of it its `SLI` is on, as its
+    /// `STA`, `SLEN` and `PLY` cut it then, and has nothing to play with no entry.
     fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;
         }
-        let (sample, entry, span, cut, synth) = match owner.machine {
+        let (sample, entry, slice, span, cut, synth) = match owner.machine {
             Machine::Sampler => {
                 let state = self.tracks.get(track)?;
                 let number = state.sample_number();
                 let playable = self.current.bank[usize::from(number)].as_deref()?;
+                let cut = state.sample_cut();
+                let slice = state.slice_number();
                 (
                     playable.sample,
                     Some(number),
-                    Some(playable.span()),
-                    state.sample_cut(),
+                    slice,
+                    Some(playable.span(slice, cut.mode == PlayMode::Thru)),
+                    cut,
                     None,
                 )
             }
-            Machine::Plaits(voice) => (0, None, None, Cut::default(), Some(voice)),
+            Machine::Plaits(voice) => (0, None, 0, None, Cut::default(), Some(voice)),
         };
         Some(NoteOn {
             sample,
@@ -1366,6 +1370,7 @@ impl Engine {
             note,
             gain: velocity_gain(velocity),
             entry,
+            slice,
             span,
             cut,
             accent: velocity >= ACCENT_VELOCITY,
@@ -2563,22 +2568,29 @@ impl Engine {
     }
 }
 
-/// The span a voice's entry plays now, if it still plays the voice's sample.
-fn span_now(bank: &Bank, entry: Option<u8>, sample: SampleId) -> Option<Span> {
+/// The span a voice's slice of its entry plays now, if the entry still plays the voice's sample.
+/// A slice gone since it started plays the last, as `SLI` past the last does.
+fn span_now(
+    bank: &Bank,
+    entry: Option<u8>,
+    (slice, thru): (u8, bool),
+    sample: SampleId,
+) -> Option<Span> {
     let playable = bank.get(usize::from(entry?))?.as_deref()?;
-    (playable.sample == sample).then(|| playable.span())
+    (playable.sample == sample).then(|| playable.span(slice, thru))
 }
 
 /// Have a voice follow its entry's changes.
 fn follow_voice(voice: &mut Voice, bank: &Bank) {
-    if let Some(span) = span_now(bank, voice.entry(), voice.sample()) {
+    if let Some(span) = span_now(bank, voice.entry(), voice.slice(), voice.sample()) {
         voice.respan(span);
     }
 }
 
 /// Have a note waiting to start follow its entry's changes.
 fn follow_note(note: &mut NoteOn, bank: &Bank) {
-    if let Some(span) = span_now(bank, note.entry, note.sample) {
+    let slice = (note.slice, note.cut.mode == PlayMode::Thru);
+    if let Some(span) = span_now(bank, note.entry, slice, note.sample) {
         note.span = Some(span);
     }
 }

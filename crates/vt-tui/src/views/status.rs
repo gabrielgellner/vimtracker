@@ -163,6 +163,9 @@ pub fn value_shown(app: &App) -> Option<String> {
                 if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
                     return Some(sample_shown(app.song(), cell.coarse()));
                 }
+                if cell.command == Some(FxCommand::Set(SettingId::SLICE)) && track.is_sound() {
+                    return Some(app.slice_shown(cell.coarse()));
+                }
                 let id = cell.command?.setting()?;
                 (id, cell.value)
             }

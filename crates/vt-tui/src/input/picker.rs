@@ -121,6 +121,11 @@ pub enum Pick {
         slot: usize,
         number: u8,
     },
+    /// A slice for a step's `SLI` to lock, in this FX column.
+    SliceLock {
+        slot: usize,
+        number: u8,
+    },
     /// Go to this track.
     Track(usize),
     /// What makes a track's sound.

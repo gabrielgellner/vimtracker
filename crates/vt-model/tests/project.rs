@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points};
+use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points, SliceParams};
 use vt_model::constants::FORMAT_VERSION;
 use vt_model::project::{
     ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
@@ -95,6 +95,14 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
             end: 30_000,
             crossfade: 960,
         }),
+        ..Points::default()
+    };
+    kick.edit.points.reslice(&[100, 20_000]);
+    kick.edit.points.slices[1].over = SliceParams {
+        gain_db: Some(-1.5),
+        pan: Some(-20),
+        reverse: Some(false),
+        ..SliceParams::default()
     };
     song.bank.set(0x01, Some(kick));
     song.bank.set(
@@ -115,6 +123,7 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
     assert!(text.contains("sampler.sample"), "the setting by its key");
     assert!(text.contains("sampler.start") && text.contains("sampler.play"));
     assert!(text.contains("loop: Some("), "the loop under its own name");
+    assert!(text.contains("slices: ["), "the slices");
     assert!(
         text.contains(&ContentHash::of(b"kick").to_string()),
         "the hash in hex"
@@ -139,7 +148,7 @@ fn points_in_a_44k_files_frames_land_on_the_same_sound_at_48k() {
     let mut entry = BankEntry::of_file("loop.wav", ContentHash::UNKNOWN);
     entry.edit.points.start = 4410;
     entry.edit.points.end = Some(22_050);
-    let span = Playable::of(&entry, &pool).unwrap().span();
+    let span = Playable::of(&entry, &pool).unwrap().span(0, false);
     assert_eq!((span.start, span.end), (4800, 24_000));
     assert!(span.frames.abs_diff(48_000) <= 2, "{}", span.frames);
 }

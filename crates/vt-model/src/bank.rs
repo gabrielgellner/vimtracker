@@ -3,13 +3,14 @@
 //! and each entry keeps how it plays, so a kit's sound plays the same on any track.
 //!
 //! An entry is metadata over audio that's never written: which file, found by its path and its
-//! content hash, where it starts, ends and loops, and how it plays. Slices and the rest of the
-//! sample editor's work go in its [`SampleEdit`] later.
+//! content hash, where it starts, ends, loops and is sliced, and how it plays. The rest of the
+//! sample editor's work goes in its [`SampleEdit`] later.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::ops::Range;
 use std::path::Path;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -173,8 +174,8 @@ pub struct Loop {
     pub crossfade: u32,
 }
 
-/// Where an entry starts, ends and loops, in frames at its file's own rate, so a point stays on
-/// the same sound whatever rate the program runs at.
+/// Where an entry starts, ends and loops and where its slices start, in frames at its file's own
+/// rate, so a point stays on the same sound whatever rate the program runs at.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Points {
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -184,12 +185,187 @@ pub struct Points {
     pub end: Option<u64>,
     #[serde(default, rename = "loop", skip_serializing_if = "Option::is_none")]
     pub loop_: Option<Loop>,
+    /// Its slices, in order of where they start, numbered by their place, as Vim numbers lines.
+    /// With none, the entry plays as one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub slices: Vec<Slice>,
+    /// The id the next new slice takes, so no id is used twice within the entry.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub next_id: SliceId,
+}
+
+/// A slice's own name within its entry, which it keeps as slices before it come and go and its
+/// number changes, so a mark can name it (#271). It's never given to another slice of the entry.
+pub type SliceId = u32;
+
+/// The most slices an entry can have: as many as `SLI`'s two hex digits number, `00` to `FF`.
+pub const MAX_SLICES: usize = 256;
+
+/// One slice of an entry: where it starts, and how it plays where that isn't as the entry does.
+/// It ends where the next one starts, or at the entry's end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Slice {
+    pub id: SliceId,
+    /// Its first frame, at the file's own rate.
+    pub start: u64,
+    #[serde(default, skip_serializing_if = "SliceParams::is_empty")]
+    pub over: SliceParams,
+}
+
+/// How a slice plays where it differs from its entry, as each of Renoise's slices has its own
+/// volume and panning. Each that's none plays as the entry does.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct SliceParams {
+    /// In decibels, in place of the entry's gain. The entry's normalising still applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gain_db: Option<f32>,
+    /// From [`MOST_PAN`] to the left, below 0, to as far to the right, where the entry is in the
+    /// middle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pan: Option<i8>,
+    /// In semitones, in place of the entry's tune, with the entry's cents on top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tune: Option<i8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reverse: Option<bool>,
+    /// In frames at the file's own rate, from the slice's start and to its end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fade_in: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fade_out: Option<u32>,
+}
+
+// The gain is never a NaN, as the entry's isn't.
+impl Eq for SliceParams {}
+
+/// How far a slice can be panned either way, as Ableton's and Renoise's pans go from 50 left to
+/// 50 right.
+pub const MOST_PAN: i8 = 50;
+
+impl SliceParams {
+    /// Whether the slice plays just as its entry does.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// How the slice plays: its entry's settings, with the slice's own in their place.
+    pub fn over(&self, play: PlayParams) -> PlayParams {
+        PlayParams {
+            gain_db: self.gain_db.unwrap_or(play.gain_db),
+            tune: self.tune.unwrap_or(play.tune),
+            reverse: self.reverse.unwrap_or(play.reverse),
+            fade_in: self.fade_in.unwrap_or(play.fade_in),
+            fade_out: self.fade_out.unwrap_or(play.fade_out),
+            ..play
+        }
+    }
+
+    /// What its pan multiplies the left and the right by: exactly 1 for both in the middle, and
+    /// keeping equal power either way, as a track's pan does.
+    pub fn pan_gains(&self) -> [f32; 2] {
+        let pan = self.pan.unwrap_or(0).clamp(-MOST_PAN, MOST_PAN);
+        if pan == 0 {
+            return [1.0, 1.0];
+        }
+        let position = (f32::from(pan) / f32::from(MOST_PAN) + 1.0) / 2.0;
+        let angle = position * std::f32::consts::FRAC_PI_2;
+        [
+            angle.cos() * std::f32::consts::SQRT_2,
+            angle.sin() * std::f32::consts::SQRT_2,
+        ]
+    }
 }
 
 impl Points {
-    /// Whether they're the whole file, with no loop.
+    /// Whether they're the whole file, with no loop and no slices.
     pub fn is_whole(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// One past the last frame that plays, in a file this long.
+    pub fn end_in(&self, length: u64) -> u64 {
+        self.end.unwrap_or(length).min(length)
+    }
+
+    /// How many slices there are to choose from: the entry as one, when it has none.
+    pub fn slice_count(&self) -> usize {
+        self.slices.len().max(1)
+    }
+
+    /// The frames a slice plays, by its number, clamped to the last, in a file this long: from its
+    /// start to the next one's, or to the entry's end, inside the entry's start and end. With no
+    /// slices, the entry is one, from its start to its end.
+    pub fn slice_frames(&self, number: usize, length: u64) -> Range<u64> {
+        let end = self.end_in(length);
+        let start = self.start.min(end);
+        if self.slices.is_empty() {
+            return start..end;
+        }
+        let number = number.min(self.slices.len() - 1);
+        let from = self.slices[number].start.clamp(start, end);
+        let to = self
+            .slices
+            .get(number + 1)
+            .map_or(end, |next| next.start.clamp(start, end));
+        from..to.max(from)
+    }
+
+    /// The number of the slice a frame is in. One before the first slice is in the first.
+    pub fn slice_at(&self, frame: u64) -> usize {
+        self.slices
+            .iter()
+            .rposition(|slice| slice.start <= frame)
+            .unwrap_or(0)
+    }
+
+    /// Where `count` slices of the same length start, from the entry's start to its end in a file
+    /// this long, as Polyend's `Evenly` and Renoise's equal slicing make them. Fewer come back if
+    /// the entry has fewer frames than that.
+    pub fn even_starts(&self, count: usize, length: u64) -> Vec<u64> {
+        let end = self.end_in(length);
+        let start = self.start.min(end);
+        let count = count.clamp(1, MAX_SLICES) as u128;
+        let mut starts: Vec<u64> = (0..count)
+            .map(|at| start + (u128::from(end - start) * at / count) as u64)
+            .collect();
+        starts.dedup();
+        starts
+    }
+
+    /// Cut the entry into slices starting at these frames, or into none, keeping the id and the
+    /// settings of each slice that starts where a new one does and giving the rest new ids. It
+    /// gives the number each old slice has now, that of the slice holding the frame it started on,
+    /// so steps that chose it keep playing the same sound, as Vim's marks follow their lines. With
+    /// no slices before or after, there's no numbering to follow, and it gives none.
+    pub fn reslice(&mut self, starts: &[u64]) -> Option<Vec<u8>> {
+        let mut starts = starts.to_vec();
+        starts.sort_unstable();
+        starts.dedup();
+        starts.truncate(MAX_SLICES);
+        let old = std::mem::take(&mut self.slices);
+        for start in starts {
+            let slice = match old.iter().find(|slice| slice.start == start) {
+                Some(kept) => *kept,
+                None => {
+                    let id = self.next_id;
+                    self.next_id += 1;
+                    Slice {
+                        id,
+                        start,
+                        over: SliceParams::default(),
+                    }
+                }
+            };
+            self.slices.push(slice);
+        }
+        if old.is_empty() || self.slices.is_empty() {
+            return None;
+        }
+        Some(
+            old.iter()
+                .map(|slice| self.slice_at(slice.start) as u8)
+                .collect(),
+        )
     }
 }
 
