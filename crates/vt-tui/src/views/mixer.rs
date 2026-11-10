@@ -10,13 +10,13 @@ use vt_model::song::level_gain;
 
 use crate::app::App;
 use crate::glyphs;
-use crate::input::mode::Mode;
 use crate::meter::{height_of, to_db};
 use crate::theme;
 use crate::track_page::{Control, MIXER};
-use crate::views::meter::{EIGHTHS, level_cell};
-use crate::views::table::{Columns, take_top};
-use crate::views::track::{name_line, value, value_spans};
+use crate::views::track::value;
+use crate::views::widgets::meter::{EIGHTHS, level_cell};
+use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::table::{Columns, take_top};
 
 /// Room for the names of the settings, at the left. Beside the meters it holds the scale's mark,
 /// with a gap after it.
@@ -126,17 +126,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 
     let current = app.track_control();
     for control in MIXER {
-        let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
         let mut cells = columns.row();
-        cells.span(
-            name_line(
-                app,
-                control.label(),
-                &label.map_or_else(String::new, String::from),
-                LABEL_WIDTH,
-            ),
-            2,
-        );
+        let labels = jump_label(app, control);
+        cells.span(name_line(app, control.label(), &labels, LABEL_WIDTH), 2);
         for index in shown.clone() {
             let track = &song.tracks[index];
             let live = app.levels.get(index).copied().unwrap_or_default();
@@ -152,8 +144,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 _ if !control.exists_on(track) => String::new(),
                 (_, Some((true, glyph))) => glyph.to_string(),
                 (_, Some((false, _))) => "-".to_owned(),
-                _ if selected && app.mode == Mode::Insert => format!("{}_", app.entry.text),
-                _ => value(control, track, song),
+                _ => setting::text(app, selected, || value(control, track, song)),
             };
             let style = if selected {
                 theme::cursor(app.mode)

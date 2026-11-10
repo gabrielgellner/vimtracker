@@ -2,13 +2,14 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::kitty;
-use crate::meter::{FLOOR_DB, Meter, db_at, height_of};
+use crate::meter::{FLOOR_DB, Meter, height_of};
 use crate::theme;
+use crate::views::widgets::image;
+use crate::views::widgets::meter::{hanging_cell, hanging_eighths, level_cell};
 
 /// The columns the meter takes: a gap, scale numbers, then L, R and G bars with gaps between them.
 const WIDTH: u16 = 13;
@@ -27,8 +28,6 @@ pub const SCOPE_WIDTH: usize = 12;
 pub const SCOPE_HEIGHT: usize = 3;
 /// The rows the scope takes from the meter's column: itself, and a gap below it.
 const SCOPE_ROWS: u16 = SCOPE_HEIGHT as u16 + 1;
-/// Partial blocks, from one eighth of a cell up to a whole one.
-pub(crate) const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 /// Split the space for a view into what the view gets and what the meter gets, if there is room.
 pub fn split(body: Rect) -> (Rect, Option<Rect>) {
@@ -61,73 +60,17 @@ pub fn split_scope(column: Rect) -> (Option<Rect>, Rect) {
 
 /// Draw the scope: the placeholders for its image.
 pub fn draw_scope(frame: &mut Frame, area: Rect, id: u32) {
-    let style = Style::new().fg(kitty::id_color(id));
-    let lines: Vec<Line> = kitty::placeholder_lines(SCOPE_WIDTH, SCOPE_HEIGHT)
+    let lines: Vec<Line> = image::rows(id, SCOPE_WIDTH, SCOPE_HEIGHT)
         .into_iter()
-        .map(|line| Line::styled(line, style))
+        .map(Line::from)
         .collect();
     frame.render_widget(Paragraph::new(lines), area);
-}
-
-/// A bar of one channel for one row, counting rows up from the bottom, some cells wide.
-pub(crate) fn level_cell(
-    row: usize,
-    rows: usize,
-    average: f32,
-    peak: f32,
-    top: f32,
-    width: usize,
-) -> Span<'static> {
-    let eighths = |db: f32| (height_of(db) * (rows * 8) as f32).round() as usize;
-    let start = row * 8;
-    let solid = eighths(average).saturating_sub(start).min(8);
-    let light = eighths(peak).saturating_sub(start).min(8);
-    let height = (row as f32 + 0.5) / rows as f32;
-    let bright = theme::level(db_at(height));
-    let dimmed = theme::dimmed(bright);
-    let held = eighths(top);
-    let (symbol, fg, bg) = if solid == 8 {
-        ('█', bright, theme::MANTLE)
-    } else if light == 0 {
-        // Only the marked top goes above the bar.
-        let marked = top > FLOOR_DB && held.saturating_sub(1) / 8 == row;
-        (if marked { '▔' } else { ' ' }, bright, theme::MANTLE)
-    } else if solid > 0 {
-        let behind = if light == 8 { dimmed } else { theme::MANTLE };
-        (EIGHTHS[solid], bright, behind)
-    } else {
-        (EIGHTHS[light], dimmed, theme::MANTLE)
-    };
-    Span::styled(symbol.to_string().repeat(width), Style::new().fg(fg).bg(bg))
 }
 
 /// The G bar for one row, hanging down from the top, counting rows down from the top.
 fn reduction_cell(row: usize, rows: usize, reduction: f32) -> Span<'static> {
     let filled = hanging_eighths(reduction / MOST_REDUCTION, row, rows);
     hanging_cell(filled, theme::RED, theme::MANTLE, 2)
-}
-
-/// How much of a row a bar hanging down from the top fills, in eighths, for a share of its whole
-/// height from 0 to 1, counting rows down from the top.
-pub(crate) fn hanging_eighths(share: f32, row: usize, rows: usize) -> usize {
-    let total = share.clamp(0.0, 1.0) * (rows * 8) as f32;
-    (total.round() as usize).saturating_sub(row * 8).min(8)
-}
-
-/// One row of a bar hanging down from the top, filled this many eighths, on a background.
-pub(crate) fn hanging_cell(
-    filled: usize,
-    color: Color,
-    behind: Color,
-    width: usize,
-) -> Span<'static> {
-    // There are no blocks that hang from the top, so a partial one is drawn the other way around.
-    let (symbol, fg, bg): (char, Color, Color) = match filled {
-        0 => (' ', color, behind),
-        8 => ('█', color, behind),
-        part => (EIGHTHS[8 - part], behind, color),
-    };
-    Span::styled(symbol.to_string().repeat(width), Style::new().fg(fg).bg(bg))
 }
 
 /// The scale's mark for each row, counting rows up from the bottom.

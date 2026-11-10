@@ -25,11 +25,13 @@ use crate::track_page::{
     ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, ENVELOPES, EnvelopeField,
     FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
-use crate::views;
-use crate::views::bar::{BAR_ENDS, ValueBar};
-use crate::views::meter::{hanging_cell, hanging_eighths};
 use crate::views::phrase::level_glyph;
-use crate::views::table::{Columns, blank_row, take_top};
+use crate::views::widgets;
+use crate::views::widgets::bar::{BAR_ENDS, ValueBar};
+use crate::views::widgets::image;
+use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
+use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::table::{Columns, blank_row, take_top};
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
@@ -154,48 +156,15 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     }
 }
 
-/// A setting's value, with a jump's label over its first letter if it has one.
-pub(crate) fn value_spans(
-    app: &App,
-    control: Control,
-    text: String,
-    style: Style,
-) -> Vec<Span<'static>> {
-    let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
-    match label {
-        Some(label) => vec![
-            Span::styled(label.to_string(), theme::jump_label()),
-            Span::styled(text.chars().skip(1).collect::<String>(), style),
-        ],
-        None => vec![Span::styled(text, style)],
-    }
-}
-
-/// A setting's name in its column, with any labels from a jump over the letters just after what's
-/// been typed, as flash.nvim draws them, since that's where the eye is while searching. The labels
-/// stay inside the room the column has.
-pub(crate) fn name_line(app: &App, name: &str, labels: &str, room: u16) -> Line<'static> {
-    let letters: Vec<char> = name.chars().collect();
-    let typed = app.field_jump.as_ref().and_then(|jump| {
-        let at = name.to_lowercase().find(&jump.query)?;
-        Some(at + jump.query.len())
-    });
-    let Some(typed) = typed.filter(|_| !labels.is_empty()) else {
-        return Line::styled(name.to_owned(), theme::dim());
-    };
-    let count = labels.chars().count();
-    let before = typed.min(usize::from(room).saturating_sub(count));
-    let after: String = letters.iter().skip(before + count).collect();
-    Line::from(vec![
-        Span::styled(
-            letters[..before.min(letters.len())]
-                .iter()
-                .collect::<String>(),
-            theme::dim(),
-        ),
-        Span::styled(labels.to_owned(), theme::jump_label()),
-        Span::styled(after, theme::dim()),
-    ])
+/// Whether a setting is left at its default, which matters less, so its value is dim: a track
+/// following the project's groove shows what it plays, dimmed as it isn't its own.
+fn at_default(control: Control, track: &Track) -> bool {
+    control == Control::Groove && track.groove.is_none()
+        || control == Control::GateLength && track.gate_length.is_none()
+        || control == Control::Speed && track.speed == Speed::Sixteenth
+        || control == Control::Reset && track.reset.is_none()
+        || control == Control::Glide && track.glide == 0
+        || control == Control::FilterMode && !track.filter.has_modes()
 }
 
 /// The Sound page's columns: its two halves side by side.
@@ -212,51 +181,22 @@ fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) 
         // return or the master has only output, so it's all on the left.
         let half = usize::from(control.column() > 0 && track.is_sound());
         cells.to(half * SOUND_HALF.len());
-        let label = app
-            .field_jump
-            .as_ref()
-            .and_then(|jump| jump.label(*control));
         cells.cell(name_line(
             app,
             control.label_on(track),
-            &label.map_or_else(String::new, String::from),
+            &jump_label(app, *control),
             SOUND_LABEL,
         ));
         let here = *control == current;
         let on_fine = here && app.track_fine;
-        let typing = here && app.mode == Mode::Insert;
-        let text = if typing && !on_fine {
-            format!("{}_", app.entry.text)
-        } else {
-            value(*control, track, app.song())
-        };
-        let style = if here && !on_fine {
-            theme::cursor(app.mode)
-        } else if *control == Control::Groove && track.groove.is_none()
-            || *control == Control::GateLength && track.gate_length.is_none()
-            || *control == Control::Speed && track.speed == Speed::Sixteenth
-            || *control == Control::Reset && track.reset.is_none()
-            || *control == Control::Glide && track.glide == 0
-            || *control == Control::FilterMode && !track.filter.has_modes()
-        {
-            theme::dim()
-        } else {
-            Style::new()
-        };
+        let on_value = here && !on_fine;
+        let text = setting::text(app, on_value, || value(*control, track, app.song()));
+        let style = setting::style(app, on_value, at_default(*control, track));
         let value = Line::from(value_spans(app, *control, text, style));
         // A setting that sweeps shows its fine part, set back.
         let fine = control.fine_on(track).map(|id| {
-            let fine = if typing && on_fine {
-                format!("{}_", app.entry.text)
-            } else {
-                format!("{:02X}", track.fine(id))
-            };
-            let style = if on_fine {
-                theme::cursor(app.mode)
-            } else {
-                theme::dim()
-            };
-            Line::styled(fine, style)
+            let fine = setting::text(app, on_fine, || format!("{:02X}", track.fine(id)));
+            Line::styled(fine, setting::style(app, on_fine, true))
         });
         let name = if control.setting_on(track) == Some(SettingId::SLICE) {
             Some(app.slice_choice(track))
@@ -467,20 +407,9 @@ fn row(
     cells.cell(name.to_owned());
     let current = app.track_control();
     for control in controls {
-        let typing = *control == current && app.mode == Mode::Insert;
-        let text = if typing {
-            format!("{}_", app.entry.text)
-        } else {
-            value(*control, track, app.song())
-        };
-        // A track following the project's groove shows what it plays, dimmed as it isn't its own.
-        let style = if *control == current {
-            theme::cursor(app.mode)
-        } else if *control == Control::Groove && track.groove.is_none() {
-            theme::dim()
-        } else {
-            Style::new()
-        };
+        let here = *control == current;
+        let text = setting::text(app, here, || value(*control, track, app.song()));
+        let style = setting::style(app, here, at_default(*control, track));
         cells.cell(value_spans(app, *control, text, style));
         // An LFO's shape has its icon after its name, where it has one, in the active colour while
         // the cursor is on that LFO.
@@ -545,10 +474,6 @@ pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
 fn draw_diagrams(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let columns = Columns::new([(DIAGRAM_WIDTH + DIAGRAM_GAP) as u16; TRACK_ENVELOPES]);
     let current = envelope_being_edited(app);
-    let shape = match app.envelope_images {
-        Some(_) => kitty::placeholder_lines(DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
-        None => vec![" ".repeat(DIAGRAM_WIDTH); DIAGRAM_HEIGHT],
-    };
     for slot in 0..TRACK_ENVELOPES {
         let style = if current == Some(slot) {
             theme::active()
@@ -559,12 +484,12 @@ fn draw_diagrams(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
             || "---".to_owned(),
             |destination| destination.name_on(track),
         );
-        // A placeholder's colour says which image it's part of.
-        let image = app.envelope_images.map_or_else(Style::new, |ids| {
-            Style::new().fg(kitty::id_color(ids[slot]))
-        });
+        let shape = match app.envelope_images {
+            Some(ids) => image::rows(ids[slot], DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+            None => vec![Span::raw(" ".repeat(DIAGRAM_WIDTH)); DIAGRAM_HEIGHT],
+        };
         let mut lines = vec![Line::styled(format!("Env {}  {name}", slot + 1), style)];
-        lines.extend(shape.iter().map(|row| Line::styled(row.clone(), image)));
+        lines.extend(shape.into_iter().map(Line::from));
         frame.render_widget(Paragraph::new(lines), columns.area_of(area, slot, 1));
     }
 }
@@ -624,21 +549,8 @@ fn fx_row(
     let current = app.track_control();
     for control in controls {
         let selected = *control == current;
-        let text = if selected && app.mode == Mode::Insert {
-            format!("{}_", app.entry.text)
-        } else {
-            value(*control, track, app.song())
-        };
-        let style = if selected {
-            theme::cursor(app.mode)
-        } else {
-            Style::new()
-        };
-        let label = app
-            .field_jump
-            .as_ref()
-            .and_then(|jump| jump.label(*control));
-        let labels = label.map_or_else(String::new, String::from);
+        let text = setting::text(app, selected, || value(*control, track, app.song()));
+        let style = setting::style(app, selected, false);
         match *control {
             Control::Insert(slot) if first => {
                 cells
@@ -650,6 +562,7 @@ fn fx_row(
             }
             Control::InsertParam(slot, param) if control.exists_on(track) => {
                 let column = param / 2;
+                let labels = jump_label(app, *control);
                 let name = name_line(app, control.name_on(track), &labels, FX_NAME_WIDTHS[column]);
                 // The column before a drawing's has the gap before it too.
                 cells.span(name, 1 + usize::from(column == FX_DRAWN_COLUMNS));
@@ -700,14 +613,10 @@ fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
         .live
         .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
-    let image = |width: usize, id: u32| {
-        kitty::placeholder_lines(width, SLOT_DRAWING_HEIGHT)
-            .into_iter()
-            .map(move |row| Span::styled(row, Style::new().fg(kitty::id_color(id))))
-    };
+    let drawing = |width: usize, id: u32| image::rows(id, width, SLOT_DRAWING_HEIGHT).into_iter();
     let rows = 0..SLOT_DRAWING_HEIGHT;
     let lines: Vec<Line<'static>> = match (track.inserts[slot], app.slot_images[slot]) {
-        (Insert::Compressor(_), Some(id)) => image(DYNAMICS_CURVE_WIDTH, id)
+        (Insert::Compressor(_), Some(id)) => drawing(DYNAMICS_CURVE_WIDTH, id)
             .zip(rows)
             .map(|(curve, row)| {
                 Line::from(vec![
@@ -720,7 +629,7 @@ fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
         (Insert::Limit(_), _) => rows
             .map(|row| Line::from(reduction_cell(reduction, row, color)))
             .collect(),
-        (Insert::Eq(_), Some(id)) => image(EQ_CURVE_WIDTH, id).map(Line::from).collect(),
+        (Insert::Eq(_), Some(id)) => drawing(EQ_CURVE_WIDTH, id).map(Line::from).collect(),
         _ => Vec::new(),
     };
     if !bypassed {
@@ -730,30 +639,14 @@ fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
     lines.into_iter().map(|line| faded(line, cursor)).collect()
 }
 
-/// An image in a box, a line for each row.
-fn boxed(id: u32, width: usize, height: usize) -> Vec<Line<'static>> {
-    let rule = "─".repeat(width);
-    let edge = theme::faint();
-    let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
-    for row in kitty::placeholder_lines(width, height) {
-        lines.push(Line::from(vec![
-            Span::styled("│", edge),
-            Span::styled(row, Style::new().fg(kitty::id_color(id))),
-            Span::styled("│", edge),
-        ]));
-    }
-    lines.push(Line::styled(format!("└{rule}┘"), edge));
-    lines
-}
-
 /// The filter's curve in a box, under its rows, and beside it under the output's column, the
 /// waveform of the sample the track plays, if it has one, each in a cell of a grid.
 fn draw_curves(frame: &mut Frame, area: Rect, filter: u32, waveform: Option<u32>) {
     let columns = Columns::new([SOUND_COLUMN, WAVEFORM_WIDTH as u16 + 2]);
-    let filter = boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
+    let filter = image::boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
     frame.render_widget(Paragraph::new(filter), columns.area_of(area, 0, 1));
     if let Some(waveform) = waveform {
-        let waveform = boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+        let waveform = image::boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
         frame.render_widget(Paragraph::new(waveform), columns.area_of(area, 1, 1));
     }
 }
@@ -762,7 +655,7 @@ fn draw_curves(frame: &mut Frame, area: Rect, filter: u32, waveform: Option<u32>
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
     let area = if app.mode == Mode::Keys {
-        let block = views::window_border()
+        let block = widgets::window_border()
             .border_style(Style::new().fg(theme::YELLOW))
             .title(" Keys ");
         let inner = block.inner(area);

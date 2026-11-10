@@ -9,7 +9,8 @@ use ratatui::widgets::Paragraph;
 use crate::app::App;
 use crate::audio_page::{AudioRow, buffer_ms};
 use crate::theme;
-use crate::views::table::{Columns, blank_row, take_top};
+use crate::views::widgets::setting;
+use crate::views::widgets::table::{Columns, blank_row, take_top};
 
 /// Room for a row's name.
 const NAME_WIDTH: u16 = 12;
@@ -59,11 +60,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let mut rows = Vec::new();
     for (index, row) in AudioRow::ALL.into_iter().enumerate() {
-        let style = if index == app.audio_row {
-            theme::cursor(app.mode)
-        } else {
-            Style::new()
-        };
+        let style = setting::style(app, index == app.audio_row, false);
         rows.push(named(row.name(), Line::styled(value(app, row), style)));
     }
     rows.push(blank_row());
