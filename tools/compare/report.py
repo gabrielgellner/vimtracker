@@ -5,7 +5,8 @@ by matplotlib, the plots embedded as PNGs, and the measurements in tables.
 and how to lay it out:
 
     [report]
-    kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob or velocity
+    kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity
+                          # or taper
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -32,6 +33,8 @@ The kinds:
   `measure` its filter's peak and bass, its brightness's decay, or its accents (see `Knob`).
 - `velocity`: one render of notes at different velocities, each note's level and brightness
   against the first's, for how a voice answers velocity (see `Velocity`).
+- `taper`: a filter's Res knob in steps, each a sweep: its peak's height and place, its bass loss
+  and where it starts to self-oscillate, at each Cut (see `Taper`).
 """
 
 from __future__ import annotations
@@ -72,6 +75,10 @@ HEADINGS = {"cut": "Cut", "res": "Res", "input.level": "Input", "acid.cutoff": "
 LOWEST_DB = -60.0
 # A ringing filter quieter than this, in dBFS, isn't ringing.
 RINGING_DB = -60.0
+# The highest a high-pass's passband is read at, under where a sweep to 20 kHz ends.
+TOP_PASSBAND_HZ = 16_000.0
+# How far from Cut a filter's passband is read, in octaves, for its peak's height over it.
+PASSBAND_OCTAVES = 3.0
 
 plt.rcParams.update(
     {
@@ -98,6 +105,14 @@ plt.rcParams.update(
 
 
 # What's shown of a setting and its value.
+
+
+def passband_hz(nominal: float, high: bool) -> float:
+    """Where a filter's passband is read for how far its peak stands over it: three octaves under
+    Cut, or over it for a high-pass, though no higher than a sweep reaches."""
+    if high:
+        return min(nominal * 2.0**PASSBAND_OCTAVES, TOP_PASSBAND_HZ)
+    return nominal * 2.0**-PASSBAND_OCTAVES
 
 
 def cut_hz(value: int) -> float:
@@ -1282,6 +1297,241 @@ class Velocity(Report):
         }
 
 
+class Taper(Report):
+    """A filter's Res knob turned in steps, each step a sweep: how tall its peak stands and where,
+    the bass it loses, and the step it starts to self-oscillate from, at each Cut (#333).
+
+    The layout's `knob` is our setting the steps turn, `reference_knob` the reference's, as a list
+    when it's named differently for some cases, such as a low-pass's and a high-pass's; `width`
+    names the types, by our filter's name, measured by how wide their peak or dip is rather than
+    how tall, a band-pass's and a notch's, whose height doesn't follow the knob.
+    """
+
+    reading = (
+        "Each point is one step of the knob, placed by how far ours is turned, with the reference "
+        "set to the step it's paired with. Each step is a sweep, read as the response report reads "
+        "it. The top row is the peak: how far it stands over the passband, three octaves under "
+        "Cut for a low-pass and over it for a high-pass, the peak being the highest gain within an "
+        "octave of Cut, so the first steps, before a peak stands out, give the top of the slope; "
+        "or for a band-pass and a notch, how many octaves wide its peak or dip is, 3 dB down. The "
+        "table has the peak's own height too. The middle row is where the "
+        "peak sits, in cents off Cut, and the bottom the bass loss, two octaves under Cut against "
+        "Res 0, or for a high-pass two octaves over. A dashed line marks the first step a side "
+        "is ringing by itself near Cut as the sweep ends, two octaves and more past it: from there on it's self-oscillating, so its "
+        "response isn't read."
+    )
+
+    def knob_of(self, name, side):
+        if side == "ours":
+            return self.settings[name].get(self.layout.get("knob", "res"))
+        for key in as_list(self.layout.get("reference_knob")):
+            if key in self.parameters[name]:
+                return self.parameters[name][key]
+        return None
+
+    def measured(self, r, samples, nominal, dip_or_band, high) -> dict:
+        given = self.inputs[r.name]
+        bins, gains = measure.bin_response(r.given, samples, self.spec.rate, given["from"], given["to"])
+        f, g = measure.response(bins, gains)
+        peak_hz, peak_db = measure.highest(bins, gains, nominal)
+        values = {
+            "peak Hz": peak_hz,
+            "peak dB": peak_db,
+            "peak cents": measure.cents(peak_hz, nominal) if math.isfinite(peak_hz) else float("nan"),
+            "under dB": measure.gain_at(f, g, nominal / 4),
+            # No higher than 16 kHz, where the sweep still reaches at Cut 5 kHz.
+            "over dB": measure.gain_at(f, g, min(nominal * 4, TOP_PASSBAND_HZ)),
+            # What it passes, three octaves away, under Cut or over it for a high-pass, far enough
+            # that the diode's early slope has passed.
+            "passband dB": measure.gain_at(f, g, passband_hz(nominal, high)),
+            "width octaves": (
+                measure.width(bins, gains, nominal, dip=dip_or_band == "Notch") if dip_or_band else float("nan")
+            ),
+            "rings": measure.rings_on(samples, self.spec.rate, given["seconds"], nominal),
+        }
+        if values["rings"]:
+            for key in ("peak Hz", "peak dB", "peak cents", "width octaves"):
+                values[key] = float("nan")
+        return values, (bins, gains)
+
+    def build(self):
+        figure_keys = as_list(self.layout.get("figure", ["filter", "mode"]))
+        column_key = self.layout.get("column", "cut")
+        knob = self.layout.get("knob", "res")
+        widths = set(as_list(self.layout.get("width")))
+
+        results = {}
+        for r in self.rendered:
+            settings = self.settings[r.name]
+            nominal = cut_hz(settings.get("cut", 255))
+            kind = settings.get("filter")
+            by = kind if kind in widths else None
+            # A high-pass's passband is over Cut.
+            high = "HP" in str(kind)
+            entry = {"sides": {}, "nominal": nominal}
+            for side, _, _, samples in self.sides(r):
+                values, ours_bins = self.measured(r, samples, nominal, by, high)
+                # How far the peak stands over what the filter passes, which is how much
+                # resonance is heard, whether or not the bass is thinned.
+                values["rise dB"] = values["peak dB"] - values["passband dB"] if not by else float("nan")
+                values["knob"] = self.knob_of(r.name, side)
+                entry["sides"][side] = values
+                if side == "ours" and r.drawn is not None:
+                    drawn_hz, drawn_db = r.drawn
+                    heard = np.interp(drawn_hz, *ours_bins)
+                    usable = (drawn_db > -40.0) & (drawn_hz >= 30.0) & (drawn_hz <= 16_000.0)
+                    near = (drawn_hz >= nominal / 2) & (drawn_hz <= nominal * 2)
+                    values["drawn peak dB"] = float(np.max(drawn_db[near])) if near.any() else float("nan")
+                    passband = measure.gain_at(drawn_hz, drawn_db, passband_hz(nominal, high))
+                    values["drawn rise dB"] = values["drawn peak dB"] - passband if not by else float("nan")
+                    values["off drawing dB"] = (
+                        float(np.max(np.abs(heard[usable] - drawn_db[usable])))
+                        if usable.any() and not values["rings"]
+                        else float("nan")
+                    )
+            results[r.name] = entry
+        self.results = results
+
+        groups = defaultdict(list)
+        for r in self.rendered:
+            groups[tuple(self.settings[r.name].get(k) for k in figure_keys)].append(r.name)
+
+        # The bass loss: against the same type, Cut and side at Res 0.
+        for names in groups.values():
+            for name in names:
+                cut = self.settings[name].get(column_key)
+                bottom = next(n for n in names if self.settings[n].get(column_key) == cut and self.settings[n].get(knob) == 0)
+                for side, values in results[name]["sides"].items():
+                    base = results[bottom]["sides"][side]
+                    # A high-pass's bass is what it lets through, over Cut.
+                    key = "over dB" if "HP" in str(self.settings[name].get("filter")) else "under dB"
+                    passes = math.isfinite(base[key]) and base[key] > -3.0
+                    values["bass loss dB"] = values[key] - base[key] if passes and not values["rings"] else float("nan")
+
+        sides = ["ours"] + (["reference"] if self.reference_name else [])
+        figures, summary, rows_out = [], [], []
+        self.gaps = {}
+        for key, names in groups.items():
+            title = group_label(figure_keys, self.settings[names[0]])
+            by_width = self.settings[names[0]].get("filter") in widths
+            height = "width octaves" if by_width else "rise dB"
+            _, columns = grid_of(names, self.settings, None, column_key)
+            figure, axes = plt.subplots(3, len(columns), figsize=(3.6 * len(columns), 7.6), squeeze=False, sharex=True)
+            onsets = {side: {} for side in sides}
+            gaps, changes = [], []
+            for j, cut in enumerate(columns):
+                steps = sorted((n for n in names if self.settings[n].get(column_key) == cut), key=lambda n: self.settings[n].get(knob))
+                x = np.array([self.settings[n].get(knob) / 255.0 for n in steps])
+                for side in sides:
+                    colour = OURS if side == "ours" else REFERENCE
+                    chosen = [results[n]["sides"][side] for n in steps]
+                    for row, measure_key in enumerate((height, "peak cents", "bass loss dB")):
+                        axes[row][j].plot(x, [v[measure_key] for v in chosen], color=colour, marker="o", markersize=2.5)
+                    if side == "ours" and not self.reference_name and not by_width:
+                        axes[0][j].plot(x, [v.get("drawn rise dB", float("nan")) for v in chosen], color=colour, linestyle=":")
+                    onset = next((xi for xi, v in zip(x, chosen) if v["rings"]), None)
+                    onsets[side][cut] = onset
+                    if onset is not None:
+                        for row in range(3):
+                            axes[row][j].axvline(onset, color=colour, linestyle="--", linewidth=0.9)
+                if self.reference_name:
+                    # Apart, and apart in how far each has come from its own Res 0, which is what
+                    # the knob's taper sets, while the filters' shapes set where they start.
+                    first = results[steps[0]]["sides"]
+                    for n in steps:
+                        a, b = results[n]["sides"]["ours"][height], results[n]["sides"]["reference"][height]
+                        if math.isfinite(a) and math.isfinite(b):
+                            gaps.append((abs(a - b), a - b, n))
+                            change = (a - first["ours"][height]) - (b - first["reference"][height])
+                            if math.isfinite(change):
+                                changes.append((abs(change), change, n))
+                axes[0][j].set_title(setting_label(column_key, cut), loc="left")
+                axes[-1][j].set_xlabel("How far Res is turned")
+            axes[0][0].set_ylabel("Peak width, octaves" if by_width else "Peak over the passband, dB")
+            axes[1][0].set_ylabel("Peak, cents off Cut")
+            axes[2][0].set_ylabel("Bass loss, dB")
+            for row in axes:
+                for panel in row:
+                    panel.set_xlim(-0.02, 1.02)
+            figure.tight_layout()
+            figures.append(f"<h3>{html.escape(title)}</h3>{image(figure)}")
+
+            def onset_text(side):
+                found = [f"{setting_label(column_key, cut)} from {number(100 * at, 0)}%" for cut, at in onsets[side].items() if at is not None]
+                return ", ".join(found) if found else "not at all"
+
+            parts = [f"ours self-oscillates {onset_text('ours')}"]
+            if self.reference_name:
+                parts.append(f"{self.reference_name} {onset_text('reference')}")
+                if gaps:
+                    unit = "octaves" if by_width else "dB"
+                    mean = float(np.mean([g[0] for g in gaps]))
+                    worst = max(gaps)
+                    changed = float(np.mean([c[0] for c in changes])) if changes else float("nan")
+                    most = max(changes) if changes else (float("nan"), float("nan"), gaps[0][2])
+                    self.gaps[title] = {
+                        "mean": mean, "worst": worst[1], "worst at": worst[2], "steps": len(gaps),
+                        "change mean": changed, "change worst": most[1], "change worst at": most[2],
+                    }
+                    measured = "width" if by_width else "height over the passband"
+                    parts.insert(0, (
+                        f"the peak's {measured} is {number(mean, 2)} {unit} apart on average over "
+                        f"{len(gaps)} steps, {number(worst[1], 2, True)} at most, at {self.case_label(worst[2])}; "
+                        f"how far it has come from Res 0 is {number(changed, 2)} {unit} apart on average, "
+                        f"{number(most[1], 2, True)} at most, at {self.case_label(most[2])}"
+                    ))
+            else:
+                strays = [results[n]["sides"]["ours"].get("off drawing dB", float("nan")) for n in names]
+                strays = [s for s in strays if math.isfinite(s)]
+                if strays:
+                    parts.append(f"what's heard strays from the drawing by at most {number(max(strays), 1)} dB before it does")
+            summary.append(f"<b>{html.escape(title)}</b>: " + "; ".join(html.escape(p) for p in parts) + ".")
+
+            for n in sorted(names, key=lambda n: (self.settings[n].get(column_key), self.settings[n].get(knob))):
+                for side in sides:
+                    v = results[n]["sides"][side]
+                    knob_value = v["knob"]
+                    shown_knob = f"0x{knob_value:02X}" if side == "ours" else f"{knob_value:g}"
+                    row = [
+                        title if side == "ours" else "",
+                        setting_label(column_key, self.settings[n].get(column_key)) if side == "ours" else "",
+                        "vimtracker" if side == "ours" else self.reference_name,
+                        shown_knob,
+                        hertz(v["peak Hz"]),
+                        number(v["peak dB"], 1, True),
+                        number(v["rise dB"], 1, True),
+                        number(v["width octaves"], 2),
+                        number(v["bass loss dB"], 1, True),
+                        "yes" if v["rings"] else "",
+                        number(v.get("off drawing dB", float("nan")), 1) if side == "ours" else "",
+                    ]
+                    rows_out.append(row)
+        headers = [
+            "Filter", HEADINGS.get(column_key, column_key), "Side", "Res", "Peak", "Peak dB", "Over passband dB", "Width, oct",
+            "Bass loss dB", "Rings on", "Off drawing, dB",
+        ]
+        keys = self.keys()
+        if not self.reference_name:
+            keys.append((OURS, "dotted", "vimtracker's peak as the Sound page draws it"))
+        return {
+            "keys": keys,
+            "summary": summary,
+            "figures": figures,
+            "numbers": table(headers, rows_out, numeric_from=3),
+            "numbers note": (
+                "Peak is the highest gain within an octave of Cut, and over passband its height over "
+                "the gain three octaves under Cut, or over it for a high-pass, up to 16 kHz. Width is how wide a band-pass's "
+                "peak or a notch's dip is, 3 dB down. A dash where a side is self-oscillating. Off "
+                "drawing is the most the measured response strays from the Sound page's drawing, "
+                "where the drawing is above −40 dB."
+            ),
+        }
+
+    def case_label(self, name):
+        settings = self.settings[name]
+        return ", ".join(setting_label(k, settings.get(k)) for k in (self.layout.get("column", "cut"), self.layout.get("knob", "res")))
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -1291,6 +1541,7 @@ KINDS = {
     "distortion": Distortion,
     "knob": Knob,
     "velocity": Velocity,
+    "taper": Taper,
 }
 
 STYLE = """

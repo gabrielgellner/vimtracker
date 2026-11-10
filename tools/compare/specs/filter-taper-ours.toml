@@ -1,0 +1,824 @@
+# The Diode's and Dirty's Res knob, which have no circuit of The Drop to compare with, over 33
+# steps at three cutoffs, measured against their own drawings (#333). Written by taper_specs.py.
+#
+#   uv run run.py specs/filter-taper-ours.toml --report out/filter-taper-ours.html
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[report]
+kind = "taper"
+title = "Diode's and Dirty's Res"
+figure = ["filter", "mode"]
+column = "cut"
+knob = "res"
+reference_knob = []
+width = []
+about = """
+Our track filter's Diode, a 303's diode ladder, and Vital's Dirty filter, each at its 24 dB \
+low-pass, which The Drop has no circuit like. Each is measured against its own drawing on the \
+Sound page, and its taper set to be like the others'.
+
+Res is turned in 33 steps, 00 to FF, at three cutoffs, about 200 Hz, 988 Hz and 5 kHz, with \
+the same quiet sine sweep as the other filter reports.
+"""
+
+[[cases]]
+name = "diode-55-res00"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "diode-55-res08"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x08 }
+
+[[cases]]
+name = "diode-55-res10"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x10 }
+
+[[cases]]
+name = "diode-55-res18"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x18 }
+
+[[cases]]
+name = "diode-55-res20"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x20 }
+
+[[cases]]
+name = "diode-55-res28"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x28 }
+
+[[cases]]
+name = "diode-55-res30"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x30 }
+
+[[cases]]
+name = "diode-55-res38"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x38 }
+
+[[cases]]
+name = "diode-55-res40"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x40 }
+
+[[cases]]
+name = "diode-55-res48"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x48 }
+
+[[cases]]
+name = "diode-55-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x50 }
+
+[[cases]]
+name = "diode-55-res58"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x58 }
+
+[[cases]]
+name = "diode-55-res60"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x60 }
+
+[[cases]]
+name = "diode-55-res68"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x68 }
+
+[[cases]]
+name = "diode-55-res70"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x70 }
+
+[[cases]]
+name = "diode-55-res78"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x78 }
+
+[[cases]]
+name = "diode-55-res80"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "diode-55-res88"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x88 }
+
+[[cases]]
+name = "diode-55-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x90 }
+
+[[cases]]
+name = "diode-55-res98"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0x98 }
+
+[[cases]]
+name = "diode-55-resA0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xA0 }
+
+[[cases]]
+name = "diode-55-resA8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xA8 }
+
+[[cases]]
+name = "diode-55-resB0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xB0 }
+
+[[cases]]
+name = "diode-55-resB8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xB8 }
+
+[[cases]]
+name = "diode-55-resC0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xC0 }
+
+[[cases]]
+name = "diode-55-resC8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xC8 }
+
+[[cases]]
+name = "diode-55-resD0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xD0 }
+
+[[cases]]
+name = "diode-55-resD8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xD8 }
+
+[[cases]]
+name = "diode-55-resE0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xE0 }
+
+[[cases]]
+name = "diode-55-resE8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xE8 }
+
+[[cases]]
+name = "diode-55-resF0"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xF0 }
+
+[[cases]]
+name = "diode-55-resF8"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xF8 }
+
+[[cases]]
+name = "diode-55-resFF"
+ours = { filter = "Diode", mode = "Full", cut = 0x55, res = 0xFF }
+
+[[cases]]
+name = "diode-90-res00"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "diode-90-res08"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x08 }
+
+[[cases]]
+name = "diode-90-res10"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x10 }
+
+[[cases]]
+name = "diode-90-res18"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x18 }
+
+[[cases]]
+name = "diode-90-res20"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x20 }
+
+[[cases]]
+name = "diode-90-res28"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x28 }
+
+[[cases]]
+name = "diode-90-res30"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x30 }
+
+[[cases]]
+name = "diode-90-res38"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x38 }
+
+[[cases]]
+name = "diode-90-res40"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x40 }
+
+[[cases]]
+name = "diode-90-res48"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x48 }
+
+[[cases]]
+name = "diode-90-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x50 }
+
+[[cases]]
+name = "diode-90-res58"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x58 }
+
+[[cases]]
+name = "diode-90-res60"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x60 }
+
+[[cases]]
+name = "diode-90-res68"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x68 }
+
+[[cases]]
+name = "diode-90-res70"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x70 }
+
+[[cases]]
+name = "diode-90-res78"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x78 }
+
+[[cases]]
+name = "diode-90-res80"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "diode-90-res88"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x88 }
+
+[[cases]]
+name = "diode-90-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x90 }
+
+[[cases]]
+name = "diode-90-res98"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0x98 }
+
+[[cases]]
+name = "diode-90-resA0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xA0 }
+
+[[cases]]
+name = "diode-90-resA8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xA8 }
+
+[[cases]]
+name = "diode-90-resB0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xB0 }
+
+[[cases]]
+name = "diode-90-resB8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xB8 }
+
+[[cases]]
+name = "diode-90-resC0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xC0 }
+
+[[cases]]
+name = "diode-90-resC8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xC8 }
+
+[[cases]]
+name = "diode-90-resD0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xD0 }
+
+[[cases]]
+name = "diode-90-resD8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xD8 }
+
+[[cases]]
+name = "diode-90-resE0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xE0 }
+
+[[cases]]
+name = "diode-90-resE8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xE8 }
+
+[[cases]]
+name = "diode-90-resF0"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xF0 }
+
+[[cases]]
+name = "diode-90-resF8"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xF8 }
+
+[[cases]]
+name = "diode-90-resFF"
+ours = { filter = "Diode", mode = "Full", cut = 0x90, res = 0xFF }
+
+[[cases]]
+name = "diode-CC-res00"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "diode-CC-res08"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x08 }
+
+[[cases]]
+name = "diode-CC-res10"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x10 }
+
+[[cases]]
+name = "diode-CC-res18"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x18 }
+
+[[cases]]
+name = "diode-CC-res20"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x20 }
+
+[[cases]]
+name = "diode-CC-res28"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x28 }
+
+[[cases]]
+name = "diode-CC-res30"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x30 }
+
+[[cases]]
+name = "diode-CC-res38"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x38 }
+
+[[cases]]
+name = "diode-CC-res40"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x40 }
+
+[[cases]]
+name = "diode-CC-res48"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x48 }
+
+[[cases]]
+name = "diode-CC-res50"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x50 }
+
+[[cases]]
+name = "diode-CC-res58"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x58 }
+
+[[cases]]
+name = "diode-CC-res60"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x60 }
+
+[[cases]]
+name = "diode-CC-res68"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x68 }
+
+[[cases]]
+name = "diode-CC-res70"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x70 }
+
+[[cases]]
+name = "diode-CC-res78"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x78 }
+
+[[cases]]
+name = "diode-CC-res80"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "diode-CC-res88"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x88 }
+
+[[cases]]
+name = "diode-CC-res90"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x90 }
+
+[[cases]]
+name = "diode-CC-res98"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0x98 }
+
+[[cases]]
+name = "diode-CC-resA0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xA0 }
+
+[[cases]]
+name = "diode-CC-resA8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xA8 }
+
+[[cases]]
+name = "diode-CC-resB0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xB0 }
+
+[[cases]]
+name = "diode-CC-resB8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xB8 }
+
+[[cases]]
+name = "diode-CC-resC0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xC0 }
+
+[[cases]]
+name = "diode-CC-resC8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xC8 }
+
+[[cases]]
+name = "diode-CC-resD0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xD0 }
+
+[[cases]]
+name = "diode-CC-resD8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xD8 }
+
+[[cases]]
+name = "diode-CC-resE0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xE0 }
+
+[[cases]]
+name = "diode-CC-resE8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xE8 }
+
+[[cases]]
+name = "diode-CC-resF0"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xF0 }
+
+[[cases]]
+name = "diode-CC-resF8"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xF8 }
+
+[[cases]]
+name = "diode-CC-resFF"
+ours = { filter = "Diode", mode = "Full", cut = 0xCC, res = 0xFF }
+
+[[cases]]
+name = "dirty-55-res00"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x00 }
+
+[[cases]]
+name = "dirty-55-res08"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x08 }
+
+[[cases]]
+name = "dirty-55-res10"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x10 }
+
+[[cases]]
+name = "dirty-55-res18"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x18 }
+
+[[cases]]
+name = "dirty-55-res20"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x20 }
+
+[[cases]]
+name = "dirty-55-res28"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x28 }
+
+[[cases]]
+name = "dirty-55-res30"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x30 }
+
+[[cases]]
+name = "dirty-55-res38"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x38 }
+
+[[cases]]
+name = "dirty-55-res40"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x40 }
+
+[[cases]]
+name = "dirty-55-res48"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x48 }
+
+[[cases]]
+name = "dirty-55-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x50 }
+
+[[cases]]
+name = "dirty-55-res58"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x58 }
+
+[[cases]]
+name = "dirty-55-res60"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x60 }
+
+[[cases]]
+name = "dirty-55-res68"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x68 }
+
+[[cases]]
+name = "dirty-55-res70"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x70 }
+
+[[cases]]
+name = "dirty-55-res78"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x78 }
+
+[[cases]]
+name = "dirty-55-res80"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x80 }
+
+[[cases]]
+name = "dirty-55-res88"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x88 }
+
+[[cases]]
+name = "dirty-55-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x90 }
+
+[[cases]]
+name = "dirty-55-res98"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0x98 }
+
+[[cases]]
+name = "dirty-55-resA0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xA0 }
+
+[[cases]]
+name = "dirty-55-resA8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xA8 }
+
+[[cases]]
+name = "dirty-55-resB0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xB0 }
+
+[[cases]]
+name = "dirty-55-resB8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xB8 }
+
+[[cases]]
+name = "dirty-55-resC0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xC0 }
+
+[[cases]]
+name = "dirty-55-resC8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xC8 }
+
+[[cases]]
+name = "dirty-55-resD0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xD0 }
+
+[[cases]]
+name = "dirty-55-resD8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xD8 }
+
+[[cases]]
+name = "dirty-55-resE0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xE0 }
+
+[[cases]]
+name = "dirty-55-resE8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xE8 }
+
+[[cases]]
+name = "dirty-55-resF0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xF0 }
+
+[[cases]]
+name = "dirty-55-resF8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xF8 }
+
+[[cases]]
+name = "dirty-55-resFF"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x55, res = 0xFF }
+
+[[cases]]
+name = "dirty-90-res00"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x00 }
+
+[[cases]]
+name = "dirty-90-res08"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x08 }
+
+[[cases]]
+name = "dirty-90-res10"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x10 }
+
+[[cases]]
+name = "dirty-90-res18"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x18 }
+
+[[cases]]
+name = "dirty-90-res20"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x20 }
+
+[[cases]]
+name = "dirty-90-res28"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x28 }
+
+[[cases]]
+name = "dirty-90-res30"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x30 }
+
+[[cases]]
+name = "dirty-90-res38"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x38 }
+
+[[cases]]
+name = "dirty-90-res40"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x40 }
+
+[[cases]]
+name = "dirty-90-res48"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x48 }
+
+[[cases]]
+name = "dirty-90-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x50 }
+
+[[cases]]
+name = "dirty-90-res58"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x58 }
+
+[[cases]]
+name = "dirty-90-res60"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x60 }
+
+[[cases]]
+name = "dirty-90-res68"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x68 }
+
+[[cases]]
+name = "dirty-90-res70"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x70 }
+
+[[cases]]
+name = "dirty-90-res78"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x78 }
+
+[[cases]]
+name = "dirty-90-res80"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x80 }
+
+[[cases]]
+name = "dirty-90-res88"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x88 }
+
+[[cases]]
+name = "dirty-90-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x90 }
+
+[[cases]]
+name = "dirty-90-res98"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0x98 }
+
+[[cases]]
+name = "dirty-90-resA0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xA0 }
+
+[[cases]]
+name = "dirty-90-resA8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xA8 }
+
+[[cases]]
+name = "dirty-90-resB0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xB0 }
+
+[[cases]]
+name = "dirty-90-resB8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xB8 }
+
+[[cases]]
+name = "dirty-90-resC0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xC0 }
+
+[[cases]]
+name = "dirty-90-resC8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xC8 }
+
+[[cases]]
+name = "dirty-90-resD0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xD0 }
+
+[[cases]]
+name = "dirty-90-resD8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xD8 }
+
+[[cases]]
+name = "dirty-90-resE0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xE0 }
+
+[[cases]]
+name = "dirty-90-resE8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xE8 }
+
+[[cases]]
+name = "dirty-90-resF0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xF0 }
+
+[[cases]]
+name = "dirty-90-resF8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xF8 }
+
+[[cases]]
+name = "dirty-90-resFF"
+ours = { filter = "Dirty", mode = "LP24", cut = 0x90, res = 0xFF }
+
+[[cases]]
+name = "dirty-CC-res00"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x00 }
+
+[[cases]]
+name = "dirty-CC-res08"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x08 }
+
+[[cases]]
+name = "dirty-CC-res10"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x10 }
+
+[[cases]]
+name = "dirty-CC-res18"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x18 }
+
+[[cases]]
+name = "dirty-CC-res20"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x20 }
+
+[[cases]]
+name = "dirty-CC-res28"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x28 }
+
+[[cases]]
+name = "dirty-CC-res30"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x30 }
+
+[[cases]]
+name = "dirty-CC-res38"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x38 }
+
+[[cases]]
+name = "dirty-CC-res40"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x40 }
+
+[[cases]]
+name = "dirty-CC-res48"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x48 }
+
+[[cases]]
+name = "dirty-CC-res50"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x50 }
+
+[[cases]]
+name = "dirty-CC-res58"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x58 }
+
+[[cases]]
+name = "dirty-CC-res60"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x60 }
+
+[[cases]]
+name = "dirty-CC-res68"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x68 }
+
+[[cases]]
+name = "dirty-CC-res70"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x70 }
+
+[[cases]]
+name = "dirty-CC-res78"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x78 }
+
+[[cases]]
+name = "dirty-CC-res80"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x80 }
+
+[[cases]]
+name = "dirty-CC-res88"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x88 }
+
+[[cases]]
+name = "dirty-CC-res90"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x90 }
+
+[[cases]]
+name = "dirty-CC-res98"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0x98 }
+
+[[cases]]
+name = "dirty-CC-resA0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xA0 }
+
+[[cases]]
+name = "dirty-CC-resA8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xA8 }
+
+[[cases]]
+name = "dirty-CC-resB0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xB0 }
+
+[[cases]]
+name = "dirty-CC-resB8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xB8 }
+
+[[cases]]
+name = "dirty-CC-resC0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xC0 }
+
+[[cases]]
+name = "dirty-CC-resC8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xC8 }
+
+[[cases]]
+name = "dirty-CC-resD0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xD0 }
+
+[[cases]]
+name = "dirty-CC-resD8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xD8 }
+
+[[cases]]
+name = "dirty-CC-resE0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xE0 }
+
+[[cases]]
+name = "dirty-CC-resE8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xE8 }
+
+[[cases]]
+name = "dirty-CC-resF0"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xF0 }
+
+[[cases]]
+name = "dirty-CC-resF8"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xF8 }
+
+[[cases]]
+name = "dirty-CC-resFF"
+ours = { filter = "Dirty", mode = "LP24", cut = 0xCC, res = 0xFF }

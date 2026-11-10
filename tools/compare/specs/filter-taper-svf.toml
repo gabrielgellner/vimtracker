@@ -1,0 +1,2036 @@
+# The clean types' Res knob against Cytomic's The Drop's OSR, an OTA state-variable filter like
+# the OSCar's, at no drive: peak height, its frequency, the bass and self-oscillation, over 33
+# steps at three cutoffs (#333). Written by taper_specs.py.
+#
+#   uv run run.py specs/filter-taper-svf.toml --report out/filter-taper-svf.html
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/The Drop.vst3"
+buffer_size = 512
+
+[reference.parameters]
+lp_drive = 0.0
+hp_drive = 0.0
+lp_hd = true
+hp_hd = true
+lp_safe_res = false
+hp_safe_res = false
+lp_resmax = 125.0
+hp_resmax = 125.0
+lp_keytrack = false
+hp_keytrack = false
+mod_active = false
+glide = "0.000 mS"
+mix = 100.0
+pad = 0.0
+
+[report]
+kind = "taper"
+title = "Clean filters' Res against The Drop's OSR"
+figure = ["filter", "mode"]
+column = "cut"
+knob = "res"
+reference_knob = ["hp_res", "lp_res"]
+width = ["BP", "Notch"]
+about = """
+Our track filter's clean types, the state-variable low-pass, high-pass, band-pass and notch at \
+12 dB, against the OSR circuit of Cytomic's The Drop, an OTA state-variable filter like the \
+OSCar's, at no drive. The band-pass is The Drop's high-pass and low-pass in series at the same \
+frequency, and the notch the two in parallel, as its manual makes them.
+
+Res is turned in 33 steps, 00 to FF, at three cutoffs, about 200 Hz, 988 Hz and 5 kHz, with \
+the same quiet sine sweep as the other filter reports. The Drop's resonance runs from 0 to \
+125% and self-oscillates above 100, so our knob's first 85%, 00 to D9, is set against its 0 to \
+100%, and the last 15% against 100 to 125%.
+"""
+
+[[cases]]
+name = "lp12-55-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0 }
+
+[[cases]]
+name = "lp12-55-res08"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 3.69 }
+
+[[cases]]
+name = "lp12-55-res10"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 7.38 }
+
+[[cases]]
+name = "lp12-55-res18"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 11.07 }
+
+[[cases]]
+name = "lp12-55-res20"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 14.76 }
+
+[[cases]]
+name = "lp12-55-res28"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 18.45 }
+
+[[cases]]
+name = "lp12-55-res30"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 22.15 }
+
+[[cases]]
+name = "lp12-55-res38"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 25.84 }
+
+[[cases]]
+name = "lp12-55-res40"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 29.53 }
+
+[[cases]]
+name = "lp12-55-res48"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 33.22 }
+
+[[cases]]
+name = "lp12-55-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 36.91 }
+
+[[cases]]
+name = "lp12-55-res58"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 40.6 }
+
+[[cases]]
+name = "lp12-55-res60"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 44.29 }
+
+[[cases]]
+name = "lp12-55-res68"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 47.98 }
+
+[[cases]]
+name = "lp12-55-res70"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 51.67 }
+
+[[cases]]
+name = "lp12-55-res78"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 55.36 }
+
+[[cases]]
+name = "lp12-55-res80"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 59.05 }
+
+[[cases]]
+name = "lp12-55-res88"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 62.75 }
+
+[[cases]]
+name = "lp12-55-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 66.44 }
+
+[[cases]]
+name = "lp12-55-res98"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 70.13 }
+
+[[cases]]
+name = "lp12-55-resA0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 73.82 }
+
+[[cases]]
+name = "lp12-55-resA8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 77.51 }
+
+[[cases]]
+name = "lp12-55-resB0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 81.2 }
+
+[[cases]]
+name = "lp12-55-resB8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 84.89 }
+
+[[cases]]
+name = "lp12-55-resC0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 88.58 }
+
+[[cases]]
+name = "lp12-55-resC8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 92.27 }
+
+[[cases]]
+name = "lp12-55-resD0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.96 }
+
+[[cases]]
+name = "lp12-55-resD8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 99.65 }
+
+[[cases]]
+name = "lp12-55-resE0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 104.74 }
+
+[[cases]]
+name = "lp12-55-resE8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 109.97 }
+
+[[cases]]
+name = "lp12-55-resF0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 115.2 }
+
+[[cases]]
+name = "lp12-55-resF8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 120.42 }
+
+[[cases]]
+name = "lp12-55-resFF"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 125.0 }
+
+[[cases]]
+name = "lp12-90-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 0.0 }
+
+[[cases]]
+name = "lp12-90-res08"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 3.69 }
+
+[[cases]]
+name = "lp12-90-res10"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 7.38 }
+
+[[cases]]
+name = "lp12-90-res18"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 11.07 }
+
+[[cases]]
+name = "lp12-90-res20"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 14.76 }
+
+[[cases]]
+name = "lp12-90-res28"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 18.45 }
+
+[[cases]]
+name = "lp12-90-res30"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 22.15 }
+
+[[cases]]
+name = "lp12-90-res38"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 25.84 }
+
+[[cases]]
+name = "lp12-90-res40"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 29.53 }
+
+[[cases]]
+name = "lp12-90-res48"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 33.22 }
+
+[[cases]]
+name = "lp12-90-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 36.91 }
+
+[[cases]]
+name = "lp12-90-res58"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 40.6 }
+
+[[cases]]
+name = "lp12-90-res60"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 44.29 }
+
+[[cases]]
+name = "lp12-90-res68"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 47.98 }
+
+[[cases]]
+name = "lp12-90-res70"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 51.67 }
+
+[[cases]]
+name = "lp12-90-res78"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 55.36 }
+
+[[cases]]
+name = "lp12-90-res80"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 59.05 }
+
+[[cases]]
+name = "lp12-90-res88"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 62.75 }
+
+[[cases]]
+name = "lp12-90-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 66.44 }
+
+[[cases]]
+name = "lp12-90-res98"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 70.13 }
+
+[[cases]]
+name = "lp12-90-resA0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 73.82 }
+
+[[cases]]
+name = "lp12-90-resA8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 77.51 }
+
+[[cases]]
+name = "lp12-90-resB0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 81.2 }
+
+[[cases]]
+name = "lp12-90-resB8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 84.89 }
+
+[[cases]]
+name = "lp12-90-resC0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 88.58 }
+
+[[cases]]
+name = "lp12-90-resC8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 92.27 }
+
+[[cases]]
+name = "lp12-90-resD0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 95.96 }
+
+[[cases]]
+name = "lp12-90-resD8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 99.65 }
+
+[[cases]]
+name = "lp12-90-resE0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 104.74 }
+
+[[cases]]
+name = "lp12-90-resE8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 109.97 }
+
+[[cases]]
+name = "lp12-90-resF0"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 115.2 }
+
+[[cases]]
+name = "lp12-90-resF8"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 120.42 }
+
+[[cases]]
+name = "lp12-90-resFF"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 125.0 }
+
+[[cases]]
+name = "lp12-CC-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 0.0 }
+
+[[cases]]
+name = "lp12-CC-res08"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x08 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 3.69 }
+
+[[cases]]
+name = "lp12-CC-res10"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x10 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 7.38 }
+
+[[cases]]
+name = "lp12-CC-res18"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x18 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 11.07 }
+
+[[cases]]
+name = "lp12-CC-res20"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x20 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 14.76 }
+
+[[cases]]
+name = "lp12-CC-res28"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x28 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 18.45 }
+
+[[cases]]
+name = "lp12-CC-res30"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x30 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 22.15 }
+
+[[cases]]
+name = "lp12-CC-res38"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x38 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 25.84 }
+
+[[cases]]
+name = "lp12-CC-res40"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x40 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 29.53 }
+
+[[cases]]
+name = "lp12-CC-res48"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x48 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 33.22 }
+
+[[cases]]
+name = "lp12-CC-res50"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x50 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 36.91 }
+
+[[cases]]
+name = "lp12-CC-res58"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x58 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 40.6 }
+
+[[cases]]
+name = "lp12-CC-res60"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x60 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 44.29 }
+
+[[cases]]
+name = "lp12-CC-res68"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x68 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 47.98 }
+
+[[cases]]
+name = "lp12-CC-res70"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x70 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 51.67 }
+
+[[cases]]
+name = "lp12-CC-res78"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x78 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 55.36 }
+
+[[cases]]
+name = "lp12-CC-res80"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 59.05 }
+
+[[cases]]
+name = "lp12-CC-res88"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x88 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 62.75 }
+
+[[cases]]
+name = "lp12-CC-res90"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x90 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 66.44 }
+
+[[cases]]
+name = "lp12-CC-res98"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x98 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 70.13 }
+
+[[cases]]
+name = "lp12-CC-resA0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 73.82 }
+
+[[cases]]
+name = "lp12-CC-resA8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 77.51 }
+
+[[cases]]
+name = "lp12-CC-resB0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 81.2 }
+
+[[cases]]
+name = "lp12-CC-resB8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 84.89 }
+
+[[cases]]
+name = "lp12-CC-resC0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 88.58 }
+
+[[cases]]
+name = "lp12-CC-resC8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 92.27 }
+
+[[cases]]
+name = "lp12-CC-resD0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 95.96 }
+
+[[cases]]
+name = "lp12-CC-resD8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 99.65 }
+
+[[cases]]
+name = "lp12-CC-resE0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 104.74 }
+
+[[cases]]
+name = "lp12-CC-resE8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 109.97 }
+
+[[cases]]
+name = "lp12-CC-resF0"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 115.2 }
+
+[[cases]]
+name = "lp12-CC-resF8"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 120.42 }
+
+[[cases]]
+name = "lp12-CC-resFF"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xFF }
+reference = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 125.0 }
+
+[[cases]]
+name = "hp12-55-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }
+
+[[cases]]
+name = "hp12-55-res08"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 3.69 }
+
+[[cases]]
+name = "hp12-55-res10"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 7.38 }
+
+[[cases]]
+name = "hp12-55-res18"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 11.07 }
+
+[[cases]]
+name = "hp12-55-res20"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 14.76 }
+
+[[cases]]
+name = "hp12-55-res28"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 18.45 }
+
+[[cases]]
+name = "hp12-55-res30"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 22.15 }
+
+[[cases]]
+name = "hp12-55-res38"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 25.84 }
+
+[[cases]]
+name = "hp12-55-res40"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 29.53 }
+
+[[cases]]
+name = "hp12-55-res48"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 33.22 }
+
+[[cases]]
+name = "hp12-55-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 36.91 }
+
+[[cases]]
+name = "hp12-55-res58"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 40.6 }
+
+[[cases]]
+name = "hp12-55-res60"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 44.29 }
+
+[[cases]]
+name = "hp12-55-res68"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 47.98 }
+
+[[cases]]
+name = "hp12-55-res70"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 51.67 }
+
+[[cases]]
+name = "hp12-55-res78"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 55.36 }
+
+[[cases]]
+name = "hp12-55-res80"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 59.05 }
+
+[[cases]]
+name = "hp12-55-res88"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 62.75 }
+
+[[cases]]
+name = "hp12-55-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 66.44 }
+
+[[cases]]
+name = "hp12-55-res98"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 70.13 }
+
+[[cases]]
+name = "hp12-55-resA0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 73.82 }
+
+[[cases]]
+name = "hp12-55-resA8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 77.51 }
+
+[[cases]]
+name = "hp12-55-resB0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 81.2 }
+
+[[cases]]
+name = "hp12-55-resB8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 84.89 }
+
+[[cases]]
+name = "hp12-55-resC0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 88.58 }
+
+[[cases]]
+name = "hp12-55-resC8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 92.27 }
+
+[[cases]]
+name = "hp12-55-resD0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.96 }
+
+[[cases]]
+name = "hp12-55-resD8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 99.65 }
+
+[[cases]]
+name = "hp12-55-resE0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 104.74 }
+
+[[cases]]
+name = "hp12-55-resE8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 109.97 }
+
+[[cases]]
+name = "hp12-55-resF0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 115.2 }
+
+[[cases]]
+name = "hp12-55-resF8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 120.42 }
+
+[[cases]]
+name = "hp12-55-resFF"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 125.0 }
+
+[[cases]]
+name = "hp12-90-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 0.0 }
+
+[[cases]]
+name = "hp12-90-res08"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 3.69 }
+
+[[cases]]
+name = "hp12-90-res10"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 7.38 }
+
+[[cases]]
+name = "hp12-90-res18"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 11.07 }
+
+[[cases]]
+name = "hp12-90-res20"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 14.76 }
+
+[[cases]]
+name = "hp12-90-res28"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 18.45 }
+
+[[cases]]
+name = "hp12-90-res30"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 22.15 }
+
+[[cases]]
+name = "hp12-90-res38"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 25.84 }
+
+[[cases]]
+name = "hp12-90-res40"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 29.53 }
+
+[[cases]]
+name = "hp12-90-res48"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 33.22 }
+
+[[cases]]
+name = "hp12-90-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 36.91 }
+
+[[cases]]
+name = "hp12-90-res58"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 40.6 }
+
+[[cases]]
+name = "hp12-90-res60"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 44.29 }
+
+[[cases]]
+name = "hp12-90-res68"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 47.98 }
+
+[[cases]]
+name = "hp12-90-res70"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 51.67 }
+
+[[cases]]
+name = "hp12-90-res78"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 55.36 }
+
+[[cases]]
+name = "hp12-90-res80"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 59.05 }
+
+[[cases]]
+name = "hp12-90-res88"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 62.75 }
+
+[[cases]]
+name = "hp12-90-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 66.44 }
+
+[[cases]]
+name = "hp12-90-res98"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 70.13 }
+
+[[cases]]
+name = "hp12-90-resA0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 73.82 }
+
+[[cases]]
+name = "hp12-90-resA8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 77.51 }
+
+[[cases]]
+name = "hp12-90-resB0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 81.2 }
+
+[[cases]]
+name = "hp12-90-resB8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 84.89 }
+
+[[cases]]
+name = "hp12-90-resC0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 88.58 }
+
+[[cases]]
+name = "hp12-90-resC8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 92.27 }
+
+[[cases]]
+name = "hp12-90-resD0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 95.96 }
+
+[[cases]]
+name = "hp12-90-resD8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 99.65 }
+
+[[cases]]
+name = "hp12-90-resE0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 104.74 }
+
+[[cases]]
+name = "hp12-90-resE8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 109.97 }
+
+[[cases]]
+name = "hp12-90-resF0"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 115.2 }
+
+[[cases]]
+name = "hp12-90-resF8"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 120.42 }
+
+[[cases]]
+name = "hp12-90-resFF"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 125.0 }
+
+[[cases]]
+name = "hp12-CC-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 0.0 }
+
+[[cases]]
+name = "hp12-CC-res08"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x08 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 3.69 }
+
+[[cases]]
+name = "hp12-CC-res10"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x10 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 7.38 }
+
+[[cases]]
+name = "hp12-CC-res18"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x18 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 11.07 }
+
+[[cases]]
+name = "hp12-CC-res20"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x20 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 14.76 }
+
+[[cases]]
+name = "hp12-CC-res28"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x28 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 18.45 }
+
+[[cases]]
+name = "hp12-CC-res30"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x30 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 22.15 }
+
+[[cases]]
+name = "hp12-CC-res38"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x38 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 25.84 }
+
+[[cases]]
+name = "hp12-CC-res40"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x40 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 29.53 }
+
+[[cases]]
+name = "hp12-CC-res48"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x48 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 33.22 }
+
+[[cases]]
+name = "hp12-CC-res50"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x50 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 36.91 }
+
+[[cases]]
+name = "hp12-CC-res58"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x58 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 40.6 }
+
+[[cases]]
+name = "hp12-CC-res60"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x60 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 44.29 }
+
+[[cases]]
+name = "hp12-CC-res68"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x68 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 47.98 }
+
+[[cases]]
+name = "hp12-CC-res70"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x70 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 51.67 }
+
+[[cases]]
+name = "hp12-CC-res78"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x78 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 55.36 }
+
+[[cases]]
+name = "hp12-CC-res80"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 59.05 }
+
+[[cases]]
+name = "hp12-CC-res88"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x88 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 62.75 }
+
+[[cases]]
+name = "hp12-CC-res90"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x90 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 66.44 }
+
+[[cases]]
+name = "hp12-CC-res98"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x98 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 70.13 }
+
+[[cases]]
+name = "hp12-CC-resA0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 73.82 }
+
+[[cases]]
+name = "hp12-CC-resA8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 77.51 }
+
+[[cases]]
+name = "hp12-CC-resB0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 81.2 }
+
+[[cases]]
+name = "hp12-CC-resB8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 84.89 }
+
+[[cases]]
+name = "hp12-CC-resC0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 88.58 }
+
+[[cases]]
+name = "hp12-CC-resC8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 92.27 }
+
+[[cases]]
+name = "hp12-CC-resD0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 95.96 }
+
+[[cases]]
+name = "hp12-CC-resD8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 99.65 }
+
+[[cases]]
+name = "hp12-CC-resE0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 104.74 }
+
+[[cases]]
+name = "hp12-CC-resE8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 109.97 }
+
+[[cases]]
+name = "hp12-CC-resF0"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 115.2 }
+
+[[cases]]
+name = "hp12-CC-resF8"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 120.42 }
+
+[[cases]]
+name = "hp12-CC-resFF"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xFF }
+reference = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 125.0 }
+
+[[cases]]
+name = "bp12-55-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }
+
+[[cases]]
+name = "bp12-55-res08"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 3.69 }
+
+[[cases]]
+name = "bp12-55-res10"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 7.38 }
+
+[[cases]]
+name = "bp12-55-res18"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 11.07 }
+
+[[cases]]
+name = "bp12-55-res20"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 14.76 }
+
+[[cases]]
+name = "bp12-55-res28"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 18.45 }
+
+[[cases]]
+name = "bp12-55-res30"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 22.15 }
+
+[[cases]]
+name = "bp12-55-res38"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 25.84 }
+
+[[cases]]
+name = "bp12-55-res40"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 29.53 }
+
+[[cases]]
+name = "bp12-55-res48"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 33.22 }
+
+[[cases]]
+name = "bp12-55-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 36.91 }
+
+[[cases]]
+name = "bp12-55-res58"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 40.6 }
+
+[[cases]]
+name = "bp12-55-res60"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 44.29 }
+
+[[cases]]
+name = "bp12-55-res68"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 47.98 }
+
+[[cases]]
+name = "bp12-55-res70"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 51.67 }
+
+[[cases]]
+name = "bp12-55-res78"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 55.36 }
+
+[[cases]]
+name = "bp12-55-res80"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 59.05 }
+
+[[cases]]
+name = "bp12-55-res88"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 62.75 }
+
+[[cases]]
+name = "bp12-55-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 66.44 }
+
+[[cases]]
+name = "bp12-55-res98"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 70.13 }
+
+[[cases]]
+name = "bp12-55-resA0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 73.82 }
+
+[[cases]]
+name = "bp12-55-resA8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 77.51 }
+
+[[cases]]
+name = "bp12-55-resB0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 81.2 }
+
+[[cases]]
+name = "bp12-55-resB8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 84.89 }
+
+[[cases]]
+name = "bp12-55-resC0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 88.58 }
+
+[[cases]]
+name = "bp12-55-resC8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 92.27 }
+
+[[cases]]
+name = "bp12-55-resD0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.96 }
+
+[[cases]]
+name = "bp12-55-resD8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 99.65 }
+
+[[cases]]
+name = "bp12-55-resE0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 104.74 }
+
+[[cases]]
+name = "bp12-55-resE8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 109.97 }
+
+[[cases]]
+name = "bp12-55-resF0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 115.2 }
+
+[[cases]]
+name = "bp12-55-resF8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 120.42 }
+
+[[cases]]
+name = "bp12-55-resFF"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 125.0 }
+
+[[cases]]
+name = "bp12-90-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 0.0 }
+
+[[cases]]
+name = "bp12-90-res08"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 3.69 }
+
+[[cases]]
+name = "bp12-90-res10"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 7.38 }
+
+[[cases]]
+name = "bp12-90-res18"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 11.07 }
+
+[[cases]]
+name = "bp12-90-res20"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 14.76 }
+
+[[cases]]
+name = "bp12-90-res28"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 18.45 }
+
+[[cases]]
+name = "bp12-90-res30"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 22.15 }
+
+[[cases]]
+name = "bp12-90-res38"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 25.84 }
+
+[[cases]]
+name = "bp12-90-res40"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 29.53 }
+
+[[cases]]
+name = "bp12-90-res48"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 33.22 }
+
+[[cases]]
+name = "bp12-90-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 36.91 }
+
+[[cases]]
+name = "bp12-90-res58"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 40.6 }
+
+[[cases]]
+name = "bp12-90-res60"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 44.29 }
+
+[[cases]]
+name = "bp12-90-res68"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 47.98 }
+
+[[cases]]
+name = "bp12-90-res70"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 51.67 }
+
+[[cases]]
+name = "bp12-90-res78"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 55.36 }
+
+[[cases]]
+name = "bp12-90-res80"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 59.05 }
+
+[[cases]]
+name = "bp12-90-res88"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 62.75 }
+
+[[cases]]
+name = "bp12-90-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 66.44 }
+
+[[cases]]
+name = "bp12-90-res98"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 70.13 }
+
+[[cases]]
+name = "bp12-90-resA0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 73.82 }
+
+[[cases]]
+name = "bp12-90-resA8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 77.51 }
+
+[[cases]]
+name = "bp12-90-resB0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 81.2 }
+
+[[cases]]
+name = "bp12-90-resB8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 84.89 }
+
+[[cases]]
+name = "bp12-90-resC0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 88.58 }
+
+[[cases]]
+name = "bp12-90-resC8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 92.27 }
+
+[[cases]]
+name = "bp12-90-resD0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 95.96 }
+
+[[cases]]
+name = "bp12-90-resD8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 99.65 }
+
+[[cases]]
+name = "bp12-90-resE0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 104.74 }
+
+[[cases]]
+name = "bp12-90-resE8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 109.97 }
+
+[[cases]]
+name = "bp12-90-resF0"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 115.2 }
+
+[[cases]]
+name = "bp12-90-resF8"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 120.42 }
+
+[[cases]]
+name = "bp12-90-resFF"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 125.0 }
+
+[[cases]]
+name = "bp12-CC-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 0.0 }
+
+[[cases]]
+name = "bp12-CC-res08"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 3.69 }
+
+[[cases]]
+name = "bp12-CC-res10"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 7.38 }
+
+[[cases]]
+name = "bp12-CC-res18"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 11.07 }
+
+[[cases]]
+name = "bp12-CC-res20"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 14.76 }
+
+[[cases]]
+name = "bp12-CC-res28"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 18.45 }
+
+[[cases]]
+name = "bp12-CC-res30"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 22.15 }
+
+[[cases]]
+name = "bp12-CC-res38"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 25.84 }
+
+[[cases]]
+name = "bp12-CC-res40"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 29.53 }
+
+[[cases]]
+name = "bp12-CC-res48"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 33.22 }
+
+[[cases]]
+name = "bp12-CC-res50"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 36.91 }
+
+[[cases]]
+name = "bp12-CC-res58"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 40.6 }
+
+[[cases]]
+name = "bp12-CC-res60"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 44.29 }
+
+[[cases]]
+name = "bp12-CC-res68"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 47.98 }
+
+[[cases]]
+name = "bp12-CC-res70"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 51.67 }
+
+[[cases]]
+name = "bp12-CC-res78"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 55.36 }
+
+[[cases]]
+name = "bp12-CC-res80"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 59.05 }
+
+[[cases]]
+name = "bp12-CC-res88"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 62.75 }
+
+[[cases]]
+name = "bp12-CC-res90"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 66.44 }
+
+[[cases]]
+name = "bp12-CC-res98"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 70.13 }
+
+[[cases]]
+name = "bp12-CC-resA0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 73.82 }
+
+[[cases]]
+name = "bp12-CC-resA8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 77.51 }
+
+[[cases]]
+name = "bp12-CC-resB0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 81.2 }
+
+[[cases]]
+name = "bp12-CC-resB8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 84.89 }
+
+[[cases]]
+name = "bp12-CC-resC0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 88.58 }
+
+[[cases]]
+name = "bp12-CC-resC8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 92.27 }
+
+[[cases]]
+name = "bp12-CC-resD0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 95.96 }
+
+[[cases]]
+name = "bp12-CC-resD8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 99.65 }
+
+[[cases]]
+name = "bp12-CC-resE0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 104.74 }
+
+[[cases]]
+name = "bp12-CC-resE8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 109.97 }
+
+[[cases]]
+name = "bp12-CC-resF0"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 115.2 }
+
+[[cases]]
+name = "bp12-CC-resF8"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 120.42 }
+
+[[cases]]
+name = "bp12-CC-resFF"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 125.0 }
+
+[[cases]]
+name = "notch12-55-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }
+
+[[cases]]
+name = "notch12-55-res08"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 3.69 }
+
+[[cases]]
+name = "notch12-55-res10"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 7.38 }
+
+[[cases]]
+name = "notch12-55-res18"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 11.07 }
+
+[[cases]]
+name = "notch12-55-res20"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 14.76 }
+
+[[cases]]
+name = "notch12-55-res28"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 18.45 }
+
+[[cases]]
+name = "notch12-55-res30"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 22.15 }
+
+[[cases]]
+name = "notch12-55-res38"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 25.84 }
+
+[[cases]]
+name = "notch12-55-res40"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 29.53 }
+
+[[cases]]
+name = "notch12-55-res48"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 33.22 }
+
+[[cases]]
+name = "notch12-55-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 36.91 }
+
+[[cases]]
+name = "notch12-55-res58"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 40.6 }
+
+[[cases]]
+name = "notch12-55-res60"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 44.29 }
+
+[[cases]]
+name = "notch12-55-res68"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 47.98 }
+
+[[cases]]
+name = "notch12-55-res70"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 51.67 }
+
+[[cases]]
+name = "notch12-55-res78"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 55.36 }
+
+[[cases]]
+name = "notch12-55-res80"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 59.05 }
+
+[[cases]]
+name = "notch12-55-res88"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 62.75 }
+
+[[cases]]
+name = "notch12-55-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 66.44 }
+
+[[cases]]
+name = "notch12-55-res98"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 70.13 }
+
+[[cases]]
+name = "notch12-55-resA0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 73.82 }
+
+[[cases]]
+name = "notch12-55-resA8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 77.51 }
+
+[[cases]]
+name = "notch12-55-resB0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 81.2 }
+
+[[cases]]
+name = "notch12-55-resB8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 84.89 }
+
+[[cases]]
+name = "notch12-55-resC0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 88.58 }
+
+[[cases]]
+name = "notch12-55-resC8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 92.27 }
+
+[[cases]]
+name = "notch12-55-resD0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.96 }
+
+[[cases]]
+name = "notch12-55-resD8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 99.65 }
+
+[[cases]]
+name = "notch12-55-resE0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 104.74 }
+
+[[cases]]
+name = "notch12-55-resE8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 109.97 }
+
+[[cases]]
+name = "notch12-55-resF0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 115.2 }
+
+[[cases]]
+name = "notch12-55-resF8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 120.42 }
+
+[[cases]]
+name = "notch12-55-resFF"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 125.0 }
+
+[[cases]]
+name = "notch12-90-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 0.0 }
+
+[[cases]]
+name = "notch12-90-res08"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 3.69 }
+
+[[cases]]
+name = "notch12-90-res10"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 7.38 }
+
+[[cases]]
+name = "notch12-90-res18"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 11.07 }
+
+[[cases]]
+name = "notch12-90-res20"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 14.76 }
+
+[[cases]]
+name = "notch12-90-res28"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 18.45 }
+
+[[cases]]
+name = "notch12-90-res30"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 22.15 }
+
+[[cases]]
+name = "notch12-90-res38"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 25.84 }
+
+[[cases]]
+name = "notch12-90-res40"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 29.53 }
+
+[[cases]]
+name = "notch12-90-res48"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 33.22 }
+
+[[cases]]
+name = "notch12-90-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 36.91 }
+
+[[cases]]
+name = "notch12-90-res58"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 40.6 }
+
+[[cases]]
+name = "notch12-90-res60"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 44.29 }
+
+[[cases]]
+name = "notch12-90-res68"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 47.98 }
+
+[[cases]]
+name = "notch12-90-res70"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 51.67 }
+
+[[cases]]
+name = "notch12-90-res78"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 55.36 }
+
+[[cases]]
+name = "notch12-90-res80"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 59.05 }
+
+[[cases]]
+name = "notch12-90-res88"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 62.75 }
+
+[[cases]]
+name = "notch12-90-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 66.44 }
+
+[[cases]]
+name = "notch12-90-res98"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 70.13 }
+
+[[cases]]
+name = "notch12-90-resA0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 73.82 }
+
+[[cases]]
+name = "notch12-90-resA8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 77.51 }
+
+[[cases]]
+name = "notch12-90-resB0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 81.2 }
+
+[[cases]]
+name = "notch12-90-resB8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 84.89 }
+
+[[cases]]
+name = "notch12-90-resC0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 88.58 }
+
+[[cases]]
+name = "notch12-90-resC8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 92.27 }
+
+[[cases]]
+name = "notch12-90-resD0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 95.96 }
+
+[[cases]]
+name = "notch12-90-resD8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 99.65 }
+
+[[cases]]
+name = "notch12-90-resE0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 104.74 }
+
+[[cases]]
+name = "notch12-90-resE8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 109.97 }
+
+[[cases]]
+name = "notch12-90-resF0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 115.2 }
+
+[[cases]]
+name = "notch12-90-resF8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 120.42 }
+
+[[cases]]
+name = "notch12-90-resFF"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.89, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.89, hp_res = 125.0 }
+
+[[cases]]
+name = "notch12-CC-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x00 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 0.0 }
+
+[[cases]]
+name = "notch12-CC-res08"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x08 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 3.69, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 3.69 }
+
+[[cases]]
+name = "notch12-CC-res10"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x10 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 7.38, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 7.38 }
+
+[[cases]]
+name = "notch12-CC-res18"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x18 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 11.07, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 11.07 }
+
+[[cases]]
+name = "notch12-CC-res20"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x20 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 14.76, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 14.76 }
+
+[[cases]]
+name = "notch12-CC-res28"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x28 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 18.45, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 18.45 }
+
+[[cases]]
+name = "notch12-CC-res30"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x30 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 22.15, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 22.15 }
+
+[[cases]]
+name = "notch12-CC-res38"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x38 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 25.84, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 25.84 }
+
+[[cases]]
+name = "notch12-CC-res40"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x40 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 29.53, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 29.53 }
+
+[[cases]]
+name = "notch12-CC-res48"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x48 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 33.22, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 33.22 }
+
+[[cases]]
+name = "notch12-CC-res50"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x50 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 36.91, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 36.91 }
+
+[[cases]]
+name = "notch12-CC-res58"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x58 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 40.6, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 40.6 }
+
+[[cases]]
+name = "notch12-CC-res60"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x60 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 44.29, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 44.29 }
+
+[[cases]]
+name = "notch12-CC-res68"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x68 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 47.98, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 47.98 }
+
+[[cases]]
+name = "notch12-CC-res70"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x70 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 51.67, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 51.67 }
+
+[[cases]]
+name = "notch12-CC-res78"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x78 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 55.36, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 55.36 }
+
+[[cases]]
+name = "notch12-CC-res80"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x80 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 59.05, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 59.05 }
+
+[[cases]]
+name = "notch12-CC-res88"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x88 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 62.75, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 62.75 }
+
+[[cases]]
+name = "notch12-CC-res90"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x90 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 66.44, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 66.44 }
+
+[[cases]]
+name = "notch12-CC-res98"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x98 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 70.13, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 70.13 }
+
+[[cases]]
+name = "notch12-CC-resA0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xA0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 73.82, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 73.82 }
+
+[[cases]]
+name = "notch12-CC-resA8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xA8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 77.51, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 77.51 }
+
+[[cases]]
+name = "notch12-CC-resB0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xB0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 81.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 81.2 }
+
+[[cases]]
+name = "notch12-CC-resB8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xB8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 84.89, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 84.89 }
+
+[[cases]]
+name = "notch12-CC-resC0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xC0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 88.58, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 88.58 }
+
+[[cases]]
+name = "notch12-CC-resC8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xC8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 92.27, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 92.27 }
+
+[[cases]]
+name = "notch12-CC-resD0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xD0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 95.96, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 95.96 }
+
+[[cases]]
+name = "notch12-CC-resD8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xD8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 99.65, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 99.65 }
+
+[[cases]]
+name = "notch12-CC-resE0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xE0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 104.74, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 104.74 }
+
+[[cases]]
+name = "notch12-CC-resE8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xE8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 109.97, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 109.97 }
+
+[[cases]]
+name = "notch12-CC-resF0"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xF0 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 115.2, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 115.2 }
+
+[[cases]]
+name = "notch12-CC-resF8"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xF8 }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 120.42, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 120.42 }
+
+[[cases]]
+name = "notch12-CC-resFF"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xFF }
+reference = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.77, lp_res = 125.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.77, hp_res = 125.0 }

@@ -64,6 +64,55 @@ const LADDER_NOTCH: [f32; 5] = [1.0, -4.0, 8.0, -8.0, 4.0];
 /// passes at its peak, as each pole passes 0.71 there.
 const BAND_MAKEUP: f32 = 4.0;
 
+/// How many points each family's `Res` taper is given at, a twentieth of the knob's turn apart.
+const TAPER_POINTS: usize = 21;
+/// How far each family's resonance is turned at each twentieth of `Res`, as a share of its most, so
+/// each equal turn raises the peak by about as much as Cytomic's The Drop's knob does (#333). Each
+/// was fitted with `tools/compare`'s `filter-taper-*` specs, where the first 85% of the knob, to
+/// `D9`, is set against The Drop's 0 to 100%: by how far the peak stands over the passband, which
+/// rises evenly from Res 0 and then steeply over the last few percent before it rings. The
+/// saturating types ring by themselves from 85%, as The Drop's circuits do over 100%, and the last
+/// 15% takes them on to their most, which is where they were before, so they ring in tune at full
+/// `Res` as they did. The clean types never ring, and climb to their highest peak over the last 20%.
+///
+/// The clean state-variable types against The Drop's OSR, an OTA state-variable filter.
+const CLEAN_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.021, 0.037, 0.051, 0.072, 0.096, 0.127, 0.161, 0.201, 0.243, 0.287, 0.331, 0.374, 0.413,
+    0.45, 0.486, 0.52, 0.64, 0.76, 0.88, 1.0,
+];
+/// The ladder against The Drop's PRD, a transistor ladder like the Prodigy's.
+const LADDER_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.055, 0.111, 0.166, 0.219, 0.271, 0.322, 0.372, 0.418, 0.462, 0.502, 0.536, 0.567, 0.593,
+    0.615, 0.634, 0.651, 0.925, 0.95, 0.975, 1.0,
+];
+/// The Korg 35s against The Drop's MS1, the MS-20's first Korg 35. Its peak barely stands out
+/// under half its feedback, so the taper starts quickly.
+const KORG_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.213, 0.35, 0.428, 0.478, 0.522, 0.573, 0.624, 0.671, 0.713, 0.751, 0.785, 0.815, 0.842,
+    0.866, 0.887, 0.905, 0.926, 0.955, 0.977, 1.0,
+];
+/// The diode ladder and `Dirty`, which The Drop has nothing like, against its PRD too, the peak
+/// over the passband scaled to start from their own at Res 0 and reach where PRD's does just
+/// before it rings. The diode's feedback is on a cube, so its taper starts quickly too.
+const DIODE_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.274, 0.343, 0.384, 0.418, 0.455, 0.494, 0.54, 0.596, 0.643, 0.681, 0.712, 0.737, 0.757,
+    0.773, 0.787, 0.798, 0.885, 0.975, 0.988, 1.0,
+];
+const DIRTY_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.128, 0.379, 0.463, 0.512, 0.556, 0.594, 0.628, 0.657, 0.682, 0.703, 0.72, 0.734, 0.746,
+    0.756, 0.763, 0.77, 0.847, 0.909, 0.955, 1.0,
+];
+
+/// A family's resonance, as a share of its most, for `Res` from 0 to 1, read between its taper's
+/// points.
+#[inline]
+fn tapered(taper: &[f32; TAPER_POINTS], resonance: f32) -> f32 {
+    let along = resonance.clamp(0.0, 1.0) * (TAPER_POINTS - 1) as f32;
+    let index = (along as usize).min(TAPER_POINTS - 2);
+    let within = along - index as f32;
+    taper[index] + (taper[index + 1] - taper[index]) * within
+}
+
 /// How `Dirty`'s mixes weigh each of its two-poles' input and its two one-poles, `L` and `L^2`, the
 /// way Vital takes low-pass, band-pass and high-pass from them. Its 12 dB modes pass straight
 /// through the two-pole before its loop.
@@ -102,7 +151,8 @@ pub struct Coefficients {
     /// asked for, and its feedback high-pass at that rate.
     diode_cutoff: f32,
     diode_feedback: f32,
-    resonance: f32,
+    /// The diode ladder's `Res` after its taper, which it puts on a cube itself.
+    diode_resonance: f32,
     /// The Korg 35's one-pole coefficient at twice the rate, `g / (1 + g)`, and its feedback.
     korg_coefficient: f32,
     korg_feedback: f32,
@@ -131,13 +181,14 @@ impl Coefficients {
         let nyquist_safe = frequency.min(rate as f32 * 0.45);
         let g = (std::f32::consts::PI * nyquist_safe / rate as f32).tan();
         // Q runs from a flat response to a strong but stable peak.
-        let q = 0.707 + resonance * 9.3;
+        let q = 0.707 + tapered(&CLEAN_TAPER, resonance) * 9.3;
         let k = 1.0 / q;
         let a1 = 1.0 / (1.0 + g * (g + k));
         let double_g = (std::f32::consts::PI * nyquist_safe / (2.0 * rate as f32)).tan();
-        let ladder_k = resonance * LADDER_FEEDBACK;
+        let ladder_k = tapered(&LADDER_TAPER, resonance) * LADDER_FEEDBACK;
         let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
-        let dirty = dirty_filter::Tuning::new(double_g / (1.0 + double_g), resonance);
+        let dirty_resonance = tapered(&DIRTY_TAPER, resonance);
+        let dirty = dirty_filter::Tuning::new(double_g / (1.0 + double_g), dirty_resonance);
         Self {
             g,
             k,
@@ -152,9 +203,9 @@ impl Coefficients {
                 share * high / low
             },
             diode_feedback: diode_filter::feedback_coefficient_at(diode_corner, 2.0 * rate as f32),
-            resonance,
+            diode_resonance: tapered(&DIODE_TAPER, resonance),
             korg_coefficient: double_g / (1.0 + double_g),
-            korg_feedback: resonance * korg35::MOST_FEEDBACK,
+            korg_feedback: tapered(&KORG_TAPER, resonance) * korg35::MOST_FEEDBACK,
             dirty,
             flat_a1: 1.0 / (1.0 + g * (g + FLAT_DAMPING)),
             double_flat_a1: 1.0 / (1.0 + double_g * (double_g + FLAT_DAMPING)),
@@ -406,7 +457,7 @@ impl Channel {
             let diode = &mut self.diode;
             return self.oversampler.process(input * DIODE_INPUT, |x| {
                 let (cutoff, feedback) = (c.diode_cutoff, c.diode_feedback);
-                diode.next(x, cutoff, c.resonance, gain, feedback, mix.low_cut) * DIODE_OUTPUT
+                diode.next(x, cutoff, c.diode_resonance, gain, feedback, mix.low_cut) * DIODE_OUTPUT
             });
         }
         if kind == FilterType::Dirty {
@@ -474,7 +525,7 @@ pub fn response_db(
         gain * gain
             * diode_filter::response(
                 c.diode_cutoff,
-                resonance,
+                c.diode_resonance,
                 c.diode_feedback,
                 mix.low_cut,
                 hertz / (2.0 * rate as f32),
@@ -675,7 +726,8 @@ mod tests {
     #[test]
     fn the_worked_out_response_matches_the_filter_itself() {
         for (kind, mode) in every_type_and_mode() {
-            for res in [0.0, 0.5, 0.8] {
+            // Short of the last climb to ringing, where a quiet sound saturates at the peak.
+            for res in [0.0, 0.5, 0.75] {
                 for hertz in [100.0, 400.0, 1000.0, 2500.0, 8000.0] {
                     let worked_out = response_db(kind, mode, cutoff(1000.0), res, 0.0, RATE, hertz);
                     // A notch at its very centre is too deep to measure, and so is what's far
@@ -683,8 +735,12 @@ mod tests {
                     if worked_out < -60.0 {
                         continue;
                     }
-                    // `Dirty` saturates even a quiet signal a little, where it's loudest.
-                    let level = if kind == FilterType::Dirty {
+                    // `Dirty` and the Korg 35s saturate even a quiet signal a little, where it's
+                    // loudest.
+                    let level = if matches!(
+                        kind,
+                        FilterType::Dirty | FilterType::Ms20LowPass | FilterType::Ms20HighPass
+                    ) {
                         0.001
                     } else {
                         0.01
@@ -763,6 +819,53 @@ mod tests {
     fn resonance_raises_a_peak_at_the_cutoff() {
         let db = |res| gain_db(FilterType::LowPass, 1000.0, res, 0.0, 1000.0, 0.1);
         assert!(db(1.0) > db(0.0) + 15.0, "{} and {}", db(1.0), db(0.0));
+    }
+
+    /// How far a filter's peak, the loudest it is within an octave of `Cut` at 1 kHz, stands over
+    /// its passband three octaves away, from its worked-out response, which is what a quiet sound
+    /// hears and the Sound page draws.
+    fn peak_over_passband(kind: FilterType, res: f32) -> f32 {
+        let mode = kind.plays(FilterMode::default());
+        let db = |hertz| response_db(kind, mode, cutoff(1000.0), res, 0.0, RATE, hertz);
+        let peak = (0..=96)
+            .map(|step| db(500.0 * 2_f32.powf(step as f32 / 48.0)))
+            .fold(f32::MIN, f32::max);
+        let high = matches!(kind, FilterType::HighPass | FilterType::Ms20HighPass);
+        peak - if high { db(8000.0) } else { db(125.0) }
+    }
+
+    #[test]
+    fn each_quarter_of_res_raises_the_peak_as_the_drops_knob_does() {
+        // How far the peak has risen over its height at Res 0, at a quarter, half and three
+        // quarters of the knob (#333), with The Drop's paired circuit's rise beside it, averaged
+        // over 200 Hz, 988 Hz and 5 kHz in `tools/compare`'s `filter-taper-*` specs. The old
+        // taper's clean low-pass had risen 9.9, 14.8 and 18.0 dB. The diode and `Dirty` follow
+        // PRD's, scaled to reach where it does just before it rings. The Korg 35s' three quarters
+        // is their linear response, which a quiet sweep hears 2 to 4 dB lower as it saturates, as
+        // MS1 does.
+        let expected = [
+            // OSR's low-pass, 4.9, 11.0 and 14.8, and high-pass, 4.5, 10.6 and 14.2.
+            (FilterType::LowPass, [4.7, 10.8, 14.5]),
+            (FilterType::HighPass, [4.7, 10.8, 14.5]),
+            // PRD's, 6.6, 12.3 and 16.4.
+            (FilterType::Ladder, [6.6, 12.3, 16.5]),
+            // MS1's low-pass, 4.6, 11.4 and 20.3, and high-pass, 4.0, 10.3 and 19.4.
+            (FilterType::Ms20LowPass, [3.8, 10.1, 22.3]),
+            (FilterType::Ms20HighPass, [5.1, 12.0, 24.4]),
+            // PRD's scaled, 9.5, 17.7 and 23.6, and 6.5, 12.1 and 16.1.
+            (FilterType::Diode, [9.9, 18.0, 23.9]),
+            (FilterType::Dirty, [6.7, 12.7, 17.3]),
+        ];
+        for (kind, rises) in expected {
+            let bottom = peak_over_passband(kind, 0.0);
+            for (res, rise) in [0.25, 0.5, 0.75].into_iter().zip(rises) {
+                let found = peak_over_passband(kind, res) - bottom;
+                assert!(
+                    (found - rise).abs() < 0.5,
+                    "{kind:?} at Res {res} rose {found} dB, not {rise}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1060,7 +1163,7 @@ mod tests {
     fn the_korg_35_low_pass_keeps_its_bass_and_slopes_at_12_db() {
         let db = |res, hertz| gain_db(FilterType::Ms20LowPass, 1000.0, res, 0.0, hertz, 0.01);
         // Its feedback goes through a high-pass, so unlike the ladder's it leaves the bass alone.
-        for res in [0.0, 0.5, 0.9] {
+        for res in [0.0, 0.5, 0.8] {
             near(db(res, 50.0), 0.0, 0.1);
         }
         // Two one-poles at the cutoff, each 3 dB down there.
@@ -1071,11 +1174,11 @@ mod tests {
     #[test]
     fn the_korg_35_high_pass_keeps_its_top_and_slopes_at_6_db() {
         let db = |res, hertz| gain_db(FilterType::Ms20HighPass, 1000.0, res, 0.0, hertz, 0.01);
-        for res in [0.0, 0.5, 0.9] {
+        for res in [0.0, 0.5, 0.8] {
             near(db(res, 16_000.0), 0.0, 0.2);
         }
         // The MS-20's high-pass falls at 6 dB an octave under its peak, however high `Res` goes.
-        for res in [0.0, 0.9] {
+        for res in [0.0, 0.8] {
             near(db(res, 100.0) - db(res, 50.0), 6.0, 0.3);
         }
     }
@@ -1085,7 +1188,7 @@ mod tests {
         for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
             for cut in [200.0, 1000.0, 4000.0] {
                 // With strong resonance, its peak is louder at `Cut` than a semitone either side.
-                let db = |hertz| gain_db(kind, cut, 0.9, 0.0, hertz, 0.01);
+                let db = |hertz| gain_db(kind, cut, 0.8, 0.0, hertz, 0.01);
                 let semitone = 2_f32.powf(1.0 / 12.0);
                 assert!(db(cut) > db(cut * semitone) && db(cut) > db(cut / semitone));
             }
@@ -1129,7 +1232,7 @@ mod tests {
             let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
             let (mut cut, mut res, mut drive) = (
                 crate::dsp::blocks::smoother::Smoothed::at(cutoff(500.0)),
-                crate::dsp::blocks::smoother::Smoothed::at(0.3),
+                crate::dsp::blocks::smoother::Smoothed::at(0.1),
                 crate::dsp::blocks::smoother::Smoothed::at(0.0),
             );
             let mut channel = Channel::default();
@@ -1137,9 +1240,9 @@ mod tests {
             let (mut last, mut most) = (0.0_f32, 0.0_f32);
             for frame in 0..RATE as usize * 2 {
                 if at(frame) {
-                    (cut.target, res.target, drive.target) = (cutoff(2000.0), 0.9, 0.6);
+                    (cut.target, res.target, drive.target) = (cutoff(2000.0), 0.8, 0.6);
                 } else {
-                    (cut.target, res.target, drive.target) = (cutoff(500.0), 0.3, 0.0);
+                    (cut.target, res.target, drive.target) = (cutoff(500.0), 0.1, 0.0);
                 }
                 let (cut, res, drive) = (
                     cut.next(smoothing),
@@ -1181,8 +1284,8 @@ mod tests {
         near(db(0.0, 1000.0), -12.0, 0.6);
         near(db(0.0, 4000.0) - db(0.0, 8000.0), 24.0, 2.0);
         // Its loop takes from what comes straight in as it rises, as the ladder's does.
-        assert!(db(0.5, 50.0) < -4.0, "{}", db(0.5, 50.0));
-        assert!(db(0.75, 50.0) < db(0.5, 50.0) - 1.0, "{}", db(0.75, 50.0));
+        assert!(db(0.25, 50.0) < -4.0, "{}", db(0.25, 50.0));
+        assert!(db(0.75, 50.0) < db(0.25, 50.0) - 1.0, "{}", db(0.75, 50.0));
     }
 
     #[test]
@@ -1190,11 +1293,11 @@ mod tests {
         for cut in [200.0, 1000.0, 4000.0] {
             // Just short of ringing by itself, its peak is louder at `Cut` than a semitone either
             // side.
-            let db = |hertz| gain_db(FilterType::Dirty, cut, 0.85, 0.0, hertz, 0.001);
+            let db = |hertz| gain_db(FilterType::Dirty, cut, 0.8, 0.0, hertz, 0.001);
             let semitone = 2_f32.powf(1.0 / 12.0);
             assert!(db(cut) > db(cut * semitone) && db(cut) > db(cut / semitone));
         }
-        // It rings by itself from about `Res DB`, and drive, which adds resonance, rings it louder
+        // It rings by itself from about `Res D9`, and drive, which adds resonance, rings it louder
         // and so flatter, until the loop's tuning is raised to meet it.
         for drive in [0.0, 1.0] {
             for res in [0.9, 1.0] {
