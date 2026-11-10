@@ -10,7 +10,8 @@
 //! in [`crate::dsp::filters::diode_filter`]. The knobs' ranges and tapers are fitted to Arturia's
 //! Acid V by the comparison harness, `tools/compare` (decision 117), and the slide, the accent
 //! and how a note ends to where Acid V and AudioRealism's ABL3 agree, with Whittle's measurements
-//! of a 303 settling where they don't (decision 127).
+//! of a 303 settling where they don't (decision 127), as is how its resonance stands through the
+//! chirp (decision 129).
 //!
 //! Open303 is copyright (c) 2009 Robin Schmidt (www.rs-met.com), under the MIT license:
 //!
@@ -44,8 +45,9 @@ use vt_model::settings::{
 /// How loud it is: a plain note with every knob at noon is as loud as Acid V's at 0 dB, and within
 /// 6 dB of the virtual analog voice on average, as its resonance makes its peaks high for its
 /// level (decision 117). It's a little under decision 117's 0.75, as the soft clip after it now
-/// leaves a plain note's peaks alone, so the note is as loud as it was (decision 127).
-const LEVEL: f32 = 0.7121;
+/// leaves a plain note's peaks alone (decision 127), and under that again as the filter's
+/// saturation takes less of a plain note (decision 129), so the note is as loud as it was.
+const LEVEL: f32 = 0.6768;
 /// Where the soft clip after the voice levels off, against full scale: 12 dB over, so a full
 /// accent's peaks reach 13 to 14 dB over a plain note's, as both references' do, rather than
 /// being rounded off at 5.6 dB (decision 127). A 303 driven hard into what follows it is still
@@ -122,17 +124,25 @@ const HIGHEST_HZ: f32 = 20_000.0;
 /// How loud the saw goes into the filter, which is made up again after it. The ladder passes the
 /// bass at up to 1.9 times at no resonance, and a low note's saw swings to about ±1.6 once it's
 /// high-passed, so at full scale its last stage was clipped flat for up to a third of each cycle,
-/// which cut deep notches into the harmonics that moved with the note (#332). At this level it
-/// stays under the clip with `Drive` at 0, and `Drive` still pushes it into the clip.
-const FILTER_LEVEL: f32 = 0.3;
+/// which cut deep notches into the harmonics that moved with the note (#332). At 0.3 it stayed
+/// under the clip, but the ladder drives its first stage harder as the resonance rises, and its
+/// saturation there still flattened a high resonance's peak and cut a cliff just past it: the
+/// harmonic an octave over the peak was 6 to 8 dB further under it than ABL3's and Acid V's,
+/// whose filters fall evenly past their peaks, and at Res 85% with Env Mod full the peak sank
+/// about 5 dB over the note's first 40 ms, where theirs hold. At this level the ladder is nearly
+/// linear at a 303's level, so the chirp keeps its shape, and `Drive` still pushes it into the
+/// saturation and the clip (decision 129).
+const FILTER_LEVEL: f32 = 0.1;
 
 /// How the Resonance knob reaches the ladder, whose own law is a cube of what it's given: the
 /// feedback rises as the knob to this power, up to this share of the ladder's most. A cube left
 /// the knob's lower half with no peak and its top few steps with nearly all of it; this way the
 /// peak climbs about evenly in dB from a quarter of the way up, and the bass thins from the first
-/// step, as Acid V's does (decision 117).
-const RESONANCE_CURVE: f32 = 1.1;
-const RESONANCE_TOP: f32 = 0.8;
+/// step, as Acid V's does (decision 117). With the saturation no longer holding the peak down, it
+/// takes less feedback to stand as high over the fundamental as both references' do, and its
+/// curve is a little steeper (decision 129).
+const RESONANCE_CURVE: f32 = 1.2;
+const RESONANCE_TOP: f32 = 0.68;
 /// How much quieter the whole voice is with Resonance full, in dB, and the knob's curve to it.
 const RESONANCE_LOSS_DB: f32 = 4.0;
 const RESONANCE_LOSS_CURVE: f32 = 0.7;
@@ -621,6 +631,87 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// C-2, as the chirp's specs play it.
+    const C2: f32 = 65.406;
+
+    /// The resonant peak in two cycles of a C-2 centred `ms` into a note: where the harmonic
+    /// standing highest over the fundamental is, in Hz, how far it stands over the fundamental,
+    /// and how far the harmonic an octave over it is under it, in dB, each harmonic times its
+    /// number, as `tools/compare`'s `chirp` reports read them.
+    fn resonant_peak(out: &[f32], ms: f32) -> (f32, f32, f32) {
+        let size = (2.0 * RATE as f32 / C2).round() as usize;
+        let start = (ms * RATE as f32 / 1000.0) as usize - size / 2;
+        let levels = harmonics(&out[start..start + size], C2, 240);
+        let top = (1..120)
+            .max_by(|a, b| levels[*a].total_cmp(&levels[*b]))
+            .expect("there are harmonics");
+        let octave = levels[2 * top + 1] - levels[top];
+        ((top + 1) as f32 * C2, levels[top] - levels[0], octave)
+    }
+
+    /// A plain C-2 held for half a second, at a share of each knob's turn: cutoff, resonance,
+    /// env mod and decay, with `Accent` at noon.
+    fn chirp(knobs: [f32; 4]) -> Vec<f32> {
+        let [cutoff, resonance, envmod, decay] = knobs;
+        let settings = places([0.0, cutoff, resonance, envmod, decay, 0.5, 0.0, 0.0]);
+        let mut acid = Acid::new(RATE);
+        acid.trigger(false);
+        (0..RATE as usize / 2)
+            .map(|_| acid.next(hertz(C2), settings))
+            .collect()
+    }
+
+    /// The resonant peak's height over the fundamental, and the harmonic an octave over it, under
+    /// it, each the mean over a note's frames every 10 ms from `from` to `to` ms.
+    fn mean_peak(out: &[f32], from: usize, to: usize) -> (f32, f32) {
+        let frames: Vec<_> = (from..=to)
+            .step_by(10)
+            .map(|ms| resonant_peak(out, ms as f32))
+            .collect();
+        let count = frames.len() as f32;
+        (
+            frames.iter().map(|frame| frame.1).sum::<f32>() / count,
+            frames.iter().map(|frame| frame.2).sum::<f32>() / count,
+        )
+    }
+
+    #[test]
+    fn at_high_resonance_the_peak_stands_high_over_the_fundamental_through_the_chirp() {
+        // Res 85% with Env Mod at noon, and 95% with it full, at Cutoff noon and Decay long: over
+        // the note's first 200 ms the peak stands about as high over the fundamental as Acid V's
+        // and ABL3's, where the saturation had held the first under 14.5 dB (decision 129).
+        let (height, _) = mean_peak(&chirp([0.5, 0.85, 0.5, 0.8]), 40, 200);
+        assert!((14.8..=17.5).contains(&height), "{height} dB at Res 85%");
+        let (height, _) = mean_peak(&chirp([0.5, 0.95, 1.0, 0.8]), 40, 200);
+        assert!((18.0..=22.5).contains(&height), "{height} dB at Res 95%");
+    }
+
+    #[test]
+    fn past_its_peak_the_filter_falls_evenly_rather_than_off_a_cliff() {
+        // The harmonic an octave over the peak, under it: both references fall about 23 to 26 dB
+        // there, as a four-pole filter does, where the saturation had cut a cliff 30 to 34 dB deep
+        // just past the peak (decision 129).
+        for knobs in [[0.5, 0.85, 0.5, 0.8], [0.5, 0.85, 1.0, 0.2]] {
+            let (_, octave) = mean_peak(&chirp(knobs), 40, 200);
+            assert!(
+                octave > -29.0,
+                "{octave} dB an octave over the peak at {knobs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_chirp_sweeps_down_from_where_the_envelope_throws_it() {
+        // Res 95%, Env Mod full, Cutoff noon and Decay long: the peak starts near 5.7 kHz and is
+        // near 1.8 kHz by 150 ms, between Acid V's and ABL3's there, though both start theirs
+        // about 0.4 octaves lower and fall more slowly at first (decision 129).
+        let out = chirp([0.5, 0.95, 1.0, 0.8]);
+        let (start, _, _) = resonant_peak(&out, 20.0);
+        let (later, _, _) = resonant_peak(&out, 150.0);
+        assert!((4_500.0..=7_000.0).contains(&start), "{start} Hz at 20 ms");
+        assert!((1_400.0..=2_200.0).contains(&later), "{later} Hz at 150 ms");
     }
 
     #[test]

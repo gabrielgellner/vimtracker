@@ -230,11 +230,14 @@ fn acid_starts_at_half_and_ends_its_note_about_16_ms_after_the_gate() {
     assert_eq!(acid(&[]).tracks[0].gate_length(), ACID_GATE);
     let out = render(&acid(&["C-2 64", "--- --"]), 2);
     let held = peak(&out, HALF - 1000, HALF - 100);
-    // Find where it has fallen 40 dB from where it was, in windows of a millisecond.
+    // Find where it has fallen 40 dB from where it was, a millisecond at a time, over a cycle of
+    // the note, so the quiet stretch a resonant wave has between its peaks, as long as a
+    // millisecond on a C-2 with a 303's resonance, isn't taken for its end (decision 129).
     let ms = RATE as usize / 1000;
-    let fallen = (HALF..STEP)
+    let cycle = (RATE as f32 / 65.406).round() as usize;
+    let fallen = (HALF..STEP - cycle)
         .step_by(ms)
-        .find(|at| peak(&out, *at, at + ms) < held / 100.0)
+        .find(|at| peak(&out, *at, at + cycle) < held / 100.0)
         .expect("it falls silent");
     let after = (fallen - HALF) as f32 / ms as f32;
     assert!(
