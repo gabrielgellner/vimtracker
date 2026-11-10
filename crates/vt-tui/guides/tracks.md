@@ -224,15 +224,25 @@ change it. Set it to a group, like `G1`, and it hears the whole kit after the gr
 slots, even while the group is muted or another track is soloed. Leave `Auto` off for
 ducking, or the bass is louder between kicks.
 
+Its `Type` is its character. `Clean` is transparent, with knobs for its ratio and
+times. `Console` is an SSL console's bus compressor, fitted to Arturia's Bus FORCE, and
+`Glue` is Ableton Live's Glue Compressor, another model of the same SSL, fitted to
+Live's own: both have the SSL's switches for their ratio, attack and release, picked
+with `K`, and an `Auto` release that lets go of a short peak quickly and a long squeeze
+slowly. `Glue`'s knee is softer the lower its ratio, its release names are the SSL's
+rather than the times they take, and it settles lower the slower its attack is.
+
 | Setting | Does |
 |---|---|
+| `Type` | `Clean`, `Console` or `Glue` |
 | `Threshold` | Where it starts turning down, from -60 dB to 0 dB |
-| `Ratio` | How much: 1:1 at `00`, 20:1 near the top, a limiter at `FF` |
+| `Ratio` | How much: 2, 4 or 10 to 1, on `Clean` 1:1 to a limiter |
 | `Attack`, `Release` | How fast it turns down and lets go |
 | `Source` | `Self`, a track by its number, `A`, `B`, or `G1` to `G4` |
 | `Auto` | `On` makes it come out as loud as it went in |
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
-| `Gain` | Makes up what it took, or trims `Auto`, on the level scale |
+| `Range` | `Glue` only: the most it turns down, up to 70 dB at `FF` |
+| `Makeup` | Turns up what it turned down, from 0 dB to +24 dB |
 
 `Limit` keeps a sound's peaks under a ceiling. It looks 2 ms ahead, so it's already
 turned down when a peak arrives, and nothing gets over, however hard it's pushed. Its
@@ -551,7 +561,7 @@ a step, `+` and `_` sixteen, `i` takes a time in ms or `off`, and `x` turns it o
 ## Groups
 
 A group sums tracks into one, as Ableton's group tracks do, so a whole kit can go
-through one compressor: `Comp` with its `Type` on `Bus` in a group's slot is the glue.
+through one compressor: `Comp` with its `Type` on `Console` or `Glue` in a group's slot is the glue.
 Every song has four, `G1` to `G4`, after the tracks and before the returns.
 
 `:group 1 1-4` puts tracks 01 to 04 in group 1, `:group 2` puts the cursor's track in

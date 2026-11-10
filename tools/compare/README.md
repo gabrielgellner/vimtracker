@@ -88,10 +88,10 @@ reference plugin.
 | `acid-velocity` | Acid at ten velocities, 10 to 127 | Acid V | each note's level, peak and brightness, which only an accent should change (decision 121) |
 | `comp-static`, `comp-static-force` | the compressor | Comp VCA-65, Bus FORCE | static curve |
 | `comp-timing`, `comp-timing-force` | the compressor | Comp VCA-65, Bus FORCE | attack, release, short and long bursts |
-| `comp-bus-static` | the compressor's `Bus` type at 2, 4 and 10:1 | Bus FORCE | static curve |
-| `comp-bus-attack`, `comp-bus-release` | `Bus`'s attacks and set releases | Bus FORCE | attack and release, short and long bursts |
-| `comp-bus-auto` | `Bus`'s Auto release | none | release after bursts from 20 ms to 2 s |
-| `comp-bus-harmonics` | `Bus` at stepped levels, 100 Hz and 1 kHz | Bus FORCE | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `comp-bus-static` | the compressor's `Console` type at 2, 4 and 10:1 | Bus FORCE | static curve |
+| `comp-bus-attack`, `comp-bus-release` | `Console`'s attacks and set releases | Bus FORCE | attack and release, short and long bursts |
+| `comp-bus-auto` | `Console`'s Auto release | none | release after bursts from 20 ms to 2 s |
+| `comp-bus-harmonics` | `Console` at stepped levels, 100 Hz and 1 kHz | Bus FORCE | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `nuance-knob-*` | decision 117's seven `acid-*` knob specs | Acid V and ABL3 | as the `acid-*` specs, with the consensus |
 | `nuance-accents` | `AAAA`, `A.A.` and `AA..` twice through after a plain note, at Res 0, 50% and 90% | Acid V and ABL3 | each note's brightness and level over the plain note's, the first accent's and the build-up (`notes`) |
 | `nuance-slides` | slides up and down by a semitone, a fifth and an octave | Acid V and ABL3 | the pitch over time, the glide's times, the dip and the brightening (`transition`) |
@@ -105,9 +105,11 @@ reference plugin.
 | `pedal-riff` | `nuance-chirp-riff`'s Blade riff as our Acid plays it, through `Distortion` at three drives | Dist OPAMP-21, the same samples in | the long-term spectrum's shape, level, crest factor and level over time (`spectrum`) |
 | `pedal-overdrive` | Distort's `Overdrive` at stepped levels at 110 Hz and 1 kHz, four drives | none, as no reference is a Tube Screamer | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `pedal-acid-v` | our Acid's held, open note through `Overdrive` and `Distortion` | Acid V through its own `Overdrive` and `Distorsion` | a held note's harmonics (`harmonics`), against each side's own note with no distortion |
-| `live-glue-static` | the compressor's `Bus` type at 2, 4 and 10:1 | Live's Glue Compressor, Bus FORCE | static curve |
-| `live-glue-attack` | `Bus`'s attacks | Glue Compressor, Bus FORCE | attack, as `comp-bus-attack` |
-| `live-glue-release` | `Bus`'s set releases and its Auto | Glue Compressor | release after short and long bursts |
+| `live-glue-static` | the compressor's `Glue` type at 2, 4 and 10:1 | Live's Glue Compressor | static curve |
+| `live-glue-attack` | `Glue`'s seven attacks, and 10 ms at 2:1 and 10:1 | Glue Compressor | attack, as `comp-bus-attack` |
+| `live-glue-release` | `Glue`'s six set releases and its Auto | Glue Compressor | release after short and long bursts |
+| `live-glue-range` | `Glue`'s `Range` at 3, 6, 12, 20 and 40 dB, at 10:1 | Glue Compressor | static curve |
+| `live-glue-detector` | `Glue` at 4:1 from a 100 Hz tone | Glue Compressor | static curve, unfitted |
 | `live-pedal-overdrive` | Distort's `Overdrive`, stepped levels at 110 Hz and 1 kHz | Live's Pedal, Overdrive | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
 | `live-pedal-riff` | the Blade riff through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
@@ -314,13 +316,12 @@ which should come back at the same level, within 0.01 dB, and the same to under 
 lined up. The other commands are `ping` and `params <device>`, which lists a device's parameters,
 their ranges and items, for writing a spec.
 
-The specs: `live-glue-static`, `live-glue-attack` and `live-glue-release` set our `Bus` against
-Glue Compressor, which is modelled on the same SSL G-bus and has its ratios, attacks and set
-releases, and its Auto release, the first reference for ours; the first two have Bus FORCE beside
-it. `live-pedal-overdrive`, `live-pedal-distortion` and `live-pedal-riff` set Distort's
-`Overdrive` and `Distortion` against Pedal's two modes, its Drive at the same place as our
-`Amount`, unfitted, with Dist OPAMP-21 beside `Distortion`. `uv run run.py --suite live` runs them
-all, about 5 minutes of Live's time.
+The specs: `live-glue-static`, `live-glue-attack`, `live-glue-release`, `live-glue-range` and
+`live-glue-detector` set our `Glue` against Glue Compressor, which it's modelled on and fitted to;
+`Console`, fitted to Bus FORCE, is measured in the `comp-bus-*` specs. `live-pedal-overdrive`,
+`live-pedal-distortion` and `live-pedal-riff` set Distort's `Overdrive` and `Distortion` against
+Pedal's two modes, its Drive at the same place as our `Amount`, unfitted, with Dist OPAMP-21
+beside `Distortion`. `uv run run.py --suite live` runs them all, about 6 minutes of Live's time.
 
 ### Setting it up
 

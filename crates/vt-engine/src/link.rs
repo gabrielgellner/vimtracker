@@ -605,7 +605,7 @@ mod tests {
     fn groups_never_allocate_in_the_callback() {
         let pool = samples();
         let bus = Insert::Compressor(vt_model::insert::Compressor {
-            kind: vt_model::insert::CompressorType::Bus,
+            kind: vt_model::insert::CompressorType::Console,
             ..vt_model::insert::Compressor::DEFAULT
         });
         let grouped = |round: usize| {

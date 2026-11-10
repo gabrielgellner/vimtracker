@@ -857,7 +857,13 @@ impl SlotDrawing {
                 kind: settings.kind,
                 threshold: settings.threshold,
                 ratio: settings.ratio,
-                bus_ratio: settings.bus_ratio,
+                console_ratio: settings.console_ratio,
+                // Glue settles lower the slower its attack is against its release, and its range
+                // caps it, so all of them bend its curve.
+                glue_ratio: settings.glue_ratio,
+                glue_attack: settings.glue_attack,
+                glue_release: settings.glue_release,
+                range: settings.range,
                 ..Compressor::DEFAULT
             })),
             Insert::Eq(settings) => Some(Self::Eq(settings)),

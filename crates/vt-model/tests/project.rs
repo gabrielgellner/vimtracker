@@ -422,7 +422,7 @@ fn groups_and_what_is_in_them_round_trip() {
     song.tracks[group].send_b = 0x50;
     song.tracks[group].mute = true;
     song.tracks[group].inserts[0] = Insert::Compressor(Compressor {
-        kind: CompressorType::Bus,
+        kind: CompressorType::Console,
         ..Compressor::DEFAULT
     });
     save_song(&dir, &song).unwrap();

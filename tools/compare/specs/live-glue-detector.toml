@@ -1,0 +1,56 @@
+# Our Glue compressor against Ableton Live's Glue Compressor at a tenth of the usual tone: the
+# static curve at 4:1 from a 100 Hz sine stepped from -30 to 0 dBFS (#338, #364). Glue settles at
+# 100 Hz where it does at 1 kHz, to a hundredth of a dB, but its gain follows the wave ten times
+# as much, so its 3rd harmonic is 20 dB louder: the timing capacitor smooths the rectified wave
+# itself, with nothing holding its peaks. Ours isn't fitted to this; it's a check.
+#
+#   uv run run.py specs/live-glue-detector.toml --report out/live-glue-detector.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 100.0
+from = -30.0
+to = 0.0
+step = 2.0
+hold = 0.3
+
+[ours]
+effects = ["comp"]
+
+[ours.settings]
+1.comp.type = "Glue"
+1.comp.threshold = 0xAA       # -20 dB
+1.comp.glueratio = "4:1"
+1.comp.glueattack = "10 ms"
+1.comp.gluerelease = "0.1 s"
+1.comp.range = 0xFF
+1.comp.makeup = 0x00
+1.comp.auto = "Off"
+1.comp.mix = 0xFF
+
+[[references]]
+name = "Glue"
+live = "Glue Compressor"
+
+[references.parameters]
+Threshold = "-20 dB"
+Ratio = 4
+Attack = 10
+Release = 0.1
+Output = "0 dB"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "static"
+title = "Glue compressor at 100 Hz against Glue Compressor"
+about = """
+Our Glue compressor, the Glue type of Comp, in a track's first slot against Ableton Live's Glue \
+Compressor, by their static curves from a 100 Hz sine stepped from -30 to 0 dBFS two decibels at \
+a time, each held 0.3 s, at 4:1 with the threshold at -20 dB, a 10 ms attack and a 0.1 s release.
+
+Glue's curve here is its curve at 1 kHz, but its gain follows the slower wave more, so it adds a \
+3rd harmonic 20 dB louder than at 1 kHz: its timing capacitor smooths the rectified wave itself. \
+Ours does the same, and isn't fitted to this.
+"""

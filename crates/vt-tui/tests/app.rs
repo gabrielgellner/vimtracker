@@ -9338,8 +9338,8 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
 }
 
 #[test]
-fn a_compressors_type_shows_its_own_settings_and_the_bus_picks_its_switches_with_k() {
-    use vt_model::insert::{BUS_AUTO_RELEASE, Compressor, CompressorType, Insert};
+fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_switches_with_k() {
+    use vt_model::insert::{CONSOLE_AUTO_RELEASE, Compressor, CompressorType, Insert, range_db};
     let screen = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(163, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -9369,17 +9369,18 @@ fn a_compressors_type_shows_its_own_settings_and_the_bus_picks_its_switches_with
     assert!(clean.contains("Type") && clean.contains("Clean"), "{clean}");
     assert!(clean.contains("Auto"), "{clean}");
 
-    // `=` on Type steps it to Bus, which shows its switches, and Auto and Makeup as Clean does.
+    // `=` on Type steps it to Console, which shows its switches, and Auto and Makeup as Clean
+    // does.
     press(&mut app, "l=");
-    assert_eq!(compressor(&app).kind, CompressorType::Bus);
-    let bus = screen(&app);
+    assert_eq!(compressor(&app).kind, CompressorType::Console);
+    let console = screen(&app);
     for shown in [
-        "Bus", "Ratio", "4:1", "Attack", "10 ms", "Release", "Auto", "Off", "Mix", "Makeup",
+        "Console", "Ratio", "4:1", "Attack", "10 ms", "Release", "Auto", "Off", "Mix", "Makeup",
     ] {
-        assert!(bus.contains(shown), "{shown}: {bus}");
+        assert!(console.contains(shown), "{shown}: {console}");
     }
-    assert!(!bus.contains("Gain"), "{bus}");
-    assert_eq!(compressor(&app).bus_release, BUS_AUTO_RELEASE);
+    assert!(!console.contains("Gain"), "{console}");
+    assert_eq!(compressor(&app).console_release, CONSOLE_AUTO_RELEASE);
 
     // The ratio is picked from its switch's three with `K`, and the release from its five.
     press(&mut app, "jl");
@@ -9387,19 +9388,49 @@ fn a_compressors_type_shows_its_own_settings_and_the_bus_picks_its_switches_with
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
     press(&mut app, "10:1");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(compressor(&app).bus_ratio, 2);
+    assert_eq!(compressor(&app).console_ratio, 2);
     press(&mut app, "lK");
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
     press(&mut app, "0.3 s");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(compressor(&app).bus_release, 1);
+    assert_eq!(compressor(&app).console_release, 1);
 
-    // Back to Clean, its own settings are as they were, and the bus's are kept.
+    // Back to Clean, its own settings are as they were, and the console's are kept.
     press(&mut app, "khh-");
     let back = compressor(&app);
     assert_eq!(back.kind, CompressorType::Clean);
     assert_eq!(back.ratio, Compressor::DEFAULT.ratio);
-    assert_eq!((back.bus_ratio, back.bus_release), (2, 1));
+    assert_eq!((back.console_ratio, back.console_release), (2, 1));
+
+    // Two steps on is Glue, with Live's switches where Live loads them, and its Range over the
+    // makeup.
+    press(&mut app, "==");
+    assert_eq!(compressor(&app).kind, CompressorType::Glue);
+    let glue = screen(&app);
+    for shown in [
+        "Glue", "Ratio", "4:1", "Attack", "1 ms", "Release", "0.6 s", "Auto", "Mix", "Range",
+        "Makeup",
+    ] {
+        assert!(glue.contains(shown), "{shown}: {glue}");
+    }
+    // Its attack has seven places, from 0.01 ms, and its release seven, Auto last.
+    press(&mut app, "llK");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 7);
+    press(&mut app, "0.01 ms");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).glue_attack, 0);
+    press(&mut app, "jK");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 7);
+    press(&mut app, "Auto");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).glue_release, 6);
+    // The range reads in dB, all 70 of them as it starts.
+    press(&mut app, "kll");
+    let range = compressor(&app).range;
+    assert_eq!(range, 0xFF);
+    let shown = format!("{:.1} dB", range_db(f32::from(range)));
+    assert_eq!(shown, "70.0 dB");
+    assert!(status_line(&app).contains(&shown), "{}", status_line(&app));
 }
 
 #[test]
@@ -9413,7 +9444,7 @@ fn a_compressors_makeup_is_its_last_setting_and_reads_in_db() {
     press(&mut app, " 4LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
-    // On Bus, `$` is its makeup, which starts at none and goes up in dB.
+    // On Console, `$` is its makeup, which starts at none and goes up in dB.
     press(&mut app, "l=");
     press(&mut app, "$");
     assert!(
@@ -9423,7 +9454,7 @@ fn a_compressors_makeup_is_its_last_setting_and_reads_in_db() {
     );
     press(&mut app, "+");
     let (kind, value) = makeup(&app);
-    assert_eq!(kind, CompressorType::Bus);
+    assert_eq!(kind, CompressorType::Console);
     assert!(value > 0, "{value}");
     let shown = format!("{:+.1} dB", vt_model::insert::makeup_db(f32::from(value)));
     assert!(status_line(&app).contains(&shown), "{}", status_line(&app));

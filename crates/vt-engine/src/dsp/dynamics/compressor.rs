@@ -9,7 +9,7 @@
 //! the louder one decides, so the stereo picture doesn't move. What it hears can be another track,
 //! for ducking.
 //!
-//! `Bus` is in [`super::bus`].
+//! `Console` is in [`super::console`] and `Glue` in [`super::glue`].
 //!
 //! Every type's `Auto` and `Makeup` come after it, on what it turned down and before the mix, so
 //! a new type has them with nothing of its own: `Auto` matches how loud it comes out to how loud
@@ -19,7 +19,8 @@ use vt_model::insert::{
     Compressor as Settings, CompressorType, attack_ms, makeup_db, ratio, release_ms, threshold_db,
 };
 
-use super::bus::{self, Bus};
+use super::console::{self, Console};
+use super::glue::{self, Glue};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The knee's width in dB: the curve bends over this much either side of the threshold.
@@ -50,7 +51,8 @@ pub struct Compressor {
 #[derive(Debug, Clone, Copy)]
 enum Kind {
     Clean(Clean),
-    Bus(Bus),
+    Console(Console),
+    Glue(Glue),
 }
 
 impl Default for Kind {
@@ -64,7 +66,8 @@ impl Compressor {
     pub fn reduction(&self) -> f32 {
         match &self.kind {
             Kind::Clean(clean) => clean.reduction,
-            Kind::Bus(bus) => bus.reduction(),
+            Kind::Console(console) => console.reduction(),
+            Kind::Glue(glue) => glue.reduction(),
         }
     }
 
@@ -84,15 +87,22 @@ impl Compressor {
             (Kind::Clean(clean), CompressorType::Clean) => {
                 clean.process(input, key, settings, smoothing, rate)
             }
-            (Kind::Bus(bus), CompressorType::Bus) => {
-                bus.process(input, key, settings, smoothing, rate)
+            (Kind::Console(console), CompressorType::Console) => {
+                console.process(input, key, settings, smoothing, rate)
+            }
+            (Kind::Glue(glue), CompressorType::Glue) => {
+                glue.process(input, key, settings, smoothing, rate)
             }
             (_, CompressorType::Clean) => {
                 self.kind = Kind::Clean(Clean::default());
                 return self.process(input, key, settings, smoothing, rate);
             }
-            (_, CompressorType::Bus) => {
-                self.kind = Kind::Bus(Bus::default());
+            (_, CompressorType::Console) => {
+                self.kind = Kind::Console(Console::default());
+                return self.process(input, key, settings, smoothing, rate);
+            }
+            (_, CompressorType::Glue) => {
+                self.kind = Kind::Glue(Glue::default());
                 return self.process(input, key, settings, smoothing, rate);
             }
         };
@@ -204,7 +214,8 @@ pub fn curve_db(level: f32, settings: Settings) -> f32 {
             let slope = 1.0 / ratio(f32::from(settings.ratio));
             computed(level, threshold, slope)
         }
-        CompressorType::Bus => level - bus::settled(level, settings),
+        CompressorType::Console => level - console::settled(level, settings),
+        CompressorType::Glue => level - glue::settled(level, settings),
     }
 }
 

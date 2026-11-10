@@ -1,8 +1,8 @@
-# Our Bus compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
+# Our Console compressor against the compressor in Arturia's Bus FORCE, its other paths muted: the
 # harmonics each adds to a sine at stepped levels, at 100 Hz and 1 kHz, with a fast attack, to
 # see whether Bus FORCE's compressor has a VCA's colour for the Bus to copy (#338). It has none:
 # no 2nd harmonic at any level, and odd ones only once it turns down, from its gain following
-# the wave, so the Bus adds none of its own.
+# the wave, so Console adds none of its own.
 #
 #   uv run run.py specs/comp-bus-harmonics.toml --report out/comp-bus-harmonics.html
 
@@ -20,11 +20,11 @@ hold = 0.5
 effects = ["comp"]
 
 [ours.settings]
-1.comp.type = "Bus"
+1.comp.type = "Console"
 1.comp.threshold = 0xAA       # -20 dB
-1.comp.busratio = "4:1"
-1.comp.busattack = "1 ms"
-1.comp.busrelease = "0.1 s"
+1.comp.consoleratio = "4:1"
+1.comp.consoleattack = "1 ms"
+1.comp.consolerelease = "0.1 s"
 1.comp.mix = 0xFF
 
 [reference]
@@ -53,16 +53,16 @@ output_trim_db = 0.0
 
 [report]
 kind = "distortion"
-title = "Bus compressor harmonics against Bus FORCE"
+title = "Console compressor harmonics against Bus FORCE"
 about = """
-Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against the compressor in \
+Our Console compressor, the SSL console type of Comp, in a track's first slot against the compressor in \
 Arturia's Bus FORCE, by the harmonics each adds to a sine held at -30, -24, -18, -12, -6 and 0 \
 dBFS, half a second each, at 100 Hz and at 1 kHz. Both are at 4:1, with Bus FORCE's Force at 4.3, \
 thresholds of -20 dBFS, a 1 ms attack and a 100 ms release, so the top levels are turned down \
 hard and fast, where a compressor's gain follows the wave the most.
 
 A VCA's colour shows as a 2nd harmonic that grows with level, whether or not it's turning down. \
-The Bus adds colour only if Bus FORCE's compressor does.
+Console adds colour only if Bus FORCE's compressor does.
 """
 
 [[cases]]

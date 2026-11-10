@@ -1,7 +1,7 @@
-# Our Bus compressor against Ableton Live's Glue Compressor, an SSL G-bus as ours is, and Arturia's
-# Bus FORCE as comp-bus-static has it: the static curve at each of the Bus's ratios, from a 1 kHz
-# sine stepped from -60 to 0 dBFS a dB at a time (#364). Glue has the G-bus's own ratios, 2, 4 and
-# 10, so it's set to ours, where Bus FORCE's Force is set where its top 10 dB has our ratio.
+# Our Glue compressor against Ableton Live's Glue Compressor, which it's fitted to: the static
+# curve at each of Glue's ratios, from a 1 kHz sine stepped from -60 to 0 dBFS a dB at a time
+# (#338, #364). Glue's knee is no setting of its own and softens as the ratio falls; ours is
+# fitted to these curves, at Glue's 10 ms attack and `.1` release, which it settles lower with.
 #
 # Glue renders through Live in real time, about 18 s a case, which needs Live open with the bridge
 # (README, "Ableton Live's devices"); each render is cached, so a rerun doesn't.
@@ -22,10 +22,11 @@ hold = 0.25
 effects = ["comp"]
 
 [ours.settings]
-1.comp.type = "Bus"
+1.comp.type = "Glue"
 1.comp.threshold = 0xAA       # -20 dB
-1.comp.busattack = "10 ms"
-1.comp.busrelease = "0.1 s"
+1.comp.glueattack = "10 ms"
+1.comp.gluerelease = "0.1 s"
+1.comp.range = 0xFF          # 70 dB, as Glue loads
 1.comp.makeup = 0x00         # 0 dB, as Glue's Output
 1.comp.auto = "Off"
 1.comp.mix = 0xFF
@@ -41,55 +42,32 @@ Release = 0.1
 Output = "0 dB"
 "Dry/Wet" = "100 %"
 
-[[references]]
-name = "Bus FORCE"
-plugin = "/Library/Audio/Plug-Ins/VST3/Bus FORCE.vst3"
-buffer_size = 512
-
-[references.parameters]
-dry_path_mute = true
-comp_path_mute = false
-comp_path_level_db = 0.0
-sat_path_mute = true
-filter_on_off = false
-eq_on_off = false
-comp_on_off = true
-comp_sc_filter = "Off"
-comp_threshold_db = -20.0
-comp_attack_ms = 10.0
-comp_release_ms = 100.0
-comp_make_up_gain_db = 0.0
-saturation_on_off = false
-auto_gain = false
-output_clipping_on_off = false
-input_trim_db = 0.0
-output_trim_db = 0.0
-
 [report]
 kind = "static"
-title = "Bus compressor static curve against Glue Compressor and Bus FORCE"
+title = "Glue compressor static curve against Glue Compressor"
 about = """
-Our Bus compressor, the SSL G-bus type of Comp, in a track's first slot against Ableton Live's \
-Glue Compressor, also modelled on the G-bus, and the compressor in Arturia's Bus FORCE, by their \
-static curves: a 1 kHz sine stepped from -60 to 0 dBFS a decibel at a time, each level held a \
-quarter of a second, with the output read once each step has settled.
+Our Glue compressor, the Glue type of Comp, in a track's first slot against Ableton Live's Glue \
+Compressor, which it's modelled on and fitted to, by their static curves: a 1 kHz sine stepped \
+from -60 to 0 dBFS a decibel at a time, each level held a quarter of a second, with the output \
+read once each step has settled.
 
-Glue is set as ours: threshold -20 dB, the same ratio, a 10 ms attack and a 0.1 s release, no \
-makeup, fully wet. Bus FORCE is as in comp-bus-static, its Force set where its top 10 dB has our \
-ratio, 2.7, 4.3 and 5.25. The summary compares ours with Glue; Bus FORCE is drawn beside them.
+Both are set alike: threshold -20 dB, the same ratio, a 10 ms attack and a 0.1 s release, all of \
+their range, no makeup, fully wet. Glue's knee isn't a setting: it starts 25 dB under the \
+threshold at 2:1 and 3 dB over it at 10:1. The console type, fitted to Bus FORCE, is measured \
+against that in comp-bus-static.
 """
 
 [[cases]]
 name = "ratio-2"
-ours = { 1.comp.busratio = "2:1" }
-references = { Glue = { Ratio = 2 }, "Bus FORCE" = { comp_force = 2.7 } }
+ours = { 1.comp.glueratio = "2:1" }
+references = { Glue = { Ratio = 2 } }
 
 [[cases]]
 name = "ratio-4"
-ours = { 1.comp.busratio = "4:1" }
-references = { Glue = { Ratio = 4 }, "Bus FORCE" = { comp_force = 4.3 } }
+ours = { 1.comp.glueratio = "4:1" }
+references = { Glue = { Ratio = 4 } }
 
 [[cases]]
 name = "ratio-10"
-ours = { 1.comp.busratio = "10:1" }
-references = { Glue = { Ratio = 10 }, "Bus FORCE" = { comp_force = 5.25 } }
+ours = { 1.comp.glueratio = "10:1" }
+references = { Glue = { Ratio = 10 } }
