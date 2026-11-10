@@ -106,9 +106,9 @@ What `kitty.rs` uses of the protocol:
 | Unicode placeholders | `U+10EEEE` with row and column diacritics, all 297 of them, so an image covers up to 297 characters across and down; the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
 | Delete | `a=d,d=I,i=<id>,q=2`, by id, freeing the data, when an image is replaced and on quitting |
 | Query | `a=q,i=31,f=100` at start, as above |
-| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, which the program places itself |
-| Place directly | `a=p,i=<id>,p=1,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it |
-| Take off | `a=d,d=i,i=<id>,p=1,q=2`, which keeps the data to place again |
+| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, and its ruler's marks, one image for each kind of point, which the program places itself |
+| Place directly | `a=p,i=<id>,p=<placement>,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it. The cursor's line is `p=1`, and each of a kind's marks has a `p` of its own |
+| Take off | `a=d,d=i,i=<id>,p=<placement>,q=2` for one placement, or without `p` for all of an image's, which keeps the data to place again |
 
 In kitty 0.50 on 2026-11-08, `scripts/live.sh` with the program run under `script` to record what
 it wrote showed the query, then the filter curve, envelope and LFO images sent as above on the
@@ -177,6 +177,15 @@ program's own commands with `q=0` to see the answers, on 2026-11-09, in kitty 0.
 
 Whether it moves as smoothly as a cell background, and which looks better, is for the author to
 see: `zc` switches between them.
+
+**The ruler's marks placed directly** (decision 109). Each point's mark is a small triangle placed
+the same way, so its tip is on its line's pixels rather than over the character the line is in.
+There's an image for each kind of point, start, end, loop and slice, each placed once for each of
+its points in view under a placement id of its own. In kitty 0.50.0 on 2026-11-10, run with
+`--dump-commands` while `:slice 16` cut Ableton's `Breakbeat 134 bpm.aif`, kitty took every
+placement, one image placed 16 times, and after the window changed size it took the four images
+stored again with new ids and placed again. A scroll a column along places each mark in view
+again, about 56 bytes a mark: 224 bytes for the 4 in view there at 512 frames a column.
 
 ### Ghostty
 

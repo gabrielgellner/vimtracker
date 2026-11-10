@@ -2,13 +2,17 @@
 //! over it at every zoom, its pictures sent only when what they show changes, and its layout on
 //! the author's screen and in a smaller window.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::crossterm::terminal::WindowSize;
+use ratatui::style::Color;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
@@ -25,6 +29,7 @@ use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::View;
 use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
+use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
 use vt_tui::views::status::value_shown;
 
 const RATE: u32 = 48_000;
@@ -490,16 +495,37 @@ fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
     let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
     let ruler = row(&terminal, 2);
     // At 597 frames a column, slice 01 is in the waveform's column 38, the screen's 39, with its
-    // number in the two before it.
+    // number in the two before it. The terminal places the mark, a pixel either side of its
+    // line at 3 pixels a character, so the columns it covers are left for it, and the number is
+    // before the first: slice 02's line is its column's first pixel, so it reaches the one before.
     let column = |frame: u64| 1 + (frame / FIT) as usize;
     for (number, start) in QUARTERS.iter().enumerate().skip(1) {
-        let at = column(*start);
-        let shown: String = ruler.chars().skip(at - 2).take(3).collect();
+        let line = (start * 3 / FIT) as usize;
+        let (first, last) = (1 + (line - 1) / 3, 1 + (line + 1) / 3);
+        assert_eq!(first, column(*start) - usize::from(number == 2));
+        let shown: String = ruler.chars().skip(first - 2).take(2).collect();
+        assert_eq!(shown, format!("{number:02X}"), "{ruler}");
+        let left: String = ruler.chars().skip(first).take(last - first + 1).collect();
+        assert!(left.trim().is_empty(), "{ruler}");
+    }
+    // Slice 00 is under the start, with its number after it at the left edge. Its mark reaches
+    // into the column after its line's, so the number is after that.
+    let first: String = ruler.chars().skip(column(1000)).take(4).collect();
+    assert_eq!(first, "  00", "{ruler}");
+    // With no pictures, as in a render, the ruler draws the marks itself.
+    let mut text = Terminal::new(TestBackend::new(163, 42)).unwrap();
+    app.sample_images = None;
+    app.sample_page.cell_width = None;
+    text.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    let ruler = row(&text, 2);
+    for (number, start) in QUARTERS.iter().enumerate().skip(1) {
+        let shown: String = ruler.chars().skip(column(*start) - 2).take(3).collect();
         assert_eq!(shown, format!("{number:02X}▾"), "{ruler}");
     }
-    // Slice 00 is under the start, with its number after it at the left edge.
     let first: String = ruler.chars().skip(column(1000)).take(3).collect();
     assert_eq!(first, "▾00", "{ruler}");
+    let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
     let settings = (0..42)
         .map(|y| row(&terminal, y))
         .find(|line| line.contains("Slices"));
@@ -657,19 +683,30 @@ fn a_cursor_leaving_the_view_brings_it_half_a_screen_along() {
 }
 
 /// Draw the screen at a size, after sending the pictures it needs, and place the cursor's line
-/// after it, as the program does each frame. What's sent is said.
+/// after it, as the program does each frame, with characters 3 pixels by 6. What's sent is said.
 fn draw(
     app: &mut App,
     graphics: &mut Graphics,
     width: u16,
     height: u16,
 ) -> (Terminal<TestBackend>, String) {
+    draw_in(app, graphics, width, height, (3, 6))
+}
+
+/// Draw the screen as [`draw`] does, with characters of this many pixels across and down.
+fn draw_in(
+    app: &mut App,
+    graphics: &mut Graphics,
+    width: u16,
+    height: u16,
+    cell: (u16, u16),
+) -> (Terminal<TestBackend>, String) {
     let mut sent = Vec::new();
     graphics.use_window(WindowSize {
         columns: width,
         rows: height,
-        width: width * 3,
-        height: height * 6,
+        width: width * cell.0,
+        height: height * cell.1,
     });
     graphics.sync(app, &mut sent).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -823,11 +860,11 @@ fn the_page_on_the_authors_screen() {
     let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
     assert!(row(&terminal, 0).starts_with(" Sample 01  one"));
     assert!(row(&terminal, 0).contains("2.000 s  48 kHz  stereo  zoom whole sample"));
-    // The ruler: the start's mark over its column, the second's time, and the end's mark.
+    // The ruler: the start's column left for its mark, which the terminal places, and the
+    // seconds' times.
     let ruler = row(&terminal, 2);
-    assert_eq!(ruler.chars().nth(2), Some('▾'), "{ruler}");
+    assert_eq!(ruler.chars().nth(2), Some(' '), "{ruler}");
     assert!(ruler.contains("╵1"), "{ruler}");
-    assert_eq!(ruler.chars().nth(1 + (90_000 / FIT) as usize), Some('▾'));
     // The waveform: 28 rows of 161 placeholders, then the overview.
     let buffer = terminal.backend().buffer();
     for y in 3..32 {
@@ -1007,4 +1044,264 @@ fn slicing_again_moves_the_steps_locks_with_their_sound_and_one_u_takes_both_bac
     keys(&mut app, "u");
     assert_eq!(lock(&app), 3);
     assert_eq!(app.sample_shown().unwrap().slice_count(), 4);
+}
+
+/// The ruler's marks as the terminal has them, from what's been sent to it.
+#[derive(Default)]
+struct Marks {
+    /// Each mark's image, by its id, and the colour it's drawn in.
+    images: BTreeMap<u32, Color>,
+    /// Where each mark is, by its image and its placement: its screen row and column, counted
+    /// from 1, and how many pixels into the column it starts.
+    placed: BTreeMap<(u32, u32), (u16, u16, usize)>,
+}
+
+/// A key's value among a command's controls, as `i` in `a=p,i=7`.
+fn control<'a>(controls: &'a str, name: &str) -> Option<&'a str> {
+    controls
+        .split(',')
+        .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
+}
+
+impl Marks {
+    /// Take in what was sent, and say how many bytes of it were placing or taking off marks.
+    fn take(&mut self, sent: &str) -> usize {
+        let pieces: Vec<&str> = sent.split("\x1b_G").collect();
+        let mut bytes = 0;
+        for index in 1..pieces.len() {
+            let (controls, data) = pieces[index].split_once(';').unwrap();
+            let data = data.split("\x1b\\").next().unwrap();
+            let id = || control(controls, "i").unwrap().parse::<u32>().unwrap();
+            let placement = || control(controls, "p").map(|p| p.parse::<u32>().unwrap());
+            let command = "\x1b_G".len() + controls.len() + 1 + data.len() + "\x1b\\".len();
+            match control(controls, "a") {
+                Some("t") => {
+                    let png = STANDARD.decode(data).unwrap();
+                    let width = u32::from_be_bytes(png[16..20].try_into().unwrap());
+                    // The cursor's line is 2 pixels wide, and every mark wider. Its colour is
+                    // the palette's second, after the see-through one.
+                    if width > 2 {
+                        self.images
+                            .insert(id(), Color::Rgb(png[44], png[45], png[46]));
+                    }
+                }
+                Some("p") if self.images.contains_key(&id()) => {
+                    let before = pieces[index - 1];
+                    let jump = &before[before.rfind("\x1b[").unwrap()..];
+                    let (row, column) = jump[2..].trim_end_matches('H').split_once(';').unwrap();
+                    let offset = control(controls, "X").unwrap().parse().unwrap();
+                    self.placed.insert(
+                        (id(), placement().unwrap()),
+                        (row.parse().unwrap(), column.parse().unwrap(), offset),
+                    );
+                    // With the cursor saved, moved to the mark's character and put back.
+                    bytes += command + "\x1b7".len() + jump.len() + "\x1b8".len();
+                }
+                Some("d") if self.images.contains_key(&id()) => {
+                    let id = id();
+                    match (control(controls, "d"), placement()) {
+                        (Some("i"), Some(placement)) => {
+                            self.placed.remove(&(id, placement));
+                        }
+                        (Some("I"), _) => {
+                            self.images.remove(&id);
+                            self.placed.retain(|(image, _), _| *image != id);
+                        }
+                        _ => self.placed.retain(|(image, _), _| *image != id),
+                    }
+                    bytes += command;
+                }
+                _ => {}
+            }
+        }
+        bytes
+    }
+
+    /// Where the marks of this colour are, in order.
+    fn of(&self, color: Color) -> Vec<(u16, u16, usize)> {
+        let mut at: Vec<_> = self
+            .placed
+            .iter()
+            .filter(|((image, _), _)| self.images[image] == color)
+            .map(|(_, at)| *at)
+            .collect();
+        at.sort_unstable();
+        at
+    }
+}
+
+/// Where the marks of these points should be, those in view, worked out from the page: each
+/// point's line at the pixel its frame is in, as the waveform draws it, and its mark a third of a
+/// character either side of the line, so its tip is on the line, on the ruler's row, the third.
+fn marks_wanted(app: &App, frames: &[u64], cell: usize) -> Vec<(u16, u16, usize)> {
+    let page = &app.sample_page;
+    let first = page.first_frame();
+    let mut at: Vec<_> = frames
+        .iter()
+        .filter(|frame| **frame >= first && (**frame - first) / page.zoom < 161)
+        .map(|frame| {
+            let line = ((frame - first) as u128 * cell as u128 / u128::from(page.zoom)) as usize;
+            // The waveform starts at the screen's second column.
+            let left = cell + line - cell / 3;
+            (3, (left / cell + 1) as u16, left % cell)
+        })
+        .collect();
+    at.sort_unstable();
+    at
+}
+
+/// The first sample's points once it's cut in four, by colour: the start, the end, the loop's
+/// ends and the slices' starts.
+fn points_by_color() -> [(Color, Vec<u64>); 4] {
+    [
+        (START_COLOR, vec![1000]),
+        (END_COLOR, vec![90_000]),
+        (LOOP_COLOR, vec![48_000, 72_000]),
+        (SLICE_COLOR, QUARTERS.to_vec()),
+    ]
+}
+
+#[test]
+fn each_mark_is_placed_with_its_tip_on_its_lines_pixel_at_every_zoom() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    // Slice 02, near the loop's start, so both stay in view as it zooms in.
+    keys(&mut app, "2 G");
+    let mut graphics = Graphics::new();
+    let mut marks = Marks::default();
+    // The author's screen, at 15 pixels by 39 a character, and a narrower character.
+    for cell in [15, 7] {
+        let mut zooms = Vec::new();
+        for step in 0..12 {
+            let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (cell, 39));
+            marks.take(&sent);
+            for (color, frames) in points_by_color() {
+                let wanted = marks_wanted(&app, &frames, usize::from(cell));
+                let zoom = app.sample_page.zoom;
+                assert_eq!(
+                    marks.of(color),
+                    wanted,
+                    "{color:?} at {zoom} frames a column"
+                );
+            }
+            // Each is a character tall.
+            assert!(!sent.contains("a=p,") || sent.contains(",h=39,"));
+            zooms.push(app.sample_page.zoom);
+            if step < 11 {
+                keys(&mut app, "z i");
+            }
+        }
+        assert_eq!(zooms[..3], [FIT, 512, 256]);
+        assert_eq!(zooms[11], 1);
+        // Nothing's sent again when nothing's changed.
+        let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (cell, 39));
+        assert!(sent.is_empty(), "{sent:?}");
+        keys(&mut app, "z O");
+    }
+    // The start, the end, the loop and the slices are a colour each, as their lines are.
+    assert_eq!(marks.images.len(), 4);
+}
+
+#[test]
+fn moving_the_cursor_sends_nothing_for_the_marks() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    let mut graphics = Graphics::new();
+    let mut marks = Marks::default();
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    let placed = marks.placed.clone();
+    assert_eq!(
+        placed.len(),
+        8,
+        "the start, the end, the loop's two and four slices"
+    );
+    for moves in ["l", "3 h", "$", "M", "] ]", "j", "z c", "l", "z c"] {
+        keys(&mut app, moves);
+        let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+        assert_eq!(marks.take(&sent), 0, "{moves} placed marks: {sent:?}");
+        assert_eq!(marks.placed, placed);
+    }
+}
+
+#[test]
+fn a_window_that_changes_size_is_sent_the_marks_again() {
+    let (mut app, _realtime) = on_page();
+    let mut graphics = Graphics::new();
+    let mut marks = Marks::default();
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    let first: Vec<u32> = marks.images.keys().copied().collect();
+    assert_eq!(first.len(), 4);
+    // The clear as the window changes size frees them, so they're stored again with new ids and
+    // placed again.
+    let (_, sent) = draw_in(&mut app, &mut graphics, 170, 42, (15, 39));
+    marks.placed.clear();
+    marks.take(&sent);
+    let again: Vec<u32> = marks.images.keys().copied().collect();
+    assert_eq!(again.len(), 4, "{sent:?}");
+    assert!(again.iter().all(|id| !first.contains(id)));
+    for (color, frames) in points_by_color().into_iter().take(3) {
+        assert_eq!(marks.of(color), marks_wanted(&app, &frames, 15));
+    }
+    // Once the page is laid out at the new size, they're placed for it, and not sent again.
+    let (_, sent) = draw_in(&mut app, &mut graphics, 170, 42, (15, 39));
+    assert!(!sent.contains("a=t,f=100"), "{sent:?}");
+}
+
+#[test]
+fn the_marks_are_taken_off_while_something_is_drawn_over_the_page() {
+    let (mut app, _realtime) = on_page();
+    command(&mut app, "slice 4");
+    let mut graphics = Graphics::new();
+    let mut marks = Marks::default();
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    let placed = marks.placed.clone();
+    keys(&mut app, "Space Space");
+    assert!(app.picker.is_some());
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    assert!(marks.placed.is_empty(), "{sent:?}");
+    // A command for each kind of mark, rather than for each mark, and one for the cursor's line.
+    assert_eq!(sent.matches("a=d,d=i,i=").count(), 4 + 1, "{sent:?}");
+    app.key(Key::new(KeyCode::Esc), Instant::now());
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    assert_eq!(marks.placed, placed);
+    assert!(!sent.contains("a=t,f=100"), "placed again, not sent again");
+    // Leaving the page takes them off too.
+    keys(&mut app, "Space 3");
+    let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+    marks.take(&sent);
+    assert!(marks.placed.is_empty());
+}
+
+#[test]
+fn a_scroll_places_only_the_marks_in_view() {
+    let mut measured = Vec::new();
+    for (slices, zoom_ins) in [(16, 2), (256, 4)] {
+        let (mut app, _realtime) = on_page();
+        command(&mut app, &format!("slice {slices}"));
+        keys(&mut app, &"z i ".repeat(zoom_ins));
+        let mut graphics = Graphics::new();
+        let mut marks = Marks::default();
+        let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+        marks.take(&sent);
+        let mut steps = Vec::new();
+        for _ in 0..8 {
+            keys(&mut app, "C-e");
+            let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
+            assert!(!sent.contains("a=t,f=100"), "the marks aren't sent again");
+            steps.push((marks.take(&sent), marks.placed.len()));
+            let (color, frames) = &points_by_color()[2];
+            assert_eq!(marks.of(*color), marks_wanted(&app, frames, 15));
+        }
+        // Each in view moves a column, at about 60 bytes a mark.
+        for (bytes, shown) in &steps {
+            assert!(*bytes <= (shown + 1) * 64, "{steps:?}");
+        }
+        measured.push((slices, app.sample_page.zoom, steps));
+    }
+    eprintln!("bytes placing marks and marks in view, a scroll at a time: {measured:?}");
 }

@@ -15,10 +15,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
 use crate::app::App;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::kitty;
 use crate::sample_page::{SamplePage, Shown};
-use crate::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
+use crate::sample_wave::{
+    END_COLOR, LOOP_COLOR, POINT_PIXELS, SLICE_COLOR, SLICE_PIXELS, START_COLOR,
+};
 use crate::slicing::pan_text;
 use crate::theme;
 use crate::views::help::POPUP_DELAY;
@@ -33,12 +35,14 @@ pub const PAGE_WIDTH: u16 = 163;
 pub const PAGE_HEIGHT: u16 = WAVE_TOP + WAVE_ROWS + 4;
 /// The waveform's column either side of it.
 const MARGIN: u16 = 1;
-/// Where a point is shown in the ruler, above its line.
+/// Where a point is shown in the ruler, above its line, when the terminal isn't placing its mark
+/// at the line's pixel: in a render, or while something is drawn over the page.
 const POINT_MARK: char = '▾';
 /// The fewest columns from one time in the ruler to the next.
 const TICK_SPACING: f64 = 12.0;
 
-/// Where the waveform is on screen, for the cursor's line, which the terminal places itself.
+/// Where the waveform is on screen, for the cursor's line and the ruler's marks, which the
+/// terminal places itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WaveOnScreen {
     /// The screen column of the waveform's first column, which is off the left when the page is
@@ -48,6 +52,115 @@ pub struct WaveOnScreen {
     /// The screen columns of the waveform in view, and how many of its rows are.
     pub columns: std::ops::Range<i32>,
     pub rows: u16,
+    /// The ruler's marks, in view or not, in the order they're drawn.
+    pub marks: Vec<Mark>,
+}
+
+/// What kind of point a mark in the ruler is for, which gives it its colour and its tip's width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MarkKind {
+    Start,
+    End,
+    Loop,
+    Slice,
+}
+
+impl MarkKind {
+    pub const ALL: [Self; 4] = [Self::Start, Self::End, Self::Loop, Self::Slice];
+
+    /// Its colour, its line's in the waveform.
+    pub fn color(self) -> Color {
+        match self {
+            Self::Start => START_COLOR,
+            Self::End => END_COLOR,
+            Self::Loop => LOOP_COLOR,
+            Self::Slice => SLICE_COLOR,
+        }
+    }
+
+    /// How wide its line in the waveform is, in pixels, which is how wide the mark's tip is.
+    pub fn line_pixels(self) -> usize {
+        match self {
+            Self::Slice => SLICE_PIXELS,
+            _ => POINT_PIXELS,
+        }
+    }
+
+    /// Its place in [`Self::ALL`].
+    pub fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// A point's mark in the ruler: a small triangle pointing down, its tip on its line's pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mark {
+    pub kind: MarkKind,
+    /// Its own number among its kind's marks, which the terminal places it by: 1 for the start,
+    /// the end and the loop's start, 2 for the loop's end, and one more than a slice's id, so a
+    /// slice's mark keeps its number as slices before it come and go.
+    pub placement: u32,
+    pub frame: u64,
+}
+
+impl Mark {
+    /// The pixel across its line starts at, counted from the waveform's left, for characters
+    /// this wide, as the waveform draws the line. It's off the left for a frame before the view.
+    pub fn line_pixel(&self, state: &SamplePage, cell_width: usize) -> i64 {
+        let across = cell_width.max(1) as i128;
+        ((i128::from(self.frame) - i128::from(state.first_frame())) * across)
+            .div_euclid(i128::from(state.zoom.max(1))) as i64
+    }
+
+    /// The pixels across it covers, counted from the waveform's left: its first, and how many.
+    /// It reaches [`mark_reach`] either side of its line.
+    pub fn pixels(&self, state: &SamplePage, cell_width: usize) -> (i64, usize) {
+        let reach = mark_reach(cell_width);
+        (
+            self.line_pixel(state, cell_width) - reach as i64,
+            self.kind.line_pixels() + 2 * reach,
+        )
+    }
+}
+
+/// How far a mark reaches either side of its line, in pixels, for characters this wide: a third
+/// of a character, so it's about as wide as `▾`, 12 pixels on the author's screen.
+pub fn mark_reach(cell_width: usize) -> usize {
+    (cell_width / 3).max(1)
+}
+
+/// The ruler's marks: each slice's start, the loop's start and end, the end and the start, in
+/// that order, so the start is drawn last, over the rest where they meet, as the waveform draws
+/// their lines.
+pub fn marks(shown: &Shown) -> Vec<Mark> {
+    let points = &shown.entry.edit.points;
+    let mark = |kind, placement, frame| Mark {
+        kind,
+        placement,
+        frame,
+    };
+    let mut marks: Vec<Mark> = points
+        .slices
+        .iter()
+        .map(|slice| mark(MarkKind::Slice, slice.id.saturating_add(1), slice.start))
+        .collect();
+    if let Some(looped) = points.loop_ {
+        marks.push(mark(MarkKind::Loop, 1, looped.start));
+        marks.push(mark(MarkKind::Loop, 2, looped.end));
+    }
+    marks.push(mark(MarkKind::End, 1, shown.end()));
+    marks.push(mark(MarkKind::Start, 1, points.start));
+    marks
+}
+
+/// Whether the terminal places the ruler's marks at their lines' pixels, rather than the ruler
+/// drawing each as `▾` over its column: when the pictures are drawn and nothing is drawn over the
+/// page, which a placed image would show through.
+pub fn marks_placed(app: &App, now: Instant) -> bool {
+    app.view == View::Sample
+        && app.sample_images.is_some()
+        && app.sample_page.cell_width.is_some()
+        && !overlaid(app, now)
 }
 
 /// The page's size in this much room: at least the author's screen's.
@@ -171,6 +284,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             top: area.y + WAVE_TOP,
             columns: start..end,
             rows,
+            marks: shown.as_ref().map(marks).unwrap_or_default(),
         });
     }
 }
@@ -246,39 +360,52 @@ pub fn cursor_column() -> Color {
 
 /// The ruler: each point's mark in its colour, over the column it's in, each slice's number in
 /// hex before its mark where there's room, as Vim numbers lines, and the time at round steps
-/// where there's room after that, faint.
+/// where there's room after that, faint. With the pictures drawn, the terminal places each mark
+/// at its line's pixels, so the ruler leaves the columns the mark covers for it, and draws it as
+/// `▾` itself only while something is drawn over the page.
 fn ruler(app: &App, shown: &Shown) -> Line<'static> {
     let state = &app.sample_page;
     let columns = state.columns;
+    let placed = marks_placed(app, Instant::now());
     let mut cells: Vec<(char, Style)> = vec![(' ', Style::new()); columns];
     let mut taken = vec![false; columns];
     let on_screen = |frame: u64| {
         let column = state.column_of(frame).checked_sub(state.column)? as usize;
         (column < columns).then_some(column)
     };
-    let mut mark = |frame: u64, color: Color| {
-        if let Some(column) = on_screen(frame) {
-            cells[column] = (POINT_MARK, Style::new().fg(color));
-            taken[column] = true;
+    // The columns a mark covers, from its first to its last: with the pictures drawn, those its
+    // pixels are in, which can be the column either side of its line's, and otherwise its line's.
+    let covers = |mark: &Mark, column: usize| match state.cell_width {
+        Some(across) => {
+            let (first, width) = mark.pixels(state, across);
+            let across = across as i64;
+            let last = first + width as i64 - 1;
+            (
+                first.div_euclid(across).max(0) as usize,
+                (last.div_euclid(across).max(0) as usize).min(columns - 1),
+            )
         }
+        None => (column, column),
     };
-    let points = &shown.entry.edit.points;
-    for slice in &points.slices {
-        mark(slice.start, SLICE_COLOR);
+    let marks = marks(shown);
+    for mark in &marks {
+        if let Some(column) = on_screen(mark.frame) {
+            let (first, last) = covers(mark, column);
+            taken[first..=last].fill(true);
+            if !placed {
+                cells[column] = (POINT_MARK, Style::new().fg(mark.kind.color()));
+            }
+        }
     }
-    if let Some(looped) = points.loop_ {
-        mark(looped.start, LOOP_COLOR);
-        mark(looped.end, LOOP_COLOR);
-    }
-    mark(shown.end(), END_COLOR);
-    mark(points.start, START_COLOR);
     // Each slice's number, in the two columns before its mark, or after it at the ruler's left
     // edge, if they're free.
-    for (number, slice) in points.slices.iter().enumerate() {
-        let Some(column) = on_screen(slice.start) else {
+    let slices = marks.iter().filter(|mark| mark.kind == MarkKind::Slice);
+    for (number, mark) in slices.enumerate() {
+        let Some(column) = on_screen(mark.frame) else {
             continue;
         };
-        let from = column.checked_sub(2).unwrap_or(column + 1);
+        let (first, last) = covers(mark, column);
+        let from = first.checked_sub(2).unwrap_or(last + 1);
         if from + 2 > columns || taken[from..from + 2].iter().any(|taken| *taken) {
             continue;
         }

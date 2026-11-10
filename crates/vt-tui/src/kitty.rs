@@ -2,6 +2,7 @@
 //! image is sent ahead of time, and placeholder characters say where it goes. As they're text, a
 //! window can be drawn over them.
 
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::sync::{Arc, mpsc};
@@ -35,7 +36,7 @@ use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
     PREVIEW_WAVE_WIDTH,
 };
-use crate::views::sample::{WAVE_ROWS, overlaid};
+use crate::views::sample::{MarkKind, WAVE_ROWS, mark_reach, marks_placed, overlaid};
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
@@ -687,8 +688,9 @@ pub struct Placement {
 }
 
 /// Place a stored image, or move it, as placing it again under the same placement id moves it.
-/// It's drawn above the text, and the terminal's cursor is put back where it was.
-pub fn place_at(out: &mut impl Write, id: u32, at: Placement) -> io::Result<()> {
+/// An image can be placed in many places at once, each under a placement id of its own. It's
+/// drawn above the text, and the terminal's cursor is put back where it was.
+pub fn place_at(out: &mut impl Write, id: u32, placement: u32, at: Placement) -> io::Result<()> {
     let Placement {
         column,
         row,
@@ -698,15 +700,42 @@ pub fn place_at(out: &mut impl Write, id: u32, at: Placement) -> io::Result<()> 
     write!(out, "\x1b7\x1b[{};{}H", row + 1, column + 1)?;
     command(
         out,
-        &format!("a=p,i={id},p=1,X={offset},h={height},C=1,z=1,q=2"),
+        &format!("a=p,i={id},p={placement},X={offset},h={height},C=1,z=1,q=2"),
         &[],
     )?;
     out.write_all(b"\x1b8")
 }
 
-/// Take a placed image off the screen, keeping it to place again.
-pub fn unplace(out: &mut impl Write, id: u32) -> io::Result<()> {
-    command(out, &format!("a=d,d=i,i={id},p=1,q=2"), &[])
+/// Take one placement of an image off the screen, keeping the image to place again.
+pub fn unplace(out: &mut impl Write, id: u32, placement: u32) -> io::Result<()> {
+    command(out, &format!("a=d,d=i,i={id},p={placement},q=2"), &[])
+}
+
+/// Take every placement of an image off the screen, keeping the image to place again.
+pub fn unplace_all(out: &mut impl Write, id: u32) -> io::Result<()> {
+    command(out, &format!("a=d,d=i,i={id},q=2"), &[])
+}
+
+/// A mark in the sample page's ruler as a picture, for characters of this size: a triangle
+/// pointing down at the bottom of a character, its tip as wide as its line in the waveform, so
+/// placed over the line it sits on it. It's [`mark_reach`] pixels either side of the line across,
+/// and a pixel more than that down, so its sides slope at 45 degrees, as `▾`'s do.
+pub fn mark_png(kind: MarkKind, cell: (usize, usize)) -> Vec<u8> {
+    mark_picture(kind, cell).png()
+}
+
+/// A mark as [`mark_png`] draws it, before it's a PNG.
+fn mark_picture(kind: MarkKind, cell: (usize, usize)) -> Picture {
+    let reach = mark_reach(cell.0);
+    let width = kind.line_pixels() + 2 * reach;
+    let height = cell.1.max(1);
+    let mut picture = Picture::new(width, height, vec![rgb(kind.color())]);
+    let rows = (reach + 1).min(height);
+    for (row, y) in (height - rows..height).enumerate() {
+        let inset = row + reach + 1 - rows;
+        picture.pixels[y * width + inset..(y + 1) * width - inset].fill(1);
+    }
+    picture
 }
 
 /// What the sample page's waveform or overview was drawn from, which is all that's compared to
@@ -887,6 +916,11 @@ pub struct Graphics {
     cursor_line: Option<(usize, u32)>,
     /// Where the line is placed, if it's on screen.
     cursor_placed: Option<Placement>,
+    /// The images of the ruler's marks, one for each kind of point in [`MarkKind::ALL`]'s order,
+    /// and the character size they're drawn for.
+    mark_images: Option<((usize, usize), [u32; MarkKind::ALL.len()])>,
+    /// Where each of the ruler's marks is placed, by its kind and its placement id.
+    marks_placed: BTreeMap<(MarkKind, u32), Placement>,
     /// A character's size in pixels, which the sample page's pictures are drawn for.
     cell: (usize, usize),
     /// The window's size in characters, as last told.
@@ -913,6 +947,8 @@ impl Graphics {
             sample_overview: None,
             cursor_line: None,
             cursor_placed: None,
+            mark_images: None,
+            marks_placed: BTreeMap::new(),
             cell: DEFAULT_CELL,
             window: None,
             frames: 0,
@@ -930,7 +966,7 @@ impl Graphics {
 
     /// Take in the window's size as the terminal says it, in characters and pixels. ratatui clears
     /// a window that's changed size, and in kitty and Ghostty a clear frees an image that isn't
-    /// shown through placeholders, so the cursor's line is sent again.
+    /// shown through placeholders, so the cursor's line and the ruler's marks are sent again.
     pub fn use_window(&mut self, size: terminal::WindowSize) {
         self.use_cell((
             usize::from(size.width) / usize::from(size.columns.max(1)),
@@ -941,6 +977,9 @@ impl Graphics {
             self.retired
                 .extend(self.cursor_line.take().map(|(_, id)| id));
             self.cursor_placed = None;
+            self.retired
+                .extend(self.mark_images.take().into_iter().flat_map(|(_, ids)| ids));
+            self.marks_placed.clear();
         }
         self.window = Some(characters);
     }
@@ -971,6 +1010,7 @@ impl Graphics {
                     .as_ref()
                     .is_some_and(|image| image.1 == id)
                 || self.cursor_line.is_some_and(|image| image.1 == id)
+                || self.mark_images.is_some_and(|(_, ids)| ids.contains(&id))
                 || self
                     .preview
                     .iter()
@@ -1014,9 +1054,11 @@ impl Graphics {
     }
 
     /// Place what the terminal places itself rather than through placeholders, once the screen
-    /// is drawn: the sample page's cursor as a line. After the drawing, so it goes where the page
-    /// is now, and so a clear as the window changes size has already happened.
+    /// is drawn: the sample page's ruler marks and its cursor as a line. After the drawing, so
+    /// they go where the page is now, and so a clear as the window changes size has already
+    /// happened.
     pub fn place(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        self.sync_marks(app, out)?;
         self.sync_cursor_line(app, out)?;
         out.flush()
     }
@@ -1312,7 +1354,7 @@ impl Graphics {
         }
         let Some(at) = wanted else {
             if let Some((_, id)) = self.cursor_line {
-                unplace(out, id)?;
+                unplace(out, id, 1)?;
             }
             self.cursor_placed = None;
             return Ok(());
@@ -1330,8 +1372,93 @@ impl Graphics {
             }
         };
         self.cursor_line = Some((height, id));
-        place_at(out, id, at)?;
+        place_at(out, id, 1, at)?;
         self.cursor_placed = Some(at);
+        Ok(())
+    }
+
+    /// Place the sample page's ruler marks, each a small triangle at its line's pixels, or take
+    /// them away when the pictures aren't drawn or something is drawn over the page. Each kind of
+    /// point's mark is an image of its own, sent once, and placed once for each of its points in
+    /// view, so a scroll, a zoom or a moved point only places the marks that moved, and moving the
+    /// cursor sends nothing.
+    fn sync_marks(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        let page = &app.sample_page;
+        let (across, down) = self.cell;
+        let mut wanted = BTreeMap::new();
+        if let Some(screen) = &page.on_screen
+            && screen.top > 0
+            && marks_placed(app, std::time::Instant::now())
+        {
+            let left = i64::from(screen.left);
+            let shown = i64::from(screen.columns.start)..i64::from(screen.columns.end);
+            for mark in &screen.marks {
+                // Only a mark whose line is in view, as the waveform has it.
+                let line = mark.line_pixel(page, across);
+                if !shown.contains(&(left + line.div_euclid(across as i64))) {
+                    continue;
+                }
+                let (first, _) = mark.pixels(page, across);
+                let Ok(pixel) = usize::try_from(left * across as i64 + first) else {
+                    continue;
+                };
+                wanted.insert(
+                    (mark.kind, mark.placement),
+                    Placement {
+                        column: (pixel / across) as u16,
+                        row: screen.top - 1,
+                        offset: pixel % across,
+                        height: down,
+                    },
+                );
+            }
+        }
+        if wanted == self.marks_placed {
+            return Ok(());
+        }
+        if wanted.is_empty() {
+            // Taken off all at once, a command for each kind rather than each mark.
+            if let Some((_, ids)) = self.mark_images {
+                for kind in MarkKind::ALL {
+                    if self.marks_placed.keys().any(|(placed, _)| *placed == kind) {
+                        unplace_all(out, ids[kind.index()])?;
+                    }
+                }
+            }
+            self.marks_placed.clear();
+            return Ok(());
+        }
+        let ids = match self.mark_images {
+            Some((drawn, ids)) if drawn == self.cell => ids,
+            old => {
+                // Drawn for another size of character: the old ones go, with their placements.
+                for id in old.into_iter().flat_map(|(_, ids)| ids) {
+                    command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
+                }
+                self.marks_placed.clear();
+                let mut ids = [0; MarkKind::ALL.len()];
+                for kind in MarkKind::ALL {
+                    // Held as each is given its id, so the next kind can't be given the same.
+                    self.mark_images = Some((self.cell, ids));
+                    let id = self.new_id();
+                    store(out, id, &mark_png(kind, self.cell))?;
+                    ids[kind.index()] = id;
+                }
+                self.mark_images = Some((self.cell, ids));
+                ids
+            }
+        };
+        for key in self.marks_placed.keys() {
+            if !wanted.contains_key(key) {
+                unplace(out, ids[key.0.index()], key.1)?;
+            }
+        }
+        for (key, at) in &wanted {
+            if self.marks_placed.get(key) != Some(at) {
+                place_at(out, ids[key.0.index()], key.1, *at)?;
+            }
+        }
+        self.marks_placed = wanted;
         Ok(())
     }
 
@@ -1389,7 +1516,8 @@ impl Graphics {
             .iter()
             .chain(&self.sample_overview)
             .map(|image| &image.1)
-            .chain(self.cursor_line.iter().map(|image| &image.1));
+            .chain(self.cursor_line.iter().map(|image| &image.1))
+            .chain(self.mark_images.iter().flat_map(|(_, ids)| ids));
         for id in held
             .chain(filter)
             .chain(waveform)
@@ -1873,6 +2001,31 @@ mod tests {
         ];
         for (png, (length, crc)) in drawings.iter().zip(before) {
             assert_eq!((png.len(), crc32(&[png])), (length, crc));
+        }
+    }
+
+    #[test]
+    fn a_mark_is_a_triangle_at_the_bottom_of_a_character_with_its_tip_on_its_line() {
+        for (kind, line) in [(MarkKind::Start, 2), (MarkKind::Slice, 1)] {
+            let (_, pixels) = decode(&mark_png(kind, DEFAULT_CELL));
+            // A third of the author's 15-pixel character either side of the line, and a
+            // character tall, so it's placed in the ruler's row as it is.
+            assert_eq!((pixels[0].len(), pixels.len()), (line + 10, 39));
+            let lit =
+                |row: &Vec<bool>| -> Vec<usize> { (0..row.len()).filter(|x| row[*x]).collect() };
+            // The tip, at the bottom, is the line's pixels, 5 in.
+            assert_eq!(lit(&pixels[38]), (5..5 + line).collect::<Vec<_>>());
+            // Each row up is a pixel wider either side, to the whole width 6 rows up.
+            for up in 0..=5 {
+                assert_eq!(
+                    lit(&pixels[38 - up]),
+                    (5 - up..5 + line + up).collect::<Vec<_>>()
+                );
+            }
+            assert!(
+                pixels[..33].iter().flatten().all(|lit| !lit),
+                "nothing above it"
+            );
         }
     }
 }

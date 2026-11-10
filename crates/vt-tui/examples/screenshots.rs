@@ -24,9 +24,9 @@ use vt_tui::explorer::Purpose;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
 use vt_tui::input::picker::{Picker, Root};
-use vt_tui::kitty::Graphics;
+use vt_tui::kitty::{DEFAULT_CELL, Graphics};
 use vt_tui::run::draw_screen;
-use vt_tui::screenshot::{sent_images, to_svg};
+use vt_tui::screenshot::{sent_images, sent_placements, to_svg_placed};
 
 const RATE: u32 = 48_000;
 /// Frames in one step at 120 BPM.
@@ -278,15 +278,22 @@ fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
     (app, realtime)
 }
 
-/// Write the screen as it is now as an SVG, with the images the terminal would be sent in it.
+/// Write the screen as it is now as an SVG, with the images the terminal would be sent in it,
+/// and those the program places itself after drawing it, as the sample page's ruler marks.
 fn write(app: &mut App, now: Instant, size: (u16, u16), path: &Path) -> std::io::Result<()> {
     let mut sent = Vec::new();
-    Graphics::new().sync(app, &mut sent)?;
+    let mut graphics = Graphics::new();
+    graphics.sync(app, &mut sent)?;
     let Ok(mut terminal) = Terminal::new(TestBackend::new(size.0, size.1));
     let Ok(_) = terminal.draw(|frame| draw_screen(frame, app, None, now));
+    graphics.place(app, &mut sent)?;
     std::fs::write(
         path,
-        to_svg(terminal.backend().buffer(), &sent_images(&sent)),
+        to_svg_placed(
+            terminal.backend().buffer(),
+            &sent_images(&sent),
+            &sent_placements(&sent, DEFAULT_CELL),
+        ),
     )
 }
 

@@ -1,8 +1,9 @@
 //! Screenshots of the interface for the manual: a drawn screen written as an SVG, with each cell's
 //! text and colours, so it's exact and stays sharp at any size. The images the terminal is sent,
-//! like the filter curve, are put in where their placeholders are, as the terminal shows them.
+//! like the filter curve, are put in where their placeholders are, as the terminal shows them, and
+//! those the program places itself, like the sample page's ruler marks, where they're placed.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 
 use base64::Engine;
@@ -99,6 +100,113 @@ pub fn sent_images(sent: &[u8]) -> HashMap<u32, Vec<u8>> {
     images
 }
 
+/// An image the program places itself rather than through placeholders, as it was last placed: at
+/// a cell, this many of the image's pixels into it across, with this many of its rows shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placed {
+    pub id: u32,
+    pub column: u16,
+    pub row: u16,
+    pub offset: usize,
+    pub height: usize,
+}
+
+/// The images the program places itself, from what was sent to the terminal: each stored PNG by
+/// its id, where each placement of them is now, and the character size in pixels they were drawn
+/// for, which they're scaled from.
+#[derive(Debug, Default)]
+pub struct Placements {
+    pub images: HashMap<u32, Vec<u8>>,
+    pub placed: Vec<Placed>,
+    pub cell: (usize, usize),
+}
+
+/// The images placed directly in what was sent to the terminal, drawn for characters of this
+/// many pixels, as they are once everything sent has been done: placing again under the same
+/// placement id moves an image, and taking one off takes it away.
+pub fn sent_placements(sent: &[u8], cell: (usize, usize)) -> Placements {
+    let text = String::from_utf8_lossy(sent);
+    let mut images = HashMap::new();
+    let mut placed = BTreeMap::new();
+    let (mut id, mut data) = (None, String::new());
+    let pieces: Vec<&str> = text.split("\x1b_G").collect();
+    for (index, command) in pieces.iter().enumerate().skip(1) {
+        let command = command.split("\x1b\\").next().unwrap_or_default();
+        let (controls, chunk) = command.split_once(';').unwrap_or((command, ""));
+        let value = |key: &str| {
+            controls
+                .split(',')
+                .find_map(|pair| pair.strip_prefix(key)?.strip_prefix('='))
+        };
+        let number = |key: &str| value(key).and_then(|value| value.parse::<u32>().ok());
+        match value("a") {
+            Some("t") => {
+                id = number("i");
+                data.clear();
+            }
+            Some("p") => {
+                // Moved to its cell just before, as `CSI row;column H`, counted from 1.
+                let before = pieces[index - 1];
+                let jump = before
+                    .rfind("\x1b[")
+                    .and_then(|at| before[at + 2..].strip_suffix('H')?.split_once(';'));
+                if let (Some(image), Some((row, column))) = (number("i"), jump)
+                    && let (Ok(row), Ok(column)) = (row.parse::<u16>(), column.parse::<u16>())
+                {
+                    placed.insert(
+                        (image, number("p").unwrap_or(0)),
+                        Placed {
+                            id: image,
+                            column: column.saturating_sub(1),
+                            row: row.saturating_sub(1),
+                            offset: number("X").unwrap_or(0) as usize,
+                            height: number("h").unwrap_or(0) as usize,
+                        },
+                    );
+                }
+                continue;
+            }
+            Some("d") => {
+                if let Some(image) = number("i") {
+                    match number("p").filter(|_| value("d") == Some("i")) {
+                        Some(placement) => {
+                            placed.remove(&(image, placement));
+                        }
+                        None => placed.retain(|(placed, _), _| *placed != image),
+                    }
+                    if value("d") == Some("I") {
+                        images.remove(&image);
+                    }
+                }
+                continue;
+            }
+            Some(_) => continue,
+            None => {}
+        }
+        data.push_str(chunk);
+        if value("m") == Some("0")
+            && let Some(id) = id.take()
+            && let Ok(png) = STANDARD.decode(&data)
+        {
+            images.insert(id, png);
+        }
+    }
+    Placements {
+        images,
+        placed: placed.into_values().collect(),
+        cell,
+    }
+}
+
+/// A PNG's width and height in pixels, from its header.
+fn png_size(png: &[u8]) -> Option<(usize, usize)> {
+    let number = |at: usize| {
+        let bytes = png.get(at..at + 4)?;
+        Some(u32::from_be_bytes(bytes.try_into().ok()?) as usize)
+    };
+    Some((number(16)?, number(20)?))
+}
+
 /// Whether a cell is part of an image, and if so where its top left is: the image it's part of,
 /// read from its colour.
 fn image_corner(buffer: &Buffer, x: u16, y: u16) -> Option<u32> {
@@ -140,6 +248,16 @@ fn placeholders_from(buffer: &Buffer, x: u16, y: u16, across: bool) -> u16 {
 /// The whole buffer as an SVG, with the images sent to the terminal where their placeholders are.
 /// Runs of cells that look the same are drawn together.
 pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
+    to_svg_placed(buffer, images, &Placements::default())
+}
+
+/// The whole buffer as [`to_svg`] draws it, with the images the program places itself over it,
+/// where they're placed, each scaled from the character size it was drawn for to the picture's.
+pub fn to_svg_placed(
+    buffer: &Buffer,
+    images: &HashMap<u32, Vec<u8>>,
+    placements: &Placements,
+) -> String {
     let area = buffer.area;
     let (width, height) = (
         f32::from(area.width) * CELL_WIDTH,
@@ -224,6 +342,35 @@ pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
             );
         }
     }
+    let (across, down) = placements.cell;
+    if across > 0 && down > 0 {
+        let (scale_x, scale_y) = (CELL_WIDTH / across as f32, CELL_HEIGHT / down as f32);
+        for placed in &placements.placed {
+            let Some(png) = placements.images.get(&placed.id) else {
+                continue;
+            };
+            let Some((width, height)) = png_size(png) else {
+                continue;
+            };
+            // Only its top rows, as many as are shown.
+            let shown = if placed.height == 0 {
+                height
+            } else {
+                placed.height.min(height)
+            };
+            let _ = writeln!(
+                svg,
+                r#"<svg x="{}" y="{}" width="{}" height="{}" overflow="hidden"><image width="{}" height="{}" preserveAspectRatio="none" href="data:image/png;base64,{}"/></svg>"#,
+                f32::from(placed.column) * CELL_WIDTH + placed.offset as f32 * scale_x,
+                f32::from(placed.row) * CELL_HEIGHT,
+                width as f32 * scale_x,
+                shown as f32 * scale_y,
+                width as f32 * scale_x,
+                height as f32 * scale_y,
+                STANDARD.encode(png)
+            );
+        }
+    }
     svg.push_str("</svg>\n");
     svg
 }
@@ -302,5 +449,45 @@ mod tests {
             "{svg}"
         );
         assert!(!svg.contains(PLACEHOLDER), "the placeholders aren't text");
+    }
+
+    #[test]
+    fn an_image_the_program_places_is_put_in_where_it_was_last_placed() {
+        use crate::kitty::{Picture, Placement, place_at, store, unplace};
+
+        let mut png = Picture::new(4, 6, vec![[255; 3]]);
+        png.pixels.fill(1);
+        let png = png.png();
+        let mut sent = Vec::new();
+        store(&mut sent, 5, &png).unwrap();
+        let at = |column, offset| Placement {
+            column,
+            row: 2,
+            offset,
+            height: 6,
+        };
+        place_at(&mut sent, 5, 1, at(1, 0)).unwrap();
+        place_at(&mut sent, 5, 2, at(3, 1)).unwrap();
+        // Placing again under the same id moves it, and taking one off takes it away.
+        place_at(&mut sent, 5, 1, at(4, 2)).unwrap();
+        place_at(&mut sent, 5, 3, at(6, 0)).unwrap();
+        unplace(&mut sent, 5, 3).unwrap();
+        let placements = sent_placements(&sent, (3, 6));
+        assert_eq!(placements.images[&5], png);
+        let columns: Vec<_> = placements
+            .placed
+            .iter()
+            .map(|placed| (placed.column, placed.offset))
+            .collect();
+        assert_eq!(columns, [(4, 2), (3, 1)]);
+
+        let buffer = Buffer::empty(Rect::new(0, 0, 10, 3));
+        let svg = to_svg_placed(&buffer, &HashMap::new(), &placements);
+        // Characters 3 pixels by 6 are 9 by 19 in the picture: 4 columns and 2 pixels in is 42.
+        assert!(
+            svg.contains(r#"<svg x="42" y="38" width="12" height="19" overflow="hidden">"#),
+            "{svg}"
+        );
+        assert_eq!(svg.matches("<image ").count(), 2);
     }
 }
