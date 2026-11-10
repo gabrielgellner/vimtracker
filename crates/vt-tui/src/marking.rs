@@ -1,16 +1,30 @@
 //! Marks: letters naming slices of the sample the current track plays, as Vim's marks name lines,
 //! so a step can lock a slice by its name, `SLI 'a`, and keep playing it as slices before it come
 //! and go. `:mark a` names one, `:marks` lists them, and `:delmarks a-c` and `:delmarks!` take them
-//! away, each one undo step on the bank entry. On the sample page, `'a` goes to the slice named
-//! `a`, and `]'` and `['` to the next and previous slice with a name, as jumps `C-o` comes back
-//! from.
+//! away, each one undo step on the bank entry. On the sample page, `m a` names the slice under the
+//! cursor, `'a` goes to the slice named `a`, `]'` and `['` to the next and previous slice with a
+//! name, `'<` and `'>` to the ends of the last selection, and `''` back to where the latest jump
+//! left from, each a jump `C-o` comes back from.
 
+use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
+use vt_model::bank::is_mark;
 
 use crate::app::App;
 use crate::banking::sample_text;
+use crate::input::keys::Key;
 use crate::input::mode::View;
 use crate::input::picker::{Pick, Picker};
+
+/// What a key after `'` or `m` on the sample page is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkWait {
+    /// `'`: a letter's slice, `<` or `>` for the last selection's ends, or `'` for the latest
+    /// jump's start.
+    Jump,
+    /// `m`: the letter to name the slice under the cursor with.
+    Name,
+}
 
 impl App {
     /// The bank entry marks are named in: the one the sample page shows, while it's the view, or
@@ -60,6 +74,50 @@ impl App {
         });
         let moved = before.map_or(String::new(), |before| format!(", not {before:02X}"));
         self.status = format!("'{letter} names slice {at:02X} of {name}{moved}: u to undo");
+    }
+
+    /// The key after `'` or `m` on the sample page.
+    pub(crate) fn mark_key(&mut self, wait: MarkWait, key: Key) {
+        let KeyCode::Char(c) = key.code else {
+            self.status = "Marks are a to z: :marks lists them".to_owned();
+            return;
+        };
+        if key.ctrl || key.alt {
+            self.status = "Marks are a to z: :marks lists them".to_owned();
+            return;
+        }
+        match (wait, c) {
+            (MarkWait::Name, c) if is_mark(c) => self.set_mark(c, None),
+            (MarkWait::Name, _) => {
+                self.status = "m takes a letter, a to z, to name the slice with".to_owned();
+            }
+            (MarkWait::Jump, c) if is_mark(c) => self.jump_to_mark(c),
+            (MarkWait::Jump, '\'') => {
+                if !self.jump_to_previous_context() {
+                    self.status = "No jump to go back from yet".to_owned();
+                }
+            }
+            (MarkWait::Jump, '<' | '>') => self.jump_to_selection_end(c == '>'),
+            (MarkWait::Jump, _) => {
+                self.status =
+                    "Marks are a to z, '< '> the last selection and '' the last jump".to_owned();
+            }
+        }
+    }
+
+    /// `'<` and `'>`: the first or last frame of the last selection, as a jump. As in Vim, they're
+    /// the selection made last, not one being made.
+    pub(crate) fn jump_to_selection_end(&mut self, last: bool) {
+        let Some((first, end)) = self.sample_page.last_selection else {
+            self.status = "No selection yet: v starts one".to_owned();
+            return;
+        };
+        let Ok(shown) = self.sample_page_here() else {
+            return;
+        };
+        self.record_jump();
+        let frame = if last { end } else { first };
+        self.sample_page.go(frame, shown.length());
     }
 
     /// `:marks`: list the letters naming slices, in the order of their slices, with each slice's

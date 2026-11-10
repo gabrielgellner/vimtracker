@@ -29,6 +29,7 @@ use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
+use vt_tui::sample_settings::SampleSetting;
 use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
 use vt_tui::views::status::value_shown;
 
@@ -530,7 +531,8 @@ fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
         .map(|y| row(&terminal, y))
         .find(|line| line.contains("Slices"));
     assert!(settings.unwrap().contains("Slices 4"));
-    // The cursor's row names the slice it's in, with the slice's own settings.
+    // The slice's row names the slice the cursor is in, with its settings, its own in the text's
+    // colour and the rest as the sample plays.
     keys(&mut app, "j");
     command(&mut app, "slice gain -3");
     command(&mut app, "slice pan -25");
@@ -540,10 +542,14 @@ fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
         app.status
     );
     let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
-    let cursor_row = (0..42)
+    let slice_row = (0..42)
         .map(|y| row(&terminal, y))
-        .find(|line| line.contains("Cursor"));
-    assert!(cursor_row.unwrap().contains("slice 01  -3.0 dB  25 L"));
+        .find(|line| line.starts_with(" Slice 01"))
+        .unwrap();
+    assert!(
+        slice_row.contains("Gain -3.0 dB   Pan 25 L   Tune +0 st"),
+        "{slice_row}"
+    );
 }
 
 #[test]
@@ -876,7 +882,15 @@ fn the_page_on_the_authors_screen() {
     assert!(
         row(&terminal, 33).starts_with(" Start 0.021 s   End 1.875 s   Loop 1.000 s to 1.500 s")
     );
-    assert!(row(&terminal, 34).starts_with(" Cursor 0.021 s  frame 1000  slice 00"));
+    assert!(row(&terminal, 33).contains("Snap off"));
+    assert!(
+        row(&terminal, 34).starts_with(" Whole sample   Gain +0.0 dB   Tune +0 st   Reverse off")
+    );
+    assert!(
+        row(&terminal, 35).starts_with(" Cursor 0.021 s  frame 1000  slice 00  on the start"),
+        "{}",
+        row(&terminal, 35)
+    );
     // The whole width is the page's, with no meter.
     assert!(!row(&terminal, 10).contains("L  R  G"));
 }
@@ -1503,8 +1517,8 @@ fn the_ruler_puts_the_letters_after_their_slices_mark() {
     let rows: Vec<String> = (0..42).map(|y| row(&text, y)).collect();
     let settings = rows.iter().find(|line| line.contains("Slices")).unwrap();
     assert!(settings.contains("Marks zab"), "{settings}");
-    let cursor_row = rows.iter().find(|line| line.contains("Cursor")).unwrap();
-    assert!(cursor_row.contains("slice 02  'a 'b"), "{cursor_row}");
+    let slice_row = rows.iter().find(|line| line.starts_with(" Slice")).unwrap();
+    assert!(slice_row.starts_with(" Slice 02 'a 'b"), "{slice_row}");
     // With the pictures drawn, the letters keep clear of the columns the placed mark covers.
     let mut graphics = Graphics::new();
     draw(&mut app, &mut graphics, 163, 42);
@@ -1793,4 +1807,338 @@ fn as_its_column_a_playhead_is_its_columns_background() {
     let (terminal, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert!(sent.contains("a=d,d=i"), "the line is taken off");
     assert_eq!(green_columns(&terminal), [11]);
+}
+
+/// The first sample's slices, as where each starts and its id.
+fn slices(app: &App) -> Vec<(u64, u32)> {
+    app.song()
+        .bank
+        .get(1)
+        .unwrap()
+        .edit
+        .points
+        .slices
+        .iter()
+        .map(|slice| (slice.start, slice.id))
+        .collect()
+}
+
+/// Put the sample page's cursor on a frame.
+fn put_cursor(app: &mut App, frame: u64) {
+    let length = app.sample_shown().unwrap().length();
+    app.sample_page.show_frame(frame, length);
+}
+
+#[test]
+fn enter_j_and_x_split_join_and_unsplit_with_ids_and_letters_following_and_each_undoes() {
+    let (mut app, _realtime) = on_page();
+    // At the start there's nothing to split.
+    keys(&mut app, "Enter");
+    assert!(slices(&app).is_empty());
+    assert!(
+        app.status.contains("between the start and the end"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "slice 4");
+    keys(&mut app, "j m a");
+    assert_eq!(marked(&app), [('a', 1)]);
+    // Enter splits slice 01 at the cursor: the part before keeps its id and its letter.
+    put_cursor(&mut app, 30_000);
+    keys(&mut app, "Enter");
+    let split = vec![
+        (1000, 0),
+        (23_250, 1),
+        (30_000, 4),
+        (45_500, 2),
+        (67_750, 3),
+    ];
+    assert_eq!(slices(&app), split);
+    assert_eq!(marked(&app), [('a', 1)]);
+    assert!(app.status.contains("Slice 02 of 5"), "{}", app.status);
+    // Again on a slice's start, there's one there already.
+    keys(&mut app, "Enter");
+    assert_eq!(slices(&app).len(), 5);
+    assert!(app.status.contains("already starts"), "{}", app.status);
+    // J joins the slice under the cursor with the next, which takes its letters with it.
+    put_cursor(&mut app, 50_000);
+    keys(&mut app, "m b");
+    assert_eq!(marked(&app), [('a', 1), ('b', 3)]);
+    put_cursor(&mut app, 31_000);
+    keys(&mut app, "J");
+    assert_eq!(
+        slices(&app),
+        [(1000, 0), (23_250, 1), (30_000, 4), (67_750, 3)]
+    );
+    assert_eq!(marked(&app), [('a', 1), ('b', 2)]);
+    // x on a slice's start takes it away, joining it to the slice before, never cutting audio.
+    put_cursor(&mut app, 30_000);
+    keys(&mut app, "x");
+    assert_eq!(slices(&app), [(1000, 0), (23_250, 1), (67_750, 3)]);
+    assert_eq!(marked(&app), [('a', 1), ('b', 1)]);
+    assert_eq!(
+        app.sample_shown().unwrap().end(),
+        90_000,
+        "the audio is all there"
+    );
+    // Slice 00 is where the slices start, so x leaves it.
+    put_cursor(&mut app, 1000);
+    keys(&mut app, "x");
+    assert_eq!(slices(&app).len(), 3);
+    // Each step is one undo.
+    keys(&mut app, "u");
+    assert_eq!(slices(&app).len(), 4);
+    keys(&mut app, "u");
+    assert_eq!(slices(&app).len(), 5);
+    keys(&mut app, "u u");
+    assert_eq!(slices(&app).len(), 4);
+    assert_eq!(marked(&app), [('a', 1)]);
+}
+
+#[test]
+fn nudges_move_a_point_by_a_pixel_a_column_and_a_frame_at_every_zoom() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    command(&mut app, "slice 4");
+    keys(&mut app, "j");
+    let start = |app: &App| slices(app)[1].0;
+    for zoom in [FIT, 512, 64, 16, 4] {
+        while app.sample_page.zoom > zoom {
+            keys(&mut app, "z i");
+        }
+        assert_eq!(app.sample_page.zoom, zoom);
+        let from = start(&app);
+        let pixel = |frame: u64| frame * CELL / zoom;
+        keys(&mut app, "=");
+        let moved = start(&app);
+        if zoom >= CELL {
+            assert_eq!(pixel(moved), pixel(from) + 1, "a pixel at {zoom}");
+            assert!(moved - from <= zoom.div_ceil(CELL), "{moved} at {zoom}");
+        } else {
+            assert_eq!(
+                moved,
+                from + 1,
+                "a frame a step closer than a frame a pixel"
+            );
+        }
+        assert_eq!(cursor(&app), moved, "the cursor follows the point");
+        keys(&mut app, "-");
+        assert!(start(&app) < moved);
+        let here = start(&app);
+        keys(&mut app, "+");
+        assert_eq!(start(&app), here + zoom, "a column at {zoom}");
+        keys(&mut app, "_ D-l");
+        assert_eq!(start(&app), here + 1, "a frame at {zoom}");
+        keys(&mut app, "D-h 3 D-l");
+        assert_eq!(start(&app), here + 3, "a count of frames at {zoom}");
+        keys(&mut app, "3 D-h");
+        assert_eq!(start(&app), here);
+    }
+    // No further than the slices either side.
+    keys(&mut app, "z O 1 0 0 0 _");
+    assert_eq!(start(&app), 1001);
+    keys(&mut app, "1 0 0 0 +");
+    assert_eq!(start(&app), 45_499);
+    // Every nudge is one undo.
+    keys(&mut app, "u");
+    assert_eq!(start(&app), 1001);
+    // Nothing renumbers, so the ids stay in order.
+    assert_eq!(
+        slices(&app).iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+        [0, 1, 2, 3]
+    );
+}
+
+#[test]
+fn g_s_g_e_g_l_and_g_upper_l_put_the_points_at_the_cursor_and_x_takes_them_back() {
+    let (mut app, _realtime) = on_page();
+    let points = |app: &App| app.song().bank.get(1).unwrap().edit.points.clone();
+    put_cursor(&mut app, 2000);
+    keys(&mut app, "g s");
+    assert_eq!(points(&app).start, 2000);
+    put_cursor(&mut app, 80_000);
+    keys(&mut app, "g e");
+    assert_eq!(points(&app).end, Some(80_000));
+    put_cursor(&mut app, 50_000);
+    keys(&mut app, "g l g L");
+    assert!(app.status.contains("after its start"), "{}", app.status);
+    put_cursor(&mut app, 60_000);
+    keys(&mut app, "g L");
+    let looped = points(&app).loop_.unwrap();
+    assert_eq!((looped.start, looped.end), (50_000, 60_000));
+    // The start can't pass the end.
+    put_cursor(&mut app, 85_000);
+    keys(&mut app, "g s");
+    assert_eq!(points(&app).start, 2000);
+    // x on a loop point takes the loop away, and on the end puts the file's back.
+    put_cursor(&mut app, 50_000);
+    keys(&mut app, "x");
+    assert_eq!(points(&app).loop_, None);
+    put_cursor(&mut app, 80_000);
+    keys(&mut app, "x");
+    assert_eq!(points(&app).end, None);
+    // With no loop, g l loops from the cursor to the end.
+    put_cursor(&mut app, 30_000);
+    keys(&mut app, "g l");
+    let looped = points(&app).loop_.unwrap();
+    assert_eq!((looped.start, looped.end), (30_000, LENGTH));
+    keys(&mut app, "u u");
+    assert_eq!(points(&app).end, Some(80_000));
+}
+
+#[test]
+fn with_snap_on_a_point_placed_lands_on_a_zero_crossing_within_a_column() {
+    let (mut app, _realtime) = on_page();
+    // K on the waveform lists the settings, Snap first, and = turns it on.
+    keys(&mut app, "K Enter =");
+    assert_eq!(app.sample_page.setting, Some(SampleSetting::Snap));
+    assert!(app.song().bank.get(1).unwrap().edit.play.snap_zero);
+    keys(&mut app, "Esc");
+    assert_eq!(app.sample_page.setting, None);
+    let shown = app.sample_shown().unwrap();
+    // The square wave changes sign every 100 frames.
+    for (target, zoom) in [(30_030, FIT), (40_071, 256), (44_449, 64)] {
+        while app.sample_page.zoom > zoom {
+            keys(&mut app, "z i");
+        }
+        put_cursor(&mut app, target);
+        keys(&mut app, "Enter");
+        let points = &app.song().bank.get(1).unwrap().edit.points;
+        let placed = points.slices[points.slice_at(target + zoom)].start;
+        assert_eq!(placed % 100, 0, "{placed} from {target}");
+        assert!(
+            placed.abs_diff(target) <= zoom,
+            "{placed} from {target} at {zoom}"
+        );
+        assert_eq!(shown.zero_crossing(target, zoom, None), Some(placed));
+    }
+    // A nudge goes on to the next crossing that way.
+    let start = slices(&app)[1].0;
+    put_cursor(&mut app, start);
+    keys(&mut app, "=");
+    assert_eq!(slices(&app)[1].0, start + 100);
+    // A frame's nudge never snaps.
+    keys(&mut app, "D-l");
+    assert_eq!(slices(&app)[1].0, start + 101);
+}
+
+#[test]
+fn enter_while_it_plays_splits_at_the_playhead() {
+    let (mut app, mut realtime) = on_page();
+    command(&mut app, "slice 4");
+    keys(&mut app, "2 G ;");
+    play(&mut realtime, &mut app, 1000);
+    put_cursor(&mut app, 10_000);
+    keys(&mut app, "Enter");
+    assert_eq!(slices(&app)[3].0, QUARTERS[2] + 1000, "{:?}", slices(&app));
+    assert!(app.status.contains("playhead"), "{}", app.status);
+    assert_eq!(cursor(&app), 10_000, "the cursor stays where it was");
+    // Tapped again further on.
+    play(&mut realtime, &mut app, 2000);
+    keys(&mut app, "Enter");
+    assert_eq!(slices(&app)[4].0, QUARTERS[2] + 3000);
+    // Once it's stopped, Enter splits at the cursor again.
+    keys(&mut app, "Esc");
+    play(&mut realtime, &mut app, 4000);
+    play(&mut realtime, &mut app, 4000);
+    keys(&mut app, "Enter");
+    assert_eq!(slices(&app)[1].0, 10_000);
+}
+
+#[test]
+fn the_settings_rows_change_a_slices_own_and_the_gain_and_reverse_keys_work_from_the_waveform() {
+    let (mut app, _realtime) = on_page();
+    let over =
+        |app: &App, slice: usize| app.song().bank.get(1).unwrap().edit.points.slices[slice].over;
+    // With no slices, they're the entry's own.
+    keys(&mut app, ">");
+    assert_eq!(app.song().bank.get(1).unwrap().edit.play.gain_db, 1.0);
+    keys(&mut app, "~");
+    assert!(app.song().bank.get(1).unwrap().edit.play.reverse);
+    keys(&mut app, "u u");
+    command(&mut app, "slice 4");
+    keys(&mut app, "j 3 <");
+    assert_eq!(over(&app, 1).gain_db, Some(-3.0));
+    assert!(
+        app.status.contains("Slice 01 gain -3.0 dB"),
+        "{}",
+        app.status
+    );
+    keys(&mut app, "~");
+    assert_eq!(over(&app, 1).reverse, Some(true));
+    // K, and the second setting is Gain, which x puts back as the sample's.
+    keys(&mut app, "K j Enter");
+    assert_eq!(app.sample_page.setting, Some(SampleSetting::Gain));
+    keys(&mut app, "x");
+    assert_eq!(over(&app, 1).gain_db, None);
+    // l goes along the rows to Pan, where + moves ten.
+    keys(&mut app, "l + -");
+    assert_eq!(over(&app, 1).pan, Some(9));
+    // j goes on to the next slice with the focus where it was.
+    keys(&mut app, "j =");
+    assert_eq!(over(&app, 2).pan, Some(1));
+    // K lists the values, the sample's own first.
+    keys(&mut app, "K Enter");
+    assert_eq!(over(&app, 2).pan, None);
+    // Fades in milliseconds.
+    keys(&mut app, "$ 1 0 =");
+    assert_eq!(over(&app, 2).fade_out, Some(480));
+    keys(&mut app, "Esc =");
+    assert_eq!(
+        over(&app, 2).fade_out,
+        Some(480),
+        "= on the waveform nudges again"
+    );
+    keys(&mut app, "u u");
+    assert_eq!(over(&app, 2).fade_out, None);
+}
+
+#[test]
+fn v_selects_frames_to_hear_and_quote_lt_gt_and_quote_quote_go_back() {
+    let (mut app, mut realtime) = on_page();
+    put_cursor(&mut app, 10_000);
+    keys(&mut app, "v");
+    put_cursor(&mut app, 20_000);
+    assert_eq!(app.sample_page.selection(), Some(10_000..20_001));
+    keys(&mut app, ";");
+    play(&mut realtime, &mut app, 1000);
+    assert_eq!(
+        heads(&realtime),
+        [Playhead {
+            entry: None,
+            frame: 11_000
+        }]
+    );
+    keys(&mut app, "o");
+    assert_eq!(cursor(&app), 10_000);
+    keys(&mut app, "Esc");
+    assert_eq!(app.sample_page.selection(), None);
+    // '< and '> are the last selection's ends, as jumps, and '' goes back from the latest.
+    put_cursor(&mut app, 40_000);
+    keys(&mut app, "' >");
+    assert_eq!(cursor(&app), 20_000);
+    keys(&mut app, "' <");
+    assert_eq!(cursor(&app), 10_000);
+    keys(&mut app, "' '");
+    assert_eq!(cursor(&app), 20_000);
+    keys(&mut app, "' '");
+    assert_eq!(cursor(&app), 10_000);
+    // g v selects it again.
+    keys(&mut app, "g v");
+    assert_eq!(app.sample_page.selection(), Some(10_000..20_001));
+}
+
+#[test]
+fn every_point_editing_key_is_listed() {
+    let (app, _realtime) = on_page();
+    let rows = app.help_rows();
+    for keys in [
+        "Enter", "J", "x", "=", "+", "D-l", "g s", "g e", "g l", "g L", "m", "v", "g v", ">", "~",
+        "K",
+    ] {
+        assert!(
+            rows.iter()
+                .any(|row| row.trim_start().starts_with(&format!("{keys} "))),
+            "{keys}"
+        );
+    }
 }

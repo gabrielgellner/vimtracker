@@ -742,6 +742,17 @@ fn mark_picture(kind: MarkKind, cell: (usize, usize)) -> Picture {
     picture
 }
 
+/// An entry's points as the waveform draws them, where they are and nothing else, so changing a
+/// slice's own settings or a letter doesn't send the picture again.
+fn drawn_points(points: &Points) -> Points {
+    let mut drawn = points.clone();
+    drawn.marks.clear();
+    for slice in &mut drawn.slices {
+        slice.over = Default::default();
+    }
+    drawn
+}
+
 /// What the sample page's waveform or overview was drawn from, which is all that's compared to
 /// tell if it has to be drawn again.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1352,7 +1363,7 @@ impl Graphics {
         let wave = WaveKey {
             hash: shown.analysis.hash,
             loaded: shown.frames.is_some(),
-            points: shown.entry.edit.points.clone(),
+            points: drawn_points(&shown.entry.edit.points),
             first: page.first_frame(),
             zoom: page.zoom,
             columns: page.columns,

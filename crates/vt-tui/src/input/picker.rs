@@ -133,6 +133,13 @@ pub enum Pick {
     },
     /// The slice a letter names, to go to on the sample page, as `'a` goes.
     Mark(char),
+    /// One of the sample page's settings, to change on its settings rows.
+    SampleSetting(crate::sample_settings::SampleSetting),
+    /// A value for one of the sample page's settings, or none for a slice to play as its sample.
+    SampleValue {
+        setting: crate::sample_settings::SampleSetting,
+        value: Option<i32>,
+    },
     /// Go to this track.
     Track(usize),
     /// What makes a track's sound.

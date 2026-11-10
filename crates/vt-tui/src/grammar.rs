@@ -5,7 +5,6 @@ use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
-use vt_model::bank::is_mark;
 use vt_model::selection::{
     Block, FIRST_FX_ORDER, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
 };
@@ -87,18 +86,17 @@ impl App {
             if self.mode.is_visual() || self.mode == Mode::OperatorPending {
                 self.mode = Mode::Normal;
             }
-            // On the sample page it also lets go of what the page is playing.
+            // On the sample page it also lets go of what the page is playing, ends a selection
+            // and leaves the settings row.
             if self.view == View::Sample {
                 self.stop_sample_audition();
+                self.sample_page.end_selection();
+                self.sample_page.setting = None;
             }
             return;
         }
-        if self.awaiting_mark {
-            self.awaiting_mark = false;
-            match key.code {
-                KeyCode::Char(c) if is_mark(c) && !key.ctrl && !key.alt => self.jump_to_mark(c),
-                _ => self.status = "Marks are a to z: :marks lists them".to_owned(),
-            }
+        if let Some(wait) = self.awaiting_mark.take() {
+            self.mark_key(wait, key);
             return;
         }
         if self.awaiting_register {
@@ -159,7 +157,7 @@ impl App {
         self.operator = None;
         self.register = None;
         self.awaiting_register = false;
-        self.awaiting_mark = false;
+        self.awaiting_mark = None;
     }
 
     /// Run a resolved command that belongs to the grammar. Returns false if it isn't one.

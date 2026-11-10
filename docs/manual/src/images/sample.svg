@@ -54,11 +54,24 @@
 <text x="513" y="641" fill="#ef9f76" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slices </text>
 <text x="576" y="641" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16   </text>
 <text x="621" y="641" fill="#ca9ee6" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Marks </text>
-<text x="675" y="641" fill="#c6d0f5" textLength="792" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ab                                                                                      </text>
-<text x="9" y="660" fill="#f2d5cf" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cursor </text>
-<text x="72" y="660" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0.085 s  frame 4060  </text>
-<text x="261" y="660" fill="#ef9f76" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">slice 00</text>
-<text x="333" y="660" fill="#737994" textLength="324" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   drawn as its column, zc to switch</text>
+<text x="675" y="641" fill="#c6d0f5" textLength="792" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ab   Snap off                                                                           </text>
+<text x="9" y="660" fill="#ef9f76" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slice 00</text>
+<text x="81" y="660" fill="#c6d0f5" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Gain </text>
+<text x="153" y="660" fill="#949cbb" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+0.0 dB</text>
+<text x="216" y="660" fill="#c6d0f5" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Pan </text>
+<text x="279" y="660" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C</text>
+<text x="288" y="660" fill="#c6d0f5" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Tune </text>
+<text x="360" y="660" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+0 st</text>
+<text x="405" y="660" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Reverse </text>
+<text x="504" y="660" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">off</text>
+<text x="531" y="660" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Fade in </text>
+<text x="630" y="660" fill="#949cbb" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0 ms</text>
+<text x="666" y="660" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Fade out </text>
+<text x="774" y="660" fill="#949cbb" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0 ms</text>
+<text x="9" y="679" fill="#f2d5cf" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cursor </text>
+<text x="72" y="679" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0.085 s  frame 4060  </text>
+<text x="261" y="679" fill="#ef9f76" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">slice 00</text>
+<text x="333" y="679" fill="#737994" textLength="324" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   drawn as its column, zc to switch</text>
 <rect x="0" y="760" width="72" height="19" fill="#8caaee"/>
 <text x="0" y="774" fill="#303446" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> SAMPLE </text>
 <rect x="72" y="760" width="72" height="19" fill="#51576d"/>

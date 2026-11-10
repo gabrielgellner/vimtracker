@@ -63,7 +63,10 @@ fn fx_name(app: &App, slot: usize) -> String {
 pub fn column_name(app: &App) -> String {
     match app.view {
         View::Audio => app.audio_row_here().name().to_owned(),
-        View::Sample => "Sample".to_owned(),
+        View::Sample => match app.sample_page.setting {
+            Some(setting) => format!("Sample: {}", setting.name()),
+            None => "Sample".to_owned(),
+        },
         View::Project => app.project_control().label().to_owned(),
         View::Phrase => match app.cursor.field {
             Field::Note => "Note".to_owned(),
@@ -456,6 +459,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 " {} ",
                 if app.mode == Mode::Keys {
                     Mode::Keys.label()
+                } else if app.view == View::Sample && app.sample_page.anchor.is_some() {
+                    // Selecting frames on the sample page keeps its keys, but is Visual.
+                    Mode::VisualField.label()
                 } else {
                     app.key_scope().label()
                 }

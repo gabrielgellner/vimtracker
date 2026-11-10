@@ -349,7 +349,7 @@ Song                               song.ron, refused unless format_version is FO
  |- bank                           01..FF -> BankEntry: label, name, edit
  |   '- SampleEdit                 timeline (one whole file for now), points, play
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
- |       '- PlayParams             gain, tune, cents, reverse, fades, normalize
+ |       '- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
  |- tracks[]                       sound tracks, then Return A, Return B and Master
  |   |- kind, name, mute, solo
  |   |- machine                    Sampler, or Plaits(voice)
@@ -478,7 +478,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the history, the engine's `Handle`, the last `Published`, the sample
 pool, the view and the mode, the cursor, the picker, the sample page and much more: over 80 fields,
-and 21 feature files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
+and 23 feature files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
 `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs` and `sample_page.rs`.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
@@ -529,8 +529,9 @@ history, the engine's handle, the sample pool and analyses, graphics, settings a
 `App` shrinks to those services, the current view, the modes and popups that span pages (the picker,
 the command line and help) and the jump list, and the feature files become methods on the page or
 service they belong to. It goes a page per PR, the track page first, with keys, drawing and
-screenshots unchanged. `SamplePage` is already half there: it keeps its own cursor, zoom and
-scroll, while its keys are still an `impl App` block.
+screenshots unchanged. `SamplePage` is already half there: it keeps its own cursor, zoom, scroll,
+selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
+in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
 **Decisions:** 49 to 53, 73 to 75, 100 to 104 and 108, with #320 and #330.
 

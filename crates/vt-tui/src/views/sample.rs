@@ -1,5 +1,6 @@
 //! The sample page: a header, a ruler with the points and the time, the waveform, an overview of
-//! the whole sample with the view shown on it, the entry's settings, and where the cursor is.
+//! the whole sample with the view shown on it, the entry's settings, the slice's under the cursor,
+//! and where the cursor is.
 //!
 //! It's laid out for the author's screen, kitty full screen on a MacBook, 163 characters by 42. A
 //! wider window gives the waveform its width, and a smaller one shows part of the page, following
@@ -17,11 +18,12 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::input::mode::{Mode, View};
 use crate::kitty;
+use crate::placing::{Edge, Point};
 use crate::sample_page::{SamplePage, Shown};
+use crate::sample_settings::SampleSetting;
 use crate::sample_wave::{
     END_COLOR, LOOP_COLOR, MARK_COLOR, POINT_PIXELS, SLICE_COLOR, SLICE_PIXELS, START_COLOR,
 };
-use crate::slicing::pan_text;
 use crate::theme;
 use crate::views::help::POPUP_DELAY;
 
@@ -32,7 +34,7 @@ pub const WAVE_ROWS: u16 = 28;
 pub const WAVE_TOP: u16 = 3;
 /// The page's size on the author's screen. A smaller window shows part of it.
 pub const PAGE_WIDTH: u16 = 163;
-pub const PAGE_HEIGHT: u16 = WAVE_TOP + WAVE_ROWS + 4;
+pub const PAGE_HEIGHT: u16 = WAVE_TOP + WAVE_ROWS + 5;
 /// The waveform's column either side of it.
 const MARGIN: u16 = 1;
 /// Where a point is shown in the ruler, above its line, when the terminal isn't placing its mark
@@ -340,6 +342,17 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
     if let Some((wave, overview)) = app.sample_images {
         let style = Style::new().fg(kitty::id_color(wave));
         let cursor = state.cursor_on_screen().filter(|_| !state.cursor_line);
+        // The selection, as the selection's grey behind the columns it covers.
+        let selected: Vec<u64> = state
+            .selection()
+            .map(|frames| {
+                let first = state.column_of(frames.start).max(state.column);
+                let last = state
+                    .column_of(frames.end - 1)
+                    .min(state.column + u64::from(columns.saturating_sub(1)));
+                (first..=last).map(|column| column - state.column).collect()
+            })
+            .unwrap_or_default();
         // The playheads as their columns, where the terminal isn't placing them as lines.
         let playheads: Vec<usize> = if lines_placed(app, Instant::now()) {
             Vec::new()
@@ -355,6 +368,9 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
         {
             let y = WAVE_TOP + y as u16;
             buffer.set_string(MARGIN, y, line, style);
+            for column in &selected {
+                buffer[(MARGIN + *column as u16, y)].set_bg(theme::SURFACE1);
+            }
             for column in &playheads {
                 buffer[(MARGIN + *column as u16, y)].set_bg(playhead_column());
             }
@@ -373,8 +389,9 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
             buffer[(MARGIN + column as u16, y)].set_bg(theme::SURFACE0);
         }
     }
-    settings(shown).render(row(WAVE_TOP + WAVE_ROWS + 2), buffer);
-    cursor_line(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 3), buffer);
+    settings(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 2), buffer);
+    slice_settings(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 3), buffer);
+    cursor_line(app, shown).render(row(WAVE_TOP + WAVE_ROWS + 4), buffer);
 }
 
 /// The background of the cursor's column, when it's shown that way: the cursor's own colour,
@@ -508,8 +525,24 @@ fn ruler(app: &App, shown: &Shown) -> Line<'static> {
     )
 }
 
-/// The entry's points, each named in its colour, so the row is the waveform's key too.
-fn settings(shown: &Shown) -> Line<'static> {
+/// A setting's value on the rows: in the cursor's colours while the focus is on it, the text's
+/// if it's the slice's own, and dimmer if it's the entry's, which the slice plays as.
+fn setting_span(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Span<'static> {
+    let (value, own) = shown.setting_value(setting, state.cursor);
+    let text = setting.text(value, shown.rate());
+    let style = if state.setting == Some(setting) {
+        theme::cursor(Mode::Normal)
+    } else if own {
+        Style::new()
+    } else {
+        theme::dim()
+    };
+    Span::styled(text, style)
+}
+
+/// The entry's points, each named in its colour, so the row is the waveform's key too, and
+/// whether points placed snap to zero crossings.
+fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     let rate = shown.rate();
     let points = &shown.entry.edit.points;
     let named = |name: &str, color: Color| Span::styled(format!("{name} "), Style::new().fg(color));
@@ -551,33 +584,54 @@ fn settings(shown: &Shown) -> Line<'static> {
         let letters: String = marks.iter().map(|(letter, _)| *letter).collect();
         spans.push(Span::raw(letters));
     }
+    spans.push(Span::raw("   "));
+    spans.push(Span::raw("Snap "));
+    spans.push(setting_span(state, shown, SampleSetting::Snap));
     Line::from(spans)
 }
 
-/// What a slice's own settings are, where it doesn't play as its entry does, as `-3.0 dB  25 L`.
-fn slice_own(shown: &Shown, slice: usize) -> Option<String> {
-    let over = shown.entry.edit.points.slices.get(slice)?.over;
-    let rate = shown.rate();
-    let mut said = Vec::new();
-    said.extend(over.gain_db.map(|db| format!("{db:+.1} dB")));
-    said.extend(over.pan.map(pan_text));
-    said.extend(over.tune.map(|tune| format!("{tune:+} st")));
-    said.extend(
-        over.reverse
-            .map(|reverse| if reverse { "reversed" } else { "forward" }.to_owned()),
-    );
-    if let (Some(fade_in), Some(fade_out)) = (over.fade_in, over.fade_out) {
-        said.push(format!(
-            "fades {} {}",
-            time(u64::from(fade_in), rate),
-            time(u64::from(fade_out), rate)
-        ));
+/// How the slice under the cursor plays, its own settings in the text's colour and those it plays
+/// as the entry does dimmer, or the entry's own with no slices.
+fn slice_settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
+    let mut spans = match shown.settings_slice(state.cursor) {
+        Some(slice) => {
+            let mut spans = vec![Span::styled(
+                format!("Slice {slice:02X}"),
+                Style::new().fg(SLICE_COLOR),
+            )];
+            let letters: Vec<String> = shown
+                .entry
+                .edit
+                .points
+                .marks_of(slice)
+                .into_iter()
+                .map(|letter| format!("'{letter}"))
+                .collect();
+            if !letters.is_empty() {
+                spans.push(Span::styled(
+                    format!(" {}", letters.join(" ")),
+                    Style::new().fg(MARK_COLOR),
+                ));
+            }
+            spans
+        }
+        None => vec![Span::styled("Whole sample", Style::new().fg(SLICE_COLOR))],
+    };
+    for setting in shown.settings() {
+        if setting == SampleSetting::Snap {
+            continue;
+        }
+        spans.push(Span::raw(format!("   {} ", setting.name())));
+        spans.push(setting_span(state, shown, setting));
     }
-    (!said.is_empty()).then(|| said.join("  "))
+    Line::from(spans)
 }
 
-/// Where the cursor is: its time, its frame and its slice, with the slice's own settings.
-fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
+/// Where the cursor is: its time, its frame and its slice, the point under it, which the nudges
+/// and `x` act on, and the selection while there's one.
+fn cursor_line(app: &App, shown: &Shown) -> Line<'static> {
+    let state = &app.sample_page;
+    let rate = shown.rate();
     let (slice, _) = shown.slice_at(state.cursor);
     let style = if state.cursor_line {
         "a line"
@@ -588,27 +642,29 @@ fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
         Span::styled("Cursor ", Style::new().fg(theme::ROSEWATER)),
         Span::raw(format!(
             "{}  frame {}  ",
-            time(state.cursor, shown.rate()),
+            time(state.cursor, rate),
             state.cursor
         )),
         Span::styled(format!("slice {slice:02X}"), Style::new().fg(SLICE_COLOR)),
     ];
-    let letters: Vec<String> = shown
-        .entry
-        .edit
-        .points
-        .marks_of(slice)
-        .into_iter()
-        .map(|letter| format!("'{letter}"))
-        .collect();
-    if !letters.is_empty() {
-        spans.push(Span::styled(
-            format!("  {}", letters.join(" ")),
-            Style::new().fg(MARK_COLOR),
-        ));
+    if let Some(point) = app.point_here(shown) {
+        let (name, color) = match point {
+            Point::Slice(number) => (format!("slice {number:02X}'s start"), SLICE_COLOR),
+            Point::Edge(Edge::Start) => ("the start".to_owned(), START_COLOR),
+            Point::Edge(Edge::End) => ("the end".to_owned(), END_COLOR),
+            Point::Edge(Edge::LoopStart) => ("the loop's start".to_owned(), LOOP_COLOR),
+            Point::Edge(Edge::LoopEnd) => ("the loop's end".to_owned(), LOOP_COLOR),
+        };
+        spans.push(Span::raw("  on "));
+        spans.push(Span::styled(name, Style::new().fg(color)));
     }
-    if let Some(own) = slice_own(shown, slice) {
-        spans.push(Span::raw(format!("  {own}")));
+    if let Some(selected) = state.selection() {
+        spans.push(Span::raw(format!(
+            "   Selection {} to {}, {}",
+            time(selected.start, rate),
+            time(selected.end, rate),
+            time(selected.end - selected.start, rate)
+        )));
     }
     spans.push(Span::styled(
         format!("   drawn as {style}, zc to switch"),
