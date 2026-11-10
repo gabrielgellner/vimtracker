@@ -5,7 +5,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Row};
 
 use vt_model::groove::{FULL_VELOCITY, MAX_PUSH};
 
@@ -17,14 +17,17 @@ use crate::project_page::{PROJECT_ROWS, ProjectControl};
 use crate::theme;
 use crate::views::meter::{EIGHTHS, hanging_cell};
 use crate::views::status::grid_name;
+use crate::views::table::{Columns, blank_row, take_top};
 
 /// Room for a setting's name, and where the right column starts.
-const LABEL: usize = 10;
-const RIGHT_COLUMN: usize = 40;
+const LABEL: u16 = 10;
+const RIGHT_COLUMN: u16 = 40;
 /// The most of a folder's path shown, so whether it's saved still fits beside it.
 const FOLDER_WIDTH: usize = 64;
-/// How wide each of a groove's steps is drawn, room for a push of `-120` and a gap.
-const STEP_WIDTH: usize = 5;
+/// How wide each of a groove's steps is drawn, room for a push of `-120` and a gap, and the gap
+/// before its units.
+const STEP_WIDTH: u16 = 5;
+const UNITS_GAP: u16 = 2;
 
 /// A path that fits, keeping its end, which says most about where it is.
 fn kept_end(path: String) -> String {
@@ -115,26 +118,22 @@ fn after(app: &App, control: ProjectControl) -> Option<String> {
     }
 }
 
-/// One row: each setting's name dim, then its value, the cursor's under it.
-fn row(app: &App, controls: &[ProjectControl]) -> Line<'static> {
+/// The settings' columns: a name and its value on the left, and the same on the right, whose value
+/// has the rest of the room.
+fn columns() -> Columns {
+    Columns::new([LABEL, RIGHT_COLUMN - LABEL, LABEL, 0]).open_ended()
+}
+
+/// One row: each setting's name dim, then its value, the cursor's under it. A value with nothing to
+/// its right has the rest of the row.
+fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static> {
     let here = app.project_control();
     let typing = app.mode == Mode::Insert;
-    let mut spans = Vec::new();
-    let mut used = 0;
-    for control in controls {
-        let at = control.column() * RIGHT_COLUMN;
-        spans.push(Span::raw(" ".repeat(at.saturating_sub(used))));
-        used = used.max(at);
+    let mut cells = columns.row();
+    for (index, control) in controls.iter().enumerate() {
+        cells.to(control.column() * 2);
         let is_here = *control == here;
         let on_fine = is_here && app.project_fine;
-        // An action is its own name, so the cursor is on that rather than a value beside it.
-        if !control.is_action() {
-            spans.push(Span::styled(
-                format!("{:<LABEL$}", control.label()),
-                theme::dim(),
-            ));
-            used += LABEL;
-        }
         let text = if is_here && typing && !on_fine {
             format!("{}_", app.entry.text)
         } else {
@@ -149,8 +148,15 @@ fn row(app: &App, controls: &[ProjectControl]) -> Line<'static> {
         } else {
             Style::new()
         };
-        used += text.chars().count();
-        spans.push(Span::styled(text, style));
+        // An action is its own name, so the cursor is on that rather than a value beside it, and
+        // what it does is in the value's place.
+        let mut spans = Vec::new();
+        if control.is_action() {
+            cells.cell(Line::styled(text, style));
+        } else {
+            cells.cell(Line::styled(control.label(), theme::dim()));
+            spans.push(Span::styled(text, style));
+        }
         if *control == ProjectControl::Bpm {
             let digits = if on_fine && typing {
                 format!(".{}_", app.entry.text)
@@ -162,21 +168,19 @@ fn row(app: &App, controls: &[ProjectControl]) -> Line<'static> {
             } else {
                 theme::dim()
             };
-            used += digits.chars().count();
             spans.push(Span::styled(digits, style));
         }
         if let Some(note) = after(app, *control) {
-            let gap = if control.is_action() {
-                LABEL.saturating_sub(control.label().len())
-            } else {
-                2
-            };
-            used += gap + note.chars().count();
-            spans.push(Span::raw(" ".repeat(gap)));
+            if !spans.is_empty() {
+                spans.push(Span::raw("  "));
+            }
             spans.push(Span::styled(note, theme::dim()));
         }
+        let alone = index + 1 == controls.len();
+        let span = if alone { 3 - control.column() * 2 } else { 1 };
+        cells.span(spans, span);
     }
-    Line::from(spans)
+    cells.done()
 }
 
 /// A push as it's shown, with its sign when it isn't 0.
@@ -188,14 +192,21 @@ fn push_text(push: i16) -> String {
     }
 }
 
+/// A groove's columns: the row's name, a column for each step, and its units after a gap.
+fn groove_columns(steps: usize) -> Columns {
+    let mut widths = vec![LABEL];
+    widths.extend(std::iter::repeat_n(STEP_WIDTH, steps));
+    widths.extend([UNITS_GAP, 0]);
+    Columns::new(widths).open_ended()
+}
+
 /// A groove's pushes drawn as ticks above a line for the steps that land late and below it for
 /// those that land early, each as tall as its push, and its values under it, then its velocities,
 /// the cursor's under it. One colour, as the curves are.
-fn groove_rows(app: &App) -> Vec<Line<'static>> {
+fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
     let (_, groove) = app.shown_groove();
     let here = app.project_control();
     let typing = app.mode == Mode::Insert;
-    let indent = || Span::raw(" ".repeat(LABEL));
     let steps = groove.steps();
     // Each tick sits over the last digit of its value.
     let tick = |filled: usize, late: bool| {
@@ -204,26 +215,29 @@ fn groove_rows(app: &App) -> Vec<Line<'static>> {
         } else {
             hanging_cell(filled, theme::TEXT, theme::BASE, 1)
         };
-        vec![Span::raw(" ".repeat(STEP_WIDTH - 1)), cell]
+        Line::from(cell).right_aligned()
     };
     let eighths = |push: i16| {
         let share = f32::from(push.unsigned_abs()) / f32::from(MAX_PUSH as u16);
         ((share * 8.0).ceil() as usize).min(8)
     };
-    let mut above = vec![indent()];
-    let mut below = vec![indent()];
+    let mut above = columns.row();
+    let mut below = columns.row();
+    above.skip(1);
+    below.skip(1);
     for push in groove.pushes() {
         let filled = eighths(*push);
-        above.extend(tick(if *push > 0 { filled } else { 0 }, true));
-        below.extend(tick(if *push < 0 { filled } else { 0 }, false));
+        above.cell(tick(if *push > 0 { filled } else { 0 }, true));
+        below.cell(tick(if *push < 0 { filled } else { 0 }, false));
     }
-    let line = vec![
-        indent(),
-        Span::styled("─".repeat(steps * STEP_WIDTH), theme::faint()),
-    ];
+    let mut line = columns.row();
+    line.skip(1).span(
+        Line::styled("─".repeat(columns.room(1, steps)), theme::faint()),
+        steps,
+    );
     let values = |control: fn(u8) -> ProjectControl, units: &'static str| {
-        let label = control(0).label();
-        let mut spans = vec![Span::styled(format!("{label:<LABEL$}"), theme::dim())];
+        let mut cells = columns.row();
+        cells.cell(Line::styled(control(0).label(), theme::dim()));
         for step in 0..steps {
             let field = control(step as u8);
             let is_here = field == here;
@@ -242,17 +256,15 @@ fn groove_rows(app: &App) -> Vec<Line<'static>> {
             } else {
                 Style::new()
             };
-            let gap = STEP_WIDTH.saturating_sub(text.chars().count());
-            spans.push(Span::raw(" ".repeat(gap)));
-            spans.push(Span::styled(text, style));
+            cells.cell(Line::styled(text, style).right_aligned());
         }
-        spans.push(Span::styled(format!("  {units}"), theme::dim()));
-        Line::from(spans)
+        cells.skip(1).cell(Line::styled(units, theme::dim()));
+        cells.done()
     };
     vec![
-        Line::from(above),
-        Line::from(line),
-        Line::from(below),
+        above.done(),
+        line.done(),
+        below.done(),
         values(ProjectControl::Push, "ticks"),
         values(ProjectControl::Velocity, "%"),
     ]
@@ -260,7 +272,13 @@ fn groove_rows(app: &App) -> Vec<Line<'static>> {
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let mut lines = vec![Line::styled("Project", bold), Line::raw("")];
+    let mut rest = area;
+    frame.render_widget(
+        Paragraph::new(Line::styled("Project", bold)),
+        take_top(&mut rest, 2),
+    );
+    let columns = columns();
+    let mut rows = Vec::new();
     for controls in PROJECT_ROWS {
         // The settings, the groove, the audio and the actions each stand apart.
         match controls.first() {
@@ -269,16 +287,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 | ProjectControl::GrooveShown
                 | ProjectControl::Audio
                 | ProjectControl::Save,
-            ) => lines.push(Line::raw("")),
-            // The pushes and velocities are drawn together.
+            ) => rows.push(blank_row()),
+            // The pushes and velocities are drawn together, in columns of their own.
             Some(ProjectControl::Push(_)) => {
-                lines.extend(groove_rows(app));
+                columns.stack(frame, &mut rest, std::mem::take(&mut rows));
+                let groove = groove_columns(app.shown_groove().1.steps());
+                let drawn = groove_rows(app, &groove);
+                groove.stack(frame, &mut rest, drawn);
                 continue;
             }
             Some(ProjectControl::Velocity(_)) => continue,
             _ => {}
         }
-        lines.push(row(app, controls));
+        rows.push(row(app, controls, &columns));
     }
-    frame.render_widget(Paragraph::new(lines), area);
+    columns.stack(frame, &mut rest, rows);
 }

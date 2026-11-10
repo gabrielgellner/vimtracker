@@ -4,7 +4,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Row};
 use vt_engine::engine::Transport;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
@@ -26,15 +26,20 @@ use crate::track_page::{
     FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
 };
 use crate::views;
+use crate::views::bar::{BAR_ENDS, ValueBar};
 use crate::views::meter::{hanging_cell, hanging_eighths};
 use crate::views::phrase::level_glyph;
+use crate::views::table::{Columns, blank_row, take_top};
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
 pub(crate) const DIAGRAM_HEIGHT: usize = 4;
-/// The size of an LFO's icon, in characters, and the room for its shape's name before it.
-const LFO_ICON_WIDTH: usize = 1;
-const LFO_SHAPE_NAME: usize = 7;
+/// The room between envelopes' diagrams.
+const DIAGRAM_GAP: usize = 2;
+/// The room for an LFO's shape's name, the longest being `Square`, and for its icon after it: the
+/// icon, which is one character, and a space more.
+const LFO_SHAPE_NAME: u16 = 6;
+const LFO_ICON_ROOM: u16 = 2;
 /// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
 pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
@@ -53,112 +58,49 @@ pub(crate) const EQ_CURVE_WIDTH: usize = 10;
 const REDUCTION_METER_DB: f32 = 24.0;
 
 /// Room for a slot's number on the FX page, and for its effect's name.
-const FX_INDENT: usize = 3;
-const FX_EFFECT_WIDTH: usize = 10;
-/// Room for a setting's name on the FX page, and for its value and bar, so its columns line up.
-const FX_NAME_WIDTHS: [usize; FX_COLUMNS] = [10, 10, 10, 6, 5];
-const FX_VALUE_WIDTH: usize = 12;
-/// Where a slot's drawing starts on the FX page: a space after four columns of settings, which is
-/// as many as the effects with drawings have.
-const FX_DRAWING_COLUMN: usize = FX_INDENT
-    + FX_EFFECT_WIDTH
-    + FX_NAME_WIDTHS[0]
-    + FX_NAME_WIDTHS[1]
-    + FX_NAME_WIDTHS[2]
-    + FX_NAME_WIDTHS[3]
-    + 4 * FX_VALUE_WIDTH
-    + 1;
+const FX_INDENT: u16 = 3;
+const FX_EFFECT_WIDTH: u16 = 10;
+/// Room for a setting's name on the FX page, for its value and a gap, and for its bar and a gap,
+/// so its columns line up. A choice takes the value's and the bar's room.
+const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [10, 10, 10, 6, 5];
+const FX_VALUE_WIDTH: u16 = 3;
+const FX_BAR_WIDTH: u16 = FX_BAR_CELLS as u16 + BAR_ENDS + 2;
+/// The columns of settings before a slot's drawing, which is as many as the effects with drawings
+/// have. The drawing starts a space after them, so that space is a column of its own, taken from
+/// the next setting's name.
+const FX_DRAWN_COLUMNS: usize = 4;
+const FX_DRAWING_GAP: u16 = 1;
+/// The table column a slot's drawing starts in: after its number and effect, three for each
+/// column of settings before it, and the gap.
+const FX_DRAWING_COLUMN: usize = 2 + 3 * FX_DRAWN_COLUMNS + 1;
 /// Cells in a bar on the FX page, where there are more columns to fit.
 const FX_BAR_CELLS: usize = 5;
 /// Room for a section's name.
-const NAME_WIDTH: usize = 10;
+const NAME_WIDTH: u16 = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
 const BAR_CELLS: usize = 9;
-/// The lines at each end of a bar's range, touching the cells between them.
-const BAR_START: &str = "▕";
-const BAR_END: &str = "▏";
-/// The Sound page's columns: a label, then a value and its bar.
-const SOUND_LABEL: usize = 10;
-const SOUND_COLUMN: usize = 36;
-/// The longest file name shown beside the output's column.
-const FILE_WIDTH: usize = 24;
-/// The characters for a cell partly full, from one eighth to seven.
-const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
-
-/// A bar for a value, full at `FF`, filling all of its cells. Only `00` leaves them empty.
-pub fn level_bar(value: u8) -> String {
-    level_bar_of(value, BAR_CELLS)
-}
-
-fn level_bar_of(value: u8, cells: usize) -> String {
-    let eighths = (usize::from(value) * cells * 8 / 255).max(usize::from(value > 0));
-    let mut bar = "█".repeat(eighths / 8);
-    if eighths % 8 > 0 {
-        bar.push(EIGHTHS[eighths % 8 - 1]);
-    }
-    format!("{bar:<cells$}")
-}
-
-/// A mark for a value either side of a centre, like pan, filling all of the bar's cells.
-pub fn centre_bar(value: u8) -> String {
-    format!(
-        "{:<BAR_CELLS$}",
-        format!("{}│", " ".repeat(bar_cell(value)))
-    )
-}
-
-/// The cell of a bar a value's mark goes in.
-fn bar_cell(value: u8) -> usize {
-    usize::from(value) * BAR_CELLS / 256
-}
-
-/// A value's bar when something is moving it. The fill or bright mark follows what's playing, with
-/// a dim mark for what's set. Over a filled cell, that mark is cut out of the fill, and the moving
-/// edge takes its place while passing through its cell, as a cell can only show one of them.
-pub fn bar_spans(set: u8, live: u8, centred: bool) -> Vec<Span<'static>> {
-    let bright = Style::new().fg(theme::MAUVE);
-    if set == live {
-        let bar = if centred {
-            centre_bar(set)
-        } else {
-            level_bar(set)
-        };
-        return vec![Span::styled(bar, bright)];
-    }
-    let bar = if centred {
-        centre_bar(live)
-    } else {
-        level_bar(live)
-    };
-    let mark = bar_cell(set);
-    bar.chars()
-        .enumerate()
-        .map(|(cell, shown)| match shown {
-            '█' if cell == mark => {
-                Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
-            }
-            ' ' if cell == mark => Span::styled("│", theme::faint()),
-            _ => Span::styled(shown.to_string(), bright),
-        })
-        .collect()
-}
-
-/// A setting's bar on the FX page: what's playing, with a dim mark for what's set if that differs.
-fn fx_bar_spans(set: u8, live: u8) -> Vec<Span<'static>> {
-    let bright = Style::new().fg(theme::MAUVE);
-    let mark = usize::from(set) * FX_BAR_CELLS / 256;
-    level_bar_of(live, FX_BAR_CELLS)
-        .chars()
-        .enumerate()
-        .map(|(cell, shown)| match shown {
-            '█' if set != live && cell == mark => {
-                Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
-            }
-            ' ' if set != live && cell == mark => Span::styled("│", theme::faint()),
-            _ => Span::styled(shown.to_string(), bright),
-        })
-        .collect()
-}
+/// The Sound page's columns, in each half: a setting's name, its value, its fine part and a gap,
+/// and its bar. A word takes all of those after the name, and the room after the bar, as a long
+/// file name needs; a choice's name takes the bar's room and what's after it. A gap parts the
+/// halves.
+const SOUND_LABEL: u16 = 10;
+const SOUND_VALUE: u16 = 2;
+const SOUND_FINE: u16 = 3;
+const SOUND_BAR: u16 = BAR_CELLS as u16 + BAR_ENDS;
+const SOUND_AFTER_BAR: u16 = FILE_WIDTH - SOUND_VALUE - SOUND_FINE - SOUND_BAR;
+const SOUND_GAP: u16 = 2;
+const SOUND_HALF: [u16; 6] = [
+    SOUND_LABEL,
+    SOUND_VALUE,
+    SOUND_FINE,
+    SOUND_BAR,
+    SOUND_AFTER_BAR,
+    SOUND_GAP,
+];
+/// Where the right half starts, the output's column, which the waveform sits under.
+const SOUND_COLUMN: u16 = SOUND_LABEL + FILE_WIDTH + SOUND_GAP;
+/// The longest file name shown on the Sound page.
+const FILE_WIDTH: u16 = 24;
 
 /// What a control with a bar is playing with right now.
 fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
@@ -230,21 +172,21 @@ pub(crate) fn value_spans(
 }
 
 /// A setting's name in its column, with any labels from a jump over the letters just after what's
-/// been typed, as flash.nvim draws them, since that's where the eye is while searching.
-pub(crate) fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Vec<Span<'static>> {
+/// been typed, as flash.nvim draws them, since that's where the eye is while searching. The labels
+/// stay inside the room the column has.
+pub(crate) fn name_line(app: &App, name: &str, labels: &str, room: u16) -> Line<'static> {
     let letters: Vec<char> = name.chars().collect();
     let typed = app.field_jump.as_ref().and_then(|jump| {
         let at = name.to_lowercase().find(&jump.query)?;
         Some(at + jump.query.len())
     });
     let Some(typed) = typed.filter(|_| !labels.is_empty()) else {
-        return vec![Span::styled(format!("{name:<room$}"), theme::dim())];
+        return Line::styled(name.to_owned(), theme::dim());
     };
     let count = labels.chars().count();
-    let before = typed.min(room.saturating_sub(count));
+    let before = typed.min(usize::from(room).saturating_sub(count));
     let after: String = letters.iter().skip(before + count).collect();
-    let used = before + count + after.chars().count();
-    vec![
+    Line::from(vec![
         Span::styled(
             letters[..before.min(letters.len())]
                 .iter()
@@ -253,43 +195,41 @@ pub(crate) fn name_spans(app: &App, name: &str, labels: &str, room: usize) -> Ve
         ),
         Span::styled(labels.to_owned(), theme::jump_label()),
         Span::styled(after, theme::dim()),
-        Span::raw(" ".repeat(room.saturating_sub(used))),
-    ]
+    ])
 }
 
-/// A row of the Sound page: a control on the left, and on the right perhaps one, or a drawing.
-fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
+/// The Sound page's columns: its two halves side by side.
+fn sound_columns() -> Columns {
+    Columns::new([SOUND_HALF, SOUND_HALF].concat())
+}
+
+/// A row of the Sound page: a control on the left, and on the right perhaps one.
+fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) -> Row<'static> {
+    let mut cells = columns.row();
     let current = app.track_control();
-    let mut spans = Vec::new();
-    let mut used = 0;
     for control in controls {
         // A sound track's output is always on the right, even on a row with nothing on the left. A
         // return or the master has only output, so it's all on the left.
-        if control.column() > 0 && track.is_sound() {
-            spans.push(Span::raw(" ".repeat(SOUND_COLUMN.saturating_sub(used))));
-        }
+        let half = usize::from(control.column() > 0 && track.is_sound());
+        cells.to(half * SOUND_HALF.len());
         let label = app
             .field_jump
             .as_ref()
             .and_then(|jump| jump.label(*control));
-        spans.extend(name_spans(
+        cells.cell(name_line(
             app,
             control.label_on(track),
             &label.map_or_else(String::new, String::from),
             SOUND_LABEL,
         ));
-        used = SOUND_LABEL;
         let here = *control == current;
         let on_fine = here && app.track_fine;
         let typing = here && app.mode == Mode::Insert;
-        let mut text = if typing && !on_fine {
+        let text = if typing && !on_fine {
             format!("{}_", app.entry.text)
         } else {
             value(*control, track, app.song())
         };
-        if *control == Control::Sample {
-            text = text.chars().take(FILE_WIDTH).collect();
-        }
         let style = if here && !on_fine {
             theme::cursor(app.mode)
         } else if *control == Control::Groove && track.groove.is_none()
@@ -303,13 +243,11 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
         } else {
             Style::new()
         };
-        used += text.chars().count();
-        spans.extend(value_spans(app, *control, text, style));
-        // A setting that sweeps shows its fine part, set back, and any other with a bar keeps the
-        // room so the bars line up.
-        if let Some(id) = control.fine_on(track) {
+        let value = Line::from(value_spans(app, *control, text, style));
+        // A setting that sweeps shows its fine part, set back.
+        let fine = control.fine_on(track).map(|id| {
             let fine = if typing && on_fine {
-                format!("{:<2}", format!("{}_", app.entry.text))
+                format!("{}_", app.entry.text)
             } else {
                 format!("{:02X}", track.fine(id))
             };
@@ -318,35 +256,36 @@ fn sound_row(app: &App, track: &Track, controls: &[Control]) -> Line<'static> {
             } else {
                 theme::dim()
             };
-            used += 2;
-            spans.push(Span::styled(fine, style));
-        } else if bar_value(*control, track).is_some() {
-            used += 2;
-            spans.push(Span::raw("  "));
-        }
+            Line::styled(fine, style)
+        });
         let name = if control.setting_on(track) == Some(SettingId::SLICE) {
             Some(app.slice_choice(track))
         } else {
             choice_name(*control, track)
         };
+        let bar = bar_value(*control, track);
+        if name.is_none() && bar.is_none() && fine.is_none() {
+            // A word, with all the room after the name.
+            cells.span(value, 4);
+            continue;
+        }
+        cells.cell(value).cell(fine.unwrap_or_default());
         if let Some(name) = name {
             // A patch number says nothing as a bar, so its name takes the bar's place.
-            used += 1 + name.chars().count();
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(name, Style::new().fg(theme::MAUVE)));
-        } else if let Some((value, centred)) = bar_value(*control, track) {
+            cells.span(Line::styled(name, Style::new().fg(theme::MAUVE)), 2);
+        } else if let Some((value, centred)) = bar {
             let live = app
                 .live
                 .and_then(|live| live_value(*control, &live))
                 .unwrap_or(value);
-            used += 1 + BAR_START.chars().count() + BAR_CELLS + BAR_END.chars().count();
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(BAR_START, theme::faint()));
-            spans.extend(bar_spans(value, live, centred));
-            spans.push(Span::styled(BAR_END, theme::faint()));
+            cells.cell(
+                ValueBar::new(value, BAR_CELLS)
+                    .playing(live)
+                    .centred(centred),
+            );
         }
     }
-    Line::from(spans)
+    cells.done()
 }
 
 /// A setting's value as text.
@@ -459,48 +398,73 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     }
 }
 
-/// How wide a setting's column is, so columns line up and don't move as values change.
-fn width(control: Control) -> usize {
+/// How wide a setting's column is on the Mod page, with a space between columns, so columns line
+/// up and don't move as values change.
+fn width(control: Control) -> u16 {
     match control {
-        Control::Lfo(_, LfoField::Rate) => 9,
-        Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + LFO_ICON_WIDTH + 2,
-        Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 8,
+        Control::Lfo(_, LfoField::Rate) => 8,
+        Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + 1 + LFO_ICON_ROOM,
+        Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 7,
         // Room for `16 loops`.
-        Control::Accumulator(AccumulatorField::Reset) => 9,
-        // Room for `Up-down`.
-        Control::Arpeggio(ArpField::Mode) => 9,
-        Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 9,
+        Control::Accumulator(AccumulatorField::Reset) => 8,
+        // Room for `Up-down-inc`.
+        Control::Arpeggio(ArpField::Mode) => 11,
+        Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 8,
         Control::Envelope(
             _,
             EnvelopeField::Attack
             | EnvelopeField::Decay
             | EnvelopeField::Sustain
             | EnvelopeField::Release,
-        ) => 9,
+        ) => 8,
         // Room for a slot's setting, like `2 Ping-pong`, or one that's gone, like `Material ---`.
         Control::Lfo(_, LfoField::Destination)
-        | Control::Envelope(_, EnvelopeField::Destination) => 13,
-        _ => 7,
+        | Control::Envelope(_, EnvelopeField::Destination) => 12,
+        _ => 6,
     }
+}
+
+/// The Mod page's columns for some rows: their name, and then each setting's. An LFO's shape takes
+/// two, its name and then its icon.
+fn mod_columns(controls: &[Control]) -> Columns {
+    let mut widths = vec![NAME_WIDTH - 1];
+    for control in controls {
+        match control {
+            Control::Lfo(_, LfoField::Shape) => widths.extend([LFO_SHAPE_NAME, LFO_ICON_ROOM]),
+            _ => widths.push(width(*control)),
+        }
+    }
+    Columns::new(widths).spaced(1)
 }
 
 /// The column names over some rows, with a jump's labels for those rows on each name.
-fn heading<const N: usize>(app: &App, rows: &[[Control; N]]) -> Line<'static> {
-    let mut spans = vec![Span::raw(" ".repeat(NAME_WIDTH))];
-    for column in 0..N {
-        let control = rows[0][column];
+fn heading<R: AsRef<[Control]>>(app: &App, rows: &[R], columns: &Columns) -> Row<'static> {
+    let mut cells = columns.row();
+    cells.skip(1);
+    for (column, control) in rows[0].as_ref().iter().copied().enumerate() {
         let labels: String = rows
             .iter()
-            .filter_map(|row| app.field_jump.as_ref()?.label(row[column]))
+            .filter_map(|row| app.field_jump.as_ref()?.label(row.as_ref()[column]))
             .collect();
-        spans.extend(name_spans(app, control.label(), &labels, width(control)));
+        let name = name_line(app, control.label(), &labels, width(control));
+        match control {
+            Control::Lfo(_, LfoField::Shape) => cells.span(name, 2),
+            _ => cells.cell(name),
+        };
     }
-    Line::from(spans)
+    cells.done()
 }
 
 /// A row of settings, with the cursor on one of them.
-fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'static> {
-    let mut spans = vec![Span::raw(format!("{name:<NAME_WIDTH$}"))];
+fn row(
+    app: &App,
+    track: &Track,
+    name: &str,
+    controls: &[Control],
+    columns: &Columns,
+) -> Row<'static> {
+    let mut cells = columns.row();
+    cells.cell(name.to_owned());
     let current = app.track_control();
     for control in controls {
         let typing = *control == current && app.mode == Mode::Insert;
@@ -517,28 +481,22 @@ fn row(app: &App, track: &Track, name: &str, controls: &[Control]) -> Line<'stat
         } else {
             Style::new()
         };
-        let room = width(*control);
-        let mut gap = room.saturating_sub(text.chars().count());
-        let length = text.chars().count();
-        spans.extend(value_spans(app, *control, text, style));
+        cells.cell(value_spans(app, *control, text, style));
         // An LFO's shape has its icon after its name, where it has one, in the active colour while
-        // the cursor is on that LFO. The column is the same width without one.
-        if let Control::Lfo(slot, LfoField::Shape) = *control
-            && let Some(icon) = glyphs::lfo_shape(track.lfos[slot].shape)
-        {
-            let before = LFO_SHAPE_NAME.saturating_sub(length);
-            spans.push(Span::raw(" ".repeat(before)));
-            let style = if lfo_being_edited(app) == Some(slot) {
-                theme::active()
-            } else {
-                theme::dim()
-            };
-            spans.push(Span::styled(icon.to_string(), style));
-            gap = room.saturating_sub(length + before + LFO_ICON_WIDTH);
+        // the cursor is on that LFO.
+        if let Control::Lfo(slot, LfoField::Shape) = *control {
+            let icon = glyphs::lfo_shape(track.lfos[slot].shape).map(|icon| {
+                let style = if lfo_being_edited(app) == Some(slot) {
+                    theme::active()
+                } else {
+                    theme::dim()
+                };
+                Line::styled(icon.to_string(), style)
+            });
+            cells.cell(icon.unwrap_or_default());
         }
-        spans.push(Span::raw(" ".repeat(gap)));
     }
-    Line::from(spans)
+    cells.done()
 }
 
 /// Which envelope the cursor is on, if any.
@@ -582,49 +540,33 @@ pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
 }
 
 /// Each envelope's name and shape, side by side, with the one being edited picked out. The shapes
-/// are images, and they're left blank until they've been sent.
-fn diagrams(app: &App, track: &Track) -> Vec<Line<'static>> {
+/// are images, and they're left blank until they've been sent. Each envelope's is a cell of a grid,
+/// its name over its shape.
+fn draw_diagrams(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+    let columns = Columns::new([(DIAGRAM_WIDTH + DIAGRAM_GAP) as u16; TRACK_ENVELOPES]);
     let current = envelope_being_edited(app);
     let shape = match app.envelope_images {
         Some(_) => kitty::placeholder_lines(DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
         None => vec![" ".repeat(DIAGRAM_WIDTH); DIAGRAM_HEIGHT],
     };
-    let style = |slot: usize| {
-        if current == Some(slot) {
+    for slot in 0..TRACK_ENVELOPES {
+        let style = if current == Some(slot) {
             theme::active()
         } else {
             theme::dim()
-        }
-    };
-    let mut lines = vec![Line::from(
-        (0..TRACK_ENVELOPES)
-            .map(|slot| {
-                let name = track.envelopes[slot].destination.map_or_else(
-                    || "---".to_owned(),
-                    |destination| destination.name_on(track),
-                );
-                let label = format!("Env {}  {name}", slot + 1);
-                Span::styled(
-                    format!("{label:<width$}", width = DIAGRAM_WIDTH + 2),
-                    style(slot),
-                )
-            })
-            .collect::<Vec<_>>(),
-    )];
-    lines.extend((0..DIAGRAM_HEIGHT).map(|row| {
-        Line::from(
-            (0..TRACK_ENVELOPES)
-                .map(|slot| {
-                    // A placeholder's colour says which image it's part of.
-                    let image = app.envelope_images.map_or_else(Style::new, |ids| {
-                        Style::new().fg(kitty::id_color(ids[slot]))
-                    });
-                    Span::styled(format!("{}  ", shape[row]), image)
-                })
-                .collect::<Vec<_>>(),
-        )
-    }));
-    lines
+        };
+        let name = track.envelopes[slot].destination.map_or_else(
+            || "---".to_owned(),
+            |destination| destination.name_on(track),
+        );
+        // A placeholder's colour says which image it's part of.
+        let image = app.envelope_images.map_or_else(Style::new, |ids| {
+            Style::new().fg(kitty::id_color(ids[slot]))
+        });
+        let mut lines = vec![Line::styled(format!("Env {}  {name}", slot + 1), style)];
+        lines.extend(shape.iter().map(|row| Line::styled(row.clone(), image)));
+        frame.render_widget(Paragraph::new(lines), columns.area_of(area, slot, 1));
+    }
 }
 
 /// Whether a slot is switched out as it's heard: while the song plays, a step's lock of its bypass
@@ -636,12 +578,8 @@ fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
     }
 }
 
-/// A bypassed slot's row, faint but for the cursor.
-fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
-    if !bypassed {
-        return line;
-    }
-    let cursor = theme::cursor(app.mode);
+/// Part of a bypassed slot's row, faint but for the cursor.
+fn faded(line: Line<'static>, cursor: Style) -> Line<'static> {
     Line::from(
         line.spans
             .into_iter()
@@ -657,11 +595,33 @@ fn faded(line: Line<'static>, app: &App, bypassed: bool) -> Line<'static> {
     )
 }
 
+/// The FX page's columns: a slot's number and its effect, then for each column of settings a name,
+/// a value and a bar, with the gap before a slot's drawing taken from the name after it.
+fn fx_columns() -> Columns {
+    let mut widths = vec![FX_INDENT, FX_EFFECT_WIDTH];
+    for (column, name) in FX_NAME_WIDTHS.into_iter().enumerate() {
+        if column == FX_DRAWN_COLUMNS {
+            widths.extend([FX_DRAWING_GAP, name - FX_DRAWING_GAP]);
+        } else {
+            widths.push(name);
+        }
+        widths.extend([FX_VALUE_WIDTH, FX_BAR_WIDTH]);
+    }
+    Columns::new(widths)
+}
+
 /// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
 /// effect is only drawn in its first row.
-fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'static> {
+fn fx_row(
+    app: &App,
+    track: &Track,
+    columns: &Columns,
+    controls: &[Control],
+    slot: usize,
+    first: bool,
+) -> Row<'static> {
+    let mut cells = columns.row();
     let current = app.track_control();
-    let mut spans = Vec::new();
     for control in controls {
         let selected = *control == current;
         let text = if selected && app.mode == Mode::Insert {
@@ -681,43 +641,38 @@ fn fx_row(app: &App, track: &Track, controls: &[Control], first: bool) -> Line<'
         let labels = label.map_or_else(String::new, String::from);
         match *control {
             Control::Insert(slot) if first => {
-                spans.push(Span::styled(
-                    format!("{:<FX_INDENT$}", slot + 1),
-                    theme::dim(),
-                ));
-                let room = FX_EFFECT_WIDTH.saturating_sub(text.chars().count());
-                spans.extend(value_spans(app, *control, text, style));
-                spans.push(Span::raw(" ".repeat(room)));
+                cells
+                    .cell(Line::styled((slot + 1).to_string(), theme::dim()))
+                    .cell(value_spans(app, *control, text, style));
             }
             Control::Insert(_) => {
-                spans.push(Span::raw(" ".repeat(FX_INDENT + FX_EFFECT_WIDTH)));
+                cells.skip(2);
             }
             Control::InsertParam(slot, param) if control.exists_on(track) => {
-                let name = control.name_on(track);
-                let room = FX_NAME_WIDTHS[param / 2];
-                spans.extend(name_spans(app, name, &labels, room));
+                let column = param / 2;
+                let name = name_line(app, control.name_on(track), &labels, FX_NAME_WIDTHS[column]);
+                // The column before a drawing's has the gap before it too.
+                cells.span(name, 1 + usize::from(column == FX_DRAWN_COLUMNS));
                 let insert = track.inserts[slot];
-                let used = if insert.params()[param].choices.is_empty() {
+                let value = value_spans(app, *control, text, style);
+                if insert.params()[param].choices.is_empty() {
                     let set = insert.value(param);
                     let live = app.live.map_or(set, |live| live.inserts[slot][param]);
-                    let used = text.chars().count() + 1 + FX_BAR_CELLS + 2;
-                    spans.extend(value_spans(app, *control, text, style));
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(BAR_START, theme::faint()));
-                    spans.extend(fx_bar_spans(set, live));
-                    spans.push(Span::styled(BAR_END, theme::faint()));
-                    used
+                    cells
+                        .cell(value)
+                        .cell(ValueBar::new(set, FX_BAR_CELLS).playing(live));
                 } else {
-                    let used = text.chars().count();
-                    spans.extend(value_spans(app, *control, text, style));
-                    used
-                };
-                spans.push(Span::raw(" ".repeat(FX_VALUE_WIDTH.saturating_sub(used))));
+                    cells.span(value, 2);
+                }
             }
             _ => {}
         }
     }
-    Line::from(spans)
+    if heard_bypassed(app, track, slot) {
+        let cursor = theme::cursor(app.mode);
+        cells.map(|line| faded(line, cursor));
+    }
+    cells.done()
 }
 
 /// One row of a gain reduction meter, which hangs down from the top of its two rows as it turns
@@ -730,80 +685,77 @@ fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
     hanging_cell(filled, color, theme::BASE, 1)
 }
 
-/// What follows a row of a slot on the FX page: a compressor's curve and how far it's turning
-/// down, a limiter's meter alone, or an EQ's curve.
-fn slot_drawing(app: &App, track: &Track, slot: usize, row: usize) -> Vec<Span<'static>> {
+/// What follows a slot's rows on the FX page: a compressor's curve and how far it's turning down,
+/// a limiter's meter alone, or an EQ's curve, a line for each row. A bypassed slot's is faint but
+/// for its images.
+fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
     let style = if slot_being_edited(app) == Some(slot) {
         theme::active()
     } else {
         theme::dim()
     };
     let color = style.fg.unwrap_or(theme::TEXT);
+    let bypassed = heard_bypassed(app, track, slot);
     let reduction = app
         .live
-        .filter(|_| !heard_bypassed(app, track, slot))
+        .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
-    match (track.inserts[slot], app.slot_images[slot]) {
-        (Insert::Compressor(_), Some(id)) => vec![
-            Span::styled(
-                kitty::placeholder_lines(DYNAMICS_CURVE_WIDTH, SLOT_DRAWING_HEIGHT)[row].clone(),
-                Style::new().fg(kitty::id_color(id)),
-            ),
-            Span::raw(" "),
-            reduction_cell(reduction, row, color),
-        ],
-        (Insert::Limit(_), _) => vec![reduction_cell(reduction, row, color)],
-        (Insert::Eq(_), Some(id)) => vec![Span::styled(
-            kitty::placeholder_lines(EQ_CURVE_WIDTH, SLOT_DRAWING_HEIGHT)[row].clone(),
-            Style::new().fg(kitty::id_color(id)),
-        )],
+    let image = |width: usize, id: u32| {
+        kitty::placeholder_lines(width, SLOT_DRAWING_HEIGHT)
+            .into_iter()
+            .map(move |row| Span::styled(row, Style::new().fg(kitty::id_color(id))))
+    };
+    let rows = 0..SLOT_DRAWING_HEIGHT;
+    let lines: Vec<Line<'static>> = match (track.inserts[slot], app.slot_images[slot]) {
+        (Insert::Compressor(_), Some(id)) => image(DYNAMICS_CURVE_WIDTH, id)
+            .zip(rows)
+            .map(|(curve, row)| {
+                Line::from(vec![
+                    curve,
+                    Span::raw(" "),
+                    reduction_cell(reduction, row, color),
+                ])
+            })
+            .collect(),
+        (Insert::Limit(_), _) => rows
+            .map(|row| Line::from(reduction_cell(reduction, row, color)))
+            .collect(),
+        (Insert::Eq(_), Some(id)) => image(EQ_CURVE_WIDTH, id).map(Line::from).collect(),
         _ => Vec::new(),
+    };
+    if !bypassed {
+        return lines;
     }
+    let cursor = theme::cursor(app.mode);
+    lines.into_iter().map(|line| faded(line, cursor)).collect()
 }
 
-/// A line with something more after it, starting at a column.
-fn followed(line: Line<'static>, column: usize, more: Vec<Span<'static>>) -> Line<'static> {
-    if more.is_empty() {
-        return line;
-    }
-    let gap = column.saturating_sub(line.width());
-    let mut spans = line.spans;
-    spans.push(Span::raw(" ".repeat(gap)));
-    spans.extend(more);
-    Line::from(spans)
-}
-
-/// An image in a box, a line of spans for each row.
-fn boxed(id: u32, width: usize, height: usize) -> Vec<Vec<Span<'static>>> {
+/// An image in a box, a line for each row.
+fn boxed(id: u32, width: usize, height: usize) -> Vec<Line<'static>> {
     let rule = "─".repeat(width);
     let edge = theme::faint();
-    let mut lines = vec![vec![Span::styled(format!("┌{rule}┐"), edge)]];
+    let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
     for row in kitty::placeholder_lines(width, height) {
-        lines.push(vec![
+        lines.push(Line::from(vec![
             Span::styled("│", edge),
             Span::styled(row, Style::new().fg(kitty::id_color(id))),
             Span::styled("│", edge),
-        ]);
+        ]));
     }
-    lines.push(vec![Span::styled(format!("└{rule}┘"), edge)]);
+    lines.push(Line::styled(format!("└{rule}┘"), edge));
     lines
 }
 
 /// The filter's curve in a box, under its rows, and beside it under the output's column, the
-/// waveform of the sample the track plays, if it has one.
-fn curves(filter: u32, waveform: Option<u32>) -> Vec<Line<'static>> {
-    let mut lines = boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
+/// waveform of the sample the track plays, if it has one, each in a cell of a grid.
+fn draw_curves(frame: &mut Frame, area: Rect, filter: u32, waveform: Option<u32>) {
+    let columns = Columns::new([SOUND_COLUMN, WAVEFORM_WIDTH as u16 + 2]);
+    let filter = boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
+    frame.render_widget(Paragraph::new(filter), columns.area_of(area, 0, 1));
     if let Some(waveform) = waveform {
-        let gap = " ".repeat(SOUND_COLUMN - FILTER_CURVE_WIDTH - 2);
-        for (line, beside) in lines
-            .iter_mut()
-            .zip(boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT))
-        {
-            line.push(Span::raw(gap.clone()));
-            line.extend(beside);
-        }
+        let waveform = boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
+        frame.render_widget(Paragraph::new(waveform), columns.area_of(area, 1, 1));
     }
-    lines.into_iter().map(Line::from).collect()
 }
 
 /// Draw the view.
@@ -847,71 +799,91 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         title.push(Span::styled(format!("{glyph} "), theme::active()));
     }
     title.extend(tabs);
-    let mut lines = vec![Line::from(title), Line::raw("")];
+    let mut rest = area;
+    frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
     match app.track_page {
         Page::Sound => {
+            let columns = sound_columns();
+            let mut rows = Vec::new();
             for controls in app.page_rows() {
                 // The filter stands apart from the machine above it.
                 if controls.first() == Some(&Control::FilterType) {
-                    lines.push(Line::raw(""));
+                    rows.push(blank_row());
                 }
-                lines.push(sound_row(app, track, controls));
+                rows.push(sound_row(app, track, controls, &columns));
             }
-            if track.is_sound() {
+            columns.stack(frame, &mut rest, rows);
+            if track.is_sound()
+                && let Some(filter) = app.filter_image
+            {
                 let waveform = app
                     .waveform_image
                     .filter(|_| track.machine == vt_model::song::Machine::Sampler);
-                lines.extend(
-                    app.filter_image
-                        .map_or_else(Vec::new, |filter| curves(filter, waveform)),
-                );
+                let rows = FILTER_CURVE_HEIGHT as u16 + 2;
+                draw_curves(frame, take_top(&mut rest, rows), filter, waveform);
             }
         }
         Page::Fx => {
-            for (slot, rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
-                let bypassed = heard_bypassed(app, track, slot);
-                let first = fx_row(app, track, rows[0], true);
-                let drawing = slot_drawing(app, track, slot, 0);
-                lines.push(faded(
-                    followed(first, FX_DRAWING_COLUMN, drawing),
-                    app,
-                    bypassed,
-                ));
+            let columns = fx_columns();
+            let mut rows = Vec::new();
+            // Where each slot's rows start, for its drawing.
+            let mut starts = Vec::new();
+            for (slot, slot_rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
+                starts.push(rows.len() as u16);
+                rows.push(fx_row(app, track, &columns, slot_rows[0], slot, true));
                 // An empty slot has nothing for its second row, and the slots stay apart.
                 if track.inserts[slot] != Insert::Empty {
-                    let second = fx_row(app, track, rows[1], false);
-                    let drawing = slot_drawing(app, track, slot, 1);
-                    lines.push(faded(
-                        followed(second, FX_DRAWING_COLUMN, drawing),
-                        app,
-                        bypassed,
-                    ));
+                    rows.push(fx_row(app, track, &columns, slot_rows[1], slot, false));
                 }
-                lines.push(Line::raw(""));
+                rows.push(blank_row());
+            }
+            let area = rest;
+            columns.stack(frame, &mut rest, rows);
+            // Each slot's drawing is a cell of the same grid, beside its two rows of settings.
+            for (slot, start) in starts.into_iter().enumerate() {
+                let mut below = area;
+                take_top(&mut below, start);
+                let cell = take_top(&mut below, SLOT_DRAWING_HEIGHT as u16);
+                let cell = columns.area_of(cell, FX_DRAWING_COLUMN, 3);
+                frame.render_widget(Paragraph::new(slot_drawing(app, track, slot)), cell);
             }
         }
         Page::Mod => {
-            lines.push(heading(app, &ENVELOPES));
+            let envelopes = mod_columns(&ENVELOPES[0]);
+            let mut rows = vec![heading(app, &ENVELOPES, &envelopes)];
             for (slot, controls) in ENVELOPES.iter().enumerate() {
-                lines.push(row(app, track, &format!("Env {}", slot + 1), controls));
+                let name = format!("Env {}", slot + 1);
+                rows.push(row(app, track, &name, controls, &envelopes));
             }
-            lines.push(Line::raw(""));
-            lines.push(heading(app, &LFOS));
+            rows.push(blank_row());
+            envelopes.stack(frame, &mut rest, rows);
+            let lfos = mod_columns(&LFOS[0]);
+            let mut rows = vec![heading(app, &LFOS, &lfos)];
             for (slot, controls) in LFOS.iter().enumerate() {
-                lines.push(row(app, track, &format!("LFO {}", slot + 1), controls));
+                rows.push(row(
+                    app,
+                    track,
+                    &format!("LFO {}", slot + 1),
+                    controls,
+                    &lfos,
+                ));
             }
+            rows.push(blank_row());
+            lfos.stack(frame, &mut rest, rows);
             // A track with no note to move has no accumulator or arpeggio.
             if track.is_sound() {
-                lines.push(Line::raw(""));
-                lines.push(heading(app, &[ACCUMULATOR]));
-                lines.push(row(app, track, "Acc", &ACCUMULATOR));
-                lines.push(Line::raw(""));
-                lines.push(heading(app, &[ARPEGGIO]));
-                lines.push(row(app, track, "Arp", &ARPEGGIO));
+                for (name, controls) in [("Acc", &ACCUMULATOR[..]), ("Arp", &ARPEGGIO[..])] {
+                    let columns = mod_columns(controls);
+                    let rows = vec![
+                        heading(app, &[controls], &columns),
+                        row(app, track, name, controls, &columns),
+                        blank_row(),
+                    ];
+                    columns.stack(frame, &mut rest, rows);
+                }
             }
-            lines.push(Line::raw(""));
-            lines.extend(diagrams(app, track));
+            let rows = DIAGRAM_HEIGHT as u16 + 1;
+            draw_diagrams(frame, take_top(&mut rest, rows), app, track);
         }
     }
-    frame.render_widget(Paragraph::new(lines), area);
 }
