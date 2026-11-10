@@ -34,6 +34,11 @@ use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::View;
 
+/// How many rows the list keeps in view beyond the cursor, as Vim's `scrolloff` does, so moving
+/// down a long list shows what's coming. It's the context Vim's popup menu keeps, and is shrunk to
+/// fit a short list, as snacks' list shrinks the window's `scrolloff`.
+pub const SCROLL_MARGIN: usize = 3;
+
 /// What choosing a row does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pick {
@@ -402,6 +407,12 @@ pub struct Picker {
     pub focus: Focus,
     /// The row the cursor is on.
     pub selected: usize,
+    /// The first row shown, which stays put until the cursor comes within the margin of an edge,
+    /// and the rows the list had room for when last drawn.
+    first_shown: usize,
+    /// Whether `zz` or `zt` showed space after the last row, which moving then keeps.
+    past_end: bool,
+    room: usize,
     /// A hint for keys this list has beyond the usual, drawn under it.
     pub hint: Option<&'static str>,
     items: Vec<Item>,
@@ -415,9 +426,10 @@ pub struct Picker {
     matched: Vec<Vec<u32>>,
     /// The item already chosen, which the list marks.
     current: Option<usize>,
-    /// Digits typed for a count, and a `g` waiting for another.
+    /// Digits typed for a count, and a `g` or a `z` waiting for another key.
     count: String,
     pending_g: bool,
+    pending_z: bool,
     /// The preview of the item under the cursor, and the images of its lines once sent.
     pub preview: Option<Arc<Shown>>,
     pub preview_images: Vec<Option<u32>>,
@@ -470,6 +482,9 @@ impl Picker {
             query: String::new(),
             focus: Focus::List,
             selected: 0,
+            first_shown: 0,
+            past_end: false,
+            room: 0,
             hint: None,
             items,
             categories,
@@ -480,6 +495,7 @@ impl Picker {
             current: None,
             count: String::new(),
             pending_g: false,
+            pending_z: false,
             preview: None,
             preview_images: Vec::new(),
             waves: HashMap::new(),
@@ -1106,6 +1122,56 @@ impl Picker {
         self.selected = self.selected.saturating_add_signed(by).min(last);
     }
 
+    /// The first row shown.
+    pub fn first_shown(&self) -> usize {
+        self.first_shown
+    }
+
+    /// Fit the list to the rows it's drawn in, which `zz` and `C-d` then go by, scrolling only as
+    /// far as keeps the cursor in view with its margin.
+    pub fn scroll_within(&mut self, room: usize) {
+        self.room = room;
+        self.scroll(self.first_shown);
+    }
+
+    /// Show the list from a row, or as near it as keeps the margin round the cursor. Moving
+    /// leaves no space after the last row, unless `zz` or `zt` already put some there. Before
+    /// it's drawn, it waits to know its room.
+    fn scroll(&mut self, first: usize) {
+        let last = self.rows.len().saturating_sub(self.room);
+        let end = if self.past_end {
+            last.max(self.first_shown)
+        } else {
+            last
+        };
+        self.scroll_until(first, end);
+        self.past_end = self.first_shown > last;
+    }
+
+    /// `zz` and `zt`: show the list from a row even past its end, as Vim shows the space after
+    /// a buffer's last line, so the last rows can sit in the middle or at the top.
+    fn scroll_past_end(&mut self, first: usize) {
+        self.scroll_until(first, usize::MAX);
+        self.past_end = self.first_shown > self.rows.len().saturating_sub(self.room);
+    }
+
+    fn scroll_until(&mut self, first: usize, end: usize) {
+        if self.room == 0 {
+            return;
+        }
+        let margin = SCROLL_MARGIN.min((self.room - 1) / 2);
+        let lowest = (self.selected + margin + 1).saturating_sub(self.room);
+        let highest = self.selected.saturating_sub(margin);
+        self.first_shown = first.max(lowest).min(highest).min(end);
+    }
+
+    /// `C-d` and `C-u`: the cursor and the view half the list down or up, as in Vim.
+    fn half_page(&mut self, direction: isize) {
+        let by = (self.room / 2).max(1) as isize * direction;
+        self.move_highlight(by);
+        self.scroll(self.first_shown.saturating_add_signed(by));
+    }
+
     /// Change the search. Matches are ranked best first, and an empty search goes back to the
     /// tree with the cursor still on what it was on.
     pub fn set_query(&mut self, query: String) {
@@ -1126,8 +1192,9 @@ impl Picker {
         }
     }
 
-    /// Work out the rows again.
+    /// Work out the rows again. Space `zz` or `zt` left after the last row goes with them.
     fn rebuild(&mut self) {
+        self.past_end = false;
         if self.tree.is_some() {
             (self.rows, self.matched) = self.tree_rows();
         } else if self.is_searching() {
@@ -1226,14 +1293,17 @@ impl Picker {
         if key.alt || key.command {
             return Outcome::Stay;
         }
-        match self.focus {
+        let outcome = match self.focus {
             Focus::List => self.list_key(key),
             Focus::Search => self.search_key(key),
-        }
+        };
+        self.scroll(self.first_shown);
+        outcome
     }
 
     fn list_key(&mut self, key: Key) -> Outcome {
         let after_g = std::mem::take(&mut self.pending_g);
+        let after_z = std::mem::take(&mut self.pending_z);
         let digits = std::mem::take(&mut self.count);
         let count = digits.parse::<usize>().ok();
         let by = count.unwrap_or(1).min(isize::MAX as usize) as isize;
@@ -1244,9 +1314,24 @@ impl Picker {
             }
             KeyCode::Char('n') if key.ctrl => self.move_highlight(by),
             KeyCode::Char('p') if key.ctrl => self.move_highlight(-by),
+            KeyCode::Char('d') if key.ctrl => self.half_page(1),
+            KeyCode::Char('u') if key.ctrl => self.half_page(-1),
             _ if key.ctrl => {}
             KeyCode::Char('j') | KeyCode::Down => self.move_highlight(by),
             KeyCode::Char('k') | KeyCode::Up => self.move_highlight(-by),
+            // The cursor's row to the middle, top or bottom, as Vim's `zz`, `zt` and `zb` put it,
+            // keeping the margin and the list's ends.
+            KeyCode::Char('z') if after_z => {
+                self.scroll_past_end(
+                    self.selected
+                        .saturating_sub(self.room.saturating_sub(1) / 2),
+                );
+            }
+            KeyCode::Char('t') if after_z => self.scroll_past_end(self.selected),
+            KeyCode::Char('b') if after_z => {
+                self.scroll((self.selected + 1).saturating_sub(self.room))
+            }
+            KeyCode::Char('z') => self.pending_z = true,
             KeyCode::Char('g') if after_g => self.selected = 0,
             KeyCode::Char('g') => self.pending_g = true,
             KeyCode::Char('G') => {
@@ -1280,8 +1365,8 @@ impl Picker {
             }
             KeyCode::Char('h') => self.close_category(),
             KeyCode::Char('/') => self.focus = Focus::Search,
-            // A count or a `g` is let go first, as in Vim.
-            KeyCode::Esc if !digits.is_empty() || after_g => {}
+            // A count, a `g` or a `z` is let go first, as in Vim.
+            KeyCode::Esc if !digits.is_empty() || after_g || after_z => {}
             KeyCode::Esc => return Outcome::Close,
             KeyCode::Char(c) => {
                 self.focus = Focus::Search;
@@ -1296,15 +1381,14 @@ impl Picker {
         match key.code {
             KeyCode::Char('n') if key.ctrl => self.move_highlight(1),
             KeyCode::Char('p') if key.ctrl => self.move_highlight(-1),
+            KeyCode::Char('d') if key.ctrl => self.half_page(1),
+            KeyCode::Char('u') if key.ctrl => self.half_page(-1),
             KeyCode::Down => self.move_highlight(1),
             KeyCode::Up => self.move_highlight(-1),
             KeyCode::Enter => return self.enter(false, true),
-            // Clearing the search goes back to the list, on what was found.
-            KeyCode::Esc if !self.query.is_empty() => {
-                self.set_query(String::new());
-                self.focus = Focus::List;
-            }
-            KeyCode::Esc => return Outcome::Close,
+            // Back to the list, as `Esc` leaves Insert mode, keeping what's found so `j` and `k`
+            // move through it. Only the list's own `Esc` closes.
+            KeyCode::Esc => self.focus = Focus::List,
             KeyCode::Backspace => {
                 let mut query = self.query.clone();
                 query.pop();
@@ -1560,7 +1644,7 @@ mod tests {
             picker.rows().is_empty(),
             "not fuzzy: no c, s and d in a row"
         );
-        press(&mut picker, "<Esc>/eep");
+        press(&mut picker, "<Esc>eep");
         assert!(picker.rows().is_empty(), "kicks hasn't been read");
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -1614,7 +1698,7 @@ mod tests {
         assert_eq!(label(&picker), "drums", "l opens");
         press(&mut picker, "A");
         assert_eq!(picker.query, "A", "nothing plays, so A searches");
-        press(&mut picker, "<Esc>l");
+        press(&mut picker, "<Backspace><Esc>l");
         assert_eq!(
             press(&mut picker, "<Enter>"),
             Outcome::Choose(Pick::Folder(root.join("drums"))),
@@ -1733,10 +1817,15 @@ mod tests {
         assert!(picker.rows().iter().all(|row| matches!(row, Row::Item(_))));
         assert_eq!(picker.matched(0), [0, 1], "the letters it matched");
         // j and k type in the search, and a category's name counts.
-        press(&mut picker, "<Esc>/amp");
+        press(&mut picker, "<Esc>amp");
         assert_eq!(picker.matching(), 2);
+        // `Esc` leaves the search for the list, keeping what it found, as `Esc` leaves Insert.
         press(&mut picker, "<Esc>");
         assert_eq!(picker.focus, Focus::List);
+        assert_eq!(picker.query, "amp");
+        assert_eq!(picker.matching(), 2);
+        // Typing again starts a new search, which emptied shows the whole list.
+        press(&mut picker, "/<Backspace><Backspace><Backspace><Esc>");
         assert!(picker.query.is_empty());
         assert_eq!(
             label(&picker),
@@ -1829,5 +1918,157 @@ mod tests {
         assert_eq!(picker.current().map(|i| i.label.as_str()), Some("song"));
         picker.set_query("zzz".to_owned());
         assert!(picker.current().is_none());
+    }
+
+    /// A list of forty items drawn sixteen rows tall, as the tallest list is.
+    fn long() -> Picker {
+        let items = (0..40)
+            .map(|at| Item::new(format!("{at:02} sound"), Pick::Track(at)))
+            .collect();
+        let mut picker = Picker::new("Sounds", items);
+        picker.scroll_within(16);
+        picker
+    }
+
+    /// The first row shown and the cursor's row.
+    fn view(picker: &Picker) -> (usize, usize) {
+        (picker.first_shown(), picker.selected)
+    }
+
+    #[test]
+    fn the_list_keeps_three_rows_beyond_the_cursor_each_way_and_holds_as_it_turns() {
+        let mut picker = long();
+        press(&mut picker, "12j");
+        assert_eq!(view(&picker), (0, 12), "three rows still show under it");
+        press(&mut picker, "j");
+        assert_eq!(view(&picker), (1, 13), "then it scrolls");
+        press(&mut picker, "8j");
+        assert_eq!(view(&picker), (9, 21));
+        press(&mut picker, "k");
+        assert_eq!(view(&picker), (9, 20), "turning round doesn't move it");
+        press(&mut picker, "8k");
+        assert_eq!(view(&picker), (9, 12), "three rows still show above it");
+        press(&mut picker, "k");
+        assert_eq!(view(&picker), (8, 11));
+    }
+
+    #[test]
+    fn the_margin_gives_way_at_the_lists_ends() {
+        let mut picker = long();
+        press(&mut picker, "G");
+        assert_eq!(view(&picker), (24, 39), "no space after the last row");
+        press(&mut picker, "3k");
+        assert_eq!(view(&picker), (24, 36));
+        press(&mut picker, "gg");
+        assert_eq!(view(&picker), (0, 0));
+        press(&mut picker, "<C-p>");
+        assert_eq!(view(&picker), (0, 0));
+        // A list shorter than its room never scrolls, and a short room keeps a smaller margin.
+        let mut picker = tree();
+        picker.scroll_within(16);
+        press(&mut picker, "G");
+        assert_eq!(view(&picker), (0, 3));
+        let mut picker = long();
+        picker.scroll_within(4);
+        press(&mut picker, "4j");
+        assert_eq!(view(&picker), (2, 4), "a margin of one in four rows");
+    }
+
+    #[test]
+    fn zz_zt_and_zb_move_the_view_round_the_cursor_without_moving_it() {
+        let mut picker = long();
+        press(&mut picker, "21G");
+        assert_eq!(view(&picker), (8, 20));
+        press(&mut picker, "zt");
+        assert_eq!(view(&picker), (17, 20), "at the top but for the margin");
+        press(&mut picker, "zb");
+        assert_eq!(view(&picker), (8, 20), "at the bottom but for the margin");
+        press(&mut picker, "zz");
+        assert_eq!(view(&picker), (13, 20), "in the middle");
+        press(&mut picker, "jk");
+        assert_eq!(view(&picker), (13, 20), "and it stays there");
+        assert_eq!(picker.focus, Focus::List, "none of them search");
+        // Nothing shows before the first row.
+        press(&mut picker, "gg");
+        press(&mut picker, "zz");
+        assert_eq!(view(&picker), (0, 0));
+        press(&mut picker, "zb");
+        assert_eq!(view(&picker), (0, 0));
+        // But `zz` and `zt` show space after the last, as Vim does after a buffer's last line,
+        // and moving keeps it until the margin needs the view back.
+        press(&mut picker, "G");
+        assert_eq!(view(&picker), (24, 39), "moving leaves no space after it");
+        press(&mut picker, "zz");
+        assert_eq!(view(&picker), (32, 39), "in the middle");
+        press(&mut picker, "zt");
+        assert_eq!(view(&picker), (36, 39), "at the top but for the margin");
+        press(&mut picker, "k");
+        assert_eq!(
+            view(&picker),
+            (35, 38),
+            "the margin above pulls it back a row"
+        );
+        press(&mut picker, "zb");
+        assert_eq!(view(&picker), (26, 38));
+        press(&mut picker, "G");
+        assert_eq!(
+            view(&picker),
+            (26, 39),
+            "and moving doesn't push it past the end"
+        );
+        // A `z` waiting is let go by `Esc` rather than closing the list.
+        assert_eq!(press(&mut picker, "z<Esc>"), Outcome::Stay);
+    }
+
+    #[test]
+    fn ctrl_d_and_ctrl_u_go_half_the_list() {
+        let mut picker = long();
+        press(&mut picker, "<C-d>");
+        assert_eq!(view(&picker), (5, 8));
+        press(&mut picker, "<C-d>");
+        assert_eq!(
+            view(&picker),
+            (13, 16),
+            "the view goes as far as the cursor"
+        );
+        press(&mut picker, "<C-u>");
+        assert_eq!(view(&picker), (5, 8));
+        press(&mut picker, "<C-u><C-u>");
+        assert_eq!(view(&picker), (0, 0));
+        press(&mut picker, "G<C-u>");
+        assert_eq!(view(&picker), (19, 31), "the margin pulls the view up");
+        press(&mut picker, "<C-d><C-d>");
+        assert_eq!(view(&picker), (24, 39), "stopping at the end");
+        // In the search too, as `C-n` and `C-p` are.
+        press(&mut picker, "/sound<C-d>");
+        assert_eq!(picker.query, "sound");
+        assert_eq!(view(&picker), (5, 8));
+    }
+
+    #[test]
+    fn searching_and_folding_after_a_scroll_keep_the_view_on_the_list() {
+        let mut picker = long();
+        press(&mut picker, "G/07");
+        assert_eq!(picker.rows().len(), 1);
+        assert_eq!(view(&picker), (0, 0));
+        press(&mut picker, "<Esc>");
+        assert_eq!(picker.rows().len(), 1, "Esc keeps the search");
+        assert_eq!(view(&picker), (0, 0));
+        // Closing a long category from far down it.
+        let mut items: Vec<Item> = (0..5)
+            .map(|at| Item::new(format!("{at}"), Pick::Track(at)))
+            .collect();
+        items
+            .extend((5..35).map(|at| Item::new(format!("{at}"), Pick::Track(at)).category("Many")));
+        let mut picker = Picker::new("Sounds", items);
+        picker.scroll_within(16);
+        press(&mut picker, "Gl20j");
+        assert_eq!(view(&picker), (14, 26));
+        press(&mut picker, "h");
+        assert_eq!(
+            view(&picker),
+            (0, 5),
+            "on the category, with the list at its top"
+        );
     }
 }

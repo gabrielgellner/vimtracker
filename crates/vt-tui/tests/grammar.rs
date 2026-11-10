@@ -1331,7 +1331,10 @@ fn k_keeps_a_value_when_changing_the_command() {
 #[test]
 fn k_can_empty_a_slot_and_esc_leaves_it() {
     let (mut app, _rt) = app_with(&[A]);
+    // The list opens on its search: the first Esc goes to the list, the second leaves it.
     keys(&mut app, "lllllK<Esc>");
+    assert_eq!(app.mode, Mode::Picker);
+    keys(&mut app, "<Esc>");
     assert_eq!(steps(&app)[0], A);
     assert_eq!(app.mode, Mode::Normal);
     keys(&mut app, "K---<Enter>");

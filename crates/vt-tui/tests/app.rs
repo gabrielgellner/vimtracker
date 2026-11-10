@@ -2395,13 +2395,13 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     let mut sent = Vec::new();
     let mut graphics = vt_tui::kitty::Graphics::new();
     graphics.sync(&mut app, &mut sent).unwrap();
-    let picker = app.picker.as_ref().unwrap();
+    let mut picker = app.picker.clone().unwrap();
     assert_eq!(picker.preview_images.len(), 3);
     assert!(picker.preview_images.iter().all(Option::is_some));
     let backend = ratatui::backend::TestBackend::new(120, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..24)
@@ -6905,6 +6905,8 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         labels
     };
@@ -7080,6 +7082,8 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         found
     };
@@ -7141,6 +7145,8 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .map(listed)
             .collect();
+        // The first Esc leaves the search for the list, and the second closes it.
+        special(app, KeyCode::Esc);
         special(app, KeyCode::Esc);
         found
     };
@@ -7221,10 +7227,10 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     press(&mut app, "1 mi");
     assert_eq!(picker(&app).focus, Focus::Search);
     assert_eq!(current(&app), "1 Mix");
-    // Esc clears it and goes back to the tree, on what it found.
+    // Esc goes back to the list, keeping what it found, as Esc leaves Insert mode.
     special(&mut app, KeyCode::Esc);
     assert_eq!(picker(&app).focus, Focus::List);
-    assert!(picker(&app).query.is_empty());
+    assert_eq!(picker(&app).query, "1 mi");
     assert_eq!(current(&app), "1 Mix");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
@@ -7267,11 +7273,11 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
 fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4LjjKjl");
-    let picker = app.picker.as_ref().unwrap();
+    let mut picker = app.picker.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..24)
@@ -9020,9 +9026,9 @@ fn long_wav(path: &std::path::Path, seconds: f32) {
 fn picker_text(app: &App, width: u16, height: u16) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    let picker = app.picker.as_ref().unwrap();
+    let mut picker = app.picker.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), picker))
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)
