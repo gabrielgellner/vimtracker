@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "vt-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hound",
  "rtrb",
@@ -2415,7 +2415,7 @@ dependencies = [
 
 [[package]]
 name = "vt-model"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hound",
  "ron",
@@ -2428,7 +2428,7 @@ dependencies = [
 
 [[package]]
 name = "vt-tui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "clap",
