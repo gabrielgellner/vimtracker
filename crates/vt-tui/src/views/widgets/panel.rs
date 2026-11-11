@@ -1,6 +1,7 @@
 //! A device's graphic panel: its pictures and meters side by side, each in a faint square box, as
 //! part of the page's grid rather than a window over it, with a caption in its bottom border if it
-//! has one, such as `GR`. A device puts it against its right side, with
+//! has one, such as `GR`, and a meter's scale as text beside its box. A device puts it against its
+//! right side, with
 //! [`Device::panel_area`](crate::views::widgets::device::Device::panel_area), and the panel sits
 //! in the middle of the rows it's given.
 
@@ -14,14 +15,23 @@ use crate::theme;
 /// The room between a panel's boxes.
 const GAP: u16 = 2;
 
-/// One box of a panel: its lines, an image's placeholders or a meter's cells, and its caption.
+/// One part of a panel: its lines, an image's placeholders, a meter's cells or a scale's numbers,
+/// and whether it's in a box, with its caption.
 struct Part {
     lines: Vec<Line<'static>>,
     width: u16,
+    boxed: bool,
     caption: Option<&'static str>,
 }
 
-/// A panel's boxes, left to right.
+impl Part {
+    /// How wide it is with its box's edges, if it has them.
+    fn outer(&self) -> u16 {
+        self.width + if self.boxed { 2 } else { 0 }
+    }
+}
+
+/// A panel's parts, left to right.
 #[derive(Default)]
 pub struct GraphicPanel {
     parts: Vec<Part>,
@@ -44,7 +54,21 @@ impl GraphicPanel {
         self.parts.push(Part {
             lines,
             width,
+            boxed: true,
             caption,
+        });
+        self
+    }
+
+    /// The same with lines right after the last box, against it, in line with the rows inside it,
+    /// such as a meter's scale.
+    #[must_use]
+    pub fn beside(mut self, lines: Vec<Line<'static>>, width: u16) -> Self {
+        self.parts.push(Part {
+            lines,
+            width,
+            boxed: false,
+            caption: None,
         });
         self
     }
@@ -54,10 +78,19 @@ impl GraphicPanel {
         self.parts.is_empty()
     }
 
+    /// The room before each part: a gap before every box but the first, and none before lines
+    /// beside a box.
+    fn gaps(&self) -> impl Iterator<Item = u16> + '_ {
+        self.parts
+            .iter()
+            .enumerate()
+            .map(|(index, part)| if index > 0 && part.boxed { GAP } else { 0 })
+    }
+
     /// How wide it is, with its boxes' edges and the gaps between them.
     pub fn width(&self) -> u16 {
-        let boxes: u16 = self.parts.iter().map(|part| part.width + 2).sum();
-        boxes + GAP * (self.parts.len() as u16).saturating_sub(1)
+        let parts: u16 = self.parts.iter().map(Part::outer).sum();
+        parts + self.gaps().sum::<u16>()
     }
 
     /// How tall it is, its tallest box with its edges.
@@ -68,15 +101,21 @@ impl GraphicPanel {
 }
 
 impl Part {
-    /// The box round its lines, a line for each row.
-    fn boxed(self, height: usize) -> Vec<Line<'static>> {
+    /// The part a line for each row: in its box, or blank above and below where a box has edges.
+    fn drawn(self, height: usize) -> Vec<Line<'static>> {
         let width = usize::from(self.width);
-        let edge = theme::faint();
-        let rule = "─".repeat(width);
-        let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
         let blank = || Line::raw(" ".repeat(width));
         let mut inside = self.lines;
         inside.resize_with(height, blank);
+        if !self.boxed {
+            let mut lines = vec![blank()];
+            lines.extend(inside);
+            lines.push(blank());
+            return lines;
+        }
+        let edge = theme::faint();
+        let rule = "─".repeat(width);
+        let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];
         for line in inside {
             let mut spans = vec![Span::styled("│", edge)];
             spans.extend(line.spans);
@@ -95,17 +134,19 @@ impl Widget for GraphicPanel {
         let height = self.height();
         let top = area.y + area.height.saturating_sub(height) / 2;
         let inside = usize::from(height.saturating_sub(2));
+        let gaps: Vec<u16> = self.gaps().collect();
         let mut x = area.x;
-        for part in self.parts {
-            let width = part.width + 2;
-            for (row, line) in part.boxed(inside).into_iter().enumerate() {
+        for (part, gap) in self.parts.into_iter().zip(gaps) {
+            x += gap;
+            let width = part.outer();
+            for (row, line) in part.drawn(inside).into_iter().enumerate() {
                 let y = top + row as u16;
                 if y < area.bottom() && x < area.right() {
                     let room = width.min(area.right() - x);
                     line.render(Rect::new(x, y, room, 1), buf);
                 }
             }
-            x += width + GAP;
+            x += width;
         }
     }
 }
