@@ -1,10 +1,11 @@
 # The Roto-Control: a second, separate way of working
 
-**Status:** steps 1 and 2 of milestone M30 (#410 and #411), with decisions 158 and 159. This note
-covers the whole milestone, #410 to #415, so the protocol layer fits what the later steps need.
-Step 1 built the protocol, the link and `vimtracker roto-probe`; step 2 shows a track's devices
-live on the Roto, storing nothing, behind an on/off setting on the audio page, off by default
-(§4). Nothing the Roto does reaches the song yet. §8 has the author's answers.
+**Status:** steps 1, 2 and 4 of milestone M30 (#410, #411 and #413), with decisions 158 to 160.
+This note covers the whole milestone, #410 to #415, so the protocol layer fits what the later steps
+need. Step 1 built the protocol, the link and `vimtracker roto-probe`; step 2 shows a track's
+devices live on the Roto, storing nothing, behind an on/off setting on the audio page, off by
+default (§4); step 4 makes its knobs edit the song, chooses its track and devices with its own
+FUNC and SEL, and switches devices in and out (§4.2). §8 has the author's answers.
 
 **The rule (the author's):** the Roto works independently of the screen. It's a separate,
 supplementary way of working: the mixer can be on the Roto while the sample page is on screen, and a
@@ -220,10 +221,97 @@ serial API's `GET CURRENT PLUGIN` and `GET PLUGIN KNOB CONFIG`, which are read-o
     `MACRO PLUGIN PAGE INDEX`, then ask for the new page's knobs. The page shown is taken from
     the knobs it asks for, 9 to 16 being the second, and the arrows too.
 *   **No switches** were asked for: a macro plugin maps its knobs alone, so an off/on setting is a
-    two-step knob.
+    two-step knob. #413 tried to give it switches, and the Roto refused them (§4.2).
 *   **Nothing was stored.** `GET CURRENT PLUGIN` read each device back as a `MacroAutoConfig` for
     Bitwig, `GET PLUGIN` by its hash found nothing, and the stored setups were the same five
     Ableton ones before and after every run.
+
+### 4.2 Knobs that edit, and the Roto's own buttons, as built (#413)
+
+**The buttons are the firmware's.** vimtracker follows the vendor's MODE, FUNC and SEL model
+exactly as the manual has it for Live and Bitwig, and only fills in the lists and states the Roto
+asks for. MODE switches between MIX, PLUGIN and MIDI. In PLUGIN mode:
+
+*   **FUNC** shows the track list on the buttons (`NUM TRACKS`, `FIRST TRACK`, `TRACK DETAILS`,
+    `TRACK DETAILS END`, then `DAW SELECT TRACK` for the one chosen, as Ableton's script sends
+    them). The arrows page it (`SET FIRST TRACK`, answered with that bank), and a button chooses a
+    track (`ROTO SELECT TRACK`), which PLUGIN mode then shows the devices of. This is the Roto's
+    own choice of track, independent of the cursor: `vt-roto`'s `live::TrackList`. The list is
+    every track in the song's order, a sound track as `Track 01` (or `01` and its name), a fixed
+    one by its title; a group's tracks in its colour, and a group marked as one.
+*   **Holding SEL** and pressing a button chooses a device (`ROTO SELECT PLUGIN`); its arrows page
+    the devices in eights (`SET FIRST PLUGIN`).
+*   **Tapping SEL** shows the devices' on/off states, and a button switches one
+    (`SET PLUGIN ENABLED`). That's an FX slot's bypass or an envelope's or an LFO's switch, both
+    ways: the Roto's switch is `b`'s action, and `b` in the app changes `PLUGIN DETAILS`' enabled
+    flag, sent again. The machine, `Filter`, `Output`, `Play`, `Accumulator` and `Arpeggio` have
+    no switch in vimtracker, so they're sent as always on, and an empty slot as off; a tap on one
+    is ignored, and the list is sent again as it was.
+
+**What the real Roto did** (the author's, firmware 3.3.0, 2026-11-11, from the app's log of
+every message each way):
+
+*   **Its buttons count from the bank shown.** On the second bank, `ROTO SELECT PLUGIN` and
+    `SET PLUGIN ENABLED` for its second button carry `1`, not `9`, as both vendor scripts read
+    them (`deviceBank.getItemAt(index)`, `_plugin_first_device + data[0]`). `PluginView::device_for`
+    adds the bank's first device.
+*   **The bank is the Roto's.** Sent again from the chosen device's bank, a toggle on the second
+    bank turned the Roto back to the first. So the bank stays where its arrows left it, and
+    `DAW SELECT PLUGIN` goes only when the chosen device is in the bank shown, as Bitwig's
+    `sendPluginSelect` checks.
+*   **A choice can come with a switch.** Tapping SEL, then holding it and pressing a device,
+    switches the device as the button goes down, and as SEL is let go shows it and asks for its
+    knobs, sometimes saying `ROTO SELECT PLUGIN` 3 to 4 seconds after the switch and sometimes
+    not at all. Holding SEL from the Roto's normal view sends the choice alone, and a plain tap
+    the switch alone, with no knobs asked for after it. Neither vendor script guards against it.
+    In vimtracker a choice wins: after a `SET PLUGIN ENABLED`, within 10 seconds and with nothing
+    else between, a `ROTO SELECT PLUGIN` for the same device, or the Roto asking for knobs that
+    vimtracker didn't make it show, means it chose the device it switched. The switch is taken
+    back, as if it was never made (`History::take_back`, no undo step and nothing to redo) unless
+    the song has changed since, when it's switched back as an edit, and the device is answered
+    with its own knobs. Without that, the Roto showed the device's name over the knobs of the one
+    chosen before.
+*   **SEL's views are the firmware's alone.** The Roto says nothing when SEL is held or let go, or
+    which of its views is up: the API's `SET PLUGIN ENABLE MODE` and `SET PLUGIN SELECT MODE` are
+    Logic Pro's only, and neither the Live nor the Bitwig script has them. So the buttons' lights
+    can't be put out while SEL is held to choose. Holding SEL and letting it go also leaves the
+    tapped view with nothing from vimtracker: the log has nothing sent at that moment. It's the
+    vendor's behaviour, to raise with Melbourne Instruments if it's the same with Live; vimtracker
+    hasn't been compared with Live.
+*   **Switches on a live device are refused.** Answering a macro plugin with
+    `SET PLUGIN CONTROL DETAILS` of type Switch, a `LEARN PARAM` numbered past its 64 knobs, and
+    the buttons' light CCs gave the Roto no switch: it sent `CONTROL MAPPED` for knobs alone, and
+    the serial API's read-only `GET PLUGIN SWITCH CONFIG` answered `NoPlugin` for each of the
+    current device's switches. Only a stored setup has switches, and nothing is stored (§8,
+    question 1), so Auto, Peak Clip, Ping-pong, Freeze, Reset and Retrig stay two-step knobs.
+*   **A light flips as it's pressed.** Tapping `Accumulator` in the switches flips its light
+    there and then, though the list sent straight back has it on; the next time the list comes up
+    it's lit as sent. The firmware draws the press itself, and a value put on a button in the
+    list (`SHOW CONTROL VALUE`, type Switch, tried with `Always on`) wasn't seen, so a device that
+    can't be switched is left to its light.
+*   **Knobs move with the CCs**: a knob's position sent as its CC pair turns its motor, and a
+    value in `SHOW CONTROL VALUE` shows on its screen for a smooth knob as for a stepped one.
+    `Output`'s `Level` typed from the keyboard as `00`, `E0`, `F8` and `E0` swung knob 5 to the
+    bottom, near the top, the top and back, each at once ("the knobs are crazy responsive"), with
+    `-inf dB`, `+0.0 dB` and `+6.0 dB` shown; stepped one at a time, it follows each step. A knob
+    turned, let go and touched again didn't jump or push against the hand.
+
+**Knobs edit the song** through `App::apply`, as keys do (`roto/edits.rs`, the way back from
+`roto/devices.rs`). Each knob's last move of a frame is one action, on the Roto's track and device
+whatever the cursor is on. A position becomes the value the mapping puts there: a list's step,
+a value's share of its range with its fine digits, an envelope's time by `=`'s steps, and an
+LFO's rate the nearest of its own kind, so a note division stays one. A knob left where its
+setting is gives no action. Touch-on to touch-off is one undo step (`History::squash_to`, as
+§5 has it), closed 300 ms after the last move with no knob touched, so a knob turned without a
+touch is one step too. Two knobs held together make one step.
+
+**What goes back.** After every new version of the song, from the Roto, the keys, an undo or a
+loaded song, `PluginView::refresh` sends what changed: the plugin list if a device's name, state
+or pages did, a knob learned again with the Roto's own hash if its name, feel or colour did, and
+otherwise its position as CCs, with its value on its screen. A touched knob isn't moved, and
+goes where its setting is once it's let go; a knob just turned takes its new position without
+being sent it. Values, the app's own text (`edits::value_text`, the status line's units, or the
+grid's text), are shown at most 12 times a second a knob, the last always.
 
 ## 5. Edits, feedback and rates
 

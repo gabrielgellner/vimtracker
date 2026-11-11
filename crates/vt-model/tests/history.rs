@@ -381,3 +381,19 @@ fn a_chain_label_and_launch_timing_are_edits() {
     let timed = edit(&song, &Action::SetLaunch(Launch::ChainEnd)).unwrap();
     assert_eq!(timed.launch, Launch::ChainEnd);
 }
+
+#[test]
+fn a_version_taken_back_leaves_no_undo_step_and_nothing_to_redo() {
+    let song = Arc::new(Song::new(1));
+    let mut history = History::new(Arc::clone(&song));
+    let first = edit(&song, &set_note(0, 0, 60)).unwrap();
+    history.commit(Arc::clone(&first));
+    let second = edit(&first, &set_note(0, 1, 62)).unwrap();
+    history.commit(second);
+    assert!(history.take_back().is_some());
+    assert!(Arc::ptr_eq(history.current(), &first));
+    assert_eq!(history.undo_depth(), 1);
+    assert!(history.redo().is_none(), "nothing to redo");
+    history.take_back();
+    assert!(history.take_back().is_none(), "nothing before the first");
+}

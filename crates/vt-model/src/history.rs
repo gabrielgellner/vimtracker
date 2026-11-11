@@ -59,6 +59,13 @@ impl History {
         Some(&self.current)
     }
 
+    /// Take back the last version as if it was never made, leaving nothing to redo, as for an edit
+    /// that turns out not to have been meant.
+    pub fn take_back(&mut self) -> Option<&Arc<Song>> {
+        self.current = self.past.pop()?;
+        Some(&self.current)
+    }
+
     /// Change the current version without adding an undo step, while something is being previewed.
     pub fn replace_current(&mut self, song: Arc<Song>) {
         self.current = song;

@@ -15,7 +15,7 @@ use crate::serial::{
 };
 use crate::sysex::{
     CONTROLS, ControlType, Daw, FirmwareVersion, FromRoto, LearnParam, PluginDetails, PluginKind,
-    ToRoto,
+    ToRoto, TrackDetails,
 };
 use crate::transport::{Deliver, LinkError, MidiSend, Ports};
 
@@ -86,12 +86,18 @@ pub struct FakeRoto {
     pub announces_mode: bool,
     /// The plugin list the program last sent, by index.
     pub plugins: BTreeMap<u8, PluginDetails>,
+    /// The first plugin of the bank the program last said was shown.
+    pub first_plugin: u8,
     /// The macro plugin shown in PLUGIN mode, and its page, once the program has chosen one.
     pub shown: Option<(u8, u8)>,
     /// The shown plugin's knobs, by the number the Roto gives each, from 1 across its pages.
     pub knobs: BTreeMap<u16, LiveKnob>,
     /// Every serial request that would change what it stores, whether or not it took it.
     pub serial_changes: Vec<Request>,
+    /// The track list the program last sent, by index, which FUNC shows in PLUGIN mode.
+    pub tracks: BTreeMap<u16, TrackDetails>,
+    /// The track the program last said was chosen.
+    pub selected_track: Option<TrackDetails>,
 }
 
 impl Default for FakeRoto {
@@ -120,9 +126,12 @@ impl FakeRoto {
             unreadable: Vec::new(),
             announces_mode: false,
             plugins: BTreeMap::new(),
+            first_plugin: 0,
             shown: None,
             knobs: BTreeMap::new(),
             serial_changes: Vec::new(),
+            tracks: BTreeMap::new(),
+            selected_track: None,
         }
     }
 
@@ -246,6 +255,22 @@ impl FakeRoto {
             }
             ToRoto::NumPlugins(count) => {
                 self.plugins.retain(|index, _| *index < count);
+                Vec::new()
+            }
+            ToRoto::FirstPlugin(first) => {
+                self.first_plugin = first;
+                Vec::new()
+            }
+            ToRoto::NumTracks(count) => {
+                self.tracks.retain(|index, _| *index < count);
+                Vec::new()
+            }
+            ToRoto::TrackDetails(details) => {
+                self.tracks.insert(details.index, details);
+                Vec::new()
+            }
+            ToRoto::DawSelectTrack(details) => {
+                self.selected_track = Some(details);
                 Vec::new()
             }
             // The real one answers only a change of what's shown, in PLUGIN mode, of a macro

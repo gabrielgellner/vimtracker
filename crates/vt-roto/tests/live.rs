@@ -6,10 +6,12 @@ use std::time::{Duration, Instant};
 use vt_roto::Label;
 use vt_roto::fake::{DEFAULT_CONTROL_COLOUR, FakePorts, FakeRoto};
 use vt_roto::link::{Event, Link, Options};
-use vt_roto::live::{Feel, KNOB_TOP, LiveControl, LiveDevice, PluginView};
+use vt_roto::live::{
+    Feel, KNOB_TOP, LiveControl, LiveDevice, LiveTrack, PluginView, Refresh, TrackList,
+};
 use vt_roto::serial::Mode;
 use vt_roto::session::{Change, Session};
-use vt_roto::sysex::{Daw, FromRoto, PluginKind, ToRoto};
+use vt_roto::sysex::{ControlType, Daw, FromRoto, PluginKind, ToRoto};
 
 fn knob(name: &str, feel: Feel, position: u16, colour: u8) -> Option<LiveControl> {
     Some(LiveControl {
@@ -320,4 +322,146 @@ fn the_page_shown_follows_the_knobs_the_roto_asks_for_and_its_arrows() {
     assert_eq!(view.page(), 0);
     assert!(view.receive(&FromRoto::PageLeft).is_empty());
     assert_eq!(view.page(), 0, "no page before the first");
+}
+
+#[test]
+fn a_change_sends_only_what_changed_and_never_moves_a_knob_held_or_turned() {
+    let mut fake = connected();
+    let mut view = PluginView::new();
+    let push = view.show(devices());
+    exchange(&mut view, &mut fake, push);
+    let none = [false; 8];
+    // Nothing changed: nothing sent.
+    assert_eq!(view.refresh(devices(), none, none), Refresh::default());
+    // Cut moved: its knob is moved, and nothing else.
+    let mut moved = devices();
+    moved[0].controls[0].as_mut().unwrap().position = 500;
+    let refresh = view.refresh(moved.clone(), none, none);
+    assert!(refresh.messages.is_empty());
+    assert_eq!(refresh.positions, [(0, 500)]);
+    // Moved again while it's touched, it isn't moved under the hand, and goes once let go.
+    let mut held = [false; 8];
+    held[0] = true;
+    moved[0].controls[0].as_mut().unwrap().position = 900;
+    assert!(view.refresh(moved.clone(), held, none).positions.is_empty());
+    assert_eq!(
+        view.refresh(moved.clone(), none, none).positions,
+        [(0, 900)]
+    );
+    // Turned on the Roto, it takes its new position without being sent it.
+    moved[0].controls[0].as_mut().unwrap().position = 1300;
+    let refresh = view.refresh(moved.clone(), held, held);
+    assert!(refresh.positions.is_empty());
+    assert!(view.refresh(moved.clone(), none, none).positions.is_empty());
+    // A knob whose name changed is learned again with the hash the Roto gave it.
+    moved[0].controls[1].as_mut().unwrap().name = Label::new("Low");
+    let refresh = view.refresh(moved.clone(), none, none);
+    match &refresh.messages[..] {
+        [
+            ToRoto::LearnParam(learned),
+            ToRoto::SetPluginControlDetails { index: 2, .. },
+        ] => {
+            assert_eq!(learned.index, 2);
+            assert_eq!(learned.hash, FakeRoto::knob_hash(2));
+            assert_eq!(learned.name.as_str(), "Low");
+        }
+        other => panic!("{other:?}"),
+    }
+    // A device switched in sends the list again, and a knob gone is unmapped.
+    moved[1].enabled = true;
+    moved[0].controls[4] = None;
+    let refresh = view.refresh(moved, none, none);
+    assert!(refresh.messages.iter().any(|message| matches!(
+        message,
+        ToRoto::PluginDetails(details) if details.index == 1 && details.enabled
+    )));
+    assert!(refresh.messages.contains(&ToRoto::UnmapControl {
+        control: ControlType::Knob,
+        index: 4,
+    }));
+}
+
+/// Twelve devices of one page each, two banks.
+fn twelve() -> Vec<LiveDevice> {
+    (0..12)
+        .map(|at| LiveDevice {
+            key: format!("vimtracker/test/{at}"),
+            name: Label::new(&format!("Dev {at}")),
+            enabled: true,
+            controls: vec![knob("Knob", Feel::Smooth, 0, 1); 8],
+        })
+        .collect()
+}
+
+#[test]
+fn the_bank_stays_where_the_rotos_arrows_left_it_and_its_buttons_count_from_it() {
+    let mut fake = connected();
+    let mut view = PluginView::new();
+    let push = view.show(twelve());
+    exchange(&mut view, &mut fake, push);
+    assert_eq!(fake.shown, Some((0, 0)));
+    // SEL's arrows to the second bank.
+    let push = view.receive(&FromRoto::SetFirstPlugin(8));
+    exchange(&mut view, &mut fake, push);
+    assert_eq!((view.first(), fake.first_plugin), (8, 8));
+    // A device of the first bank switched out: the list again, from the second bank, and the
+    // device chosen in the first isn't chosen again, which would turn the Roto back.
+    let mut changed = twelve();
+    changed[2].enabled = false;
+    let refresh = view.refresh(changed.clone(), [false; 8], [false; 8]);
+    assert!(refresh.messages.contains(&ToRoto::FirstPlugin(8)));
+    assert!(
+        !refresh
+            .messages
+            .iter()
+            .any(|message| matches!(message, ToRoto::DawSelectPlugin { .. }))
+    );
+    // The second button of the second bank is the tenth device.
+    assert_eq!(view.device_for(1), 9);
+    let push = view.receive(&FromRoto::RotoSelectPlugin(1));
+    exchange(&mut view, &mut fake, push);
+    assert_eq!(view.selected_index(), 9);
+    assert_eq!(fake.shown, Some((9, 0)));
+    // A place in the whole list is taken as it is.
+    assert_eq!(view.device_for(10), 10);
+}
+
+#[test]
+fn the_track_list_pages_in_eights_and_says_which_track_was_chosen() {
+    let tracks: Vec<LiveTrack> = (0..11)
+        .map(|at| LiveTrack {
+            name: Label::new(&format!("Track {at:02}")),
+            colour: 3,
+            grouped: at == 9,
+        })
+        .collect();
+    let mut list = TrackList::new();
+    let push = list.show(tracks.clone(), 0);
+    assert_eq!(push[0], ToRoto::NumTracks(11));
+    assert_eq!(push[1], ToRoto::FirstTrack(0));
+    let details: Vec<_> = push
+        .iter()
+        .filter(|message| matches!(message, ToRoto::TrackDetails(_)))
+        .collect();
+    assert_eq!(details.len(), 8);
+    assert!(matches!(push.last(), Some(ToRoto::DawSelectTrack(track)) if track.index == 0));
+    assert!(list.update(tracks.clone(), 0).is_empty(), "nothing new");
+    // The arrows: the second bank, of three.
+    let (push, chosen) = list.receive(&FromRoto::SetFirstTrack(8));
+    assert_eq!(chosen, None);
+    assert_eq!(push[1], ToRoto::FirstTrack(8));
+    assert!(push.iter().any(|message| matches!(
+        message,
+        ToRoto::TrackDetails(track) if track.index == 9 && track.grouped
+    )));
+    // A button: the track chosen.
+    let (push, chosen) = list.receive(&FromRoto::RotoSelectTrack(10));
+    assert!(push.is_empty());
+    assert_eq!((chosen, list.selected()), (Some(10), 10));
+    // Past the end: nothing.
+    assert_eq!(list.receive(&FromRoto::RotoSelectTrack(11)).1, None);
+    // A track renamed is sent again.
+    let mut renamed = tracks;
+    renamed[3].name = Label::new("Bass");
+    assert!(!list.update(renamed, 10).is_empty());
 }

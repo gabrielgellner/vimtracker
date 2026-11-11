@@ -271,14 +271,15 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
-| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), live devices in PLUGIN mode, storing nothing (`live.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the Roto's setting and its devices as the Roto shows them (`roto.rs`, `roto/devices.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), live devices in PLUGIN mode, storing nothing, with the Roto's track list and what changed sent back (`live.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the Roto's setting, its devices as the Roto shows them, and its knobs' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
     draws or reads a terminal. `vt-roto` knows nothing of songs: it takes devices as names, feels,
     positions and colours, and `vt-tui`'s `roto/devices.rs` makes those from a track's
-    `DeviceSpec`s and the settings registry ([`roto-control.md`](roto-control.md)).
+    `DeviceSpec`s and the settings registry, and `roto/edits.rs` turns a knob's position back into
+    the `Action` a key would give ([`roto-control.md`](roto-control.md)).
 *   **What the interface borrows from the engine.** Besides `Published` and the queues, `vt-tui`
     calls the engine's DSP to draw what a sound does: the track filter's response, a compressor's
     static curve and an EQ's response come from `dsp::filter`, `dsp::compressor` and `dsp::eq`, so a
