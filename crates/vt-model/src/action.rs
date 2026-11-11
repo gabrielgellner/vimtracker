@@ -258,6 +258,11 @@ pub enum Action {
         track: usize,
         level: u8,
     },
+    /// Set a track's trim, the gain at its input.
+    SetTrackTrim {
+        track: usize,
+        trim: u8,
+    },
     /// Put a track in a choke group, from 1 to `CHOKE_GROUPS`, or in none.
     SetTrackChoke {
         track: usize,
@@ -970,6 +975,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .level = (*level).min(MAX_LEVEL);
+        }
+        Action::SetTrackTrim { track, trim } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .trim = *trim;
         }
         Action::SetTrackChoke { track, choke } => {
             check_choke(*choke)?;

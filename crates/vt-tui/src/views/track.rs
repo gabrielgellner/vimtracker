@@ -137,6 +137,8 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
     let level = |value| Some((value, false));
     match control {
         Control::Level => level(track.level),
+        // 0 dB is in the middle, so it shows a cut or a boost either side of it, as pan does.
+        Control::Trim => Some((track.trim, true)),
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
         Control::Base(TrackControl::Pitch) => Some((track.pitch, true)),
         // Those with a middle that's a setting of its own show where they are around it.
@@ -342,6 +344,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
         Control::FilterMode => track.filter.plays(track.filter_mode).name().to_owned(),
         Control::Level => hex(track.level),
+        Control::Trim => hex(track.trim),
         Control::Groove => track.groove.unwrap_or(song.groove).name().to_owned(),
         Control::Envelope(slot, field) => {
             let envelope = &track.envelopes[slot];

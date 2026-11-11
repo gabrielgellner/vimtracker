@@ -59,7 +59,7 @@ use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::recording::Recording;
 use crate::shaping::ShapePanel;
-use crate::track_page::{Page, TakenInsert};
+use crate::track_page::{MIXER_START, Page, TakenInsert};
 use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
@@ -446,7 +446,7 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
-            mixer_row: 0,
+            mixer_row: MIXER_START,
             song_column: 0,
             playing_section: 0,
             looping: None,

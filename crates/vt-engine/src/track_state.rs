@@ -548,6 +548,8 @@ pub struct TrackState {
     gain: Smoothed,
     /// The track's level from the song, which playback going back to the top leaves alone.
     pub level: Smoothed,
+    /// The track's trim from the song, the gain at its input, which playback leaves alone too.
+    pub input_trim: Smoothed,
     pan: Smoothed,
     cutoff: Smoothed,
     resonance: Smoothed,
@@ -751,6 +753,7 @@ impl TrackState {
             send_b: 0.0,
             gain: Smoothed::at(1.0),
             level: Smoothed::at(1.0),
+            input_trim: Smoothed::at(1.0),
             pan: Smoothed::at(0.5),
             cutoff: Smoothed::at(1.0),
             resonance: Smoothed::at(0.0),
@@ -1555,6 +1558,7 @@ impl TrackState {
     pub fn settle(&mut self) {
         self.gain.settle();
         self.level.settle();
+        self.input_trim.settle();
         self.pan.settle();
         self.cutoff.settle();
         self.resonance.settle();
@@ -1638,7 +1642,7 @@ impl TrackState {
             .plays(FilterMode::at(place).unwrap_or_default())
     }
 
-    /// Filter, level and pan one frame of voice output, and work out what it sends.
+    /// Trim, filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
     pub fn shape(
         &mut self,
@@ -1648,6 +1652,10 @@ impl TrackState {
         rate: u32,
         keys: &Keys,
     ) -> ShapedFrame {
+        // The trim comes first, as a console's input gain does, so it sets how hard the filter,
+        // its drive and the slots are hit. At 0 dB it's exactly 1, which leaves the voice as it is.
+        let trim = self.input_trim.next(smoothing);
+        let input = [input[0] * trim, input[1] * trim];
         let cutoff = (self.cutoff.next(smoothing)
             + self.cut_offset.next(fast)
             + self.cut_envelope.next(fast))
@@ -1721,7 +1729,7 @@ impl TrackState {
         }
     }
 
-    /// Run a frame through the slots and level of a track with no voice of its own.
+    /// Run a frame through the trim, slots and level of a track with no voice of its own.
     #[inline]
     fn slots_and_level(
         &mut self,
@@ -1731,7 +1739,8 @@ impl TrackState {
         rate: u32,
         keys: &Keys,
     ) -> [f32; 2] {
-        let mut frame = input;
+        let trim = self.input_trim.next(smoothing);
+        let mut frame = [input[0] * trim, input[1] * trim];
         for (slot, insert) in self.inserts.iter_mut().enumerate() {
             let keeping_up = if self.slot_moving[slot] {
                 fast
@@ -1750,9 +1759,9 @@ impl TrackState {
         [frame[0] * gain, frame[1] * gain]
     }
 
-    /// What a return adds to the mix for what's sent to it: its slots, level and pan, then whether
-    /// it's heard, faded so muting doesn't click. With nothing going in and nothing left in its
-    /// slots, it does no work.
+    /// What a return adds to the mix for what's sent to it: its trim, slots, level and pan, then
+    /// whether it's heard, faded so muting doesn't click. With nothing going in and nothing left in
+    /// its slots, it does no work.
     #[inline]
     pub fn process_return(
         &mut self,

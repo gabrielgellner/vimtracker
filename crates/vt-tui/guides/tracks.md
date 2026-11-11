@@ -525,6 +525,14 @@ follow what's playing. A setting that's whole values, like `Bits`, just steps.
 
 ## Output
 
+`Trim`, at the top, is the gain at the track's input, for gain staging, so `Level`
+is left for the mix, as a console's input trim and fader are. It's a quarter of a dB a
+step either side of `80`, which is 0 dB: `FF` is +31.75 dB, `01` -31.75 dB, and `00`
+is off, which silences the track. It comes straight after the machine, before the
+filter, so turning it up drives `Drive` and the slots harder. Steps and modulators
+don't move it, and a change glides as `Level`'s does. The status line reads it in dB;
+`=` and `-` move it a quarter of a dB, `+` and `_` 4 dB, and `x` goes back to 0 dB.
+
 `Pan`, `Send A` and `Send B` are where those values start when
 playback starts from the top. A step's `h` value changes them until the next start,
 and changing one here is heard straight away unless a lock or glide is on top. `Level` scales the whole track.
@@ -573,7 +581,8 @@ A track in a group plays through it, and the group plays through its own slots,
 `Level` and `Pan` to the master. Its sends still go from the track itself, so a snare
 can go to the reverb on its own, and the group has `Send A` and `Send B` of its own
 too. A group's Sound page lists its tracks on the left, each with its own mute or solo,
-and has `Level`, `Pan` and its sends on the right, where a track's are. The rest is as on
+and has `Trim`, `Level`, `Pan` and its sends on the right, where a track's are. Its
+`Trim` is at its input, so it sets how hard the sum of its tracks hits its slots. The rest is as on
 a return.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
@@ -629,7 +638,9 @@ passes on what it's sent. `M` is the master: everything goes through it, and the
 limiter.
 
 They make no sound of their own, so they have no machine or filter, and their Sound
-page has just `Level` and `Pan`, and the master only `Level`. The rest works as on any
+page has just `Trim`, `Level` and `Pan`, and the master only `Trim` and `Level`. `Trim` is
+at the input, before the slots, so it sets how hard what's sent, or the whole mix, hits
+them, and `Level` after them sets what goes on. The rest works as on any
 track: 3 slots on the FX page, the Mod page, a strip on the mixer, and phrases. To give
 one a phrase, type a chain number in its column on the Song view. A note on one plays
 nothing, but it does start the track's envelopes. Steps on a return only reach that
@@ -732,8 +743,8 @@ others. See **FX commands**.
 ## The mixer
 
 Press `Space 6` for a strip for each track: its name, a meter of what it's playing
-with `L` and `R` bars, a fader beside them showing its `Level`, then its `Pan`,
-`Send A`, `Send B`, mute and solo. The meters are on the same scale as the main one,
+with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
+`Level`, `Pan`, `Send A`, `Send B`, mute and solo. It opens on `Level`. The meters are on the same scale as the main one,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
 tracks, `j` and `k` up and down the strip, and values edit as they do on the track page. On mute and solo, `=` switches on,
 `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
