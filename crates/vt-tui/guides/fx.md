@@ -53,6 +53,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `DEP4` | Mod 4's depth: `80` is none, as on the Mod page. `DEP5` `DEP6` too |
 | `DEP2` | An envelope's depth. `DEP1` `DEP3` too, but not the notes' shape |
 | `PHS4` | An LFO's phase: `00` to `FF` is a turn, round. `PHS5` `PHS6` too |
+| `POL4` | Mod 4's polarity: `00` one way, `01` both. `POL5` `POL6` too |
+| `POL2` | An envelope's polarity. `POL3` too, but not the notes' shape |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't

@@ -183,11 +183,11 @@ pub fn tracks_of_different_lengths() -> (App, Realtime) {
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-/// From `Mod 1`'s type, at the top of the Mod page, to the type of one of the LFOs a new track's
-/// last three slots are: along `Mod 1`'s title, across to `Mod 4`'s on the right, and down that
-/// column a device at a time.
+/// From anywhere in `Mod 1`'s title, at the top of the Mod page, to the type of one of the LFOs
+/// a new track's last three slots are: to the end of `Mod 1`'s title, across to `Mod 4`'s on the
+/// right, and down that column a device at a time.
 pub fn to_lfo(lfo: usize) -> String {
-    format!("ll{}", "}".repeat(lfo))
+    format!("$l{}", "}".repeat(lfo))
 }
 
 /// A device's title on the track page, by its name, from its frame's corner to the other, as

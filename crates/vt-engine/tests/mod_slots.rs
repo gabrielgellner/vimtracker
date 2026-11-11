@@ -1,6 +1,7 @@
 //! A track's six mod slots: a type change glides rather than jumps and goes on as the new type,
 //! the first envelope on `Vol` shapes the notes wherever it is, LFOs keep the random waves they had
 //! before slots, and an envelope's depth can be locked and moved like an LFO's.
+//! A slot moves its setting one way or both, as its polarity says.
 
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::envelope::Adsr;
 use vt_model::lfo::{Lfo, Rate, Shape, wave};
-use vt_model::modulation::{ModKind, ModSlot};
+use vt_model::modulation::{ModKind, ModSlot, Polarity};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -225,4 +226,65 @@ fn an_envelope_moves_a_later_envelopes_depth() {
     back.tracks[0].mods[2] =
         ModSlot::adsr(Some(SettingId::modulator(1, 0).unwrap()), held()).with_depth(0x20);
     assert_eq!(cutoff_after(&back, 1), 0x80);
+}
+
+/// An envelope that goes straight to full and then straight to nothing, while the note holds.
+fn gone() -> Adsr {
+    Adsr {
+        attack_ms: 0,
+        decay_ms: 0,
+        sustain: 0,
+        ..Adsr::decay()
+    }
+}
+
+#[test]
+fn a_unipolar_lfo_moves_its_setting_one_way_only() {
+    // The square on `Cut` at `+40`: both ways, `C0` while up and `40` while down; one way, `C0`
+    // while up and back at `80` while down.
+    let mut both = song(&[]);
+    both.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::CUT), square()).with_depth(0x40);
+    assert_eq!(
+        both.tracks[0].mods[3].polarity(),
+        Polarity::Bi,
+        "an LFO's own"
+    );
+    assert_eq!(
+        (cutoff_after(&both, 1), cutoff_after(&both, 3)),
+        (0xC0, 0x40)
+    );
+    let mut one = both.clone();
+    one.tracks[0].mods[3].polarity = Some(Polarity::Uni);
+    assert_eq!((cutoff_after(&one, 1), cutoff_after(&one, 3)), (0xC0, 0x80));
+}
+
+#[test]
+fn a_bipolar_envelope_is_centred_on_its_setting() {
+    // Fallen to nothing, an envelope at `+40` leaves `Cut` at `80` one way, and takes it to `40`
+    // both ways; held full, it's `C0` either way.
+    let mut one = song(&[]);
+    one.tracks[0].mods[1] = ModSlot::adsr(Some(SettingId::CUT), gone()).with_depth(0x40);
+    assert_eq!(
+        one.tracks[0].mods[1].polarity(),
+        Polarity::Uni,
+        "an envelope's own"
+    );
+    assert_eq!(cutoff_after(&one, 1), 0x80);
+    let mut both = one.clone();
+    both.tracks[0].mods[1].polarity = Some(Polarity::Bi);
+    assert_eq!(cutoff_after(&both, 1), 0x40);
+    both.tracks[0].mods[1].adsr = held();
+    assert_eq!(cutoff_after(&both, 1), 0xC0);
+}
+
+#[test]
+fn a_step_locks_a_slots_polarity() {
+    // The fallen envelope, one way of its own, made both ways for its note by a step.
+    let mut locked = song(&["C-3 -- mod2.polarity:01 --- ---"]);
+    locked.tracks[0].mods[1] = ModSlot::adsr(Some(SettingId::CUT), gone()).with_depth(0x40);
+    assert_eq!(cutoff_after(&locked, 1), 0x40);
+    assert_eq!(
+        SettingId::modulator(1, 2).unwrap().label(),
+        Some("POL2".to_owned())
+    );
 }

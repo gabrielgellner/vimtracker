@@ -1095,7 +1095,7 @@ fn the_track_page_draws_each_envelopes_shape() {
     };
     press(&mut app, "L");
     let drawn = page(&mut app, &mut graphics);
-    assert!(line(&drawn, top).starts_with(&modulator_title("Mod 1", true, "ADSR  → Vol ─")));
+    assert!(line(&drawn, top).starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
     let first = app.mod_images.unwrap()[0];
     assert_eq!(drawn[image].fg, id_color(first));
 
@@ -1348,11 +1348,11 @@ fn the_track_page_shows_its_settings_in_columns() {
         let (top, left) = device_at(&lines, identity);
         from_column(&lines[top], left)
     };
-    assert!(title("Mod 1").starts_with(&modulator_title("Mod 1", true, "ADSR  → Vol ─")));
-    assert!(title("Mod 2").starts_with(&modulator_title("Mod 2", true, "ADSR  → Cut ─")));
-    assert!(title("Mod 3").starts_with(&modulator_title("Mod 3", true, "ADSR  → --- ─")));
-    assert!(title("Mod 4").starts_with(&modulator_title("Mod 4", true, "LFO  Free  → Cut ─")));
-    assert!(title("Mod 5").starts_with(&modulator_title("Mod 5", true, "LFO  Free  → --- ─")));
+    assert!(title("Mod 1").starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
+    assert!(title("Mod 2").starts_with(&modulator_title("Mod 2", true, "ADSR  Uni  → Cut ─")));
+    assert!(title("Mod 3").starts_with(&modulator_title("Mod 3", true, "ADSR  Uni  → --- ─")));
+    assert!(title("Mod 4").starts_with(&modulator_title("Mod 4", true, "LFO  Free  Bi  → Cut ─")));
+    assert!(title("Mod 5").starts_with(&modulator_title("Mod 5", true, "LFO  Free  Bi  → --- ─")));
     // An envelope's times down its left and its levels down its right.
     let (top, left) = device_at(&lines, "Mod 1");
     let row = |at: usize| from_column(&lines[top + at], left);
@@ -2445,7 +2445,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_tui::views::widgets::toggle;
     let (mut app, _realtime) = app();
     // Across to the LFOs and down past them, onto its first row, as its title has nothing.
-    press(&mut app, " 4Lll3}");
+    press(&mut app, " 4L$l3}");
     let rows = |app: &mut App| {
         let lines = screen_cells(app);
         let (top, left) = device_at(&lines, "Arpeggio");

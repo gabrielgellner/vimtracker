@@ -9,7 +9,7 @@ use vt_engine::link::Realtime;
 use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::action::Action;
 use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, wave};
-use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
+use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
@@ -36,6 +36,7 @@ fn every_mod_setting(sound: bool) -> Vec<Control> {
     for slot in 0..MOD_SLOTS - LFOS {
         for field in [
             ModField::Type,
+            ModField::Polarity,
             ModField::Destination,
             ModField::Attack,
             ModField::Decay,
@@ -51,6 +52,7 @@ fn every_mod_setting(sound: bool) -> Vec<Control> {
         for field in [
             ModField::Type,
             ModField::Mode,
+            ModField::Polarity,
             ModField::Destination,
             ModField::Shape,
             ModField::Rate,
@@ -143,6 +145,8 @@ fn every_modulator_setting_is_on_the_mod_page_once_and_the_keys_reach_it() {
         for column in 0..2 {
             page.key(Cmd::Move(Motion::First), 1, Some(&track));
             if column == 1 {
+                // Off the end of `Mod 1`'s title into `Mod 4`'s.
+                page.key(Cmd::Move(Motion::RowEnd), 1, Some(&track));
                 page.key(RIGHT, 1, Some(&track));
             }
             loop {
@@ -181,8 +185,13 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     // The page reads `Mod 1`, `Mod 4`, `Mod 2`, … so `Mod 4` is the second device.
     assert_eq!(cursor(&page), at(0, 0, 0));
     assert_eq!(page.control(Some(&track)), Control::Mod(0, ModField::Type));
-    // An ADSR's title is its type then its destination, and `l` goes along it, then into
-    // `Mod 4`'s title, whose type is first; `h` comes back to the last of `Mod 1`'s.
+    // An ADSR's title is its type, its polarity and its destination, and `l` goes along it,
+    // then into `Mod 4`'s title, whose type is first; `h` comes back to the last of `Mod 1`'s.
+    page.key(RIGHT, 1, Some(&track));
+    assert_eq!(
+        page.control(Some(&track)),
+        Control::Mod(0, ModField::Polarity)
+    );
     page.key(RIGHT, 1, Some(&track));
     assert_eq!(
         page.control(Some(&track)),
@@ -192,7 +201,7 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     assert_eq!(cursor(&page), at(1, 0, 0));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Type));
     page.key(LEFT, 1, Some(&track));
-    assert_eq!(cursor(&page), at(0, 0, 1));
+    assert_eq!(cursor(&page), at(0, 0, 2));
     // On `Sustain`, the last of `Mod 1`'s first row, `l` goes to `Shape`, the first of `Mod 4`'s,
     // and `h` comes back to the last.
     keys(&mut page, &track, &[(DOWN, 1)]);
@@ -238,15 +247,17 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
 }
 
 #[test]
-fn a_slots_title_is_its_type_its_mode_then_its_destination_and_h_and_l_go_along_it() {
+fn a_slots_title_is_its_type_its_mode_its_polarity_then_its_destination_and_h_and_l_go_along_it() {
     let track = Track::default();
     let mut page = mod_page();
     let control = |page: &TrackPage| page.control(Some(&track));
-    // An LFO has a mode, between its type and its destination.
-    keys(&mut page, &track, &[(RIGHT, 2)]);
+    // An LFO has a mode after its type, then its polarity and its destination.
+    keys(&mut page, &track, &[(RIGHT, 3)]);
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
     page.key(RIGHT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Mode));
+    page.key(RIGHT, 1, Some(&track));
+    assert_eq!(control(&page), Control::Mod(3, ModField::Polarity));
     page.key(RIGHT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Destination));
     page.key(RIGHT, 1, Some(&track));
@@ -257,15 +268,15 @@ fn a_slots_title_is_its_type_its_mode_then_its_destination_and_h_and_l_go_along_
     );
     page.key(Cmd::Move(Motion::RowStart), 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
-    // `k` from a grid's left column is its type; from an ADSR's right column its destination,
-    // and from an LFO's right column its mode, the title's second.
+    // `k` from a grid's left column is its type, and from its right column the title's second:
+    // an ADSR's polarity, and an LFO's mode.
     keys(&mut page, &track, &[(DOWN, 1), (UP, 1)]);
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
     keys(&mut page, &track, &[(DOWN, 1), (RIGHT, 1), (UP, 1)]);
     assert_eq!(control(&page), Control::Mod(3, ModField::Mode));
     let mut page = mod_page();
     keys(&mut page, &track, &[(DOWN, 1), (RIGHT, 1), (UP, 1)]);
-    assert_eq!(control(&page), Control::Mod(0, ModField::Destination));
+    assert_eq!(control(&page), Control::Mod(0, ModField::Polarity));
 }
 
 #[test]
@@ -290,7 +301,7 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
     keys(
         &mut page,
         &track,
-        &[(Cmd::Move(Motion::First), 1), (RIGHT, 1)],
+        &[(Cmd::Move(Motion::First), 1), (RIGHT, 2)],
     );
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
     page.key(NEXT, 3, Some(&track));
@@ -350,7 +361,7 @@ fn the_keys_move_across_the_mod_page_in_the_app() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Type));
-    press(&mut app, "ll}");
+    press(&mut app, "$l}");
     assert_eq!(app.track_control(), Control::Mod(4, ModField::Type));
     press(&mut app, "jh");
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Sustain));
@@ -370,11 +381,11 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
         let wanted = modulator_title(&identity, on, controls);
         assert!(found.starts_with(&wanted), "{found} against {wanted}");
     };
-    title(&app, 1, true, "ADSR  → Vol ─");
-    title(&app, 2, true, "ADSR  → Cut ─");
-    title(&app, 3, true, "ADSR  → --- ─");
+    title(&app, 1, true, "ADSR  --  → Vol ─");
+    title(&app, 2, true, "ADSR  Uni  → Cut ─");
+    title(&app, 3, true, "ADSR  Uni  → --- ─");
     for slot in 4..=6 {
-        title(&app, slot, true, "LFO  Free  → --- ─");
+        title(&app, slot, true, "LFO  Free  Bi  → --- ─");
     }
     // The accumulator and the arpeggio have no destination, and no room for a switch.
     assert!(device_title(&app, "Accumulator").starts_with("╭─ Accumulator ───"));
@@ -387,23 +398,25 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
         app.song().tracks[0].mods[5].destination,
         Some(SettingId::PAN)
     );
-    title(&app, 6, true, "LFO  Free  → Pan ─");
+    title(&app, 6, true, "LFO  Free  Bi  → Pan ─");
     // `k` from the grid's first row reaches it.
     press(&mut app, "jkx");
     assert_eq!(app.song().tracks[0].mods[5].destination, None);
-    title(&app, 6, true, "LFO  Free  → --- ─");
+    title(&app, 6, true, "LFO  Free  Bi  → --- ─");
 
     // Going nowhere, it's dim, as an empty slot's title is, its arrow too; set, it's the
-    // value's own colour. `Mod 1`'s title is on the page's third row and `Mod 3`'s two bands
-    // down, its arrow 19 in and its destination 21.
+    // value's own colour. `Mod 1`'s title is on the page's third row, its arrow 23 in after its
+    // polarity's `--`, and `Mod 3`'s two bands down, its arrow 24 in after its `Uni`.
     let buffer = track_page_buffer(&app);
     let dim = vt_tui::theme::dim().fg.unwrap();
-    assert_eq!(buffer[(19, 2)].symbol(), "→");
-    assert_eq!(buffer[(21, 2)].symbol(), "V");
-    assert_ne!(buffer[(21, 2)].fg, dim, "Mod 1's Vol");
-    assert_eq!(buffer[(21, 2 + 9 * 2)].symbol(), "-");
-    assert_eq!(buffer[(21, 2 + 9 * 2)].fg, dim, "Mod 3's ---");
-    assert_eq!(buffer[(19, 2 + 9 * 2)].fg, dim, "and its arrow");
+    assert_eq!(buffer[(23, 2)].symbol(), "→");
+    assert_eq!(buffer[(25, 2)].symbol(), "V");
+    assert_ne!(buffer[(25, 2)].fg, dim, "Mod 1's Vol");
+    let below = 2 + 9 * 2;
+    assert_eq!(buffer[(24, below)].symbol(), "→");
+    assert_eq!(buffer[(26, below)].symbol(), "-");
+    assert_eq!(buffer[(26, below)].fg, dim, "Mod 3's ---");
+    assert_eq!(buffer[(24, below)].fg, dim, "and its arrow");
 }
 
 #[test]
@@ -511,12 +524,12 @@ fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
     let text = lines.join("\n");
     let switch = vt_tui::views::widgets::toggle::glyph(true);
     for (slot, controls) in [
-        (1, "ADSR  → Vol"),
-        (2, "ADSR  → Cut"),
-        (3, "ADSR  → ---"),
-        (4, "LFO  Free  → ---"),
-        (5, "LFO  Free  → ---"),
-        (6, "LFO  Free  → ---"),
+        (1, "ADSR  --  → Vol"),
+        (2, "ADSR  Uni  → Cut"),
+        (3, "ADSR  Uni  → ---"),
+        (4, "LFO  Free  Bi  → ---"),
+        (5, "LFO  Free  Bi  → ---"),
+        (6, "LFO  Free  Bi  → ---"),
     ] {
         let wanted = format!("╭─ Mod {slot}  {switch}  {controls} ─");
         assert_eq!(text.matches(&wanted).count(), 1, "{wanted} in\n{text}");
@@ -556,7 +569,7 @@ fn the_mod_page_goes_by_whole_bands_where_fewer_fit() {
     };
     assert_eq!(titles(&draw(&app)), ["Mod 1", "Mod 2"]);
     // On the arpeggio, the page has gone down to keep its band in view, as low as it can be.
-    press(&mut app, "ll3}");
+    press(&mut app, "$l3}");
     assert_eq!(app.track_control(), Control::Arpeggio(ArpField::Rate));
     let lines = draw(&app);
     assert_eq!(titles(&lines), ["Mod 3", "Accum"]);
@@ -597,12 +610,12 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     assert!(device_title(&app, "Mod 4").starts_with(&modulator_title(
         "Mod 4",
         false,
-        "LFO  Free  → --- ─"
+        "LFO  Free  Bi  → --- ─"
     )));
     assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
         "Mod 1",
         true,
-        "ADSR  → Vol ─"
+        "ADSR  --  → Vol ─"
     )));
 
     // Its switch is faint, and so is all in it but the cursor: its title and its settings.
@@ -611,8 +624,8 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     assert_eq!(buffer[lfo_switch].fg, theme::OVERLAY0);
     assert_eq!(buffer[(89, 2)].symbol(), "L");
     assert_eq!(buffer[(89, 2)].fg, theme::OVERLAY0);
-    assert_eq!(buffer[(102, 2)].symbol(), "-");
-    assert_eq!(buffer[(102, 2)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(106, 2)].symbol(), "-");
+    assert_eq!(buffer[(106, 2)].fg, theme::OVERLAY0);
     assert_eq!(buffer[(79, 4)].symbol(), "S");
     assert_eq!(buffer[(79, 4)].fg, theme::OVERLAY0);
     assert_eq!(buffer[(89, 6)].bg, theme::ROSEWATER, "the cursor");
@@ -636,7 +649,7 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
         "Mod 1",
         false,
-        "ADSR  → Vol ─"
+        "ADSR  --  → Vol ─"
     )));
     assert!(lfo(&app).bypassed, "and only it");
 }
@@ -699,7 +712,7 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
         "Mod 2",
         false,
-        "LFO  Free  → Cut ─"
+        "LFO  Free  Bi  → Cut ─"
     )));
     // Its LFO's phase set, and back to an ADSR, which finds its envelope as it was.
     press(&mut app, "jl=");
@@ -771,7 +784,7 @@ fn k_on_an_lfos_mode_sets_whether_notes_start_it() {
     assert!(device_title(&app, "Mod 4").starts_with(&modulator_title(
         "Mod 4",
         true,
-        "LFO  Trig  → --- ─"
+        "LFO  Trig  Bi  → --- ─"
     )));
     // `=` and `-` go through the modes, as any list does.
     press(&mut app, "-");
@@ -783,7 +796,7 @@ fn an_envelopes_depth_is_a_destination_of_the_envelope_before_it() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
     // Mod 1's destination list has Mod 2's depth, an envelope's, after the LFOs' settings.
-    press(&mut app, "lK/M2 Depth");
+    press(&mut app, "$K/M2 Depth");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].mods[0].destination,
@@ -792,7 +805,7 @@ fn an_envelopes_depth_is_a_destination_of_the_envelope_before_it() {
     assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
         "Mod 1",
         true,
-        "ADSR  → M2 Depth ─"
+        "ADSR  Uni  → M2 Depth ─"
     )));
     // Off `Vol`, it no longer shapes the notes, so its depth is its own.
     assert_eq!(depth_shown(&mut app, 1), "00");
@@ -1204,4 +1217,154 @@ fn a_modulators_toggles_take_two_cells_and_nothing_moves_when_one_flips() {
     assert_eq!(flipped.len(), 2, "{flipped:?}");
     press(&mut app, "-b");
     assert!(toggles_flipped(&before, &track_page_buffer(&app)).is_empty());
+}
+
+#[test]
+fn a_slots_polarity_is_in_its_title_and_equals_flips_it_as_one_undo_step() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let slot = |app: &App| app.song().tracks[0].mods[1];
+    // Mod 2's polarity, after its type, is its type's own until one is chosen.
+    press(&mut app, "}l");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Polarity));
+    assert_eq!(slot(&app).polarity, None);
+    let depth = app.history.undo_depth();
+    press(&mut app, "=");
+    assert_eq!(slot(&app).polarity, Some(Polarity::Bi));
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
+        "Mod 2",
+        true,
+        "ADSR  Bi  → Cut ─"
+    )));
+    press(&mut app, "-");
+    assert_eq!(
+        slot(&app).polarity,
+        Some(Polarity::Uni),
+        "chosen, even as the type's own"
+    );
+    press(&mut app, "u");
+    assert_eq!(slot(&app).polarity, Some(Polarity::Bi));
+    // `x` puts it back to following the type.
+    press(&mut app, "x");
+    assert_eq!(slot(&app).polarity, None);
+    assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
+        "Mod 2",
+        true,
+        "ADSR  Uni  → Cut ─"
+    )));
+    // The slot shaping the notes has none to show.
+    assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
+        "Mod 1",
+        true,
+        "ADSR  --  → Vol ─"
+    )));
+}
+
+#[test]
+fn k_on_a_polarity_lists_one_way_and_both() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    // On Mod 4's, an LFO's, after its mode.
+    press(&mut app, &format!("{}ll", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Polarity));
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().expect("the polarity picker");
+    assert_eq!(picker.title, "Mod 4 polarity");
+    let labels: Vec<String> = picker.items().iter().map(listed).collect();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(
+        labels[0].starts_with("Uni") && labels[1].starts_with("Bi"),
+        "{labels:?}"
+    );
+    assert_eq!(
+        listed(picker.current().unwrap()).split_whitespace().next(),
+        Some("Bi")
+    );
+    press(&mut app, "k");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].mods[3].polarity, Some(Polarity::Uni));
+    assert!(device_title(&app, "Mod 4").starts_with(&modulator_title(
+        "Mod 4",
+        true,
+        "LFO  Free  Uni  → --- ─"
+    )));
+}
+
+#[test]
+fn a_type_change_keeps_a_chosen_polarity_and_otherwise_follows_the_type() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let slot = |app: &App| app.song().tracks[0].mods[2];
+    let pick = |app: &mut App, up: bool| {
+        press(app, "0K");
+        press(app, if up { "k" } else { "j" });
+        special(app, KeyCode::Enter);
+    };
+    // Mod 3, an ADSR going one way, made an LFO, swings both ways, as an LFO does.
+    press(&mut app, "}}");
+    pick(&mut app, false);
+    assert_eq!(slot(&app).kind, ModKind::Lfo);
+    assert_eq!(
+        (slot(&app).polarity, slot(&app).polarity()),
+        (None, Polarity::Bi)
+    );
+    assert!(device_title(&app, "Mod 3").starts_with(&modulator_title(
+        "Mod 3",
+        true,
+        "LFO  Free  Bi  → --- ─"
+    )));
+    // Back to an ADSR, one way again.
+    pick(&mut app, true);
+    assert_eq!(slot(&app).polarity(), Polarity::Uni);
+    // Chosen both ways, it stays so through a change of type.
+    press(&mut app, "l=");
+    assert_eq!(slot(&app).polarity, Some(Polarity::Bi));
+    pick(&mut app, false);
+    assert_eq!(slot(&app).kind, ModKind::Lfo);
+    assert_eq!(slot(&app).polarity, Some(Polarity::Bi));
+    pick(&mut app, true);
+    assert_eq!(
+        (slot(&app).kind, slot(&app).polarity()),
+        (ModKind::Adsr, Polarity::Bi)
+    );
+}
+
+#[test]
+fn a_slots_picture_is_sent_again_when_its_polarity_changes() {
+    let (mut app, _realtime) = with_lfos([
+        lfo_on(SettingId::CUT, Shape::Sine, 0, 0x40),
+        unassigned(),
+        unassigned(),
+    ]);
+    let mut graphics = Graphics::new();
+    let mut ids = |app: &mut App| {
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        // Twice, as a picture changed a frame after another waits a frame.
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.mod_images.unwrap()
+    };
+    let first = ids(&mut app);
+    let set = |app: &mut App, slot: usize, polarity: Polarity| {
+        let modulator = ModSlot {
+            polarity: Some(polarity),
+            ..app.song().tracks[0].mods[slot]
+        };
+        app.apply(&Action::SetMod {
+            track: 0,
+            slot,
+            modulator,
+        });
+    };
+    // Chosen as its type's own, nothing changes for the picture.
+    set(&mut app, LFOS, Polarity::Bi);
+    set(&mut app, 1, Polarity::Uni);
+    assert_eq!(ids(&mut app), first);
+    // The LFO's cycle and the envelope's shape each change with it.
+    set(&mut app, LFOS, Polarity::Uni);
+    set(&mut app, 1, Polarity::Bi);
+    let now = ids(&mut app);
+    assert_ne!(now[LFOS], first[LFOS]);
+    assert_ne!(now[1], first[1]);
+    assert_eq!(now[2], first[2], "the others' stay");
 }

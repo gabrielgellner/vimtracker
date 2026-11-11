@@ -219,6 +219,7 @@ impl App {
             ),
             ModField::Type
             | ModField::Mode
+            | ModField::Polarity
             | ModField::Destination
             | ModField::Reset
             | ModField::Shape => return,

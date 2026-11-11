@@ -53,6 +53,76 @@ impl ModKind {
     pub fn has_mode(self) -> bool {
         matches!(self, Self::Lfo)
     }
+
+    /// Which way it moves what it reaches unless its slot says otherwise: an envelope rises from
+    /// the setting, and an LFO swings around it, as before slots had a polarity.
+    pub fn polarity(self) -> Polarity {
+        match self {
+            Self::Adsr => Polarity::Uni,
+            Self::Lfo => Polarity::Bi,
+        }
+    }
+}
+
+/// Which way a slot moves what it reaches, as Bitwig's and Vital's modulators have it (#434):
+/// one way from the setting, or both ways around it. A negative depth still flips the direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Polarity {
+    /// One way: an LFO from 0 to 1, for a tremolo that only dips or a vibrato that only bends up,
+    /// and an envelope rising from the setting.
+    Uni,
+    /// Both ways: an LFO from -1 to 1, and an envelope centred on the setting, from below it at
+    /// rest to above it at full.
+    Bi,
+}
+
+impl Polarity {
+    /// Both, in the order lists and the registry's values have them.
+    pub const ALL: [Self; 2] = [Self::Uni, Self::Bi];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Uni => "Uni",
+            Self::Bi => "Bi",
+        }
+    }
+
+    /// What it does, for a list to choose from.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Uni => "one way from the setting",
+            Self::Bi => "both ways around the setting",
+        }
+    }
+
+    /// Its place among [`Polarity::ALL`], as a setting's value.
+    pub fn index(self) -> u8 {
+        match self {
+            Self::Uni => 0,
+            Self::Bi => 1,
+        }
+    }
+
+    /// The other one.
+    #[must_use]
+    pub fn other(self) -> Self {
+        match self {
+            Self::Uni => Self::Bi,
+            Self::Bi => Self::Uni,
+        }
+    }
+
+    /// A modulator's output, from 0 to 1 for an envelope's level or -1 to 1 for a wave, in this
+    /// polarity, from the one its type gives.
+    #[inline]
+    pub fn of(self, natural: Self, value: f32) -> f32 {
+        match (natural, self) {
+            (Self::Bi, Self::Uni) => (value + 1.0) * 0.5,
+            (Self::Uni, Self::Bi) => value * 2.0 - 1.0,
+            _ => value,
+        }
+    }
 }
 
 fn is_false(value: &bool) -> bool {
@@ -78,6 +148,10 @@ pub struct ModSlot {
     /// a new track's have.
     #[serde(default, skip_serializing_if = "is_false")]
     pub bypassed: bool,
+    /// Which way it moves what it reaches, if it's been chosen; otherwise its type's own, so a
+    /// type change keeps one that was chosen and follows the type's if none was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub polarity: Option<Polarity>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub adsr: Adsr,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -92,6 +166,7 @@ impl ModSlot {
             destination,
             depth: 0,
             bypassed: false,
+            polarity: None,
             adsr,
             lfo: Lfo::default(),
         }
@@ -104,6 +179,7 @@ impl ModSlot {
             destination,
             depth: 0,
             bypassed: false,
+            polarity: None,
             adsr: Adsr::default(),
             lfo,
         }
@@ -118,6 +194,11 @@ impl ModSlot {
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
         self.depth.abs() <= MAX_DEPTH && self.adsr.in_range() && self.lfo.in_range()
+    }
+
+    /// Which way it moves what it reaches: its own if it's been chosen, else its type's.
+    pub fn polarity(&self) -> Polarity {
+        self.polarity.unwrap_or_else(|| self.kind.polarity())
     }
 
     /// The name of its mode, for a type that has one.
@@ -266,5 +347,45 @@ mod tests {
         slot.adsr.attack_ms = 300;
         slot.kind = ModKind::Lfo;
         assert_eq!((slot.lfo.phase, slot.adsr.attack_ms), (90, 300));
+    }
+
+    #[test]
+    fn a_slots_polarity_follows_its_type_until_one_is_chosen() {
+        let mut slot = default_mod(3);
+        assert_eq!(slot.polarity(), Polarity::Bi);
+        slot.kind = ModKind::Adsr;
+        assert_eq!(slot.polarity(), Polarity::Uni, "an envelope's own");
+        slot.polarity = Some(Polarity::Bi);
+        slot.kind = ModKind::Lfo;
+        slot.kind = ModKind::Adsr;
+        assert_eq!(slot.polarity(), Polarity::Bi, "chosen, it stays");
+        let text = ron::to_string(&slot).unwrap();
+        assert!(text.contains("polarity:Some(Bi)"), "{text}");
+        assert_eq!(ron::from_str::<ModSlot>(&text).unwrap(), slot);
+        assert!(
+            !ron::to_string(&default_mod(3))
+                .unwrap()
+                .contains("polarity")
+        );
+    }
+
+    #[test]
+    fn a_polarity_maps_its_types_output_only_when_it_differs() {
+        // An LFO one way goes from 0 to 1, and an envelope both ways from -1 to 1.
+        assert_eq!(Polarity::Uni.of(Polarity::Bi, -1.0), 0.0);
+        assert_eq!(Polarity::Uni.of(Polarity::Bi, 1.0), 1.0);
+        assert_eq!(Polarity::Bi.of(Polarity::Uni, 0.0), -1.0);
+        assert_eq!(Polarity::Bi.of(Polarity::Uni, 0.75), 0.5);
+        // Its own leaves every value exactly as it was.
+        for value in [-0.3_f32, 0.1, 0.7] {
+            assert_eq!(
+                Polarity::Bi.of(Polarity::Bi, value).to_bits(),
+                value.to_bits()
+            );
+            assert_eq!(
+                Polarity::Uni.of(Polarity::Uni, value).to_bits(),
+                value.to_bits()
+            );
+        }
     }
 }

@@ -25,7 +25,7 @@ use vt_model::constants::{
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{LfoMode, Rate, Shape};
-use vt_model::modulation::{MAX_DEPTH, ModKind};
+use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
@@ -334,13 +334,15 @@ fn depth(depth: i16) -> (Feel, u16) {
     )
 }
 
-/// Whether an LFO's mode is `Trig`, as the button under its `Phase` shows it while the mode has
-/// two, the `Retrig` it took over; #86's five make it a knob.
-fn lfo_mode_on(control: Control, track: &Track) -> Option<bool> {
+/// Whether a mod slot's two-way choices are on, as its buttons show them: an LFO's mode is
+/// `Trig` (the button under its `Phase`, the `Retrig` it took over, while the mode has two;
+/// #86's five make it a knob), and any slot's polarity is `Bi` (the button under its `Depth`).
+fn mod_switch_on(control: Control, track: &Track) -> Option<bool> {
     match control {
         Control::Mod(slot, ModField::Mode) if track.mods[slot].kind == ModKind::Lfo => {
             Some(track.mods[slot].lfo.mode == LfoMode::Trig)
         }
+        Control::Mod(slot, ModField::Polarity) => Some(track.mods[slot].polarity() == Polarity::Bi),
         _ => None,
     }
 }
@@ -352,7 +354,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
     if !control.exists_on(track) {
         return None;
     }
-    if let Some(on) = toggle_on(control, track, song).or_else(|| lfo_mode_on(control, track)) {
+    if let Some(on) = toggle_on(control, track, song).or_else(|| mod_switch_on(control, track)) {
         return Some((Feel::Switch, if on { position_of(1, 2) } else { 0 }));
     }
     let names = |items: &[&str]| {
@@ -462,7 +464,9 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
             match field {
                 // What a slot is, the app's alone; an LFO's mode is a switch while it has two.
-                ModField::Type | ModField::Mode | ModField::Reset => return None,
+                ModField::Type | ModField::Mode | ModField::Polarity | ModField::Reset => {
+                    return None;
+                }
                 ModField::Destination => {
                     let choices = SettingId::for_mod(track, slot);
                     let at = modulator

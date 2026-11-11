@@ -13,6 +13,7 @@ use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::Adsr;
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, wave};
+use vt_model::modulation::Polarity;
 use vt_model::song::{FilterType, Track};
 
 use super::{indexed_png, rgb};
@@ -347,9 +348,19 @@ fn filter_open(track: &Track) -> bool {
 /// An envelope's shape, from silence, with a point at the end of each stage so its corners are
 /// sharp, over a dotted baseline and fainter dotted lines down it between the stages, so each of
 /// its times has a part of the picture to point at.
-pub fn envelope(envelope: &Adsr, (width, height): (usize, usize)) -> Plot {
+pub fn envelope(envelope: &Adsr, size: (usize, usize)) -> Plot {
+    envelope_in(envelope, Polarity::Uni, size)
+}
+
+/// An envelope's shape in a polarity: over its baseline one way, or its centre line both ways, as
+/// what it moves is then at rest half way up.
+pub fn envelope_in(envelope: &Adsr, polarity: Polarity, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
-    plot.across(0.0, Mark::Grid);
+    let rest = match polarity {
+        Polarity::Uni => 0.0,
+        Polarity::Bi => 0.5,
+    };
+    plot.across(rest, Mark::Grid);
     let ends = stage_ends(envelope);
     // Between attack and decay, decay and sustain, and sustain and release.
     for end in &ends[..3] {
@@ -367,12 +378,14 @@ const JUMP: f32 = 1e-4;
 /// whether a negative depth turns it upside down. Its rate and the size of its depth aren't in
 /// it, so the picture never changes with them: the dot's speed shows the rate, and the depth's
 /// number is beside it. The random waves draw only their centre line, so neither their phase nor
-/// their sign is in it.
+/// their sign is in it. One way only, its dotted line is where it's at rest, the bottom of the
+/// wave, rather than its centre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LfoDrawing {
     pub shape: lfo::Shape,
     pub phase: u16,
     pub flipped: bool,
+    pub unipolar: bool,
 }
 
 impl LfoDrawing {
@@ -383,13 +396,24 @@ impl LfoDrawing {
                 shape: lfo.shape,
                 phase: lfo.phase % 360,
                 flipped: depth < 0,
+                unipolar: false,
             }
         } else {
             Self {
                 shape: lfo.shape,
                 phase: 0,
                 flipped: false,
+                unipolar: false,
             }
+        }
+    }
+
+    /// The same, in a polarity, which moves its dotted line.
+    #[must_use]
+    pub fn in_polarity(self, polarity: Polarity) -> Self {
+        Self {
+            unipolar: polarity == Polarity::Uni,
+            ..self
         }
     }
 
@@ -447,7 +471,13 @@ pub fn lfo_draws_its_wave(shape: lfo::Shape) -> bool {
 /// has the centre line alone.
 pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
-    plot.across(0.5, Mark::Grid);
+    // One way only, it's at rest where the wave is lowest, or highest flipped.
+    let rest = if drawing.unipolar {
+        drawing.level_of(-1.0)
+    } else {
+        0.5
+    };
+    plot.across(rest, Mark::Grid);
     if lfo_draws_its_wave(drawing.shape) {
         let level = |x: f32| drawing.level_at(x);
         plot.curve(level, level(0.0), &drawing.corners());

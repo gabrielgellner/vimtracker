@@ -411,7 +411,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
- |   |- mods[6]                    ModSlot: kind, destination, depth, switch, and each type's
+ |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
  |   |                             own settings (adsr, lfo), kept while another type plays
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
  |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order
@@ -459,7 +459,8 @@ Song                               song.ron, refused unless format_version is FO
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
     Mod page, each a `ModSlot` of a type, `ModKind::Adsr` or `ModKind::Lfo`, with a destination
-    setting, a depth and a switch, which every type shares, and each type's own settings, which a
+    setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
+    which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
     rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
     ADSR is in milliseconds, with a reset. The first envelope-type slot on `Vol` shapes the notes
@@ -551,7 +552,8 @@ is due. `Engine::render` then plays the run's frames.
     (`FAST_SMOOTHING_MS`) while modulation moves it, so nothing clicks.
 *   **Mod slots** (`track_state.rs`). `TrackState::modulate` works a track's six slots out in
     order, every `LFO_UPDATE_FRAMES`, through a fixed `slots: [SlotRun; MOD_SLOTS]`: each reads its
-    held depth and phase plus what earlier slots added to them, and adds to its destination, an
+    held depth and phase plus what earlier slots added to them, maps its output by its held
+    polarity (`Polarity::of`, which leaves its type's own exactly as it was), and adds to its destination, an
     envelope's through the fast smoothers and an LFO's into `offsets`, through the slow ones. A
     slot keeps every type's run going (its envelope's stage, its cycles' start), so a type change
     picks the new type up as though it had always been there, and the jump between what the old

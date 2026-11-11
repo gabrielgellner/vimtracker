@@ -67,10 +67,10 @@ impl SettingId {
                         .iter()
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
-            // A slot's depth does nothing on the one shaping the notes, and only an LFO has a
-            // phase.
-            (Owner::Mod(slot), 0) => note_shape_slot(&track.mods) != Some(slot),
-            (Owner::Mod(slot), _) => track.mods[slot].kind == ModKind::Lfo,
+            // A slot's depth and polarity do nothing on the one shaping the notes, and only an LFO
+            // has a phase.
+            (Owner::Mod(slot), 1) => track.mods[slot].kind == ModKind::Lfo,
+            (Owner::Mod(slot), _) => note_shape_slot(&track.mods) != Some(slot),
             (Owner::Sampler, _) => track.is_sound() && track.machine == Machine::Sampler,
             (Owner::Bypass(slot), _) => track
                 .inserts
@@ -109,7 +109,10 @@ impl SettingId {
             (Owner::Voice(voice), _) => format!("A setting of {}", voice.name()),
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
             (Owner::Mod(slot), 0) => format!("How far Mod {} moves", slot + 1),
-            (Owner::Mod(slot), _) => format!("Where Mod {} is in its cycle", slot + 1),
+            (Owner::Mod(slot), 1) => format!("Where Mod {} is in its cycle", slot + 1),
+            (Owner::Mod(slot), _) => {
+                format!("Whether Mod {} moves one way or both", slot + 1)
+            }
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
             (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
@@ -161,15 +164,14 @@ impl SettingId {
         settings
     }
 
-    /// What a mod slot can move: what's on the track, and the settings the slots after it have,
-    /// as the slots run in order, so there's never a way back round.
+    /// What a mod slot can move: what's on the track, and the depths and phases the slots after
+    /// it have, as the slots run in order, so there's never a way back round. A polarity is
+    /// chosen, so steps lock it but nothing moves it.
     pub fn for_mod(track: &Track, slot: usize) -> Vec<Self> {
         let mut settings = Self::to_modulate(track);
-        settings.extend(
-            mod_settings()
-                .skip((slot + 1) * 2)
-                .filter(|id| id.exists_on(track)),
-        );
+        settings.extend(mod_settings().filter(|id| {
+            matches!(id.owner(), (Owner::Mod(other), 0 | 1) if other > slot) && id.exists_on(track)
+        }));
         settings
     }
 
@@ -206,7 +208,7 @@ impl SettingId {
 
 /// Every mod slot's settings, in order.
 fn mod_settings() -> impl Iterator<Item = SettingId> {
-    (0..MOD_SLOTS).flat_map(|slot| (0..2).filter_map(move |at| SettingId::modulator(slot, at)))
+    (0..MOD_SLOTS).flat_map(|slot| (0..).map_while(move |at| SettingId::modulator(slot, at)))
 }
 
 impl FxCommand {

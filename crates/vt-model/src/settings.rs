@@ -956,8 +956,9 @@ fn param_entry(param: &Param) -> Entry {
     }
 }
 
-/// A mod slot's settings that steps can lock: its depth, whatever its type, and an LFO's phase.
-const MOD: [Entry; 2] = [
+/// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
+/// LFO's phase.
+const MOD: [Entry; 3] = [
     Entry {
         key: "depth",
         name: "Depth",
@@ -981,7 +982,21 @@ const MOD: [Entry; 2] = [
         },
         default: 0x00,
     },
+    Entry {
+        key: "polarity",
+        name: "Polarity",
+        label: Some("POL"),
+        kind: Kind::Stepped {
+            choices: &POLARITY_NAMES,
+            wraps: false,
+        },
+        // Each type has its own, which the track's value gives; this is an LFO's.
+        default: 0x01,
+    },
 ];
+
+/// A polarity's names, in the order of its values.
+const POLARITY_NAMES: [&str; 2] = ["Uni", "Bi"];
 
 /// A slot's own, whatever effect is in it.
 const SLOT_OWN: [Entry; 1] = [Entry {
@@ -1453,7 +1468,7 @@ impl SettingId {
         }
     }
 
-    /// One of a mod slot's settings: 0 is depth, 1 is phase.
+    /// One of a mod slot's settings: 0 is depth, 1 is phase, 2 is polarity.
     pub const fn modulator(slot: usize, setting: usize) -> Option<Self> {
         if slot < MOD_SLOTS && setting < MOD.len() {
             Some(Self((MODS_START + slot * MOD.len() + setting) as u16))
@@ -1689,7 +1704,7 @@ mod tests {
             labels((0..TRACK.len()).filter_map(SettingId::track))
                 .into_iter()
                 .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
-                    (0..2).filter_map(move |at| SettingId::modulator(slot, at))
+                    (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))
                 })))
                 .chain(EVENTS.map(|event| event.name().to_owned()))
         };

@@ -14,6 +14,8 @@ pub enum ModField {
     Type,
     /// The type's mode, as an LFO's `Free` or `Trig`, for a type that has one.
     Mode,
+    /// Whether it moves what it reaches one way or both (#434).
+    Polarity,
     Destination,
     Depth,
     /// An envelope's.
@@ -32,7 +34,7 @@ impl ModField {
     /// Whether a slot of this type has it.
     pub fn on(self, kind: ModKind) -> bool {
         match self {
-            Self::Type | Self::Destination | Self::Depth => true,
+            Self::Type | Self::Polarity | Self::Destination | Self::Depth => true,
             Self::Mode => kind.has_mode(),
             Self::Attack | Self::Decay | Self::Sustain | Self::Release | Self::Reset => {
                 kind == ModKind::Adsr
@@ -143,6 +145,7 @@ impl Control {
             Self::Mod(_, field) => match field {
                 ModField::Type => "Type",
                 ModField::Mode => "Mode",
+                ModField::Polarity => "Polarity",
                 ModField::Destination => "Dest",
                 ModField::Depth => "Depth",
                 ModField::Attack => "Attack",
@@ -212,6 +215,10 @@ impl Control {
             Self::Mod(slot, ModField::Phase) => Some((
                 SettingId::modulator(slot, 1)?,
                 phase_value(track.mods[slot].lfo.phase),
+            )),
+            Self::Mod(slot, ModField::Polarity) => Some((
+                SettingId::modulator(slot, 2)?,
+                u16::from(track.mods[slot].polarity().index()) << 8,
             )),
             Self::Level => base(SettingId::VOL, track.level),
             Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
@@ -328,6 +335,7 @@ impl Control {
                     _,
                     ModField::Type
                         | ModField::Mode
+                        | ModField::Polarity
                         | ModField::Destination
                         | ModField::Shape
                         | ModField::Reset

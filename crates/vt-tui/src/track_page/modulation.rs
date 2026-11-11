@@ -68,11 +68,17 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
 }
 
 /// A mod slot as a half-width device, `Mod 1` to `Mod 6`, with its switch, then its type, its
-/// type's mode if it has one, and its destination in its title, in that order for `h` and `l`.
+/// type's mode if it has one, its polarity and its destination in its title, in that order for `h`
+/// and `l`.
 fn mod_device(slot: usize, modulator: &ModSlot) -> DeviceSpec {
     let kind = modulator.kind;
     let mut title = [None; DEVICE_COLUMNS];
-    let fields = [ModField::Type, ModField::Mode, ModField::Destination];
+    let fields = [
+        ModField::Type,
+        ModField::Mode,
+        ModField::Polarity,
+        ModField::Destination,
+    ];
     for (place, field) in title
         .iter_mut()
         .zip(fields.into_iter().filter(|field| field.on(kind)))

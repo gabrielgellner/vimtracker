@@ -5,7 +5,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meanin
 use vt_model::envelope::Adsr;
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
-use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
+use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
 use vt_model::speed::Speed;
@@ -32,6 +32,14 @@ const MODE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 4 mode",
     "Mod 5 mode",
     "Mod 6 mode",
+];
+const POLARITY_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 polarity",
+    "Mod 2 polarity",
+    "Mod 3 polarity",
+    "Mod 4 polarity",
+    "Mod 5 polarity",
+    "Mod 6 polarity",
 ];
 const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 destination",
@@ -384,6 +392,16 @@ impl App {
                 });
                 (MODE_TITLES[slot], modes.to_vec())
             }
+            ModField::Polarity => {
+                let both = Polarity::ALL.map(|polarity| {
+                    let chosen = ModSlot {
+                        polarity: Some(polarity),
+                        ..modulator
+                    };
+                    Item::new(polarity.name(), pick(chosen)).meaning(polarity.meaning())
+                });
+                (POLARITY_TITLES[slot], both.to_vec())
+            }
             ModField::Destination => {
                 let off = Item::new(
                     "---",
@@ -442,11 +460,20 @@ impl App {
             }
             _ => {
                 self.status =
-                    "K chooses from a list on Type, Mode, Dest, Shape, Rate and Reset".to_owned();
+                    "K chooses from a list on Type, Mode, Polarity, Dest, Shape, Rate and Reset"
+                        .to_owned();
                 return;
             }
         };
-        let position = items.iter().position(|item| item.pick == pick(modulator));
+        // A polarity that follows its type opens on the one it plays.
+        let current = match field {
+            ModField::Polarity => ModSlot {
+                polarity: Some(modulator.polarity()),
+                ..modulator
+            },
+            _ => modulator,
+        };
+        let position = items.iter().position(|item| item.pick == pick(current));
         self.show_picker(Picker::new(title, items).opened_on(position));
     }
 }

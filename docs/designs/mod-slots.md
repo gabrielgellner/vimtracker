@@ -877,6 +877,12 @@ they go one at a time rather than in parallel. 2, 3 and 6 are small enough not t
   destination.
 * **The random waves' keys:** a slot's key is `(slot + 3) % 6`, so slots 4 to 6 have the keys LFOs
   1 to 3 had, and every default song, a `Random` or `Smooth` LFO's included, renders as before.
-* **Memory:** a `Track` grows from 344 bytes to 408 with the ADSR and LFO settings only, so a song
-  of 15 tracks costs about 1.4 KB more per undo version, not §4's 9 KB; Steps' values will add
+* **Polarity (#434, the author's addition):** a common setting, `Uni` or `Bi`, saved only once
+  chosen; until then a slot follows its type's, an envelope `Uni` and an LFO `Bi`, so every song
+  sounds as it did. `Uni` takes an LFO from 0 to 1, and `Bi` centres an envelope on its setting.
+  It's in the title, after the mode, as ADSR's grid is full; a step locks it (`POL1`–`POL6`), and
+  nothing modulates it. The pictures' dotted line is a baseline for `Uni` and a centre line for
+  `Bi`, and on the Roto it's a button under `Depth`, lit for `Bi`.
+* **Memory:** a `Track` grows from 344 bytes to 432 with the ADSR and LFO settings and the polarity, so a song
+  of 15 tracks costs about 1.9 KB more per undo version, not §4's 9 KB; Steps' values will add
   the most.

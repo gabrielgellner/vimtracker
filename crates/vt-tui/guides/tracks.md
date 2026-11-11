@@ -753,8 +753,8 @@ accumulator beside the arpeggio under them. A return, a group and the master hav
 no notes to move, so their page ends with the slots.
 
 A slot's title says what it is and where it goes: `Mod 4`, its switch, green while
-it's in, its type, its mode if the type has one, and `→` its `Dest`, so
-`Mod 4  LFO  Trig  → Cut` reads as what it's for. `---` there is dim, as it goes
+it's in, its type, its mode if the type has one, its polarity, and `→` its `Dest`,
+so `Mod 4  LFO  Trig  Bi  → Cut` reads as what it's for. `---` there is dim, as it goes
 nowhere. Its settings are in two columns of three, and its shape or cycle is in a
 box on its right. The device with the cursor has the brighter frame.
 
@@ -765,8 +765,8 @@ box on its right. The device with the cursor has the brighter frame.
 | `{` `}` | Up or down a device in the column, on the same setting |
 | `0` `$` | The first or last setting on the row, in the device |
 | `gg` `G` | The top or bottom of the column |
-| `K` | On the type, choose another; on the mode or `Dest`, list them |
-| `x` | On the type, put back the slot's first type |
+| `K` | On the type, choose another; on the mode, polarity or `Dest`, list them |
+| `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
 **Changing a type.** `K` on the type lists `ADSR` and `LFO`, each with what it
@@ -783,6 +783,16 @@ it over 5 ms, so it doesn't click. Its settings stay as they are, and it keeps
 running underneath, so an LFO comes back in phase and an envelope where the note
 has it. It's saved with the song. A step can't switch one, as a step can an FX
 slot, but `DEP4 80` on a step takes `Mod 4` to no depth for its note.
+
+**Polarity.** `Uni` moves what a slot reaches one way only, and `Bi` both ways
+around it. An envelope is `Uni` and an LFO `Bi` unless you choose: `=` on the
+polarity flips it. An LFO at `Uni` goes from nothing to its depth, for a tremolo
+that only dips `Vol`, a vibrato that only bends up, or a filter that only opens. An
+envelope at `Bi` is centred on the setting: below it at rest and above it at full,
+so on `Pitch` a note can start above itself and settle below. A negative `Depth`
+still flips either. The picture's dotted line shows it: a baseline for `Uni`, a
+centre line for `Bi`. A chosen polarity stays through a type change, and `x` puts
+back the type's own. A step locks it with `POL`, as `POL4 00` for one way.
 
 So `}` goes from `Mod 1` to `Mod 2`, and `3}` from `Mod 4` to the arpeggio. Where
 the screen has room for fewer than four rows of devices, the page moves by whole

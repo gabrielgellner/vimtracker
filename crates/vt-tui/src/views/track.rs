@@ -177,6 +177,9 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     match field {
         ModField::Type => modulator.kind.name().to_owned(),
         ModField::Mode => modulator.mode_name().unwrap_or("--").to_owned(),
+        // The note-shaping slot's level is the note's, one way only.
+        ModField::Polarity if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
+        ModField::Polarity => modulator.polarity().name().to_owned(),
         ModField::Destination => modulator
             .destination
             .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),

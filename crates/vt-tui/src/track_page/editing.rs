@@ -75,6 +75,7 @@ fn adjust_mod(
     match field {
         ModField::Type => {}
         ModField::Mode => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+        ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
         ModField::Destination => {
             let mut choices = vec![None];
             choices.extend(SettingId::for_mod(track, slot).into_iter().map(Some));
@@ -132,6 +133,13 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Destination => {
             return ModSlot {
                 destination: fresh.destination,
+                ..modulator
+            };
+        }
+        // Back to following its type.
+        ModField::Polarity => {
+            return ModSlot {
+                polarity: None,
                 ..modulator
             };
         }

@@ -741,7 +741,7 @@ pub fn dot_placement(
     diameter: usize,
 ) -> Placement {
     let size = (MOD_PANEL_WIDTH * cell.0, MOD_PANEL_HEIGHT * cell.1);
-    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth);
+    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth).in_polarity(modulator.polarity());
     let x = drawing.x_of(f64::from(now.phase) / (f64::from(u16::MAX) + 1.0));
     // A random wave's cycle isn't flipped, as it's only its centre line, but its dot is.
     let signed = LfoDrawing {
@@ -1664,13 +1664,14 @@ impl Graphics {
             let key = (PanelKey::Mod(slot), shade);
             ids[slot] = match modulator.kind {
                 ModKind::Adsr => {
-                    let adsr = modulator.adsr;
-                    self.panel(out, key, Shape::Envelope(adsr), size, |size| {
-                        plot::envelope(&adsr, size).png(shade.color())
+                    let (adsr, polarity) = (modulator.adsr, modulator.polarity());
+                    self.panel(out, key, Shape::Envelope(adsr, polarity), size, |size| {
+                        plot::envelope_in(&adsr, polarity, size).png(shade.color())
                     })?
                 }
                 ModKind::Lfo => {
-                    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth);
+                    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth)
+                        .in_polarity(modulator.polarity());
                     self.panel(out, key, Shape::Lfo(drawing), size, |size| {
                         plot::lfo_cycle(drawing, size).png(shade.color())
                     })?

@@ -494,8 +494,8 @@ const PLAY: DeviceLayout = live(
 const DEST_PAGE: Page<Setting> = knobs("Dest", [s("dest"), __, __, __, __, __, __, __]);
 
 /// An ADSR slot's: attack, decay, sustain and release, then how far it goes, with its reset on the
-/// button under `Attack`, as it starts the envelope again from nothing; where it goes on the next
-/// page.
+/// button under `Attack`, as it starts the envelope again from nothing, and its polarity under
+/// `Depth`, lit for `Bi`; where it goes on the next page.
 const ADSR: DeviceLayout = stored(
     "adsr",
     &[
@@ -511,14 +511,15 @@ const ADSR: DeviceLayout = stored(
                 __,
                 __,
             ],
-            button(0, "reset"),
+            [s("reset"), GAP, GAP, GAP, s("polarity"), __, __, __],
         ),
         DEST_PAGE,
     ],
 );
 
 /// An LFO slot's: its rate and shape, how far it goes and where in its cycle it starts, with its
-/// mode on the button under `Phase`, lit for `Trig`, as each note then starts it there; where it
+/// polarity on the button under `Depth`, lit for `Bi`, and its mode under `Phase`, lit for `Trig`,
+/// as each note then starts it there; where it
 /// goes on the next page. #86's five modes make the button a knob, and the device live.
 const LFO: DeviceLayout = stored(
     "lfo",
@@ -535,7 +536,7 @@ const LFO: DeviceLayout = stored(
                 __,
                 __,
             ],
-            button(3, "mode"),
+            [GAP, GAP, s("polarity"), s("mode"), __, __, __, __],
         ),
         DEST_PAGE,
     ],
@@ -1150,6 +1151,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Mod(_, field) => match field {
             ModField::Type => "type",
             ModField::Mode => "mode",
+            ModField::Polarity => "polarity",
             ModField::Destination => "dest",
             ModField::Depth => "depth",
             ModField::Attack => "attack",

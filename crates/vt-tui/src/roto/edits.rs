@@ -19,7 +19,7 @@ use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, note_rates};
-use vt_model::modulation::{MAX_DEPTH, ModSlot};
+use vt_model::modulation::{MAX_DEPTH, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
@@ -286,6 +286,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
                 ModField::Mode => lfo.mode = pick(&LfoMode::ALL, position),
+                ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
                 ModField::Destination => {
                     modulator.destination =
                         destination_at(SettingId::for_mod(track, slot), position);
@@ -404,6 +405,15 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
                     mode: if on { LfoMode::Trig } else { LfoMode::Free },
                     ..track.mods[slot].lfo
                 },
+                ..track.mods[slot]
+            },
+        }),
+        // A slot's polarity on its button, `Bi` lit.
+        Control::Mod(slot, ModField::Polarity) => Some(Action::SetMod {
+            track: at,
+            slot,
+            modulator: ModSlot {
+                polarity: Some(if on { Polarity::Bi } else { Polarity::Uni }),
                 ..track.mods[slot]
             },
         }),
