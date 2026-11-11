@@ -54,7 +54,6 @@ pub enum ProjectControl {
     /// When every track starts again, in the section the cursor is in.
     Reset,
     Seed,
-    Limiter,
     Scale,
     Root,
     Grid,
@@ -97,8 +96,9 @@ const VELOCITIES: [ProjectControl; MAX_GROOVE_STEPS] = {
 };
 
 /// The page's rows, top to bottom: how it plays on the left, and how notes go in on the right,
-/// then the groove drawn and changed.
-pub const PROJECT_ROWS: [&[ProjectControl]; 18] = [
+/// then the groove drawn and changed. The limiter isn't here: it's after the master's `Level`, on
+/// the master's Sound page, where it's heard.
+pub const PROJECT_ROWS: [&[ProjectControl]; 17] = [
     &[ProjectControl::Name],
     &[ProjectControl::Folder],
     &[ProjectControl::Bpm, ProjectControl::Scale],
@@ -106,7 +106,6 @@ pub const PROJECT_ROWS: [&[ProjectControl]; 18] = [
     &[ProjectControl::Launch, ProjectControl::Grid],
     &[ProjectControl::Reset, ProjectControl::AutoJump],
     &[ProjectControl::Seed],
-    &[ProjectControl::Limiter],
     &[ProjectControl::GrooveShown],
     &[ProjectControl::GrooveSteps, ProjectControl::Humanise],
     &PUSHES,
@@ -130,7 +129,6 @@ impl ProjectControl {
             Self::Launch => "Launch",
             Self::Reset => "Reset",
             Self::Seed => "Seed",
-            Self::Limiter => "Limiter",
             Self::Scale => "Scale",
             Self::Root => "Root",
             Self::Grid => "Grid",
@@ -485,11 +483,6 @@ impl App {
                 };
                 self.line(Line::Seed(seed));
             }
-            ProjectControl::Limiter => {
-                if song.limiter != up {
-                    self.line(Line::SetLimiter(up));
-                }
-            }
             ProjectControl::Scale => {
                 let scale = next_in(&scales(self.scale), scale_here(self.scale), up);
                 self.set_scale(scale);
@@ -572,7 +565,6 @@ impl App {
                 self.line(Line::Reset(None));
             }
             ProjectControl::Seed if song.seed != 0 => self.line(Line::Seed(0)),
-            ProjectControl::Limiter if !song.limiter => self.line(Line::SetLimiter(true)),
             ProjectControl::Scale if self.scale.on => {
                 self.set_scale(Scale {
                     on: false,
@@ -651,10 +643,6 @@ impl App {
                     .map(|id| Item::new(id.name(), Pick::ShowGroove(id)).meaning(id.meaning()))
                     .collect();
                 ("The groove to draw and change", Some(shown.index()))
-            }
-            ProjectControl::Limiter => {
-                let on = !self.song().limiter;
-                return self.line(Line::SetLimiter(on));
             }
             ProjectControl::AutoJump => return self.toggle_auto_jump(),
             ProjectControl::Audio => return self.jump_to_view(View::Audio),

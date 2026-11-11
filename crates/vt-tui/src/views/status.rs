@@ -143,6 +143,10 @@ pub fn value_shown(app: &App) -> Option<String> {
     if app.view == View::Track && app.track_control() == Control::Sample {
         return Some(sample_shown(app.song(), track.sample()));
     }
+    if app.view == View::Track && app.track_control() == Control::Limiter {
+        let on = if app.song().limiter { "on" } else { "off" };
+        return Some(on.to_owned());
+    }
     if app.view == View::Track && app.track_control() == Control::Reset {
         return Some(reset_shown(track.reset));
     }

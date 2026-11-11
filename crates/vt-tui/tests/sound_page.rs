@@ -14,7 +14,7 @@ use vt_model::insert::Insert;
 use vt_model::samples::SamplePool;
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
-use vt_model::song::{Machine, Song, SynthVoice, Track};
+use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
@@ -254,12 +254,22 @@ fn the_sound_rack_moves_on_its_own_without_an_app() {
     assert_eq!(page.control(track), Control::Setting(3), "Kick's Accent");
     page.key(Cmd::Move(Motion::NextBeat), 2, track);
     assert_eq!(page.device_cursor(track), at(2, 1, 1));
-    // A fixed track's Sound page is still rows of its output.
+    // A fixed track's Sound page is its Output alone, with holes where it lacks a setting.
     let master = Track {
         kind: vt_model::song::TrackKind::Master,
         ..Track::default()
     };
-    assert!(page.devices(Some(&master)).is_empty());
+    let devices = page.devices(Some(&master));
+    assert_eq!(devices.len(), 1);
+    assert_eq!(devices[0].identity, "Output");
+    assert_eq!(
+        devices[0].grid,
+        [
+            [Some(Control::Trim), Some(Control::Limiter), None, None],
+            [Some(Control::Level), None, None, None],
+            [None; 4],
+        ]
+    );
 }
 
 /// Where the filter's curve's placeholders are on a screen: each cell in its colour.
@@ -544,4 +554,152 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     assert!(sends > frames / 4, "{sends} of {frames}");
     assert!(sends <= frames / 2 + 1, "{sends} of {frames}");
     assert!(average < 8000, "{average}");
+}
+
+/// An app on the Sound page of a fixed track, on its `Level`, in a song of six named tracks,
+/// three of them in group 1, with tracks 03 to 05 and the group sending to return B.
+fn on_fixed(kind: TrackKind) -> (App, Realtime) {
+    let mut song = Song::new(6);
+    for (at, name) in ["Kick", "Snare", "Hats", "Perc", "Pad", "Bass"]
+        .into_iter()
+        .enumerate()
+    {
+        song.tracks[at].name = name.to_owned();
+    }
+    for track in [0, 2, 3] {
+        song.tracks[track].group = Some(1);
+    }
+    for (track, send) in [(2, 0x0C), (3, 0x30), (4, 0x60)] {
+        song.tracks[track].send_b = send;
+    }
+    let group = song.fixed_track(TrackKind::Group(1)).unwrap();
+    song.tracks[group].send_b = 0x18;
+    let at = song.fixed_track(kind).unwrap();
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    app.cursor.track = at;
+    press(&mut app, " 4gg0j");
+    (app, realtime)
+}
+
+#[test]
+fn a_fixed_tracks_output_and_what_feeds_it_fit_the_page_and_the_keys_box_at_163_by_42() {
+    let fixed = [
+        (TrackKind::Group(1), Some("Tracks")),
+        (TrackKind::ReturnB, Some("Sends in")),
+        (TrackKind::Master, None),
+    ];
+    for (kind, feed) in fixed {
+        let (mut app, _realtime) = on_fixed(kind);
+        assert_eq!(app.track_control(), Control::Level);
+        for (mode, top, frame) in [(Mode::Normal, 2, ""), (Mode::Keys, 3, "│")] {
+            app.mode = mode;
+            let screen = full_screen(&mut app);
+            let lines = lines(&screen);
+            let found = titles(&lines);
+            // The Output at the top, as a sound track's Machine is, and what feeds it under.
+            let expected: Vec<(usize, String)> = std::iter::once((top, "Output".to_owned()))
+                .chain(feed.map(|feed| (top + 9, feed.to_owned())))
+                .collect();
+            assert_eq!(found, expected, "{kind:?} {mode:?}: {lines:#?}");
+            // The Output's frame is the brighter, with the cursor in it; the other's isn't.
+            let corner = |y: usize| {
+                let x = lines[y].chars().position(|c| c == '╭').unwrap();
+                screen[(x as u16, y as u16)].fg
+            };
+            assert_eq!(corner(top), vt_tui::theme::OVERLAY2);
+            if feed.is_some() {
+                assert_eq!(corner(top + 9), vt_tui::theme::SURFACE1);
+            }
+            // Every row ends at the frame, as the Sound page's devices do.
+            let edge = (0..WIDTH)
+                .find(|x| screen[(*x, top as u16)].symbol() == "╮")
+                .unwrap();
+            let bottom = top + if feed.is_some() { 17 } else { 8 };
+            for y in top..=bottom {
+                let end = screen[(edge, y as u16)].symbol();
+                assert!(["╮", "│", "╯"].contains(&end), "{}", lines[y]);
+            }
+            assert!(lines[bottom].trim_start_matches(frame).starts_with('╰'));
+            // A group's and a return's Output has the meter after its trim; the master's has
+            // none, as the main meter is beside it.
+            let boxed = lines[top + 1].contains('┌');
+            assert_eq!(
+                boxed,
+                kind != TrackKind::Master,
+                "{kind:?}: {}",
+                lines[top + 1]
+            );
+            if kind != TrackKind::Master {
+                assert!(lines[top + 5].contains("-48"), "{}", lines[top + 5]);
+            }
+        }
+    }
+}
+
+#[test]
+fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_undo() {
+    use vt_tui::views::status::value_shown;
+    use vt_tui::views::widgets::toggle;
+    let (mut app, _realtime) = on_fixed(TrackKind::Master);
+    // The toggle where the value would be, after the name's room, in its own colour.
+    let limiter = |app: &mut App| {
+        let screen = full_screen(app);
+        let lines = lines(&screen);
+        let line = &lines[4];
+        let at = line.find("Limiter").expect("beside Trim");
+        let x = line[..at].chars().count() + 10;
+        let cell = &screen[(x as u16, 4)];
+        (cell.symbol().chars().next().unwrap(), cell.fg)
+    };
+    assert!(app.song().limiter);
+    assert_eq!(
+        limiter(&mut app),
+        (toggle::glyph(true), vt_tui::theme::GREEN)
+    );
+    // Beside `Trim`, after `Level` down the columns, as the master plays them.
+    press(&mut app, "kl");
+    assert_eq!(app.track_control(), Control::Limiter);
+    assert_eq!(column_name(&app), "Limiter");
+    assert_eq!(value_shown(&app).as_deref(), Some("on"));
+    // `K` switches it, as one undo step, and the status line says what off means.
+    let depth = app.history.undo_depth();
+    press(&mut app, "K");
+    assert!(!app.song().limiter);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(app.status.starts_with("Limiter off"), "{}", app.status);
+    assert_eq!(value_shown(&app).as_deref(), Some("off"));
+    press(&mut app, "h");
+    assert_eq!(
+        limiter(&mut app),
+        (toggle::glyph(false), vt_tui::theme::OVERLAY0)
+    );
+    press(&mut app, "l");
+    press(&mut app, "u");
+    assert!(app.song().limiter, "undone");
+    press(&mut app, "-");
+    assert!(!app.song().limiter, "- takes it off");
+    let depth = app.history.undo_depth();
+    press(&mut app, "-");
+    assert_eq!(app.history.undo_depth(), depth, "already off");
+    press(&mut app, "=");
+    assert!(app.song().limiter, "= puts it on");
+    press(&mut app, "i");
+    assert!(!app.song().limiter, "i switches it too");
+    assert_eq!(app.mode, Mode::Normal);
+    press(&mut app, "x");
+    assert!(app.song().limiter, "x puts it back as a new song has it");
+    press(&mut app, "u");
+    assert!(!app.song().limiter);
+    press(&mut app, "u");
+    assert!(app.song().limiter);
+    // Only the master has it.
+    for kind in [TrackKind::Group(1), TrackKind::ReturnB] {
+        let (app, _realtime) = on_fixed(kind);
+        let devices = app.track_page.devices(app.track_here());
+        let mut places = devices[0].rows().flatten();
+        assert!(!places.any(|place| place == Some(Control::Limiter)));
+    }
 }

@@ -59,9 +59,10 @@ protects your ears, so keep it at a safe level.
 
 ## Turning it off
 
-Run `:set limiter=off` for a render to keep levels over `0` in its float WAV,
-so another program can turn them down. `:set limiter=on` puts it back. G then
-reads `--`. It is saved with the project.
+Switch off `Limiter` on the master's Sound page, after its `Level`, for a
+render to keep levels over `0` in its float WAV, so another program can turn
+them down. `:set limiter=off` does the same, and `:set limiter=on` puts it
+back. G then reads `--`. It is saved with the project.
 
 It doesn't change what you hear while playing: the output clips at `0` either
 way, so nothing over full reaches your gear.

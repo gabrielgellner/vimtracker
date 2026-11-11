@@ -18,7 +18,7 @@ use vt_model::bank::{BankEntry, ContentHash, Loop, Points};
 use vt_model::sample::{Decoded, SampleData};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{Machine, Song, SynthVoice};
+use vt_model::song::{Machine, Song, SynthVoice, TrackKind};
 use vt_tui::app::App;
 use vt_tui::explorer::Purpose;
 use vt_tui::input::keys::Key;
@@ -140,6 +140,17 @@ const SHOTS: &[Shot] = &[
         kick: false,
         drums: false,
     },
+    // Return B, past the four tracks, group 1 and return A, with what sends to it under its
+    // Output (`sends_to_b`).
+    Shot {
+        name: "track-return",
+        rows: GATES,
+        keys: " 4WWWWWWgg0j<Tab>",
+        play: 8,
+        voice: Some(SynthVoice::VirtualAnalog),
+        kick: false,
+        drums: false,
+    },
     Shot {
         name: "track-mod",
         rows: GATES,
@@ -229,6 +240,22 @@ fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
         }
     }
     song
+}
+
+/// Name the four tracks, put the first two in group 1, and send three of them and the group to
+/// return B, by different amounts, for its Sends in.
+fn sends_to_b(song: &mut Song) {
+    for (at, name) in ["Lead", "Snare", "Hats", "Pad"].into_iter().enumerate() {
+        song.tracks[at].name = name.to_owned();
+    }
+    for track in [0, 1] {
+        song.tracks[track].group = Some(1);
+    }
+    for (track, send) in [(0, 0x60), (2, 0x0C), (3, 0x30)] {
+        song.tracks[track].send_b = send;
+    }
+    let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
+    song.tracks[group].send_b = 0x18;
 }
 
 /// Press keys as they're written, with `<Name>` for a key that isn't a character.
@@ -350,6 +377,9 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
         song.tracks[0].machine = Machine::Sampler;
         song.tracks[0].set_setting(SettingId::SAMPLE, number);
     }
+    if shot.name == "track-return" {
+        sends_to_b(&mut song);
+    }
     // Taken before the app, so its first frame measures no time since the app began.
     let start = Instant::now();
     let (mut app, mut realtime) = app_on(song, pool);
@@ -357,7 +387,9 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let now = play(&mut app, &mut realtime, shot.play, start);
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
-        "sample" | "track-fx" | "track-sound" | "track-mod" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        "sample" | "track-fx" | "track-sound" | "track-mod" | "track-return" => {
+            (SAMPLE_WIDTH, SAMPLE_HEIGHT)
+        }
         _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));

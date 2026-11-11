@@ -124,6 +124,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
             .shown(u16::from(track.glide) << 8),
         Control::Sample => sample_text(song, track.sample()),
         Control::Mute | Control::Solo => String::new(),
+        Control::Limiter => if song.limiter { "on" } else { "off" }.to_owned(),
         Control::FilterType => track.filter.name().to_owned(),
         // The MS-20's have none, so it doesn't apply.
         Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
@@ -203,10 +204,12 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
 }
 
 /// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
-/// effect's `Off`/`On` list, an envelope's `Reset`, and an LFO's or the arpeggio's `Retrig`. They
-/// show as a toggle, and the status line still says the word.
-fn toggle_on(control: Control, track: &Track) -> Option<bool> {
+/// effect's `Off`/`On` list, an envelope's `Reset`, an LFO's or the arpeggio's `Retrig`, and the
+/// master's `Limiter`, which is the song's. They show as a toggle, and the status line still says
+/// the word.
+fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
     match control {
+        Control::Limiter => Some(song.limiter),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
             let found = insert.params().get(param)?;
@@ -230,7 +233,7 @@ fn value_line(
     default: bool,
 ) -> Line<'static> {
     let typing = here && app.mode == Mode::Insert;
-    let (text, style) = match toggle_on(control, track) {
+    let (text, style) = match toggle_on(control, track, app.song()) {
         Some(on) if !typing => {
             let style = if here {
                 theme::cursor(app.mode)

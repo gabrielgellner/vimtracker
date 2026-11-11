@@ -70,8 +70,19 @@ in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and
 `2}` to `Pitch`. The device with the cursor has the brighter frame. A sampler's
 waveform is in a box at the right of the Machine.
 
-A group's, a return's and the master's Sound pages are still rows of their output's
-settings, as below.
+A group's, a return's and the master's Sound page is the same Output, with a gap
+where it lacks a setting, and under it a device of what feeds it, which the cursor
+doesn't stop in:
+
+| Track | Output | Under it |
+|---|---|---|
+| Group | `Trim` `Level` `Pan`; `Send A` `Send B` | Tracks, those in it |
+| Return | `Trim` `Level` `Pan` | Sends in, with each send |
+| Master | `Trim` `Level`; `Limiter` | |
+
+Both lists follow the song as it changes, three down each column, and past 12 the
+last says how many more there are. The master's Output has no meter, as the main
+meter beside it shows what it plays.
 
 ## The filter
 
@@ -626,10 +637,10 @@ go through `G1` to `G4`, `i` takes a number or `off`, and `x` takes it out.
 A track in a group plays through it, and the group plays through its own slots,
 `Level` and `Pan` to the master. Its sends still go from the track itself, so a snare
 can go to the reverb on its own, and the group has `Send A` and `Send B` of its own
-too. A group's Sound page lists its tracks on the left, each with its own mute or solo,
-and has `Trim`, `Level`, `Pan` and its sends on the right, where a track's are. Its
-`Trim` is at its input, so it sets how hard the sum of its tracks hits its slots. The rest is as on
-a return.
+too. A group's Sound page has an Output with `Trim`, `Level`, `Pan` and its sends,
+where a track's are, and under it Tracks, the tracks in it, in its colour, each with
+its own mute or solo. Its `Trim` is at its input, so it sets how hard the sum of its
+tracks hits its slots. The rest is as on a return.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
 tracks' strips share it, as does a track's `Group` on its Sound page. Its tracks are
@@ -684,9 +695,16 @@ passes on what it's sent. `M` is the master: everything goes through it, and the
 limiter.
 
 They make no sound of their own, so they have no machine or filter, and their Sound
-page has just `Trim`, `Level` and `Pan`, and the master only `Trim` and `Level`. `Trim` is
-at the input, before the slots, so it sets how hard what's sent, or the whole mix, hits
-them, and `Level` after them sets what goes on. The rest works as on any
+page is an Output with just `Trim`, `Level` and `Pan`, and the master's only `Trim`,
+`Level` and `Limiter`. `Trim` is at the input, before the slots, so it sets how hard
+what's sent, or the whole mix, hits them, and `Level` after them sets what goes on.
+Under a return's Output, Sends in lists every track and group sending to it, with its
+`Send A` or `Send B` and its bar, which saves finding them strip by strip on the mixer.
+
+The master's `Limiter` is the song's limiter, after its `Level`, so the master reads
+`Trim`, its slots, `Level`, then the limiter. It's a toggle: `K` or `i`
+switch it, `=` puts it on, `-` takes it off and `x` puts it back on, each one `u`, as
+`:set limiter` does. See the meter's guide for what it does. The rest works as on any
 track: 4 slots on the FX page, the Mod page, a strip on the mixer, and phrases. To give
 one a phrase, type a chain number in its column on the Song view. A note on one plays
 nothing, but it does start the track's envelopes. Steps on a return only reach that

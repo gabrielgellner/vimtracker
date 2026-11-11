@@ -1403,7 +1403,8 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     // The EQ's last row has a hole in the first column, so the cursor lands beside it.
     page.key(Cmd::Move(Motion::Up), 1, track);
     assert_eq!(page.device_cursor(track), at(0, 3, 1));
-    // An edit isn't the page's own, and a return's Sound page isn't a rack.
+    // An edit isn't the page's own, and a return's Sound page is a rack of one, its Output, so
+    // `}` has nowhere to go.
     assert_eq!(page.key(Cmd::Increase, 1, track), Outcome::Passed);
     let fixed = Track {
         kind: vt_model::song::TrackKind::ReturnA,
@@ -1413,9 +1414,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     page.key(Cmd::PreviousPage, 1, fixed);
     page.key(Cmd::PreviousPage, 1, fixed);
     assert_eq!(page.page, Page::Sound);
-    assert_eq!(page.device_cursor(fixed), None);
+    assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
     assert_eq!(
         page.key(Cmd::Move(Motion::NextBeat), 1, fixed),
-        Outcome::Refused("{ and } go between devices, and this page has none")
+        Outcome::Done
     );
+    assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
 }

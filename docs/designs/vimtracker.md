@@ -591,7 +591,7 @@ back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine 
 is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
-    track and its row tables for the fixed tracks, `modulation.rs` the Mod page's devices, and
+    track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
@@ -609,9 +609,12 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     column of devices (`rack_column`), and `h` and `l` go on past a row's ends into the device
     beside it (`device_beside`). A sound track's Sound page is a rack of four (`sound::devices`):
     the Machine, from `Machine::grid` with `Machine::type_param` in its title, and the Filter,
-    Output and Play, each a fixed grid of the track's own controls. A track whose page gives none
-    is rows of settings (`TrackPage::page_rows`) with no holes, as the fixed tracks' Sound pages
-    are.
+    Output and Play, each a fixed grid of the track's own controls. A group's, a return's and the
+    master's is its Output alone, the same grid with holes where it lacks a setting, the master's
+    with the song's `Control::Limiter` in Send A's place (decision 154). Every page is a rack, so
+    there are no row tables. What feeds a group or a return, its Tracks or its Sends in, is drawn
+    under the Output by `views/track/sound.rs` from the song each frame, and isn't a device, as
+    the cursor doesn't stop in it.
 *   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs` and the Mod
     page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
     read through a `CellSource` (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose

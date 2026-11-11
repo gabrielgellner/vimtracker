@@ -78,6 +78,8 @@ pub enum Control {
     Reset,
     /// How long a tie glides into the next note, in ms, or off.
     Glide,
+    /// The song's limiter, on or off, after the master's `Level`: the master's alone.
+    Limiter,
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
@@ -114,6 +116,7 @@ impl Control {
             Self::Speed => "Speed",
             Self::Reset => "Reset",
             Self::Glide => "Glide",
+            Self::Limiter => "Limiter",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "Sample",
@@ -175,25 +178,6 @@ impl Control {
                 .get(param)
                 .map_or_else(|| self.label(), |found| found.name),
             _ => self.label_on(track),
-        }
-    }
-
-    /// Which column of the Sound page it's in: output on the right, everything else on the left.
-    pub fn column(self) -> usize {
-        match self {
-            Self::Level
-            | Self::Trim
-            | Self::Groove
-            | Self::Choke
-            | Self::Group
-            | Self::GateLength
-            | Self::Speed
-            | Self::Reset
-            | Self::Glide
-            | Self::Base(
-                TrackControl::Pan | TrackControl::SendA | TrackControl::SendB | TrackControl::Pitch,
-            ) => 1,
-            _ => 0,
         }
     }
 
@@ -264,9 +248,11 @@ impl Control {
     }
 
     /// Whether this track has the setting: a slot only has the settings of what's in it, only a
-    /// sound track or a group sends, and the master can't be panned, muted or soloed.
+    /// sound track or a group sends, the master can't be panned, muted or soloed, and only the
+    /// master has the limiter.
     pub fn exists_on(self, track: &Track) -> bool {
         match self {
+            Self::Limiter => track.kind == TrackKind::Master,
             Self::InsertParam(slot, param) => param < track.inserts[slot].params().len(),
             Self::Base(TrackControl::SendA | TrackControl::SendB) => {
                 track.is_sound() || track.is_group()
@@ -317,6 +303,7 @@ impl Control {
                 | Self::Sample
                 | Self::Mute
                 | Self::Solo
+                | Self::Limiter
                 | Self::FilterType
                 | Self::FilterMode
                 | Self::Groove

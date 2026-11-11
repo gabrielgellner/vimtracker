@@ -66,7 +66,6 @@ fn value(app: &App, control: ProjectControl) -> String {
             None => "off".to_owned(),
         },
         ProjectControl::Seed => song.seed.to_string(),
-        ProjectControl::Limiter => on_off(song.limiter),
         ProjectControl::Scale if app.scale.on => app.scale.kind.name().to_owned(),
         ProjectControl::Scale => "off".to_owned(),
         ProjectControl::Root => app.scale.root_name().to_owned(),

@@ -558,7 +558,7 @@ pub const SETTINGS: [Setting; 4] = [
     },
     Setting {
         key: "limiter",
-        meaning: "The limiter on the output",
+        meaning: "The limiter after the master's Level",
         takes: Takes::Words(ON_OFF),
         parse: |value| match value {
             "on" => Some(Line::SetLimiter(true)),
