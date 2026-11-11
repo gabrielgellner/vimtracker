@@ -135,6 +135,10 @@ pub const HOLD_TIME: Duration = Duration::from_millis(300);
 /// stopped and nothing is playing.
 const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 
+/// Why `:e` and `:new` refused, and the ways on.
+pub(crate) const UNSAVED_OPEN: &str = "Unsaved changes: :w to save, or :e! to discard them";
+const UNSAVED_NEW: &str = "Unsaved changes: :w to save, or :new! to discard them";
+
 /// What a key started that lasts while it's down, and is undone or ended when it's let go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Momentary {
@@ -406,6 +410,8 @@ pub struct App {
     pub recent_places: RecentPlaces,
     /// The command line a folder chosen in the explorer goes on to.
     pub naming: Option<Naming>,
+    /// Whether the project the explorer opens throws away unsaved changes, as after `:e!`.
+    pub(crate) opening_discards: bool,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
     /// The selection a replace will fill, and the undo depth from before it started.
@@ -563,6 +569,7 @@ impl App {
             file_playing: None,
             recent_places: RecentPlaces::default(),
             naming: None,
+            opening_discards: false,
             names,
             replacing_selection: None,
             selection_scope: None,
@@ -2630,13 +2637,22 @@ impl App {
                 self.open_naming_explorer(Purpose::Save, "w", String::new());
             }
             Line::Write(path) => self.write(path),
-            Line::Edit(Some(path)) => self.open(&path),
-            Line::Edit(None) => self.open_project_explorer(),
-            Line::New(Some(path)) => self.new_project(&path),
-            Line::New(None) if self.dirty => {
-                self.status = "Unsaved changes: use :w to save first".to_owned();
+            Line::Edit {
+                path: Some(path),
+                force,
+            } => self.open(&path, force),
+            Line::Edit { path: None, force } => self.open_project_explorer(force),
+            Line::New {
+                path: Some(path),
+                force,
+            } => self.new_project(&path, force),
+            Line::New { path: None, force } if self.dirty && !force => {
+                self.status = UNSAVED_NEW.to_owned();
             }
-            Line::New(None) => self.open_naming_explorer(Purpose::Save, "new", String::new()),
+            Line::New { path: None, force } => {
+                let command = if force { "new!" } else { "new" };
+                self.open_naming_explorer(Purpose::Save, command, String::new());
+            }
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
             Line::SampleChange(change) => self.change_sample(change),
@@ -2880,13 +2896,15 @@ impl App {
         }
     }
 
-    fn open(&mut self, path: &Path) {
-        if self.dirty {
-            self.status = "Unsaved changes: use :w to save first".to_owned();
+    /// Open a project. Forced, unsaved changes are thrown away, autosave and all, as `:q!` does.
+    fn open(&mut self, path: &Path, force: bool) {
+        if self.dirty && !force {
+            self.status = UNSAVED_OPEN.to_owned();
             return;
         }
         match project::load_song(path) {
             Ok(song) => {
+                self.discard_changes();
                 self.handle.send(Command::Return);
                 self.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
@@ -2900,9 +2918,10 @@ impl App {
         }
     }
 
-    fn new_project(&mut self, path: &Path) {
-        if self.dirty {
-            self.status = "Unsaved changes: use :w to save first".to_owned();
+    /// Start a project. Forced, unsaved changes are thrown away, autosave and all.
+    fn new_project(&mut self, path: &Path, force: bool) {
+        if self.dirty && !force {
+            self.status = UNSAVED_NEW.to_owned();
             return;
         }
         let song = Song {
@@ -2911,6 +2930,7 @@ impl App {
         };
         match project::create_project(path, &song) {
             Ok(()) => {
+                self.discard_changes();
                 self.handle.send(Command::Return);
                 self.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
@@ -2918,6 +2938,14 @@ impl App {
                 self.status = format!("Created {}", path.display());
             }
             Err(error) => self.status = error.to_string(),
+        }
+    }
+
+    /// Throw away unsaved changes before another project replaces them, so their autosave isn't
+    /// offered back the next time this project opens.
+    fn discard_changes(&mut self) {
+        if self.dirty {
+            self.forget_autosave();
         }
     }
 

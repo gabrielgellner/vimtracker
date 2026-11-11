@@ -17,13 +17,19 @@ use vt_model::song::{LAUNCH_WORDS, Launch};
 pub enum Line {
     /// Save, or save to a new folder. With no folder yet, the explorer chooses one.
     Write(Option<PathBuf>),
-    /// Open a project, or choose one in the explorer.
-    Edit(Option<PathBuf>),
+    /// Open a project, or choose one in the explorer. Forced, it throws away unsaved changes.
+    Edit {
+        path: Option<PathBuf>,
+        force: bool,
+    },
     Quit {
         force: bool,
     },
-    /// Start a project, or choose where in the explorer.
-    New(Option<PathBuf>),
+    /// Start a project, or choose where in the explorer. Forced, it throws away unsaved changes.
+    New {
+        path: Option<PathBuf>,
+        force: bool,
+    },
     /// Put a sample on this track, or browse a folder of them, or choose one in the explorer.
     Sample(Option<PathBuf>),
     /// Change where the sample this track plays starts, ends or loops, or how it plays.
@@ -584,7 +590,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 38] = [
+pub const COMMANDS: [Command; 40] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -595,13 +601,45 @@ pub const COMMANDS: [Command; 38] = [
         name: "e",
         meaning: "Open a project",
         takes: Takes::Folder,
-        parse: |argument| Ok(Line::Edit(optional_path(argument))),
+        parse: |argument| {
+            Ok(Line::Edit {
+                path: optional_path(argument),
+                force: false,
+            })
+        },
+    },
+    Command {
+        name: "e!",
+        meaning: "Open a project and discard changes",
+        takes: Takes::Folder,
+        parse: |argument| {
+            Ok(Line::Edit {
+                path: optional_path(argument),
+                force: true,
+            })
+        },
     },
     Command {
         name: "new",
         meaning: "Start a new project",
         takes: Takes::Folder,
-        parse: |argument| Ok(Line::New(optional_path(argument))),
+        parse: |argument| {
+            Ok(Line::New {
+                path: optional_path(argument),
+                force: false,
+            })
+        },
+    },
+    Command {
+        name: "new!",
+        meaning: "Start a new project and discard changes",
+        takes: Takes::Folder,
+        parse: |argument| {
+            Ok(Line::New {
+                path: optional_path(argument),
+                force: true,
+            })
+        },
     },
     Command {
         name: "q",
@@ -1146,8 +1184,41 @@ mod tests {
             Ok(Line::Sample(Some("a b.wav".into())))
         );
         assert_eq!(parse("sample"), Ok(Line::Sample(None)));
-        assert_eq!(parse("e"), Ok(Line::Edit(None)));
-        assert_eq!(parse("new"), Ok(Line::New(None)));
+        assert_eq!(
+            parse("e"),
+            Ok(Line::Edit {
+                path: None,
+                force: false
+            })
+        );
+        assert_eq!(
+            parse("e!"),
+            Ok(Line::Edit {
+                path: None,
+                force: true
+            })
+        );
+        assert_eq!(
+            parse("e! songs/two"),
+            Ok(Line::Edit {
+                path: Some("songs/two".into()),
+                force: true
+            })
+        );
+        assert_eq!(
+            parse("new"),
+            Ok(Line::New {
+                path: None,
+                force: false
+            })
+        );
+        assert_eq!(
+            parse("new! songs/three"),
+            Ok(Line::New {
+                path: Some("songs/three".into()),
+                force: true
+            })
+        );
         assert_eq!(parse("kit"), Ok(Line::Kit(None)));
         assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
         assert_eq!(parse("kit 909 all"), Ok(Line::KitTracks("909".into())));

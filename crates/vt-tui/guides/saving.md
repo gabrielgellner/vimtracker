@@ -6,7 +6,9 @@
 | `:w path` | Save to a new folder, with a copy of every sample |
 | `:e path` | Open a project |
 | `:e` | Choose a project to open |
+| `:e! path`, `:e!` | The same, discarding changes |
 | `:new path` | Start a new project |
+| `:new! path`, `:new!` | The same, discarding changes |
 | `:q` | Quit, or refuse if there are unsaved changes |
 | `:q!` | Quit and discard changes |
 | `Space qq` | The same as `:q` |
@@ -20,6 +22,11 @@ and shows the one under the cursor: its tempo, its tracks and when it was saved.
 `:w` before the project has a folder, and `:new` on its own, list folders: `l` opens
 one, and `Enter` chooses it and puts the command on the command line with the folder
 and a name filled in, so `Enter` saves it there.
+
+`:e` and `:new` refuse while there are unsaved changes, as `:q` does. `:e!` and
+`:new!` throw them away, with their autosave, and go ahead; `:e!` on its own opens
+the explorer, and the project chosen there opens without asking. `:e!` with this
+project's own folder goes back to how it was last saved.
 
 ## Names
 
@@ -159,4 +166,4 @@ then speeds it up as the load rises.
 
 Unsaved work is written to `song.autosave.ron` every minute once the project
 has a folder. After a crash you are asked whether to restore it. `:w`, any
-quit and answering no all remove it.
+quit, `:e!`, `:new!` and answering no all remove it.

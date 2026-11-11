@@ -1281,7 +1281,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 
 **Step numbers.** The phrase view shows each step's number in hex and, more faintly to its left, its distance from the cursor in decimal, which is the count to type before `j` or `k`.
 
-**Commands.** `:q`, `:e` and `Space qq` refuse with unsaved changes, as in Vim.
+**Commands.** `:q`, `:e`, `:new` and `Space qq` refuse with unsaved changes, as in Vim; `:q!`, `:e!` and `:new!` discard them.
 
 | Command | Action |
 |---|---|

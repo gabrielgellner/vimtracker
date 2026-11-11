@@ -491,6 +491,8 @@ mod tests {
         );
         assert_eq!(tab("se", nowhere()), "se", "seed and set share only se");
         assert_eq!(texts(&complete("q", nowhere())), ["q", "q!"]);
+        assert_eq!(texts(&complete("ne", nowhere())), ["new", "new!"]);
+        assert!(texts(&complete("e", nowhere())).starts_with(&["e", "e!"]));
         assert!(complete("zz", nowhere()).candidates.is_empty());
     }
 

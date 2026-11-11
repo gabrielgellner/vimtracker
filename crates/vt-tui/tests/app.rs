@@ -10155,6 +10155,103 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
 }
 
 #[test]
+fn e_bang_opens_a_project_and_discards_unsaved_changes() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    let one = root.join("one");
+    command(&mut app, &format!("e {}", one.display()));
+    command(&mut app, "bpm 90");
+    assert!(app.dirty);
+    vt_model::project::write_autosave(&one, app.song()).unwrap();
+
+    // :e refuses, and says how to go on.
+    command(&mut app, &format!("e {}", root.join("two").display()));
+    assert_eq!(
+        app.status,
+        "Unsaved changes: :w to save, or :e! to discard them"
+    );
+    assert_eq!(app.folder.as_deref(), Some(one.as_path()));
+
+    // :e! opens it, and the changes' autosave goes with them.
+    command(&mut app, &format!("e! {}", root.join("two").display()));
+    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(app.song().millibpm, 137_630);
+    assert!(!app.dirty);
+    assert!(!one.join("song.autosave.ron").exists());
+
+    // On this project's own folder, it goes back to how it was saved.
+    command(&mut app, "bpm 90");
+    command(&mut app, &format!("e! {}", root.join("two").display()));
+    assert_eq!(app.song().millibpm, 137_630);
+    assert!(!app.dirty);
+    assert_eq!(app.mode, Mode::Normal, "with nothing to restore");
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn e_bang_with_no_folder_opens_what_the_explorer_chooses_without_refusing() {
+    let root = projects();
+    let (mut app, _realtime) = app();
+    command(&mut app, &format!("e {}", root.join("one").display()));
+    command(&mut app, "bpm 90");
+    command(&mut app, "e!");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
+    press(&mut app, "j");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(app.song().millibpm, 137_630);
+    assert!(!app.dirty);
+
+    // An :e! explorer closed unused leaves later opening to refuse as before.
+    command(&mut app, "e!");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "bpm 90");
+    command(&mut app, &format!("e {}", root.join("one").display()));
+    assert!(app.status.contains(":e!"), "{}", app.status);
+    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn new_bang_starts_a_project_and_discards_unsaved_changes() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let path = folder();
+    command(&mut app, "new");
+    assert_eq!(
+        app.status,
+        "Unsaved changes: :w to save, or :new! to discard them"
+    );
+    assert_ne!(app.mode, Mode::Picker);
+    command(&mut app, &format!("new {}", path.display()));
+    assert!(!path.exists());
+
+    // Without a folder, :new! chooses one, and its name line is :new!'s.
+    command(&mut app, "new!");
+    assert_eq!(app.mode, Mode::Picker);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.mode, Mode::Command);
+    assert!(
+        app.command_line.starts_with("new! "),
+        "{}",
+        app.command_line
+    );
+    special(&mut app, KeyCode::Esc);
+
+    command(&mut app, &format!("new! {}", path.display()));
+    assert_eq!(app.folder.as_deref(), Some(path.as_path()));
+    assert!(!app.dirty);
+    assert!(
+        !notes(&app).iter().any(|note| matches!(note, Note::On(_))),
+        "a fresh song"
+    );
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
 fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let root = projects();
     let (mut app, _realtime) = app();

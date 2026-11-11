@@ -671,8 +671,18 @@ impl App {
                     each_track: false,
                 });
             }
-            ProjectControl::Open => return self.line(Line::Edit(None)),
-            ProjectControl::New => return self.line(Line::New(None)),
+            ProjectControl::Open => {
+                return self.line(Line::Edit {
+                    path: None,
+                    force: false,
+                });
+            }
+            ProjectControl::New => {
+                return self.line(Line::New {
+                    path: None,
+                    force: false,
+                });
+            }
             ProjectControl::Name
             | ProjectControl::Folder
             | ProjectControl::Bpm
