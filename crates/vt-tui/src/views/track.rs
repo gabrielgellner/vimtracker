@@ -4,10 +4,9 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Row};
+use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
-use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
 use vt_model::settings::{SettingId, gate_percent};
@@ -20,8 +19,7 @@ use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::track_page::{
-    ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, DeviceSpec, ENVELOPES,
-    EnvelopeField, LFOS, LfoField, Page,
+    AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField, Page,
 };
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
@@ -33,20 +31,14 @@ use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
-use crate::views::widgets::table::{Columns, blank_row, take_top};
+use crate::views::widgets::table::take_top;
 use crate::views::widgets::toggle;
 
+mod modulation;
 mod sound;
 
-/// The size of an envelope's diagram, in characters.
-pub(crate) const DIAGRAM_WIDTH: usize = 28;
-pub(crate) const DIAGRAM_HEIGHT: usize = 4;
-/// The room between envelopes' diagrams.
-const DIAGRAM_GAP: usize = 2;
-/// The room for an LFO's shape's name, the longest being `Square`, and for its icon after it: the
-/// icon, which is one character, and a space more.
-const LFO_SHAPE_NAME: u16 = 6;
-const LFO_ICON_ROOM: u16 = 2;
+pub(crate) use modulation::{DIAGRAM_HEIGHT, DIAGRAM_WIDTH, envelope_being_edited};
+
 /// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
 pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
 pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
@@ -77,8 +69,6 @@ const REDUCTION_SCALE_WIDTH: u16 = 4;
 const EMPTY_SLOT: &str = "Empty";
 /// The row of an empty slot's settings its hint is on, the middle one.
 const EMPTY_HINT_ROW: u16 = ROW_STEP;
-/// Room for a section's name.
-const NAME_WIDTH: u16 = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
 const BAR_CELLS: usize = 9;
 
@@ -252,108 +242,6 @@ fn value_line(
     Line::from(value_spans(app, control, text, style))
 }
 
-/// How wide a setting's column is on the Mod page, with a space between columns, so columns line
-/// up and don't move as values change.
-fn width(control: Control) -> u16 {
-    match control {
-        Control::Lfo(_, LfoField::Rate) => 8,
-        Control::Lfo(_, LfoField::Shape) => LFO_SHAPE_NAME + 1 + LFO_ICON_ROOM,
-        Control::Base(TrackControl::SendB) | Control::Lfo(_, LfoField::Retrig) => 7,
-        // Room for `16 loops`.
-        Control::Accumulator(AccumulatorField::Reset) => 8,
-        // Room for `Up-down-inc`.
-        Control::Arpeggio(ArpField::Mode) => 11,
-        Control::Base(TrackControl::LowCut | TrackControl::HighCut) => 8,
-        Control::Envelope(
-            _,
-            EnvelopeField::Attack
-            | EnvelopeField::Decay
-            | EnvelopeField::Sustain
-            | EnvelopeField::Release,
-        ) => 8,
-        // Room for a slot's setting, like `2 Ping-pong`, or one that's gone, like `Material ---`.
-        Control::Lfo(_, LfoField::Destination)
-        | Control::Envelope(_, EnvelopeField::Destination) => 12,
-        _ => 6,
-    }
-}
-
-/// The Mod page's columns for some rows: their name, and then each setting's. An LFO's shape takes
-/// two, its name and then its icon.
-fn mod_columns(controls: &[Control]) -> Columns {
-    let mut widths = vec![NAME_WIDTH - 1];
-    for control in controls {
-        match control {
-            Control::Lfo(_, LfoField::Shape) => widths.extend([LFO_SHAPE_NAME, LFO_ICON_ROOM]),
-            _ => widths.push(width(*control)),
-        }
-    }
-    Columns::new(widths).spaced(1)
-}
-
-/// The column names over some rows, with a jump's labels for those rows on each name.
-fn heading<R: AsRef<[Control]>>(app: &App, rows: &[R], columns: &Columns) -> Row<'static> {
-    let mut cells = columns.row();
-    cells.skip(1);
-    for (column, control) in rows[0].as_ref().iter().copied().enumerate() {
-        let labels: String = rows
-            .iter()
-            .filter_map(|row| app.field_jump.as_ref()?.label(row.as_ref()[column]))
-            .collect();
-        let name = name_line(app, control.label(), &labels, width(control));
-        match control {
-            Control::Lfo(_, LfoField::Shape) => cells.span(name, 2),
-            _ => cells.cell(name),
-        };
-    }
-    cells.done()
-}
-
-/// A row of settings, with the cursor on one of them.
-fn row(
-    app: &App,
-    track: &Track,
-    name: &str,
-    controls: &[Control],
-    columns: &Columns,
-) -> Row<'static> {
-    let mut cells = columns.row();
-    cells.cell(name.to_owned());
-    let current = app.track_control();
-    for control in controls {
-        let here = *control == current;
-        cells.cell(value_line(
-            app,
-            track,
-            *control,
-            here,
-            at_default(*control, track),
-        ));
-        // An LFO's shape has its icon after its name, where it has one, in the active colour while
-        // the cursor is on that LFO.
-        if let Control::Lfo(slot, LfoField::Shape) = *control {
-            let icon = glyphs::lfo_shape(track.lfos[slot].shape).map(|icon| {
-                let style = if lfo_being_edited(app) == Some(slot) {
-                    theme::active()
-                } else {
-                    theme::dim()
-                };
-                Line::styled(icon.to_string(), style)
-            });
-            cells.cell(icon.unwrap_or_default());
-        }
-    }
-    cells.done()
-}
-
-/// Which envelope the cursor is on, if any.
-pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
-    match app.track_control() {
-        Control::Envelope(slot, _) => Some(slot),
-        _ => None,
-    }
-}
-
 /// Whether the cursor is on something the filter's curve shows.
 pub(crate) fn filter_being_edited(app: &App) -> bool {
     matches!(
@@ -375,40 +263,6 @@ pub(crate) fn slot_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
         Control::Insert(slot) | Control::InsertParam(slot, _) => Some(slot),
         _ => None,
-    }
-}
-
-/// Which LFO the cursor is on, if any.
-pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
-    match app.track_control() {
-        Control::Lfo(slot, _) => Some(slot),
-        _ => None,
-    }
-}
-
-/// Each envelope's name and shape, side by side, with the one being edited picked out. The shapes
-/// are images, and they're left blank until they've been sent. Each envelope's is a cell of a grid,
-/// its name over its shape.
-fn draw_diagrams(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
-    let columns = Columns::new([(DIAGRAM_WIDTH + DIAGRAM_GAP) as u16; TRACK_ENVELOPES]);
-    let current = envelope_being_edited(app);
-    for slot in 0..TRACK_ENVELOPES {
-        let style = if current == Some(slot) {
-            theme::active()
-        } else {
-            theme::dim()
-        };
-        let name = track.envelopes[slot].destination.map_or_else(
-            || "---".to_owned(),
-            |destination| destination.name_on(track),
-        );
-        let shape = match app.envelope_images {
-            Some(ids) => image::rows(ids[slot], DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
-            None => vec![Span::raw(" ".repeat(DIAGRAM_WIDTH)); DIAGRAM_HEIGHT],
-        };
-        let mut lines = vec![Line::styled(format!("Env {}  {name}", slot + 1), style)];
-        lines.extend(shape.into_iter().map(Line::from));
-        frame.render_widget(Paragraph::new(lines), columns.area_of(area, slot, 1));
     }
 }
 
@@ -686,42 +540,6 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     match app.track_page.page {
         Page::Sound => sound::draw(frame, rest, app, track),
         Page::Fx => draw_fx(frame, rest, app, track),
-        Page::Mod => {
-            let envelopes = mod_columns(&ENVELOPES[0]);
-            let mut rows = vec![heading(app, &ENVELOPES, &envelopes)];
-            for (slot, controls) in ENVELOPES.iter().enumerate() {
-                let name = format!("Env {}", slot + 1);
-                rows.push(row(app, track, &name, controls, &envelopes));
-            }
-            rows.push(blank_row());
-            envelopes.stack(frame, &mut rest, rows);
-            let lfos = mod_columns(&LFOS[0]);
-            let mut rows = vec![heading(app, &LFOS, &lfos)];
-            for (slot, controls) in LFOS.iter().enumerate() {
-                rows.push(row(
-                    app,
-                    track,
-                    &format!("LFO {}", slot + 1),
-                    controls,
-                    &lfos,
-                ));
-            }
-            rows.push(blank_row());
-            lfos.stack(frame, &mut rest, rows);
-            // A track with no note to move has no accumulator or arpeggio.
-            if track.is_sound() {
-                for (name, controls) in [("Acc", &ACCUMULATOR[..]), ("Arp", &ARPEGGIO[..])] {
-                    let columns = mod_columns(controls);
-                    let rows = vec![
-                        heading(app, &[controls], &columns),
-                        row(app, track, name, controls, &columns),
-                        blank_row(),
-                    ];
-                    columns.stack(frame, &mut rest, rows);
-                }
-            }
-            let rows = DIAGRAM_HEIGHT as u16 + 1;
-            draw_diagrams(frame, take_top(&mut rest, rows), app, track);
-        }
+        Page::Mod => modulation::draw(frame, rest, app, track),
     }
 }

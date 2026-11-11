@@ -9,36 +9,12 @@
 
 use std::time::Duration;
 
-use vt_model::lfo::Shape;
 use vt_model::song::{Machine, SynthVoice, Track, TrackKind};
 
 /// A switch that's on: `nf-fa-toggle_on`, U+F205.
 pub const SWITCH_ON: char = '\u{f205}';
 /// A switch that's off: `nf-fa-toggle_off`, U+F204.
 pub const SWITCH_OFF: char = '\u{f204}';
-
-// LFO shapes (decision 104). The Material Design waves, after an LFO's shape name. A falling saw
-// has none, as Material's saw rises, and neither have the random shapes.
-
-/// `Sine`: `nf-md-sine_wave`, U+F095B.
-pub const SINE_WAVE: char = '\u{f095b}';
-/// `Tri`: `nf-md-triangle_wave`, U+F147C.
-pub const TRIANGLE_WAVE: char = '\u{f147c}';
-/// `Ramp`, which rises: `nf-md-sawtooth_wave`, U+F147A.
-pub const SAWTOOTH_WAVE: char = '\u{f147a}';
-/// `Square`: `nf-md-square_wave`, U+F147B.
-pub const SQUARE_WAVE: char = '\u{f147b}';
-
-/// An LFO shape's icon, if it has one.
-pub fn lfo_shape(shape: Shape) -> Option<char> {
-    match shape {
-        Shape::Sine => Some(SINE_WAVE),
-        Shape::Tri => Some(TRIANGLE_WAVE),
-        Shape::Ramp => Some(SAWTOOTH_WAVE),
-        Shape::Square => Some(SQUARE_WAVE),
-        Shape::Saw | Shape::Random | Shape::Smooth => None,
-    }
-}
 
 // Transport, on the status line (decision 104). These stand in for the words, rather than
 // beside them.

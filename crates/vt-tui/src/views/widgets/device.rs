@@ -25,6 +25,8 @@ const PADDING: u16 = 2;
 const TITLE_INDENT: u16 = 2;
 /// The room between the title's parts.
 const TITLE_GAP: &str = "  ";
+/// The room between two half-width devices side by side.
+pub const HALF_GAP: u16 = 2;
 
 /// What's in a title's place for its switch.
 #[derive(Clone, Copy)]
@@ -110,6 +112,32 @@ impl Device {
 /// What's inside a device's frame.
 fn inner(area: Rect) -> Rect {
     widgets::window_border().inner(area)
+}
+
+/// Where each device of a rack goes in an area, from its band, top to bottom, and its side: none
+/// for the whole width, or 0 or 1 for the left or the right half, with a gap between. Each band is
+/// a device tall. Where fewer bands fit than there are, the rack goes by whole bands to keep the
+/// band `keep` in view, as low as it can be, and a device out of view has no area.
+pub fn rack_areas(area: Rect, places: &[(usize, Option<usize>)], keep: usize) -> Vec<Option<Rect>> {
+    let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
+    let first = (keep + 1).saturating_sub(fit);
+    let half = area.width.saturating_sub(HALF_GAP) / 2;
+    places
+        .iter()
+        .map(|(band, side)| {
+            let shown = band.checked_sub(first).filter(|shown| *shown < fit)?;
+            let y = area.y + shown as u16 * DEVICE_HEIGHT;
+            let height = DEVICE_HEIGHT.min(area.bottom().saturating_sub(y));
+            Some(match side {
+                None => Rect::new(area.x, y, area.width, height),
+                Some(0) => Rect::new(area.x, y, half, height),
+                Some(_) => {
+                    let x = area.x + half + HALF_GAP;
+                    Rect::new(x, y, area.right().saturating_sub(x), height)
+                }
+            })
+        })
+        .collect()
 }
 
 impl Widget for Device {

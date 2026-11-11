@@ -8,7 +8,7 @@ use vt_model::grid::GRID_ROWS;
 use vt_model::song::{Machine, Track};
 
 use super::controls::base;
-use super::{Control, DEVICE_COLUMNS, DeviceSpec};
+use super::{Control, DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
 
 /// The Sound page's devices on a sound track, top to bottom: its machine, its filter, its output
 /// and how it plays. Each is a full-width device, and the four fill the rows inside the
@@ -93,6 +93,7 @@ fn device<const TITLE: usize>(
     DeviceSpec {
         identity: identity.to_owned(),
         switchable: false,
+        width: DeviceWidth::Full,
         title: std::array::from_fn(|at| title.get(at).copied().flatten()),
         grid,
     }

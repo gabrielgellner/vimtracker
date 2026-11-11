@@ -5237,12 +5237,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     special(&mut app, KeyCode::Enter);
     let target = SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
     assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
-    let lfo = |app: &App| {
-        track_page_text(app)
-            .into_iter()
-            .find(|line| line.starts_with("LFO 1"))
-            .unwrap()
-    };
+    let lfo = |app: &App| device_title(app, "LFO 1");
     assert!(lfo(&app).contains("1 Amount"), "{}", lfo(&app));
 
     // Emptying the slot leaves it chosen, doing nothing, and saying so.
@@ -5411,10 +5406,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
         Some(SettingId::voice(SynthVoice::Fm, 0).unwrap())
     );
     press(&mut app, "L");
-    let line = track_page_text(&app)
-        .into_iter()
-        .find(|line| line.starts_with("LFO 1"))
-        .unwrap();
+    let line = device_title(&app, "LFO 1");
     assert!(line.contains("Ratio ---"), "{line}");
 }
 
@@ -5447,34 +5439,32 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
         "{first:?}"
     );
     assert!(!has(&first, "L1 Depth"), "{first:?}");
-    let second = labels(&mut app, "jK/");
+    let second = labels(&mut app, "}K/");
     assert!(
         !has(&second, "L1 Depth") && !has(&second, "L2 Depth") && has(&second, "L3 Depth"),
         "{second:?}"
     );
-    let third = labels(&mut app, "jK/");
+    let third = labels(&mut app, "}K/");
     assert!(
         !third
             .iter()
             .any(|label| label.starts_with('L') && label.contains(" Depth  ")),
         "{third:?}"
     );
-    let envelope = labels(&mut app, "ggK/");
+    // Across to `Env 3`, beside `LFO 3`.
+    let envelope = labels(&mut app, "hK/");
     assert!(
         has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase") && has(&envelope, "L3 Phase"),
         "{envelope:?}"
     );
 
-    press(&mut app, &format!("{}K/l2 depth", to_lfo(0)));
+    press(&mut app, &format!("gg{}K/l2 depth", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
         Some(SettingId::lfo(1, 0).unwrap())
     );
-    let line = track_page_text(&app)
-        .into_iter()
-        .find(|line| line.starts_with("LFO 1"))
-        .unwrap();
+    let line = device_title(&app, "LFO 1");
     assert!(line.contains("L2 Depth"), "{line}");
 }
 

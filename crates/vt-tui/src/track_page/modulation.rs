@@ -1,110 +1,124 @@
-//! The Mod page: the envelopes, the LFOs, the accumulator and the arpeggio, each a row.
+//! The Mod page: a rack of half-width devices, each envelope beside the LFO of its number, and the
+//! accumulator beside the arpeggio under them (the track pages study,
+//! `docs/designs/track-pages.md`, §2.2). An envelope or an LFO has its destination in its title,
+//! as what it's for, and each states its grid here, by what its settings mean.
 
 use vt_model::constants::TRACK_ENVELOPES;
+use vt_model::grid::Grid;
 use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::song::Track;
 
-use super::{AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField};
-
-/// The Mod page's devices, on a track whose Mod page is a rack. It isn't yet on any: the page is a
-/// row of settings for each modulator, the tables below, until each is a half-width device of its
-/// own (the track pages study, `docs/designs/track-pages.md`, §2.2).
-pub(super) fn devices(_track: &Track) -> Vec<DeviceSpec> {
-    Vec::new()
-}
-
-const fn lfo_row(slot: usize) -> [Control; 6] {
-    [
-        Control::Lfo(slot, LfoField::Destination),
-        Control::Lfo(slot, LfoField::Shape),
-        Control::Lfo(slot, LfoField::Rate),
-        Control::Lfo(slot, LfoField::Depth),
-        Control::Lfo(slot, LfoField::Phase),
-        Control::Lfo(slot, LfoField::Retrig),
-    ]
-}
-
-const fn envelope_row(slot: usize) -> [Control; 7] {
-    [
-        Control::Envelope(slot, EnvelopeField::Destination),
-        Control::Envelope(slot, EnvelopeField::Attack),
-        Control::Envelope(slot, EnvelopeField::Decay),
-        Control::Envelope(slot, EnvelopeField::Sustain),
-        Control::Envelope(slot, EnvelopeField::Release),
-        Control::Envelope(slot, EnvelopeField::Depth),
-        Control::Envelope(slot, EnvelopeField::Reset),
-    ]
-}
-
-/// Each envelope's row.
-pub static ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = {
-    let mut rows = [envelope_row(0); TRACK_ENVELOPES];
-    let mut slot = 0;
-    while slot < TRACK_ENVELOPES {
-        rows[slot] = envelope_row(slot);
-        slot += 1;
-    }
-    rows
+use super::{
+    AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec, EnvelopeField, LfoField,
 };
 
-/// Each LFO's row.
-pub static LFOS: [[Control; 6]; LFOS_PER_TRACK] = {
-    let mut rows = [lfo_row(0); LFOS_PER_TRACK];
-    let mut slot = 0;
-    while slot < LFOS_PER_TRACK {
-        rows[slot] = lfo_row(slot);
-        slot += 1;
-    }
-    rows
-};
-
-/// The accumulators' row, under the LFOs, as they move notes from pass to pass as the LFOs move
-/// settings over time.
-pub const ACCUMULATOR: [Control; 6] = [
-    Control::Accumulator(AccumulatorField::Up),
-    Control::Accumulator(AccumulatorField::Down),
-    Control::Accumulator(AccumulatorField::Moves),
-    Control::Accumulator(AccumulatorField::AtLimit),
-    Control::Accumulator(AccumulatorField::Adds),
-    Control::Accumulator(AccumulatorField::Reset),
+/// An envelope's settings, as its grid places them: its times down the left, and its levels down
+/// the right.
+const ENVELOPE_SETTINGS: [EnvelopeField; 6] = [
+    EnvelopeField::Attack,
+    EnvelopeField::Decay,
+    EnvelopeField::Release,
+    EnvelopeField::Sustain,
+    EnvelopeField::Depth,
+    EnvelopeField::Reset,
 ];
+const ENVELOPE_GRID: [[Option<usize>; 3]; 2] =
+    [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
-/// The arpeggio's row, under the accumulator's, as both play a row's note on from what's written.
-pub const ARPEGGIO: [Control; 4] = [
-    Control::Arpeggio(ArpField::Rate),
-    Control::Arpeggio(ArpField::Mode),
-    Control::Arpeggio(ArpField::Octaves),
-    Control::Arpeggio(ArpField::Retrig),
+/// An LFO's settings: what it plays down the left, and where it starts down the right, with a hole
+/// under `Retrig` for the `Fade` that #86 brings.
+const LFO_SETTINGS: [LfoField; 5] = [
+    LfoField::Shape,
+    LfoField::Rate,
+    LfoField::Depth,
+    LfoField::Phase,
+    LfoField::Retrig,
 ];
+const LFO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
 
-/// The Mod page's rows, top to bottom.
-pub static MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] = {
-    let mut rows: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] =
-        [&[]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2];
-    let mut row = 0;
-    while row < FIXED_MOD_ROWS.len() {
-        rows[row] = FIXED_MOD_ROWS[row];
-        row += 1;
-    }
-    rows[row] = &ACCUMULATOR;
-    rows[row + 1] = &ARPEGGIO;
-    rows
-};
+/// The accumulator's settings: how far it goes down the left, and what it does there and when
+/// down the right.
+const ACCUMULATOR_SETTINGS: [AccumulatorField; 6] = [
+    AccumulatorField::Up,
+    AccumulatorField::Down,
+    AccumulatorField::Moves,
+    AccumulatorField::AtLimit,
+    AccumulatorField::Adds,
+    AccumulatorField::Reset,
+];
+const ACCUMULATOR_GRID: [[Option<usize>; 3]; 2] =
+    [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
-/// The Mod page of a return or the master, which have no notes for an accumulator or an arpeggio
-/// to play: each envelope's row, then each LFO's.
-pub static FIXED_MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] = {
-    let mut rows: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
-        [&[]; TRACK_ENVELOPES + LFOS_PER_TRACK];
-    let mut slot = 0;
-    while slot < TRACK_ENVELOPES {
-        rows[slot] = &ENVELOPES[slot];
-        slot += 1;
+/// The arpeggio's settings: how it steps down the left, and how far and how it starts each note
+/// down the right.
+const ARPEGGIO_SETTINGS: [ArpField; 4] = [
+    ArpField::Rate,
+    ArpField::Mode,
+    ArpField::Octaves,
+    ArpField::Retrig,
+];
+const ARPEGGIO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), None], [Some(2), Some(3), None]];
+
+/// A title with one control, over the grid's first column.
+fn titled(control: Control) -> [Option<Control>; DEVICE_COLUMNS] {
+    let mut title = [None; DEVICE_COLUMNS];
+    title[0] = Some(control);
+    title
+}
+
+/// An envelope as a half-width device, `Env 1` to `Env 3`, with its destination in its title.
+fn envelope_device(slot: usize) -> DeviceSpec {
+    let title = titled(Control::Envelope(slot, EnvelopeField::Destination));
+    let grid = Grid::from_columns(&ENVELOPE_GRID);
+    DeviceSpec::new(format!("Env {}", slot + 1), title, grid, |at| {
+        Control::Envelope(slot, ENVELOPE_SETTINGS[at])
+    })
+    .half()
+}
+
+/// An LFO as a half-width device, `LFO 1` to `LFO 3`, with its destination in its title.
+fn lfo_device(slot: usize) -> DeviceSpec {
+    let title = titled(Control::Lfo(slot, LfoField::Destination));
+    let grid = Grid::from_columns(&LFO_GRID);
+    DeviceSpec::new(format!("LFO {}", slot + 1), title, grid, |at| {
+        Control::Lfo(slot, LFO_SETTINGS[at])
+    })
+    .half()
+}
+
+/// The accumulator as a half-width device, with nothing in its title.
+fn accumulator_device() -> DeviceSpec {
+    let grid = Grid::from_columns(&ACCUMULATOR_GRID);
+    DeviceSpec::new("Accumulator", [None; DEVICE_COLUMNS], grid, |at| {
+        Control::Accumulator(ACCUMULATOR_SETTINGS[at])
+    })
+    .half()
+}
+
+/// The arpeggio as a half-width device, with nothing in its title.
+fn arpeggio_device() -> DeviceSpec {
+    let grid = Grid::from_columns(&ARPEGGIO_GRID);
+    DeviceSpec::new("Arpeggio", [None; DEVICE_COLUMNS], grid, |at| {
+        Control::Arpeggio(ARPEGGIO_SETTINGS[at])
+    })
+    .half()
+}
+
+/// The Mod page's devices in the order they're read: each envelope, then the LFO of its number
+/// beside it, then the accumulator and the arpeggio beside it. A return, a group or the master
+/// has no notes for an accumulator or an arpeggio to play, so its page ends with the LFOs.
+pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
+    let mut devices = Vec::new();
+    for slot in 0..TRACK_ENVELOPES.max(LFOS_PER_TRACK) {
+        if slot < TRACK_ENVELOPES {
+            devices.push(envelope_device(slot));
+        }
+        if slot < LFOS_PER_TRACK {
+            devices.push(lfo_device(slot));
+        }
     }
-    let mut slot = 0;
-    while slot < LFOS_PER_TRACK {
-        rows[TRACK_ENVELOPES + slot] = &LFOS[slot];
-        slot += 1;
+    if track.is_sound() {
+        devices.extend([accumulator_device(), arpeggio_device()]);
     }
-    rows
-};
+    devices
+}

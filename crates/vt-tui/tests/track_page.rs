@@ -520,10 +520,10 @@ fn the_track_page_types_lfo_settings() {
         "the last for LFO 1 on a sample track: the last LFO's phase"
     );
 
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     assert_eq!(lfo(&app).shape, Shape::Saw);
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     typed(&mut app, "1/8d");
     assert_eq!(lfo(&app).rate, Rate::Note(720));
     typed(&mut app, "7st");
@@ -534,7 +534,7 @@ fn the_track_page_types_lfo_settings() {
     assert_eq!(lfo(&app).rate, Rate::Hertz(250));
     assert!(app.status.contains("1/8d"), "{}", app.status);
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     typed(&mut app, "-40");
     assert_eq!(lfo(&app).depth, -0x40);
     typed(&mut app, "+7F");
@@ -542,7 +542,7 @@ fn the_track_page_types_lfo_settings() {
     typed(&mut app, "100");
     assert_eq!(lfo(&app).depth, 0x7F);
 
-    press(&mut app, "l");
+    press(&mut app, "kkl");
     typed(&mut app, "90");
     assert_eq!(lfo(&app).phase, 90);
     typed(&mut app, "360");
@@ -552,7 +552,7 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "4-");
     assert_eq!(lfo(&app).phase, 345);
 
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     assert!(lfo(&app).retrig);
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "i lists a setting that is a list");
@@ -593,7 +593,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 
     // It opens on what's set, and leaves the other settings alone. Esc changes nothing.
     typed_rate_on_second_lfo(&mut app);
-    press(&mut app, "0K");
+    press(&mut app, "kkK");
     assert_eq!(
         listed(app.picker.as_ref().unwrap().current().unwrap()),
         "Res  Filter resonance"
@@ -617,7 +617,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 }
 
 fn typed_rate_on_second_lfo(app: &mut App) {
-    press(app, "ll");
+    press(app, "jj");
     typed(app, "7st");
 }
 
@@ -907,7 +907,7 @@ fn the_track_page_sets_the_utility_filter() {
 fn cmd_with_the_movement_keys_changes_the_value_without_moving() {
     let (mut app, _realtime) = on_track_page();
     let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
-    press(&mut app, "L0l");
+    press(&mut app, "Lj");
     typed(&mut app, "20");
     let label = app.track_control().label();
     with_cmd(&mut app, "D-l");
@@ -929,7 +929,7 @@ fn a_held_cmd_l_keeps_adjusting() {
     use ratatui::crossterm::event::KeyEventKind;
     let (mut app, _realtime) = on_track_page();
     let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
-    press(&mut app, "L0l");
+    press(&mut app, "Lj");
     typed(&mut app, "20");
     let key = parse_sequence("D-l").unwrap()[0];
     let now = Instant::now();
@@ -946,7 +946,7 @@ fn the_track_page_sets_envelopes() {
     let (mut app, _realtime) = on_track_page();
     let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];
     // Env 1, on its Attack.
-    press(&mut app, "L0l");
+    press(&mut app, "Lj");
     typed(&mut app, "20");
     assert_eq!(env(&app, 0).attack_ms, 20);
     press(&mut app, "=");
@@ -963,10 +963,10 @@ fn the_track_page_sets_envelopes() {
     press(&mut app, "x");
     assert_eq!(env(&app, 0).attack_ms, 1);
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     typed(&mut app, "180");
     assert_eq!(env(&app, 0).decay_ms, 180);
-    press(&mut app, "l");
+    press(&mut app, "kl");
     typed(&mut app, "40");
     assert_eq!(env(&app, 0).sustain, 40);
     typed(&mut app, "101");
@@ -974,7 +974,7 @@ fn the_track_page_sets_envelopes() {
     assert!(app.status.contains("percent"), "{}", app.status);
     press(&mut app, "+");
     assert_eq!(env(&app, 0).sustain, 50);
-    press(&mut app, "l");
+    press(&mut app, "hjj");
     typed(&mut app, "300");
     assert_eq!(env(&app, 0).release_ms, 300);
 
@@ -989,10 +989,10 @@ fn the_track_page_sets_envelopes() {
     press(&mut app, "/pitch");
     special(&mut app, KeyCode::Enter);
     assert_eq!(env(&app, 1).destination, Some(SettingId::PITCH));
-    press(&mut app, "lllll");
+    press(&mut app, "jjl");
     typed(&mut app, "+18");
     assert_eq!(env(&app, 1).depth, 0x18);
-    press(&mut app, "lK");
+    press(&mut app, "jK");
     press(&mut app, "off");
     special(&mut app, KeyCode::Enter);
     assert!(!env(&app, 1).reset);
@@ -1011,40 +1011,41 @@ fn the_track_page_draws_each_envelopes_shape() {
     use vt_tui::kitty::{Graphics, id_color};
     let (mut app, _realtime) = on_track_page();
     let mut graphics = Graphics::new();
+    // The page as the author's screen has room for it, beside the meter.
     let page = |app: &mut App, graphics: &mut Graphics| {
         graphics.sync(app, &mut Vec::new()).unwrap();
-        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
             .unwrap();
         terminal.backend().buffer().clone()
     };
-    let text = |buffer: &ratatui::buffer::Buffer| {
-        (0..24)
-            .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
-            .collect::<Vec<_>>()
+    // `Env 1`'s device is the first, at the top left, with its title on the page's third row and
+    // its shape's first cell inside its panel's box, 42 along and two down.
+    let (top, image) = (2, (42, 4));
+    let line = |buffer: &ratatui::buffer::Buffer, y: u16| {
+        (0..74).map(|x| buffer[(x, y)].symbol()).collect::<String>()
     };
     press(&mut app, "L");
     let drawn = page(&mut app, &mut graphics);
-    let lines = text(&drawn);
-    let heading = lines.iter().position(|l| l.contains("Env 1  Vol")).unwrap();
-    assert!(lines[heading].contains("Env 2  Cut"));
+    assert!(line(&drawn, top).starts_with("╭─ Env 1     Vol ─"));
     let first = app.envelope_images.unwrap()[0];
-    assert_eq!(drawn[(0, heading as u16 + 1)].fg, id_color(first));
+    assert_eq!(drawn[image].fg, id_color(first));
 
     // Changing a value sends a new image, which the placeholders point to.
-    press(&mut app, "gg0lll");
+    press(&mut app, "ggjl");
     typed(&mut app, "0");
     let changed = page(&mut app, &mut graphics);
-    assert_ne!(changed[(0, heading as u16 + 1)].fg, id_color(first));
+    assert_ne!(changed[image].fg, id_color(first));
     assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
 
     // The first envelope on Vol has no depth to show, and off it, it does.
-    assert!(text(&page(&mut app, &mut graphics))[3].contains("--"));
-    press(&mut app, "0K/cut");
+    let depth = |app: &mut App, graphics: &mut Graphics| line(&page(app, graphics), top + 4);
+    assert!(depth(&mut app, &mut graphics).contains("Depth     --"));
+    press(&mut app, "ggK/cut");
     special(&mut app, KeyCode::Enter);
-    assert!(text(&page(&mut app, &mut graphics))[3].contains("00"));
+    assert!(depth(&mut app, &mut graphics).contains("Depth     00"));
 }
 
 #[test]
@@ -1062,27 +1063,27 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
     choose(&mut app, "/cut");
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     choose(&mut app, "square");
     assert_eq!(lfo(&app).shape, Shape::Square);
 
-    press(&mut app, "l");
+    press(&mut app, "j");
     assert_eq!(app.mode, Mode::Normal);
     choose(&mut app, "1/8d");
     assert_eq!(lfo(&app).rate, Rate::Note(720));
 
-    // Retrig is three along, past Depth and Phase, which aren't lists.
-    press(&mut app, "l");
+    // Depth, under Rate, isn't a list, and Retrig is beside Rate.
+    press(&mut app, "j");
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.status.contains("Dest"), "{}", app.status);
-    press(&mut app, "ll");
+    press(&mut app, "kl");
     choose(&mut app, "on");
     assert!(lfo(&app).retrig);
     assert_eq!(lfo(&app).shape, Shape::Square, "the others are left alone");
 
     // The picker opens on what's set.
-    press(&mut app, "0lK");
+    press(&mut app, "0kK");
     assert_eq!(app.picker.as_ref().unwrap().selected, 4);
     special(&mut app, KeyCode::Esc);
 
@@ -1090,7 +1091,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker);
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "li");
+    press(&mut app, "ji");
     assert_eq!(app.mode, Mode::Insert);
     special(&mut app, KeyCode::Esc);
 }
@@ -1110,14 +1111,14 @@ fn large_steps_on_the_track_page_suit_each_setting() {
         GrooveId::from_index(1),
         "a groove moves one at a time"
     );
-    press(&mut app, &format!("L{}0ll", to_lfo(0)));
+    press(&mut app, &format!("L{}0jj", to_lfo(0)));
     press(&mut app, "+");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
     press(&mut app, "_");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(960));
-    press(&mut app, "l+");
+    press(&mut app, "j+");
     assert_eq!(track(&app).lfos[0].depth, 0x10);
-    press(&mut app, "l+");
+    press(&mut app, "kkl+");
     assert_eq!(track(&app).lfos[0].phase, 90);
     press(&mut app, "_");
     assert_eq!(track(&app).lfos[0].phase, 0);
@@ -1148,28 +1149,28 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
 
     // Only the setting under the cursor goes back.
     press(&mut app, &format!("L{}0=", to_lfo(0)));
-    press(&mut app, "l=");
-    press(&mut app, "l");
+    press(&mut app, "j=");
+    press(&mut app, "j");
     typed(&mut app, "7st");
-    press(&mut app, "l");
+    press(&mut app, "j");
     typed(&mut app, "+40");
-    press(&mut app, "l");
+    press(&mut app, "kkl");
     typed(&mut app, "90");
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     let lfo = |app: &App| track(app).lfos[0];
     press(&mut app, "x");
     assert!(!lfo(&app).retrig);
-    press(&mut app, "hx");
+    press(&mut app, "kx");
     assert_eq!(lfo(&app).phase, 0);
-    press(&mut app, "hx");
+    press(&mut app, "hjjx");
     assert_eq!(lfo(&app).depth, 0);
-    press(&mut app, "hx");
+    press(&mut app, "kx");
     assert_eq!(lfo(&app).rate, Lfo::default().rate);
     assert_eq!(lfo(&app).shape, Shape::Saw);
-    press(&mut app, "hx");
+    press(&mut app, "kx");
     assert_eq!(lfo(&app).shape, Shape::Tri);
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
-    press(&mut app, "hx");
+    press(&mut app, "kx");
     assert_eq!(lfo(&app), Lfo::default());
 
     // Already there, it leaves no undo step.
@@ -1223,7 +1224,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
 #[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, &format!("L{}0ll", to_lfo(0)));
+    press(&mut app, &format!("L{}0jj", to_lfo(0)));
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
     typed(&mut app, "7st");
@@ -1263,31 +1264,44 @@ fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, &format!("L{}0=ll", to_lfo(0)));
+    press(&mut app, &format!("L{}0=jj", to_lfo(0)));
     typed(&mut app, "1/8d");
-    press(&mut app, "l");
+    press(&mut app, "j");
     typed(&mut app, "+40");
-    press(&mut app, "l");
+    press(&mut app, "kkl");
     typed(&mut app, "90");
-    let lines = track_page_text(&app);
+    let lines = screen_cells(&mut app);
     assert!(lines[0].contains(" Track 01 "), "{}", lines[0]);
-    assert!(lines[2].contains("Attack") && lines[2].contains("Reset"));
-    assert!(lines[3].starts_with("Env 1") && lines[3].contains("Vol"));
-    assert!(lines[4].starts_with("Env 2") && lines[4].contains("Cut"));
-    assert!(lines[5].starts_with("Env 3") && lines[5].contains("---"));
-    assert!(lines[7].contains("Dest") && lines[7].contains("Retrig"));
-    let lfo: Vec<&str> = lines[8].split_whitespace().collect();
-    let triangle = vt_tui::glyphs::TRIANGLE_WAVE.to_string();
-    // Its retrig is a toggle, off.
+    // Each modulator's destination is in its title, after the room for its switch.
+    let title = |identity: &str| {
+        let (top, left) = device_at(&lines, identity);
+        from_column(&lines[top], left)
+    };
+    assert!(title("Env 1").starts_with("╭─ Env 1     Vol ─"));
+    assert!(title("Env 2").starts_with("╭─ Env 2     Cut ─"));
+    assert!(title("Env 3").starts_with("╭─ Env 3     --- ─"));
+    assert!(title("LFO 1").starts_with("╭─ LFO 1     Cut ─"));
+    assert!(title("LFO 2").starts_with("╭─ LFO 2     --- ─"));
+    // An envelope's times down its left and its levels down its right.
+    let (top, left) = device_at(&lines, "Env 1");
+    let row = |at: usize| from_column(&lines[top + at], left);
+    let on = vt_tui::glyphs::SWITCH_ON.to_string();
+    assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
+    assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
+    assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
+    // An LFO's shape, rate and depth down its left, and its phase and retrig, a toggle that's
+    // off, down its right, with a hole under them.
+    let (top, left) = device_at(&lines, "LFO 1");
+    let row = |at: usize| from_column(&lines[top + at], left);
     let off = vt_tui::glyphs::SWITCH_OFF.to_string();
-    assert_eq!(
-        lfo,
-        [
-            "LFO", "1", "Cut", "Tri", &triangle, "1/8d", "+40", "90°", &off
-        ]
+    assert!(
+        row(2).starts_with("│  Shape     Tri        Phase     90°"),
+        "{}",
+        row(2)
     );
-    assert!(lines[9].starts_with("LFO 2"));
-    assert!(lines[10].starts_with("LFO 3"));
+    assert!(row(4).starts_with(&format!("│  Rate      1/8d       Retrig    {off}")));
+    let inside: String = row(6).chars().take(73).collect();
+    assert_eq!(inside.trim_end(), "│  Depth     +40");
     press(&mut app, "H");
     let lines = track_text(&app);
     // Four devices, each with its settings down columns and its title on its frame's top.
@@ -1369,7 +1383,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
 
 #[test]
 fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
-    use vt_tui::track_page::{MOD_ROWS, Page};
+    use vt_tui::track_page::Page;
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.track_page.page, Page::Sound);
     press(&mut app, "H");
@@ -1378,8 +1392,15 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     press(&mut app, "L");
     assert_eq!(app.track_page.page, Page::Mod);
     assert_eq!(app.track_page.row, 0);
-    let row = MOD_ROWS[0];
-    assert!(row.contains(&app.track_control()), "the cursor stays valid");
+    let modulation: Vec<_> = Page::Mod
+        .devices(&app.song().tracks[0])
+        .iter()
+        .flat_map(|device| device.rows().flatten().flatten().collect::<Vec<_>>())
+        .collect();
+    assert!(
+        modulation.contains(&app.track_control()),
+        "the cursor stays valid"
+    );
     press(&mut app, "GH");
     assert_eq!(app.track_page.page, Page::Sound);
     assert_eq!(app.track_page.row, 0);
@@ -1388,10 +1409,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
         .iter()
         .flat_map(|device| device.rows().flatten().flatten().collect::<Vec<_>>())
         .collect();
-    let all: Vec<_> = sound
-        .iter()
-        .chain(MOD_ROWS.iter().flat_map(|row| row.iter()))
-        .collect();
+    let all: Vec<_> = sound.iter().chain(&modulation).collect();
     for (at, control) in all.iter().enumerate() {
         assert!(!all[at + 1..].contains(control), "{control:?} is on twice");
     }
@@ -1436,35 +1454,44 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     let (mut app, _realtime) = app();
     app.envelope_images = Some([0x01_02_03, 0x04_05_06, 0x07_08_09]);
     press(&mut app, " 4L");
+    // As much of the page as the author's screen has room for, beside the meter.
     let buffer = {
-        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
             .unwrap();
         terminal.backend().buffer().clone()
     };
-    let at = |text: &str| {
-        (0..24).find(|y| {
-            (0..80)
-                .map(|x| buffer[(x, *y)].symbol())
-                .collect::<String>()
-                .contains(text)
-        })
-    };
-    let label = at("Env 1  Vol").unwrap();
-    let first = &buffer[(0, label + 1)];
-    assert!(
-        first.symbol().starts_with('\u{10EEEE}'),
-        "{:?}",
-        first.symbol()
-    );
-    assert_eq!(first.fg, ratatui::style::Color::Rgb(1, 2, 3));
-    // The second envelope is one image width and a gap along, and holds its row and column.
-    let second = &buffer[(30, label + 2)];
-    assert_eq!(second.symbol(), "\u{10EEEE}\u{30D}\u{305}");
-    assert_eq!(second.fg, ratatui::style::Color::Rgb(4, 5, 6));
-    assert_eq!(buffer[(27, label + 1)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
+    let colours = [(1, 2, 3), (4, 5, 6), (7, 8, 9)];
+    for (slot, (red, green, blue)) in colours.into_iter().enumerate() {
+        // Each envelope's device is the left of its band, a device tall, under the page's title.
+        let top = 2 + 9 * slot as u16;
+        let title: String = (0..9).map(|x| buffer[(x, top)].symbol()).collect();
+        assert_eq!(title, format!("╭─ Env {} ", slot + 1));
+        // Its panel is against its right side, 2 in from its frame, in a faint box that's as tall
+        // as all inside the frame but its last row, which the settings' rows sit beside.
+        assert_eq!(buffer[(73, top)].symbol(), "╮");
+        assert_eq!(buffer[(41, top + 1)].symbol(), "┌");
+        assert_eq!(buffer[(70, top + 6)].symbol(), "┘");
+        for x in 71..73 {
+            assert_eq!(
+                buffer[(x, top + 3)].symbol(),
+                " ",
+                "the room before the frame"
+            );
+        }
+        // The shape fills the box, each cell holding its row and column.
+        let first = &buffer[(42, top + 2)];
+        assert_eq!(first.symbol(), "\u{10EEEE}\u{305}\u{305}");
+        assert_eq!(first.fg, ratatui::style::Color::Rgb(red, green, blue));
+        assert_eq!(buffer[(43, top + 3)].symbol(), "\u{10EEEE}\u{30D}\u{30D}");
+        assert_eq!(buffer[(69, top + 2)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
+        // The settings stop short of it.
+        let sustain: String = (24..41).map(|x| buffer[(x, top + 2)].symbol()).collect();
+        assert!(sustain.starts_with("Sustain   "), "{sustain}");
+        assert!(sustain.ends_with("  "), "{sustain}");
+    }
 }
 
 #[test]
@@ -1490,14 +1517,14 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
 
     // Each envelope's other look is sent once, and after that the cursor only swaps between them.
-    press(&mut app, "j");
+    press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 2);
     let moved = app.envelope_images.unwrap();
     assert!(moved[0] != first[0] && moved[1] != first[1]);
-    press(&mut app, "k");
+    press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     assert_eq!(app.envelope_images.unwrap(), first);
-    press(&mut app, "j");
+    press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     assert_eq!(app.envelope_images.unwrap(), moved);
 
@@ -1514,51 +1541,27 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
 }
 
 #[test]
-fn an_lfos_shape_has_its_glyph_after_its_name_and_keeps_the_columns_in_line() {
-    use vt_tui::glyphs;
-    use vt_tui::theme;
-    let draw = |app: &App| {
-        let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal = ratatui::Terminal::new(backend).unwrap();
-        terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
-            .unwrap();
-        terminal.backend().buffer().clone()
-    };
+fn an_lfos_shape_is_a_word_in_its_grid_with_no_glyph_beside_it() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
     assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Tri);
-    let plain = draw(&app);
-    let row = (0..24)
-        .find(|y| {
-            (0..80)
-                .map(|x| plain[(x, *y)].symbol())
-                .collect::<String>()
-                .starts_with("LFO 1")
-        })
-        .unwrap();
-    let text = |buffer: &ratatui::buffer::Buffer, x: u16| buffer[(x, row)].symbol().to_owned();
-    // After the name's column, one cell, dim while the cursor is on another LFO.
-    assert_eq!(text(&plain, 30), glyphs::TRIANGLE_WAVE.to_string());
-    assert_eq!(plain[(30, row)].fg, theme::dim().fg.unwrap());
-    assert_eq!(text(&plain, 31), " ");
-
-    // In the active colour while the cursor is on its LFO.
-    press(&mut app, &to_lfo(0));
-    assert_eq!(draw(&app)[(30, row)].fg, theme::active().fg.unwrap());
-
-    // A falling saw has no glyph, and the columns after it stay where they were.
-    press(&mut app, "l=");
+    let lines = screen_cells(&mut app);
+    let (top, left) = device_at(&lines, "LFO 1");
+    let row = from_column(&lines[top + 2], left);
+    assert!(
+        row.starts_with("│  Shape     Tri        Phase     0°"),
+        "{row}"
+    );
+    // Nothing after the shape's name but the room to the next column: the wave the study draws
+    // beside it (#384) will say it, so a glyph would say it twice.
+    press(&mut app, &format!("{}j=", to_lfo(0)));
     assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Saw);
-    let saw = draw(&app);
-    assert_eq!(text(&saw, 30), " ");
-    for x in 31..80 {
-        assert_eq!(text(&saw, x), text(&plain, x), "at {x}");
-    }
-    assert_eq!(glyphs::lfo_shape(Shape::Ramp), Some(glyphs::SAWTOOTH_WAVE));
-    for shape in [Shape::Saw, Shape::Random, Shape::Smooth] {
-        assert_eq!(glyphs::lfo_shape(shape), None);
-    }
+    let lines = screen_cells(&mut app);
+    let row = from_column(&lines[top + 2], left);
+    assert!(
+        row.starts_with("│  Shape     Saw        Phase     0°"),
+        "{row}"
+    );
 }
 
 #[test]
@@ -1754,11 +1757,14 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(column_name(&app), "Dest", "it hasn't moved");
 
-    // Enter goes to the nearest.
+    // Enter goes to the nearest, `Env 1`'s, in its own device.
     press(&mut app, "/dep");
     special(&mut app, KeyCode::Enter);
     assert_eq!(column_name(&app), "Depth");
-    assert_eq!(app.track_page.row, 0);
+    assert_eq!(
+        app.track_control(),
+        vt_tui::track_page::Control::Envelope(0, vt_tui::track_page::EnvelopeField::Depth)
+    );
 }
 
 #[test]
@@ -1821,6 +1827,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 
 #[test]
 fn a_jumps_labels_also_follow_the_names_being_searched() {
+    use vt_tui::track_page::{Control, EnvelopeField};
     let (mut app, _realtime) = app();
     press(&mut app, " 4/cu");
     let line = from_name;
@@ -1834,26 +1841,33 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     assert!(line(&app, "Cutd").starts_with("Cutd      dF00 ▕"));
     special(&mut app, KeyCode::Esc);
 
-    // A name over two rows has both their labels, and the columns stay put.
+    // A name in every device has a label in each, and the columns stay put.
     press(&mut app, "L/dep");
     let labels = jump_labels(&app);
-    let text = track_text(&app);
-    let heading = text.iter().find(|line| line.contains("Attack")).unwrap();
     assert!(
         labels.iter().all(|label| label.ends_with("Depth")),
         "{labels:?}"
     );
-    let after = &heading[heading.find("Dep").unwrap() + 3..];
-    assert!(
-        !after.starts_with("th"),
-        "two labels over the rest: {heading}"
-    );
-    assert!(heading.contains("Reset"), "{heading}");
-    let at = |line: &str, word: &str| line.find(word).unwrap();
+    let label = app
+        .field_jump
+        .as_ref()
+        .unwrap()
+        .label(Control::Envelope(1, EnvelopeField::Depth))
+        .unwrap();
+    let row = |app: &mut App| {
+        let lines = screen_cells(app);
+        let (top, left) = device_at(&lines, "Env 2");
+        from_column(&lines[top + 4], left)
+    };
+    let labelled = row(&mut app);
+    let wanted = format!("│  Decay     200 ms     Dep{label}h     {label}0");
+    assert!(labelled.starts_with(&wanted), "{labelled}");
     special(&mut app, KeyCode::Esc);
-    let plain = track_text(&app);
-    let before = plain.iter().find(|line| line.contains("Attack")).unwrap();
-    assert_eq!(at(heading, "Reset"), at(before, "Reset"));
+    let plain = row(&mut app);
+    assert!(
+        plain.starts_with("│  Decay     200 ms     Depth     00"),
+        "{plain}"
+    );
 }
 
 #[test]
@@ -2221,15 +2235,26 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     use vt_model::accumulator::{Accumulation, AtLimit, Moves, Reset};
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LGk");
-    let text = track_text(&app).join("\n");
+    // Down the left column past the envelopes, onto its first row, as its title has nothing.
+    press(&mut app, " 4L3}");
+    let rows = |app: &mut App| {
+        let lines = screen_cells(app);
+        let (top, left) = device_at(&lines, "Accumulator");
+        assert!(from_column(&lines[top], left).starts_with("╭─ Accumulator ──"));
+        [2, 4, 6].map(|row| from_column(&lines[top + row], left))
+    };
+    let [first, second, third] = rows(&mut app);
     assert!(
-        text.contains("Up     Down   Moves  Limit  Adds   Reset"),
-        "{text}"
+        first.starts_with("│  Up        7          Limit     Wrap  "),
+        "{first}"
     );
     assert!(
-        text.contains("Acc       7      7      Row    Wrap   Row    Chain"),
-        "{text}"
+        second.starts_with("│  Down      7          Adds      Row  "),
+        "{second}"
+    );
+    assert!(
+        third.starts_with("│  Moves     Row        Reset     Chain  "),
+        "{third}"
     );
     assert_eq!(column_name(&app), "Accumulator up");
     assert_eq!(
@@ -2246,7 +2271,7 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     press(&mut app, "x");
     assert_eq!(accumulation(&app), Accumulation::default());
     // Typed, it's a number of degrees.
-    press(&mut app, "li3");
+    press(&mut app, "ji3");
     special(&mut app, KeyCode::Enter);
     assert_eq!(accumulation(&app).down, 3);
     press(&mut app, "i40");
@@ -2255,7 +2280,7 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     assert!(app.status.contains("from 1 to 28"), "{}", app.status);
 
     // The others are lists, which `K` shows with what each does.
-    press(&mut app, "l");
+    press(&mut app, "j");
     press(&mut app, "K");
     let picker = app.picker.as_ref().expect("the choices are listed");
     assert_eq!(picker.title, "Accumulator moves");
@@ -2274,12 +2299,19 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
         value_shown(&app).as_deref(),
         Some("every row on the track moves with the ACUs")
     );
-    press(&mut app, "l=");
+    press(&mut app, "kkl=");
     assert_eq!(accumulation(&app).at_limit, AtLimit::Bounce);
-    press(&mut app, "ll==");
+    press(&mut app, "jj==");
     assert_eq!(accumulation(&app).reset, Reset::Loops(1));
-    let text = track_text(&app).join("\n");
-    assert!(text.contains("Track  Bounce Row    1 loop"), "{text}");
+    let [first, _, third] = rows(&mut app);
+    assert!(
+        first.starts_with("│  Up        7          Limit     Bounce  "),
+        "{first}"
+    );
+    assert!(
+        third.starts_with("│  Moves     Track      Reset     1 loop  "),
+        "{third}"
+    );
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("each time round the chain")
@@ -2299,8 +2331,11 @@ fn a_return_has_no_accumulator() {
         press(&mut app, "W");
     }
     press(&mut app, " 4LG");
-    let text = track_text(&app).join("\n");
-    assert!(!text.contains("Acc "), "{text}");
+    let text = screen_cells(&mut app).join("\n");
+    assert!(
+        text.contains("╭─ LFO 3 ") && !text.contains("Accumulator"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -2309,16 +2344,24 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_tui::views::status::{column_name, value_shown};
     use vt_tui::views::widgets::toggle;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LG");
-    let text = track_text(&app).join("\n");
-    assert!(text.contains("Rate   Mode        Oct    Retrig"), "{text}");
+    // Across to the LFOs and down past them, onto its first row, as its title has nothing.
+    press(&mut app, " 4Ll3}");
+    let rows = |app: &mut App| {
+        let lines = screen_cells(app);
+        let (top, left) = device_at(&lines, "Arpeggio");
+        assert!(from_column(&lines[top], left).starts_with("╭─ Arpeggio ──"));
+        [2, 4].map(|row| from_column(&lines[top + row], left))
+    };
+    let [first, second] = rows(&mut app);
     assert!(
-        text.contains(&format!(
-            "Arp       Tick   Up          1      {}",
-            toggle::text(false)
-        )),
-        "{text}"
+        first.starts_with("│  Rate      Tick          Oct       1  "),
+        "{first}"
     );
+    let retrig = format!(
+        "│  Mode      Up            Retrig    {}",
+        toggle::text(false)
+    );
+    assert!(second.starts_with(&retrig), "{second}");
     assert_eq!(column_name(&app), "Arp rate");
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -2346,7 +2389,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert_eq!(arpeggio(&app).rate, ArpRate::ThirtySecond);
 
     // The modes go round, and `K` lists them.
-    press(&mut app, "l");
+    press(&mut app, "j");
     assert_eq!(column_name(&app), "Arp mode");
     press(&mut app, "-");
     assert_eq!(arpeggio(&app).mode, ArpMode::Random);
@@ -2373,7 +2416,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     );
 
     // The octaves are a number from 1 to 4.
-    press(&mut app, "l====");
+    press(&mut app, "kl====");
     assert_eq!(arpeggio(&app).octaves, 4);
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -2388,20 +2431,22 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert!(app.status.contains("from 1 to 4"), "{}", app.status);
 
     // Retrig is on or off.
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     assert!(arpeggio(&app).retrig);
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("each note starts again, with its envelopes")
     );
-    let text = track_text(&app).join("\n");
+    let [first, second] = rows(&mut app);
     assert!(
-        text.contains(&format!(
-            "Arp       1/32   Up-down     2      {}",
-            toggle::text(true)
-        )),
-        "{text}"
+        first.starts_with("│  Rate      1/32          Oct       2  "),
+        "{first}"
     );
+    let retrig = format!(
+        "│  Mode      Up-down       Retrig    {}",
+        toggle::text(true)
+    );
+    assert!(second.starts_with(&retrig), "{second}");
     press(&mut app, "x");
     assert!(!arpeggio(&app).retrig);
     assert_eq!(
@@ -2409,17 +2454,15 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
         Some("legato: each note only changes the pitch, and Acid slides")
     );
 
-    // The longest mode has room, and the columns after it stay in line.
-    press(&mut app, "hh+");
+    // The longest mode has room, and the column after it stays in line.
+    press(&mut app, "h+");
     assert_eq!(arpeggio(&app).mode, ArpMode::UpDownInc);
-    let text = track_text(&app).join("\n");
-    assert!(
-        text.contains(&format!(
-            "Arp       1/32   Up-down-inc 2      {}",
-            toggle::text(false)
-        )),
-        "{text}"
+    let [_, second] = rows(&mut app);
+    let retrig = format!(
+        "│  Mode      Up-down-inc   Retrig    {}",
+        toggle::text(false)
     );
+    assert!(second.starts_with(&retrig), "{second}");
 }
 
 #[test]
@@ -2435,8 +2478,11 @@ fn a_return_has_no_arpeggio() {
         press(&mut app, "W");
     }
     press(&mut app, " 4LG");
-    let text = track_text(&app).join("\n");
-    assert!(!text.contains("Arp "), "{text}");
+    let text = screen_cells(&mut app).join("\n");
+    assert!(
+        text.contains("╭─ LFO 3 ") && !text.contains("Arpeggio"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -2496,51 +2542,30 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     press(&mut app, "b");
     assert_eq!(value_of(&app, "Peak Clip").1, theme::OVERLAY0);
 
-    // On the Mod page, an envelope's Reset and the LFOs' and the arpeggio's Retrig, under their
-    // names.
+    // On the Mod page, an envelope's Reset and the LFOs' and the arpeggio's Retrig, after their
+    // names in the second column of their devices: each band is a device tall, the left device's
+    // second column 24 in and the right device's 76 further, and a value 10 after its name.
     press(&mut app, "H");
     let buffer = track_page_buffer(&app);
-    let lines: Vec<String> = (0..40)
-        .map(|y| (0..150).map(|x| buffer[(x, y)].symbol()).collect())
-        .collect();
-    let column = |heading: &str, y: usize| {
-        let at = lines[y].find(heading).unwrap();
-        lines[y][..at].chars().count() as u16
-    };
-    let envelopes = lines
-        .iter()
-        .position(|line| line.contains("Reset"))
-        .unwrap();
-    let reset = column("Reset", envelopes);
-    for row in 1..=3 {
-        let y = (envelopes + row) as u16;
-        assert_eq!(
-            glyph_at(&buffer, (reset, y)).0,
-            SWITCH_ON,
-            "{}",
-            lines[envelopes + row]
-        );
+    let top = |band: u16| 2 + 9 * band;
+    for band in 0..3 {
+        let reset = (34, top(band) + 6);
+        assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Env {}", band + 1);
+        let retrig = (76 + 34, top(band) + 4);
+        assert_eq!(glyph_at(&buffer, retrig).0, SWITCH_OFF, "LFO {}", band + 1);
     }
-    let lfos = envelopes + 5;
-    let retrig = column("Retrig", lfos);
-    assert_eq!(glyph_at(&buffer, (retrig, lfos as u16 + 1)).0, SWITCH_OFF);
-    let arp = lines
-        .iter()
-        .position(|line| line.starts_with("Arp"))
-        .unwrap();
-    let arp_retrig = column("Retrig", arp - 1);
-    assert_eq!(glyph_at(&buffer, (arp_retrig, arp as u16)), off);
-    // `=` on the first envelope's Reset flips it, and the next is still under its heading.
-    press(&mut app, "gg$");
+    // The arpeggio's values have room for its longest mode, so its second column is further in.
+    assert_eq!(buffer[(76 + 27, top(3) + 4)].symbol(), "R");
+    assert_eq!(glyph_at(&buffer, (76 + 37, top(3) + 4)), off);
+    // `=` on the first envelope's Reset flips it, and its name stays where it was.
+    press(&mut app, "ggjjjl");
     assert_eq!(app.track_control().label(), "Reset");
     press(&mut app, "=");
     assert!(!app.song().tracks[0].envelopes[0].reset);
+    press(&mut app, "k");
     let buffer = track_page_buffer(&app);
-    assert_eq!(
-        glyph_at(&buffer, (reset, envelopes as u16 + 1)).0,
-        SWITCH_OFF
-    );
-    assert_eq!(buffer[(reset, envelopes as u16)].symbol(), "R");
+    assert_eq!(glyph_at(&buffer, (34, top(0) + 6)).0, SWITCH_OFF);
+    assert_eq!(buffer[(24, top(0) + 6)].symbol(), "R");
 }
 
 #[test]
@@ -2835,8 +2860,8 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
         let name = format!("Env {envelope}");
         assert_eq!(
             count(&name),
-            2,
-            "{name}'s row and its shape\n{}",
+            1,
+            "{name}'s device\n{}",
             modulation.join("\n")
         );
     }
@@ -2879,7 +2904,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
 
     // The last LFO on the delay's feedback, and the last envelope on the last LFO's depth.
     press(&mut app, " 4H");
-    press(&mut app, &"j".repeat(TRACK_ENVELOPES + LFOS_PER_TRACK - 1));
+    press(&mut app, &to_lfo(LFOS_PER_TRACK - 1));
     press(&mut app, "0");
     assert_eq!(
         app.track_control(),
@@ -2893,7 +2918,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
         app.song().tracks[0].lfos[LFOS_PER_TRACK - 1].destination,
         Some(feedback)
     );
-    press(&mut app, &"k".repeat(LFOS_PER_TRACK));
+    press(&mut app, "h");
     assert_eq!(
         app.track_control(),
         Control::Envelope(TRACK_ENVELOPES - 1, EnvelopeField::Destination)

@@ -37,7 +37,7 @@ pub struct CellWidths {
     pub name: u16,
     /// Its value and the space after it.
     pub value: u16,
-    /// The cells inside a bar, each split into eighths.
+    /// The cells inside a bar, each split into eighths, or none for a compact cell with no bar.
     pub bar_cells: usize,
     /// The gap before the next column.
     pub gap: u16,
@@ -61,9 +61,21 @@ impl CellWidths {
         ..Self::FX
     };
 
-    /// The bar with its ends.
+    /// Compact cells, for a half-width device, where a panel rather than a bar shows the values:
+    /// a name, a value as long as `2 bars` or `8000 ms`, and no bar. That's 21 columns a cell.
+    pub const COMPACT: Self = Self {
+        name: 10,
+        value: 8,
+        bar_cells: 0,
+        gap: 3,
+    };
+
+    /// The bar with its ends, or nothing in a compact cell, which has none.
     fn bar(self) -> u16 {
-        self.bar_cells as u16 + BAR_ENDS
+        match self.bar_cells {
+            0 => 0,
+            cells => cells as u16 + BAR_ENDS,
+        }
     }
 
     /// A whole column, with its gap.

@@ -183,9 +183,41 @@ pub fn tracks_of_different_lengths() -> (App, Realtime) {
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-/// Down the Mod page from its top row to an LFO's row, past every envelope's.
+/// From `Env 1`'s destination, at the top of the Mod page, to an LFO's: across to `LFO 1`'s on
+/// the right, and down that column a device at a time.
 pub fn to_lfo(lfo: usize) -> String {
-    "j".repeat(vt_model::constants::TRACK_ENVELOPES + lfo)
+    format!("l{}", "}".repeat(lfo))
+}
+
+/// A device's title on the track page, by its name, from its frame's corner to the other, as
+/// `╭─ LFO 1     Cut ───…╮`, drawn as wide as the author's screen has room for.
+pub fn device_title(app: &App, identity: &str) -> String {
+    let (width, height) = (150, 40);
+    let backend = ratatui::backend::TestBackend::new(width, height);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let start = format!("╭─ {identity} ");
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .find_map(|line| {
+            let at = line.find(&start)?;
+            let end = line[at..].find('╮')? + at;
+            Some(line[at..end + '╮'.len_utf8()].to_owned())
+        })
+        .unwrap_or_else(|| panic!("{identity}'s title"))
+}
+
+/// From `Env 1`'s destination, at the top of the Mod page, to another envelope's: down the left
+/// column a device at a time.
+pub fn to_envelope(envelope: usize) -> String {
+    "}".repeat(envelope)
 }
 
 /// Start typing a value, type it and enter it.
@@ -326,4 +358,46 @@ pub fn drawn(
         .draw(|frame| draw(frame, frame.area(), app))
         .unwrap();
     terminal.backend().buffer().clone()
+}
+
+/// The whole screen at the author's size, a line at a time with a character for each cell, an
+/// image's placeholder being `▒`, so a column is a count of characters.
+pub fn screen_cells(app: &mut App) -> Vec<String> {
+    let (width, height) = (163, 42);
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| {
+                    let symbol = buffer[(x, y)].symbol();
+                    match symbol.starts_with('\u{10EEEE}') {
+                        true => "▒".to_owned(),
+                        false => symbol.to_owned(),
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Where a device is on the screen, by its name: the row of its title, and the column of its
+/// frame's left edge.
+pub fn device_at(lines: &[String], identity: &str) -> (usize, usize) {
+    let title = format!("╭─ {identity} ");
+    for (row, line) in lines.iter().enumerate() {
+        if let Some(at) = line.find(&title) {
+            return (row, line[..at].chars().count());
+        }
+    }
+    panic!("{identity} in\n{}", lines.join("\n"));
+}
+
+/// A line from a column on, counted in characters.
+pub fn from_column(line: &str, column: usize) -> String {
+    line.chars().skip(column).collect()
 }

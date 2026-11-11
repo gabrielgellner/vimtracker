@@ -15,20 +15,22 @@ mod sound;
 mod typing;
 
 pub use controls::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
-pub use device::{DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec};
+pub use device::{
+    DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
+};
 pub use fx::TakenInsert;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
-pub use modulation::{ACCUMULATOR, ARPEGGIO, ENVELOPES, FIXED_MOD_ROWS, LFOS, MOD_ROWS};
 pub use sound::{GROUP_ROWS, MASTER_ROWS, RETURN_ROWS};
 
 use std::sync::Arc;
 
 use vt_model::selection::Motion;
-use vt_model::song::{Machine, Track, TrackKind};
+use vt_model::song::{Track, TrackKind};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use device::{device_beside, rack_column};
 
 /// A part of the track page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -59,10 +61,12 @@ impl Page {
         Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
-    /// The page's devices, top to bottom, on a page that's a rack of them, each page's from its
-    /// own file: a sound track's Sound page, and the FX page's slots. A page with none is rows of
-    /// settings (`Page::rows`). The cursor, `j`, `k`, `{` and `}` go through whatever devices a page gives,
-    /// so a page becomes a rack by giving them.
+    /// The page's devices, in the order they're read, on a page that's a rack of them, each page's
+    /// from its own file: a sound track's Sound page, the Mod page's envelopes, LFOs, accumulator
+    /// and arpeggio, and the FX page's slots. A page with none is rows of settings
+    /// (`TrackPage::page_rows`). The cursor, `j`, `k`, `h`, `l`, `{` and `}` go through whatever
+    /// devices a page gives, laid out as its rack ([`rack_places`]), so a page becomes a rack by
+    /// giving them.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
@@ -70,32 +74,27 @@ impl Page {
             Self::Fx => fx::devices(track),
         }
     }
-
-    /// The page's rows, top to bottom, for a track with this machine.
-    pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
-        match (self, machine) {
-            (Self::Mod, _) => &MOD_ROWS,
-            // Each is a rack, whose rows depend on the machine or on what's in each slot: see
-            // `Page::devices`.
-            (Self::Sound | Self::Fx, _) => &[],
-        }
-    }
 }
 
 /// The place nearest a row and field that holds a setting: in a row with none, the nearest row
 /// above with some, and on a hole, the nearest setting along the row, the left one of two as near.
-/// On a rack, a device's title with nothing in it, as the Sound page's `Output` has, stands for
-/// the device's first row with some, so `}` onto it lands in the device rather than above it.
+/// In a rack it's the nearest row in the same device, above or else below, so a device's title
+/// with nothing in it, as the Sound page's `Output` and the accumulator have, stands for its first
+/// row with some, and `}` onto it lands in the device rather than above it.
 fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize) -> (usize, usize) {
-    let empty = |row: usize| rows[row].iter().all(Option::is_none);
-    let mut row = row.min(rows.len().saturating_sub(1));
-    if rack && row.is_multiple_of(DEVICE_ROWS) && row < rows.len() && empty(row) {
-        let end = (row + DEVICE_ROWS).min(rows.len());
-        row = (row..end).find(|at| !empty(*at)).unwrap_or(row);
-    }
-    while row > 0 && empty(row) {
-        row -= 1;
-    }
+    let row = row.min(rows.len().saturating_sub(1));
+    let filled = |row: &usize| {
+        rows.get(*row)
+            .is_some_and(|row| row.iter().any(Option::is_some))
+    };
+    let row = if rack {
+        let top = row - row % DEVICE_ROWS;
+        let bottom = (top + DEVICE_ROWS).min(rows.len());
+        let above = (top..=row).rev().find(filled);
+        above.or_else(|| (row..bottom).find(filled)).unwrap_or(row)
+    } else {
+        (0..=row).rev().find(filled).unwrap_or(0)
+    };
     let places = rows.get(row).map_or(&[][..], Vec::as_slice);
     let field = (0..places.len())
         .filter(|at| places[*at].is_some())
@@ -141,17 +140,16 @@ impl TrackPage {
         track.map_or_else(Vec::new, |track| self.page.devices(track))
     }
 
-    /// The rows of the page showing, which depend on the track's kind and machine.
+    /// The rows of the page showing, on a page that isn't a rack: a fixed track's Sound page, which
+    /// depends on its kind. Every other page is a rack, whose rows are its devices'
+    /// (`Page::devices`).
     pub fn page_rows(&self, track: Option<&Track>) -> &'static [&'static [Control]] {
         let kind = track.map_or(TrackKind::Sound, |track| track.kind);
         match (self.page, kind) {
             (Page::Sound, TrackKind::Group(_)) => &GROUP_ROWS,
             (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
             (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
-            (Page::Mod, kind) if kind != TrackKind::Sound => &FIXED_MOD_ROWS,
-            _ => self
-                .page
-                .rows(track.map_or(Machine::Sampler, |track| track.machine)),
+            _ => &[],
         }
     }
 
@@ -181,11 +179,36 @@ impl TrackPage {
 
     /// Where the cursor is, as a row and a place in it that hold a setting. In a row with none,
     /// such as an empty slot's grid, it's the nearest row above with some, which in a slot is its
-    /// title at least. On a hole, it's the nearest setting along the row, the left one of two as
-    /// near.
+    /// title at least, and in a device whose title has nothing, such as the accumulator's, its
+    /// first row. On a hole, it's the nearest setting along the row, the left one of two as near.
     pub fn place(&self, track: Option<&Track>) -> (usize, usize) {
+        self.nearest(track, self.row, self.field)
+    }
+
+    /// The place nearest a row and field that holds a setting, as [`TrackPage::place`] finds it.
+    fn nearest(&self, track: Option<&Track>, row: usize, field: usize) -> (usize, usize) {
         let rack = !self.devices(track).is_empty();
-        place_in(&self.rows(track), rack, self.row, self.field)
+        place_in(&self.rows(track), rack, row, field)
+    }
+
+    /// On a rack, the devices in a device's column, top to bottom, which `j`, `k`, `{`, `}`, `gg`
+    /// and `G` keep to. Elsewhere, nothing.
+    fn column(&self, track: Option<&Track>, device: usize) -> Option<Vec<usize>> {
+        let devices = self.devices(track);
+        (!devices.is_empty()).then(|| rack_column(&devices, device.min(devices.len() - 1)))
+    }
+
+    /// The first row of the page, or its last, for `gg` and `G`: on a rack, of the top or the
+    /// bottom device in the cursor's column.
+    fn end_row(&self, last: bool, track: Option<&Track>) -> usize {
+        let Some(column) = self.column(track, self.row / DEVICE_ROWS) else {
+            return if last { usize::MAX } else { 0 };
+        };
+        match (last, column.first(), column.last()) {
+            (false, Some(top), _) => top * DEVICE_ROWS,
+            (true, _, Some(bottom)) => bottom * DEVICE_ROWS + DEVICE_ROWS - 1,
+            _ => 0,
+        }
     }
 
     /// What the cursor is on.
@@ -214,8 +237,7 @@ impl TrackPage {
     /// Put the cursor at the place nearest a row and field that holds a setting, off any fine
     /// digits.
     pub fn move_to(&mut self, track: Option<&Track>, row: usize, field: usize) {
-        let rack = !self.devices(track).is_empty();
-        (self.row, self.field) = place_in(&self.rows(track), rack, row, field);
+        (self.row, self.field) = self.nearest(track, row, field);
         self.fine = false;
     }
 
@@ -229,12 +251,16 @@ impl TrackPage {
             Cmd::Move(Motion::NextBeat | Motion::PreviousBeat)
                 if self.devices(track).is_empty() =>
             {
-                return Outcome::Refused("{ and } go between slots on the FX page");
+                return Outcome::Refused("{ and } go between devices, and this page has none");
             }
             Cmd::Move(Motion::NextBeat) => self.move_device(times as isize, track),
             Cmd::Move(Motion::PreviousBeat) => self.move_device(-(times as isize), track),
-            Cmd::Move(Motion::First) => self.move_row_keeping_field(0, track),
-            Cmd::Move(Motion::Last) => self.move_row_keeping_field(usize::MAX, track),
+            Cmd::Move(Motion::First) => {
+                self.move_row_keeping_field(self.end_row(false, track), track);
+            }
+            Cmd::Move(Motion::Last) => {
+                self.move_row_keeping_field(self.end_row(true, track), track);
+            }
             Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.step_right(track)),
             Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.step_left(track)),
             Cmd::Move(Motion::RowStart) => self.row_end(false, track),
@@ -268,8 +294,16 @@ impl TrackPage {
         }
     }
 
+    /// The row in the device beside the cursor's, on its right or its left, that's level with the
+    /// cursor's row, on a rack with a device there.
+    fn row_beside(&self, track: Option<&Track>, row: usize, right: bool) -> Option<usize> {
+        let devices = self.devices(track);
+        let beside = device_beside(&devices, row / DEVICE_ROWS, right)?;
+        Some(beside * DEVICE_ROWS + row % DEVICE_ROWS)
+    }
+
     /// `l`: onto the fine digits of a setting that has them, and then on to the next, over any
-    /// holes.
+    /// holes. Past the last, it goes into the device on the right, if there's one, on the same row.
     fn step_right(&mut self, track: Option<&Track>) {
         if !self.fine && self.has_fine_here(track) {
             self.fine = true;
@@ -281,10 +315,14 @@ impl TrackPage {
             .enumerate()
             .skip(field + 1)
             .find_map(|(at, place)| place.and(Some(at)));
-        self.move_to(track, row, next.unwrap_or(field));
+        match (next, self.row_beside(track, row, true)) {
+            (None, Some(beside)) => self.move_to(track, beside, 0),
+            _ => self.move_to(track, row, next.unwrap_or(field)),
+        }
     }
 
-    /// `h`: back off the fine digits, and onto the previous setting's if it has them.
+    /// `h`: back off the fine digits, and onto the previous setting's if it has them. Before the
+    /// first, it goes into the device on the left, if there's one, to its last on the same row.
     fn step_left(&mut self, track: Option<&Track>) {
         if self.fine {
             self.fine = false;
@@ -294,20 +332,33 @@ impl TrackPage {
         let before = self.rows(track)[row][..field]
             .iter()
             .rposition(Option::is_some);
-        self.move_to(track, row, before.unwrap_or(field));
-        self.fine = before.is_some() && self.has_fine_here(track);
+        let beside = self.row_beside(track, row, false);
+        match (before, beside) {
+            (None, Some(beside)) => self.move_to(track, beside, usize::MAX),
+            _ => self.move_to(track, row, before.unwrap_or(field)),
+        }
+        self.fine = (before.is_some() || beside.is_some()) && self.has_fine_here(track);
     }
 
     /// Move a row up or down, past any with nothing in them, as an empty slot's grid is, aiming
-    /// for the field `j` and `k` aim for.
+    /// for the field `j` and `k` aim for. On a rack it keeps to the cursor's column of devices,
+    /// going on into the title of the one below, or the last row of the one above.
     fn step_row(&mut self, by: isize, track: Option<&Track>) {
         let wanted = self.wanted_field();
         let rows = self.rows(track);
-        let mut row = self.place(track).0;
-        while let Some(next) = row.checked_add_signed(by).filter(|next| *next < rows.len()) {
-            row = next;
-            if rows[row].iter().any(Option::is_some) {
-                self.move_to(track, row, wanted);
+        let here = self.place(track).0;
+        let order: Vec<usize> = match self.column(track, here / DEVICE_ROWS) {
+            Some(column) => column
+                .iter()
+                .flat_map(|device| device * DEVICE_ROWS..(device + 1) * DEVICE_ROWS)
+                .collect(),
+            None => (0..rows.len()).collect(),
+        };
+        let mut at = order.iter().position(|row| *row == here).unwrap_or(0);
+        while let Some(next) = at.checked_add_signed(by).filter(|next| *next < order.len()) {
+            at = next;
+            if rows[order[at]].iter().any(Option::is_some) {
+                self.move_to(track, order[at], wanted);
                 break;
             }
         }
@@ -337,15 +388,23 @@ impl TrackPage {
         self.move_to(track, row, field);
     }
 
-    /// Go to a device some way from the cursor's, on the same row and column, stopping at either
-    /// end of the rack. The row and column are kept as they were, so they come back after a
-    /// device that hasn't got them, such as an empty slot.
+    /// Go to a device some way up or down from the cursor's, in its column of the rack, on the
+    /// same row and column, stopping at either end. The row and column are kept as they were, so
+    /// they come back after a device that hasn't got them, such as an empty slot.
     fn move_device(&mut self, by: isize, track: Option<&Track>) {
         let count = self.devices(track).len();
-        let device = (self.row / DEVICE_ROWS)
+        let here = (self.row / DEVICE_ROWS).min(count.saturating_sub(1));
+        let Some(column) = self.column(track, here) else {
+            return;
+        };
+        let at = column
+            .iter()
+            .position(|device| *device == here)
+            .unwrap_or(0);
+        let to = at
             .saturating_add_signed(by)
-            .min(count.saturating_sub(1));
-        self.row = device * DEVICE_ROWS + self.row % DEVICE_ROWS;
+            .min(column.len().saturating_sub(1));
+        self.row = column[to] * DEVICE_ROWS + self.row % DEVICE_ROWS;
     }
 }
 

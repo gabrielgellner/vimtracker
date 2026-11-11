@@ -566,10 +566,13 @@ built from, so a new page uses them rather than working out its layout again:
     *   `device`: `Device`, a device's rounded frame 9 rows tall (`DEVICE_HEIGHT`), its title on
         the top border (its identity, dim, its switch's `toggle` or the room for one, and its
         title controls, bold while it has the cursor), its brighter frame while it has the cursor, and the areas of its
-        settings and its panel.
+        settings and its panel; and `rack_areas`, where each device of a rack goes from its band
+        and side, full width or a half with `HALF_GAP` between, going by whole bands to keep the
+        cursor's in view where fewer fit.
     *   `grid`: `SettingsGrid`, up to four columns of three rows with holes, at `CellWidths`, read
         through the `CellSource` trait (a setting's name, value and `ValueBar`), so it knows
-        nothing of `App`; and `faded`, for a device switched out.
+        nothing of `App`; and `faded`, for a device switched out. `CellWidths::FX` has bars, and
+        `CellWidths::COMPACT` none, for a half-width device whose panel shows what its values do.
     *   `panel`: `GraphicPanel`, faint square boxes side by side, with an image's placeholders or a
         meter's cells inside and a caption in the bottom border, such as `GR`.
 
@@ -586,24 +589,33 @@ back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine 
 is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
-    track and its row tables for the fixed tracks, `modulation.rs` the Mod page's, and `fx.rs` the
-    slots; `controls.rs` has `Control`, what each setting is called and holds on a track.
-*   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s, the FX
-    page a slot each (`DeviceSpec::slot`); a `DeviceSpec` is its identity, its title controls over
-    the grid's first columns and its grid of `Control`s, built by `DeviceSpec::new` from a model's
-    `Grid` (`vt-model`'s `grid.rs`), as `Insert::grid` is. A page with devices is a rack: its cursor
-    rows are the devices' rows one after another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0`
-    and `$` step over and `j` and `k` land beside, `TrackPage::device_cursor` reads the cursor as a
-    device, a row (the title is 0) and a column, and `{` and `}` move by devices; a title with
-    nothing in it stands for its device's first settings row. A sound track's Sound page is a rack
-    of four (`sound::devices`): the Machine, from `Machine::grid` with `Machine::type_param` in its
-    title, and the Filter, Output and Play, each a fixed grid of the track's own controls. A page
-    or track that gives none is rows of settings (`Page::rows`, `TrackPage::page_rows`) with no
-    holes, as the fixed tracks' Sound pages are.
-*   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs`: a device's
-    frame and title (`widgets::device`), its grid read through a `CellSource` (`widgets::grid`,
-    `CellWidths::FX` and `CellWidths::SOUND`, whose value has room for its fine digits), and its
-    panel (`widgets::panel`).
+    track and its row tables for the fixed tracks, `modulation.rs` the Mod page's devices, and
+    `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
+    track.
+*   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
+    page a slot each (`DeviceSpec::slot`), and the Mod page an envelope, then the LFO beside it,
+    for each number, then the accumulator and the arpeggio (decision 151). A `DeviceSpec` is its
+    identity, its title controls over the grid's first columns, its grid of `Control`s and its
+    width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
+    `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're
+    read: a full-width device has a band to itself, and two half-width ones in a row share one,
+    left and right. A page with devices is a rack: its cursor rows are the devices' rows one after
+    another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0` and `$` step over and `j` and `k`
+    land beside, and `TrackPage::device_cursor` reads the cursor as a device, a row (the title is
+    0) and a column; a row with nothing in it, such as an empty title, stands for the nearest row
+    with something in the same device. `j`, `k`, `{`, `}`, `gg` and `G` keep to the cursor's
+    column of devices (`rack_column`), and `h` and `l` go on past a row's ends into the device
+    beside it (`device_beside`). A sound track's Sound page is a rack of four (`sound::devices`):
+    the Machine, from `Machine::grid` with `Machine::type_param` in its title, and the Filter,
+    Output and Play, each a fixed grid of the track's own controls. A track whose page gives none
+    is rows of settings (`TrackPage::page_rows`) with no holes, as the fixed tracks' Sound pages
+    are.
+*   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs` and the Mod
+    page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
+    read through a `CellSource` (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
+    value has room for its fine digits, and `CellWidths::COMPACT`, with no bar, for the Mod page's
+    half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
+    `widgets::device::rack_areas`.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -758,7 +770,7 @@ macOS, the one platform the golden hashes hold on.
 | Golden renders | `crates/vt-engine/tests/golden/`, through `tests/support/` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, under `rt_guard` | That a block allocates and frees nothing |
-| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's Sound and Mod pages (`track_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
+| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's Sound page and settings (`track_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
 | Graphics | Unit tests in `kitty.rs` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/probe.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, the analysis thread and its cache, and importing kits from Ableton |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
