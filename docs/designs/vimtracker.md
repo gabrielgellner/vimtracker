@@ -1117,7 +1117,7 @@ source** that chooses what to write. Those are built when a second generator nee
 with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there. Issue 18's live
 state is deferred until plain values are found wanting. Selecting and pressing `S` again reshapes, from the values now there.
 
-**Sweep.** A sweep covers one column, Velocity or FX, across at least two rows. A multi-column, note-column or instrument-column
+**Sweep.** A sweep covers one column, Note, Velocity, Nudge, gate length or FX, across at least two rows (decision 171 for the note's columns). A multi-column, gate-pulses or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
 highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
 first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). `Where` chooses the
