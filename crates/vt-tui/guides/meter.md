@@ -108,10 +108,16 @@ setting under the cursor. It's off until you turn it on: `=` turns it on and `-`
 `i` or Enter switch it, and `x` puts it back off. This machine remembers it, in
 `~/.config/vimtracker/wheel.ron`.
 
-While it's on, scrolling up raises the setting under the cursor and scrolling down lowers
-it, wherever `=` and `-` change something, a selection included. Where the pointer is
-doesn't matter, and clicks and drags do nothing. The guide to selecting and
-editing says how far each tick goes.
+While it's on, the fingers going up or right raise the setting under the cursor and down
+or left lower it, as a level bar fills, wherever `=` and `-` change something, a
+selection included. Shift takes the large step. Where the pointer is doesn't matter, and
+clicks and drags do nothing. The guide to selecting and editing says how far each tick
+goes.
+
+The row below, `Direction`, says which way: with the fingers, as it starts, or against
+them. vimtracker asks macOS whether it scrolls naturally as it starts, so the value
+follows the fingers either way. `=`, `-`, `K`, `i` or Enter switch it, and `x` puts it
+back with the fingers. It's kept in `wheel.ron` too.
 
 kitty and Ghostty send vimtracker the mouse while it's on, so a plain drag no longer
 selects text. Hold Shift and drag to select, in either. Turning it off gives the terminal
