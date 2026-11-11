@@ -78,6 +78,9 @@ reference plugin.
 | `filter-taper-ladder` | Ladder, LP24, the same | The Drop's PRD, 4 poles | the same |
 | `filter-taper-ms20`, `filter-taper-ms20-ms2` | MS20 LP and HP, the same | The Drop's MS1, and MS2 | the same |
 | `filter-taper-ours` | Diode and Dirty, the same | the Sound page's drawing | the same |
+| `filter-refs-svf` | the clean LP, HP, BP and notch at 12 dB | The Drop's OSR and Filter SEM | sweep response at 3 cutoffs, at Res 0, half way to ringing and 95% of the way, written by `filter_refs.py` |
+| `filter-refs-ladder` | Ladder, LP24 | The Drop's PRD and Filter MINI | the same |
+| `filter-refs-ms20` | MS20 LP and HP | The Drop's MS1 and Filter MS-20 | the same |
 | `acid-filter` | Acid's diode ladder | Acid V | a held note's harmonics |
 | `acid-cutoff` | Acid's Cutoff, 16 steps | Acid V's | centroid and peak against the knob (#295) |
 | `acid-cutoff-peak` | Acid's Cutoff at Res 90%, 17 steps | Acid V's | where the filter rings, its height and the bass |
@@ -119,6 +122,57 @@ The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the r
 100 to 125%, where it self-oscillates. Their `taper` report reads each step's sweep for how far the
 peak stands over the passband three octaves away, and whether the filter is ringing by itself near
 Cut as the sweep ends, two octaves and more past it.
+
+### The filter references
+
+`filter_refs.py` checks each of the track filter's circuits against two independent references,
+the circuit of The Drop it's paired with and an Arturia filter modelled on the same one, and takes
+where they agree as the target, as the nuance suite does for the Acid (decision 137):
+
+```sh
+uv run filter_refs.py                    # every circuit, about 2 minutes once the references are kept
+uv run filter_refs.py --circuit ms20     # one: svf, ladder or ms20
+uv run filter_refs.py --write-specs      # and write specs/filter-refs-*.toml from the same settings
+```
+
+| Ours | The Drop | Arturia |
+|---|---|---|
+| `LP`, `HP`, `BP`, `Notch` at 12 dB | OSR, two poles | Filter SEM |
+| `Ladder`, `LP24` | PRD, four poles | Filter MINI |
+| `MS20 LP`, `MS20 HP` | MS1, two poles | Filter MS-20 |
+
+It maps each side's knobs by measuring: The Drop, Filter SEM and Filter MS-20 have their cutoff in
+hertz, and Filter MINI's knob is set where, with no resonance, it passes 12 dB under its passband,
+as a four-pole ladder's four equal poles do at its cutoff. Each Res knob is turned in 33 steps at
+200 Hz, 988 Hz and 5 kHz, our first 85% against each reference's turn up to where it starts to
+ring, which it measures for the Arturia filters and which is The Drop's 100%. Filter SEM never
+rings, so its whole turn is set against our 85%. Then, from quiet sweeps, a click and a stepped
+sine: the slope's shape at Res 0, the peak's height along the way to ringing and the passband it
+takes, the peak's place, width and fall at the same height of peak on every side, its ringing's
+pitch and level at six cutoffs, and the harmonic distortion at stepped levels. The page,
+`out/filter-refs/index.html`, and `consensus.json` have each measure's consensus, as
+`consensus.py` gives it, and plots of the peak and the passband along Res.
+
+Reference renders are kept in `out/filter-refs/cache/`, so a run after a change to our code
+compares with the same reference samples, and `--fresh` renders them again; ours are kept by the
+binary's time and size. Each Arturia filter starts from its `Default` preset, its state given
+twice, with everything that isn't the bare filter switched off, as its spec says. Found by
+measuring, on 2026-11-10:
+
+- **Filter MINI**'s `limit_resonance` does the opposite of its name: off, as it loads, the
+  resonance stops growing at 0.74 and never rings; on, it rings from 0.75. Its input's coupling
+  takes 2.3 dB at 20 Hz, so its response with the knob open is taken out under 1 kHz.
+- **Filter SEM** never self-oscillates, at any resonance, as an SEM doesn't. Its input's coupling
+  takes 3.2 dB at 20 Hz, taken out the same way. Its mode knob is low-pass at 0, a notch at 0.5,
+  half the low-pass and half the high-pass, 6 dB down, and high-pass at 1.
+- **Filter MS-20** takes a new setting only at its next render: its cutoff stays where the last
+  case left it for a whole render, and a pre-roll doesn't help, so a spec gives it `settle = true`
+  and `render_reference.py` plays it a buffer of silence with each case's settings first. Its
+  distortion's filters dull the top by 10 dB at 16 kHz even at no drive, so its dry/wet is at 0.
+  Its `Clean` mode is linear until it clips at 0 dBFS, and `Dirty` clips everything over
+  −12 dBFS. Its high-pass and low-pass are in series, so the one not measured is left open, and
+  that open response, which lifts the bass by up to 4.6 dB around 60 Hz, is taken out of every
+  other. Its `limit_resonance` stops it ringing, as its name says, so it's off.
 
 The Acid's filter is inside the voice, where the probe can't feed it a sweep, so `acid-filter`
 reads its shape from a held sawtooth's harmonics on both sides. The track filter's `Diode` type is
@@ -248,7 +302,9 @@ whose sequencer plays its own pattern from a held key, so a spec can start a plu
 preset, read from `/Library/Arturia/Presets/<plugin>/`, with `preset = "Default"`, and change
 settings that aren't parameters with `state`, such as `state = { Sequencer_OnOff = 0 }`
 (`arturia.py`). These are the plugin's saved settings, as a host keeps them in a project, changed
-by name. Acid V takes them only when given them twice, which `render_reference.py` does.
+by name. Acid V takes them only when given them twice, which `render_reference.py` does. A
+reference that takes a new setting only at its next render, as Filter MS-20 does, is given
+`settle = true`, and played a buffer of silence with each case's settings before it renders.
 
 ## Ableton Live's devices
 

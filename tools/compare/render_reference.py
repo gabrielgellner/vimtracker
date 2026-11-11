@@ -16,6 +16,9 @@ A reference's section can say, beside its plugin, parameters and state:
   where they would without it.
 - `wake_note`, a MIDI note played for a tenth of a second at the pre-roll's start, for a plugin
   that stays silent until it's had one.
+- `settle = true`, for a plugin that takes a new setting only at its next render, as Arturia's
+  Filter MS-20 does: its cutoff stays where the last case left it for a whole render, and a
+  pre-roll doesn't help. It's given one buffer of silence with the case's settings first.
 """
 
 from __future__ import annotations
@@ -96,6 +99,8 @@ def render(spec: specs.Spec, case: str | None, reference: Reference | None = Non
     buffer_size = int(section.get("buffer_size", DEFAULT_BUFFER_SIZE))
     channels = int(section.get("channels", 2))
     plugin, rate = reference.plugin, spec.rate
+    if section.get("settle"):
+        plugin(np.zeros((channels, buffer_size), dtype=np.float32), rate, buffer_size=buffer_size, reset=True)
     preroll = math.ceil(float(section.get("preroll", 0.0)) * rate / buffer_size) * buffer_size
     if spec.plays_notes:
         frames = specs.duration_frames(spec)

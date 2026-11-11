@@ -19,6 +19,11 @@ use crate::dsp::filters::korg35::{self, Korg35};
 
 /// How far `Drive` turns up what goes into the filter, at full.
 const DRIVE_GAIN: f32 = 7.0;
+/// How much quieter `MS20 LP` takes its input into the Korg 35, and louder its output, so its
+/// saturation, and its ringing at full `Res`, sit 2.3 dB higher. Its low-pass rang 2.3 dB under
+/// where The Drop's MS1 and Arturia's Filter MS-20 agree, from 640 Hz to 3.6 kHz, where its
+/// high-pass already rang with them (decision 137). A quiet sound comes through the same.
+const KORG_LOW_HEADROOM: f32 = 1.3;
 /// Where the ladder's feedback starts to self-oscillate, just past 4.
 const LADDER_FEEDBACK: f32 = 4.3;
 /// A stage's slope can't fall below this, or a loud signal would stop it responding.
@@ -49,6 +54,16 @@ const TANH_RANGE: f32 = 4.0;
 /// The damping of the second filter a clean low-pass or high-pass goes through for 24 dB, which has
 /// no resonance of its own: `1 / Q` for a Q of 0.707.
 const FLAT_DAMPING: f32 = std::f32::consts::SQRT_2;
+/// The clean low-pass's, high-pass's and notch's Q at Res 0: 0.5, two equal poles, so the gain at
+/// `Cut` is 6 dB down, as Cytomic's The Drop's OSR and Arturia's Filter SEM both have it, an OTA
+/// state-variable filter and the Oberheim SEM's, with their resonance down (decision 137).
+const CLEAN_LEAST_Q: f32 = 0.5;
+/// The band-pass's Q at Res 0, and the utility filters' and anything else's with no resonance: a
+/// Butterworth's 0.707. The two references' band-passes differ, OSR's being its high-pass and
+/// low-pass in series, so the band-pass is left as it was.
+const BAND_LEAST_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
+/// The clean types' Q at full `Res`, a strong but stable peak.
+const CLEAN_MOST_Q: f32 = 10.0;
 
 /// How the ladder's mixes weigh what goes into its first stage and what comes out of each of its
 /// four, after Vital's `LadderFilter`. Each stage is a one-pole low-pass `L`, so `HP24` is
@@ -75,8 +90,16 @@ const TAPER_POINTS: usize = 21;
 /// 15% takes them on to their most, which is where they were before, so they ring in tune at full
 /// `Res` as they did. The clean types never ring, and climb to their highest peak over the last 20%.
 ///
-/// The clean state-variable types against The Drop's OSR, an OTA state-variable filter.
+/// The clean low-pass, high-pass and notch against The Drop's OSR, an OTA state-variable filter,
+/// from a Q of 0.5 to 10 (decision 137): fitted by the peak's height over the passband, which now
+/// starts where OSR's does, at Res 0.
 const CLEAN_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.013, 0.028, 0.045, 0.064, 0.087, 0.112, 0.142, 0.175, 0.211, 0.248, 0.284, 0.319, 0.352,
+    0.383, 0.412, 0.44, 0.58, 0.72, 0.86, 1.0,
+];
+/// The clean band-pass, and the utility filters, from a Q of 0.707 to 10, as decision 120 fitted
+/// all the clean types against OSR.
+const BAND_TAPER: [f32; TAPER_POINTS] = [
     0.0, 0.021, 0.037, 0.051, 0.072, 0.096, 0.127, 0.161, 0.201, 0.243, 0.287, 0.331, 0.374, 0.413,
     0.45, 0.486, 0.52, 0.64, 0.76, 0.88, 1.0,
 ];
@@ -90,6 +113,13 @@ const LADDER_TAPER: [f32; TAPER_POINTS] = [
 const KORG_TAPER: [f32; TAPER_POINTS] = [
     0.0, 0.213, 0.35, 0.428, 0.478, 0.522, 0.573, 0.624, 0.671, 0.713, 0.751, 0.785, 0.815, 0.842,
     0.866, 0.887, 0.905, 0.926, 0.955, 0.977, 1.0,
+];
+/// `MS20 HP`'s own, against where MS1's high-pass and Arturia's Filter MS-20's agree (decision
+/// 137): on the low-pass's taper its peak stood 3 to 4 dB over both of theirs all the way up, so
+/// it's given less feedback up to 80%, then rings from the same place and reaches the same most.
+const KORG_HIGH_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.031, 0.063, 0.094, 0.19, 0.272, 0.351, 0.422, 0.49, 0.552, 0.608, 0.661, 0.71, 0.755,
+    0.795, 0.832, 0.866, 0.926, 0.955, 0.977, 1.0,
 ];
 /// The diode ladder and `Dirty`, which The Drop has nothing like, against its PRD too, the peak
 /// over the passband scaled to start from their own at Res 0 and reach where PRD's does just
@@ -140,11 +170,17 @@ pub(crate) fn soft_clip(x: f32) -> f32 {
 #[derive(Debug, Clone, Copy)]
 pub struct Coefficients {
     g: f32,
+    /// The band-pass's damping, `1 / Q`, and `a1`, `1 / (1 + g (g + k))`, which the utility
+    /// filters share at Res 0.
     k: f32,
     a1: f32,
+    /// The low-pass's, high-pass's and notch's, whose Q starts lower.
+    clean_k: f32,
+    clean_a1: f32,
     /// The same at twice the rate, for what saturates.
     double_g: f32,
     double_a1: f32,
+    double_clean_a1: f32,
     /// The ladder's feedback.
     ladder_k: f32,
     /// The diode ladder's cutoff as a fraction of twice the rate, set so it resonates at the cutoff
@@ -156,6 +192,8 @@ pub struct Coefficients {
     /// The Korg 35's one-pole coefficient at twice the rate, `g / (1 + g)`, and its feedback.
     korg_coefficient: f32,
     korg_feedback: f32,
+    /// `MS20 HP`'s feedback, on its own taper.
+    korg_high_feedback: f32,
     /// The `Dirty` filter's tuning at twice the rate.
     dirty: dirty_filter::Tuning,
     /// The second clean filter's `a1` for a low-pass or high-pass at 24 dB, at the rate and twice
@@ -180,10 +218,13 @@ impl Coefficients {
         let frequency = 20.0 * 1000_f32.powf(cutoff);
         let nyquist_safe = frequency.min(rate as f32 * 0.45);
         let g = (std::f32::consts::PI * nyquist_safe / rate as f32).tan();
-        // Q runs from a flat response to a strong but stable peak.
-        let q = 0.707 + tapered(&CLEAN_TAPER, resonance) * 9.3;
+        // Q runs from no peak to a strong but stable one.
+        let q = BAND_LEAST_Q + tapered(&BAND_TAPER, resonance) * (CLEAN_MOST_Q - BAND_LEAST_Q);
         let k = 1.0 / q;
         let a1 = 1.0 / (1.0 + g * (g + k));
+        let clean_q =
+            CLEAN_LEAST_Q + tapered(&CLEAN_TAPER, resonance) * (CLEAN_MOST_Q - CLEAN_LEAST_Q);
+        let clean_k = 1.0 / clean_q;
         let double_g = (std::f32::consts::PI * nyquist_safe / (2.0 * rate as f32)).tan();
         let ladder_k = tapered(&LADDER_TAPER, resonance) * LADDER_FEEDBACK;
         let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
@@ -193,8 +234,11 @@ impl Coefficients {
             g,
             k,
             a1,
+            clean_k,
+            clean_a1: 1.0 / (1.0 + g * (g + clean_k)),
             double_g,
             double_a1: 1.0 / (1.0 + double_g * (double_g + k)),
+            double_clean_a1: 1.0 / (1.0 + double_g * (double_g + clean_k)),
             ladder_k,
             diode_cutoff: {
                 let share = frequency / RESONANT_SHARE / (2.0 * rate as f32);
@@ -206,11 +250,24 @@ impl Coefficients {
             diode_resonance: tapered(&DIODE_TAPER, resonance),
             korg_coefficient: double_g / (1.0 + double_g),
             korg_feedback: tapered(&KORG_TAPER, resonance) * korg35::MOST_FEEDBACK,
+            korg_high_feedback: tapered(&KORG_HIGH_TAPER, resonance) * korg35::MOST_FEEDBACK,
             dirty,
             flat_a1: 1.0 / (1.0 + g * (g + FLAT_DAMPING)),
             double_flat_a1: 1.0 / (1.0 + double_g * (double_g + FLAT_DAMPING)),
             mix: Mix::new(mode, ladder_k, &dirty),
             smoothing: smoother::coefficient(rate),
+        }
+    }
+
+    /// A clean type's damping and `a1`, at the rate or twice it: the band-pass's own, or the
+    /// others'.
+    #[inline]
+    fn first(&self, kind: FilterType, double: bool) -> (f32, f32) {
+        match (kind == FilterType::BandPass, double) {
+            (true, false) => (self.k, self.a1),
+            (true, true) => (self.k, self.double_a1),
+            (false, false) => (self.clean_k, self.clean_a1),
+            (false, true) => (self.clean_k, self.double_clean_a1),
         }
     }
 
@@ -221,8 +278,7 @@ impl Coefficients {
         match (flat, double) {
             (true, false) => (FLAT_DAMPING, self.flat_a1),
             (true, true) => (FLAT_DAMPING, self.double_flat_a1),
-            (false, false) => (self.k, self.a1),
-            (false, true) => (self.k, self.double_a1),
+            (false, _) => self.first(kind, double),
         }
     }
 }
@@ -338,11 +394,11 @@ impl Svf {
     }
 
     /// The same at twice the rate with a soft clip in the feedback, so resonance saturates instead
-    /// of growing.
+    /// of growing, with the `a1` of the type's damping at that rate.
     #[inline]
-    fn tick_driven(&mut self, input: f32, c: &Coefficients) -> (f32, f32) {
+    fn tick_driven(&mut self, input: f32, c: &Coefficients, a1: f32) -> (f32, f32) {
         let v3 = input - self.ic2;
-        let v1 = c.double_a1 * self.ic1 + c.double_a1 * c.double_g * v3;
+        let v1 = a1 * self.ic1 + a1 * c.double_g * v3;
         let v2 = self.ic2 + c.double_g * v1;
         self.ic1 = 2.0 * soft_clip(v1) - self.ic1;
         self.ic2 = 2.0 * v2 - self.ic2;
@@ -431,8 +487,9 @@ impl Channel {
             self.mix.approach(&c.mix, c.smoothing);
         }
         if drive <= 0.0 && !kind.saturates() {
-            let (band, low) = self.svf.tick(input, c);
-            let first = svf_output(kind, input, band, low, c.k);
+            let (k, a1) = c.first(kind, false);
+            let (band, low) = self.svf.tick_tuned(input, c.g, a1);
+            let first = svf_output(kind, input, band, low, k);
             let (k, a1) = c.second(kind, false);
             let (band, low) = self.second.tick_tuned(first, c.g, a1);
             let second = svf_output(kind, first, band, low, k);
@@ -477,19 +534,21 @@ impl Channel {
         } else if kind == FilterType::Ms20LowPass {
             let korg = &mut self.korg;
             self.oversampler.process(input * gain, |x| {
-                korg.low_pass(x, c.korg_coefficient, c.korg_feedback)
+                korg.low_pass(x / KORG_LOW_HEADROOM, c.korg_coefficient, c.korg_feedback)
+                    * KORG_LOW_HEADROOM
             })
         } else if kind == FilterType::Ms20HighPass {
             let korg = &mut self.korg;
             self.oversampler.process(input * gain, |x| {
-                korg.high_pass(x, c.korg_coefficient, c.korg_feedback)
+                korg.high_pass(x, c.korg_coefficient, c.korg_high_feedback)
             })
         } else {
             let (svf, second) = (&mut self.svf, &mut self.second);
+            let (first_k, first_a1) = c.first(kind, true);
             let (k, a1) = c.second(kind, true);
             self.oversampler.process(input * gain, |x| {
-                let (band, low) = svf.tick_driven(x, c);
-                let first = svf_output(kind, x, band, low, c.k);
+                let (band, low) = svf.tick_driven(x, c, first_a1);
+                let first = svf_output(kind, x, band, low, first_k);
                 let (band, low) = second.tick_tuned(first, c.double_g, a1);
                 let after = svf_output(kind, first, band, low, k);
                 soft_clip(first + mix.series * (after - first))
@@ -532,7 +591,13 @@ pub fn response_db(
             )
     } else if matches!(kind, FilterType::Ms20LowPass | FilterType::Ms20HighPass) {
         let along = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
-        korg35::response(kind == FilterType::Ms20HighPass, c.korg_feedback, along)
+        let high = kind == FilterType::Ms20HighPass;
+        let feedback = if high {
+            c.korg_high_feedback
+        } else {
+            c.korg_feedback
+        };
+        korg35::response(high, feedback, along)
     } else if kind == FilterType::Ladder {
         // Four one-poles in a loop, `L = 1 / (1 + jw)`, each stage `L^i / (1 + k L^4)`, which is
         // `(1 + jw)^(4 - i) / ((1 + jw)^4 + k)`.
@@ -562,7 +627,7 @@ pub fn response_db(
             };
             top / (rest + k2 * w2)
         };
-        let first = single(c.k);
+        let first = single(c.first(kind, false).0);
         let (k, _) = c.second(kind, false);
         // The second filter's mix is all or nothing once settled, so only its power is needed.
         first * (1.0 + mix.series * (single(k) - 1.0))
@@ -783,9 +848,10 @@ mod tests {
 
     #[test]
     fn low_pass_passes_lows_and_slopes_at_12_db() {
+        // Two equal poles at Res 0, so 6 dB down at `Cut`, as OSR and Filter SEM are (decision 137).
         let db = |hertz| gain_db(FilterType::LowPass, 1000.0, 0.0, 0.0, hertz, 0.1);
         near(db(100.0), 0.0, 0.1);
-        near(db(1000.0), -3.0, 0.3);
+        near(db(1000.0), -6.0, 0.3);
         near(db(4000.0) - db(8000.0), 12.0, 3.0);
     }
 
@@ -793,7 +859,7 @@ mod tests {
     fn high_pass_is_the_mirror() {
         let db = |hertz| gain_db(FilterType::HighPass, 1000.0, 0.0, 0.0, hertz, 0.1);
         near(db(10_000.0), 0.0, 0.2);
-        near(db(1000.0), -3.0, 0.3);
+        near(db(1000.0), -6.0, 0.3);
         assert!(db(100.0) < -35.0, "{}", db(100.0));
     }
 
@@ -842,16 +908,19 @@ mod tests {
         // taper's clean low-pass had risen 9.9, 14.8 and 18.0 dB. The diode and `Dirty` follow
         // PRD's, scaled to reach where it does just before it rings. The Korg 35s' three quarters
         // is their linear response, which a quiet sweep hears 2 to 4 dB lower as it saturates, as
-        // MS1 does.
+        // MS1 does. The clean types now start from OSR's Q of 0.5 (decision 137), where they
+        // were at 0.707 and 1.4 dB higher, and `MS20 HP` follows where MS1's high-pass and
+        // Filter MS-20's agree on the peak's height, rather than MS1's rise from its own Res 0,
+        // as MS1's high-pass falls at 12 dB an octave where the MS-20's and ours fall at 6.
         let expected = [
             // OSR's low-pass, 4.9, 11.0 and 14.8, and high-pass, 4.5, 10.6 and 14.2.
-            (FilterType::LowPass, [4.7, 10.8, 14.5]),
-            (FilterType::HighPass, [4.7, 10.8, 14.5]),
+            (FilterType::LowPass, [4.8, 10.9, 14.6]),
+            (FilterType::HighPass, [4.9, 11.0, 14.7]),
             // PRD's, 6.6, 12.3 and 16.4.
             (FilterType::Ladder, [6.6, 12.3, 16.5]),
             // MS1's low-pass, 4.6, 11.4 and 20.3, and high-pass, 4.0, 10.3 and 19.4.
             (FilterType::Ms20LowPass, [3.8, 10.1, 22.3]),
-            (FilterType::Ms20HighPass, [5.1, 12.0, 24.4]),
+            (FilterType::Ms20HighPass, [1.7, 7.1, 17.2]),
             // PRD's scaled, 9.5, 17.7 and 23.6, and 6.5, 12.1 and 16.1.
             (FilterType::Diode, [9.9, 18.0, 23.9]),
             (FilterType::Dirty, [6.7, 12.7, 17.3]),
@@ -1180,6 +1249,49 @@ mod tests {
         // The MS-20's high-pass falls at 6 dB an octave under its peak, however high `Res` goes.
         for res in [0.0, 0.8] {
             near(db(res, 100.0) - db(res, 50.0), 6.0, 0.3);
+        }
+    }
+
+    #[test]
+    fn the_notch_starts_with_two_equal_poles_and_the_band_pass_as_it_was() {
+        // At Res 0 the notch is 4.4 dB down an octave from `Cut`, a Q of 0.5, as OSR's and Filter
+        // SEM's are (decision 137); the band-pass is still 3.3 dB down there, a Q of 0.707, as the
+        // two references' band-passes differ.
+        let notch = gain_db(FilterType::Notch, 1000.0, 0.0, 0.0, 2000.0, 0.1);
+        near(notch, -4.4, 0.3);
+        let band = gain_db(FilterType::BandPass, 1000.0, 0.0, 0.0, 2000.0, 0.1);
+        near(band, -3.3, 0.3);
+    }
+
+    /// The loudest a filter rings, in dBFS, from a second to two after it's struck once.
+    fn ringing_db(kind: FilterType, cut: f32, res: f32) -> f32 {
+        let c = Coefficients::new(cutoff(cut), res, RATE);
+        let mut channel = Channel::default();
+        channel.process(0.1, kind, 0.0, &c);
+        let frames = RATE as usize * 2;
+        let mut peak = 0.0_f32;
+        for frame in 0..frames {
+            let output = channel.process(0.0, kind, 0.0, &c);
+            if frame > frames / 2 {
+                peak = peak.max(output.abs());
+            }
+        }
+        20.0 * peak.max(1e-9).log10()
+    }
+
+    #[test]
+    fn the_korg_35s_ring_as_loud_as_ms1_and_filter_ms20_agree() {
+        // Where The Drop's MS1 and Arturia's Filter MS-20 agree, from 640 Hz to 3.6 kHz, both
+        // ring at full resonance at −5.1 to −6.5 dBFS (decision 137). `MS20 LP` rang 2.3 dB under
+        // that, and now rings as `MS20 HP` does.
+        for cut in [640.0, 1530.0, 3630.0] {
+            for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
+                let level = ringing_db(kind, cut, 1.0);
+                assert!(
+                    (-7.0..=-4.5).contains(&level),
+                    "{kind:?} at {cut} rang at {level} dBFS"
+                );
+            }
         }
     }
 

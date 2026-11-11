@@ -1,0 +1,173 @@
+# The MS20 types against MS1 and Filter MS-20, written by filter_refs.py --write-specs, which
+# measures far more of each circuit; this draws the responses, as each side gives them, with
+# nothing taken out. Each reference's state is as filter_refs.py sets it.
+#
+# The Drop: The Drop, as the filter-taper specs set it: no drive, nothing modulating, no glide,
+# its HD circuits, its resonance's whole turn at 125%, which self-oscillates over 100%, and only
+# the section measured switched on. Circuit MS1, two poles.
+#
+# Filter MS-20: Filter MS-20 from its Default preset, its state given twice: its output at 0 dB
+# rather than the preset's −1.52, its distortion's dry/wet at 0, as at 100% even with no drive its
+# own filters dull the top by 10 dB at 16 kHz, its `Clean` mode, which is linear until it clips at
+# 0 dBFS, where `Dirty` clips everything over −12 dBFS, and `limit_resonance` off, which lets it
+# ring, as its name says. Its function generator, envelope follower and sequencer modulate nothing
+# as it loads. It has a high-pass and a low-pass in series, so the one not measured is left open,
+# the high-pass at 20 Hz or the low-pass at 20 kHz, with no peak, and that open response is taken
+# out of every response measured: it lifts the bass by up to 4.6 dB around 60 Hz and takes 13 dB
+# off at 16 kHz. It takes a new setting only at its next render, so each render is given a buffer
+# of silence first.
+#
+#   uv run run.py specs/filter-refs-ms20.toml --report out/filter-refs-ms20.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[[references]]
+name = "The Drop"
+plugin = "/Library/Audio/Plug-Ins/VST3/The Drop.vst3"
+buffer_size = 512
+[references.parameters]
+lp_drive = 0.0
+hp_drive = 0.0
+lp_hd = true
+hp_hd = true
+lp_safe_res = false
+hp_safe_res = false
+lp_resmax = 125.0
+hp_resmax = 125.0
+lp_keytrack = false
+hp_keytrack = false
+mod_active = false
+glide = "0.000 mS"
+mix = 100.0
+pad = 0.0
+
+[[references]]
+name = "Filter MS-20"
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter MS-20.vst3"
+buffer_size = 512
+preset = "Default"
+settle = true
+[references.parameters]
+fx_level_db = 0.0
+movement = 100.0
+global_mix = 100.0
+master_cutoff = 0.0
+stereo = 0.0
+limit_resonance = false
+filter_mode = "Clean"
+distortion_drive_db = 0.0
+distortion_dry_wet = 0.0
+
+[report]
+kind = "response"
+title = "The MS20 types against MS1 and Filter MS-20"
+figure = ["filter"]
+row = "res"
+column = "cut"
+about = """
+The MS20 types against MS1 and Filter MS-20, by a quiet sine sweep's response at three cutoffs,
+at Res 0, half way to where each side starts to ring and 95% of the way, our first 85% of Res
+set against each reference's knob up to where it starts to ring. filter_refs.py measures each
+circuit further and gives the references' consensus. The Drop's MS1 is the MS-20's first filter,
+the Korg 35, which ours is; its MS2, the later OTA one, is in the filter-taper-ms20-ms2 spec.
+"""
+
+[[cases]]
+name = "lp-55-res00"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 200.0, lpf_peak = 0.0, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-55-res6C"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 50.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 200.0, lpf_peak = 35.74, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-55-resCE"
+ours = { filter = "MS20 LP", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 200.0, lpf_peak = 67.91, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-90-res00"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.889, lp_res = 0.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 988.889, lpf_peak = 0.0, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-90-res6C"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.889, lp_res = 50.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 988.889, lpf_peak = 35.74, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-90-resCE"
+ours = { filter = "MS20 LP", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 988.889, lp_res = 95.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 988.889, lpf_peak = 67.91, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-CC-res00"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.773, lp_res = 0.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 5023.773, lpf_peak = 0.0, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-CC-res6C"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.773, lp_res = 50.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 5023.773, lpf_peak = 35.74, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "lp-CC-resCE"
+ours = { filter = "MS20 LP", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "MS1", lp_4_pole = false, lp_freq = 5023.773, lp_res = 95.0 }, "Filter MS-20" = { lpf_cutoff_frequency_hz = 5023.773, lpf_peak = 67.91, hpf_cutoff_frequency_hz = 20.0, hpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-55-res00"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 200.0, hpf_peak = 0.0, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-55-res6C"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 50.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 200.0, hpf_peak = 31.88, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-55-resCE"
+ours = { filter = "MS20 HP", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 200.0, hpf_peak = 60.58, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-90-res00"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.889, hp_res = 0.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 988.889, hpf_peak = 0.0, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-90-res6C"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.889, hp_res = 50.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 988.889, hpf_peak = 31.88, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-90-resCE"
+ours = { filter = "MS20 HP", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 988.889, hp_res = 95.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 988.889, hpf_peak = 60.58, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-CC-res00"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.773, hp_res = 0.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 5023.773, hpf_peak = 0.0, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-CC-res6C"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.773, hp_res = 50.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 5023.773, hpf_peak = 31.88, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }
+
+[[cases]]
+name = "hp-CC-resCE"
+ours = { filter = "MS20 HP", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "MS1", hp_4_pole = false, hp_freq = 5023.773, hp_res = 95.0 }, "Filter MS-20" = { hpf_cutoff_frequency_hz = 5023.773, hpf_peak = 60.58, lpf_cutoff_frequency_hz = 20000.0, lpf_peak = 0.0 } }

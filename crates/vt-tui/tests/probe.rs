@@ -13,7 +13,7 @@ const LADDER_SPEC: &str = include_str!("../../../tools/compare/specs/filter-ladd
 const TIMING_SPEC: &str = include_str!("../../../tools/compare/specs/comp-timing.toml");
 /// Specs in tools/compare, which must all parse and prepare, with the nuance suite's, whose cases
 /// play notes of their own and name two references.
-const SPECS: [&str; 26] = [
+const SPECS: [&str; 29] = [
     include_str!("../../../tools/compare/specs/nuance-accents.toml"),
     include_str!("../../../tools/compare/specs/nuance-chirp.toml"),
     include_str!("../../../tools/compare/specs/nuance-chirp-riff.toml"),
@@ -40,6 +40,9 @@ const SPECS: [&str; 26] = [
     include_str!("../../../tools/compare/specs/filter-ours.toml"),
     include_str!("../../../tools/compare/specs/filter-ringing.toml"),
     include_str!("../../../tools/compare/specs/filter-ringing-ours.toml"),
+    include_str!("../../../tools/compare/specs/filter-refs-svf.toml"),
+    include_str!("../../../tools/compare/specs/filter-refs-ladder.toml"),
+    include_str!("../../../tools/compare/specs/filter-refs-ms20.toml"),
 ];
 
 fn loaded(text: &str) -> Loaded {
@@ -369,7 +372,8 @@ fn the_drawn_response_is_the_sound_pages() {
     assert!((drawn[0].0 - 20.0).abs() < 1e-3);
     assert!((drawn[drawn.len() - 1].0 - 20_000.0).abs() < 1.0);
     assert!(at(100.0).abs() < 0.5, "flat well under its cutoff");
-    assert!((at(988.0) + 3.0).abs() < 1.0, "3 dB down at it");
+    // Two equal poles at Res 0, as OSR and Filter SEM have it (decision 137).
+    assert!((at(988.0) + 6.0).abs() < 1.0, "6 dB down at it");
     assert!(at(10_000.0) < -30.0, "and falling well over it");
 }
 
