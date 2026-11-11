@@ -105,12 +105,15 @@ fn once_connected_the_rotos_choices_reach_the_program() {
     assert_eq!(fake.mode, Mode::Plugin);
 }
 
+/// Looks for the ports often and sends without pausing. The handshake's timeout stays the
+/// default's: no test here waits for it, and a short one under load would start a handshake again
+/// that was only slow, which the count of `DAW STARTED` would see.
 fn quick() -> Options {
     Options {
         daw: Daw::Bitwig,
         watch_every: Duration::from_millis(10),
         sysex_gap: Duration::ZERO,
-        handshake_timeout: Duration::from_millis(500),
+        ..Options::default()
     }
 }
 
