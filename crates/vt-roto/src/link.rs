@@ -58,6 +58,9 @@ enum Input {
     Midi(Vec<u8>),
     Send(ToRoto),
     Ccs(Vec<[u8; 3]>),
+    /// Say `DAW STARTED` and stop at once, before anything that came after it is read, so the
+    /// Roto's ping in answer is never answered by this link.
+    HandBack,
     Stop,
 }
 
@@ -123,8 +126,8 @@ impl Link {
     /// ping and takes it, as a running Live with the Roto's script does, then closes the link
     /// without answering, so this one never does.
     pub fn hand_back(self) {
-        let _ = self.input.send(Input::Send(ToRoto::DawStarted));
-        // Dropping it stops the thread once the message is sent, before any ping can come back.
+        // The thread stops as it sends it, whatever is in its inbox after, such as the ping.
+        let _ = self.input.send(Input::HandBack);
     }
 
     /// Everything that's happened since the last call, without waiting.
@@ -185,6 +188,10 @@ impl Worker {
                             self.send_raw(&cc);
                         }
                     }
+                }
+                Ok(Input::HandBack) => {
+                    self.send_sysex(&ToRoto::DawStarted);
+                    return;
                 }
                 Ok(Input::Stop) | Err(RecvTimeoutError::Disconnected) => return,
                 Err(RecvTimeoutError::Timeout) => {}
