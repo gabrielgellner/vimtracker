@@ -377,6 +377,7 @@ impl App {
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,
+                    TrackControl::VelocityDelta => track.velocity_delta,
                 };
                 self.set_hex(control, change(value));
             }
@@ -607,6 +608,7 @@ impl App {
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,
+                    TrackControl::VelocityDelta => track.velocity_delta,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));

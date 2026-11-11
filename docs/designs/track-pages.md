@@ -231,7 +231,7 @@ Yellow stays the only coloured frame, on the Keys box.
 * **Output.** `Trim`, `Level` and `Pan` in one column, then `Send A`, `Send B` and `Group`. Reading
   down, that's the signal's order, as decision 136 wants. The panel is the track's own level meter.
 * **Play.** How the track plays its notes: `Pitch`, `Glide` and `Gate`, then `Speed`, `Groove` and
-  `Reset`, then `Choke`. There's no panel, so its space stays empty, as an FX device with no
+  `Reset`, then `Choke` and `Velocity` (decision 166). There's no panel, so its space stays empty, as an FX device with no
   graphic does.
 
 **A four-setting drum synth** (Kick). The cursor is on the machine in the title, so Machine has the
@@ -748,7 +748,7 @@ waveform's 28 rows.
 | Sound | Machine | `Machine` | none | machine, type (Sample, Wave, Patch, Chord) | `Machine::grid()` | L sample thumbnail (sampler only) |
 | Sound | Filter | `Filter` | none | type, mode | Cut/Res/Drive, Low/High cut | L curve |
 | Sound | Output | `Output` | none | none | Trim/Level/Pan, sends/Group (master: Limiter) | text track meter (none on the master) |
-| Sound | Play | `Play` | none | none | Pitch/Glide/Gate, Speed/Groove/Reset, Choke | none |
+| Sound | Play | `Play` | none | none | Pitch/Glide/Gate, Speed/Groove/Reset, Choke/Velocity | none |
 | Sound (group, return) | Tracks, Sends in | the name | none | none | read-only list | none |
 | Mod | Env *n* | `Env n` | on/off (Q1) | destination | times, levels | H shape |
 | Mod | LFO *n* | `LFO n` | on/off (Q1) | destination | Shape/Rate/Depth, Phase/Retrig/(Fade) | H cycle with phase dot |

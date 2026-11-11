@@ -188,6 +188,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 TrackControl::LowCut => track.low_cut,
                 TrackControl::HighCut => track.high_cut,
                 TrackControl::Pitch => track.pitch,
+                TrackControl::VelocityDelta => track.velocity_delta,
             };
             let set = |value| Action::SetTrackBase {
                 track: at,
