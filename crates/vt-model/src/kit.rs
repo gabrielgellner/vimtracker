@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::label::is_name;
 use crate::project::ProjectError;
 
@@ -87,21 +86,10 @@ pub struct KitEntry {
     pub variants: Vec<PathBuf>,
     pub layers: Vec<PathBuf>,
     pub choke: Option<u8>,
+    /// In decibels, for its sample's entry in the bank rather than its track's level.
     pub gain: f32,
+    /// In semitones, for its sample's entry in the bank rather than its track's pitch.
     pub tune: i8,
-}
-
-impl KitEntry {
-    /// The level its track takes: unity, moved by its gain, a quarter of a dB a step.
-    pub fn level(&self) -> u8 {
-        let steps = (self.gain / DB_PER_LEVEL).round();
-        (f32::from(UNITY_LEVEL) + steps).clamp(0.0, f32::from(MAX_LEVEL)) as u8
-    }
-
-    /// The pitch its track takes: `80`, moved by its tune, a semitone a step.
-    pub fn pitch(&self) -> u8 {
-        (0x80 + i16::from(self.tune)).clamp(0, 0xFF) as u8
-    }
 }
 
 /// Read a kit file, its sounds in file order. A sound whose label can't be a name, or whose

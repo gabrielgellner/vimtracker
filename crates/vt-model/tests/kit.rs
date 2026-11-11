@@ -133,7 +133,7 @@ fn a_kit_file_writes_only_what_it_says_and_reads_back() {
 }
 
 #[test]
-fn a_sounds_gain_and_tune_are_its_tracks_level_and_pitch() {
+fn a_sounds_gain_and_tune_are_read_as_written_and_default_to_zero() {
     let path = kit(r#"(sounds: [
         (path: "a.wav"),
         (path: "b.wav", gain: -6.0, tune: 3),
@@ -141,10 +141,10 @@ fn a_sounds_gain_and_tune_are_its_tracks_level_and_pitch() {
         (path: "d.wav", gain: -100.0, tune: 48),
     ])"#);
     let kit = load_kit(&path).unwrap();
-    let tracks: Vec<(u8, u8)> = kit.sounds.iter().map(|s| (s.level(), s.pitch())).collect();
+    let read: Vec<(f32, i8)> = kit.sounds.iter().map(|s| (s.gain, s.tune)).collect();
     assert_eq!(
-        tracks,
-        [(0xE0, 0x80), (0xC8, 0x83), (0xF8, 0x50), (0x00, 0xB0)],
-        "a quarter of a dB and a semitone a step, within the level's scale"
+        read,
+        [(0.0, 0), (-6.0, 3), (20.0, -48), (-100.0, 48)],
+        "in decibels and semitones, as the file has them, out to the tune's ends"
     );
 }
