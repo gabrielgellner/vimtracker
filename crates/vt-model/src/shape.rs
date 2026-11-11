@@ -12,6 +12,12 @@ pub const MAX_BEND: i8 = 100;
 pub const WAVES: [Wave; 5] = [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square];
 /// How long a wave's cycle is unless told otherwise: a half note.
 pub const DEFAULT_RATE: Rate = Rate::Note(TICKS_PER_QUARTER as u32 * 2);
+/// How many hits a Euclidean `Where` starts with: in eight rows, the tresillo.
+pub const EUCLID_HITS: u16 = 3;
+const EUCLID: Where = Where::Euclid {
+    hits: EUCLID_HITS,
+    rotate: 0,
+};
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -78,6 +84,9 @@ pub enum Where {
     Every(u16),
     /// Each row with this percent chance.
     Chance(u8),
+    /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
+    /// those rows later, going round.
+    Euclid { hits: u16, rotate: u16 },
 }
 
 impl Where {
@@ -90,8 +99,36 @@ impl Where {
             Self::AllRows => "All rows",
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
+            Self::Euclid { .. } => "Euclid",
         }
     }
+}
+
+/// `hits` spread as evenly as they go over `rows`, by Bjorklund's algorithm, so 3 in 8 is the
+/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them.
+pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
+    if hits >= rows {
+        return vec![true; rows];
+    }
+    if hits == 0 {
+        return vec![false; rows];
+    }
+    // Pair the hits with the rests, then the pairs with what's left over, until one is left over.
+    let mut groups: Vec<Vec<bool>> = vec![vec![true]; hits];
+    let mut rest: Vec<Vec<bool>> = vec![vec![false]; rows - hits];
+    while rest.len() > 1 {
+        let pairs = groups.len().min(rest.len());
+        let left = if groups.len() > pairs {
+            groups.split_off(pairs)
+        } else {
+            rest.split_off(pairs)
+        };
+        for (group, tail) in groups.iter_mut().zip(rest) {
+            group.extend(tail);
+        }
+        rest = left;
+    }
+    groups.into_iter().chain(rest).flatten().collect()
 }
 
 /// The column being filled.
@@ -121,7 +158,7 @@ impl ShapeColumn {
     /// The choices of rows. A velocity means nothing without a note, so those only narrow them.
     pub fn wheres(self) -> Vec<Where> {
         match self {
-            Self::Velocity => vec![Where::Notes, Where::Every(4), Where::Chance(50)],
+            Self::Velocity => vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID],
             Self::Fx { .. } => vec![
                 Where::Commands,
                 Where::AllRows,
@@ -129,6 +166,7 @@ impl ShapeColumn {
                 Where::NoNotes,
                 Where::Every(4),
                 Where::Chance(50),
+                EUCLID,
             ],
         }
     }
@@ -291,26 +329,44 @@ pub fn targets(
     place: Where,
     seed: u64,
 ) -> Vec<usize> {
-    (range.first..=range.last)
+    let open: Vec<usize> = (range.first..=range.last)
+        .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
+        .collect();
+    if let Where::Euclid { hits, rotate } = place {
+        // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among
+        // the notes however they're spaced.
+        let pattern = euclid(usize::from(hits), open.len());
+        let later = usize::from(rotate) % open.len().max(1);
+        return open
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| pattern[(index + open.len() - later) % open.len()])
+            .map(|(_, row)| *row)
+            .collect();
+    }
+    open.into_iter()
         .filter(|row| {
-            let Some(step) = steps.get(*row) else {
-                return false;
-            };
-            if !column.can_take(step) {
-                return false;
-            }
+            let step = &steps[*row];
             let has_note = matches!(step.note, Note::On(_));
             let offset = row - range.first;
             match place {
                 Where::Notes => has_note,
                 Where::NoNotes => !has_note,
                 Where::Commands => column.value(step).is_some(),
-                Where::AllRows => true,
+                Where::AllRows | Where::Euclid { .. } => true,
                 Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
                 Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
             }
         })
         .collect()
+}
+
+/// How many rows of a range a column could change, which a Euclidean `Where` spreads its hits
+/// over.
+pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize {
+    (range.first..=range.last)
+        .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
+        .count()
 }
 
 /// The values a shape writes, by row. A ramp's ends are the first and last rows it fills, and rows
@@ -647,6 +703,68 @@ mod tests {
         assert_ne!(half, picked(50, 2));
         assert_eq!(picked(0, 1).len(), 0);
         assert_eq!(picked(100, 1).len(), 1000);
+    }
+
+    /// A pattern as `x` and `.`.
+    fn drawn(pattern: &[bool]) -> String {
+        pattern
+            .iter()
+            .map(|hit| if *hit { 'x' } else { '.' })
+            .collect()
+    }
+
+    #[test]
+    fn euclid_gives_toussaints_patterns() {
+        assert_eq!(drawn(&euclid(3, 8)), "x..x..x.");
+        assert_eq!(drawn(&euclid(5, 8)), "x.xx.xx.");
+        assert_eq!(drawn(&euclid(5, 16)), "x..x..x..x..x...");
+        assert_eq!(drawn(&euclid(4, 12)), "x..x..x..x..");
+        assert_eq!(drawn(&euclid(7, 16)), "x..x.x.x..x.x.x.");
+        assert_eq!(drawn(&euclid(0, 4)), "....");
+        assert_eq!(drawn(&euclid(4, 4)), "xxxx");
+        assert_eq!(drawn(&euclid(9, 4)), "xxxx");
+        assert!(euclid(3, 0).is_empty());
+    }
+
+    #[test]
+    fn a_euclidean_where_rotates_later_and_goes_round() {
+        let steps = notes(8);
+        let picked = |hits, rotate| {
+            let rows = targets(&steps, all(&steps), VEL, Where::Euclid { hits, rotate }, 1);
+            let mut pattern = vec![false; 8];
+            for row in rows {
+                pattern[row] = true;
+            }
+            drawn(&pattern)
+        };
+        assert_eq!(picked(3, 0), "x..x..x.");
+        assert_eq!(picked(3, 1), ".x..x..x");
+        assert_eq!(picked(3, 2), "x.x..x..");
+        assert_eq!(picked(3, 8), "x..x..x.", "a whole turn");
+        assert_eq!(picked(5, 0), "x.xx.xx.");
+        assert_eq!(picked(5, 3), "xx.x.xx.");
+    }
+
+    #[test]
+    fn a_euclidean_where_counts_among_the_notes() {
+        // Notes on 6 of 16 rows: 3 hits among them fall on every other note.
+        let mut steps = rows(&vec!["--- -- --- --- ---"; 16]);
+        for row in [0, 3, 4, 8, 11, 14] {
+            steps[row] = "C-3 -- --- --- ---".parse().unwrap();
+        }
+        let place = Where::Euclid { hits: 3, rotate: 0 };
+        assert_eq!(targets(&steps, all(&steps), VEL, place, 1), [0, 4, 11]);
+        assert_eq!(open_rows(&steps, all(&steps), VEL), 6);
+        // On an FX column, among the rows that could hold the command: not the one with another.
+        let steps = rows(&[
+            "--- -- --- --- ---",
+            "--- -- res:10 --- ---",
+            "--- -- --- --- ---",
+            "--- -- --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let place = Where::Euclid { hits: 2, rotate: 0 };
+        assert_eq!(targets(&steps, all(&steps), CUT, place, 1), [0, 3]);
     }
 
     #[test]

@@ -8,8 +8,8 @@ use vt_model::action::{Action, edit};
 use vt_model::lfo::{Rate, Shape as Wave, note_rates};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
-    DEFAULT_RATE, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES, Where,
-    default_ends,
+    DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
+    Where, default_ends, open_rows,
 };
 use vt_model::song::Song;
 
@@ -33,6 +33,8 @@ const PHASE_JUMP: i16 = 90;
 /// The longest `Run`, and how far a large step moves it.
 const MAX_RUN: i16 = 256;
 const RUN_JUMP: i16 = 4;
+/// How far a large step moves a Euclidean `Where`'s hits or rotation.
+const EUCLID_JUMP: i16 = 4;
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
 
@@ -51,6 +53,8 @@ pub enum ShapeRow {
     Run,
     Where,
     Amount,
+    Hits,
+    Rotate,
 }
 
 impl ShapeRow {
@@ -69,6 +73,8 @@ impl ShapeRow {
             Self::Run => "Run",
             Self::Where => "Where",
             Self::Amount => "Amount",
+            Self::Hits => "Hits",
+            Self::Rotate => "Rotate",
         }
     }
 }
@@ -91,7 +97,8 @@ pub struct ShapePanel {
 impl ShapePanel {
     /// The rows on show. `Fill` comes first, as it decides the rest: a wave and `Alternate` have
     /// their own settings in place of a curve, a `List` has its values in place of the two ends,
-    /// and `Amount` only means something for some choices of rows.
+    /// and `Amount` only means something for some choices of rows, as `Hits` and `Rotate` do for
+    /// a Euclidean one.
     pub fn rows(&self) -> Vec<ShapeRow> {
         let mut rows = vec![ShapeRow::Fill];
         if self.shape.kind != FillKind::List {
@@ -104,10 +111,18 @@ impl ShapePanel {
             FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
         });
         rows.push(ShapeRow::Where);
-        if matches!(self.shape.place, Where::Every(_) | Where::Chance(_)) {
-            rows.push(ShapeRow::Amount);
+        match self.shape.place {
+            Where::Every(_) | Where::Chance(_) => rows.push(ShapeRow::Amount),
+            Where::Euclid { .. } => rows.extend_from_slice(&[ShapeRow::Hits, ShapeRow::Rotate]),
+            _ => {}
         }
         rows
+    }
+
+    /// How many rows of the selection the column could change, which a Euclidean `Where`'s hits
+    /// are spread over.
+    pub fn open_rows(&self) -> usize {
+        open_rows(self.base_steps(), self.selection.range, self.column)
     }
 
     /// The steps underneath, as they were when the panel opened.
@@ -402,6 +417,7 @@ impl App {
         }
         self.change_shape(|panel| {
             let top = i16::from(panel.column.highest());
+            let open = panel.open_rows() as i16;
             let shape = &mut panel.shape;
             let hex = sign * if large { HEX_JUMP } else { 1 };
             let bend = sign * if large { BEND_JUMP } else { BEND_NUDGE };
@@ -446,6 +462,18 @@ impl App {
                     }
                     _ => {}
                 },
+                ShapeRow::Hits | ShapeRow::Rotate => {
+                    if let Where::Euclid { hits, rotate } = shape.place {
+                        let by = sign * if large { EUCLID_JUMP } else { 1 };
+                        shape.place = if panel.row == ShapeRow::Hits {
+                            let hits = moved(hits.min(open as u16) as i16, by, 0, open) as u16;
+                            Where::Euclid { hits, rotate }
+                        } else {
+                            let rotate = (rotate as i16 + by).rem_euclid(open.max(1)) as u16;
+                            Where::Euclid { hits, rotate }
+                        };
+                    }
+                }
             }
         });
     }
@@ -474,6 +502,18 @@ impl App {
                         Where::Chance(_) => Where::Chance(50),
                         place => place,
                     };
+                }
+                ShapeRow::Hits | ShapeRow::Rotate => {
+                    if let Where::Euclid { hits, rotate } = shape.place {
+                        shape.place = if panel.row == ShapeRow::Hits {
+                            Where::Euclid {
+                                hits: EUCLID_HITS,
+                                rotate,
+                            }
+                        } else {
+                            Where::Euclid { hits, rotate: 0 }
+                        };
+                    }
                 }
             }
             if !panel.rows().contains(&panel.row) {
@@ -619,6 +659,7 @@ impl App {
         let mut refused = None;
         self.change_shape(|panel| {
             let top = panel.column.highest();
+            let open = panel.open_rows() as u16;
             let shape = &mut panel.shape;
             match panel.row {
                 ShapeRow::From | ShapeRow::To => {
@@ -651,6 +692,21 @@ impl App {
                         shape.place = Where::Chance(percent.min(100) as u8);
                     }
                     _ => refused = Some("That amount isn't a whole number above 0"),
+                },
+                ShapeRow::Hits | ShapeRow::Rotate => match (shape.place, text.parse::<u16>()) {
+                    (Where::Euclid { rotate, .. }, Ok(hits)) if panel.row == ShapeRow::Hits => {
+                        shape.place = Where::Euclid {
+                            hits: hits.min(open),
+                            rotate,
+                        };
+                    }
+                    (Where::Euclid { hits, .. }, Ok(rotate)) => {
+                        shape.place = Where::Euclid {
+                            hits,
+                            rotate: rotate % open.max(1),
+                        };
+                    }
+                    _ => refused = Some("Hits and Rotate are whole numbers"),
                 },
                 // A wave here is laid out by rows, so a rate has to be in time with them.
                 ShapeRow::Rate => match text.parse::<Rate>() {

@@ -49,6 +49,17 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
             Where::Chance(percent) => format!("{percent}%"),
             _ => String::new(),
         },
+        ShapeRow::Hits => match shape.place {
+            Where::Euclid { hits, .. } => {
+                let open = panel.open_rows();
+                format!("{} of {open}", usize::from(hits).min(open))
+            }
+            _ => String::new(),
+        },
+        ShapeRow::Rotate => match shape.place {
+            Where::Euclid { rotate, .. } => rotate.to_string(),
+            _ => String::new(),
+        },
     }
 }
 
