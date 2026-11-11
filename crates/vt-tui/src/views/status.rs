@@ -502,6 +502,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         && let Some(hint) = app.sample_mode_hint()
     {
         hint
+    } else if app.status.is_empty()
+        && let Some(total) = app.adjusted_total()
+    {
+        // What the changes kept on the selection add up to stays in sight as it moves.
+        total
     } else {
         app.status.clone()
     };

@@ -433,8 +433,8 @@ fn transposing_a_beat_then_repeating_on_the_next_beat() {
     expected.extend(vec![up_d; 4]);
     let (mut app, _rt) = app_with(&start);
     keys(&mut app, "Vib>");
-    assert_eq!(app.mode, Mode::Normal);
-    keys(&mut app, "}Vib.");
+    assert_eq!(app.mode, Mode::VisualStep, "the selection stays until Esc");
+    keys(&mut app, "<Esc>}Vib.");
     assert_eq!(steps(&app), expected);
     keys(&mut app, "u");
     assert_eq!(steps(&app)[4], start[4], "undo takes back one change");
@@ -444,7 +444,8 @@ fn transposing_a_beat_then_repeating_on_the_next_beat() {
 #[test]
 fn reselect_restores_the_last_selection() {
     let (mut app, _rt) = app_with(&[A, B, C]);
-    keys(&mut app, "Vj>");
+    keys(&mut app, "Vj><Esc>");
+    assert_eq!(app.mode, Mode::Normal);
     keys(&mut app, "gv");
     assert_eq!(app.mode, Mode::VisualStep);
     assert_eq!(app.current_selection().range.last, 1);
@@ -1021,8 +1022,13 @@ fn visual_r_fills_notes_on_every_selected_step() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, "vGra");
     assert_eq!(steps(&app), [C3, C3, C3, C3]);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.cursor.step, 0, "back at the top of the selection");
+    assert_eq!(
+        app.mode,
+        Mode::VisualField,
+        "the selection stays, for another"
+    );
+    assert_eq!(app.cursor.step, 3, "the cursor's back where it was");
+    assert_eq!(app.current_selection().range.len(), 4);
 }
 
 #[test]
@@ -1066,11 +1072,11 @@ fn escape_leaves_a_selection_replace_with_nothing_written() {
     assert_eq!(app.cursor.step, 2);
     keys(&mut app, "r<Esc>");
     assert_eq!(steps(&app), [E, E, E]);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.mode, Mode::VisualField, "back to the selection");
+    assert_eq!(app.cursor.step, 2);
     // A later single replace isn't mistaken for the selection's.
-    keys(&mut app, "ra");
-    assert_eq!(steps(&app), [C3, E, E]);
+    keys(&mut app, "<Esc>ra");
+    assert_eq!(steps(&app), [E, E, C3]);
 }
 
 #[test]
@@ -1107,22 +1113,22 @@ fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
         steps(&app),
         [E, "--- -- res:7F --- ---", E, "--- -- cut:7F --- ---",]
     );
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.cursor.step, 3);
 }
 
 #[test]
 fn dot_repeats_a_selection_replace() {
     let (mut app, _rt) = app_with(&[E, E, E, E, E, E]);
-    keys(&mut app, "vjra");
+    keys(&mut app, "vjra<Esc>");
     // In Normal it covers as many steps again, from the cursor.
-    keys(&mut app, "jj.");
+    keys(&mut app, "j.");
     assert_eq!(steps(&app), [C3, C3, C3, C3, E, E]);
     keys(&mut app, "u");
     assert_eq!(steps(&app), [C3, C3, E, E, E, E]);
     // On a selection it covers that selection, and it doesn't run off the end.
     keys(&mut app, "vjjjj.");
     assert_eq!(steps(&app), [C3, C3, C3, C3, C3, C3]);
-    keys(&mut app, "u");
+    keys(&mut app, "u<Esc>");
     keys(&mut app, "G.");
     assert_eq!(steps(&app), [C3, C3, E, E, E, C3]);
     assert_eq!(steps(&app).len(), 6);
@@ -1901,7 +1907,10 @@ fn a_selection_reaches_other_tracks_and_clears_them_as_one_undo() {
 fn b_reaches_backwards_and_operators_change_each_track() {
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
     keys(&mut app, "WlvB=");
-    assert_eq!(app.cursor.track, 0, "it lands on the first track");
+    assert_eq!(
+        app.cursor.track, 1,
+        "the selection stays, and the cursor in it"
+    );
     assert_eq!(track_steps(&app, 0), ["C-3 41 cut:20 --- ---"]);
     assert_eq!(track_steps(&app, 1), ["C-3 41 cut:20 --- ---"]);
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
@@ -1970,7 +1979,7 @@ fn yank_and_paste_keep_each_tracks_part() {
 #[test]
 fn dot_repeats_across_as_many_tracks_and_gv_comes_back() {
     let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N], &[N, N]]);
-    keys(&mut app, "VW>j.");
+    keys(&mut app, "VW><Esc>j.");
     let up = "C#3 40 cut:20 --- ---";
     assert_eq!(track_steps(&app, 0), [up, up]);
     assert_eq!(track_steps(&app, 1), [up, up]);
@@ -1979,7 +1988,7 @@ fn dot_repeats_across_as_many_tracks_and_gv_comes_back() {
     keys(&mut app, "VW<Esc>");
     assert_eq!(app.cursor.track, 0, "Esc stays where it is");
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
-    keys(&mut app, "VW>gv");
+    keys(&mut app, "VW><Esc>gv");
     assert!(app.mode.is_visual());
     assert_eq!(app.current_selection().tracks.count(), 2);
 }
@@ -2259,4 +2268,175 @@ fn a_nudge_is_filled_on_notes_and_copied_and_cleared_with_the_velocity() {
         "llvjj=",
         &["C-3 50 +7 cut:20 --- ---", "C-3 40 +1 cut:20 --- ---", E],
     );
+}
+
+/// A key with Cmd, pressed and let go as the terminal sends it.
+fn with_cmd(app: &mut App, name: &str) {
+    use ratatui::crossterm::event::KeyEventKind;
+    let key = vt_tui::input::keys::parse_sequence(name).unwrap()[0];
+    let now = Instant::now();
+    app.key_event(key, KeyEventKind::Press, now);
+    app.key_event(key, KeyEventKind::Release, now);
+}
+
+#[test]
+fn a_selection_stays_through_repeated_adjusts_across_two_tracks() {
+    let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N], &[N, N]]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "vjW");
+    for key in ["+", "+", "-"] {
+        keys(&mut app, key);
+        assert_eq!(app.mode, Mode::VisualField, "still selected after {key}");
+    }
+    let up = "B-4 40 cut:20 --- ---";
+    assert_eq!(track_steps(&app, 0), [up, up]);
+    assert_eq!(track_steps(&app, 1), [up, up]);
+    assert_eq!(track_steps(&app, 2), [N, N], "the third wasn't reached");
+    assert_eq!(
+        app.history.undo_depth(),
+        depth + 3,
+        "each press is its own undo step"
+    );
+    assert_eq!(app.status, "+23 semitones");
+    // `>` and `<`, `C-a` and `C-x` keep it too, and count.
+    keys(&mut app, "<<^a");
+    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.status, "+22 semitones");
+}
+
+#[test]
+fn the_running_total_counts_each_columns_own_steps() {
+    let (mut app, _rt) = app_with(&[N, N]);
+    keys(&mut app, "lvj--");
+    assert_eq!(app.status, "-2 steps");
+    keys(&mut app, "+");
+    assert_eq!(app.status, "+1 large step, -2 steps");
+    assert_eq!(steps(&app), ["C-3 4E cut:20 --- ---"; 2]);
+    // It stays in sight as the selection moves, and goes with it.
+    keys(&mut app, "k");
+    assert_eq!(
+        app.adjusted_total().as_deref(),
+        Some("+1 large step, -2 steps")
+    );
+    keys(&mut app, "<Esc>");
+    assert_eq!(app.adjusted_total(), None);
+    assert!(app.status.is_empty(), "{}", app.status);
+    // A new selection starts from nothing, and presses that come back to where they were say so.
+    keys(&mut app, "v=-");
+    assert_eq!(app.status, "0 steps");
+    // On notes, with the scale on, `=` and `-` move through it in degrees, `+` in semitones.
+    let (mut app, _rt) = app_with(&[N]);
+    app.scale.on = true;
+    keys(&mut app, "v==+");
+    assert_eq!(app.status, "+12 semitones, +2 degrees");
+}
+
+#[test]
+fn undo_while_selected_takes_back_one_press_and_keeps_the_selection() {
+    let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
+    keys(&mut app, "vW++");
+    let octave = "C-4 40 cut:20 --- ---";
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 0), [octave]);
+    assert_eq!(track_steps(&app, 1), [octave]);
+    assert_eq!(app.mode, Mode::VisualField, "still selected");
+    assert_eq!(app.current_selection().tracks.count(), 2);
+    assert_eq!(app.status, "+12 semitones");
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 1), [N]);
+    assert_eq!(app.adjusted_total(), None, "nothing moved now");
+    keys(&mut app, "^r");
+    assert_eq!(track_steps(&app, 1), [octave]);
+    assert_eq!(app.status, "+12 semitones");
+    // Another press goes on from there, on the same selection.
+    keys(&mut app, "-");
+    assert_eq!(track_steps(&app, 0), ["B-3 40 cut:20 --- ---"]);
+    assert_eq!(track_steps(&app, 1), ["B-3 40 cut:20 --- ---"]);
+    assert_eq!(app.status, "+11 semitones");
+}
+
+#[test]
+fn undo_past_the_selections_own_changes_keeps_it_and_redo_comes_back_in_step() {
+    let (mut app, _rt) = app_with(&[N]);
+    keys(&mut app, "ra");
+    keys(&mut app, "v+u");
+    assert_eq!(app.adjusted_total(), None);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), [N], "the change from before the selection");
+    assert_eq!(app.mode, Mode::VisualField);
+    keys(&mut app, "^r");
+    assert_eq!(
+        app.adjusted_total(),
+        None,
+        "that change wasn't the selection's"
+    );
+    keys(&mut app, "^r");
+    assert_eq!(app.status, "+12 semitones");
+}
+
+#[test]
+fn d_x_and_y_end_a_kept_selection_and_gv_brings_it_back() {
+    let (mut app, _rt) = app_with(&[N, N, N]);
+    keys(&mut app, "vj+d");
+    assert_eq!(app.mode, Mode::Normal, "d ends it");
+    let cleared = "--- 40 cut:20 --- ---";
+    assert_eq!(steps(&app), [cleared, cleared, N], "the notes it covered");
+    keys(&mut app, "gv");
+    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.current_selection().range.len(), 2);
+    assert_eq!(app.adjusted_total(), None, "gv starts a new total");
+    keys(&mut app, "y");
+    assert_eq!(app.mode, Mode::Normal, "y ends it");
+    keys(&mut app, "Vx");
+    assert_eq!(app.mode, Mode::Normal, "x ends it");
+}
+
+#[test]
+fn dot_on_a_selection_repeats_a_press_and_keeps_it() {
+    let (mut app, _rt) = app_with(&[N, N]);
+    keys(&mut app, "vj+<Esc>");
+    assert_eq!(app.mode, Mode::Normal);
+    keys(&mut app, "gv.");
+    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(steps(&app), ["C-5 40 cut:20 --- ---"; 2]);
+    assert_eq!(app.status, "+12 semitones");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_keeps_the_selection_as_the_keys_they_stand_for() {
+    let (mut app, _rt) = app_with(&[N, N]);
+    keys(&mut app, "vj");
+    with_cmd(&mut app, "D-k");
+    with_cmd(&mut app, "D-k");
+    with_cmd(&mut app, "D-h");
+    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(steps(&app), ["B-4 40 cut:20 --- ---"; 2], "as + + -");
+    assert_eq!(app.status, "+23 semitones");
+    with_cmd(&mut app, "D-l");
+    with_cmd(&mut app, "D-j");
+    assert_eq!(steps(&app), ["C-4 40 cut:20 --- ---"; 2], "as = and _");
+    assert_eq!(app.status, "+12 semitones");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_changes_the_shape_panels_values_as_its_keys_do() {
+    let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
+    keys(&mut app, "lvGSj");
+    let shape = |app: &App| app.shape.as_ref().unwrap().shape;
+    let start = shape(&app);
+    let row = app.shape.as_ref().unwrap().row;
+    for (plain, cmd) in [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")] {
+        keys(&mut app, plain);
+        let by_plain = shape(&app);
+        assert_ne!(by_plain, start, "{plain} changes the start");
+        app.shape.as_mut().unwrap().shape = start;
+        with_cmd(&mut app, cmd);
+        assert_eq!(shape(&app), by_plain, "{cmd} as {plain}");
+        assert_eq!(app.shape.as_ref().unwrap().row, row, "without moving");
+        app.shape.as_mut().unwrap().shape = start;
+    }
+    // While a value's typed, Cmd keys type nothing.
+    keys(&mut app, "i");
+    with_cmd(&mut app, "D-l");
+    assert_eq!(app.shape.as_ref().unwrap().typing.as_deref(), Some(""));
 }

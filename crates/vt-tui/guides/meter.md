@@ -69,7 +69,8 @@ way, so nothing over full reaches your gear.
 ## The audio page
 
 `Space 7` opens the audio page: which device plays, its rate and its buffer. `j` and
-`k` choose a row, `=` and `-` step through its choices, `K` lists them, and `x` goes back
+`k` choose a row, `=` and `-` step through its choices, as do Cmd with `l` and `h`, or
+`k` and `j`, `K` lists them, and `x` goes back
 to the system's own. A change takes effect at once: the transport stops, and the song,
 undo, mutes and solos all stay. This machine remembers the choice for next time, in
 `~/.config/vimtracker/audio.ron`.

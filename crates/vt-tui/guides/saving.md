@@ -70,7 +70,8 @@ command changes, with undo where the command has it:
 part, the digits after the point. `Enter` on Audio opens the audio page.
 
 It moves as the track page does: `j` `k` go between rows and keep their column,
-`h` `l` between settings, `=` `-` `+` `_` change a value, `i` types one, as its
+`h` `l` between settings, `=` `-` `+` `_` change a value, as do Cmd with `l` `h` `k`
+`j` without moving, `i` types one, as its
 command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
 and switches the Limiter and Auto-jump, and `x` puts one back as a new project has it.
 

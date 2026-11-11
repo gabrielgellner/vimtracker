@@ -381,7 +381,7 @@ pub enum Shift {
 }
 
 /// How many 24ths of a step one large step of a nudge is: a sixth, as `DEL` counts.
-const LARGE_NUDGE: i32 = 4;
+pub const LARGE_NUDGE: i32 = 4;
 
 /// How much one large step is for a value in hex.
 const LARGE_HEX: i32 = 0x10;

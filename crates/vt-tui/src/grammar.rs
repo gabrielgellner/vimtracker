@@ -6,12 +6,14 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::selection::{
-    Block, FIRST_FX_ORDER, FX_GROUP, Field, Motion, Scope, Shift, StepRange, Target, first_value,
+    Block, FIRST_FX_ORDER, FX_GROUP, Field, LARGE_NUDGE, Motion, Scope, Shift, StepRange, Target,
+    first_value,
 };
 use vt_model::shape::{Shape, ShapeColumn};
+use vt_model::song::Song;
 use vt_model::step::{FxCommand, Note, Step};
 
-use crate::app::{App, Entry, Selection, TrackSpan};
+use crate::app::{App, Cursor, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -78,11 +80,230 @@ pub enum Cover {
     },
 }
 
+/// What a change kept on a selection moves its values by is counted in, for the running total.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unit {
+    Semitone,
+    /// A step along the scale, which is a different number of semitones from note to note.
+    Degree,
+    Step,
+    LargeStep,
+    /// A nudge's 24ths of a step.
+    Nudge,
+}
+
+impl Unit {
+    /// In the order the total names them.
+    const ALL: [Self; 5] = [
+        Self::Semitone,
+        Self::Degree,
+        Self::LargeStep,
+        Self::Step,
+        Self::Nudge,
+    ];
+
+    /// What a change of this kind moves the selection's first column by, as a unit and how many
+    /// of it each step is. A note is counted in semitones, an octave being 12, or in degrees of
+    /// the scale; any other value in the small and large steps of its own column.
+    fn of(kind: Shift, scope: Scope, scale_on: bool) -> (Self, i32) {
+        match kind {
+            Shift::Nudge => (Self::Nudge, 1),
+            Shift::NudgeLarge => (Self::Nudge, LARGE_NUDGE),
+            Shift::Large if scope.first == 0 => (Self::Semitone, 12),
+            Shift::Chromatic if scope.first == 0 => (Self::Semitone, 1),
+            Shift::Increment | Shift::Operator if scope.first == 0 && scale_on => (Self::Degree, 1),
+            Shift::Increment | Shift::Operator if scope.first == 0 => (Self::Semitone, 1),
+            Shift::Large | Shift::FineLarge | Shift::LengthLarge => (Self::LargeStep, 1),
+            _ => (Self::Step, 1),
+        }
+    }
+
+    fn name(self, plural: bool) -> &'static str {
+        match (self, plural) {
+            (Self::Semitone, false) => "semitone",
+            (Self::Semitone, true) => "semitones",
+            (Self::Degree, false) => "degree",
+            (Self::Degree, true) => "degrees",
+            (Self::Step, false) => "step",
+            (Self::Step, true) => "steps",
+            (Self::LargeStep, false) => "large step",
+            (Self::LargeStep, true) => "large steps",
+            (Self::Nudge, false) => "24th of a step",
+            (Self::Nudge, true) => "24ths of a step",
+        }
+    }
+}
+
+/// One change kept on a selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Adjustment {
+    Moved(Unit, i32),
+    /// `r` wrote one value across it, so what moved before doesn't add to what moves after.
+    Filled,
+}
+
+/// The changes made on a selection that stays until `Esc`, so the status line can say what they
+/// add up to (decision 148). Each is its own undo step, and undo and redo while it's selected take
+/// them back and bring them again.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Adjustments {
+    done: Vec<Adjustment>,
+    /// What undo took back, the latest last, with nothing for an undo step from before the
+    /// selection, so redo brings them back in step with the history.
+    undone: Vec<Option<Adjustment>>,
+}
+
+impl Adjustments {
+    fn record(&mut self, adjustment: Adjustment) {
+        self.done.push(adjustment);
+        self.undone.clear();
+    }
+
+    fn undo(&mut self) {
+        let adjustment = self.done.pop();
+        self.undone.push(adjustment);
+    }
+
+    fn redo(&mut self) {
+        if let Some(Some(adjustment)) = self.undone.pop() {
+            self.done.push(adjustment);
+        }
+    }
+
+    /// What the moves since the selection started, or since its last fill, add up to, as
+    /// "+11 semitones" or "+1 large step, -2 steps"; nothing if none has been made.
+    pub fn total(&self) -> Option<String> {
+        let since = self
+            .done
+            .iter()
+            .rposition(|adjustment| *adjustment == Adjustment::Filled)
+            .map_or(0, |at| at + 1);
+        let moves: Vec<(Unit, i32)> = self.done[since..]
+            .iter()
+            .filter_map(|adjustment| match adjustment {
+                Adjustment::Moved(unit, by) => Some((*unit, *by)),
+                Adjustment::Filled => None,
+            })
+            .collect();
+        let (last, _) = *moves.last()?;
+        let sum = |unit: Unit| -> i32 {
+            moves
+                .iter()
+                .filter(|(of, _)| *of == unit)
+                .map(|(_, by)| *by)
+                .fold(0, i32::saturating_add)
+        };
+        let parts: Vec<String> = Unit::ALL
+            .into_iter()
+            .filter_map(|unit| {
+                let total = sum(unit);
+                (total != 0).then(|| format!("{total:+} {}", unit.name(total.abs() != 1)))
+            })
+            .collect();
+        Some(if parts.is_empty() {
+            format!("0 {}", last.name(true))
+        } else {
+            parts.join(", ")
+        })
+    }
+}
+
+/// A selection as it was, to come back to.
+#[derive(Debug, Clone)]
+pub struct SelectionPlace {
+    mode: Mode,
+    cursor: Cursor,
+    anchor: Option<(usize, Scope)>,
+    anchor_track: Option<usize>,
+    scope: Option<Scope>,
+    adjustments: Adjustments,
+}
+
 impl App {
+    /// What the changes kept on the selection add up to, while it's selected.
+    pub fn adjusted_total(&self) -> Option<String> {
+        self.mode
+            .is_visual()
+            .then(|| self.adjustments.total())
+            .flatten()
+    }
+
+    /// After a change kept on the selection: count it if it changed the song, and say what the
+    /// changes add up to.
+    fn adjusted(&mut self, before: &Arc<Song>, adjustment: Adjustment) {
+        if !Arc::ptr_eq(before, self.song()) {
+            self.adjustments.record(adjustment);
+        }
+        self.show_adjusted();
+    }
+
+    fn show_adjusted(&mut self) {
+        if let Some(total) = self.adjustments.total() {
+            self.status = total;
+        }
+    }
+
+    /// A move on the selection, counted in its unit.
+    fn moved(&self, kind: Shift, by: i32, scope: Scope) -> Adjustment {
+        let (unit, size) = Unit::of(kind, scope, self.scale.on);
+        Adjustment::Moved(unit, by.saturating_mul(size))
+    }
+
+    /// After undo or redo while selecting: the selection stays, and its total goes back or
+    /// forward with the change.
+    pub(crate) fn undid_while_selecting(&mut self, undo: bool) {
+        if undo {
+            self.adjustments.undo();
+        } else {
+            self.adjustments.redo();
+        }
+        self.show_adjusted();
+    }
+
+    fn selection_place(&self) -> SelectionPlace {
+        SelectionPlace {
+            mode: self.mode,
+            cursor: self.cursor,
+            anchor: self.anchor,
+            anchor_track: self.anchor_track,
+            scope: self.selection_scope,
+            adjustments: self.adjustments.clone(),
+        }
+    }
+
+    fn return_to(&mut self, place: SelectionPlace) {
+        self.mode = place.mode;
+        self.cursor = place.cursor;
+        self.anchor = place.anchor;
+        self.anchor_track = place.anchor_track;
+        self.selection_scope = place.scope;
+        self.adjustments = place.adjustments;
+        self.clamp_cursor();
+    }
+
+    /// Back to the selection a replace across it started from, as `Esc` cancelled it.
+    pub(crate) fn cancel_selection_replace(&mut self) {
+        if let Some(place) = self.replace_returns_to.take() {
+            self.return_to(place);
+        }
+    }
+
     /// Handle a key in Normal, operator-pending or Visual mode.
     pub(crate) fn command_key_normal(&mut self, key: Key, now: Instant) {
         if key.code == KeyCode::Esc {
             self.reset_pending();
+            // `Esc` is what ends a selection kept through its changes, and `gv` brings it back,
+            // as in Vim. Its total goes with it.
+            if self.mode.is_visual() {
+                self.last_selection = Some(self.current_selection());
+                if self
+                    .adjusted_total()
+                    .is_some_and(|total| total == self.status)
+                {
+                    self.status.clear();
+                }
+                self.adjustments = Adjustments::default();
+            }
             if self.mode.is_visual() || self.mode == Mode::OperatorPending {
                 self.mode = Mode::Normal;
             }
@@ -235,6 +456,7 @@ impl App {
         if self.mode.is_visual() {
             let selection = self.current_selection();
             self.count = None;
+            let before = Arc::clone(self.song());
             self.apply_operator(op, selection.range, selection.scope, selection.tracks);
             self.last_change = Some(Change::Operator {
                 op,
@@ -244,7 +466,16 @@ impl App {
                     tracks: selection.tracks.count(),
                 },
             });
-            self.leave_visual(selection);
+            // `>` and `<` move the values, so the selection stays for more; `d`, `x` and `y` end
+            // it.
+            match op {
+                Op::ShiftUp | Op::ShiftDown => {
+                    let by = if op == Op::ShiftUp { 1 } else { -1 };
+                    let moved = self.moved(Shift::Operator, by, selection.scope);
+                    self.adjusted(&before, moved);
+                }
+                Op::Clear | Op::Copy => self.leave_visual(selection),
+            }
             return;
         }
         self.operator = Some(op);
@@ -510,8 +741,10 @@ impl App {
         };
         let amount = self.count.take().unwrap_or(1) as i32;
         let by = sign.saturating_mul(amount);
+        // On a selection, it stays selected for the next press, until `Esc`.
         if self.mode.is_visual() {
             let selection = self.current_selection();
+            let before = Arc::clone(self.song());
             self.apply_increment(by, selection.range, selection.scope, selection.tracks, kind);
             self.last_change = Some(Change::Increment {
                 by,
@@ -522,7 +755,8 @@ impl App {
                 },
                 kind,
             });
-            self.leave_visual(selection);
+            let moved = self.moved(kind, by, selection.scope);
+            self.adjusted(&before, moved);
             return;
         }
         let change = Change::Increment {
@@ -595,7 +829,10 @@ impl App {
             .to_owned();
             return;
         };
+        // Once the value is in, or `Esc` cancels it, the selection comes back, for another.
+        let place = self.selection_place();
         self.leave_visual(selection);
+        self.replace_returns_to = Some(place);
         self.cursor.step = first;
         self.cursor.field = field;
         self.entry = Entry::default();
@@ -648,6 +885,10 @@ impl App {
             self.history.squash_to(depth);
             self.cursor.step = selection.range.first;
             steps = selection.range.len();
+            if let Some(place) = self.replace_returns_to.take() {
+                self.return_to(place);
+                self.adjustments.record(Adjustment::Filled);
+            }
         }
         self.last_change = Some(Change::Replace {
             field,
@@ -890,6 +1131,20 @@ impl App {
         self.count = None;
         if self.mode.is_visual() {
             let selection = self.current_selection();
+            let before = Arc::clone(self.song());
+            // What moves the values, or fills them, keeps the selection, as it did the first time.
+            let kept = match change {
+                Change::Increment { by, kind, .. } => Some(self.moved(kind, by, selection.scope)),
+                Change::Operator {
+                    op: op @ (Op::ShiftUp | Op::ShiftDown),
+                    ..
+                } => {
+                    let by = if op == Op::ShiftUp { 1 } else { -1 };
+                    Some(self.moved(Shift::Operator, by, selection.scope))
+                }
+                Change::Replace { .. } => Some(Adjustment::Filled),
+                _ => None,
+            };
             match change {
                 Change::Operator { op, .. } => {
                     self.apply_operator(op, selection.range, selection.scope, selection.tracks);
@@ -920,7 +1175,10 @@ impl App {
                 }
                 Change::Paste { .. } => {}
             }
-            self.leave_visual(selection);
+            match kept {
+                Some(adjustment) => self.adjusted(&before, adjustment),
+                None => self.leave_visual(selection),
+            }
         } else {
             self.do_change(&change);
         }
@@ -943,6 +1201,7 @@ impl App {
         self.anchor = Some((self.cursor.step, scope));
         self.anchor_track = Some(self.cursor.track);
         self.selection_scope = None;
+        self.adjustments = Adjustments::default();
         self.mode = mode;
         self.count = None;
     }
@@ -987,6 +1246,7 @@ impl App {
 
     fn leave_visual(&mut self, selection: Selection) {
         self.last_selection = Some(selection);
+        self.adjustments = Adjustments::default();
         self.cursor.step = selection.range.first;
         self.mode = Mode::Normal;
         self.anchor = None;
@@ -1004,6 +1264,7 @@ impl App {
         self.anchor = Some((selection.range.first, selection.scope));
         self.anchor_track = Some(selection.tracks.last);
         self.selection_scope = Some(selection.scope);
+        self.adjustments = Adjustments::default();
         self.go_to_track_at(selection.tracks.first);
         self.cursor.step = selection.range.last;
         self.mode = if selection.scope.is_whole() {
