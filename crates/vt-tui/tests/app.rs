@@ -8225,6 +8225,102 @@ fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
 }
 
 #[test]
+fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
+    use vt_tui::glyphs::{PLAY, WAITING};
+    let (mut app, mut rt) = app();
+    // Stopped, there's no grid to wait for, so it switches at once.
+    tap(&mut app, " gm");
+    assert_eq!(app.status, "Track 01 muted at once, as nothing's playing");
+    assert!(app.levels[0].mute);
+    tap(&mut app, " gm");
+    assert!(!app.levels[0].mute);
+
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    tap(&mut app, " gm");
+    assert_eq!(
+        app.status,
+        "Track 01 mutes on the 1bar grid; Space g m again takes it back"
+    );
+    block(&mut rt, &mut app);
+    assert!(rt.engine().mute_waiting(0));
+    assert!(app.jam[0].mute_waiting);
+    assert!(!app.levels[0].mute, "not until the line");
+    assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} MUTE  ")));
+    press(&mut app, " 6");
+    assert!(
+        screen_rows(&mut app)
+            .iter()
+            .any(|row| row.trim_start().starts_with("Mute") && row.contains(WAITING)),
+        "the mixer's Mute row waits"
+    );
+
+    // Again, it's taken back.
+    tap(&mut app, " gm");
+    assert_eq!(app.status, "Track 01's mute switch taken back");
+    block(&mut rt, &mut app);
+    assert!(!rt.engine().mute_waiting(0));
+    assert!(!status_line(&app).contains("MUTE"));
+
+    // Armed again, it lands on the bar, and the live mute follows it, saved with the song.
+    app.dirty = false;
+    tap(&mut app, " gm");
+    block(&mut rt, &mut app);
+    for _ in 0..400 {
+        block(&mut rt, &mut app);
+    }
+    assert!(!app.jam[0].mute_waiting, "landed on the bar");
+    assert!(app.levels[0].mute);
+    assert!(app.dirty);
+
+    // `Space g s` solos the same way, and unmuting by hand meanwhile leaves it waiting.
+    tap(&mut app, " gs");
+    assert_eq!(
+        app.status,
+        "Track 01 solos on the 1bar grid; Space g s again takes it back"
+    );
+    tap(&mut app, " m");
+    block(&mut rt, &mut app);
+    assert!(app.jam[0].solo_waiting);
+    assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} SOLO  ")));
+    for _ in 0..400 {
+        block(&mut rt, &mut app);
+    }
+    assert!(app.levels[0].solo);
+    assert!(!app.levels[0].mute);
+}
+
+#[test]
+fn mutes_armed_on_two_tracks_land_together_and_space_capital_m_takes_them_back() {
+    let (mut app, mut rt) = app();
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    tap(&mut app, " gm");
+    app.cursor.track = 1;
+    tap(&mut app, " gm");
+    block(&mut rt, &mut app);
+    assert!(app.jam[0].mute_waiting && app.jam[1].mute_waiting);
+    tap(&mut app, " M");
+    block(&mut rt, &mut app);
+    assert!(!rt.engine().mute_waiting(0) && !rt.engine().mute_waiting(1));
+
+    tap(&mut app, " gm");
+    app.cursor.track = 0;
+    tap(&mut app, " gm");
+    let mut landed = None;
+    for blocks in 0..400 {
+        block(&mut rt, &mut app);
+        let both = (app.levels[0].mute, app.levels[1].mute);
+        if both != (false, false) {
+            landed = Some((blocks, both));
+            break;
+        }
+    }
+    let (_, both) = landed.expect("they land on the bar");
+    assert_eq!(both, (true, true), "in the same block");
+}
+
+#[test]
 fn space_a_on_a_return_says_it_has_no_chain() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);

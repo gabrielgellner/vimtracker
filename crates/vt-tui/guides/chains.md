@@ -93,6 +93,7 @@ an edit changes all of them.
 | `Space 4` | The track page: its sound, modulation and effects |
 | `Space m`, `:mute` | Mute or unmute this track |
 | `Space s`, `:solo` | Solo or unsolo this track |
+| `Space g m`, `Space g s` | The same, at the next line of the launch grid |
 | `Space M` | Clear all mutes and solos |
 
 A tap of `m` or `s` switches the mute or solo and leaves it. Hold the key down
@@ -210,6 +211,21 @@ once, as a `:reset` would, without changing what they play:
 
 Press either again before the line to take it back. While one waits, the status
 line shows `󰔟 REALIGN`. With `:launch chain` they wait for the next bar.
+
+Mutes and solos can land on the grid too, for a drop or an entry on the bar:
+
+| Keys | Does, while playing |
+|---|---|
+| `Space g m` | Mute or unmute this track at the next line |
+| `Space g s` | Solo or unsolo this track at the next line |
+
+Arm several, on as many tracks as you like, and they all switch together on the
+same line. Press one again before the line to take it back, and `Space m`,
+`Space s` or `Space M` switch at once, taking back any waiting. While one waits,
+the status line shows `󰔟 MUTE` or `󰔟 SOLO`, and the track shows `󰔟` in place of
+its mute or solo, in the phrase view's overview and on the mixer. With
+`:launch chain` they wait for the next bar. Stopped, nothing is coming round to
+wait for, so they switch at once.
 
 `:label verse bass` names the chain under the cursor, in the song and chain views,
 and `:label` alone clears it. Its number stays what rows refer to. The status line
