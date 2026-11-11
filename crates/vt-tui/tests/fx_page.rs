@@ -387,11 +387,11 @@ fn braces_go_to_the_same_setting_in_the_next_slot() {
     assert_eq!(app.track_page.row, 9);
     press(&mut app, "9}");
     assert_eq!(app.track_page.row, 13, "it stops at the last");
-    press(&mut app, "H");
+    press(&mut app, "HH");
     let (row, field) = (app.track_page.row, app.track_page.field);
     press(&mut app, "}");
     assert_eq!((app.track_page.row, app.track_page.field), (row, field));
-    assert!(app.status.contains("FX page"), "{}", app.status);
+    assert!(app.status.contains("Mod and FX pages"), "{}", app.status);
 }
 
 #[test]
@@ -1407,13 +1407,14 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     // The EQ's last row has a hole in the first column, so the cursor lands beside it.
     page.key(Cmd::Move(Motion::Up), 1, track);
     assert_eq!(page.device_cursor(track), at(0, 3, 1));
-    // An edit isn't the page's own, and the page beside isn't a rack.
+    // An edit isn't the page's own, and the Sound page isn't a rack.
     assert_eq!(page.key(Cmd::Increase, 1, track), Outcome::Passed);
     page.key(Cmd::PreviousPage, 1, track);
-    assert_eq!(page.page, Page::Mod);
+    page.key(Cmd::PreviousPage, 1, track);
+    assert_eq!(page.page, Page::Sound);
     assert_eq!(page.device_cursor(track), None);
     assert_eq!(
         page.key(Cmd::Move(Motion::NextBeat), 1, track),
-        Outcome::Refused("{ and } go between slots on the FX page")
+        Outcome::Refused("{ and } go between devices, on the Mod and FX pages")
     );
 }

@@ -34,9 +34,11 @@ it the waveform of the sample it plays:
 
 ![A track's Sound page, with its filter curve and its sample's waveform](images/track-sound.svg)
 
-and its envelopes and LFO shapes on its Mod page:
+and on its Mod page, a device for each modulator in two columns, the envelopes with their
+shapes beside the LFOs, each with its destination in its title, and the accumulator beside the
+arpeggio under them:
 
-![A track's Mod page, with its envelopes and LFO shapes](images/track-mod.svg)
+![A track's Mod page: three envelopes with their shapes down the left, three LFOs down the right, each titled with its destination, and the accumulator and the arpeggio under them](images/track-mod.svg)
 
 and on its FX page, a device for each slot, with its effect and type in its title and its
 settings in three rows: a Glue compressor with its curve and a meter of how far it's turning

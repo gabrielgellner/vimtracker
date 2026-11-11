@@ -36,9 +36,6 @@ const WIDTH: u16 = 120;
 const HEIGHT: u16 = 24;
 /// The project page's, which is taller, with its groove under its settings.
 const PROJECT_HEIGHT: u16 = 32;
-/// The Mod page's, tall enough for every envelope's and LFO's row and the envelopes' shapes under
-/// them.
-const MOD_HEIGHT: u16 = 26;
 
 /// One picture for the manual.
 struct Shot {
@@ -146,7 +143,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-mod",
         rows: GATES,
-        keys: " 4Lli20<Enter>li300<Enter>li60<Enter>li400<Enter>",
+        keys: " 4Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglK/cut<Enter>jjji+30<Enter>",
         play: 0,
         voice: None,
         kick: false,
@@ -154,8 +151,8 @@ const SHOTS: &[Shot] = &[
     },
 ];
 
-/// The sample page's and the FX page's shots are of the author's screen, kitty full screen on a
-/// MacBook, where the FX page's four devices fit beside the main meter.
+/// The sample page's, the FX page's and the Mod page's shots are of the author's screen, kitty full
+/// screen on a MacBook, where the FX and Mod pages' four rows of devices fit beside the main meter.
 const SAMPLE_WIDTH: u16 = 163;
 const SAMPLE_HEIGHT: u16 = 42;
 
@@ -349,8 +346,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let now = play(&mut app, &mut realtime, shot.play, start);
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
-        "track-mod" => (WIDTH, MOD_HEIGHT),
-        "sample" | "track-fx" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        "sample" | "track-fx" | "track-mod" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
         _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));

@@ -664,11 +664,38 @@ Soloing a track keeps the returns, so you hear what it sends. Soloing a return p
 only what comes back from it. Muting a return silences what comes back, and the master
 can't be muted or soloed.
 
+## The Mod page
+
+The Mod page is a rack of devices in two columns, as the FX page is a rack of slots:
+`Env 1` to `Env 3` down the left, each beside the LFO of its number on the right, and
+the accumulator beside the arpeggio under them. A return, a group and the master have
+no notes to move, so their page ends with the LFOs.
+
+Each envelope and LFO has its `Dest` in its title, as a slot has its effect, so
+`LFO 1     Cut` reads as what it's for. `---` there is dim, as it goes nowhere. The
+room between the name and the `Dest` is for the switch that will turn it off. Its
+settings are in two columns of three, and an envelope's shape is in a box on its
+right. The device with the cursor has the brighter frame.
+
+| Keys | Does |
+|---|---|
+| `h` `l` | Through a row's settings, and on into the device beside it, on the same row |
+| `j` `k` | Down and up, on into the device below or above, keeping to the column |
+| `k` on a first row | Up to the title, the `Dest` |
+| `{` `}` | Up or down a device in the same column, staying on the same setting |
+| `0` `$` | The first or last setting on the row, in the device |
+| `gg` `G` | The top or bottom of the column |
+
+So `}` goes from `Env 1` to `Env 2`, and `3}` from `LFO 1` to the arpeggio. Where the
+screen has room for fewer than four rows of devices, the page moves by whole rows of
+them to keep the cursor's in view.
+
 ## Envelopes
 
-Each track has three, which start with each note. The page draws their shapes.
-Time is stretched in the drawing, so a short attack still shows, and a stage's
-width depends only on its own time.
+Each track has three, which start with each note. Each draws its shape in a box on
+its right. Time is stretched in the drawing, so a short attack still shows, and a
+stage's width depends only on its own time. The times are down the left, and the
+levels and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
@@ -708,9 +735,8 @@ step moves the centre and the LFO carries on around it.
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
-from one to the next, which suits a slow drift on `Cut`. `Sine`, `Tri`, `Ramp`
-and `Square` have their wave after the name, `󰥛` `󱑼` `󱑺` `󱑻`. `Saw` has none, as the
-font's saw rises, and nor have the random shapes.
+from one to the next, which suits a slow drift on `Cut`. An LFO's `Shape`, `Rate`
+and `Depth` are down its left, and its `Phase` and `Retrig` down its right.
 
 | Type this as a rate | For |
 |---|---|
@@ -738,8 +764,8 @@ on a step.
 
 ## The accumulator
 
-The `Acc` row under the LFOs says how the track's `ACU`s move its notes from pass
-to pass: `Up` and `Down`, how far from the note as written, in scale degrees with
+The `Accumulator` device, under the envelopes, says how the track's `ACU`s move its
+notes from pass to pass: `Up` and `Down`, how far from the note as written, in scale degrees with
 the scale on and semitones with it off; `Moves`, `Row` for only the row with the
 `ACU` or `Track` for every row; `Limit`, `Wrap` `Bounce` or `Hold`; `Adds`, once a
 row, on each `MLT` pulse or on each `RET` hit; and `Reset`, when it goes back to
@@ -748,7 +774,7 @@ types a limit and `K` lists the others. See **FX commands**.
 
 ## The arpeggio
 
-The `Arp` row under it says how the track's `ARP`s play: `Rate`, how long each note
+The `Arpeggio` device, beside the accumulator, says how the track's `ARP`s play: `Rate`, how long each note
 is, `Tick` or a note division from `1/128` to `1/8`, as a share of the track's step;
 `Mode`, `Up` `Down` `Up-down` or `Random`; `Oct`, how many octaves it climbs, 1 to 4;
 and `Retrig`, `off` to only change the pitch, sliding on `Acid`, or `on` to start

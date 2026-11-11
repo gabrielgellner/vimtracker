@@ -448,8 +448,16 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
 const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("j", Cmd::Move(Motion::Down), "Next row"),
     ("k", Cmd::Move(Motion::Up), "Previous row"),
-    ("g g", Cmd::Move(Motion::First), "First row"),
-    ("G", Cmd::Move(Motion::Last), "Last row"),
+    (
+        "g g",
+        Cmd::Move(Motion::First),
+        "First row, of this column of devices",
+    ),
+    (
+        "G",
+        Cmd::Move(Motion::Last),
+        "Last row, of this column of devices",
+    ),
     ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX"),
     ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
     ("d d", Cmd::RemoveRow, "Take an effect out of its slot"),
@@ -464,15 +472,23 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     (
         "}",
         Cmd::Move(Motion::NextBeat),
-        "Next slot, on the FX page",
+        "Next device down, on the Mod and FX pages",
     ),
     (
         "{",
         Cmd::Move(Motion::PreviousBeat),
-        "Previous slot, on the FX page",
+        "Previous device up, on the Mod and FX pages",
     ),
-    ("h", Cmd::Move(Motion::Left), "Previous setting"),
-    ("l", Cmd::Move(Motion::Right), "Next setting"),
+    (
+        "h",
+        Cmd::Move(Motion::Left),
+        "Previous setting, or the device on the left",
+    ),
+    (
+        "l",
+        Cmd::Move(Motion::Right),
+        "Next setting, or the device on the right",
+    ),
     ("0", Cmd::Move(Motion::RowStart), "First setting"),
     ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
     ("=", Cmd::Increase, "Increase the value"),
