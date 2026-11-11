@@ -25,6 +25,8 @@ use std::f32::consts::PI;
 
 use crate::rng::Pcg32;
 
+use super::sides::SameBits;
+
 /// Noise on `0..1`.
 #[inline]
 pub(in crate::dsp) fn random(rng: &mut Pcg32) -> f32 {
@@ -121,6 +123,19 @@ impl Svf {
         let lp_gain = (1.0 - mode * 2.0).max(0.0);
         let (hp, bp, lp) = self.process_all(input);
         hp_gain * hp + bp_gain * bp + lp_gain * lp
+    }
+}
+
+impl SameBits for Svf {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        [self.g, self.r, self.h, self.state_1, self.state_2].same_bits(&[
+            other.g,
+            other.r,
+            other.h,
+            other.state_1,
+            other.state_2,
+        ])
     }
 }
 

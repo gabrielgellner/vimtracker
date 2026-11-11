@@ -17,6 +17,7 @@ use vt_model::settings::{
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
 
+use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::InsertState;
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::memory::MemoryPool;
@@ -859,13 +860,7 @@ impl TrackState {
     /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values
     /// glide back, so anything still sounding doesn't click.
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
-        self.rng = Pcg32::new(seed, index as u64);
-        self.forget_conditions();
-        self.forget_accumulators();
-        self.groove_rng = groove_rng(seed, index);
-        self.arp_rng = arp_rng(seed, index);
-        self.arp = None;
-        self.last_note = None;
+        self.reset_all_but_settings(seed, index, clock);
         self.load(track);
         for id in SettingId::all() {
             let base = base_of(id, track);
@@ -873,6 +868,20 @@ impl TrackState {
             self.write_value(id, scaled(base));
         }
         self.gliding = 0;
+    }
+
+    /// Reset what playing from the top does apart from the settings: the random generators,
+    /// conditions, accumulators, arpeggio, last note and LFOs. Enough on its own for a state no
+    /// track has had since its settings were last reset to an empty track's, as nothing else
+    /// changes them, and going through every setting is most of a reset's time.
+    pub fn reset_all_but_settings(&mut self, seed: u64, index: usize, clock: u64) {
+        self.rng = Pcg32::new(seed, index as u64);
+        self.forget_conditions();
+        self.forget_accumulators();
+        self.groove_rng = groove_rng(seed, index);
+        self.arp_rng = arp_rng(seed, index);
+        self.arp = None;
+        self.last_note = None;
         self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
     }
 
@@ -1697,18 +1706,8 @@ impl TrackState {
                 None => input,
             }
         };
-        let mut filtered = self.trimmed(filtered, smoothing, rate);
-        for (slot, insert) in self.inserts.iter_mut().enumerate() {
-            // A setting being modulated keeps up, and a change on its own doesn't jump.
-            let keeping_up = if self.slot_moving[slot] {
-                fast
-            } else {
-                smoothing
-            };
-            filtered = self.slot_times.time(slot, !insert.is_empty(), || {
-                insert.process(filtered, keeping_up, rate, keys)
-            });
-        }
+        let filtered = self.trimmed(filtered, smoothing, rate);
+        let filtered = self.through_slots(filtered, smoothing, fast, rate, keys);
         self.key = filtered;
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
         let keeping_up = |target: SettingId| {
@@ -1735,6 +1734,33 @@ impl TrackState {
         }
     }
 
+    /// Run a frame through the slots in order. Whether its two sides are the same is looked at
+    /// once, and each slot passes it on to the next, so a chain of effects that keep a mono sound
+    /// mono works out one side all the way through (decision 147).
+    #[inline]
+    fn through_slots(
+        &mut self,
+        mut frame: [f32; 2],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> [f32; 2] {
+        let mut same = same_sides(frame);
+        for (slot, insert) in self.inserts.iter_mut().enumerate() {
+            // A setting being modulated keeps up, and a change on its own doesn't jump.
+            let keeping_up = if self.slot_moving[slot] {
+                fast
+            } else {
+                smoothing
+            };
+            (frame, same) = self.slot_times.time(slot, !insert.is_empty(), || {
+                insert.process_sides(frame, same, keeping_up, rate, keys)
+            });
+        }
+        frame
+    }
+
     /// Run a frame through the trim, slots and level of a track with no voice of its own.
     #[inline]
     fn slots_and_level(
@@ -1746,17 +1772,8 @@ impl TrackState {
         keys: &Keys,
     ) -> [f32; 2] {
         let trim = self.input_trim.next(smoothing);
-        let mut frame = [input[0] * trim, input[1] * trim];
-        for (slot, insert) in self.inserts.iter_mut().enumerate() {
-            let keeping_up = if self.slot_moving[slot] {
-                fast
-            } else {
-                smoothing
-            };
-            frame = self.slot_times.time(slot, !insert.is_empty(), || {
-                insert.process(frame, keeping_up, rate, keys)
-            });
-        }
+        let frame = [input[0] * trim, input[1] * trim];
+        let frame = self.through_slots(frame, smoothing, fast, rate, keys);
         self.key = frame;
         let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
             smoothing

@@ -12,6 +12,7 @@ use vt_model::insert::{
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::oversampler::Oversampler;
+use crate::dsp::blocks::sides::{Sides, same_sides};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
@@ -34,6 +35,26 @@ const DEFAULT_NOTE: f32 = 60.0;
 /// enough that a step's lock of its bypass lands with the step.
 pub const BYPASS_FADE_MS: f32 = 5.0;
 
+/// What an effect does with a sound that's the same on both sides, bit for bit, as a mono voice's
+/// is until something spreads it (decision 147). A slot is told whether what comes in is, by the
+/// slot before or by the track looking once, and an effect that keeps it so tells the slot after.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mono {
+    /// Each side goes through the same steps with its own state and nothing between them, so it
+    /// works the left out alone and gives it to both, keeping the right's state to copy from the
+    /// left's the moment the sides differ ([`Sides`]). What comes out is exactly what working out
+    /// both gives. After the sides have differed, their states can stay apart for a while, so it
+    /// works out both until they're the same again, and the slot looks at what comes out.
+    OneSide,
+    /// One state for both sides, such as a compressor's linked detector, and the same done to
+    /// each: what comes out is the same on both sides, with nothing more to save, so the slot
+    /// passes that on without looking.
+    Linked,
+    /// It spreads the sides apart or mixes them, or hasn't been looked at for this: it works out
+    /// both, and the slot looks at what comes out.
+    Stereo,
+}
+
 /// What a track keeps for one of its slots. Nothing here allocates.
 #[derive(Debug, Clone)]
 pub struct InsertState {
@@ -45,7 +66,9 @@ pub struct InsertState {
     amount: Smoothed,
     mix: Smoothed,
     gain: Smoothed,
-    oversampler: [Oversampler; 2],
+    /// Each side's oversampling for the shapes that need it, once for both while a sound is the
+    /// same on both sides.
+    oversampler: Sides<Oversampler>,
     held: [f32; 2],
     /// How many frames since `Down` last took a sample.
     since: f32,
@@ -79,7 +102,7 @@ impl Default for InsertState {
             amount: Smoothed::at(0.0),
             mix: Smoothed::at(0.0),
             gain: Smoothed::at(1.0),
-            oversampler: [Oversampler::default(); 2],
+            oversampler: Sides::default(),
             held: [0.0; 2],
             since: 0.0,
             eq: ThreeBands::default(),
@@ -464,31 +487,86 @@ impl InsertState {
         matches!(self.insert, Insert::Empty)
     }
 
+    /// What its effect does with a sound that's the same on both sides (decision 147). Every
+    /// effect says, so a new one has to choose: `Mono::Stereo` is always safe, and
+    /// `tests/mono.rs` checks every other claim.
+    pub fn mono(&self) -> Mono {
+        match self.insert {
+            // Each of its types works each side alone, the same way, with nothing between them.
+            Insert::Distort(_) | Insert::Eq(_) | Insert::Lpg(_) | Insert::Vowel(_) => Mono::OneSide,
+            // One detector for both sides, and one gain on each.
+            Insert::Empty | Insert::Compressor(_) => Mono::Linked,
+            // These spread the sides apart or mix them, or keep their sides in the effect pool's
+            // buffers, which haven't been looked at for this.
+            Insert::Delay(_)
+            | Insert::Reverb(_)
+            | Insert::Chorus(_)
+            | Insert::Limit(_)
+            | Insert::Phaser(_)
+            | Insert::Flanger(_)
+            | Insert::Tape(_)
+            | Insert::Plate(_)
+            | Insert::Pitch(_)
+            | Insert::Grains(_)
+            | Insert::Warps(_)
+            | Insert::Reso(_)
+            | Insert::Comb(_) => Mono::Stereo,
+        }
+    }
+
     /// One frame through the slot, faded toward what came in as it's bypassed.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {
-        let wet = self.effect(input, smoothing, rate, keys);
-        if self.on.value == self.on.target {
-            return if self.on.target > 0.0 { wet } else { input };
-        }
-        // A straight line rather than a smoother's curve, so a step's lock is done within a few
-        // ms of its step, however long it lasts.
-        let by = 1000.0 / (BYPASS_FADE_MS * rate as f32);
-        let on = if self.on.target > self.on.value {
-            (self.on.value + by).min(self.on.target)
+        self.process_sides(input, same_sides(input), smoothing, rate, keys)
+            .0
+    }
+
+    /// The same, with `same` saying whether the frame's two sides are the same, bit for bit, as
+    /// the slot before found or made them, and saying whether those of what comes out are, for
+    /// the slot after. False is always safe. A linked effect passes true on without looking; any other
+    /// looks at what comes out, as one that works one side out for both can have sides that
+    /// still differ for a while after the sound's did.
+    #[inline]
+    pub fn process_sides(
+        &mut self,
+        input: [f32; 2],
+        same: bool,
+        smoothing: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> ([f32; 2], bool) {
+        let kept = same && self.mono() == Mono::Linked;
+        let wet = self.effect(input, same, smoothing, rate, keys);
+        let out = if self.on.value == self.on.target {
+            if self.on.target > 0.0 { wet } else { input }
         } else {
-            (self.on.value - by).max(self.on.target)
+            // A straight line rather than a smoother's curve, so a step's lock is done within a
+            // few ms of its step, however long it lasts.
+            let by = 1000.0 / (BYPASS_FADE_MS * rate as f32);
+            let on = if self.on.target > self.on.value {
+                (self.on.value + by).min(self.on.target)
+            } else {
+                (self.on.value - by).max(self.on.target)
+            };
+            self.on.value = on;
+            [
+                input[0] + (wet[0] - input[0]) * on,
+                input[1] + (wet[1] - input[1]) * on,
+            ]
         };
-        self.on.value = on;
-        [
-            input[0] + (wet[0] - input[0]) * on,
-            input[1] + (wet[1] - input[1]) * on,
-        ]
+        (out, kept || same_sides(out))
     }
 
     /// One frame through the effect. An empty slot does nothing else.
     #[inline]
-    fn effect(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {
+    fn effect(
+        &mut self,
+        input: [f32; 2],
+        same: bool,
+        smoothing: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> [f32; 2] {
         let (kind, set) = match self.insert {
             Insert::Empty => return input,
             Insert::Compressor(settings) => {
@@ -512,7 +590,9 @@ impl InsertState {
                 let key = settings
                     .source_track(keys.sounds)
                     .map_or(input, |track| keys.of(track));
-                let wet = self.gate.process(input, key, settings, smoothing, rate);
+                let wet = self
+                    .gate
+                    .process(input, same, key, settings, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [
@@ -549,7 +629,7 @@ impl InsertState {
                 ];
             }
             Insert::Vowel(_) => {
-                let wet = self.vowel.process(input, self.note, smoothing, rate);
+                let wet = self.vowel.process(input, same, self.note, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);
                 return [
@@ -570,7 +650,7 @@ impl InsertState {
                 let gain = self.gain.next(smoothing);
                 return self
                     .eq
-                    .process(input, smoothing, rate)
+                    .process(input, same, smoothing, rate)
                     .map(|sample| sample * gain);
             }
             Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
@@ -609,24 +689,20 @@ impl InsertState {
                 }
                 self.held
             }
-            DistortType::Overdrive | DistortType::Distortion => {
-                self.pedal.process(kind, input, amount, smoothing, rate)
-            }
+            DistortType::Overdrive | DistortType::Distortion => self
+                .pedal
+                .process(kind, input, same, amount, smoothing, rate),
             DistortType::Soft => {
                 let (pre, post) = overdrive_gains(amount);
-                let [left, right] = &mut self.oversampler;
-                [
-                    left.process(input[0], |x| soft_clip(x * pre)) * post,
-                    right.process(input[1], |x| soft_clip(x * pre)) * post,
-                ]
+                self.oversampler.process(input, same, |side, input| {
+                    side.process(input, |x| soft_clip(x * pre)) * post
+                })
             }
             _ => {
                 let drive = drive_of(amount);
-                let [left, right] = &mut self.oversampler;
-                [
-                    left.process(input[0], |x| shaped(kind, x * drive)),
-                    right.process(input[1], |x| shaped(kind, x * drive)),
-                ]
+                self.oversampler.process(input, same, |side, input| {
+                    side.process(input, |x| shaped(kind, x * drive))
+                })
             }
         };
         // Written so all wet and all dry are exact.

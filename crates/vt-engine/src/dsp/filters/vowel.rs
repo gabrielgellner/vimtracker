@@ -29,6 +29,7 @@ use std::f32::consts::PI;
 
 use vt_model::insert::{Vowel as Settings, vowel_blend};
 
+use crate::dsp::blocks::sides::Sides;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::resonator::{Limiter, semitones};
 use crate::dsp::filters::filter::Svf;
@@ -175,7 +176,8 @@ impl Bank {
 /// enough to keep in every slot.
 #[derive(Debug, Clone, Copy)]
 pub struct Formants {
-    filters: [[Svf; FORMANTS]; 2],
+    /// Each side's formants, worked out once for both while a sound is the same on both.
+    filters: Sides<[Svf; FORMANTS]>,
     /// The formants now, how much they move each frame, and where they're going by the end of the
     /// block.
     now: Bank,
@@ -204,7 +206,7 @@ pub struct Formants {
 impl Default for Formants {
     fn default() -> Self {
         let mut formants = Self {
-            filters: [[Svf::default(); FORMANTS]; 2],
+            filters: Sides::default(),
             now: Bank::default(),
             step: Bank::default(),
             target: Bank::default(),
@@ -242,9 +244,17 @@ impl Formants {
     }
 
     /// One frame of the slot's sound through the formants, with `note` the track's for `Track`,
-    /// and the frame out, all wet and within full scale.
+    /// and the frame out, all wet and within full scale. `same` says its two sides are the same,
+    /// bit for bit.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32, rate: u32) -> [f32; 2] {
+    pub fn process(
+        &mut self,
+        input: [f32; 2],
+        same: bool,
+        note: f32,
+        smoothing: f32,
+        rate: u32,
+    ) -> [f32; 2] {
         if rate != self.rate {
             self.rate = rate;
             self.limiter = Limiter::new(rate);
@@ -259,13 +269,15 @@ impl Formants {
         if self.moving {
             self.work_out_a1();
         }
-        let mut out = [0.0; 2];
-        for (side, out) in out.iter_mut().enumerate() {
-            for (at, filter) in self.filters[side].iter_mut().enumerate() {
-                let (band, _) = filter.tick_tuned(input[side], self.now.g[at], self.a1[at]);
-                *out += band * self.now.gain[at];
+        let (now, a1) = (&self.now, &self.a1);
+        let out = self.filters.process(input, same, |filters, sample| {
+            let mut out = 0.0;
+            for (at, filter) in filters.iter_mut().enumerate() {
+                let (band, _) = filter.tick_tuned(sample, now.g[at], a1[at]);
+                out += band * now.gain[at];
             }
-        }
+            out
+        });
         if self.moving {
             self.now.add(&self.step);
         }
@@ -384,7 +396,7 @@ mod tests {
         formants.settle();
         input
             .iter()
-            .map(|&sample| formants.process([sample; 2], note, NO_SMOOTHING, rate))
+            .map(|&sample| formants.process([sample; 2], true, note, NO_SMOOTHING, rate))
             .collect()
     }
 
@@ -717,7 +729,7 @@ mod tests {
                 let note = 48.0 + (frame / 192 % 3) as f32 * 7.0;
                 // A quiet tone among the formants, so what moves is the filter and not the sound.
                 let tone = (frame as f32 / RATE as f32 * 500.0 * TAU).sin() * 0.05;
-                let out = formants.process([tone; 2], note, smoothing, RATE);
+                let out = formants.process([tone; 2], true, note, smoothing, RATE);
                 if frame > RATE as usize / 2 {
                     for side in 0..2 {
                         largest = largest.max((out[side] - last[side]).abs());
@@ -764,7 +776,7 @@ mod tests {
                                 } else {
                                     151.0
                                 };
-                                let out = formants.process([input, -input], note, 1.0, rate);
+                                let out = formants.process([input, -input], false, note, 1.0, rate);
                                 assert!(
                                     out.iter().all(|s| s.is_finite() && s.abs() <= 1.0),
                                     "{rate} {vowel:x} {size:x} {resonance:x} {track:x}: {out:?}"
@@ -785,13 +797,13 @@ mod tests {
         let mut loudest = 0.0_f32;
         for frame in 0..RATE as usize * 2 {
             let tone = (frame as f32 / RATE as f32 * hertz * TAU).sin();
-            let out = formants.process([tone; 2], 60.0, NO_SMOOTHING, RATE);
+            let out = formants.process([tone; 2], true, 60.0, NO_SMOOTHING, RATE);
             loudest = loudest.max(out[0].abs());
         }
         assert!(loudest <= 1.0, "{loudest}");
         assert!(formants.limiting() < 0.5, "{}", formants.limiting());
         for _ in 0..RATE as usize * 8 {
-            formants.process([0.0; 2], 60.0, NO_SMOOTHING, RATE);
+            formants.process([0.0; 2], true, 60.0, NO_SMOOTHING, RATE);
         }
         assert!(formants.limiting() > 0.9, "{}", formants.limiting());
     }

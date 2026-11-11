@@ -3,5 +3,6 @@
 
 pub mod oversampler;
 pub(super) mod plaits_parts;
+pub(crate) mod sides;
 pub(super) mod sine_table;
 pub mod smoother;

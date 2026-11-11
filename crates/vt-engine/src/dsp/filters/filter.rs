@@ -10,6 +10,7 @@
 use vt_model::song::{FilterMode, FilterType, Track};
 
 use crate::dsp::blocks::oversampler::Oversampler;
+use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother;
 use crate::dsp::filters::diode_filter::{
     self, Complex, DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE,
@@ -371,6 +372,13 @@ impl Mix {
 pub struct Svf {
     ic1: f32,
     ic2: f32,
+}
+
+impl SameBits for Svf {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.ic1.same_bits(&other.ic1) && self.ic2.same_bits(&other.ic2)
+    }
 }
 
 impl Svf {
