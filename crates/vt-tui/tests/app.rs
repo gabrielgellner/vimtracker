@@ -4567,10 +4567,12 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[7].contains("Dest") && lines[7].contains("Retrig"));
     let lfo: Vec<&str> = lines[8].split_whitespace().collect();
     let triangle = vt_tui::glyphs::TRIANGLE_WAVE.to_string();
+    // Its retrig is a toggle, off.
+    let off = vt_tui::glyphs::SWITCH_OFF.to_string();
     assert_eq!(
         lfo,
         [
-            "LFO", "1", "Cut", "Tri", &triangle, "1/8d", "+40", "90°", "off"
+            "LFO", "1", "Cut", "Tri", &triangle, "1/8d", "+40", "90°", &off
         ]
     );
     assert!(lines[9].starts_with("LFO 2"));
@@ -7101,6 +7103,17 @@ fn fx_line(app: &App, slot: usize) -> String {
     lines[at..at + 9].join("\n")
 }
 
+/// A slot's title as the FX page writes it on its frame's top: its digit, its bypass's toggle, on
+/// or off, with the no-break space that keeps it to its cell, or on an empty slot the room for one,
+/// then what's after it.
+fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
+    let switch = match switch {
+        Some(on) => format!("{}\u{a0}", vt_tui::views::widgets::toggle::glyph(on)),
+        None => "  ".to_owned(),
+    };
+    format!("╭─ {}  {switch} {controls}", slot + 1)
+}
+
 /// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back
 /// on the first slot's effect.
 fn four_devices(app: &mut App) {
@@ -7136,7 +7149,7 @@ fn l_reaches_the_fx_page_and_stops_there() {
     press(&mut app, "L");
     for slot in [0, 2] {
         let device = fx_line(&app, slot);
-        let title = format!("╭─ {}     Empty ─", slot + 1);
+        let title = slot_title(slot, None, "Empty ─");
         assert!(device.starts_with(&title), "{device}");
         assert!(device.contains("│  K  pick an effect"), "{device}");
     }
@@ -7158,7 +7171,10 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
     // The effect and its type are in the title, and its settings in its grid.
     let line = fx_line(&app, 0);
-    assert!(line.starts_with("╭─ 1     Distort  Soft ─"), "{line}");
+    assert!(
+        line.starts_with(&slot_title(0, Some(true), "Distort  Soft ─")),
+        "{line}"
+    );
     assert!(line.contains("│  Amount    40 ▕"), "{line}");
     assert!(line.contains("Mix       FF ▕█████████▏"), "{line}");
     assert!(line.contains("Gain      E0 ▕"), "{line}");
@@ -9561,10 +9577,13 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     assert_eq!(compressor(&app).kind, CompressorType::Console);
     let console = screen(&app);
     for shown in [
-        "Console", "Ratio", "4:1", "Attack", "10 ms", "Release", "Auto", "Off", "Mix", "Makeup",
+        "Console", "Ratio", "4:1", "Attack", "10 ms", "Release", "Auto", "Mix", "Makeup",
     ] {
         assert!(console.contains(shown), "{shown}: {console}");
     }
+    // Auto is off, as a toggle.
+    let off = vt_tui::views::widgets::toggle::text(false);
+    assert!(console.contains(&off), "{console}");
     assert!(!console.contains("Gain"), "{console}");
     assert_eq!(compressor(&app).console_release, CONSOLE_AUTO_RELEASE);
 
@@ -9697,7 +9716,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     // The curve's placeholders in their box, 13 by 5, then the meter in its own, captioned, and
     // its scale, against the right of the slot's frame, with two columns between it and the
     // frame, filling the seven rows inside it.
-    let comp = row_of("╭─ 1     Comp");
+    let comp = row_of(&slot_title(0, Some(true), "Comp"));
     let text = |buffer: &ratatui::buffer::Buffer, y: u16| {
         (0..150)
             .map(|x| buffer[(x, y)].symbol())
@@ -9737,7 +9756,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     assert_eq!(buffer[(140, comp + 6)].fg, vt_tui::theme::BASE);
     // A limiter has its meter alone, with its scale, where the compressor's is: 3 dB is the top
     // three quarters of its top row, six eighths at half a dB each.
-    let limit = row_of("╭─ 3     Limit");
+    let limit = row_of(&slot_title(2, Some(true), "Limit"));
     assert!(
         text(&buffer, limit + 7).ends_with("└GR┘      │"),
         "{}",
@@ -10086,7 +10105,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     let screen = rows(&mut app, false);
     for slot in 0..4 {
         let top = 2 + 9 * slot;
-        let title = format!("╭─ {}     ", slot + 1);
+        let title = slot_title(slot, Some(true), "");
         assert!(screen[top].starts_with(&title), "{}", screen[top]);
         assert_eq!(at(&screen[top], 149), '╮', "{}", screen[top]);
         for row in &screen[top + 1..top + 8] {
@@ -10124,13 +10143,18 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     let glue = &screen[4];
     assert!(glue.contains("│  Threshold"), "{glue}");
     assert!(glue.contains("Mix       FF ▕█████████▏"), "{glue}");
-    assert!(screen[6].contains("Peak Clip Off"), "{}", screen[6]);
+    let off = vt_tui::views::widgets::toggle::text(false);
+    assert!(
+        screen[6].contains(&format!("Peak Clip {off}")),
+        "{}",
+        screen[6]
+    );
     // In the keyboard's box, one column and row in on each side, it all still fits: the devices
     // fill rows 3 to 38, with the box's bottom under them.
     let boxed = rows(&mut app, true);
     for slot in 0..4 {
         let top = 3 + 9 * slot;
-        let title = format!("│╭─ {}     ", slot + 1);
+        let title = format!("│{}", slot_title(slot, Some(true), ""));
         assert!(boxed[top].starts_with(&title), "{}", boxed[top]);
         assert_eq!(
             (at(&boxed[top], 148), at(&boxed[top], 149)),
@@ -12290,12 +12314,16 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
 fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
     use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::views::widgets::toggle;
     let (mut app, _realtime) = app();
     press(&mut app, " 4LG");
     let text = track_text(&app).join("\n");
     assert!(text.contains("Rate   Mode        Oct    Retrig"), "{text}");
     assert!(
-        text.contains("Arp       Tick   Up          1      off"),
+        text.contains(&format!(
+            "Arp       Tick   Up          1      {}",
+            toggle::text(false)
+        )),
         "{text}"
     );
     assert_eq!(column_name(&app), "Arp rate");
@@ -12375,7 +12403,10 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     );
     let text = track_text(&app).join("\n");
     assert!(
-        text.contains("Arp       1/32   Up-down     2      on"),
+        text.contains(&format!(
+            "Arp       1/32   Up-down     2      {}",
+            toggle::text(true)
+        )),
         "{text}"
     );
     press(&mut app, "x");
@@ -12390,7 +12421,10 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert_eq!(arpeggio(&app).mode, ArpMode::UpDownInc);
     let text = track_text(&app).join("\n");
     assert!(
-        text.contains("Arp       1/32   Up-down-inc 2      off"),
+        text.contains(&format!(
+            "Arp       1/32   Up-down-inc 2      {}",
+            toggle::text(false)
+        )),
         "{text}"
     );
 }
@@ -12553,6 +12587,185 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
     press(&mut app, "kkb");
     press(&mut app, "jj");
     assert!(faint(&app));
+}
+
+/// The track page drawn as wide and tall as the page is beside the main meter at 163x42.
+fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+/// A cell's glyph and colours.
+fn glyph_at(buffer: &ratatui::buffer::Buffer, at: (u16, u16)) -> (char, Color, Color) {
+    let cell = &buffer[at];
+    (cell.symbol().chars().next().unwrap(), cell.fg, cell.bg)
+}
+
+#[test]
+fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
+    use vt_engine::track_state::LiveValues;
+    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::theme;
+    let (mut app, _realtime) = on_fx_page();
+    // A Delay in the first slot, the second left empty, and the cursor off the slot's title.
+    press(&mut app, "K");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    let (first, second) = (2, 11);
+    // The switch is after the slot's digit, where the room for it was, and the effect is where it
+    // was before it came.
+    let switch = |app: &App| {
+        let buffer = track_page_buffer(app);
+        assert_eq!(buffer[(3, first)].symbol(), "1");
+        assert_eq!(
+            buffer[(7, first)].symbol(),
+            "\u{a0}",
+            "it keeps to its cell"
+        );
+        assert_eq!(buffer[(9, first)].symbol(), "D");
+        let (glyph, color, _) = glyph_at(&buffer, (6, first));
+        (glyph, color)
+    };
+    let on = (SWITCH_ON, theme::GREEN);
+    let off = (SWITCH_OFF, theme::OVERLAY0);
+    assert_eq!(switch(&app), on);
+    // An empty slot has nothing to switch, and keeps the room.
+    let buffer = track_page_buffer(&app);
+    assert_eq!(buffer[(6, second)].symbol(), " ");
+    assert_eq!(buffer[(7, second)].symbol(), " ");
+    assert_eq!(buffer[(9, second)].symbol(), "E");
+
+    // `b` flips it from anywhere in the slot, and back.
+    press(&mut app, "b");
+    assert!(app.song().tracks[0].bypassed[0]);
+    assert_eq!(switch(&app), off);
+    press(&mut app, "b");
+    assert_eq!(switch(&app), on);
+
+    // Playing, it shows what's heard, so a lock switches it out for its note and back in.
+    let heard = |bypassed: bool| LiveValues {
+        bypassed: [bypassed, false, false, false],
+        ..LiveValues::default()
+    };
+    app.transport = Transport::Playing;
+    app.live = Some(heard(true));
+    assert_eq!(switch(&app), off, "a lock bypasses it");
+    app.live = Some(heard(false));
+    assert_eq!(switch(&app), on);
+    press(&mut app, "b");
+    assert_eq!(switch(&app), on, "a lock brings it in under b's bypass");
+    // Stopped, it's the slot's own, whatever was last heard.
+    app.transport = Transport::Stopped;
+    assert_eq!(switch(&app), off);
+}
+
+#[test]
+fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
+    use vt_model::insert::Insert;
+    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::theme;
+    use vt_tui::track_page::Control;
+    let (mut app, _realtime) = on_fx_page();
+    four_devices(&mut app);
+    let text = fx_page_text(&app).join("\n");
+    for word in [" Off ", " On "] {
+        assert!(!text.contains(word), "{word} in\n{text}");
+    }
+    // Where a setting's name is, by its row and the text it starts with.
+    let find = |app: &App, name: &str| {
+        let lines = fx_page_text(app);
+        lines
+            .iter()
+            .enumerate()
+            .find_map(|(y, line)| {
+                let at = line.find(name)?;
+                Some((line[..at].chars().count() as u16, y as u16))
+            })
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    let value_of = |app: &App, name: &str| {
+        let (x, y) = find(app, name);
+        // The value is after the name's 10 columns.
+        glyph_at(&track_page_buffer(app), (x + 10, y))
+    };
+    let off = (SWITCH_OFF, theme::OVERLAY0, Color::Reset);
+    let on = (SWITCH_ON, theme::GREEN, Color::Reset);
+    // Glue's Auto and Peak Clip start off, and the Delay's Ping-pong on.
+    for name in ["Auto", "Peak Clip"] {
+        assert_eq!(value_of(&app, name), off, "{name}");
+    }
+    assert_eq!(value_of(&app, "Ping-pong"), on);
+    // The Delay's Ping-pong and the Drive beside it are a column apart, as every column is.
+    let (ping, row) = find(&app, "Ping-pong");
+    assert_eq!(find(&app, "Drive"), (ping + 27, row));
+
+    // `=` on Peak Clip flips it, in the cursor's colours while it's there and green after.
+    press(&mut app, "ggj$j");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 10));
+    press(&mut app, "=");
+    assert!(matches!(
+        app.song().tracks[0].inserts[0],
+        Insert::Compressor(compressor) if compressor.peak_clip == 1
+    ));
+    let (glyph, _, background) = value_of(&app, "Peak Clip");
+    assert_eq!((glyph, background), (SWITCH_ON, theme::ROSEWATER));
+    assert!(status_line(&app).contains("On"), "{}", status_line(&app));
+    press(&mut app, "k");
+    assert_eq!(value_of(&app, "Peak Clip"), on);
+    // Bypassed, it fades as the rest of the slot does.
+    press(&mut app, "b");
+    assert_eq!(value_of(&app, "Peak Clip").1, theme::OVERLAY0);
+
+    // On the Mod page, an envelope's Reset and the LFOs' and the arpeggio's Retrig, under their
+    // names.
+    press(&mut app, "H");
+    let buffer = track_page_buffer(&app);
+    let lines: Vec<String> = (0..40)
+        .map(|y| (0..150).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect();
+    let column = |heading: &str, y: usize| {
+        let at = lines[y].find(heading).unwrap();
+        lines[y][..at].chars().count() as u16
+    };
+    let envelopes = lines
+        .iter()
+        .position(|line| line.contains("Reset"))
+        .unwrap();
+    let reset = column("Reset", envelopes);
+    for row in 1..=3 {
+        let y = (envelopes + row) as u16;
+        assert_eq!(
+            glyph_at(&buffer, (reset, y)).0,
+            SWITCH_ON,
+            "{}",
+            lines[envelopes + row]
+        );
+    }
+    let lfos = envelopes + 5;
+    let retrig = column("Retrig", lfos);
+    assert_eq!(glyph_at(&buffer, (retrig, lfos as u16 + 1)).0, SWITCH_OFF);
+    let arp = lines
+        .iter()
+        .position(|line| line.starts_with("Arp"))
+        .unwrap();
+    let arp_retrig = column("Retrig", arp - 1);
+    assert_eq!(glyph_at(&buffer, (arp_retrig, arp as u16)), off);
+    // `=` on the first envelope's Reset flips it, and the next is still under its heading.
+    press(&mut app, "gg$");
+    assert_eq!(app.track_control().label(), "Reset");
+    press(&mut app, "=");
+    assert!(!app.song().tracks[0].envelopes[0].reset);
+    let buffer = track_page_buffer(&app);
+    assert_eq!(
+        glyph_at(&buffer, (reset, envelopes as u16 + 1)).0,
+        SWITCH_OFF
+    );
+    assert_eq!(buffer[(reset, envelopes as u16)].symbol(), "R");
 }
 
 #[test]
@@ -13548,7 +13761,7 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
     assert_eq!(names.len(), INSERTS);
     for (slot, name) in names.iter().enumerate() {
         // Each slot's device, with its settings in its frame.
-        let top = format!("╭─ {}     {name}", slot + 1);
+        let top = slot_title(slot, Some(true), name);
         let at = fx.iter().position(|line| line.starts_with(&top));
         let at = at.unwrap_or_else(|| panic!("{top} in\n{}", fx.join("\n")));
         assert!(fx[at + 2].starts_with("│  "), "{}", fx[at + 2]);

@@ -882,10 +882,11 @@ fn the_page_on_the_authors_screen() {
     assert!(
         row(&terminal, 33).starts_with(" Start 0.021 s   End 1.875 s   Loop 1.000 s to 1.500 s")
     );
-    assert!(row(&terminal, 33).contains("Snap off"));
-    assert!(
-        row(&terminal, 34).starts_with(" Whole sample   Gain +0.0 dB   Tune +0 st   Reverse off")
-    );
+    let off = vt_tui::glyphs::SWITCH_OFF;
+    assert!(row(&terminal, 33).contains(&format!("Snap {off}")));
+    assert!(row(&terminal, 34).starts_with(&format!(
+        " Whole sample   Gain +0.0 dB   Tune +0 st   Reverse {off}"
+    )));
     assert!(
         row(&terminal, 35).starts_with(" Cursor 0.021 s  frame 1000  slice 00  on the start"),
         "{}",
@@ -1983,6 +1984,51 @@ fn g_s_g_e_g_l_and_g_upper_l_put_the_points_at_the_cursor_and_x_takes_them_back(
     assert_eq!((looped.start, looped.end), (30_000, LENGTH));
     keys(&mut app, "u u");
     assert_eq!(points(&app).end, Some(80_000));
+}
+
+#[test]
+fn snap_and_reverse_are_toggles_that_flip_with_their_settings() {
+    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::theme;
+    let (mut app, _realtime) = on_page();
+    let mut graphics = Graphics::new();
+    // The glyph after a setting's name on a row of the settings, its colours, and where the next
+    // setting starts.
+    let toggle = |app: &mut App, graphics: &mut Graphics, y: u16, name: &str| {
+        let (terminal, _) = draw(app, graphics, 163, 42);
+        let line = row(&terminal, y);
+        let at = line.find(name).unwrap();
+        let x = (line[..at].chars().count() + name.chars().count()) as u16;
+        let buffer = terminal.backend().buffer();
+        // The no-break space after it keeps it to its cell.
+        assert_eq!(buffer[(x + 1, y)].symbol(), "\u{a0}", "{line}");
+        let cell = &buffer[(x, y)];
+        (cell.symbol().chars().next().unwrap(), cell.fg, cell.bg)
+    };
+    let off = (SWITCH_OFF, theme::OVERLAY0, theme::BASE);
+    let on = (SWITCH_ON, theme::GREEN, theme::BASE);
+    draw(&mut app, &mut graphics, 163, 42);
+    let fades = |app: &mut App, graphics: &mut Graphics| {
+        let (terminal, _) = draw(app, graphics, 163, 42);
+        row(&terminal, 34).find("Fade in")
+    };
+    let fade_at = fades(&mut app, &mut graphics);
+    assert!(fade_at.is_some());
+    assert_eq!(toggle(&mut app, &mut graphics, 33, "Snap "), off);
+    assert_eq!(toggle(&mut app, &mut graphics, 34, "Reverse "), off);
+    // `~` turns it round, and what's after it stays where it was.
+    keys(&mut app, "~");
+    assert_eq!(toggle(&mut app, &mut graphics, 34, "Reverse "), on);
+    assert_eq!(fades(&mut app, &mut graphics), fade_at);
+    // `K` and `=` turn Snap on, in the cursor's colours while the focus is on it, and the status
+    // line still says the word.
+    keys(&mut app, "K Enter =");
+    assert!(app.song().bank.get(1).unwrap().edit.play.snap_zero);
+    let (glyph, _, background) = toggle(&mut app, &mut graphics, 33, "Snap ");
+    assert_eq!((glyph, background), (SWITCH_ON, theme::ROSEWATER));
+    assert!(app.status.contains("on"), "{}", app.status);
+    keys(&mut app, "Esc");
+    assert_eq!(toggle(&mut app, &mut graphics, 33, "Snap "), on);
 }
 
 #[test]

@@ -1,8 +1,8 @@
 //! A device: one thing in a page's rack, such as an FX slot, in a rounded frame 9 rows tall with
-//! its title on the top border. The title says which device it is, dim, then has a place for its
-//! switch, then the controls that change its character, such as an effect and its type. Inside
-//! are its settings grid on the left and its graphic panel, if it has one, on the right. The
-//! device with the cursor has a brighter frame and its title's controls bold.
+//! its title on the top border. The title says which device it is, dim, then has its switch, or a
+//! place for one, then the controls that change its character, such as an effect and its type.
+//! Inside are its settings grid on the left and its graphic panel, if it has one, on the right.
+//! The device with the cursor has a brighter frame and its title's controls bold.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -10,9 +10,11 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
+use crate::glyphs;
 use crate::theme;
 use crate::views::widgets;
 use crate::views::widgets::grid::GRID_HEIGHT;
+use crate::views::widgets::toggle;
 
 /// How tall every device is, whatever it holds, so nothing moves when what's in it changes: its
 /// frame, a blank line, three rows of settings with a blank line after each, and its frame.
@@ -24,10 +26,19 @@ const TITLE_INDENT: u16 = 2;
 /// The room between the title's parts.
 const TITLE_GAP: &str = "  ";
 
+/// What's in a title's place for its switch.
+#[derive(Clone, Copy)]
+enum Switch {
+    /// A toggle, on or off.
+    Toggle(bool),
+    /// Nothing, but its room.
+    Room,
+}
+
 /// A device's frame and title.
 pub struct Device {
     identity: String,
-    switch: Option<Span<'static>>,
+    switch: Option<Switch>,
     controls: Vec<Line<'static>>,
     focused: bool,
 }
@@ -43,11 +54,21 @@ impl Device {
         }
     }
 
-    /// The same with its switch after its name, or the room for one.
+    /// The same with its switch after its name, on or off.
     #[must_use]
-    pub fn switch(self, switch: Span<'static>) -> Self {
+    pub fn switch(self, on: bool) -> Self {
         Self {
-            switch: Some(switch),
+            switch: Some(Switch::Toggle(on)),
+            ..self
+        }
+    }
+
+    /// The same with the room for a switch after its name, as one that has nothing to switch
+    /// leaves, so what's after it is where it is on the others.
+    #[must_use]
+    pub fn switch_room(self) -> Self {
+        Self {
+            switch: Some(Switch::Room),
             ..self
         }
     }
@@ -102,11 +123,24 @@ impl Widget for Device {
             .border_style(Style::new().fg(frame))
             .render(area, buf);
         let mut title = vec![Span::raw(" "), Span::styled(self.identity, theme::dim())];
-        if let Some(switch) = self.switch {
-            title.extend([Span::raw(TITLE_GAP), switch]);
+        // A switch's glyph is followed by the no-break space that keeps it to its cell, which is
+        // the first column of the gap after it, and the room for one is as wide.
+        let switch = match self.switch {
+            Some(Switch::Toggle(on)) => Some(vec![
+                toggle::span(on),
+                Span::raw(glyphs::ICON_SPACE.to_string()),
+            ]),
+            Some(Switch::Room) => Some(vec![Span::raw("  ")]),
+            None => None,
+        };
+        let mut gap = TITLE_GAP;
+        if let Some(switch) = switch {
+            title.push(Span::raw(TITLE_GAP));
+            title.extend(switch);
+            gap = &TITLE_GAP[1..];
         }
         for control in self.controls {
-            title.push(Span::raw(TITLE_GAP));
+            title.push(Span::raw(std::mem::replace(&mut gap, TITLE_GAP)));
             title.extend(control.spans.into_iter().map(|span| {
                 if self.focused {
                     span.patch_style(Modifier::BOLD)
