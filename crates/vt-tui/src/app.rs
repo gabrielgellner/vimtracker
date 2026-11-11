@@ -311,6 +311,9 @@ pub struct App {
     /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
     /// gain reduction meter holds at the deepest.
     pub slot_reduction: [crate::meter::Held; vt_model::insert::INSERTS],
+    /// The cursor's track's level right after its trim, each side's in dB, for the meter in its
+    /// Output device: where it is now and the highest it was lately.
+    pub after_trim: [crate::meter::Held; 2],
     /// The main output's recent sound, for the scope above the meter.
     pub scope: crate::scope::Scope,
     /// The id of the scope's image, and whether the last screen drawn had room for it.
@@ -516,6 +519,7 @@ impl App {
             recording: None,
             meter: Meter::default(),
             slot_reduction: [crate::meter::Held::new(0.0); vt_model::insert::INSERTS],
+            after_trim: [crate::meter::Held::new(crate::meter::FLOOR_DB); 2],
             scope: crate::scope::Scope::new(rate),
             scope_image: None,
             scope_shown: true,
@@ -880,6 +884,13 @@ impl App {
         }
         for (slot, held) in self.slot_reduction.iter_mut().enumerate() {
             held.update(self.live.map_or(0.0, |live| live.reduction[slot]), seconds);
+        }
+        // Only what was reported this frame, for this track, so it falls once nothing is.
+        let trimmed = report
+            .filter(|report| report.watched == track)
+            .map_or([0.0; 2], |report| report.live.after_trim);
+        for (held, level) in self.after_trim.iter_mut().zip(trimmed) {
+            held.update(crate::meter::to_db(level), seconds);
         }
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;

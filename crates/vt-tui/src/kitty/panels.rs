@@ -4,16 +4,15 @@
 //! it changes.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use vt_model::envelope::Envelope;
-use vt_model::sample::SampleData;
 
 use super::plot::Shade;
 use super::{FilterSettings, SlotDrawing};
+use crate::sample_wave::Thumbnail;
 
-/// A panel that draws an image: the Sound page's filter curve and sample's waveform, an envelope
-/// on the Mod page, or an FX slot's curve.
+/// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, an
+/// envelope on the Mod page, or an FX slot's curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
@@ -26,9 +25,9 @@ pub enum PanelKey {
 #[derive(Debug, Clone)]
 pub enum Shape {
     Filter(FilterSettings),
-    /// A sample, drawn once for each, which is held so another loaded later can't be mistaken for
-    /// it.
-    Waveform(Arc<SampleData>),
+    /// A sampler's slice, with where it starts and stops, drawn again only when one of those
+    /// changes or the file's frames come in.
+    Waveform(Thumbnail),
     Envelope(Envelope),
     Slot(SlotDrawing),
 }
@@ -37,7 +36,7 @@ impl PartialEq for Shape {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Filter(a), Self::Filter(b)) => a == b,
-            (Self::Waveform(a), Self::Waveform(b)) => Arc::ptr_eq(a, b),
+            (Self::Waveform(a), Self::Waveform(b)) => a == b,
             (Self::Envelope(a), Self::Envelope(b)) => a == b,
             (Self::Slot(a), Self::Slot(b)) => a == b,
             _ => false,

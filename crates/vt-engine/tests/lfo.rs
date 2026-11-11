@@ -379,6 +379,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
+        after_trim: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
 }

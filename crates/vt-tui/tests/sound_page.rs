@@ -279,17 +279,17 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
     for mode in [Mode::Normal, Mode::Keys] {
         let (mut app, _realtime) = playing(Machine::Sampler);
         app.mode = mode;
-        // Without an image, there's no box.
-        let plain = full_screen(&mut app);
-        assert!(!lines(&plain).iter().any(|line| line.contains('┌')));
+        // Without an image, there's no box in the Filter.
+        let plain = lines(&full_screen(&mut app));
+        let (top, _) = titles(&plain)[1];
+        assert!(!plain[top..top + 9].iter().any(|line| line.contains('┌')));
 
         app.filter_image = Some(0x01_02_03);
         let drawn = full_screen(&mut app);
         let text = lines(&drawn);
-        let (top, _) = titles(&text)[1];
         let cells = image_cells(&drawn, Color::Rgb(1, 2, 3));
-        // Its size is as it was: 24 by 3.
-        assert_eq!(cells.len(), 24 * 3);
+        // The large panel's size: 49 by 5.
+        assert_eq!(cells.len(), 49 * 5);
         let rows: Vec<u16> = cells.iter().map(|(_, y)| *y).collect();
         let columns: Vec<u16> = cells.iter().map(|(x, _)| *x).collect();
         let (left, right) = (
@@ -297,9 +297,9 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
             *columns.iter().max().unwrap(),
         );
         let (first, last) = (*rows.iter().min().unwrap(), *rows.iter().max().unwrap());
-        // In the middle of the Filter's inside, with its box a row above and below.
-        assert_eq!(usize::from(first), top + 3, "{text:#?}");
-        assert_eq!(usize::from(last), top + 5);
+        // All of the Filter's inside, with its box a row above and below.
+        assert_eq!(usize::from(first), top + 2, "{text:#?}");
+        assert_eq!(usize::from(last), top + 6);
         assert_eq!(drawn[(left - 1, first - 1)].symbol(), "┌");
         assert_eq!(drawn[(right + 1, last + 1)].symbol(), "┘");
         // Against the device's right side, two columns in from its frame.
@@ -308,11 +308,14 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
             .unwrap();
         assert_eq!(frame, right + 4, "{}", text[usize::from(first)]);
         // Clear of the settings beside it.
-        let settings = text[usize::from(first) - 1].find("Low cut").unwrap();
+        let settings = text[usize::from(first)]
+            .chars()
+            .position(|c| c == 'L')
+            .unwrap();
         assert!(
             usize::from(left) > settings + 30,
             "{}",
-            text[usize::from(first) - 1]
+            text[usize::from(first)]
         );
     }
 }
@@ -327,7 +330,7 @@ fn a_samplers_waveform_is_in_the_machines_panel() {
     let found = titles(&text);
     let waveform = image_cells(&drawn, Color::Rgb(4, 5, 6));
     let filter = image_cells(&drawn, Color::Rgb(1, 2, 3));
-    assert_eq!(waveform.len(), 24 * 3);
+    assert_eq!(waveform.len(), 49 * 5);
     let machine = found[0].0 as u16..found[1].0 as u16;
     let device = found[1].0 as u16..found[2].0 as u16;
     assert!(waveform.iter().all(|(_, y)| machine.contains(y)));
@@ -368,4 +371,177 @@ fn acids_sound_page_at_163_by_42() {
     for (row, line) in expected {
         assert!(text[row].starts_with(line), "{row}: {}", text[row]);
     }
+}
+
+/// The inside of the box in a device's panel, row by row, as text, for the device whose title is
+/// at `top`.
+fn panel_rows(text: &[String], top: usize) -> Vec<String> {
+    let line: Vec<char> = text[top + 1].chars().collect();
+    let left = line.iter().position(|c| *c == '┌').unwrap();
+    let right = line.iter().position(|c| *c == '┐').unwrap();
+    (top + 2..top + 7)
+        .map(|row| {
+            let chars: Vec<char> = text[row].chars().collect();
+            chars[left + 1..right].iter().collect()
+        })
+        .collect()
+}
+
+#[test]
+fn the_output_meter_shows_each_side_after_the_trim_with_its_held_peak_and_scale() {
+    use vt_tui::meter::{FLOOR_DB, Held};
+    for mode in [Mode::Normal, Mode::Keys] {
+        let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Kick));
+        app.mode = mode;
+        // Silent, the bars are empty and only the scale shows.
+        let text = lines(&full_screen(&mut app));
+        let (top, title) = titles(&text)[2].clone();
+        assert_eq!(title, "Output");
+        let rows = panel_rows(&text, top);
+        assert_eq!(rows.len(), 5);
+        assert!(rows.iter().all(|row| row.chars().count() == 49));
+        assert_eq!(rows[1], format!(" L {}", " ".repeat(46)));
+        assert_eq!(rows[3], "         -48     -36     -24     -12       0     ");
+        assert!(rows[0].trim().is_empty() && rows[4].trim().is_empty());
+
+        // At -12 dB now, after -6 dB a moment ago: 32 cells of 1.5 dB from -60, and the held
+        // mark in the cell -6 dB is in.
+        let mut held = Held::new(FLOOR_DB);
+        held.update(-6.0, 0.0);
+        held.update(-12.0, 1.0);
+        assert_eq!((held.now, held.top), (-12.0, -6.0));
+        let mut quieter = Held::new(FLOOR_DB);
+        quieter.update(-6.0, 0.0);
+        quieter.update(-13.5, 1.0);
+        app.after_trim = [held, quieter];
+        let text = lines(&full_screen(&mut app));
+        let rows = panel_rows(&text, top);
+        let left = format!(" L {}   ▏{}", "█".repeat(32), " ".repeat(10));
+        assert_eq!(rows[1], left);
+        // A dB and a half less is a cell less, with the same mark.
+        let right = format!(" R {}    ▏{}", "█".repeat(31), " ".repeat(10));
+        assert_eq!(rows[2], right);
+        // Clear of the settings beside it, in the device, against its right side.
+        let line = &text[top + 2];
+        let group = line.find("Send A").unwrap();
+        let box_left = text[top + 1].chars().position(|c| c == '┌').unwrap();
+        assert!(box_left > line[..group].chars().count() + 29, "{line}");
+    }
+}
+
+#[test]
+fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
+    use vt_tui::meter::FLOOR_DB;
+    let mut song = Song::new(2);
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::Kick);
+    *Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap())
+        .step_mut(0)
+        .unwrap() = "C-3 -- --- --- ---".parse().unwrap();
+    let heard = |trim: u8, level: u8| {
+        let mut song = song.clone();
+        song.tracks[0].trim = trim;
+        song.tracks[0].level = level;
+        let samples = Arc::new(SamplePool::default());
+        let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+        let (handle, mut realtime) = connect(Engine::new(48_000, version));
+        let mut app = App::new(song, None, samples, handle, 48_000);
+        press(&mut app, " 4");
+        app.handle
+            .send(vt_engine::link::Command::PlayFrom { step: 0 });
+        let mut out = vec![0.0; 2048 * 2];
+        realtime.process(&mut out);
+        app.tick();
+        app.after_trim.map(|side| side.now)
+    };
+    let plain = heard(0x80, 0xE0);
+    assert!(plain[0] > -30.0 && plain[0] < 6.0, "{plain:?}");
+    // 12 dB more trim reads 12 dB more, and the fader, after it, changes nothing.
+    let hot = heard(0x80 + 48, 0x00);
+    assert!((hot[0] - plain[0] - 12.0).abs() < 0.01, "{plain:?} {hot:?}");
+    assert!(plain[0] > FLOOR_DB);
+}
+
+/// What the moving filter curve costs: an LFO sweeping `Cut` over a bar, with a note on every
+/// step, run as the program runs it, a frame of audio, a tick and a sync every 33 ms. It prints
+/// what it measures with `--nocapture`, for decision 153.
+#[test]
+fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
+    use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
+    use vt_model::lfo::{Lfo, Rate, Shape};
+    use vt_tui::kitty::Graphics;
+    let mut song = Song::new(2);
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
+    song.tracks[0].cutoff = 0x80;
+    song.tracks[0].resonance = 0xA0;
+    song.tracks[0].lfos[0] = Lfo {
+        destination: Some(SettingId::CUT),
+        shape: Shape::Tri,
+        rate: Rate::Note(TICKS_PER_QUARTER as u32 * 4),
+        depth: 0x60,
+        ..Lfo::default()
+    };
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    for step in 0..16 {
+        *phrase.step_mut(step).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
+    }
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, mut realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 4");
+    app.handle
+        .send(vt_engine::link::Command::PlayFrom { step: 0 });
+    let mut graphics = Graphics::new();
+    let frames = 4 * 1000 / FRAME_MS as usize;
+    let audio = 48_000 * FRAME_MS as usize / 1000;
+    let mut out = vec![0.0; audio * 2];
+    let (mut sends, mut bytes, mut written, mut pngs) = (0, 0, 0, Vec::new());
+    let mut syncing = std::time::Duration::ZERO;
+    for _ in 0..frames {
+        realtime.process(&mut out);
+        app.tick();
+        let mut sent = Vec::new();
+        let started = Instant::now();
+        graphics.sync(&mut app, &mut sent).unwrap();
+        syncing += started.elapsed();
+        let text = String::from_utf8_lossy(&sent);
+        sends += text.matches(",c=49,r=5,").count();
+        // Only the curve's commands, its first and the rest of its pieces, as the scope over the
+        // main meter is sent in the same frames.
+        let mut curve = false;
+        for command in text.split("\x1b_G").skip(1) {
+            if command.starts_with("a=T") {
+                curve = command.contains(",c=49,r=5,");
+            } else if command.starts_with("a=") {
+                continue;
+            }
+            if curve {
+                bytes += command.len() + "\x1b_G".len();
+            }
+        }
+        written += sent.len();
+        let images = vt_tui::screenshot::sent_images(&sent);
+        pngs.extend(
+            app.filter_image
+                .and_then(|id| images.get(&id))
+                .map(Vec::len),
+        );
+    }
+    let seconds = frames as f32 * FRAME_MS as f32 / 1000.0;
+    let average = pngs.iter().sum::<usize>() / pngs.len().max(1);
+    eprintln!(
+        "the filter curve under an LFO on Cut: {sends} sends in {seconds:.1} s, {:.1} a second; \
+         PNGs of {} to {} bytes, {average} on average; {:.1} KB a second sent for it, of \
+         {:.1} KB with the scope; {:.2} ms a frame to draw and send",
+        sends as f32 / seconds,
+        pngs.iter().min().unwrap_or(&0),
+        pngs.iter().max().unwrap_or(&0),
+        bytes as f32 / seconds / 1024.0,
+        written as f32 / seconds / 1024.0,
+        syncing.as_secs_f32() * 1000.0 / frames as f32,
+    );
+    // It moves, so it's sent, but never two frames running: at most 15 times a second.
+    assert!(sends > frames / 4, "{sends} of {frames}");
+    assert!(sends <= frames / 2 + 1, "{sends} of {frames}");
+    assert!(average < 8000, "{average}");
 }

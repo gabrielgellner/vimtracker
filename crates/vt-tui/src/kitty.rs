@@ -15,7 +15,7 @@ use flate2::write::ZlibEncoder;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::engine::PLAYHEADS;
-use vt_model::bank::{BankEntry, ContentHash, Points};
+use vt_model::bank::{ContentHash, Points};
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
@@ -24,9 +24,9 @@ use crate::app::App;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Shown;
 use crate::sample_page::SamplePage;
-use crate::sample_wave::Drawing;
+use crate::sample_wave::{Drawing, Thumbnail};
 use crate::theme;
-use crate::track_page::{Control, Page};
+use crate::track_page::Page;
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
@@ -38,7 +38,8 @@ use crate::views::sample::{
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    envelope_being_edited, filter_being_edited, heard_bypassed, slot_being_edited,
+    envelope_being_edited, filter_being_edited, heard_bypassed, machine_being_edited,
+    slot_being_edited,
 };
 use crate::waveform;
 
@@ -555,12 +556,6 @@ pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
     line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
 }
 
-/// A sample's waveform as a PNG, at its real level.
-pub fn waveform_png(frames: &[[f32; 2]], color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&waveform::spans(frames, &[], across, down), down, color)
-}
-
 /// The rows a waveform covers in each column of dots, for a drawing this many characters across
 /// and down, to keep in place of the sample and draw later with [`spans_png`].
 pub fn waveform_spans(frames: &[[f32; 2]], columns: usize, rows: usize) -> Vec<(usize, usize)> {
@@ -845,6 +840,29 @@ pub(crate) fn rgb(color: Color) -> [u8; 3] {
     match color {
         Color::Rgb(red, green, blue) => [red, green, blue],
         _ => [255; 3],
+    }
+}
+
+/// What a sampler track plays, as its thumbnail shows it, once its file has been analysed.
+fn thumbnail(app: &App, track: &Track) -> Option<Thumbnail> {
+    let entry = app.song().bank.get(track.sample())?;
+    let source = entry.source()?;
+    let analysis = Arc::clone(app.samples.analysis(source.hash)?);
+    let frames = app.samples.id_of(&source.path).and_then(|id| {
+        let data = app.samples.shared(id)?;
+        Some((Arc::clone(data), app.samples.rates(id)))
+    });
+    Some(Thumbnail::of(entry, analysis, frames, track))
+}
+
+/// A thumbnail's colours in a shade: the sound that plays and the rest. With the cursor in the
+/// Machine, what plays is the text's colour, as on the sample page, rather than the active
+/// green, which would be hard to tell from the start's teal.
+fn thumbnail_colors(shade: Shade) -> ([u8; 3], [u8; 3]) {
+    match shade {
+        Shade::Focused => (rgb(theme::TEXT), rgb(theme::OVERLAY0)),
+        Shade::Dim => (shade.color(), rgb(theme::SURFACE1)),
+        Shade::Faint => (shade.color(), rgb(theme::SURFACE0)),
     }
 }
 
@@ -1187,37 +1205,30 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the waveform of the sample a track plays, if the terminal lacks it. A track with no
-    /// sample, or one that didn't load, has none.
+    /// Send the thumbnail of what a sampler track plays, if the terminal lacks it: the slice its
+    /// `Slice` is on, with its `Start` and `Length` as the sample page's start and end lines. A
+    /// track with no sample, or one whose file hasn't been analysed, has none yet.
     fn sync_waveform(
         &mut self,
         app: &mut App,
         track: &Track,
         out: &mut impl Write,
     ) -> io::Result<()> {
-        let samples = Arc::clone(&app.samples);
-        let song = Arc::clone(app.song());
-        let Some(sample) = song
-            .bank
-            .get(track.sample())
-            .and_then(BankEntry::source)
-            .and_then(|source| samples.shared(samples.id_of(&source.path)?))
-        else {
+        let Some(thumbnail) = thumbnail(app, track) else {
             return Ok(());
         };
-        let shade = Shade::of(app.track_control() == Control::Sample, false);
+        let shade = Shade::of(machine_being_edited(app), false);
+        let cell = self.cell;
         let id = self.panel(
             out,
             (PanelKey::Waveform, shade),
-            Shape::Waveform(Arc::clone(sample)),
+            Shape::Waveform(thumbnail.clone()),
             (WAVEFORM_WIDTH, WAVEFORM_HEIGHT),
             |_| {
-                waveform_png(
-                    &sample.frames,
-                    shade.color(),
-                    WAVEFORM_WIDTH,
-                    WAVEFORM_HEIGHT,
-                )
+                let (sound, outside) = thumbnail_colors(shade);
+                thumbnail
+                    .picture((WAVEFORM_WIDTH, WAVEFORM_HEIGHT), cell, sound, outside)
+                    .png()
             },
         )?;
         app.waveform_image = Some(id);
@@ -1830,8 +1841,9 @@ mod tests {
     #[test]
     fn the_existing_drawings_are_unchanged() {
         // Each PNG's size and CRC, as they were before pictures could have more colours or be
-        // compressed: the Sound page's waveform, the explorer's preview and the kit picker's. The
-        // envelopes are curves now, drawn by `plot`.
+        // compressed: the explorer's preview and the kit picker's. The envelopes are curves now,
+        // drawn by `plot`, and the Sound page's waveform is a thumbnail drawn as the sample page's
+        // waveform is.
         let frames: Vec<[f32; 2]> = (0..3000)
             .map(|frame| {
                 let level = (frame as f32 * 0.05).sin() * (-(frame as f32) / 900.0).exp();
@@ -1840,7 +1852,6 @@ mod tests {
             .collect();
         let color = [200, 120, 40];
         let drawings = [
-            waveform_png(&frames, color, WAVEFORM_WIDTH, WAVEFORM_HEIGHT),
             spans_png(
                 &waveform_spans(&frames, PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT),
                 PREVIEW_SAMPLE_HEIGHT,
@@ -1852,7 +1863,7 @@ mod tests {
                 color,
             ),
         ];
-        let before = [(6039, 0x5bff_5631), (9315, 0xf14b_3760), (783, 0x143f_a841)];
+        let before = [(9315, 0xf14b_3760), (783, 0x143f_a841)];
         for (png, (length, crc)) in drawings.iter().zip(before) {
             assert_eq!((png.len(), crc32(&[png])), (length, crc));
         }

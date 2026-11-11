@@ -1,6 +1,7 @@
 //! A meter's cells, a row at a time: a level rising from the bottom, as the main meter's and the
-//! mixer's bars do, or an amount hanging down from the top, as gain reduction does, each cell
-//! filled in eighths. The FX page's reduction meters and the project page's groove use them too.
+//! mixer's bars do, an amount hanging down from the top, as gain reduction does, or a level going
+//! across, as the Sound page's Output meter does, each cell filled in eighths. The FX page's
+//! reduction meters and the project page's groove use them too.
 
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
@@ -59,4 +60,33 @@ pub fn hanging_cell(filled: usize, color: Color, behind: Color, width: usize) ->
         part => (EIGHTHS[8 - part], behind, color),
     };
     Span::styled(symbol.to_string().repeat(width), Style::new().fg(fg).bg(bg))
+}
+
+/// Partial blocks filling a cell from the left, from one eighth of it to seven.
+const LEFT_EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+
+/// A level as a bar across, a character for each `per_cell` dB up from `floor`, each filled in
+/// eighths and in the level colour at its middle, with a faint mark in the cell of the highest it
+/// was lately, `held`, while the bar is below it.
+pub fn level_across(
+    db: f32,
+    held: f32,
+    floor: f32,
+    per_cell: f32,
+    cells: usize,
+) -> Vec<Span<'static>> {
+    let eighths = |db: f32| ((db - floor) / per_cell * 8.0).round().max(0.0) as usize;
+    let filled = eighths(db);
+    let marked = (held > floor).then(|| (eighths(held).max(1) - 1) / 8);
+    (0..cells)
+        .map(|cell| {
+            let color = theme::level(floor + per_cell * (cell as f32 + 0.5));
+            match filled.saturating_sub(cell * 8).min(8) {
+                8 => Span::styled("█", Style::new().fg(color)),
+                0 if marked == Some(cell) => Span::styled("▏", theme::faint()),
+                0 => Span::raw(" "),
+                part => Span::styled(LEFT_EIGHTHS[part - 1].to_string(), Style::new().fg(color)),
+            }
+        })
+        .collect()
 }

@@ -189,8 +189,10 @@ fn drums() -> Decoded {
     }
 }
 
-/// The name the kick is played by.
+/// The name the kick is played by, and its content's hash, so its analysis is found for the
+/// Sound page's thumbnail.
 const KICK: &str = "kick.wav";
+const KICK_HASH: ContentHash = ContentHash(0x4B1C);
 
 /// Half a second of a kick drum, made here so the screenshots need no file: a sine falling from
 /// 150 Hz to 50 Hz as it dies away.
@@ -302,8 +304,17 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let mut song = song(shot.rows, shot.voice);
     let mut pool = SamplePool::default();
     if shot.kick {
-        pool.insert(KICK, kick());
-        song.sample_on(0, KICK);
+        let kick = kick();
+        let decoded = Decoded {
+            samples: kick.frames.concat(),
+            channels: 2,
+            rate: RATE,
+        };
+        pool.insert_analysis(Arc::new(Analysis::of(KICK_HASH, &decoded)));
+        pool.insert(KICK, kick);
+        let number = song.bank.add(BankEntry::of_file(KICK, KICK_HASH));
+        song.tracks[0].machine = Machine::Sampler;
+        song.tracks[0].set_setting(SettingId::SAMPLE, number.expect("room in the bank"));
     }
     if shot.drums {
         let decoded = drums();

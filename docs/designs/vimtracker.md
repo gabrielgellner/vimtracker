@@ -331,8 +331,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 solo, fill, realigns, launches, the scale and which track to watch. The engine resolves each against
 its own state, so two quick presses can't act on an out-of-date view of it. **Telemetry** comes back
 each block: where playback is, each track's place and levels, the watched track's live values, and
-up to four sample playheads. `Handle::latest` merges every report since the last frame, so a meter
-doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
+up to four sample playheads. The live values carry the watched track's peak right after its trim
+(`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
+`Engine::take_after_trim` takes, for the Output device's meter. `Handle::latest` merges every
+report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
 
 **Real-time safety.** Nothing in `Realtime::process` allocates, frees, locks or does I/O. Each
@@ -677,14 +679,20 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     terminal's own pixels, the characters they cover times `Graphics::cell`, so nothing is
     stretched. Its `Plot` is an anti-aliased 2-pixel line, each pixel covered in eighths by its
     distance from the line, over faint dotted gridlines, as a PNG whose palette has an alpha for
-    each entry, always compressed, about 1 to 2 KB. The waveforms and the scope stay solid dots.
+    each entry, always compressed, about 1 to 2 KB. The filter curve is the Sound page's large
+    panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
+    The scope and the pickers' waveforms stay solid dots.
 *   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
-    `(PanelKey, Shade)`: the filter, the sample's waveform, each envelope and each FX slot, each in
+    `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each envelope and each FX slot, each in
     up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
     from. `Graphics::panel` sends one only when its shape is new, and one that changes again within
     a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a
     second, as the scope is. Moving the cursor or switching a slot out and back sends nothing once
     each shade has been sent.
+*   **A sampler's thumbnail, `sample_wave::Thumbnail`.** The Sound page's Machine device shows the
+    slice its `Slice` is on, cut as the engine cuts a note: `Start` and `Length` are shares of the
+    slice in play order. It's drawn by the sample page's own `Drawing`, at one pixel for each of
+    the screen's, with the start's teal line, the end's red one, and the sound outside them dim.
 *   **Direct placements with `X=`, for thin lines and markers.** A placeholder can only sit on a
     character, about 15 pixels wide on the author's screen, which is too coarse for the sample
     page's cursor line, its playheads and its ruler's marks. Their images are stored once with

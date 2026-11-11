@@ -135,6 +135,10 @@ pub struct LiveValues {
     pub reduction: [f32; INSERTS],
     /// Whether each slot is switched out as it's heard, a step's lock of it included.
     pub bypassed: [bool; INSERTS],
+    /// The highest level of each side since the last report, right after the trim and before the
+    /// filter, as a gain: what the Output device's meter shows, so the trim can be set by eye.
+    /// The report fills it in from `Engine::take_after_trim`.
+    pub after_trim: [f32; 2],
 }
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
@@ -502,6 +506,9 @@ pub struct TrackState {
     pub tail: Voice,
     /// What this track has played since the meters last asked, after its level and pan.
     pub reading: Reading,
+    /// The highest level of each side since it was last taken, right after the trim and before
+    /// the filter or the slots, for the Output device's meter, so the trim can be set by eye.
+    pub after_trim: [f32; 2],
     /// Live controls, kept here rather than in the song so undo can't change them.
     pub mute: bool,
     pub solo: bool,
@@ -765,6 +772,7 @@ impl TrackState {
             gain: Smoothed::at(1.0),
             level: Smoothed::at(1.0),
             input_trim: Smoothed::at(1.0),
+            after_trim: [0.0; 2],
             pan: Smoothed::at(0.5),
             cutoff: Smoothed::at(1.0),
             resonance: Smoothed::at(0.0),
@@ -1137,6 +1145,9 @@ impl TrackState {
             }),
             reduction: std::array::from_fn(|slot| self.inserts[slot].reduction()),
             bypassed: self.bypassed,
+            // Taken, as it's the highest since it last was, by `Engine::take_after_trim`, which the
+            // report fills this in from.
+            after_trim: [0.0; 2],
         }
     }
 
@@ -1716,6 +1727,7 @@ impl TrackState {
         // its drive and the slots are hit. At 0 dB it's exactly 1, which leaves the voice as it is.
         let trim = self.input_trim.next(smoothing);
         let input = [input[0] * trim, input[1] * trim];
+        self.take_in_after_trim(input);
         let cutoff = (self.cutoff.next(smoothing)
             + self.cut_offset.next(fast)
             + self.cut_envelope.next(fast))
@@ -1781,6 +1793,15 @@ impl TrackState {
         }
     }
 
+    /// Keep the highest level of each side right after the trim, for the Output device's meter.
+    /// It's a comparison a side, and a sample that isn't a number leaves it as it was.
+    #[inline]
+    fn take_in_after_trim(&mut self, frame: [f32; 2]) {
+        for (highest, sample) in self.after_trim.iter_mut().zip(frame) {
+            *highest = highest.max(sample.abs());
+        }
+    }
+
     /// Run a frame through the slots in order. Whether its two sides are the same is looked at
     /// once, and each slot passes it on to the next, so a chain of effects that keep a mono sound
     /// mono works out one side all the way through (decision 147).
@@ -1820,6 +1841,7 @@ impl TrackState {
     ) -> [f32; 2] {
         let trim = self.input_trim.next(smoothing);
         let frame = [input[0] * trim, input[1] * trim];
+        self.take_in_after_trim(frame);
         let frame = self.through_slots(frame, smoothing, fast, rate, keys);
         self.key = frame;
         let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {

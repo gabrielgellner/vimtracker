@@ -339,6 +339,17 @@ impl Handle {
                 for (reading, earlier) in report.tracks.iter_mut().zip(earlier.tracks) {
                     reading.merge(earlier);
                 }
+                // The level after the trim keeps its loudest too, while it's the same track's.
+                if report.watched == earlier.watched {
+                    for (highest, earlier) in report
+                        .live
+                        .after_trim
+                        .iter_mut()
+                        .zip(earlier.live.after_trim)
+                    {
+                        *highest = highest.max(earlier);
+                    }
+                }
             }
             latest = Some(report);
         }
@@ -452,6 +463,8 @@ impl Realtime {
             room.fill_from_iter(mono.map(|[left, right]| (left + right) * 0.5));
         }
         let reading = self.engine.take_reading();
+        let mut live = self.engine.live(self.watched);
+        live.after_trim = self.engine.take_after_trim(self.watched);
         let _ = self.telemetry.push(Telemetry {
             section: self.engine.section(),
             position: self.engine.position(),
@@ -465,7 +478,7 @@ impl Realtime {
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,
-            live: self.engine.live(self.watched),
+            live,
             playheads: self.engine.playheads(self.watched),
         });
         // A change that doesn't fit stays different, so it goes in a later block.
@@ -1222,6 +1235,37 @@ mod tests {
         assert_eq!(reading.frames, BLOCK as u32 * 5);
         assert!(reading.power[0] > 0.0);
         assert_eq!(handle.latest(), None, "nothing is counted twice");
+    }
+
+    #[test]
+    fn the_level_after_the_trim_is_reported_for_the_track_watched_without_allocating() {
+        let pool = samples();
+        let mut two = song(2, 16);
+        // The first track's trim at +12 dB, its filter shut and its fader down, so only a level
+        // taken after the trim and before the filter reads anything.
+        two.tracks[0].trim = vt_model::constants::UNITY_TRIM + 48;
+        two.tracks[0].filter = vt_model::song::FilterType::HighPass;
+        two.tracks[0].cutoff = 0xFF;
+        two.tracks[0].level = 0;
+        let engine = Engine::new(48_000, published(two, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        assert_eq!(blocks(&mut rt, 4), 0, "the tap never allocates");
+        let report = handle.latest().unwrap();
+        assert_eq!(report.watched, 0);
+        let boosted = 0.5 * vt_model::song::trim_gain(vt_model::constants::UNITY_TRIM + 48);
+        assert!(
+            (report.live.after_trim[0] - boosted).abs() < 1e-3,
+            "{:?}",
+            report.live.after_trim
+        );
+        assert!(report.tracks[0].before[0] < 1e-3, "the fader is down");
+        // The loudest of the reports since the last look is kept, and only the track watched is.
+        handle.send(Command::Watch { track: 1 });
+        assert_eq!(blocks(&mut rt, 3), 0);
+        let report = handle.latest().unwrap();
+        assert_eq!(report.watched, 1);
+        assert!((report.live.after_trim[0] - 0.5).abs() < 1e-3, "{report:?}");
     }
 
     #[test]
