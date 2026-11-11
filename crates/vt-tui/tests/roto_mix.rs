@@ -341,10 +341,10 @@ fn func_focuses_one_track_level_pan_and_sends_and_plugin_mode_shows_it_too() {
             .is_some_and(|track| track.index == 3)
     }));
     assert_eq!(app.roto.track, 3);
-    settle(&mut app, 30);
-    ports.with(|fake| assert_eq!(fake.sends, Some(2)));
     let level = position(&app, Control::Level, 3);
-    assert_eq!(ports.with(|fake| fake.knob_position(0)), Some(level));
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.sends == Some(2) && fake.knob_position(0) == Some(level)
+    }));
     roto_does(
         &ports,
         ControlEvent::Knob {
@@ -463,6 +463,8 @@ fn the_keys_move_the_knobs_but_never_one_being_touched() {
             .last()
             .is_some_and(|text| text.ends_with("dB"))
     }));
+    // Touched, it shows its value, which says the app has seen the touch.
+    let shown = ports.with(|fake| values_shown(fake, 1).len());
     roto_does(
         &ports,
         ControlEvent::Touch {
@@ -470,7 +472,9 @@ fn the_keys_move_the_knobs_but_never_one_being_touched() {
             touched: true,
         },
     );
-    settle(&mut app, 30);
+    assert!(tick_until(&mut app, &ports, |fake| values_shown(fake, 1)
+        .len()
+        > shown));
     let before = ports.with(|fake| fake.knob_position(1));
     app.apply(&Action::SetTrackLevel {
         track: 1,
