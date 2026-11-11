@@ -471,7 +471,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
     )],
 );
 
-/// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing.
+/// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing, and last
+/// how much louder or softer than written its notes play, a live dynamics knob.
 const PLAY: DeviceLayout = live(
     "play",
     &[knobs(
@@ -484,7 +485,7 @@ const PLAY: DeviceLayout = live(
             s("speed"),
             s("groove"),
             s("reset"),
-            __,
+            s("velocity"),
         ],
     )],
 );
@@ -1135,6 +1136,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::SendA => "senda",
             TrackControl::SendB => "sendb",
             TrackControl::Pitch => "pitch",
+            TrackControl::VelocityDelta => "velocity",
         },
         Control::Level => "level",
         Control::Trim => "trim",

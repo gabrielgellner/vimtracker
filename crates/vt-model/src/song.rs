@@ -376,6 +376,10 @@ pub struct Track {
     /// Where held `PTCH` starts, in semitones from `80`, as a kit sound's tune sets it.
     #[serde(default = "centre")]
     pub pitch: u8,
+    /// Where held `VDLT` starts: how far its notes' velocities are moved up or down from their
+    /// own, by [`velocity_delta`](crate::settings::velocity_delta), with `80` as none.
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub velocity_delta: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -418,6 +422,10 @@ pub struct Track {
     /// The phrases its chains can play, numbered within it.
     #[serde(default)]
     pub phrases: BTreeMap<u32, Arc<Phrase>>,
+}
+
+fn is_centre(value: &u8) -> bool {
+    *value == centre()
 }
 
 fn is_zero(value: &u8) -> bool {
@@ -688,6 +696,7 @@ impl Default for Track {
             send_a: 0,
             send_b: 0,
             pitch: centre(),
+            velocity_delta: centre(),
             choke: None,
             group: None,
             gate_length: None,

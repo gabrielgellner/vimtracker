@@ -18,7 +18,7 @@ use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::speed::{SPEED_NAMES, Speed};
-use crate::step::FxCommand;
+use crate::step::{FxCommand, MAX_VELOCITY};
 
 /// The most settings a machine has.
 pub const MAX_MACHINE_SETTINGS: usize = 8;
@@ -98,6 +98,8 @@ pub enum Units {
     /// How far a note's length is moved up or down, as a share of its last pulse, as
     /// [`gate_delta`] gives it.
     GateDelta,
+    /// How far a note's velocity is moved up or down, as [`velocity_delta`] gives it.
+    VelocityDelta,
     /// How long a tied note takes to glide to the next, as [`glide_ms`] gives it, or off.
     Glide,
 }
@@ -193,6 +195,19 @@ pub fn gate_value(percent: u8) -> u8 {
 /// is a step of the other: `80` leaves it, `00` takes half a pulse off and `FF` adds half.
 pub fn gate_delta(value: f32) -> f32 {
     value - 128.0
+}
+
+/// How far a `VDLT` value moves a note's velocity, so a step of one is a step of the other: `80`
+/// leaves it, `90` adds `10`, and `00` and `FF` take any velocity to either end.
+pub fn velocity_delta(value: f32) -> f32 {
+    value - 128.0
+}
+
+/// A note's velocity moved by a `VDLT` value, kept to the velocity's range.
+pub fn moved_velocity(velocity: u8, value: f32) -> u8 {
+    (f32::from(velocity) + velocity_delta(value))
+        .round()
+        .clamp(0.0, f32::from(MAX_VELOCITY)) as u8
 }
 
 /// How far an EQ band boosts or cuts, in dB, at either end.
@@ -294,6 +309,11 @@ impl Kind {
                 Units::AcidDrive => format!("+{:.1} dB", acid_drive_db(coarse as f32)),
                 Units::GateLength => format!("{:.0} %", gate_share(coarse as f32) * 100.0),
                 Units::GateDelta => format!("{:+.0} %", gate_delta(coarse as f32) / 2.55),
+                Units::VelocityDelta => {
+                    let moved = velocity_delta(coarse as f32).round() as i32;
+                    let sign = if moved < 0 { '-' } else { '+' };
+                    format!("{sign}{:02X} vel", moved.unsigned_abs())
+                }
                 Units::Glide => {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
@@ -429,7 +449,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 13] = [
+const TRACK: [Entry; 14] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -531,11 +551,24 @@ const TRACK: [Entry; 13] = [
         },
         default: 0,
     },
+    // As `LDLT` is to a note's length: added to each note's velocity as it starts, so a lane of it
+    // is an accent pattern and a glide of it a crescendo, and the note keeps its own.
+    Entry {
+        key: "velocitydelta",
+        name: "Velocity up or down",
+        label: Some("VDLT"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::VelocityDelta,
+        },
+        default: 0x80,
+    },
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 13] = [
+const TRACK_GROUPS: [&str; 14] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1415,6 +1448,8 @@ impl SettingId {
     pub const SPEED: Self = Self(11);
     /// How long a tie glides into the next note, as [`glide_ms`] gives it.
     pub const GLIDE: Self = Self(12);
+    /// How far a note's velocity is moved up or down from its own, as [`velocity_delta`] gives it.
+    pub const VELOCITY_DELTA: Self = Self(13);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -1784,6 +1819,10 @@ mod tests {
         assert_eq!(shown(SettingId::GATE_DELTA, 0x0000), "-50 %");
         assert_eq!(shown(SettingId::GATE_DELTA, 0xC000), "+25 %");
         assert_eq!(SettingId::GATE_DELTA.label(), Some("LDLT".into()));
+        assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x8000), "+00 vel");
+        assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x9000), "+10 vel");
+        assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x0000), "-80 vel");
+        assert_eq!(SettingId::VELOCITY_DELTA.label(), Some("VDLT".into()));
         assert_eq!(
             (depth.label(), phase.label(), SettingId::PITCH.label()),
             (

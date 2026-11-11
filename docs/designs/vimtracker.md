@@ -408,7 +408,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- filter, filter_mode, cutoff, resonance, drive, low_cut, high_cut
  |   |- inserts[4], bypassed[4]    an effect and its settings in each slot
  |   |- level, trim, pan, send_a, send_b
- |   |- pitch, choke, gate_length, speed, reset, glide, groove
+ |   |- pitch, velocity_delta, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
  |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
