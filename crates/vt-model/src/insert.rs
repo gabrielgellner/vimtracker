@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
+use crate::grid::{GRID_ROWS, Grid};
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
 /// How many a track has.
@@ -1943,6 +1944,88 @@ impl Insert {
         Self::Distort(distort)
     }
 
+    /// The setting that changes the effect's character, by its place among those it has now: the
+    /// `Type` of a Distort, a Chorus or a Comp, and the `Mode` of an LPG or a Comb. The FX page
+    /// shows it in the slot's title, beside the effect, rather than in its grid.
+    pub fn type_param(self) -> Option<usize> {
+        self.params().iter().position(|found| {
+            matches!(
+                found.setting,
+                Setting::Type
+                    | Setting::ChorusType
+                    | Setting::CompressorType
+                    | Setting::GateMode
+                    | Setting::CombMode
+            )
+        })
+    }
+
+    /// Where its settings sit on the FX page, by their places among those it has now. Its type is
+    /// in the title instead. Most effects have their own settings column by column in the order
+    /// they're listed, then a column of what comes out, `Mix` and `Gain`, last. A few are placed by
+    /// what they mean: a compressor's detector, times and output each have a column, an EQ's
+    /// bands are its columns, and a delay's repeats, their tone and what comes out are its.
+    pub fn grid(self) -> Grid {
+        use Setting as S;
+        let placed: &[&[Setting]] = match self {
+            Self::Compressor(compressor) => match compressor.kind {
+                CompressorType::Clean => &[
+                    &[S::Threshold, S::Ratio],
+                    &[S::Attack, S::Release, S::Source],
+                    &[S::Makeup, S::AutoGain],
+                    &[S::Mix],
+                ],
+                CompressorType::Console => &[
+                    &[S::Threshold, S::ConsoleRatio],
+                    &[S::ConsoleAttack, S::ConsoleRelease, S::Source],
+                    &[S::Makeup, S::AutoGain],
+                    &[S::Mix],
+                ],
+                CompressorType::Glue => &[
+                    &[S::Threshold, S::GlueRatio, S::Range],
+                    &[S::GlueAttack, S::GlueRelease, S::Source],
+                    &[S::Makeup, S::AutoGain],
+                    &[S::Mix, S::PeakClip],
+                ],
+            },
+            Self::Eq(_) => &[
+                &[S::LowFrequency, S::Low],
+                &[S::MidFrequency, S::Mid, S::MidQ],
+                &[S::HighFrequency, S::High],
+                &[S::Gain],
+            ],
+            Self::Delay(_) => &[
+                &[S::Time, S::Feedback, S::PingPong],
+                &[S::LowCut, S::HighCut, S::Drive],
+                &[S::Width, S::Mix, S::Gain],
+            ],
+            _ => return self.default_grid(),
+        };
+        let params = self.params();
+        let index = |setting: &Setting| params.iter().position(|found| found.setting == *setting);
+        let columns: Vec<Vec<Option<usize>>> = placed
+            .iter()
+            .map(|column| column.iter().map(index).collect())
+            .collect();
+        Grid::from_columns(&columns)
+    }
+
+    /// The grid most effects have: their own settings down each column in order, then what comes
+    /// out in a column of its own.
+    fn default_grid(self) -> Grid {
+        let params = self.params();
+        let output = |at: &usize| matches!(params[*at].setting, Setting::Mix | Setting::Gain);
+        let own: Vec<usize> = (0..params.len())
+            .filter(|at| Some(*at) != self.type_param() && !output(at))
+            .collect();
+        let mut columns: Vec<Vec<Option<usize>>> = own
+            .chunks(GRID_ROWS)
+            .map(|column| column.iter().copied().map(Some).collect())
+            .collect();
+        columns.push((0..params.len()).filter(output).map(Some).collect());
+        Grid::from_columns(&columns)
+    }
+
     /// The next or previous effect, as it starts, going round. It's the same kind of slot if the
     /// settings differ, so stepping always changes the effect.
     #[must_use]
@@ -3330,6 +3413,7 @@ impl Default for Distort {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::grid::GRID_COLUMNS;
 
     #[test]
     fn every_effect_starts_at_its_declared_defaults_and_fits() {
@@ -3343,6 +3427,89 @@ mod tests {
         for effect in crate::settings::Effect::ALL {
             assert!(effect.params().len() <= MAX_KEPT_PARAMS, "{effect:?}");
         }
+    }
+
+    /// Every effect in each of its types and modes, as it starts.
+    fn every_kind() -> Vec<Insert> {
+        Insert::ALL
+            .into_iter()
+            .flat_map(|effect| match effect.type_param() {
+                Some(at) => (0..effect.params()[at].choices.len())
+                    .map(|kind| effect.with_value(at, kind as u8))
+                    .collect(),
+                None => vec![effect],
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last() {
+        for effect in every_kind()
+            .into_iter()
+            .filter(|effect| *effect != Insert::Empty)
+        {
+            let grid = effect.grid();
+            let params = effect.params();
+            assert!(
+                grid.places_each_once(params.len(), effect.type_param()),
+                "{effect:?}: {grid:?}"
+            );
+            // The column of what comes out is the last one used.
+            let used = (0..GRID_COLUMNS)
+                .filter(|column| (0..GRID_ROWS).any(|row| grid.at(row, *column).is_some()))
+                .collect::<Vec<_>>();
+            let last = *used.last().unwrap_or(&0);
+            assert_eq!(
+                used,
+                (0..=last).collect::<Vec<_>>(),
+                "{effect:?}: no empty column"
+            );
+            assert!(
+                (0..GRID_ROWS)
+                    .filter_map(|row| grid.at(row, last))
+                    .any(|at| matches!(params[at].setting, Setting::Mix | Setting::Gain)),
+                "{effect:?}: {grid:?}"
+            );
+            // A name has its column's ten characters and a space, and a choice the value's and
+            // the bar's fourteen.
+            for at in grid.settings() {
+                assert!(params[at].name.len() < 10, "{}", params[at].name);
+                for choice in params[at].choices {
+                    assert!(choice.chars().count() <= 14, "{choice}");
+                }
+            }
+        }
+        assert_eq!(Insert::Empty.grid(), Grid::default());
+    }
+
+    #[test]
+    fn a_few_effects_place_their_settings_by_what_they_mean() {
+        let names = |effect: Insert, row: usize| {
+            effect
+                .grid()
+                .row(row)
+                .map(|at| at.map_or("", |at| effect.params()[at].name))
+        };
+        let glue = compressor(CompressorType::Glue);
+        assert_eq!(names(glue, 0), ["Threshold", "Attack", "Makeup", "Mix"]);
+        assert_eq!(names(glue, 1), ["Ratio", "Release", "Auto", "Peak Clip"]);
+        assert_eq!(names(glue, 2), ["Range", "Source", "", ""]);
+        assert_eq!(glue.type_param(), Some(0));
+        let clean = compressor(CompressorType::Clean);
+        assert_eq!(names(clean, 2), ["", "Source", "", ""]);
+        let eq = Insert::Eq(Equaliser::DEFAULT);
+        assert_eq!(names(eq, 0), ["Low freq", "Mid freq", "High freq", "Gain"]);
+        assert_eq!(names(eq, 2), ["", "Mid Q", "", ""]);
+        assert_eq!(eq.type_param(), None);
+        let delay = Insert::Delay(Delay::DEFAULT);
+        assert_eq!(names(delay, 2), ["Ping-pong", "Drive", "Gain", ""]);
+        // The rest go in order, with what comes out after.
+        let chorus = Insert::Chorus(Chorus::DEFAULT);
+        assert_eq!(names(chorus, 0), ["Rate", "Mix", "", ""]);
+        assert_eq!(names(chorus, 1), ["Depth", "Gain", "", ""]);
+        let reverb = Insert::Reverb(Reverb::DEFAULT);
+        assert_eq!(names(reverb, 0), ["Pre", "Low cut", "Mix", ""]);
+        assert_eq!(names(reverb, 2), ["Damp", "", "", ""]);
     }
 
     /// A compressor of a type, as it starts.

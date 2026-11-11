@@ -19,18 +19,20 @@ use crate::app::App;
 use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
-use crate::kitty;
 use crate::theme;
 use crate::track_page::{
-    ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, ENVELOPES, EnvelopeField,
-    FX_COLUMNS, FX_ROWS, LFOS, LfoField, Page, SLOT_ROWS,
+    ACCUMULATOR, ARPEGGIO, AccumulatorField, ArpField, Control, DeviceSpec, ENVELOPES,
+    EnvelopeField, LFOS, LfoField, Page,
 };
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::bar::{BAR_ENDS, ValueBar};
+use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
+use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
 use crate::views::widgets::group;
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
+use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::{Cells, Columns, blank_row, take_top};
 
@@ -58,28 +60,20 @@ pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
 /// The size of an EQ's curve on the FX page, in characters, which is the room a slot's drawing
 /// has.
 pub(crate) const EQ_CURVE_WIDTH: usize = 10;
-/// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom.
+/// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom, and
+/// how wide it is, which leaves room for its box's caption.
 const REDUCTION_METER_DB: f32 = 24.0;
+const REDUCTION_METER_WIDTH: usize = 2;
+/// The caption on a gain reduction meter's box.
+const REDUCTION_CAPTION: &str = "GR";
 
-/// Room for a slot's number on the FX page, and for its effect's name.
-const FX_INDENT: u16 = 3;
-const FX_EFFECT_WIDTH: u16 = 10;
-/// Room for a setting's name on the FX page, for its value and a gap, and for its bar and a gap,
-/// so its columns line up. A choice takes the value's and the bar's room. Each name's room is its
-/// column's longest and a space: `Feedback`, `Ping-pong`, `High freq`, `Drive`, `Makeup` and
-/// Glue's `Peak Clip`. With the slot's drawing, the page is 148 wide, so it fits at 163 columns
-/// beside the main meter, inside the box the keyboard's mode draws around it.
-const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [9, 10, 10, 6, 7, 10];
-const FX_VALUE_WIDTH: u16 = 3;
-const FX_BAR_WIDTH: u16 = FX_BAR_CELLS as u16 + BAR_ENDS + 2;
-/// A slot's drawing comes after all its columns of settings, the six that `MAX_PARAMS` gives every
-/// slot, whether it uses them or not, so the drawings line up, and starts a space after them.
-const FX_DRAWING_GAP: u16 = 1;
-/// The table column a slot's drawing starts in: after its number and effect, three for each
-/// column of settings, and the gap.
-const FX_DRAWING_COLUMN: usize = 2 + 3 * FX_COLUMNS + 1;
-/// Cells in a bar on the FX page, where there are more columns to fit.
-const FX_BAR_CELLS: usize = 5;
+/// How much room a slot's title leaves for its switch, which #375 puts there, so its effect stays
+/// where it is when it comes.
+const SWITCH_ROOM: &str = " ";
+/// What an empty slot says, under its title.
+const EMPTY_SLOT: &str = "Empty";
+/// The row of an empty slot's settings its hint is on, the middle one.
+const EMPTY_HINT_ROW: u16 = ROW_STEP;
 /// Room for a section's name.
 const NAME_WIDTH: u16 = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
@@ -582,84 +576,117 @@ fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
     }
 }
 
-/// Part of a bypassed slot's row, faint but for the cursor.
-fn faded(line: Line<'static>, cursor: Style) -> Line<'static> {
-    Line::from(
-        line.spans
-            .into_iter()
-            .map(|span| {
-                // A drawing's placeholders keep their colour, which says which image they are.
-                if span.style == cursor || span.content.starts_with(kitty::PLACEHOLDER) {
-                    span
-                } else {
-                    span.style(theme::faint())
-                }
-            })
-            .collect::<Vec<_>>(),
-    )
+/// What the FX page's cells show for a slot's settings, read from what's in the slot.
+struct SlotCells<'a> {
+    app: &'a App,
+    track: &'a Track,
 }
 
-/// The FX page's columns: a slot's number and its effect, then for each column of settings a name,
-/// a value and a bar, then the gap before a slot's drawing and the drawing.
-fn fx_columns() -> Columns {
-    let mut widths = vec![FX_INDENT, FX_EFFECT_WIDTH];
-    for name in FX_NAME_WIDTHS {
-        widths.extend([name, FX_VALUE_WIDTH, FX_BAR_WIDTH]);
+impl CellSource for SlotCells<'_> {
+    type Id = Control;
+
+    fn name(&self, control: Control, room: u16) -> Line<'static> {
+        let labels = jump_label(self.app, control);
+        name_line(self.app, control.name_on(self.track), &labels, room)
     }
-    widths.extend([FX_DRAWING_GAP, EQ_CURVE_WIDTH as u16]);
-    Columns::new(widths)
-}
 
-/// One row of a slot on the FX page, with its settings in columns, read from the effect's list. The
-/// effect is only drawn in its first row.
-fn fx_row(
-    app: &App,
-    track: &Track,
-    columns: &Columns,
-    controls: &[Control],
-    slot: usize,
-    first: bool,
-) -> Row<'static> {
-    let mut cells = columns.row();
-    let current = app.track_control();
-    for control in controls {
-        let selected = *control == current;
-        let text = setting::text(app, selected, || value(*control, track, app.song()));
-        let style = setting::style(app, selected, false);
-        match *control {
-            Control::Insert(slot) if first => {
-                cells
-                    .cell(Line::styled((slot + 1).to_string(), theme::dim()))
-                    .cell(value_spans(app, *control, text, style));
-            }
-            Control::Insert(_) => {
-                cells.skip(2);
-            }
-            Control::InsertParam(slot, param) if control.exists_on(track) => {
-                let column = param / 2;
-                let labels = jump_label(app, *control);
-                let name = name_line(app, control.name_on(track), &labels, FX_NAME_WIDTHS[column]);
-                cells.cell(name);
-                let insert = track.inserts[slot];
-                let value = value_spans(app, *control, text, style);
-                if insert.params()[param].choices.is_empty() {
-                    let set = insert.value(param);
-                    let live = app.live.map_or(set, |live| live.inserts[slot][param]);
-                    cells
-                        .cell(value)
-                        .cell(ValueBar::new(set, FX_BAR_CELLS).playing(live));
-                } else {
-                    cells.span(value, 2);
-                }
-            }
-            _ => {}
+    fn value(&self, control: Control) -> Line<'static> {
+        let here = control == self.app.track_control();
+        let text = setting::text(self.app, here, || {
+            value(control, self.track, self.app.song())
+        });
+        let style = setting::style(self.app, here, false);
+        Line::from(value_spans(self.app, control, text, style))
+    }
+
+    fn bar(&self, control: Control) -> Option<ValueBar> {
+        let Control::InsertParam(slot, param) = control else {
+            return None;
+        };
+        let insert = self.track.inserts[slot];
+        if !insert.params().get(param)?.choices.is_empty() {
+            return None;
         }
+        let set = insert.value(param);
+        let live = self.app.live.map_or(set, |live| live.inserts[slot][param]);
+        Some(ValueBar::new(set, BAR_CELLS).playing(live))
     }
-    if heard_bypassed(app, track, slot) {
-        let cursor = theme::cursor(app.mode);
-        cells.map(|line| faded(line, cursor));
+}
+
+/// A device's title controls, each in its own style: on a slot, its effect, `Empty` when there's
+/// none, and its type if it has one.
+fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'static>> {
+    let current = app.track_control();
+    device
+        .title
+        .iter()
+        .flatten()
+        .map(|control| {
+            let here = *control == current;
+            let empty =
+                matches!(*control, Control::Insert(slot) if track.inserts[slot] == Insert::Empty);
+            let text = setting::text(app, here, || match empty {
+                true => EMPTY_SLOT.to_owned(),
+                false => value(*control, track, app.song()),
+            });
+            let style = setting::style(app, here, empty);
+            Line::from(value_spans(app, *control, text, style))
+        })
+        .collect()
+}
+
+/// A slot as a device: its frame and title, then its settings in its effect's grid, or a hint if
+/// it's empty, and its graphic panel. A bypassed slot's contents are faint but for the cursor and
+/// its images.
+fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &DeviceSpec) {
+    let Some(Control::Insert(slot)) = device.title[0] else {
+        return;
+    };
+    let cursor = theme::cursor(app.mode);
+    let fade = heard_bypassed(app, track, slot).then_some(cursor);
+    let mut controls = title_controls(app, track, device);
+    if let Some(keep) = fade {
+        controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
-    cells.done()
+    let frame_widget = Device::new(device.identity.clone())
+        .switch(Span::raw(SWITCH_ROOM))
+        .controls(controls)
+        .focused(slot_being_edited(app) == Some(slot));
+    frame.render_widget(frame_widget, area);
+    let settings = Device::settings_area(area);
+    if track.inserts[slot] == Insert::Empty {
+        let hint = Line::from(vec![
+            Span::raw("K"),
+            Span::styled("  pick an effect", theme::dim()),
+        ]);
+        let mut row = settings;
+        take_top(&mut row, EMPTY_HINT_ROW);
+        frame.render_widget(hint, take_top(&mut row, 1));
+        return;
+    }
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let source = SlotCells { app, track };
+    let grid = SettingsGrid::new(&source, rows, CellWidths::FX).faded(fade);
+    frame.render_widget(grid, settings);
+    let panel = slot_panel(app, track, slot);
+    if !panel.is_empty() {
+        let at = Device::panel_area(area, panel.width());
+        frame.render_widget(panel, at);
+    }
+}
+
+/// The FX page: a device for each slot, stacked down the page. Each is as tall whatever it holds,
+/// so four fill the rows inside the keyboard's box. Where fewer fit, the page goes by whole devices
+/// to keep the cursor's in view.
+fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+    let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
+    let cursor = app.device_cursor().map_or(0, |cursor| cursor.device);
+    let first = (cursor + 1).saturating_sub(fit);
+    let mut rest = area;
+    for device in Page::Fx.devices(track).iter().skip(first).take(fit) {
+        let area = take_top(&mut rest, DEVICE_HEIGHT);
+        draw_slot(frame, area, app, track, device);
+    }
 }
 
 /// One row of a gain reduction meter, which hangs down from the top of its two rows as it turns
@@ -667,15 +694,15 @@ fn fx_row(
 fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
     let filled = hanging_eighths(db / REDUCTION_METER_DB, row, SLOT_DRAWING_HEIGHT);
     if filled == 0 && row == 0 {
-        return Span::styled("▔", theme::faint());
+        return Span::styled("▔".repeat(REDUCTION_METER_WIDTH), theme::faint());
     }
-    hanging_cell(filled, color, theme::BASE, 1)
+    hanging_cell(filled, color, theme::BASE, REDUCTION_METER_WIDTH)
 }
 
-/// What follows a slot's rows on the FX page: a compressor's curve and how far it's turning down,
-/// a limiter's meter alone, or an EQ's curve, a line for each row. A bypassed slot's is faint but
-/// for its images.
-fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
+/// A slot's graphic panel on the FX page: a compressor's curve and how far it's turning down, a
+/// limiter's meter alone, or an EQ's curve, each in its box. A curve's box is left out until its
+/// image has been sent. A bypassed slot's meter is faint, and its images keep their colour.
+fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
     let style = if slot_being_edited(app) == Some(slot) {
         theme::active()
     } else {
@@ -687,30 +714,35 @@ fn slot_drawing(app: &App, track: &Track, slot: usize) -> Vec<Line<'static>> {
         .live
         .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
-    let drawing = |width: usize, id: u32| image::rows(id, width, SLOT_DRAWING_HEIGHT).into_iter();
-    let rows = 0..SLOT_DRAWING_HEIGHT;
-    let lines: Vec<Line<'static>> = match (track.inserts[slot], app.slot_images[slot]) {
-        (Insert::Compressor(_), Some(id)) => drawing(DYNAMICS_CURVE_WIDTH, id)
-            .zip(rows)
-            .map(|(curve, row)| {
-                Line::from(vec![
-                    curve,
-                    Span::raw(" "),
-                    reduction_cell(reduction, row, color),
-                ])
-            })
-            .collect(),
-        (Insert::Limit(_), _) => rows
-            .map(|row| Line::from(reduction_cell(reduction, row, color)))
-            .collect(),
-        (Insert::Eq(_), Some(id)) => drawing(EQ_CURVE_WIDTH, id).map(Line::from).collect(),
-        _ => Vec::new(),
-    };
-    if !bypassed {
-        return lines;
-    }
     let cursor = theme::cursor(app.mode);
-    lines.into_iter().map(|line| faded(line, cursor)).collect()
+    let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
+    let meter = || {
+        let lines = (0..SLOT_DRAWING_HEIGHT)
+            .map(|row| fade(Line::from(reduction_cell(reduction, row, color))))
+            .collect();
+        (lines, REDUCTION_METER_WIDTH as u16, Some(REDUCTION_CAPTION))
+    };
+    let curve = |width: usize| {
+        app.slot_images[slot].map(|id| {
+            let lines = image::rows(id, width, SLOT_DRAWING_HEIGHT)
+                .into_iter()
+                .map(Line::from)
+                .collect();
+            (lines, width as u16, None)
+        })
+    };
+    let parts = match track.inserts[slot] {
+        Insert::Compressor(_) => [curve(DYNAMICS_CURVE_WIDTH), Some(meter())],
+        Insert::Limit(_) => [Some(meter()), None],
+        Insert::Eq(_) => [curve(EQ_CURVE_WIDTH), None],
+        _ => [None, None],
+    };
+    parts
+        .into_iter()
+        .flatten()
+        .fold(GraphicPanel::new(), |panel, (lines, width, caption)| {
+            panel.boxed(lines, width, caption)
+        })
 }
 
 /// The filter's curve in a box, under its rows, and beside it under the output's column, the
@@ -804,31 +836,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 draw_curves(frame, take_top(&mut rest, rows), filter, waveform);
             }
         }
-        Page::Fx => {
-            let columns = fx_columns();
-            let mut rows = Vec::new();
-            // Where each slot's rows start, for its drawing.
-            let mut starts = Vec::new();
-            for (slot, slot_rows) in FX_ROWS.chunks(SLOT_ROWS).enumerate() {
-                starts.push(rows.len() as u16);
-                rows.push(fx_row(app, track, &columns, slot_rows[0], slot, true));
-                // An empty slot has nothing for its second row, and the slots stay apart.
-                if track.inserts[slot] != Insert::Empty {
-                    rows.push(fx_row(app, track, &columns, slot_rows[1], slot, false));
-                }
-                rows.push(blank_row());
-            }
-            let area = rest;
-            columns.stack(frame, &mut rest, rows);
-            // Each slot's drawing is a cell of the same grid, beside its two rows of settings.
-            for (slot, start) in starts.into_iter().enumerate() {
-                let mut below = area;
-                take_top(&mut below, start);
-                let cell = take_top(&mut below, SLOT_DRAWING_HEIGHT as u16);
-                let cell = columns.area_of(cell, FX_DRAWING_COLUMN, 1);
-                frame.render_widget(Paragraph::new(slot_drawing(app, track, slot)), cell);
-            }
-        }
+        Page::Fx => draw_fx(frame, rest, app, track),
         Page::Mod => {
             let envelopes = mod_columns(&ENVELOPES[0]);
             let mut rows = vec![heading(app, &ENVELOPES, &envelopes)];

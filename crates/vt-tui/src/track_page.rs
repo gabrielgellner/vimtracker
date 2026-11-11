@@ -10,8 +10,9 @@ use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TRACK_ENVELOPES,
 };
 use vt_model::envelope::Envelope;
+use vt_model::grid::{GRID_COLUMNS, GRID_ROWS};
 use vt_model::groove::GrooveId;
-use vt_model::insert::{INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{
     LFOS_PER_TRACK, Lfo, MAX_LFO_DEPTH, Rate, Shape, depth_value, note_rates, phase_value,
@@ -204,43 +205,58 @@ pub const MIXER_START: usize = 1;
 /// The mixer's columns, as rows like a page's.
 pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
-/// The rows of a slot on the FX page, as columns of two settings, one over the other: the top row
-/// has the even ones and the bottom the odd. The effect is in both, as one tall column, so `j` and
-/// `k` on it go between slots.
-const fn insert_row(slot: usize, bottom: usize) -> [Control; FX_COLUMNS + 1] {
-    let mut row = [Control::Insert(slot); FX_COLUMNS + 1];
-    let mut column = 0;
-    while column < FX_COLUMNS {
-        row[column + 1] = Control::InsertParam(slot, 2 * column + bottom);
-        column += 1;
-    }
-    row
+/// How many columns of settings a device has, its grid's.
+pub const DEVICE_COLUMNS: usize = GRID_COLUMNS;
+/// How many rows the cursor goes through in a device: its title, then its grid's.
+pub const DEVICE_ROWS: usize = 1 + GRID_ROWS;
+
+/// One device in a page's rack, as the cursor and the page see it: which it is, the controls in
+/// its title over the grid's first columns, and its settings grid, each place a control or a hole
+/// the cursor steps over. Every device has as many rows, whatever it holds, so moving between
+/// devices keeps the cursor's row and column. The FX page's slots are the first devices.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceSpec {
+    /// Which device it is, such as a slot's digit, dim at the start of its title.
+    pub identity: String,
+    /// Whether `b` can switch it out, which gives its title a switch.
+    pub switchable: bool,
+    pub title: [Option<Control>; DEVICE_COLUMNS],
+    pub grid: [[Option<Control>; DEVICE_COLUMNS]; GRID_ROWS],
 }
 
-/// Each slot's rows, top then bottom, one slot after another.
-static INSERT_ROWS: [[Control; FX_COLUMNS + 1]; INSERTS * SLOT_ROWS] = {
-    let mut rows = [[Control::Insert(0); FX_COLUMNS + 1]; INSERTS * SLOT_ROWS];
-    let mut row = 0;
-    while row < rows.len() {
-        rows[row] = insert_row(row / SLOT_ROWS, row % SLOT_ROWS);
-        row += 1;
+impl DeviceSpec {
+    /// A slot on the FX page: its effect over the grid's first column and its type over the
+    /// second, then its effect's grid. An empty slot has only its effect.
+    pub fn slot(slot: usize, insert: Insert) -> Self {
+        let mut title = [None; DEVICE_COLUMNS];
+        title[0] = Some(Control::Insert(slot));
+        title[1] = insert.type_param().map(|at| Control::InsertParam(slot, at));
+        let grid = insert.grid();
+        Self {
+            identity: (slot + 1).to_string(),
+            switchable: insert != Insert::Empty,
+            title,
+            grid: std::array::from_fn(|row| {
+                grid.row(row)
+                    .map(|at| at.map(|at| Control::InsertParam(slot, at)))
+            }),
+        }
     }
-    rows
-};
-/// How many columns of settings a slot has.
-pub const FX_COLUMNS: usize = MAX_PARAMS.div_ceil(2);
-/// How many rows a slot takes.
-pub const SLOT_ROWS: usize = 2;
-/// The FX page's rows, top to bottom. The cursor stops at the last setting an effect uses.
-pub static FX_ROWS: [&[Control]; INSERTS * SLOT_ROWS] = {
-    let mut rows: [&[Control]; INSERTS * SLOT_ROWS] = [&[]; INSERTS * SLOT_ROWS];
-    let mut row = 0;
-    while row < rows.len() {
-        rows[row] = &INSERT_ROWS[row];
-        row += 1;
+
+    /// Its rows as the cursor goes through them: its title, then its grid's.
+    pub fn rows(&self) -> impl Iterator<Item = [Option<Control>; DEVICE_COLUMNS]> + '_ {
+        std::iter::once(self.title).chain(self.grid.iter().copied())
     }
-    rows
-};
+}
+
+/// Where the cursor is in a page's rack: in which device, on which of its rows, the title being 0,
+/// and in which column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceCursor {
+    pub device: usize,
+    pub row: usize,
+    pub column: usize,
+}
 
 const fn base(control: TrackControl) -> Control {
     Control::Base(control)
@@ -401,6 +417,20 @@ impl Page {
         Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
+    /// The page's devices, top to bottom, on a page that's a rack of them: the FX page's slots.
+    /// The other pages are rows of settings, for now.
+    pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
+        match self {
+            Self::Fx => track
+                .inserts
+                .iter()
+                .enumerate()
+                .map(|(slot, insert)| DeviceSpec::slot(slot, *insert))
+                .collect(),
+            Self::Sound | Self::Mod => Vec::new(),
+        }
+    }
+
     /// The page's rows, top to bottom, for a track with this machine.
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
@@ -409,7 +439,8 @@ impl Page {
             (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
             (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
-            (Self::Fx, _) => &FX_ROWS,
+            // It's a rack, whose rows depend on what's in each slot: see `Page::devices`.
+            (Self::Fx, _) => &[],
         }
     }
 }
@@ -661,6 +692,21 @@ fn no_modes(filter: FilterType) -> String {
     format!("{} has no modes", filter.name())
 }
 
+/// The place nearest a row and field that holds a setting: in a row with none, the nearest row
+/// above with some, and on a hole, the nearest setting along the row, the left one of two as near.
+fn place_in(rows: &[Vec<Option<Control>>], row: usize, field: usize) -> (usize, usize) {
+    let mut row = row.min(rows.len().saturating_sub(1));
+    while row > 0 && rows[row].iter().all(Option::is_none) {
+        row -= 1;
+    }
+    let places = rows.get(row).map_or(&[][..], Vec::as_slice);
+    let field = (0..places.len())
+        .filter(|at| places[*at].is_some())
+        .min_by_key(|at| (at.abs_diff(field), *at > field))
+        .unwrap_or(0);
+    (row, field)
+}
+
 /// The next item in a list, going round.
 fn next_in<T: Copy + PartialEq>(items: &[T], current: T, up: bool) -> T {
     let position = items.iter().position(|item| *item == current).unwrap_or(0);
@@ -674,9 +720,52 @@ impl App {
         if self.view == View::Mixer {
             return MIXER[self.mixer_row_here()];
         }
-        let rows = self.page_rows();
-        let row = rows[self.track_row.min(rows.len() - 1)];
-        row[self.track_field.min(self.fields_in(row) - 1)]
+        let (row, field) = self.cursor_place();
+        let rows = self.cursor_rows();
+        let place = rows
+            .get(row)
+            .and_then(|row| row.get(field).copied().flatten());
+        place.unwrap_or(Control::Machine)
+    }
+
+    /// The page's devices, on a page that's a rack of them.
+    pub(crate) fn devices(&self) -> Vec<DeviceSpec> {
+        self.song()
+            .tracks
+            .get(self.cursor.track)
+            .map_or_else(Vec::new, |track| self.track_page.devices(track))
+    }
+
+    /// The page's rows as the cursor goes through them, each a list of places that can be holes it
+    /// steps over. On a rack they're each device's in turn. Elsewhere they're each row's settings
+    /// up to the first this track doesn't have.
+    pub(crate) fn cursor_rows(&self) -> Vec<Vec<Option<Control>>> {
+        let devices = self.devices();
+        if !devices.is_empty() {
+            return devices
+                .iter()
+                .flat_map(DeviceSpec::rows)
+                .map(Vec::from)
+                .collect();
+        }
+        self.page_rows()
+            .iter()
+            .map(|row| {
+                row[..self.fields_in(row)]
+                    .iter()
+                    .copied()
+                    .map(Some)
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Where the cursor is, as a row and a place in it that hold a setting. In a row with none,
+    /// such as an empty slot's grid, it's the nearest row above with some, which in a slot is its
+    /// title at least. On a hole, it's the nearest setting along the row, the left one of two as
+    /// near.
+    fn cursor_place(&self) -> (usize, usize) {
+        place_in(&self.cursor_rows(), self.track_row, self.track_field)
     }
 
     /// The mixer's rows this track has: a fixed track has no sends, and the master no pan, mute or
@@ -731,7 +820,7 @@ impl App {
         self.mixer_row = rows.get(to as usize).copied().unwrap_or(0);
     }
 
-    /// How many settings a row has on this track, which on the FX page depends on the effect.
+    /// How many settings a row of a page other than FX has on this track.
     fn fields_in(&self, row: &[Control]) -> usize {
         let track = self.song().tracks.get(self.cursor.track);
         track.map_or(row.len(), |track| {
@@ -1049,9 +1138,33 @@ impl App {
         }
     }
 
+    /// Where the cursor is in the page's rack, on a page that's one.
+    pub fn device_cursor(&self) -> Option<DeviceCursor> {
+        if self.devices().is_empty() {
+            return None;
+        }
+        let (row, column) = self.cursor_place();
+        Some(DeviceCursor {
+            device: row / DEVICE_ROWS,
+            row: row % DEVICE_ROWS,
+            column,
+        })
+    }
+
+    /// Go to a device some way from the cursor's, on the same row and column, stopping at either
+    /// end of the rack. The row and column are kept as they were, so they come back after a
+    /// device that hasn't got them, such as an empty slot.
+    fn move_device(&mut self, by: isize) {
+        let count = self.devices().len();
+        let device = (self.track_row / DEVICE_ROWS)
+            .saturating_add_signed(by)
+            .min(count.saturating_sub(1));
+        self.track_row = device * DEVICE_ROWS + self.track_row % DEVICE_ROWS;
+    }
+
     /// The slot the cursor is in, on the FX page.
     fn fx_slot(&self) -> usize {
-        self.track_row / SLOT_ROWS
+        self.device_cursor().map_or(0, |cursor| cursor.device)
     }
 
     /// `b`: switch this slot out to hear the track without it, or back in.
@@ -1091,7 +1204,7 @@ impl App {
             slot,
             undo_depth: self.history.undo_depth(),
         });
-        self.move_control(self.track_row, 0);
+        self.move_control(slot * DEVICE_ROWS, 0);
         self.status = format!("Took {}: p puts it in a slot", insert.name());
     }
 
@@ -1165,9 +1278,7 @@ impl App {
     }
 
     pub(crate) fn move_control(&mut self, row: usize, field: usize) {
-        let rows = self.page_rows();
-        self.track_row = row.min(rows.len() - 1);
-        self.track_field = field.min(self.fields_in(rows[self.track_row]) - 1);
+        (self.track_row, self.track_field) = place_in(&self.cursor_rows(), row, field);
         self.track_fine = false;
     }
 
@@ -1176,13 +1287,20 @@ impl App {
         self.track_control().fine_on(&self.page_track()).is_some()
     }
 
-    /// `l`: onto the fine digits of a setting that has them, and then on to the next.
+    /// `l`: onto the fine digits of a setting that has them, and then on to the next, over any
+    /// holes.
     fn step_right(&mut self) {
         if !self.track_fine && self.has_fine_here() {
             self.track_fine = true;
-        } else {
-            self.move_control(self.track_row, self.track_field.saturating_add(1));
+            return;
         }
+        let (row, field) = self.cursor_place();
+        let next = self.cursor_rows()[row]
+            .iter()
+            .enumerate()
+            .skip(field + 1)
+            .find_map(|(at, place)| place.and(Some(at)));
+        self.move_control(row, next.unwrap_or(field));
     }
 
     /// `h`: back off the fine digits, and onto the previous setting's if it has them.
@@ -1191,9 +1309,12 @@ impl App {
             self.track_fine = false;
             return;
         }
-        let before = self.track_field;
-        self.move_control(self.track_row, before.saturating_sub(1));
-        self.track_fine = self.track_field != before && self.has_fine_here();
+        let (row, field) = self.cursor_place();
+        let before = self.cursor_rows()[row][..field]
+            .iter()
+            .rposition(Option::is_some);
+        self.move_control(row, before.unwrap_or(field));
+        self.track_fine = before.is_some() && self.has_fine_here();
     }
 
     /// Move the fine part of the setting under the cursor, carrying into its value past `FF` or
@@ -1247,17 +1368,16 @@ impl App {
         }
     }
 
-    /// Move a row up or down, past any that would leave the cursor on the same setting, as an empty
-    /// slot's effect is in both its rows.
+    /// Move a row up or down, past any with nothing in them, as an empty slot's grid is, aiming
+    /// for the field `j` and `k` aim for.
     fn step_row(&mut self, by: isize) {
-        let before = self.track_control();
         let wanted = self.wanted_field();
-        let last = self.page_rows().len() - 1;
-        let mut row = self.track_row;
-        while let Some(next) = row.checked_add_signed(by).filter(|next| *next <= last) {
+        let rows = self.cursor_rows();
+        let mut row = self.cursor_place().0;
+        while let Some(next) = row.checked_add_signed(by).filter(|next| *next < rows.len()) {
             row = next;
-            self.move_control(row, wanted);
-            if self.track_control() != before {
+            if rows[row].iter().any(Option::is_some) {
+                self.move_control(row, wanted);
                 break;
             }
         }
@@ -1282,13 +1402,11 @@ impl App {
         self.track_wanted = Some((self.track_row, self.track_field, wanted));
     }
 
-    /// The first field drawn on the cursor's line. A slot's effect is one tall column drawn on its
-    /// top line, so on its bottom line the row starts at its first setting there.
-    fn row_start(&self) -> usize {
-        let rows = self.page_rows();
-        let row = self.track_row.min(rows.len() - 1);
-        let bottom_of_slot = self.track_page == Page::Fx && row % SLOT_ROWS == SLOT_ROWS - 1;
-        usize::from(bottom_of_slot && self.fields_in(rows[row]) > 1)
+    /// `0` and `$`: the first or the last setting on the cursor's row, over any holes.
+    fn row_end(&mut self, last: bool) {
+        let row = self.cursor_place().0;
+        let field = if last { usize::MAX } else { 0 };
+        self.move_control(row, field);
     }
 
     /// Run a command on the mixer. `h` and `l` go between its strips, and `j` and `k` up and down
@@ -1310,33 +1428,42 @@ impl App {
         true
     }
 
+    /// Put the cursor where it's seen, keeping the column `j` and `k` aim for. Left elsewhere,
+    /// as after `}` onto an empty slot, an edit could bring back the setting it was kept for.
+    fn settle_cursor(&mut self) {
+        let wanted = self.wanted_field();
+        let place = self.cursor_place();
+        if place != (self.track_row, self.track_field) {
+            (self.track_row, self.track_field) = place;
+            self.track_wanted = Some((place.0, place.1, wanted));
+        }
+    }
+
     /// Run a command on the track page. Returns false if it means the same as anywhere.
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
+        // Only `{` and `}` go on from where the cursor was kept, so they come back to it.
+        let kept = (self.track_row, self.track_field, self.track_wanted);
+        let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
+        if !braces && self.view != View::Mixer {
+            self.settle_cursor();
+        }
         let count = self.count.take();
         let times = count.unwrap_or(1).max(1);
-        let (row, field) = (self.track_row, self.track_field);
+        let field = self.track_field;
         match cmd {
             Cmd::Move(Motion::Down) => (0..times).for_each(|_| self.step_row(1)),
             Cmd::Move(Motion::Up) => (0..times).for_each(|_| self.step_row(-1)),
-            Cmd::Move(Motion::NextBeat | Motion::PreviousBeat) if self.track_page != Page::Fx => {
+            Cmd::Move(Motion::NextBeat | Motion::PreviousBeat) if self.devices().is_empty() => {
                 self.status = "{ and } go between slots on the FX page".to_owned();
             }
-            // Only the slot changes, so a setting goes to the same setting in the next. The field
-            // is left as it is, so it comes back after an empty slot.
-            Cmd::Move(Motion::NextBeat) => {
-                let slot = (row / SLOT_ROWS).saturating_add(times).min(INSERTS - 1);
-                self.track_row = slot * SLOT_ROWS + row % SLOT_ROWS;
-            }
-            Cmd::Move(Motion::PreviousBeat) => {
-                let slot = (row / SLOT_ROWS).saturating_sub(times);
-                self.track_row = slot * SLOT_ROWS + row % SLOT_ROWS;
-            }
+            Cmd::Move(Motion::NextBeat) => self.move_device(times as isize),
+            Cmd::Move(Motion::PreviousBeat) => self.move_device(-(times as isize)),
             Cmd::Move(Motion::First) => self.move_row_keeping_field(0),
             Cmd::Move(Motion::Last) => self.move_row_keeping_field(usize::MAX),
             Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.step_right()),
             Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.step_left()),
-            Cmd::Move(Motion::RowStart) => self.move_control(row, self.row_start()),
-            Cmd::Move(Motion::RowEnd) => self.move_control(row, usize::MAX),
+            Cmd::Move(Motion::RowStart) => self.row_end(false),
+            Cmd::Move(Motion::RowEnd) => self.row_end(true),
             Cmd::PreviousPage | Cmd::NextPage => {
                 self.track_page = self.track_page.beside(cmd == Cmd::NextPage);
                 self.move_control(0, field);
@@ -1374,6 +1501,9 @@ impl App {
                 self.mode = Mode::Insert;
             }
             _ => {
+                // What it means elsewhere, such as going to another track, keeps the cursor
+                // where it was kept.
+                (self.track_row, self.track_field, self.track_wanted) = kept;
                 self.count = count;
                 return false;
             }

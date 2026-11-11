@@ -77,11 +77,14 @@ fn labelled(
 impl App {
     /// The settings a search looks through. The mixer's are those of the cursor's track, whose row
     /// the cursor stays on.
-    fn jump_rows(&self) -> &'static [&'static [Control]] {
+    fn jump_rows(&self) -> Vec<Vec<Option<Control>>> {
         if self.view == View::Mixer {
-            &MIXER_ROWS
+            MIXER_ROWS
+                .iter()
+                .map(|row| row.iter().copied().map(Some).collect())
+                .collect()
         } else {
-            self.page_rows()
+            self.cursor_rows()
         }
     }
 
@@ -101,13 +104,13 @@ impl App {
         };
         let mut hits: Vec<_> = self
             .jump_rows()
-            .iter()
+            .into_iter()
             .enumerate()
             .flat_map(|(row, controls)| {
                 controls
-                    .iter()
+                    .into_iter()
                     .enumerate()
-                    .map(move |(field, control)| (row, field, *control))
+                    .filter_map(move |(field, control)| Some((row, field, control?)))
             })
             .filter(|(_, _, control)| control.exists_on(track))
             .map(|(row, field, control)| {
@@ -117,13 +120,6 @@ impl App {
             .filter(|(_, _, _, name)| name.contains(query))
             .collect();
         hits.sort_by_key(|(row, field, _, _)| (row.abs_diff(from_row), field.abs_diff(from_field)));
-        // A setting can be in two rows, as a slot's effect is.
-        let mut seen = Vec::new();
-        hits.retain(|(_, _, control, _)| {
-            let new = !seen.contains(control);
-            seen.push(*control);
-            new
-        });
         hits.into_iter()
             .map(|(_, _, control, name)| (control, name))
             .collect()
@@ -161,7 +157,7 @@ impl App {
             .iter()
             .enumerate()
             .find_map(|(row, controls)| {
-                let field = controls.iter().position(|field| *field == control)?;
+                let field = controls.iter().position(|field| *field == Some(control))?;
                 Some((row, field))
             });
         if let Some((row, field)) = place {

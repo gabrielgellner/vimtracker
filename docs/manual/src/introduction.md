@@ -38,10 +38,11 @@ and its envelopes and LFO shapes on its Mod page:
 
 ![A track's Mod page, with its envelopes and LFO shapes](images/track-mod.svg)
 
-and on its FX page, a compressor's curve, with a meter beside it of how far it's turning
-down, an EQ's curve, and a limiter's meter:
+and on its FX page, a device for each slot, with its effect and type in its title and its
+settings in three rows: a Glue compressor with its curve and a meter of how far it's turning
+down, an EQ with its curve, a limiter with its meter, and an empty slot:
 
-![A track's FX page, with a compressor's curve and gain reduction, an EQ's curve and a limiter's gain reduction](images/track-fx.svg)
+![A track's FX page: four framed devices, a Glue compressor with its curve and gain reduction, an EQ with its curve, a limiter with its gain reduction and an empty slot](images/track-fx.svg)
 
 and the sample page, on `Space 0`, with the track's sample as a big waveform, left above right,
 its start, end and loop marked, and an overview of the whole sample below with the part in view:

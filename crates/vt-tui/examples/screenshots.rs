@@ -128,7 +128,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-fx",
         rows: LANE,
-        keys: " 4LLKComp<Enter>lli40hhjKEQ3<Enter>ljiD0li50jhhKLimit<Enter><Tab>",
+        keys: " 4LLKComp<Enter>l==hji40}KEQ3<Enter>jjiD0li50}KLimit<Enter><Tab>",
         play: 6,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,
@@ -154,7 +154,8 @@ const SHOTS: &[Shot] = &[
     },
 ];
 
-/// The sample page's shot is of the author's screen, kitty full screen on a MacBook.
+/// The sample page's and the FX page's shots are of the author's screen, kitty full screen on a
+/// MacBook, where the FX page's four devices fit beside the main meter.
 const SAMPLE_WIDTH: u16 = 163;
 const SAMPLE_HEIGHT: u16 = 42;
 
@@ -349,7 +350,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
         "track-mod" => (WIDTH, MOD_HEIGHT),
-        "sample" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        "sample" | "track-fx" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
         _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));

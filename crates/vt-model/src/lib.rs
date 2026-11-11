@@ -8,6 +8,7 @@ pub mod bank;
 pub mod condition;
 pub mod constants;
 pub mod envelope;
+pub mod grid;
 pub mod groove;
 pub mod history;
 pub mod insert;
