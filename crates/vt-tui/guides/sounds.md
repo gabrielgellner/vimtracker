@@ -6,9 +6,9 @@ and LFOs**.
 
 ## The synths
 
-`K` on Machine, at the top of the Sound page, chooses `Sampler` or one of the synths, by
-typing its name. They come from Mutable Instruments' Plaits, and each has its own
-settings, named on the page below Machine. A track keeps each synth's settings, so
+`K` on the machine, in the title of the Sound page's Machine device, chooses `Sampler` or
+one of the synths, by typing its name. Most come from Mutable Instruments' Plaits, and each
+has its own settings, in the Machine device under it. A track keeps each synth's settings, so
 trying another and coming back finds the first as you left it. One you haven't played on
 the track starts from its own defaults.
 
@@ -238,10 +238,15 @@ hat, and raise `Decay` for an open one.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
-The first three are set from steps with `HAR`, `TIM` and `MOR`, in that order on any
-synth, and LFOs and envelopes can move them as `Har`, `Tim` and `Mor`. A `VA`, `FM`, `Fold`, `Waves`, `6-op`, `Dust` or `Noise` note holds
-until the next note, `OFF` or `KIL`, shaped by the first envelope, so shorten its
-Sustain for plucks. The drums, `String` and `Modal` die away by themselves. A track plays one note at a time.
+A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
+`Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
+slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by
+their names, like `Punch`. Each belongs to its voice, so a lock does nothing while the
+track plays another.
+
+A note on any synth but the drums, `String` and `Modal` holds until the next note, `OFF`
+or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those five die
+away by themselves. A track plays one note at a time.
 
 ## Accent
 
@@ -293,11 +298,12 @@ background, so the list doesn't wait for it, and the last few are kept.
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
-settings cut the sample further, in the Sound page's Machine, and a step can lock
-any of them:
+settings choose the sample and cut it further, in the Sound page's Machine, and a step
+can lock any of them:
 
 | Setting | Step | Does |
 |---|---|---|
+| `Sample` | `SMP` | Which of the bank's samples plays: see **The bank** |
 | `Slice` | `SLI` | Which slice plays, once it's sliced: see **Slices** |
 | `Start` | `STA` | Where a note starts: `80` is half way in |
 | `Length` | `SLEN` | How much plays from there. `FF` is all of it |
@@ -310,6 +316,23 @@ from where the sample starts playing, so on a reversed sample they count back fr
 its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
 never reaches its end.
+
+## The bank
+
+The samples a project plays are its bank, numbered `01` to `FF`. A file joins it when
+it's first chosen, from `Space 5`, `:sample` or a kit, and a sampler's `Sample`, in its
+Machine device's title, says which entry it plays, `00` for none. A step's `SMP` plays
+another entry for its note, so one track can play a whole kit.
+
+| Keys | Does |
+|---|---|
+| `K` on `Sample` | List the bank to choose from, with a way to add a file |
+| `K` on a step's `SMP` | List the bank, for that step's lock |
+| `:bank` | List the bank, to choose what this track plays |
+| `:bank clean` | Take out every entry nothing plays, as one undo |
+
+Each entry keeps how it plays, its start, end, loop, gain, tune, slices and marks,
+whatever track plays it.
 
 ## Normalising and trimming
 

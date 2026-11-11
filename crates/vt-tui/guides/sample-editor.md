@@ -33,7 +33,7 @@ is a line. Every motion takes a count.
 
 | Keys | View |
 |---|---|
-| `zi` `zo` | Zoom in or out by 2 on the cursor, as `M-1` `M-2` do |
+| `zi` `zo` | Zoom in or out by 2 on the cursor, as `Option-1` `Option-2` do |
 | `zO` `zv` | The whole sample, or the slice filling the view |
 | `C-d` `C-u` | Half a screen later or earlier |
 | `C-e` `C-y` | A column later or earlier |
@@ -55,7 +55,7 @@ to the next or previous named slice. A step can play a named slice as `SLI 'a`.
 
 | Keys | Plays |
 |---|---|
-| `;` | The slice under the cursor, as it plays in the song |
+| `;` | The slice under the cursor as the song plays it, or the selection |
 | `Space c` | From the cursor to the sample's end |
 | `Esc` | Stops it |
 

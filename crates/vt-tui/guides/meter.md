@@ -48,8 +48,8 @@ nothing at all, so what you hear is exactly what went in. Above `0` it clips
 hard, and that is meant to sound bad.
 
 So G should stay empty. Any limiting at all turns the number above it red.
-If that happens, the fix is the mix: bring tracks down with `:tvol`, or lower
-velocities, until the bars stay under `0`.
+If that happens, the fix is the mix: bring tracks' `Level` down on the mixer, or
+with `:tvol`, or lower velocities, until the bars stay under `0`.
 
 ## Protecting your ears
 
@@ -69,8 +69,9 @@ way, so nothing over full reaches your gear.
 
 ## The audio page
 
-`Space 7` opens the audio page: which device plays, its rate and its buffer. `j` and
-`k` choose a row, `=` and `-` step through its choices, as do Cmd with `l` and `h`, or
+`Space 7` opens the audio page: which device plays, its rate and its buffer, then the
+latency and how well it's keeping up. `j` and `k` choose a row, `gg` and `G` the first or
+last, `=` and `-` step through its choices, as do Cmd with `l` and `h`, or
 `k` and `j`, `K` lists them, and `x` goes back
 to the system's own. A change takes effect at once: the transport stops, and the song,
 undo, mutes and solos all stay. This machine remembers the choice for next time, in
