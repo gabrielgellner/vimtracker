@@ -683,6 +683,15 @@ These need no terminal and no sound device, so they run anywhere.
     writes the track filter's response as the Sound page draws it. The Python side doesn't run in
     CI, while `crates/vt-tui/tests/probe.rs` checks that the specs in `tools/compare/specs/` parse
     and prepare on our side.
+*   **`vimtracker notes <project> <out.toml>`** (`track_notes.rs`) reads a project, never writing
+    to it, and writes one sound track's notes once through its chain, the first in any section
+    that gives it one, as a probe spec's notes, with the song's tempo and the track's machine
+    settings. `--track` picks the track by its name and `--machine` by its machine. Rows are timed
+    as the sequencer plays them, each pulse a step at the track's speed, with each gate's share
+    and a `Hold` sliding into the next row's note; a track with FX, lanes, nudges or a groove
+    other than `Straight` is refused rather than read wrongly. `tools/compare/song_line.py` uses
+    it for a spec that's a stub naming a song, writing the whole spec from the song each run, so a
+    song's line is compared without being copied into the repository.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 

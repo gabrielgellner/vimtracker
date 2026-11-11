@@ -147,7 +147,13 @@ def main() -> None:
     parser.add_argument("--case")
     parser.add_argument("--reference", help="which of the spec's references; the first if not given")
     args = parser.parse_args()
-    spec = specs.read(args.spec)
+    import song_line
+
+    try:
+        spec = specs.read(args.spec)
+    except song_line.Skipped as skipped:
+        print(skipped, file=sys.stderr)
+        return
     out = render(spec, args.case, name=args.reference)
     write(args.out, spec.rate, out)
     print(f"Rendered {args.out} ({out.shape[1] / spec.rate:.2f} s)", file=sys.stderr)

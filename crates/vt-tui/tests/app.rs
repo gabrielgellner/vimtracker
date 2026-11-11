@@ -13029,8 +13029,8 @@ fn the_sound_page_sets_a_samplers_start_length_and_play() {
 }
 
 /// A first track whose rows last these pulses, each with a note, beside a second track of this
-/// many rows at this speed, numbered by their notes from `C-4`: the shape of the Blade test
-/// project, whose acid line is 7 rows over 16 pulses beside drums of 16 rows.
+/// many rows at this speed, numbered by their notes from `C-4`: the shape of an acid line of 7
+/// rows over 16 pulses beside drums of 16 rows.
 fn timeline_song(pulses: &[u8], rows: usize, speed: vt_model::speed::Speed) -> (App, Realtime) {
     use vt_model::step::{Gate, GateKind};
     let mut song = Song::new(2);
@@ -13061,8 +13061,8 @@ fn timeline_song(pulses: &[u8], rows: usize, speed: vt_model::speed::Speed) -> (
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-/// The Blade project's acid rows, 16 pulses in all.
-const BLADE: [u8; 7] = [2, 1, 3, 4, 3, 1, 2];
+/// An acid line's rows of uneven lengths, 16 pulses in all.
+const UNEVEN: [u8; 7] = [2, 1, 3, 4, 3, 1, 2];
 
 /// The second track's note on a row, as its rows are numbered from `C-4`.
 fn note_name(row: usize) -> String {
@@ -13071,7 +13071,7 @@ fn note_name(row: usize) -> String {
 
 #[test]
 fn the_timeline_gives_a_row_a_line_for_each_pulse() {
-    let (app, _realtime) = timeline_song(&BLADE, 16, vt_model::speed::Speed::Sixteenth);
+    let (app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     let buffer = screen(&app);
     // Each row's own line has its number, and its continuation lines none.
     let numbered: Vec<(u16, String)> = (0..16)
@@ -13107,7 +13107,7 @@ fn the_timeline_gives_a_row_a_line_for_each_pulse() {
 
 #[test]
 fn other_tracks_line_up_by_time_in_the_timeline() {
-    let (app, _realtime) = timeline_song(&BLADE, 16, vt_model::speed::Speed::Sixteenth);
+    let (app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     let buffer = screen(&app);
     // The drums' sixteenths go down beside the acid's lines, one a line, rather than one a row.
     for line in 0..16 {
@@ -13145,7 +13145,7 @@ fn a_slower_track_leaves_lines_blank_and_a_faster_one_marks_them() {
 
 #[test]
 fn j_and_k_skip_continuation_lines_and_counts_count_rows() {
-    let (mut app, _realtime) = timeline_song(&BLADE, 16, vt_model::speed::Speed::Sixteenth);
+    let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     press(&mut app, "j");
     assert_eq!(app.cursor.step, 1);
     press(&mut app, "2j");
@@ -13200,7 +13200,7 @@ fn the_view_scrolls_by_the_lines_rows_take() {
 
 #[test]
 fn the_playheads_follow_the_timeline() {
-    let (mut app, _realtime) = timeline_song(&BLADE, 16, vt_model::speed::Speed::Sixteenth);
+    let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     // Step 5 is row 02's third pulse, on line 5, and the drums' row 05.
@@ -13213,7 +13213,7 @@ fn the_playheads_follow_the_timeline() {
 
 #[test]
 fn z_a_collapses_the_timeline_to_a_line_a_row_and_opens_it_again() {
-    let (mut app, _realtime) = timeline_song(&BLADE, 16, vt_model::speed::Speed::Sixteenth);
+    let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     assert!(app.timeline_on(), "the timeline is the default");
     press(&mut app, "za");
     assert!(!app.timeline_on());
