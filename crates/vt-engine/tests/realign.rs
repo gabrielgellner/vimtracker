@@ -46,8 +46,8 @@ fn song(tracks: &[&[&str]]) -> Song {
     for (index, rows) in tracks.iter().enumerate() {
         song.sample_on(index, "s");
         let track = &mut song.tracks[index];
-        track.envelopes[0].attack_ms = 0;
-        track.envelopes[0].release_ms = 0;
+        track.mods[0].adsr.attack_ms = 0;
+        track.mods[0].adsr.release_ms = 0;
         let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
         track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
     }

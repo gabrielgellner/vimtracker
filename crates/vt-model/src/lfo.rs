@@ -1,4 +1,5 @@
-//! Low-frequency oscillators, which a track keeps running apart from its steps.
+//! Low-frequency oscillators, one of a mod slot's types, which a track keeps running apart from its
+//! steps, and the musical rates they and effects' sweeps run at.
 
 use std::fmt;
 use std::str::FromStr;
@@ -7,12 +8,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
-use crate::settings::SettingId;
-
-/// How many a track has.
-pub const LFOS_PER_TRACK: usize = 3;
-/// The furthest either way a depth goes, in the units of what it moves.
-pub const MAX_LFO_DEPTH: i16 = 0xFF;
 
 const BAR_TICKS: u32 = TICKS_PER_QUARTER as u32 * 4;
 const MAX_RATE_BARS: u32 = 64;
@@ -367,38 +362,56 @@ fn random(key: u64, cycle: i64) -> f32 {
     (mixed >> 40) as f32 / (1_u64 << 23) as f32 - 1.0
 }
 
-/// One LFO's settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Lfo {
-    pub destination: Option<SettingId>,
-    pub shape: Shape,
-    pub rate: Rate,
-    /// How far it swings either way, in the destination's units. Negative flips the shape.
-    pub depth: i16,
-    /// Where in the cycle it starts, in degrees.
-    pub phase: u16,
-    /// Whether each note on the track restarts it. Otherwise only playing from the top does.
-    pub retrig: bool,
-    /// Whether it's switched out, to hear the track without it. It keeps running underneath, so
-    /// it comes back in phase.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub bypassed: bool,
+/// How an LFO runs against the track's notes: the mode in its title. The Digitakt's five are the
+/// plan (`docs/designs/mod-slots.md` §2), and `Hold`, `One` and `Half` come with #86.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LfoMode {
+    /// It runs from the song's position, and only playing from the top starts it again.
+    #[default]
+    Free,
+    /// Each note on the track starts it again at its `Phase`.
+    Trig,
 }
 
-fn is_false(value: &bool) -> bool {
-    !*value
+impl LfoMode {
+    /// Every mode, in the order `+` goes through them.
+    pub const ALL: [Self; 2] = [Self::Free, Self::Trig];
+
+    /// The name in the title.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Free => "Free",
+            Self::Trig => "Trig",
+        }
+    }
+
+    /// What it does, for a list to choose from.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Free => "runs from the song's position",
+            Self::Trig => "each note starts it at its phase",
+        }
+    }
+}
+
+/// An LFO's own settings: its wave, how fast, where it starts and how notes start it. Where it goes
+/// and how far are its mod slot's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lfo {
+    pub shape: Shape,
+    pub rate: Rate,
+    /// Where in the cycle it starts, in degrees.
+    pub phase: u16,
+    pub mode: LfoMode,
 }
 
 impl Default for Lfo {
     fn default() -> Self {
         Self {
-            destination: None,
             shape: Shape::default(),
             rate: Rate::Note(TICKS_PER_QUARTER as u32),
-            depth: 0,
             phase: 0,
-            retrig: false,
-            bypassed: false,
+            mode: LfoMode::Free,
         }
     }
 }
@@ -406,24 +419,8 @@ impl Default for Lfo {
 impl Lfo {
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
-        self.rate.in_range() && self.depth.abs() <= MAX_LFO_DEPTH && self.phase < 360
+        self.rate.in_range() && self.phase < 360
     }
-}
-
-/// A depth as a setting's value, with a coarse byte and a fine one: `8000` is none, and `00` and
-/// `FF` are the furthest either way. The sides have their own scales, as there are 128 coarse
-/// values below the middle and 127 above.
-pub fn depth_value(depth: i16) -> u16 {
-    let depth = f64::from(depth.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH));
-    let side = if depth < 0.0 { 128.0 } else { 127.0 };
-    (32768.0 + depth / f64::from(MAX_LFO_DEPTH) * side * 256.0).round() as u16
-}
-
-/// A depth from a value on the `00` to `FF` scale, the inverse of [`depth_value`].
-pub fn depth_of(value: f32) -> f32 {
-    let from_middle = value - 128.0;
-    let side = if from_middle < 0.0 { 128.0 } else { 127.0 };
-    from_middle / side * f32::from(MAX_LFO_DEPTH)
 }
 
 /// A phase in degrees as a setting's value, where `FF00` is a whole turn.
@@ -436,31 +433,12 @@ pub fn phase_of(value: f32) -> f32 {
     value / 255.0
 }
 
-/// A depth as text, with its sign, in hex like the values it moves.
-pub fn depth_text(depth: i16) -> String {
-    match depth {
-        0 => "00".to_owned(),
-        depth if depth < 0 => format!("-{:02X}", depth.unsigned_abs()),
-        depth => format!("+{depth:02X}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn depth_and_phase_go_there_and_back_as_values() {
-        assert_eq!(depth_value(0), 0x8000);
-        assert_eq!(depth_value(MAX_LFO_DEPTH), 0xFF00);
-        assert_eq!(depth_value(-MAX_LFO_DEPTH), 0x0000);
-        for depth in [-255, -40, -1, 0, 1, 0x40, 255] {
-            let back = depth_of(f32::from(depth_value(depth)) / 256.0);
-            assert!(
-                (back - f32::from(depth)).abs() < 0.01,
-                "{depth} came back as {back}"
-            );
-        }
+    fn phase_goes_there_and_back_as_a_value() {
         assert_eq!(phase_value(0), 0);
         assert_eq!(phase_value(180), 0x7F80);
         assert!((phase_of(f32::from(phase_value(90)) / 256.0) - 0.25).abs() < 1e-6);
@@ -544,13 +522,6 @@ mod tests {
         assert_eq!(rate("1/4").cycles(1920.0, 99.0), 2.0);
         assert_eq!(rate("3st").cycles(1440.0, 99.0), 2.0);
         assert_eq!(rate("2hz").cycles(99.0, 1.5), 3.0);
-    }
-
-    #[test]
-    fn depth_shows_its_sign_in_hex() {
-        assert_eq!(depth_text(0), "00");
-        assert_eq!(depth_text(0x40), "+40");
-        assert_eq!(depth_text(-0xFF), "-FF");
     }
 
     fn close(a: f32, b: f32) {

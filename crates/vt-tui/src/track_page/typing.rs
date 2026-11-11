@@ -6,16 +6,17 @@ use vt_model::accumulator::{Accumulation, MOST_DEGREES};
 use vt_model::action::Action;
 use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Lfo, MAX_LFO_DEPTH, Rate};
+use vt_model::lfo::{Lfo, Rate};
+use vt_model::modulation::{MAX_DEPTH, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
 
-use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+use super::{AccumulatorField, ArpField, Control, ModField};
 
 /// Read a depth, with an optional sign, in hex.
 fn parse_depth(text: &str) -> Option<i16> {
@@ -24,7 +25,7 @@ fn parse_depth(text: &str) -> Option<i16> {
         None => (1, text.strip_prefix('+').unwrap_or(text)),
     };
     let depth = i16::from_str_radix(digits, 16).ok()?;
-    (0..=MAX_LFO_DEPTH).contains(&depth).then_some(sign * depth)
+    (0..=MAX_DEPTH).contains(&depth).then_some(sign * depth)
 }
 
 impl App {
@@ -140,37 +141,7 @@ impl App {
                 }
             },
             Control::Groove | Control::Speed => {}
-            Control::Lfo(slot, LfoField::Rate) => match text.parse::<Rate>() {
-                Ok(rate) => {
-                    let lfo = Lfo {
-                        rate,
-                        ..track.lfos[slot]
-                    };
-                    self.set_lfo(slot, lfo);
-                }
-                Err(error) => self.status = error.to_string(),
-            },
-            Control::Lfo(slot, LfoField::Depth) => match parse_depth(text) {
-                Some(depth) => {
-                    let lfo = Lfo {
-                        depth,
-                        ..track.lfos[slot]
-                    };
-                    self.set_lfo(slot, lfo);
-                }
-                None => self.status = "Depth is hex from -FF to +FF".to_owned(),
-            },
-            Control::Lfo(slot, LfoField::Phase) => match text.parse::<u16>() {
-                Ok(phase) if phase < 360 => {
-                    let lfo = Lfo {
-                        phase,
-                        ..track.lfos[slot]
-                    };
-                    self.set_lfo(slot, lfo);
-                }
-                _ => self.status = "Phase is degrees from 0 to 359".to_owned(),
-            },
-            Control::Lfo(..) | Control::FilterType | Control::FilterMode | Control::Machine => {}
+            Control::FilterType | Control::FilterMode | Control::Machine => {}
             Control::Accumulator(field @ (AccumulatorField::Up | AccumulatorField::Down)) => {
                 match text.trim().parse::<u8>() {
                     Ok(limit) if (1..=MOST_DEGREES).contains(&limit) => {
@@ -198,45 +169,64 @@ impl App {
                 _ => self.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
             },
             Control::Arpeggio(_) => {}
-            Control::Envelope(slot, field) => {
-                let current = track.envelopes[slot];
-                let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
-                let changed = match field {
-                    EnvelopeField::Attack => ms.map(|attack_ms| Envelope {
-                        attack_ms,
-                        ..current
-                    }),
-                    EnvelopeField::Decay => ms.map(|decay_ms| Envelope {
-                        decay_ms,
-                        ..current
-                    }),
-                    EnvelopeField::Release => ms.map(|release_ms| Envelope {
-                        release_ms,
-                        ..current
-                    }),
-                    EnvelopeField::Sustain => text
-                        .trim_end_matches('%')
-                        .parse::<u8>()
-                        .ok()
-                        .filter(|sustain| *sustain <= 100)
-                        .map(|sustain| Envelope { sustain, ..current }),
-                    EnvelopeField::Depth => {
-                        parse_depth(text).map(|depth| Envelope { depth, ..current })
-                    }
-                    EnvelopeField::Destination | EnvelopeField::Reset => None,
-                };
-                match changed {
-                    Some(envelope) => self.set_envelope(slot, envelope),
-                    None => {
-                        self.status = match field {
-                            EnvelopeField::Sustain => "Sustain is a percent from 0 to 100",
-                            EnvelopeField::Depth => "Depth is hex from -FF to +FF",
-                            _ => "Times are milliseconds from 0 to 8000",
-                        }
-                        .to_owned();
-                    }
-                }
-            }
+            Control::Mod(slot, field) => self.type_mod(slot, field, text),
+        }
+    }
+
+    /// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time or
+    /// sustain, or an LFO's rate or phase. The rest are lists, chosen with `K`.
+    fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
+        let current = self.page_track().mods[slot];
+        let (adsr, lfo) = (current.adsr, current.lfo);
+        let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
+        let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
+        let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
+        let (changed, why) = match field {
+            ModField::Depth => (
+                parse_depth(text).map(|depth| ModSlot { depth, ..current }),
+                "Depth is hex from -FF to +FF".to_owned(),
+            ),
+            ModField::Attack => (
+                ms.map(|attack_ms| with_adsr(Adsr { attack_ms, ..adsr })),
+                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+            ),
+            ModField::Decay => (
+                ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
+                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+            ),
+            ModField::Release => (
+                ms.map(|release_ms| with_adsr(Adsr { release_ms, ..adsr })),
+                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+            ),
+            ModField::Sustain => (
+                text.trim_end_matches('%')
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|sustain| *sustain <= 100)
+                    .map(|sustain| with_adsr(Adsr { sustain, ..adsr })),
+                "Sustain is a percent from 0 to 100".to_owned(),
+            ),
+            ModField::Rate => match text.parse::<Rate>() {
+                Ok(rate) => (Some(with_lfo(Lfo { rate, ..lfo })), String::new()),
+                Err(error) => (None, error.to_string()),
+            },
+            ModField::Phase => (
+                text.parse::<u16>()
+                    .ok()
+                    .filter(|phase| *phase < 360)
+                    .map(|phase| with_lfo(Lfo { phase, ..lfo })),
+                "Phase is degrees from 0 to 359".to_owned(),
+            ),
+            ModField::Type
+            | ModField::Mode
+            | ModField::Polarity
+            | ModField::Destination
+            | ModField::Reset
+            | ModField::Shape => return,
+        };
+        match changed {
+            Some(modulator) => self.set_mod(slot, modulator),
+            None => self.status = why,
         }
     }
 }

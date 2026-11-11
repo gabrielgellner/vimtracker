@@ -2,31 +2,46 @@
 //! their values on a track, and which can be listed or typed.
 
 use vt_model::action::TrackControl;
-use vt_model::lfo::{depth_value, phase_value};
+use vt_model::lfo::phase_value;
+use vt_model::modulation::{ModKind, depth_value};
 use vt_model::settings::{Effect, Kind, SettingId};
 use vt_model::song::{FilterType, Track, TrackKind};
 
-/// One setting of an LFO.
+/// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
+/// in its own way, then each type's own, which mean what they do under the slot's type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LfoField {
+pub enum ModField {
+    Type,
+    /// The type's mode, as an LFO's `Free` or `Trig`, for a type that has one.
+    Mode,
+    /// Whether it moves what it reaches one way or both (#434).
+    Polarity,
     Destination,
-    Shape,
-    Rate,
     Depth,
-    Phase,
-    Retrig,
-}
-
-/// One setting of an envelope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EnvelopeField {
-    Destination,
+    /// An envelope's.
     Attack,
     Decay,
     Sustain,
     Release,
-    Depth,
     Reset,
+    /// An LFO's.
+    Shape,
+    Rate,
+    Phase,
+}
+
+impl ModField {
+    /// Whether a slot of this type has it.
+    pub fn on(self, kind: ModKind) -> bool {
+        match self {
+            Self::Type | Self::Polarity | Self::Destination | Self::Depth => true,
+            Self::Mode => kind.has_mode(),
+            Self::Attack | Self::Decay | Self::Sustain | Self::Release | Self::Reset => {
+                kind == ModKind::Adsr
+            }
+            Self::Shape | Self::Rate | Self::Phase => kind == ModKind::Lfo,
+        }
+    }
 }
 
 /// One of the track's accumulator settings, which its `ACU`s share.
@@ -83,8 +98,8 @@ pub enum Control {
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
-    Lfo(usize, LfoField),
-    Envelope(usize, EnvelopeField),
+    /// One of a mod slot's settings, by the slot's place.
+    Mod(usize, ModField),
     Accumulator(AccumulatorField),
     Arpeggio(ArpField),
     /// What's in one of the track's slots.
@@ -127,19 +142,21 @@ impl Control {
             Self::Level => "Level",
             Self::Trim => "Trim",
             Self::Groove => "Groove",
-            Self::Lfo(_, LfoField::Destination) => "Dest",
-            Self::Lfo(_, LfoField::Shape) => "Shape",
-            Self::Lfo(_, LfoField::Rate) => "Rate",
-            Self::Lfo(_, LfoField::Depth) => "Depth",
-            Self::Lfo(_, LfoField::Phase) => "Phase",
-            Self::Lfo(_, LfoField::Retrig) => "Retrig",
-            Self::Envelope(_, EnvelopeField::Destination) => "Dest",
-            Self::Envelope(_, EnvelopeField::Attack) => "Attack",
-            Self::Envelope(_, EnvelopeField::Decay) => "Decay",
-            Self::Envelope(_, EnvelopeField::Sustain) => "Sustain",
-            Self::Envelope(_, EnvelopeField::Release) => "Release",
-            Self::Envelope(_, EnvelopeField::Depth) => "Depth",
-            Self::Envelope(_, EnvelopeField::Reset) => "Reset",
+            Self::Mod(_, field) => match field {
+                ModField::Type => "Type",
+                ModField::Mode => "Mode",
+                ModField::Polarity => "Polarity",
+                ModField::Destination => "Dest",
+                ModField::Depth => "Depth",
+                ModField::Attack => "Attack",
+                ModField::Decay => "Decay",
+                ModField::Sustain => "Sustain",
+                ModField::Release => "Release",
+                ModField::Reset => "Reset",
+                ModField::Shape => "Shape",
+                ModField::Rate => "Rate",
+                ModField::Phase => "Phase",
+            },
             Self::Accumulator(AccumulatorField::Up) => "Up",
             Self::Accumulator(AccumulatorField::Down) => "Down",
             Self::Accumulator(AccumulatorField::Moves) => "Moves",
@@ -191,12 +208,18 @@ impl Control {
             Self::Setting(_) => self
                 .setting_on(track)
                 .and_then(|id| base(id, track.setting(id))),
-            Self::Lfo(lfo, LfoField::Depth) => {
-                Some((SettingId::lfo(lfo, 0)?, depth_value(track.lfos[lfo].depth)))
-            }
-            Self::Lfo(lfo, LfoField::Phase) => {
-                Some((SettingId::lfo(lfo, 1)?, phase_value(track.lfos[lfo].phase)))
-            }
+            Self::Mod(slot, ModField::Depth) => Some((
+                SettingId::modulator(slot, 0)?,
+                depth_value(track.mods[slot].depth),
+            )),
+            Self::Mod(slot, ModField::Phase) => Some((
+                SettingId::modulator(slot, 1)?,
+                phase_value(track.mods[slot].lfo.phase),
+            )),
+            Self::Mod(slot, ModField::Polarity) => Some((
+                SettingId::modulator(slot, 2)?,
+                u16::from(track.mods[slot].polarity().index()) << 8,
+            )),
             Self::Level => base(SettingId::VOL, track.level),
             Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
             Self::Base(TrackControl::Resonance) => base(SettingId::RES, track.resonance),
@@ -308,11 +331,15 @@ impl Control {
                 | Self::FilterMode
                 | Self::Groove
                 | Self::Speed
-                | Self::Lfo(
+                | Self::Mod(
                     _,
-                    LfoField::Destination | LfoField::Shape | LfoField::Retrig
+                    ModField::Type
+                        | ModField::Mode
+                        | ModField::Polarity
+                        | ModField::Destination
+                        | ModField::Shape
+                        | ModField::Reset
                 )
-                | Self::Envelope(_, EnvelopeField::Destination | EnvelopeField::Reset)
                 | Self::Accumulator(
                     AccumulatorField::Moves
                         | AccumulatorField::AtLimit

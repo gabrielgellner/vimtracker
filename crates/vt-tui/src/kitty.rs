@@ -17,9 +17,8 @@ use ratatui::style::Color;
 use vt_engine::engine::PLAYHEADS;
 use vt_engine::track_state::LfoNow;
 use vt_model::bank::{ContentHash, Points};
-use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
-use vt_model::lfo::{LFOS_PER_TRACK, Lfo};
+use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
@@ -40,8 +39,7 @@ use crate::views::sample::{
 use crate::views::track::{
     DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
     MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    envelope_being_edited, filter_being_edited, heard_bypassed, lfo_being_edited,
-    machine_being_edited, slot_being_edited,
+    filter_being_edited, heard_bypassed, machine_being_edited, mod_being_edited, slot_being_edited,
 };
 use crate::waveform;
 
@@ -738,16 +736,16 @@ pub fn dot_pixels(cell: (usize, usize)) -> usize {
 pub fn dot_placement(
     cell: (usize, usize),
     corner: (u16, u16),
-    lfo: &Lfo,
+    modulator: &ModSlot,
     now: LfoNow,
     diameter: usize,
 ) -> Placement {
     let size = (MOD_PANEL_WIDTH * cell.0, MOD_PANEL_HEIGHT * cell.1);
-    let drawing = LfoDrawing::of(lfo);
+    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth).in_polarity(modulator.polarity());
     let x = drawing.x_of(f64::from(now.phase) / (f64::from(u16::MAX) + 1.0));
     // A random wave's cycle isn't flipped, as it's only its centre line, but its dot is.
     let signed = LfoDrawing {
-        flipped: lfo.depth < 0,
+        flipped: modulator.depth < 0,
         ..drawing
     };
     let level = signed.level_of(f32::from(now.value) / f32::from(i16::MAX));
@@ -971,8 +969,8 @@ pub struct Graphics {
     /// The images of the dot that rides an LFO's cycle, dim and focused, and how many pixels
     /// across they're drawn.
     dot_images: Option<(usize, [u32; 2])>,
-    /// Where each LFO's dot is placed, and in which shade, by its placement id less one.
-    dots_placed: [Option<(Shade, Placement)>; LFOS_PER_TRACK],
+    /// Where each LFO's dot is placed, and in which shade, by its slot, its placement id less one.
+    dots_placed: [Option<(Shade, Placement)>; MOD_SLOTS],
     /// A character's size in pixels, which the sample page's pictures are drawn for.
     cell: (usize, usize),
     /// The window's size in characters, as last told.
@@ -1002,7 +1000,7 @@ impl Graphics {
             mark_images: None,
             marks_placed: BTreeMap::new(),
             dot_images: None,
-            dots_placed: [None; LFOS_PER_TRACK],
+            dots_placed: [None; MOD_SLOTS],
             cell: DEFAULT_CELL,
             window: None,
             frames: 0,
@@ -1042,7 +1040,7 @@ impl Graphics {
             self.marks_placed.clear();
             self.retired
                 .extend(self.dot_images.take().into_iter().flat_map(|(_, ids)| ids));
-            self.dots_placed = [None; LFOS_PER_TRACK];
+            self.dots_placed = [None; MOD_SLOTS];
             self.retired.extend(self.panels.clear());
         }
         self.window = Some(characters);
@@ -1122,8 +1120,8 @@ impl Graphics {
     /// Where each LFO's dot goes on the Mod page, and in which shade: on its cycle where it is
     /// now, while it runs, its cycle is on screen and nothing is drawn over the page. One switched
     /// out or going nowhere has none, and while the song is stopped none has.
-    fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; LFOS_PER_TRACK] {
-        let mut wanted = [None; LFOS_PER_TRACK];
+    fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
+        let mut wanted = [None; MOD_SLOTS];
         let shown = app.view == View::Track
             && app.track_page.page == Page::Mod
             && !overlaid(app, std::time::Instant::now());
@@ -1133,17 +1131,21 @@ impl Graphics {
         if !shown {
             return wanted;
         }
-        let edited = lfo_being_edited(app);
+        let edited = mod_being_edited(app);
         let diameter = dot_pixels(self.cell);
-        for (slot, lfo) in track.lfos.iter().enumerate() {
-            let (Some(corner), Some(now)) = (app.lfo_cycles_at[slot], live.lfos[slot]) else {
+        for (slot, modulator) in track.mods.iter().enumerate() {
+            let (Some(corner), Some(now)) = (app.lfo_cycles_at[slot], live.mods[slot]) else {
                 continue;
             };
-            if lfo.bypassed || lfo.destination.is_none() {
+            if modulator.kind != ModKind::Lfo
+                || modulator.bypassed
+                || modulator.destination.is_none()
+            {
                 continue;
             }
             let shade = Shade::of(edited == Some(slot), false);
-            wanted[slot] = Some((shade, dot_placement(self.cell, corner, lfo, now, diameter)));
+            let placement = dot_placement(self.cell, corner, modulator, now, diameter);
+            wanted[slot] = Some((shade, placement));
         }
         wanted
     }
@@ -1163,7 +1165,7 @@ impl Graphics {
             _ if wanted.iter().all(Option::is_none) => {
                 self.retired
                     .extend(self.dot_images.take().into_iter().flat_map(|(_, ids)| ids));
-                self.dots_placed = [None; LFOS_PER_TRACK];
+                self.dots_placed = [None; MOD_SLOTS];
                 return Ok(());
             }
             old => {
@@ -1171,7 +1173,7 @@ impl Graphics {
                 for id in old.into_iter().flat_map(|(_, ids)| ids) {
                     command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
                 }
-                self.dots_placed = [None; LFOS_PER_TRACK];
+                self.dots_placed = [None; MOD_SLOTS];
                 let mut ids = [0; 2];
                 for (index, shade) in [Shade::Dim, Shade::Focused].into_iter().enumerate() {
                     // Held as each is given its id, so the next can't be given the same.
@@ -1649,38 +1651,34 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the Mod page's envelopes' shapes and LFOs' cycles, if the terminal lacks them, each
-    /// faint while it's switched out. An LFO's cycle is sent again only when its wave, its
-    /// `Phase` or its depth's sign changes.
+    /// Send each of the Mod page's slots' pictures, if the terminal lacks them, each faint while
+    /// it's switched out: an envelope's shape or an LFO's cycle, by its type. An LFO's cycle is
+    /// sent again only when its wave, its `Phase` or its depth's sign changes, and a slot's when
+    /// its type does.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let size = (MOD_PANEL_WIDTH, MOD_PANEL_HEIGHT);
-        let edited = envelope_being_edited(app);
-        let mut envelope_ids = [0; TRACK_ENVELOPES];
-        for (slot, envelope) in track.envelopes.iter().enumerate() {
-            let shade = Shade::of(edited == Some(slot), envelope.bypassed);
-            envelope_ids[slot] = self.panel(
-                out,
-                (PanelKey::Envelope(slot), shade),
-                Shape::Envelope(*envelope),
-                size,
-                |size| plot::envelope(envelope, size).png(shade.color()),
-            )?;
+        let edited = mod_being_edited(app);
+        let mut ids = [0; MOD_SLOTS];
+        for (slot, modulator) in track.mods.iter().enumerate() {
+            let shade = Shade::of(edited == Some(slot), modulator.bypassed);
+            let key = (PanelKey::Mod(slot), shade);
+            ids[slot] = match modulator.kind {
+                ModKind::Adsr => {
+                    let (adsr, polarity) = (modulator.adsr, modulator.polarity());
+                    self.panel(out, key, Shape::Envelope(adsr, polarity), size, |size| {
+                        plot::envelope_in(&adsr, polarity, size).png(shade.color())
+                    })?
+                }
+                ModKind::Lfo => {
+                    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth)
+                        .in_polarity(modulator.polarity());
+                    self.panel(out, key, Shape::Lfo(drawing), size, |size| {
+                        plot::lfo_cycle(drawing, size).png(shade.color())
+                    })?
+                }
+            };
         }
-        app.envelope_images = Some(envelope_ids);
-        let edited = lfo_being_edited(app);
-        let mut lfo_ids = [0; LFOS_PER_TRACK];
-        for (slot, lfo) in track.lfos.iter().enumerate() {
-            let shade = Shade::of(edited == Some(slot), lfo.bypassed);
-            let drawing = LfoDrawing::of(lfo);
-            lfo_ids[slot] = self.panel(
-                out,
-                (PanelKey::Lfo(slot), shade),
-                Shape::Lfo(drawing),
-                size,
-                |size| plot::lfo_cycle(drawing, size).png(shade.color()),
-            )?;
-        }
-        app.lfo_images = Some(lfo_ids);
+        app.mod_images = Some(ids);
         Ok(())
     }
 

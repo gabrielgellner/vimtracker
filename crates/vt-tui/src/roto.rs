@@ -1058,8 +1058,8 @@ impl App {
         self.roto.sent_song = Some(Arc::clone(self.song()));
     }
 
-    /// SEL on the Roto switching a device in or out: an FX slot's bypass, or an envelope's or an
-    /// LFO's switch, as `b` does, on the Roto's track. A device with no switch, or an empty
+    /// SEL on the Roto switching a device in or out: an FX slot's bypass, or a mod slot's switch,
+    /// as `b` does, on the Roto's track. A device with no switch, or an empty
     /// slot, stays as it is, and the Roto is shown so again.
     fn roto_switch_device(&mut self, device: usize, enabled: bool) {
         let at = self.roto.track;
@@ -1077,22 +1077,13 @@ impl App {
                     bypassed: !enabled,
                 })
             }
-            Some(Control::Envelope(slot, _)) if track.envelopes[slot].bypassed == enabled => {
-                let mut envelope = track.envelopes[slot];
-                envelope.bypassed = !enabled;
-                Some(Action::SetEnvelope {
+            Some(Control::Mod(slot, _)) if track.mods[slot].bypassed == enabled => {
+                let mut modulator = track.mods[slot];
+                modulator.bypassed = !enabled;
+                Some(Action::SetMod {
                     track: at,
                     slot,
-                    envelope,
-                })
-            }
-            Some(Control::Lfo(slot, _)) if track.lfos[slot].bypassed == enabled => {
-                let mut lfo = track.lfos[slot];
-                lfo.bypassed = !enabled;
-                Some(Action::SetLfo {
-                    track: at,
-                    slot,
-                    lfo,
+                    modulator,
                 })
             }
             _ => None,

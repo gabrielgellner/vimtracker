@@ -52,8 +52,8 @@ fn song(rows: &[&str], arpeggio: Arpeggio) -> Song {
     song.scale.on = false;
     song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     track.arpeggio = arpeggio;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
@@ -414,7 +414,7 @@ fn the_gate_closing_ends_it() {
     song.sample_on(0, "sine");
     // `6B` closes the gate 42% of the way through the step, on the G.
     song.tracks[0].gate_length = Some(0x6B);
-    song.tracks[0].envelopes[0].release_ms = 500;
+    song.tracks[0].mods[0].adsr.release_ms = 500;
     let out = render(&song, 2 * STEP);
     let notes: Vec<i32> = (0..6)
         .map(|note| sine_note(&out, note * TICK + 100, note * TICK + 900))
@@ -427,7 +427,7 @@ fn the_gate_closing_ends_it() {
 fn an_off_ends_it() {
     let mut off = song(&["C-3 -- arp:47 off:03"], Arpeggio::default());
     off.sample_on(0, "sine");
-    off.tracks[0].envelopes[0].release_ms = 500;
+    off.tracks[0].mods[0].adsr.release_ms = 500;
     let out = render(&off, STEP);
     let notes: Vec<i32> = (0..6)
         .map(|note| sine_note(&out, note * TICK + 100, note * TICK + 900))

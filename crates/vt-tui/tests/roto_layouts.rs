@@ -219,7 +219,7 @@ fn button_key(layout: &DeviceLayout, page: usize, button: usize) -> Option<&'sta
 
 #[test]
 fn an_envelope_is_attack_decay_sustain_release_first_and_an_lfo_what_it_plays() {
-    let envelope = layout_named("envelope");
+    let envelope = layout_named("adsr");
     assert_eq!(
         first_knobs(envelope)[..5],
         ["attack", "decay", "sustain", "release", "depth"]
@@ -233,7 +233,18 @@ fn an_envelope_is_attack_decay_sustain_release_first_and_an_lfo_what_it_plays() 
     }
     // Each restart is under what it starts again.
     assert_eq!(button_key(envelope, 0, 0), Some("reset"), "under Attack");
-    assert_eq!(button_key(lfo, 0, 3), Some("retrig"), "under Phase");
+    assert_eq!(button_key(lfo, 0, 3), Some("mode"), "under Phase");
+    // And a modulator's polarity under its depth, which it turns the way of.
+    assert_eq!(
+        button_key(envelope, 0, 4),
+        Some("polarity"),
+        "under the envelope's Depth"
+    );
+    assert_eq!(
+        button_key(lfo, 0, 2),
+        Some("polarity"),
+        "under the LFO's Depth"
+    );
     assert_eq!(button_key(layout_named("arpeggio"), 0, 0), Some("retrig"));
     // A filter's cutoff then resonance; a compressor's threshold then ratio; a 303's order.
     assert_eq!(
@@ -382,7 +393,7 @@ fn a_live_device_has_its_buttons_on_two_step_knobs_above_them() {
     assert!(stored.stored);
     assert!(stored.controls[5].is_none());
     assert_eq!(stored.switches[0].as_ref().unwrap().name.as_str(), "Reset");
-    assert_eq!(stored.key, "vimtracker:envelope");
+    assert_eq!(stored.key, "vimtracker:adsr");
 }
 
 #[test]
@@ -433,7 +444,7 @@ fn every_stored_setup_fits_the_roto_and_keeps_its_version() {
     let versions_again: Vec<u64> = again.iter().map(|setup| setup.version()).collect();
     assert_eq!(versions, versions_again, "the same every time");
     let names: Vec<&str> = setups.iter().map(|setup| setup.name.as_str()).collect();
-    for wanted in ["vt Glue", "vt Envelope", "vt LFO", "vt Output", "vt Delay"] {
+    for wanted in ["vt Glue", "vt ADSR", "vt LFO", "vt Output", "vt Delay"] {
         assert!(names.contains(&wanted), "{names:?}");
     }
 }
@@ -475,7 +486,7 @@ fn a_slot_can_give_a_setting_another_colour_and_turn() {
         placed(Control::Speed, &speed, track, &song).unwrap().feel,
         Feel::Smooth
     );
-    let reset = Control::Envelope(0, vt_tui::track_page::EnvelopeField::Reset);
+    let reset = Control::Mod(0, vt_tui::track_page::ModField::Reset);
     let smooth_reset = Setting {
         key: "reset",
         ..speed
@@ -524,12 +535,12 @@ fn an_lfo_rate_turns_smoothly_and_a_note_value_stays_one() {
     use vt_model::lfo::{Rate, note_rates};
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::LfoField;
+    use vt_tui::track_page::ModField;
     // A stored knob keeps at most 16 steps, and a note value has 24, so it's smooth, its value
     // shown as it turns.
     let mut song = Song::new(1);
-    song.tracks[0].lfos[0].rate = note_rates()[3];
-    let rate = Control::Lfo(0, LfoField::Rate);
+    song.tracks[0].mods[3].lfo.rate = note_rates()[3];
+    let rate = Control::Mod(3, ModField::Rate);
     assert_eq!(
         knob(rate, &song.tracks[0], &song).unwrap().feel,
         Feel::Smooth
@@ -538,8 +549,8 @@ fn an_lfo_rate_turns_smoothly_and_a_note_value_stays_one() {
     let next = edit(&song, &turned(rate, 0, &song, KNOB_TOP).unwrap()).unwrap();
     // The knob goes from slow to fast, so its top is the fastest note value.
     let fastest = note_rates()[0];
-    assert_eq!(next.tracks[0].lfos[0].rate, fastest);
-    assert!(matches!(next.tracks[0].lfos[0].rate, Rate::Note(_)));
+    assert_eq!(next.tracks[0].mods[3].lfo.rate, fastest);
+    assert!(matches!(next.tracks[0].mods[3].lfo.rate, Rate::Note(_)));
     assert_eq!(
         value_text(rate, &next.tracks[0], &next),
         fastest.to_string()
@@ -584,7 +595,40 @@ fn everything_the_roto_is_sent_is_ascii_its_font_can_draw() {
     }
     // An LFO's phase, which the app writes in degrees.
     let song = Song::new(1);
-    let phase = Control::Lfo(0, vt_tui::track_page::LfoField::Phase);
+    let phase = Control::Mod(3, vt_tui::track_page::ModField::Phase);
     let text = value_text(phase, &song.tracks[0], &song);
     assert_eq!(Label::new(&text).as_str(), "0deg", "{text}");
+}
+
+#[test]
+fn a_modulators_polarity_button_is_lit_for_both_ways_and_a_press_flips_it() {
+    use vt_model::action::edit;
+    use vt_model::modulation::Polarity;
+    use vt_roto::live::{KNOB_TOP, position_of};
+    use vt_tui::roto::edits::turned;
+    use vt_tui::track_page::ModField;
+    let song = std::sync::Arc::new(Song::new(1));
+    // Read `Mod 1`, `Mod 4`, `Mod 2`: an LFO, then an envelope, each stored with its buttons.
+    for (device, slot, button, lit) in [(1, 3, 2, true), (2, 1, 4, false)] {
+        let track = &song.tracks[0];
+        let spec = &Page::Mod.devices(track)[device];
+        let stored = live_device(Page::Mod, device, spec, track, &song, true);
+        let switch = stored.switches[button].as_ref().unwrap();
+        assert_eq!(switch.name.as_str(), "Polarity");
+        assert_eq!(switch.feel, Feel::Switch);
+        let on = if lit { position_of(1, 2) } else { 0 };
+        assert_eq!(switch.position, on, "Mod {}", slot + 1);
+        // A press is the switch turned to its other end, which chooses the other polarity.
+        let polarity = Control::Mod(slot, ModField::Polarity);
+        let to = if lit { 0 } else { KNOB_TOP };
+        let next = edit(&song, &turned(polarity, 0, &song, to).unwrap()).unwrap();
+        let wanted = if lit { Polarity::Uni } else { Polarity::Bi };
+        assert_eq!(next.tracks[0].mods[slot].polarity, Some(wanted));
+        let spec = &Page::Mod.devices(&next.tracks[0])[device];
+        let shown = live_device(Page::Mod, device, spec, &next.tracks[0], &next, true);
+        let switch = shown.switches[button].as_ref().unwrap();
+        assert_eq!(switch.position == 0, lit, "its light follows");
+        // Pressed where it already is, nothing happens.
+        assert!(turned(polarity, 0, &next, if lit { 0 } else { KNOB_TOP }).is_none());
+    }
 }

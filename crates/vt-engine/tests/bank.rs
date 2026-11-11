@@ -7,6 +7,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::bank::{BankEntry, ContentHash, PlayParams};
 use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -48,8 +49,8 @@ fn song(sample: u8, rows: &[&str]) -> Song {
     bank(&mut song);
     let track = &mut song.tracks[0];
     track.set_setting(SettingId::SAMPLE, sample);
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
     for (at, text) in rows.iter().enumerate() {
         *phrase.step_mut(at).unwrap() = text.parse().unwrap();
@@ -180,7 +181,7 @@ fn two_tracks_play_one_entry_and_each_locks_its_own() {
     // Panned apart, so each channel is one track's.
     song.tracks[0].pan = 0x00;
     song.tracks[1].pan = 0xFF;
-    song.tracks[1].envelopes[0].attack_ms = 0;
+    song.tracks[1].mods[0].adsr.attack_ms = 0;
     let out = render(song, STEP);
     let (left, right) = (out[STEP], out[STEP + 1]);
     close(left, right * 2.0);
@@ -212,13 +213,15 @@ fn an_entrys_gain_and_tune_are_its_own_on_any_track() {
 #[test]
 fn an_lfo_on_sample_moves_which_entry_a_note_starts_with() {
     let mut moved = song(2, &["--- -- --- --- ---", "C-3 -- --- --- ---"]);
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::SAMPLE),
-        shape: Shape::Square,
-        rate: Rate::Note(960 * 8),
-        depth: 0x01,
-        ..Lfo::default()
-    };
+    moved.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::SAMPLE),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Note(960 * 8),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x01);
     let out = render(moved, STEP * 2);
     let heard = on_step(&out, 1);
     let quiet = render(song(1, &["C-3 -- --- --- ---"]), STEP);

@@ -10,6 +10,7 @@ use vt_model::bank::{BankEntry, PlayParams};
 use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
+use vt_model::modulation::ModSlot;
 use vt_model::order::Order;
 use vt_model::sample::load_sample;
 use vt_model::scale::{Scale, ScaleKind};
@@ -577,6 +578,28 @@ impl App {
         );
     }
 
+    /// Replace one of a track's mod slots with what was chosen. A new type keeps the slot's
+    /// destination, depth and switch, and finds its own settings as the slot last had them.
+    fn pick_mod(&mut self, track: usize, slot: usize, modulator: ModSlot) {
+        let was = self
+            .song()
+            .tracks
+            .get(track)
+            .map(|found| found.mods[slot].kind);
+        self.apply(&Action::SetMod {
+            track,
+            slot,
+            modulator,
+        });
+        if was.is_some_and(|kind| kind != modulator.kind) {
+            self.status = format!(
+                "Mod {} is {} now, with its destination, depth and switch kept",
+                slot + 1,
+                modulator.kind.name()
+            );
+        }
+    }
+
     /// Put a chosen amount in a slot as an `ACU`.
     fn pick_amount(&mut self, slot: usize, value: u8) {
         self.cursor.field = Field::FxValue(slot);
@@ -717,9 +740,11 @@ impl App {
             Pick::Arpeggio { track, arpeggio } => {
                 self.apply(&Action::SetArpeggio { track, arpeggio });
             }
-            Pick::Lfo { track, slot, lfo } => {
-                self.apply(&Action::SetLfo { track, slot, lfo });
-            }
+            Pick::Mod {
+                track,
+                slot,
+                modulator,
+            } => self.pick_mod(track, slot, modulator),
             Pick::Machine { track, machine } => {
                 self.apply(&Action::SetTrackMachine { track, machine });
             }
@@ -742,17 +767,6 @@ impl App {
             }
             Pick::Speed { track, speed } => {
                 self.apply(&Action::SetTrackSpeed { track, speed });
-            }
-            Pick::Envelope {
-                track,
-                slot,
-                envelope,
-            } => {
-                self.apply(&Action::SetEnvelope {
-                    track,
-                    slot,
-                    envelope,
-                });
             }
             Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
             Pick::SectionChain(chain) => self.pick_section_chain(chain),

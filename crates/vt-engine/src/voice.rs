@@ -21,7 +21,7 @@ use crate::dsp::wave_terrain::WaveTerrain;
 use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::playable::Span;
 use vt_model::sample::SampleData;
 use vt_model::samples::SampleId;
@@ -202,7 +202,7 @@ pub struct Voice {
     pan: [f32; 2],
     pan_target: [f32; 2],
     level: f32,
-    shape: Envelope,
+    shape: Adsr,
     rate: u32,
     /// Frames since the stage began.
     elapsed: u64,
@@ -233,7 +233,7 @@ impl Default for Voice {
             pan: [1.0, 1.0],
             pan_target: [1.0, 1.0],
             level: 0.0,
-            shape: Envelope::note_shape(),
+            shape: Adsr::note_shape(),
             rate: 48_000,
             elapsed: 0,
             release_after: None,
@@ -264,7 +264,7 @@ pub struct NoteOn {
     /// Whether its velocity accents it, for a voice with an accent of its own.
     pub accent: bool,
     /// The shape of its level.
-    pub shape: Envelope,
+    pub shape: Adsr,
     pub release_after: Option<u32>,
 }
 

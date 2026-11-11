@@ -183,14 +183,15 @@ pub fn tracks_of_different_lengths() -> (App, Realtime) {
     (App::new(song, None, samples, handle, 48_000), realtime)
 }
 
-/// From `Env 1`'s destination, at the top of the Mod page, to an LFO's: across to `LFO 1`'s on
-/// the right, and down that column a device at a time.
+/// From anywhere in `Mod 1`'s title, at the top of the Mod page, to the type of one of the LFOs
+/// a new track's last three slots are: to the end of `Mod 1`'s title, across to `Mod 4`'s on the
+/// right, and down that column a device at a time.
 pub fn to_lfo(lfo: usize) -> String {
-    format!("l{}", "}".repeat(lfo))
+    format!("$l{}", "}".repeat(lfo))
 }
 
 /// A device's title on the track page, by its name, from its frame's corner to the other, as
-/// `╭─ LFO 1     Cut ───…╮` with its switch after its name, drawn as wide as the author's screen has room for.
+/// `╭─ Mod 4     LFO  Free  → Cut ───…╮` with its switch after its name, drawn as wide as the author's screen has room for.
 pub fn device_title(app: &App, identity: &str) -> String {
     let (width, height) = (150, 40);
     let backend = ratatui::backend::TestBackend::new(width, height);
@@ -214,8 +215,8 @@ pub fn device_title(app: &App, identity: &str) -> String {
         .unwrap_or_else(|| panic!("{identity}'s title"))
 }
 
-/// From `Env 1`'s destination, at the top of the Mod page, to another envelope's: down the left
-/// column a device at a time.
+/// From `Mod 1`'s type, at the top of the Mod page, to another envelope's: down the left column
+/// a device at a time.
 pub fn to_envelope(envelope: usize) -> String {
     "}".repeat(envelope)
 }
@@ -278,8 +279,8 @@ pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
     format!("╭─ {}  {switch} {controls}", slot + 1)
 }
 
-/// An envelope's or an LFO's title, as `device_title` gives it: its name, its switch on or off,
-/// two cells with the plain space it's drawn over, then what follows, such as its destination.
+/// A mod slot's title, as `device_title` gives it: its name, its switch on or off, two cells
+/// with the plain space it's drawn over, then what follows, its type, mode and destination.
 pub fn modulator_title(identity: &str, on: bool, controls: &str) -> String {
     let switch = vt_tui::views::widgets::toggle::glyph(on);
     format!("╭─ {identity}  {switch}  {controls}")

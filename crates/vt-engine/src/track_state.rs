@@ -2,12 +2,13 @@
 
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::{ArpMode, Cycle};
-use vt_model::constants::{FX_SLOTS, MAX_TRACKS, TRACK_ENVELOPES, UNITY_LEVEL};
-use vt_model::envelope::Envelope;
+use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
+use vt_model::envelope::Adsr;
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
-use vt_model::lfo::{
-    LFOS_PER_TRACK, MAX_LFO_DEPTH, depth_of, depth_value, phase_of, phase_value, wave,
+use vt_model::lfo::{LfoMode, phase_of, phase_value, wave};
+use vt_model::modulation::{
+    MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
 };
 use vt_model::playable::Playable;
 use vt_model::settings::{
@@ -28,13 +29,10 @@ use crate::rng::Pcg32;
 use crate::timing::SlotTimes;
 use crate::voice::{Cut, NoteOn, Voice};
 
-/// How many envelopes and LFOs a track has, each moving at most one setting.
-const MODULATORS: usize = TRACK_ENVELOPES + LFOS_PER_TRACK;
-
 /// What a track's envelopes move, by setting, kept as a short list as there are only a few.
 #[derive(Debug, Clone, Copy, Default)]
 struct Moved {
-    entries: [(usize, f32); TRACK_ENVELOPES],
+    entries: [(usize, f32); MOD_SLOTS],
     count: usize,
 }
 
@@ -74,9 +72,9 @@ const TRIM_OPEN: f32 = 0.001;
 
 /// Where an LFO's cycles count from.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct LfoStart {
-    pub tick: f64,
-    pub clock: u64,
+struct LfoStart {
+    tick: f64,
+    clock: u64,
 }
 
 /// Where one of a track's envelopes has got to.
@@ -95,13 +93,119 @@ enum EnvelopeRun {
 }
 
 impl EnvelopeRun {
-    fn level(self, envelope: &Envelope, clock: u64, rate: u32) -> f32 {
+    fn level(self, envelope: &Adsr, clock: u64, rate: u32) -> f32 {
         match self {
             Self::Idle => 0.0,
             Self::Held { at, from } => envelope.held(clock.saturating_sub(at), from, rate),
             Self::Released { at, from } => envelope.released(clock.saturating_sub(at), from, rate),
         }
     }
+}
+
+/// One mod slot as it runs, whatever its type: every type's state is kept going underneath, so a
+/// slot whose type changes picks the new one up where it would be had it always been there, and
+/// what it adds glides from the old type's to the new one's rather than jumping.
+#[derive(Debug, Clone, Copy)]
+struct SlotRun {
+    /// The type it last ran as, to notice a change: none until it first runs.
+    seen: Option<ModKind>,
+    /// Where its envelope has got to, which each note starts and ends.
+    envelope: EnvelopeRun,
+    /// Where its cycles count from.
+    start: LfoStart,
+    /// Its held depth, phase and polarity, on the `00` to `FF` scale, as steps and the page set
+    /// them. The polarity is below zero until it's first set, which is the slot's own.
+    values: [f32; 3],
+    /// How much of what it moves is heard, from 1 while it's in to 0 while it's switched out,
+    /// gliding between them over [`BYPASS_FADE_MS`] as a slot's bypass does, so switching one
+    /// doesn't jump.
+    share: f32,
+    /// What it added last time, in its destination's units over 255.
+    out: f32,
+    /// What it added before its type changed less what the new type first added, which fades out
+    /// as `glide_left` goes from 1 to 0 over [`BYPASS_FADE_MS`].
+    glide: f32,
+    glide_left: f32,
+    /// Where it was in its wave when the modulation was last worked out, if it ran as an LFO.
+    now: Option<LfoNow>,
+}
+
+impl Default for SlotRun {
+    fn default() -> Self {
+        Self {
+            seen: None,
+            envelope: EnvelopeRun::Idle,
+            start: LfoStart::default(),
+            values: [128.0, 0.0, -1.0],
+            share: 1.0,
+            out: 0.0,
+            glide: 0.0,
+            glide_left: 0.0,
+            now: None,
+        }
+    }
+}
+
+impl SlotRun {
+    /// Which way it moves what it reaches: as a step or the page last set it, or the slot's own.
+    fn polarity(&self, slot: &ModSlot) -> Polarity {
+        match self.values[2] {
+            held if held < 0.0 => slot.polarity(),
+            held if held >= 0.5 => Polarity::Bi,
+            _ => Polarity::Uni,
+        }
+    }
+
+    /// What it adds this time, `out` with what's left of a type change's glide, kept as what it
+    /// added. A type it's just changed to starts its glide from what the old one last added.
+    fn add(&mut self, kind: ModKind, out: f32) -> f32 {
+        if self.seen.is_some_and(|seen| seen != kind) {
+            self.glide = self.out - out;
+            self.glide_left = 1.0;
+        }
+        self.seen = Some(kind);
+        let added = if self.glide_left > 0.0 {
+            out + self.glide * self.glide_left
+        } else {
+            out
+        };
+        self.out = added;
+        added
+    }
+
+    /// Add nothing this time, as it moves nothing, which ends any glide.
+    fn rest(&mut self, kind: ModKind) {
+        self.seen = Some(kind);
+        self.out = 0.0;
+        self.glide_left = 0.0;
+    }
+}
+
+/// Start one slot's envelope for a note, from nothing or from where it is, and its cycles again if
+/// its LFO's mode follows the notes.
+fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime) {
+    let from = if slot.adsr.reset {
+        0.0
+    } else {
+        run.envelope.level(&slot.adsr, now.clock, now.rate)
+    };
+    run.envelope = EnvelopeRun::Held {
+        at: now.clock,
+        from,
+    };
+    if slot.lfo.mode == LfoMode::Trig {
+        run.start = LfoStart {
+            tick: now.tick,
+            clock: now.clock,
+        };
+    }
+}
+
+/// The key a slot's random waves are picked by: slots 4 to 6 have the keys the three LFOs had
+/// before mod slots, so their `Random` and `Smooth` waves are as they were, and slots 1 to 3 the
+/// next three.
+fn wave_key(slot: usize) -> u64 {
+    ((slot + MOD_SLOTS - 3) % MOD_SLOTS) as u64
 }
 
 /// Where the song is, for working out LFOs.
@@ -139,9 +243,10 @@ pub struct LiveValues {
     /// filter, as a gain: what the Output device's meter shows, so the trim can be set by eye.
     /// The report fills it in from `Engine::take_after_trim`.
     pub after_trim: [f32; 2],
-    /// Where each LFO is in its wave now, for one that's running: none while the song is stopped,
-    /// or for one with nowhere to go, no depth, or switched out once it has faded.
-    pub lfos: [Option<LfoNow>; LFOS_PER_TRACK],
+    /// Where each mod slot that's an LFO is in its wave now, for one that's running: none while
+    /// the song is stopped, or for one with nowhere to go, no depth, or switched out once it has
+    /// faded.
+    pub mods: [Option<LfoNow>; MOD_SLOTS],
 }
 
 /// Where an LFO is in its wave and what the wave gives there, before its depth, for the Mod page's
@@ -611,13 +716,14 @@ pub struct TrackState {
     trim_countdown: u32,
     coefficients: Option<Coefficients>,
     filter_countdown: u32,
-    pub lfo_starts: [LfoStart; LFOS_PER_TRACK],
+    /// Each mod slot as it runs.
+    slots: [SlotRun; MOD_SLOTS],
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
     /// The settings `offsets` has anything on, at most one for each envelope and LFO, so only those
     /// are cleared next time rather than every setting.
-    offset_marks: [Option<usize>; MODULATORS],
+    offset_marks: [Option<usize>; MOD_SLOTS],
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
@@ -627,12 +733,9 @@ pub struct TrackState {
     pan_envelope: Smoothed,
     /// The last pan position and its gains, as a settled pan stays put and `cos` and `sin` cost.
     panned: (f32, (f32, f32)),
-    envelopes: [EnvelopeRun; TRACK_ENVELOPES],
     /// What modulation multiplies a note's speed by.
     pitch: f64,
-    /// Each LFO's held depth and phase, and the held pitch, on the `00` to `FF` scale, as steps
-    /// and the page set them.
-    lfo_values: [[f32; 2]; LFOS_PER_TRACK],
+    /// The held pitch, on the `00` to `FF` scale, as steps and the page set it.
     held_pitch: f32,
     /// Held `LEN`, the track's `Gate`, on the `00` to `FF` scale.
     held_gate: f32,
@@ -645,13 +748,6 @@ pub struct TrackState {
     held_sampler: [f32; SAMPLER_SETTINGS],
     /// Whether each slot is switched out as it's heard: its own bypass, or a step's lock of it.
     bypassed: [bool; INSERTS],
-    /// How much of what each envelope and LFO moves is heard, from 1 while it's in to 0 while it's
-    /// switched out, gliding between them over [`BYPASS_FADE_MS`] as a slot's bypass does, so
-    /// switching one doesn't jump.
-    envelope_shares: [f32; TRACK_ENVELOPES],
-    lfo_shares: [f32; LFOS_PER_TRACK],
-    /// Where each LFO was in its wave when the modulation was last worked out, if it ran.
-    lfo_now: [Option<LfoNow>; LFOS_PER_TRACK],
     /// The frames rendered when the shares last moved.
     shared_at: u64,
     /// The loaded voice's held settings, in its order, on `0..=1`.
@@ -685,14 +781,15 @@ fn pan_position(value: f32) -> f32 {
 
 /// Where a setting starts on this track, before any step sets it, with a coarse byte and a fine
 /// one. A voice keeps its own, an effect's setting is what's in its slot, or its default while
-/// another effect is there, and an LFO's depth and phase are what its page has.
+/// another effect is there, and a mod slot's depth and phase are what its page has.
 pub fn base_of(id: SettingId, track: &Track) -> u16 {
-    let lfo = |lfo: usize, at: usize| match at {
-        0 => depth_value(track.lfos[lfo].depth),
-        _ => phase_value(track.lfos[lfo].phase),
+    let modulator = |slot: usize, at: usize| match at {
+        0 => depth_value(track.mods[slot].depth),
+        1 => phase_value(track.mods[slot].lfo.phase),
+        _ => u16::from(track.mods[slot].polarity().index()) << 8,
     };
     let whole = match id.owner() {
-        (Owner::Lfo(n), at) => return lfo(n, at),
+        (Owner::Mod(n), at) => return modulator(n, at),
         (Owner::Track, _) => match id {
             SettingId::VOL => UNITY_LEVEL,
             SettingId::PAN => track.pan,
@@ -822,9 +919,9 @@ impl TrackState {
             trim_countdown: 0,
             coefficients: None,
             filter_countdown: 0,
-            lfo_starts: [LfoStart::default(); LFOS_PER_TRACK],
+            slots: [SlotRun::default(); MOD_SLOTS],
             offsets: [0.0; SettingId::COUNT],
-            offset_marks: [None; MODULATORS],
+            offset_marks: [None; MOD_SLOTS],
             synth: {
                 let mut synth = [0.0; MAX_MACHINE_SETTINGS];
                 synth[..4].copy_from_slice(&[0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0]);
@@ -837,9 +934,7 @@ impl TrackState {
             res_envelope: Smoothed::at(0.0),
             pan_envelope: Smoothed::at(0.0),
             panned: (0.5, pan_gains(0.5)),
-            envelopes: [EnvelopeRun::Idle; TRACK_ENVELOPES],
             pitch: 1.0,
-            lfo_values: [[128.0, 0.0]; LFOS_PER_TRACK],
             held_pitch: 128.0,
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
@@ -848,9 +943,6 @@ impl TrackState {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
             bypassed: [false; INSERTS],
-            envelope_shares: [1.0; TRACK_ENVELOPES],
-            lfo_shares: [1.0; LFOS_PER_TRACK],
-            lfo_now: [None; LFOS_PER_TRACK],
             shared_at: 0,
             filter_moving: false,
             key: [0.0; 2],
@@ -929,7 +1021,17 @@ impl TrackState {
         self.arp_rng = arp_rng(seed, index);
         self.arp = None;
         self.last_note = None;
-        self.lfo_starts = [LfoStart { tick: 0.0, clock }; LFOS_PER_TRACK];
+        for run in &mut self.slots {
+            run.start = LfoStart { tick: 0.0, clock };
+        }
+    }
+
+    /// Count every slot's cycles from the top of the song, as playing starts there, keeping the
+    /// clock they count real time from.
+    pub fn count_cycles_from_the_top(&mut self) {
+        for run in &mut self.slots {
+            run.start.tick = 0.0;
+        }
     }
 
     /// Hear the voice and effects the track has now. One that's changed is heard from its own
@@ -963,8 +1065,8 @@ impl TrackState {
         }
     }
 
-    /// Work out what the LFOs add now. A stopped track sits at its held values, so an audition
-    /// hears those rather than wherever the LFO stopped.
+    /// Work out what the mod slots add now. A stopped track sits at its held values, so an
+    /// audition hears those rather than wherever an LFO stopped.
     pub fn modulate(
         &mut self,
         track: &Track,
@@ -979,70 +1081,79 @@ impl TrackState {
         }
         self.move_shares(track, now.rendered, now.rate);
         self.filter_moving = false;
-        // Envelopes, then each LFO, so each reads what's before it, and there's no way back round.
-        // What the envelopes move is kept by setting, as there are only a few.
-        let mut moved = Moved::default();
-        for (slot, (envelope, run)) in track.envelopes.iter().zip(self.envelopes).enumerate() {
-            let Some(destination) = envelope.destination else {
-                continue;
-            };
-            // The first one on `Vol` is each note's own shape, which the voice follows itself. One
-            // switched out does nothing, as if it had no depth, once it has faded.
-            let share = self.envelope_shares[slot];
-            if envelope.depth == 0
-                || share == 0.0
-                || (slot == 0 && destination == SettingId::VOL)
-                || !destination.exists_on(track)
-            {
-                continue;
-            }
-            self.filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
-            if stopped {
-                continue;
-            }
-            let level = run.level(envelope, now.clock, now.rate);
-            moved.add(
-                destination.index(),
-                level * f32::from(envelope.depth) / 255.0 * share,
-            );
-        }
         // Only what was moved last time needs clearing.
         for index in self.offset_marks.iter_mut().filter_map(Option::take) {
             self.offsets[index] = 0.0;
         }
+        // Each slot in order, so each reads what the slots before it add to its own depth and
+        // phase, and there's no way back round. What the envelopes move is kept by setting, as
+        // there are only a few, and goes through the fast smoothers; what the LFOs move goes
+        // straight into the offsets, through the slow ones.
+        let mut moved = Moved::default();
         let mut marks = 0;
-        self.lfo_now = [None; LFOS_PER_TRACK];
+        let mut filter_moving = false;
+        let shaping = note_shape_slot(&track.mods);
         let offsets = &mut self.offsets;
-        for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
-            let Some(destination) = lfo.destination else {
+        for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
+            run.now = None;
+            let Some(destination) = slot.destination else {
+                run.rest(slot.kind);
                 continue;
             };
             let moved_by = |setting: usize| {
-                SettingId::lfo(slot, setting)
+                SettingId::modulator(at, setting)
                     .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
             };
-            let [depth, phase] = self.lfo_values[slot];
-            let depth = depth_of(depth) + moved_by(0) * 255.0;
-            let share = self.lfo_shares[slot];
-            // A target that isn't on this track does no work, and nor does one switched out.
-            if depth == 0.0 || share == 0.0 || !destination.exists_on(track) {
+            let [depth, phase, _] = run.values;
+            let polarity = run.polarity(slot);
+            // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
+            let held = match slot.kind {
+                ModKind::Adsr => depth_of(depth).round(),
+                ModKind::Lfo => depth_of(depth),
+            };
+            let depth = held + moved_by(0) * 255.0;
+            let share = run.share;
+            // The note-shaping slot is each note's own shape, which the voice follows itself. A
+            // target that isn't on this track, or is a slot before this one, does no work, and
+            // nor does a slot switched out, once it has faded.
+            if depth == 0.0
+                || share == 0.0
+                || shaping == Some(at)
+                || !destination.reached_from(at, track)
+            {
+                run.rest(slot.kind);
                 continue;
             }
-            self.filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
+            filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
             if stopped {
+                run.rest(slot.kind);
                 continue;
             }
-            let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
-            let cycles = lfo.rate.cycles(now.tick - start.tick, seconds);
-            let key = now.seed ^ ((index as u64) << 8 | slot as u64);
-            let phase = f64::from(phase_of(phase) + moved_by(1));
-            let value = wave(lfo.shape, cycles + phase, key);
-            self.lfo_now[slot] = Some(LfoNow::of(cycles + phase, value));
-            let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
-            offsets[destination.index()] += value * depth / 255.0 * share;
-            self.offset_marks[marks] = Some(destination.index());
-            marks += 1;
+            let depth = depth.clamp(-f32::from(MAX_DEPTH), f32::from(MAX_DEPTH));
+            match slot.kind {
+                ModKind::Adsr => {
+                    let level = run.envelope.level(&slot.adsr, now.clock, now.rate);
+                    let level = polarity.of(Polarity::Uni, level);
+                    let added = run.add(slot.kind, level * depth / 255.0 * share);
+                    moved.add(destination.index(), added);
+                }
+                ModKind::Lfo => {
+                    let start = run.start;
+                    let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
+                    let cycles = slot.lfo.rate.cycles(now.tick - start.tick, seconds);
+                    let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
+                    let phase = f64::from(phase_of(phase) + moved_by(1));
+                    let value = wave(slot.lfo.shape, cycles + phase, key);
+                    run.now = Some(LfoNow::of(cycles + phase, value));
+                    let value = polarity.of(Polarity::Bi, value);
+                    offsets[destination.index()] +=
+                        run.add(slot.kind, value * depth / 255.0 * share);
+                    self.offset_marks[marks] = Some(destination.index());
+                    marks += 1;
+                }
+            }
         }
+        self.filter_moving = filter_moving;
         // A different filter starts from silence rather than from another's state.
         if self.filter_type != track.filter {
             self.filter_type = track.filter;
@@ -1097,35 +1208,32 @@ impl TrackState {
         self.tell_slots_the_note();
     }
 
-    /// Move each modulator's share toward 1 if it's in or 0 if it's switched out, over
-    /// [`BYPASS_FADE_MS`]. It goes by the frames rendered since last time, so a note's extra
-    /// update between the regular ones moves it no further.
+    /// Move each mod slot's share toward 1 if it's in or 0 if it's switched out, and what's left
+    /// of a type change's glide toward 0, over [`BYPASS_FADE_MS`]. It goes by the frames rendered
+    /// since last time, so a note's extra update between the regular ones moves them no further.
     fn move_shares(&mut self, track: &Track, rendered: u64, rate: u32) {
         let frames = rendered.saturating_sub(self.shared_at);
         self.shared_at = rendered;
         let by = frames as f32 * 1000.0 / (BYPASS_FADE_MS * rate as f32);
-        let glide = |share: &mut f32, bypassed: bool| {
-            let to = if bypassed { 0.0 } else { 1.0 };
-            *share = if to > *share {
-                (*share + by).min(to)
+        for (run, slot) in self.slots.iter_mut().zip(&track.mods) {
+            let to = if slot.bypassed { 0.0 } else { 1.0 };
+            run.share = if to > run.share {
+                (run.share + by).min(to)
             } else {
-                (*share - by).max(to)
+                (run.share - by).max(to)
             };
-        };
-        for (share, envelope) in self.envelope_shares.iter_mut().zip(&track.envelopes) {
-            glide(share, envelope.bypassed);
-        }
-        for (share, lfo) in self.lfo_shares.iter_mut().zip(&track.lfos) {
-            glide(share, lfo.bypassed);
+            run.glide_left = (run.glide_left - by).max(0.0);
         }
     }
 
-    /// Put each modulator's share where its switch is, with no glide, for a song that starts
-    /// playing with some switched out.
+    /// Put each mod slot's share where its switch is, and take each one's type as it is, with no
+    /// glide, for a song that starts playing with some switched out.
     fn settle_shares(&mut self, track: &Track) {
-        let share = |bypassed: bool| if bypassed { 0.0 } else { 1.0 };
-        self.envelope_shares = track.envelopes.map(|envelope| share(envelope.bypassed));
-        self.lfo_shares = track.lfos.map(|lfo| share(lfo.bypassed));
+        for (run, slot) in self.slots.iter_mut().zip(&track.mods) {
+            run.share = if slot.bypassed { 0.0 } else { 1.0 };
+            run.seen = Some(slot.kind);
+            run.glide_left = 0.0;
+        }
     }
 
     /// The pan gains for a position, worked out again only when it moves.
@@ -1178,7 +1286,7 @@ impl TrackState {
             // Taken, as it's the highest since it last was, by `Engine::take_after_trim`, which the
             // report fills this in from.
             after_trim: [0.0; 2],
-            lfos: self.lfo_now,
+            mods: self.slots.map(|run| run.now),
         }
     }
 
@@ -1194,27 +1302,21 @@ impl TrackState {
         Settings::from_places(std::array::from_fn(at))
     }
 
-    /// Start the track's envelopes for a note.
-    pub fn trigger_envelopes(&mut self, track: &Track, now: SongTime) {
-        for (envelope, run) in track.envelopes.iter().zip(&mut self.envelopes) {
-            let from = if envelope.reset {
-                0.0
-            } else {
-                run.level(envelope, now.clock, now.rate)
-            };
-            *run = EnvelopeRun::Held {
-                at: now.clock,
-                from,
-            };
+    /// Start a note's modulation: every slot's envelope, and the cycles of each that a note
+    /// starts, whatever type each is now, so one that changes type picks the new one up as though
+    /// it had always been it.
+    pub fn trigger_mods(&mut self, track: &Track, now: SongTime) {
+        for (slot, run) in track.mods.iter().zip(&mut self.slots) {
+            trigger_slot(slot, run, now);
         }
     }
 
-    /// Start the release of the track's envelopes, when a note ends.
-    pub fn release_envelopes(&mut self, track: &Track, now: SongTime) {
-        for (envelope, run) in track.envelopes.iter().zip(&mut self.envelopes) {
-            if matches!(run, EnvelopeRun::Held { .. }) {
-                let from = run.level(envelope, now.clock, now.rate);
-                *run = EnvelopeRun::Released {
+    /// Start the release of every slot's envelope, when a note ends.
+    pub fn release_mods(&mut self, track: &Track, now: SongTime) {
+        for (slot, run) in track.mods.iter().zip(&mut self.slots) {
+            if matches!(run.envelope, EnvelopeRun::Held { .. }) {
+                let from = run.envelope.level(&slot.adsr, now.clock, now.rate);
+                run.envelope = EnvelopeRun::Released {
                     at: now.clock,
                     from,
                 };
@@ -1480,7 +1582,9 @@ impl TrackState {
         self.pending = [None; PENDING_PARTS];
         self.soonest = u64::MAX;
         self.tied = false;
-        self.envelopes = [EnvelopeRun::Idle; TRACK_ENVELOPES];
+        for run in &mut self.slots {
+            run.envelope = EnvelopeRun::Idle;
+        }
     }
 
     /// Run a lock or hold value from a step. Anything else on that value gives way to it.
@@ -1579,8 +1683,8 @@ impl TrackState {
     /// isn't heard.
     fn write_value(&mut self, id: SettingId, value: f32) {
         match id.owner() {
-            (Owner::Lfo(lfo), at) => {
-                self.lfo_values[lfo][at] = value;
+            (Owner::Mod(slot), at) => {
+                self.slots[slot].values[at] = value;
                 return;
             }
             (Owner::Track, _) => match id {

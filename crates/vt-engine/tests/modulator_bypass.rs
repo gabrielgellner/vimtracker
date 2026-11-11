@@ -6,8 +6,9 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -42,8 +43,8 @@ fn song() -> Song {
     for track in 0..song.sound_tracks() {
         song.sample_on(track, "s");
     }
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     song.tracks[0].cutoff = 0x80;
@@ -54,13 +55,15 @@ fn song() -> Song {
 /// then `40` for two.
 fn with_square_on_cut() -> Song {
     let mut song = song();
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
-        shape: Shape::Square,
-        rate: Rate::Note(QUARTER),
-        depth: 0x40,
-        ..Lfo::default()
-    };
+    song.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::CUT),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Note(QUARTER),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x40);
     song
 }
 
@@ -103,7 +106,7 @@ fn switching_out_an_lfo_on_cut_glides_to_the_held_value_and_stops_its_movement()
     engine.play_from(0);
     assert_eq!(*cutoffs(&mut engine, STEP, STEP).last().unwrap(), 0xC0);
 
-    song.tracks[0].lfos[0].bypassed = true;
+    song.tracks[0].mods[3].bypassed = true;
     engine.swap(version(&song));
     // In blocks of 16 frames over 10 ms: it glides down over the 5 ms a slot's bypass takes, and
     // lands there within its next update after that.
@@ -120,8 +123,8 @@ fn switching_out_an_lfo_on_cut_glides_to_the_held_value_and_stops_its_movement()
 fn switched_back_in_an_lfo_is_in_phase_with_one_left_in() {
     let mut song = with_square_on_cut();
     // A triangle whose cycle isn't a whole number of blocks, so being out of phase would show.
-    song.tracks[0].lfos[0].shape = Shape::Tri;
-    song.tracks[0].lfos[0].rate = Rate::Steps(3);
+    song.tracks[0].mods[3].lfo.shape = Shape::Tri;
+    song.tracks[0].mods[3].lfo.rate = Rate::Steps(3);
     let mut left_in = Engine::new(RATE, version(&song));
     let mut switched = Engine::new(RATE, version(&song));
     left_in.play_from(0);
@@ -131,7 +134,7 @@ fn switched_back_in_an_lfo_is_in_phase_with_one_left_in() {
     assert_eq!(first, cutoffs(&mut switched, STEP, block));
 
     // Out for a step and a bit, it sits at the held value while the other moves.
-    song.tracks[0].lfos[0].bypassed = true;
+    song.tracks[0].mods[3].bypassed = true;
     switched.swap(version(&song));
     let moving = cutoffs(&mut left_in, STEP + 1300, block);
     let held = cutoffs(&mut switched, STEP + 1300, block);
@@ -139,7 +142,7 @@ fn switched_back_in_an_lfo_is_in_phase_with_one_left_in() {
     assert!(moving.iter().any(|value| *value != 0x80), "{moving:?}");
 
     // Back in, it fades up, and once it has it's where the one left in is, block by block.
-    song.tracks[0].lfos[0].bypassed = false;
+    song.tracks[0].mods[3].bypassed = false;
     switched.swap(version(&song));
     let left = cutoffs(&mut left_in, 10 * MS, 16);
     let back = cutoffs(&mut switched, 10 * MS, 16);
@@ -157,26 +160,25 @@ fn switched_back_in_an_lfo_is_in_phase_with_one_left_in() {
 fn switching_an_envelope_on_cut_out_and_back_glides_both_ways() {
     let mut song = song();
     song.tracks[0].cutoff = 0x40;
-    song.tracks[0].envelopes[1] = Envelope {
-        destination: Some(SettingId::CUT),
+    let held = Adsr {
         attack_ms: 0,
         decay_ms: 0,
         sustain: 100,
-        depth: 0x40,
-        ..Envelope::filter_shape()
+        ..Adsr::decay()
     };
+    song.tracks[0].mods[1] = ModSlot::adsr(Some(SettingId::CUT), held).with_depth(0x40);
     let mut engine = Engine::new(RATE, version(&song));
     engine.play_from(0);
     assert_eq!(*cutoffs(&mut engine, STEP, STEP).last().unwrap(), 0x80);
 
-    song.tracks[0].envelopes[1].bypassed = true;
+    song.tracks[0].mods[1].bypassed = true;
     engine.swap(version(&song));
     let out = cutoffs(&mut engine, 10 * MS, 16);
     glides(&out, 0x80, 0x40);
     assert_eq!(*out.last().unwrap(), 0x40);
 
     // It kept running underneath, so back in it's the held note's sustain again.
-    song.tracks[0].envelopes[1].bypassed = false;
+    song.tracks[0].mods[1].bypassed = false;
     engine.swap(version(&song));
     let out = cutoffs(&mut engine, 10 * MS, 16);
     glides(&out, 0x40, 0x80);
@@ -186,11 +188,11 @@ fn switching_an_envelope_on_cut_out_and_back_glides_both_ways() {
 #[test]
 fn a_song_that_starts_with_a_modulator_switched_out_plays_as_with_no_depth() {
     let mut switched = with_square_on_cut();
-    switched.tracks[0].lfos[0].bypassed = true;
-    switched.tracks[0].envelopes[1].depth = 0x40;
-    switched.tracks[0].envelopes[1].bypassed = true;
+    switched.tracks[0].mods[3].bypassed = true;
+    switched.tracks[0].mods[1].depth = 0x40;
+    switched.tracks[0].mods[1].bypassed = true;
     let mut without = with_square_on_cut();
-    without.tracks[0].lfos[0].depth = 0;
+    without.tracks[0].mods[3].depth = 0;
     let render = |song: &Song| render_frames(version(song), RATE, STEP * 4);
     assert_eq!(render(&switched), render(&without));
 }
@@ -199,11 +201,11 @@ fn a_song_that_starts_with_a_modulator_switched_out_plays_as_with_no_depth() {
 fn the_first_envelope_on_vol_switched_out_leaves_notes_their_plain_shape() {
     let mut song = song();
     // A short decay to nothing, which ends the note well inside its step while it's in.
-    song.tracks[0].envelopes[0].decay_ms = 50;
-    song.tracks[0].envelopes[0].sustain = 0;
+    song.tracks[0].mods[0].adsr.decay_ms = 50;
+    song.tracks[0].mods[0].adsr.sustain = 0;
     let shaped = render_frames(version(&song), RATE, STEP);
     assert_eq!(shaped[(STEP - 1) * 2], 0.0);
-    song.tracks[0].envelopes[0].bypassed = true;
+    song.tracks[0].mods[0].bypassed = true;
     let plain = render_frames(version(&song), RATE, STEP);
     assert!(plain[(STEP - 1) * 2] > 0.5, "{}", plain[(STEP - 1) * 2]);
 }

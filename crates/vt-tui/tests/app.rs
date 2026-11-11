@@ -3053,8 +3053,8 @@ fn a_step_locks_a_sample_from_the_bank() {
     let track = &app.song().tracks[0];
     let sample = FxCommand::Set(SettingId::SAMPLE);
     assert!(FxCommand::on_track(track).contains(&sample));
-    assert!(SettingId::for_lfo(track, 0).contains(&SettingId::SAMPLE));
-    assert!(SettingId::for_envelope(track).contains(&SettingId::SAMPLE));
+    assert!(SettingId::for_mod(track, 3).contains(&SettingId::SAMPLE));
+    assert!(SettingId::for_mod(track, 0).contains(&SettingId::SAMPLE));
     assert_eq!(FxCommand::typed("smp", track), Some(sample));
 }
 
@@ -5203,8 +5203,8 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
 #[test]
 fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     let (mut app, _realtime) = app();
-    // LFO 1's Dest is on the Mod page, under the envelopes.
-    press(&mut app, &format!(" 4L{}", to_lfo(0)));
+    // Mod 4's Dest, the first LFO's, is on the Mod page, beside the envelopes.
+    press(&mut app, &format!(" 4L{}$", to_lfo(0)));
     let list = |app: &mut App| {
         press(app, "K/");
         let labels: Vec<String> = app
@@ -5223,7 +5223,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     assert!(!list(&mut app).iter().any(|label| label.starts_with("1 ")));
 
     press(&mut app, "L="); // Distort in slot 1.
-    press(&mut app, &format!("H{}", to_lfo(0)));
+    press(&mut app, &format!("H{}$", to_lfo(0)));
     let labels = list(&mut app);
     assert!(
         labels
@@ -5236,14 +5236,14 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     press(&mut app, "K/1 amount");
     special(&mut app, KeyCode::Enter);
     let target = SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
-    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
-    let lfo = |app: &App| device_title(app, "LFO 1");
+    assert_eq!(app.song().tracks[0].mods[3].destination, Some(target));
+    let lfo = |app: &App| device_title(app, "Mod 4");
     assert!(lfo(&app).contains("1 Amount"), "{}", lfo(&app));
 
     // Emptying the slot leaves it chosen, doing nothing, and saying so.
-    press(&mut app, "Lx");
+    press(&mut app, "L0x");
     press(&mut app, "H");
-    assert_eq!(app.song().tracks[0].lfos[0].destination, Some(target));
+    assert_eq!(app.song().tracks[0].mods[3].destination, Some(target));
     assert!(lfo(&app).contains("1 ---"), "{}", lfo(&app));
 }
 
@@ -5251,13 +5251,13 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
 fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
-    press(&mut app, &to_lfo(0));
+    press(&mut app, &format!("{}$", to_lfo(0)));
     // Past the thirteen a sample track has, as a synth's settings aren't on it.
     for _ in 0..14 {
         press(&mut app, "=");
     }
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 0).unwrap()),
     );
 }
@@ -5374,19 +5374,19 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
     // A sample track has no synth settings, in Dest or for a step.
-    let dest = labels(&mut app, &format!(" 4L{}K/", to_lfo(0)));
+    let dest = labels(&mut app, &format!(" 4L{}$K/", to_lfo(0)));
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
     let steps = labels(&mut app, " 3lllllK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
 
     // On a synth they're there under their names on this voice.
-    press(&mut app, " 4HKfm");
+    press(&mut app, " 4H0Kfm");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::Fm)
     );
-    let dest = labels(&mut app, &format!("Lgg{}K/", to_lfo(0)));
+    let dest = labels(&mut app, &format!("Lgg{}$K/", to_lfo(0)));
     assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
     let steps = labels(&mut app, " 3K");
     assert!(on(&steps, "INDX"), "{steps:?}");
@@ -5395,18 +5395,18 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     press(&mut app, " 4K/ratio");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::voice(SynthVoice::Fm, 0).unwrap())
     );
-    press(&mut app, "HggK");
+    press(&mut app, "Hgg0K");
     press(&mut app, "sa");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::voice(SynthVoice::Fm, 0).unwrap())
     );
     press(&mut app, "L");
-    let line = device_title(&app, "LFO 1");
+    let line = device_title(&app, "Mod 4");
     assert!(line.contains("Ratio ---"), "{line}");
 }
 
@@ -5433,47 +5433,51 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
-    let first = labels(&mut app, &format!(" 4L{}K/", to_lfo(0)));
+    let first = labels(&mut app, &format!(" 4L{}$K/", to_lfo(0)));
     assert!(
-        has(&first, "L2 Depth") && has(&first, "L2 Phase") && has(&first, "L3 Phase"),
+        has(&first, "M5 Depth") && has(&first, "M5 Phase") && has(&first, "M6 Phase"),
         "{first:?}"
     );
-    assert!(!has(&first, "L1 Depth"), "{first:?}");
+    assert!(
+        !has(&first, "M4 Depth") && !has(&first, "M3 Depth"),
+        "{first:?}"
+    );
     let second = labels(&mut app, "}K/");
     assert!(
-        !has(&second, "L1 Depth") && !has(&second, "L2 Depth") && has(&second, "L3 Depth"),
+        !has(&second, "M4 Depth") && !has(&second, "M5 Depth") && has(&second, "M6 Depth"),
         "{second:?}"
     );
     let third = labels(&mut app, "}K/");
     assert!(
         !third
             .iter()
-            .any(|label| label.starts_with('L') && label.contains(" Depth  ")),
+            .any(|label| label.starts_with("M") && label.contains(" Depth  ")),
         "{third:?}"
     );
-    // Across to `Env 3`, beside `LFO 3`.
-    let envelope = labels(&mut app, "hK/");
+    // Across to `Mod 3`, beside `Mod 6`: an envelope reaches every LFO.
+    let envelope = labels(&mut app, "0hK/");
     assert!(
-        has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase") && has(&envelope, "L3 Phase"),
+        has(&envelope, "M4 Depth") && has(&envelope, "M5 Phase") && has(&envelope, "M6 Phase"),
         "{envelope:?}"
     );
+    assert!(!has(&envelope, "M2 Depth"), "{envelope:?}");
 
-    press(&mut app, &format!("gg{}K/l2 depth", to_lfo(0)));
+    press(&mut app, &format!("gg{}$K/m5 depth", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
-        Some(SettingId::lfo(1, 0).unwrap())
+        app.song().tracks[0].mods[3].destination,
+        Some(SettingId::modulator(4, 0).unwrap())
     );
-    let line = device_title(&app, "LFO 1");
-    assert!(line.contains("L2 Depth"), "{line}");
+    let line = device_title(&app, "Mod 4");
+    assert!(line.contains("M5 Depth"), "{line}");
 }
 
 #[test]
 fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
-    // Distort in slot 1, then LFO 1's Dest.
-    press(&mut app, &format!(" 4LL=H{}K", to_lfo(0)));
+    // Distort in slot 1, then Mod 4's Dest.
+    press(&mut app, &format!(" 4LL=H{}$K", to_lfo(0)));
     let current = |app: &App| {
         app.picker
             .as_ref()
@@ -5517,7 +5521,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "1 Mix");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap())
     );
 
@@ -5528,7 +5532,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap()),
         "changing nothing"
     );
@@ -5547,7 +5551,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "Pitch");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.song().tracks[0].lfos[0].destination,
+        app.song().tracks[0].mods[3].destination,
         Some(SettingId::PITCH)
     );
 }
@@ -5555,7 +5559,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
 #[test]
 fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
-    press(&mut app, &format!(" 4L{}Kjl", to_lfo(0)));
+    press(&mut app, &format!(" 4L{}$Kjl", to_lfo(0)));
     let mut picker = app.picker.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -5573,7 +5577,7 @@ fn dests_window_draws_categories_as_dim_headings_with_counts() {
         .collect();
     let total = picker.items().len();
     assert!(
-        text.contains(&format!("LFO destination {total}/{total}")),
+        text.contains(&format!("Mod 4 destination {total}/{total}")),
         "{text}"
     );
     assert!(text.contains("│• ---"), "the chosen one is marked: {text}");
@@ -5836,14 +5840,14 @@ fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, "llllli");
-    press(&mut app, "dep1");
+    press(&mut app, "dep4");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "9F");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
     let step = app.phrase_here().unwrap().steps()[0].to_string();
-    assert!(step.contains("lfo1.depth:9F"), "{step}");
-    assert_eq!(column_name(&app), "LFO 1: Depth");
+    assert!(step.contains("mod4.depth:9F"), "{step}");
+    assert_eq!(column_name(&app), "Mod 4: Depth");
     // Fine-tuned to a depth of exactly +40.
     press(&mut app, "l");
     for _ in 0..0xE0 {
@@ -8888,8 +8892,8 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
         FxCommand::typed("1byp", track),
         Some(FxCommand::Set(bypass))
     );
-    assert!(!SettingId::for_lfo(track, 0).contains(&bypass));
-    assert!(!SettingId::for_envelope(track).contains(&bypass));
+    assert!(!SettingId::for_mod(track, 3).contains(&bypass));
+    assert!(!SettingId::for_mod(track, 0).contains(&bypass));
     // With nothing in a slot, there's nothing to bypass.
     assert!(FxCommand::on_track(track).contains(&FxCommand::Set(bypass)));
     let empty = FxCommand::Set(SettingId::bypass(1).unwrap());

@@ -39,8 +39,8 @@ fn song(hits: &[usize]) -> Song {
     let mut song = Song::new(hits.len());
     for (track, &step) in hits.iter().enumerate() {
         song.sample_on(track, "tone");
-        song.tracks[track].envelopes[0].attack_ms = 0;
-        song.tracks[track].envelopes[0].release_ms = 0;
+        song.tracks[track].mods[0].adsr.attack_ms = 0;
+        song.tracks[track].mods[0].adsr.release_ms = 0;
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
         *phrase.step_mut(step).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }

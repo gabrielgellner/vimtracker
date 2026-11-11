@@ -14,7 +14,7 @@ mod pickers;
 mod sound;
 mod typing;
 
-pub use controls::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+pub use controls::{AccumulatorField, ArpField, Control, ModField};
 pub use device::{
     DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
 };
@@ -63,7 +63,7 @@ impl Page {
 
     /// The page's devices, in the order they're read, each page's from its own file: the Sound
     /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
-    /// envelopes, LFOs, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
+    /// mod slots, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
     /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
     /// ([`rack_places`]).
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {

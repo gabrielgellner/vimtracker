@@ -66,8 +66,8 @@ fn song(rows: &[&str], machine: Machine, glide_ms: Option<f32>) -> Song {
     song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
     track.machine = machine;
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     track.gate_length = Some(FULL_GATE);
     track.glide = glide_ms.map_or(0, glide_value);
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();

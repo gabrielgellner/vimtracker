@@ -18,7 +18,7 @@ pub enum DeviceWidth {
     /// All of it, as an FX slot does.
     #[default]
     Full,
-    /// Half, beside another, as the Mod page's envelopes and LFOs are.
+    /// Half, beside another, as the Mod page's slots are.
     Half,
 }
 

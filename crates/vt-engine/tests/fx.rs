@@ -29,8 +29,8 @@ fn song(texts: &[&str]) -> Song {
     for track in 0..song.sound_tracks() {
         song.sample_on(track, "s");
     }
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
@@ -165,7 +165,7 @@ fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
 #[test]
 fn off_starts_the_notes_release() {
     let mut with_release = song(&["C-3 -- off:01 --- ---"]);
-    with_release.tracks[0].envelopes[0].release_ms = 20;
+    with_release.tracks[0].mods[0].adsr.release_ms = 20;
     let out = render(with_release, flat(0.5), STEP);
     let at_off = level_at(&out, UNIT - 1);
     let during = level_at(&out, UNIT + 480);
@@ -649,8 +649,8 @@ fn ducked(compressor: Insert) -> Vec<[f32; 2]> {
     let mut song = Song::new(2);
     for track in 0..2 {
         song.sample_on(track, "s");
-        song.tracks[track].envelopes[0].attack_ms = 0;
-        song.tracks[track].envelopes[0].release_ms = 0;
+        song.tracks[track].mods[0].adsr.attack_ms = 0;
+        song.tracks[track].mods[0].adsr.release_ms = 0;
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
         *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
@@ -979,8 +979,8 @@ fn warps_ring_modulates_one_track_by_another_thats_muted() {
         let mut song = Song::new(2);
         for (track, note) in [(0, "C-3"), (1, "F#3")] {
             song.sample_on(track, "s");
-            song.tracks[track].envelopes[0].attack_ms = 0;
-            song.tracks[track].envelopes[0].release_ms = 0;
+            song.tracks[track].mods[0].adsr.attack_ms = 0;
+            song.tracks[track].mods[0].adsr.release_ms = 0;
             let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
             *phrase.step_mut(0).unwrap() = format!("{note} -- --- --- ---").parse().unwrap();
         }
@@ -1030,8 +1030,8 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
         let mut song = Song::new(2);
         for (track, text) in [(0, "C-3 -- kil:02 --- ---"), (1, "C-3 -- --- --- ---")] {
             song.sample_on(track, "s");
-            song.tracks[track].envelopes[0].attack_ms = 0;
-            song.tracks[track].envelopes[0].release_ms = 0;
+            song.tracks[track].mods[0].adsr.attack_ms = 0;
+            song.tracks[track].mods[0].adsr.release_ms = 0;
             let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
             *phrase.step_mut(0).unwrap() = text.parse().unwrap();
         }

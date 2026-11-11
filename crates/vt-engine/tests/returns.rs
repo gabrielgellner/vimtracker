@@ -37,8 +37,8 @@ fn pool() -> Arc<SamplePool> {
 fn song(send: &str) -> Song {
     let mut song = Song::new(1);
     song.sample_on(0, "s");
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     song.tracks[0].send_a = 0xE0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = format!("C-3 -- {send} --- ---").parse().unwrap();

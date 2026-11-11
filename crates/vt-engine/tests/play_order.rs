@@ -71,8 +71,8 @@ fn song(rows: &[&str], order: Order) -> Song {
     };
     song.sample_on(0, "s");
     let track = &mut song.tracks[0];
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     let mut phrase = Phrase::from_steps(steps);
     phrase.set_order(order);

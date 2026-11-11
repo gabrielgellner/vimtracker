@@ -6,6 +6,7 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::lfo::{Lfo, Rate};
+use vt_model::modulation::ModSlot;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{FULL_GATE, Machine, Phrase, Song, SynthVoice};
@@ -135,12 +136,14 @@ fn a_lock_of_another_voices_setting_does_nothing() {
 fn an_lfo_moves_its_settings() {
     for destination in (0..3).filter_map(|at| SettingId::voice(SynthVoice::VirtualAnalog, at)) {
         let mut moving = song(&[NOTE, REST, REST, REST]);
-        moving.tracks[0].lfos[0] = Lfo {
-            destination: Some(destination),
-            rate: Rate::Hertz(4000),
-            depth: 0x40,
-            ..Lfo::default()
-        };
+        moving.tracks[0].mods[3] = ModSlot::lfo(
+            Some(destination),
+            Lfo {
+                rate: Rate::Hertz(4000),
+                ..Lfo::default()
+            },
+        )
+        .with_depth(0x40);
         assert_ne!(
             play(moving, 4),
             play(song(&[NOTE, REST, REST, REST]), 4),

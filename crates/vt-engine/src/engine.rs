@@ -10,9 +10,10 @@ use vt_model::constants::{
     MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
+use vt_model::modulation::note_shape_slot;
 use vt_model::order::Dealer;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
@@ -1079,9 +1080,7 @@ impl Engine {
         self.millibpm = self.current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         self.transport = Transport::Playing;
         for track in self.tracks.iter_mut() {
-            for start in &mut track.lfo_starts {
-                start.tick = 0.0;
-            }
+            track.count_cycles_from_the_top();
         }
         self.update_lfos();
     }
@@ -1116,13 +1115,7 @@ impl Engine {
             return;
         };
         let state = &mut self.tracks[index];
-        state.trigger_envelopes(track, now);
-        for (lfo, start) in track.lfos.iter().zip(&mut state.lfo_starts) {
-            if lfo.retrig {
-                start.tick = now.tick;
-                start.clock = now.clock;
-            }
-        }
+        state.trigger_mods(track, now);
         state.modulate(track, index, now, false, &mut self.memory);
     }
 
@@ -1130,7 +1123,7 @@ impl Engine {
     fn release_modulation(&mut self, index: usize) {
         let now = self.song_time();
         if let Some(track) = self.current.song.tracks.get(index) {
-            self.tracks[index].release_envelopes(track, now);
+            self.tracks[index].release_mods(track, now);
         }
     }
 
@@ -1149,7 +1142,7 @@ impl Engine {
                 }
                 // A note heard while stopped works the LFOs out once, but they aren't moving.
                 if self.transport == Transport::Stopped {
-                    live.lfos = Default::default();
+                    live.mods = Default::default();
                 }
                 live
             }
@@ -1157,16 +1150,17 @@ impl Engine {
         }
     }
 
-    /// The shape of a track's notes: its first envelope if that's on `Vol` and in. Switched out,
-    /// its notes have the plain shape a new track's have, from the next one.
-    fn note_shape(&self, index: usize) -> Envelope {
+    /// The shape of a track's notes: its first envelope on `Vol`, whichever slot that is, if it's
+    /// in. Switched out, or with none, its notes have the plain shape a new track's have, from
+    /// the next one.
+    fn note_shape(&self, index: usize) -> Adsr {
         self.current
             .song
             .tracks
             .get(index)
-            .map(|track| track.envelopes[0])
-            .filter(|envelope| envelope.destination == Some(SettingId::VOL) && !envelope.bypassed)
-            .unwrap_or_default()
+            .and_then(|track| track.mods.get(note_shape_slot(&track.mods)?))
+            .filter(|slot| !slot.bypassed)
+            .map_or(Adsr::note_shape(), |slot| slot.adsr)
     }
 
     /// Pause in place, or resume from the stored position.
@@ -1397,7 +1391,7 @@ impl Engine {
             file,
             span,
             velocity_gain(DEFAULT_NOTE_VELOCITY),
-            Envelope::note_shape(),
+            Adsr::note_shape(),
         )
     }
 
@@ -1405,10 +1399,10 @@ impl Engine {
     /// fade in or out, so what comes out is what the track's filter and effects make of it, for
     /// `vimtracker probe`. Otherwise it goes as [`Engine::play_file`] does.
     pub fn play_input(&mut self, track: usize, input: Arc<SampleData>) -> Option<Arc<SampleData>> {
-        let unshaped = Envelope {
+        let unshaped = Adsr {
             attack_ms: 0,
             release_ms: 0,
-            ..Envelope::note_shape()
+            ..Adsr::note_shape()
         };
         self.play_one_off(track, input, None, 1.0, unshaped)
     }
@@ -1419,7 +1413,7 @@ impl Engine {
         file: Arc<SampleData>,
         span: Option<Span>,
         gain: f32,
-        shape: Envelope,
+        shape: Adsr,
     ) -> Option<Arc<SampleData>> {
         let plays = self
             .current
@@ -1526,7 +1520,7 @@ impl Engine {
     /// plays sounds the same, as does every accent (decision 121). A sampler plays the bank entry
     /// its `SMP` is on as the note starts, the slice of it its `SLI` is on, as its `STA`, `SLEN`
     /// and `PLY` cut it then, and has nothing to play with no entry.
-    fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
+    fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Adsr) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;

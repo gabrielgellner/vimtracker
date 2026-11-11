@@ -2,9 +2,10 @@
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::insert::Insert;
-use vt_model::lfo::{Lfo, Shape, note_rates};
+use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
+use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
 use vt_model::speed::Speed;
@@ -14,7 +15,41 @@ use crate::glyphs;
 use crate::input::picker::{Item, Pick, Picker};
 
 use super::controls::no_modes;
-use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+
+/// The titles of each slot's lists, as a list's title is fixed text.
+const TYPE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 type",
+    "Mod 2 type",
+    "Mod 3 type",
+    "Mod 4 type",
+    "Mod 5 type",
+    "Mod 6 type",
+];
+const MODE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 mode",
+    "Mod 2 mode",
+    "Mod 3 mode",
+    "Mod 4 mode",
+    "Mod 5 mode",
+    "Mod 6 mode",
+];
+const POLARITY_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 polarity",
+    "Mod 2 polarity",
+    "Mod 3 polarity",
+    "Mod 4 polarity",
+    "Mod 5 polarity",
+    "Mod 6 polarity",
+];
+const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 destination",
+    "Mod 2 destination",
+    "Mod 3 destination",
+    "Mod 4 destination",
+    "Mod 5 destination",
+    "Mod 6 destination",
+];
+use super::{AccumulatorField, ArpField, Control, ModField};
 
 impl App {
     pub(super) fn open_control_picker(&mut self) {
@@ -66,10 +101,6 @@ impl App {
             self.open_setting_picker(id, choices);
             return;
         }
-        if let Control::Envelope(slot, field) = self.track_control() {
-            self.open_envelope_picker(slot, field);
-            return;
-        }
         if let Control::Accumulator(field) = self.track_control() {
             self.open_accumulator_picker(field);
             return;
@@ -78,68 +109,13 @@ impl App {
             self.open_arpeggio_picker(field);
             return;
         }
-        let Control::Lfo(slot, field) = self.track_control() else {
+        let Control::Mod(slot, field) = self.track_control() else {
             self.status =
-                "K chooses from a list on Machine, Voice, Patch, File, Type, Groove, Speed, Dest, Shape, Rate, Retrig and Reset"
+                "K chooses from a list on Machine, Voice, Patch, File, Type, Mode, Groove, Speed, Dest, Shape, Rate and Reset"
                     .to_owned();
             return;
         };
-        let track = self.cursor.track;
-        let page = self.page_track();
-        let lfo = page.lfos[slot];
-        let pick = |lfo| Pick::Lfo { track, slot, lfo };
-        let (title, items): (&'static str, Vec<Item>) = match field {
-            LfoField::Destination => {
-                let off = Item::new(
-                    "---",
-                    pick(Lfo {
-                        destination: None,
-                        ..lfo
-                    }),
-                )
-                .meaning("Off");
-                let on = SettingId::for_lfo(&page, slot)
-                    .into_iter()
-                    .map(|destination| {
-                        Item::new(
-                            destination.name_on(&page),
-                            pick(Lfo {
-                                destination: Some(destination),
-                                ..lfo
-                            }),
-                        )
-                        .meaning(destination.meaning())
-                        .category(destination.group())
-                    });
-                ("LFO destination", std::iter::once(off).chain(on).collect())
-            }
-            LfoField::Shape => {
-                let shapes =
-                    Shape::ALL.map(|shape| Item::new(shape.name(), pick(Lfo { shape, ..lfo })));
-                ("LFO shape", shapes.to_vec())
-            }
-            LfoField::Rate => {
-                let rates = note_rates()
-                    .into_iter()
-                    .map(|rate| Item::new(rate.to_string(), pick(Lfo { rate, ..lfo })))
-                    .collect();
-                ("LFO rate. i types any other", rates)
-            }
-            LfoField::Retrig => {
-                let choices = [false, true].map(|retrig| {
-                    let name = if retrig { "on" } else { "off" };
-                    Item::new(name, pick(Lfo { retrig, ..lfo }))
-                });
-                ("LFO retrig", choices.to_vec())
-            }
-            LfoField::Depth | LfoField::Phase => {
-                self.status =
-                    "K chooses from a list on Type, Dest, Shape, Rate, Retrig and Reset".to_owned();
-                return;
-            }
-        };
-        let position = items.iter().position(|item| item.pick == pick(lfo));
-        self.show_picker(Picker::new(title, items).opened_on(position));
+        self.open_mod_picker(slot, field);
     }
 
     /// List the filter types, with what each does and the current one highlighted.
@@ -388,61 +364,116 @@ impl App {
         self.show_picker(Picker::new(setting.name(), items).opened_on(Some(usize::from(current))));
     }
 
-    /// List what an envelope's setting can be, with the current one highlighted.
-    fn open_envelope_picker(&mut self, slot: usize, field: EnvelopeField) {
+    /// List what a mod slot's setting can be, with the current one highlighted: its type, its
+    /// type's mode, where it goes, or an envelope's or an LFO's own that are lists.
+    fn open_mod_picker(&mut self, slot: usize, field: ModField) {
         let track = self.cursor.track;
         let page = self.page_track();
-        let envelope = self.page_track().envelopes[slot];
-        let pick = |envelope| Pick::Envelope {
+        let modulator = page.mods[slot];
+        let pick = |modulator| Pick::Mod {
             track,
             slot,
-            envelope,
+            modulator,
         };
+        let (adsr, lfo) = (modulator.adsr, modulator.lfo);
         let (title, items): (&'static str, Vec<Item>) = match field {
-            EnvelopeField::Destination => {
+            ModField::Type => {
+                let kinds = ModKind::ALL.map(|kind| {
+                    Item::new(kind.name(), pick(ModSlot { kind, ..modulator }))
+                        .meaning(kind.meaning())
+                });
+                (TYPE_TITLES[slot], kinds.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Lfo => {
+                let modes = LfoMode::ALL.map(|mode| {
+                    let lfo = Lfo { mode, ..lfo };
+                    Item::new(mode.name(), pick(ModSlot { lfo, ..modulator }))
+                        .meaning(mode.meaning())
+                });
+                (MODE_TITLES[slot], modes.to_vec())
+            }
+            ModField::Polarity => {
+                let both = Polarity::ALL.map(|polarity| {
+                    let chosen = ModSlot {
+                        polarity: Some(polarity),
+                        ..modulator
+                    };
+                    Item::new(polarity.name(), pick(chosen)).meaning(polarity.meaning())
+                });
+                (POLARITY_TITLES[slot], both.to_vec())
+            }
+            ModField::Destination => {
                 let off = Item::new(
                     "---",
-                    pick(Envelope {
+                    pick(ModSlot {
                         destination: None,
-                        ..envelope
+                        ..modulator
                     }),
                 )
                 .meaning("Off");
-                let on = SettingId::for_envelope(&page)
+                let on = SettingId::for_mod(&page, slot)
                     .into_iter()
                     .map(|destination| {
                         Item::new(
                             destination.name_on(&page),
-                            pick(Envelope {
+                            pick(ModSlot {
                                 destination: Some(destination),
-                                ..envelope
+                                ..modulator
                             }),
                         )
                         .meaning(destination.meaning())
                         .category(destination.group())
                     });
                 (
-                    "Envelope destination",
+                    DESTINATION_TITLES[slot],
                     std::iter::once(off).chain(on).collect(),
                 )
             }
-            EnvelopeField::Reset => {
+            ModField::Reset => {
                 let choices = [true, false].map(|reset| {
                     let (name, meaning) = if reset {
                         ("on", "Each note starts it from zero")
                     } else {
                         ("off", "Each note goes on from where it is")
                     };
-                    Item::new(name, pick(Envelope { reset, ..envelope })).meaning(meaning)
+                    let adsr = Adsr { reset, ..adsr };
+                    Item::new(name, pick(ModSlot { adsr, ..modulator })).meaning(meaning)
                 });
                 ("Envelope reset", choices.to_vec())
             }
+            ModField::Shape => {
+                let shapes = Shape::ALL.map(|shape| {
+                    let lfo = Lfo { shape, ..lfo };
+                    Item::new(shape.name(), pick(ModSlot { lfo, ..modulator }))
+                });
+                ("LFO shape", shapes.to_vec())
+            }
+            ModField::Rate => {
+                let rates = note_rates()
+                    .into_iter()
+                    .map(|rate| {
+                        let lfo = Lfo { rate, ..lfo };
+                        Item::new(rate.to_string(), pick(ModSlot { lfo, ..modulator }))
+                    })
+                    .collect();
+                ("LFO rate. i types any other", rates)
+            }
             _ => {
-                self.status = "K chooses from a list on Dest and Reset".to_owned();
+                self.status =
+                    "K chooses from a list on Type, Mode, Polarity, Dest, Shape, Rate and Reset"
+                        .to_owned();
                 return;
             }
         };
-        let position = items.iter().position(|item| item.pick == pick(envelope));
+        // A polarity that follows its type opens on the one it plays.
+        let current = match field {
+            ModField::Polarity => ModSlot {
+                polarity: Some(modulator.polarity()),
+                ..modulator
+            },
+            _ => modulator,
+        };
+        let position = items.iter().position(|item| item.pick == pick(current));
         self.show_picker(Picker::new(title, items).opened_on(position));
     }
 }

@@ -16,7 +16,10 @@
 //!     track, is on a page of its own, one arrow away.
 //! *   A button is always under a knob: the Roto draws a button's label only under a knob that's
 //!     set (firmware 3.3.0), so a restart is under what it starts again, `Reset` under `Attack`,
-//!     `Retrig` under an LFO's `Phase` and the arpeggio's `Mode`.
+//!     an LFO's mode (`Trig` lit, `Free` dark) under its `Phase` and the arpeggio's `Retrig`
+//!     under its `Mode`.
+//! *   A mod slot's layout is its type's: an ADSR's or an LFO's, swapped when the app changes its
+//!     type, which is never chosen on the Roto.
 //! *   **The Roto plays and tweaks; the app builds** (the author's rule, 2026-11-11). What a
 //!     device is, its machine, its effect or an effect's type or mode, is chosen in the app with
 //!     `K`, never on the Roto: each changes what the device is and swaps its whole layout under
@@ -41,7 +44,9 @@ use vt_roto::layout::{Layout, Page, Slot};
 use vt_roto::sysex::CONTROLS;
 
 use super::devices::Family;
-use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField};
+use vt_model::modulation::ModKind;
+
+use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
 
 /// A setting in a layout's slot: its key, and how it differs from what its kind gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -488,13 +493,14 @@ const PLAY: DeviceLayout = live(
 /// turned by mistake, one arrow away.
 const DEST_PAGE: Page<Setting> = knobs("Dest", [s("dest"), __, __, __, __, __, __, __]);
 
-/// Attack, decay, sustain and release, then how far it goes, with its reset on the button under
-/// `Attack`, as it starts the envelope again from nothing; where it goes on the next page.
-const ENVELOPE: DeviceLayout = stored(
-    "envelope",
+/// An ADSR slot's: attack, decay, sustain and release, then how far it goes, with its reset on the
+/// button under `Attack`, as it starts the envelope again from nothing, and its polarity under
+/// `Depth`, lit for `Bi`; where it goes on the next page.
+const ADSR: DeviceLayout = stored(
+    "adsr",
     &[
         page(
-            "Envelope",
+            "ADSR",
             [
                 s("attack"),
                 s("decay"),
@@ -505,14 +511,16 @@ const ENVELOPE: DeviceLayout = stored(
                 __,
                 __,
             ],
-            button(0, "reset"),
+            [s("reset"), GAP, GAP, GAP, s("polarity"), __, __, __],
         ),
         DEST_PAGE,
     ],
 );
 
-/// Its rate and shape, how far it goes and where in its cycle it starts, with its retrigger on
-/// the button under `Phase`, as a retrigger starts it there; where it goes on the next page.
+/// An LFO slot's: its rate and shape, how far it goes and where in its cycle it starts, with its
+/// polarity on the button under `Depth`, lit for `Bi`, and its mode under `Phase`, lit for `Trig`,
+/// as each note then starts it there; where it
+/// goes on the next page. #86's five modes make the button a knob, and the device live.
 const LFO: DeviceLayout = stored(
     "lfo",
     &[
@@ -528,7 +536,7 @@ const LFO: DeviceLayout = stored(
                 __,
                 __,
             ],
-            button(3, "retrig"),
+            [GAP, GAP, s("polarity"), s("mode"), __, __, __, __],
         ),
         DEST_PAGE,
     ],
@@ -962,7 +970,7 @@ pub const ALL: [&DeviceLayout; 56] = [
     &RETURN_OUTPUT,
     &MASTER_OUTPUT,
     &PLAY,
-    &ENVELOPE,
+    &ADSR,
     &LFO,
     &ACCUMULATOR,
     &ARPEGGIO,
@@ -1067,8 +1075,10 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Insert(slot)) => effect_layout(track.inserts[slot]),
         Some(Control::FilterType) => &FILTER,
         Some(Control::Base(TrackControl::Pitch)) => &PLAY,
-        Some(Control::Envelope(..)) => &ENVELOPE,
-        Some(Control::Lfo(..)) => &LFO,
+        Some(Control::Mod(slot, _)) => match track.mods[slot].kind {
+            ModKind::Adsr => &ADSR,
+            ModKind::Lfo => &LFO,
+        },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
         _ => match track.kind {
@@ -1081,10 +1091,11 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 }
 
 /// Whether a control is the app's alone, never on the Roto: what a device is, its machine, its
-/// effect, or the effect's type or mode, as each swaps the device's whole layout.
+/// effect, the effect's type or mode, or a mod slot's type, as each swaps the device's whole
+/// layout.
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
-        Control::Machine | Control::Insert(_) => true,
+        Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,
     }
@@ -1137,22 +1148,20 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Limiter => "limiter",
         Control::FilterType => "type",
         Control::FilterMode => "mode",
-        Control::Lfo(_, field) => match field {
-            LfoField::Destination => "dest",
-            LfoField::Shape => "shape",
-            LfoField::Rate => "rate",
-            LfoField::Depth => "depth",
-            LfoField::Phase => "phase",
-            LfoField::Retrig => "retrig",
-        },
-        Control::Envelope(_, field) => match field {
-            EnvelopeField::Destination => "dest",
-            EnvelopeField::Attack => "attack",
-            EnvelopeField::Decay => "decay",
-            EnvelopeField::Sustain => "sustain",
-            EnvelopeField::Release => "release",
-            EnvelopeField::Depth => "depth",
-            EnvelopeField::Reset => "reset",
+        Control::Mod(_, field) => match field {
+            ModField::Type => "type",
+            ModField::Mode => "mode",
+            ModField::Polarity => "polarity",
+            ModField::Destination => "dest",
+            ModField::Depth => "depth",
+            ModField::Attack => "attack",
+            ModField::Decay => "decay",
+            ModField::Sustain => "sustain",
+            ModField::Release => "release",
+            ModField::Reset => "reset",
+            ModField::Shape => "shape",
+            ModField::Rate => "rate",
+            ModField::Phase => "phase",
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",

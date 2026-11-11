@@ -1,6 +1,6 @@
 //! The track page, `Space 4`: its Sound and Mod pages' settings and what each key does to
 //! them, the cursor's moves through their rows, `/`'s jumps, and their drawings: the bars, the
-//! filter's curve, the envelopes' shapes and the sample's waveform. The FX page is
+//! filter's curve, the mod slots' pictures and the sample's waveform. The FX page is
 //! `fx_page.rs`.
 
 use std::sync::Arc;
@@ -14,7 +14,8 @@ use vt_engine::published::Published;
 use vt_model::action::{Action, TrackControl};
 use vt_model::constants::MAX_GROUPS;
 use vt_model::groove::GrooveId;
-use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::lfo::{Lfo, LfoMode, Rate, Shape};
+use vt_model::modulation::{MOD_SLOTS, default_mod};
 use vt_model::samples::SamplePool;
 use vt_model::settings::{SettingId, gate_value};
 use vt_model::song::{FilterType, Machine, Song, SynthVoice, TrackKind};
@@ -484,7 +485,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         reduction: Default::default(),
         bypassed: Default::default(),
         after_trim: Default::default(),
-        lfos: Default::default(),
+        mods: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -570,9 +571,9 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
 #[test]
 fn the_track_page_types_lfo_settings() {
     let (mut app, _realtime) = on_track_page();
-    let lfo = |app: &App| app.song().tracks[0].lfos[0];
-    // Down to LFO 1, on Dest.
-    press(&mut app, &format!("L{}0", to_lfo(0)));
+    let lfo = |app: &App| app.song().tracks[0].mods[3];
+    // Down to Mod 4, the first LFO, on Dest at the end of its title.
+    press(&mut app, &format!("L{}$", to_lfo(0)));
     press(&mut app, "=");
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
     press(&mut app, "-");
@@ -580,22 +581,22 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::lfo(vt_model::lfo::LFOS_PER_TRACK - 1, 1).unwrap()),
-        "the last for LFO 1 on a sample track: the last LFO's phase"
+        Some(SettingId::modulator(MOD_SLOTS - 1, 1).unwrap()),
+        "the last for Mod 4 on a sample track: the last slot's phase"
     );
 
-    press(&mut app, "j=");
-    assert_eq!(lfo(&app).shape, Shape::Saw);
+    press(&mut app, "0j=");
+    assert_eq!(lfo(&app).lfo.shape, Shape::Saw);
 
     press(&mut app, "j");
     typed(&mut app, "1/8d");
-    assert_eq!(lfo(&app).rate, Rate::Note(720));
+    assert_eq!(lfo(&app).lfo.rate, Rate::Note(720));
     typed(&mut app, "7st");
-    assert_eq!(lfo(&app).rate, Rate::Steps(7));
+    assert_eq!(lfo(&app).lfo.rate, Rate::Steps(7));
     typed(&mut app, "2.5hz");
-    assert_eq!(lfo(&app).rate, Rate::Hertz(250));
+    assert_eq!(lfo(&app).lfo.rate, Rate::Hertz(250));
     typed(&mut app, "fast");
-    assert_eq!(lfo(&app).rate, Rate::Hertz(250));
+    assert_eq!(lfo(&app).lfo.rate, Rate::Hertz(250));
     assert!(app.status.contains("1/8d"), "{}", app.status);
 
     press(&mut app, "j");
@@ -608,22 +609,23 @@ fn the_track_page_types_lfo_settings() {
 
     press(&mut app, "kkl");
     typed(&mut app, "90");
-    assert_eq!(lfo(&app).phase, 90);
+    assert_eq!(lfo(&app).lfo.phase, 90);
     typed(&mut app, "360");
-    assert_eq!(lfo(&app).phase, 90);
+    assert_eq!(lfo(&app).lfo.phase, 90);
     press(&mut app, "3-");
-    assert_eq!(lfo(&app).phase, 45);
+    assert_eq!(lfo(&app).lfo.phase, 45);
     press(&mut app, "4-");
-    assert_eq!(lfo(&app).phase, 345);
+    assert_eq!(lfo(&app).lfo.phase, 345);
 
-    press(&mut app, "j=");
-    assert!(lfo(&app).retrig);
+    // Above `Phase`, its mode, in its title.
+    press(&mut app, "k=");
+    assert_eq!(lfo(&app).lfo.mode, LfoMode::Trig);
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "i lists a setting that is a list");
     special(&mut app, KeyCode::Esc);
 
     // Nothing else moved.
-    assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
+    assert_eq!(app.song().tracks[0].mods[4], default_mod(4));
 }
 
 #[test]
@@ -633,15 +635,15 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     assert_eq!(app.mode, Mode::Normal, "not on a Dest");
     assert!(app.status.contains("Dest"), "{}", app.status);
 
-    // The second LFO's Dest, on the next track.
+    // The second LFO's Dest, Mod 5's, on the next track.
     press(&mut app, "W");
-    press(&mut app, &format!("L{}0K/", to_lfo(1)));
+    press(&mut app, &format!("L{}$K/", to_lfo(1)));
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
         16,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and LFO 3's two"
+        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's two"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -649,39 +651,39 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.view, View::Track);
     assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
+        app.song().tracks[1].mods[4].destination,
         Some(SettingId::RES)
     );
-    assert_eq!(app.song().tracks[1].lfos[0], Lfo::default());
-    assert_eq!(app.song().tracks[0].lfos[1], Lfo::default());
+    assert_eq!(app.song().tracks[1].mods[3], default_mod(3));
+    assert_eq!(app.song().tracks[0].mods[4], default_mod(4));
 
     // It opens on what's set, and leaves the other settings alone. Esc changes nothing.
     typed_rate_on_second_lfo(&mut app);
-    press(&mut app, "kkK");
+    press(&mut app, "kk$K");
     assert_eq!(
         listed(app.picker.as_ref().unwrap().current().unwrap()),
         "Res  Filter resonance"
     );
     special(&mut app, KeyCode::Esc);
     assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
+        app.song().tracks[1].mods[4].destination,
         Some(SettingId::RES)
     );
     press(&mut app, "K/pan");
     special(&mut app, KeyCode::Enter);
-    let lfo = app.song().tracks[1].lfos[1];
+    let lfo = app.song().tracks[1].mods[4];
     assert_eq!(lfo.destination, Some(SettingId::PAN));
-    assert_eq!(lfo.rate, Rate::Steps(7));
+    assert_eq!(lfo.lfo.rate, Rate::Steps(7));
 
     press(&mut app, "u");
     assert_eq!(
-        app.song().tracks[1].lfos[1].destination,
+        app.song().tracks[1].mods[4].destination,
         Some(SettingId::RES)
     );
 }
 
 fn typed_rate_on_second_lfo(app: &mut App) {
-    press(app, "jj");
+    press(app, "0jj");
     typed(app, "7st");
 }
 
@@ -970,7 +972,7 @@ fn the_track_page_sets_the_utility_filter() {
 #[test]
 fn cmd_with_the_movement_keys_changes_the_value_without_moving() {
     let (mut app, _realtime) = on_track_page();
-    let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
+    let attack = |app: &App| app.song().tracks[0].mods[0].adsr.attack_ms;
     press(&mut app, "Lj");
     typed(&mut app, "20");
     let label = app.track_control().label();
@@ -992,7 +994,7 @@ fn cmd_with_the_movement_keys_changes_the_value_without_moving() {
 fn a_held_cmd_l_keeps_adjusting() {
     use ratatui::crossterm::event::KeyEventKind;
     let (mut app, _realtime) = on_track_page();
-    let attack = |app: &App| app.song().tracks[0].envelopes[0].attack_ms;
+    let attack = |app: &App| app.song().tracks[0].mods[0].adsr.attack_ms;
     press(&mut app, "Lj");
     typed(&mut app, "20");
     let key = parse_sequence("D-l").unwrap()[0];
@@ -1008,42 +1010,42 @@ fn a_held_cmd_l_keeps_adjusting() {
 #[test]
 fn the_track_page_sets_envelopes() {
     let (mut app, _realtime) = on_track_page();
-    let env = |app: &App, slot: usize| app.song().tracks[0].envelopes[slot];
-    // Env 1, on its Attack.
+    let env = |app: &App, slot: usize| app.song().tracks[0].mods[slot];
+    // Mod 1, on its Attack.
     press(&mut app, "Lj");
     typed(&mut app, "20");
-    assert_eq!(env(&app, 0).attack_ms, 20);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 20);
     press(&mut app, "=");
-    assert_eq!(env(&app, 0).attack_ms, 25);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 25);
     press(&mut app, "+");
-    assert_eq!(env(&app, 0).attack_ms, 75);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 75);
     typed(&mut app, "9000");
-    assert_eq!(env(&app, 0).attack_ms, 75);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 75);
     assert!(app.status.contains("8000"), "{}", app.status);
     typed(&mut app, "8000");
-    assert_eq!(env(&app, 0).attack_ms, 8000);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 8000);
     press(&mut app, "=");
-    assert_eq!(env(&app, 0).attack_ms, 8000);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 8000);
     press(&mut app, "x");
-    assert_eq!(env(&app, 0).attack_ms, 1);
+    assert_eq!(env(&app, 0).adsr.attack_ms, 1);
 
     press(&mut app, "j");
     typed(&mut app, "180");
-    assert_eq!(env(&app, 0).decay_ms, 180);
+    assert_eq!(env(&app, 0).adsr.decay_ms, 180);
     press(&mut app, "kl");
     typed(&mut app, "40");
-    assert_eq!(env(&app, 0).sustain, 40);
+    assert_eq!(env(&app, 0).adsr.sustain, 40);
     typed(&mut app, "101");
-    assert_eq!(env(&app, 0).sustain, 40);
+    assert_eq!(env(&app, 0).adsr.sustain, 40);
     assert!(app.status.contains("percent"), "{}", app.status);
     press(&mut app, "+");
-    assert_eq!(env(&app, 0).sustain, 50);
+    assert_eq!(env(&app, 0).adsr.sustain, 50);
     press(&mut app, "hjj");
     typed(&mut app, "300");
-    assert_eq!(env(&app, 0).release_ms, 300);
+    assert_eq!(env(&app, 0).adsr.release_ms, 300);
 
-    // Env 2, its depth in hex and its destination from a list.
-    press(&mut app, "j0K");
+    // Mod 2, its depth in hex and its destination from a list.
+    press(&mut app, "j$K");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         listed(app.picker.as_ref().unwrap().current().unwrap()),
@@ -1053,21 +1055,21 @@ fn the_track_page_sets_envelopes() {
     press(&mut app, "/pitch");
     special(&mut app, KeyCode::Enter);
     assert_eq!(env(&app, 1).destination, Some(SettingId::PITCH));
-    press(&mut app, "jjl");
+    press(&mut app, "0jjl");
     typed(&mut app, "+18");
     assert_eq!(env(&app, 1).depth, 0x18);
     press(&mut app, "jK");
     press(&mut app, "off");
     special(&mut app, KeyCode::Enter);
-    assert!(!env(&app, 1).reset);
+    assert!(!env(&app, 1).adsr.reset);
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "i lists a setting that is a list");
     special(&mut app, KeyCode::Esc);
 
     // Each is one undo, and the first envelope was left alone.
     press(&mut app, "u");
-    assert!(env(&app, 1).reset);
-    assert_eq!(env(&app, 0).release_ms, 300);
+    assert!(env(&app, 1).adsr.reset);
+    assert_eq!(env(&app, 0).adsr.release_ms, 300);
 }
 
 #[test]
@@ -1085,7 +1087,7 @@ fn the_track_page_draws_each_envelopes_shape() {
             .unwrap();
         terminal.backend().buffer().clone()
     };
-    // `Env 1`'s device is the first, at the top left, with its title on the page's third row and
+    // `Mod 1`'s device is the first, at the top left, with its title on the page's third row and
     // its shape's first cell inside its panel's box, 46 along and two down.
     let (top, image) = (2, (46, 4));
     let line = |buffer: &ratatui::buffer::Buffer, y: u16| {
@@ -1093,8 +1095,8 @@ fn the_track_page_draws_each_envelopes_shape() {
     };
     press(&mut app, "L");
     let drawn = page(&mut app, &mut graphics);
-    assert!(line(&drawn, top).starts_with(&modulator_title("Env 1", true, "Vol ─")));
-    let first = app.envelope_images.unwrap()[0];
+    assert!(line(&drawn, top).starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
+    let first = app.mod_images.unwrap()[0];
     assert_eq!(drawn[image].fg, id_color(first));
 
     // Changing a value sends a new image, which the placeholders point to.
@@ -1102,12 +1104,12 @@ fn the_track_page_draws_each_envelopes_shape() {
     typed(&mut app, "0");
     let changed = page(&mut app, &mut graphics);
     assert_ne!(changed[image].fg, id_color(first));
-    assert_eq!(app.song().tracks[0].envelopes[0].sustain, 0);
+    assert_eq!(app.song().tracks[0].mods[0].adsr.sustain, 0);
 
     // The first envelope on Vol has no depth to show, and off it, it does.
     let depth = |app: &mut App, graphics: &mut Graphics| line(&page(app, graphics), top + 4);
     assert!(depth(&mut app, &mut graphics).contains("Depth     --"));
-    press(&mut app, "ggK/cut");
+    press(&mut app, "gg$K/cut");
     special(&mut app, KeyCode::Enter);
     assert!(depth(&mut app, &mut graphics).contains("Depth     00"));
 }
@@ -1115,7 +1117,7 @@ fn the_track_page_draws_each_envelopes_shape() {
 #[test]
 fn every_list_setting_on_the_track_page_has_a_picker() {
     let (mut app, _realtime) = on_track_page();
-    let lfo = |app: &App| app.song().tracks[0].lfos[0];
+    let lfo = |app: &App| app.song().tracks[0].mods[3];
     let choose = |app: &mut App, keys: &str| {
         press(app, "K");
         assert_eq!(app.mode, Mode::Picker);
@@ -1123,31 +1125,35 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
         special(app, KeyCode::Enter);
         assert_eq!(app.mode, Mode::Normal);
     };
-    press(&mut app, &format!("L{}0", to_lfo(0)));
+    press(&mut app, &format!("L{}$", to_lfo(0)));
     choose(&mut app, "/cut");
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
 
-    press(&mut app, "j");
+    press(&mut app, "0j");
     choose(&mut app, "square");
-    assert_eq!(lfo(&app).shape, Shape::Square);
+    assert_eq!(lfo(&app).lfo.shape, Shape::Square);
 
     press(&mut app, "j");
     assert_eq!(app.mode, Mode::Normal);
     choose(&mut app, "1/8d");
-    assert_eq!(lfo(&app).rate, Rate::Note(720));
+    assert_eq!(lfo(&app).lfo.rate, Rate::Note(720));
 
-    // Depth, under Rate, isn't a list, and Retrig is beside Rate.
+    // Depth, under Rate, isn't a list, and the mode is in the title over Phase.
     press(&mut app, "j");
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.status.contains("Dest"), "{}", app.status);
-    press(&mut app, "kl");
-    choose(&mut app, "on");
-    assert!(lfo(&app).retrig);
-    assert_eq!(lfo(&app).shape, Shape::Square, "the others are left alone");
+    press(&mut app, "kklk");
+    choose(&mut app, "trig");
+    assert_eq!(lfo(&app).lfo.mode, LfoMode::Trig);
+    assert_eq!(
+        lfo(&app).lfo.shape,
+        Shape::Square,
+        "the others are left alone"
+    );
 
     // The picker opens on what's set.
-    press(&mut app, "0kK");
+    press(&mut app, "0jK");
     assert_eq!(app.picker.as_ref().unwrap().selected, 4);
     special(&mut app, KeyCode::Esc);
 
@@ -1175,17 +1181,17 @@ fn large_steps_on_the_track_page_suit_each_setting() {
         GrooveId::from_index(1),
         "a groove moves one at a time"
     );
-    press(&mut app, &format!("L{}0jj", to_lfo(0)));
+    press(&mut app, &format!("L{}jj", to_lfo(0)));
     press(&mut app, "+");
-    assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
+    assert_eq!(track(&app).mods[3].lfo.rate, Rate::Note(480));
     press(&mut app, "_");
-    assert_eq!(track(&app).lfos[0].rate, Rate::Note(960));
+    assert_eq!(track(&app).mods[3].lfo.rate, Rate::Note(960));
     press(&mut app, "j+");
-    assert_eq!(track(&app).lfos[0].depth, 0x10);
+    assert_eq!(track(&app).mods[3].depth, 0x10);
     press(&mut app, "kkl+");
-    assert_eq!(track(&app).lfos[0].phase, 90);
+    assert_eq!(track(&app).mods[3].lfo.phase, 90);
     press(&mut app, "_");
-    assert_eq!(track(&app).lfos[0].phase, 0);
+    assert_eq!(track(&app).mods[3].lfo.phase, 0);
 }
 
 #[test]
@@ -1212,30 +1218,31 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).send_b, 0);
 
     // Only the setting under the cursor goes back.
-    press(&mut app, &format!("L{}0=", to_lfo(0)));
-    press(&mut app, "j=");
+    press(&mut app, &format!("L{}$=", to_lfo(0)));
+    press(&mut app, "0j=");
     press(&mut app, "j");
     typed(&mut app, "7st");
     press(&mut app, "j");
     typed(&mut app, "+40");
     press(&mut app, "kkl");
     typed(&mut app, "90");
-    press(&mut app, "j=");
-    let lfo = |app: &App| track(app).lfos[0];
+    press(&mut app, "k=");
+    let lfo = |app: &App| track(app).mods[3];
+    assert_eq!(lfo(&app).lfo.mode, LfoMode::Trig);
     press(&mut app, "x");
-    assert!(!lfo(&app).retrig);
-    press(&mut app, "kx");
-    assert_eq!(lfo(&app).phase, 0);
+    assert_eq!(lfo(&app).lfo.mode, LfoMode::Free);
+    press(&mut app, "jx");
+    assert_eq!(lfo(&app).lfo.phase, 0);
     press(&mut app, "hjjx");
     assert_eq!(lfo(&app).depth, 0);
     press(&mut app, "kx");
-    assert_eq!(lfo(&app).rate, Lfo::default().rate);
-    assert_eq!(lfo(&app).shape, Shape::Saw);
+    assert_eq!(lfo(&app).lfo.rate, Lfo::default().rate);
+    assert_eq!(lfo(&app).lfo.shape, Shape::Saw);
     press(&mut app, "kx");
-    assert_eq!(lfo(&app).shape, Shape::Tri);
+    assert_eq!(lfo(&app).lfo.shape, Shape::Tri);
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
-    press(&mut app, "kx");
-    assert_eq!(lfo(&app), Lfo::default());
+    press(&mut app, "k$x");
+    assert_eq!(lfo(&app), default_mod(3));
 
     // Already there, it leaves no undo step.
     let depth = app.history.undo_depth();
@@ -1288,15 +1295,15 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
 #[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, &format!("L{}0jj", to_lfo(0)));
+    press(&mut app, &format!("L{}jj", to_lfo(0)));
     press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
+    assert_eq!(app.song().tracks[0].mods[3].lfo.rate, Rate::Note(720));
     typed(&mut app, "7st");
     press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Steps(6));
+    assert_eq!(app.song().tracks[0].mods[3].lfo.rate, Rate::Steps(6));
     typed(&mut app, "2hz");
     press(&mut app, "=");
-    assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Hertz(210));
+    assert_eq!(app.song().tracks[0].mods[3].lfo.rate, Rate::Hertz(210));
 }
 
 #[test]
@@ -1328,7 +1335,7 @@ fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, &format!("L{}0=jj", to_lfo(0)));
+    press(&mut app, &format!("L{}$=0jj", to_lfo(0)));
     typed(&mut app, "1/8d");
     press(&mut app, "j");
     typed(&mut app, "+40");
@@ -1336,34 +1343,34 @@ fn the_track_page_shows_its_settings_in_columns() {
     typed(&mut app, "90");
     let lines = screen_cells(&mut app);
     assert!(lines[0].contains(" Track 01 "), "{}", lines[0]);
-    // Each modulator's destination is in its title, after its switch.
+    // Each slot's type, mode and destination are in its title, after its switch.
     let title = |identity: &str| {
         let (top, left) = device_at(&lines, identity);
         from_column(&lines[top], left)
     };
-    assert!(title("Env 1").starts_with(&modulator_title("Env 1", true, "Vol ─")));
-    assert!(title("Env 2").starts_with(&modulator_title("Env 2", true, "Cut ─")));
-    assert!(title("Env 3").starts_with(&modulator_title("Env 3", true, "--- ─")));
-    assert!(title("LFO 1").starts_with(&modulator_title("LFO 1", true, "Cut ─")));
-    assert!(title("LFO 2").starts_with(&modulator_title("LFO 2", true, "--- ─")));
+    assert!(title("Mod 1").starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
+    assert!(title("Mod 2").starts_with(&modulator_title("Mod 2", true, "ADSR  Uni  → Cut ─")));
+    assert!(title("Mod 3").starts_with(&modulator_title("Mod 3", true, "ADSR  Uni  → --- ─")));
+    assert!(title("Mod 4").starts_with(&modulator_title("Mod 4", true, "LFO  Free  Bi  → Cut ─")));
+    assert!(title("Mod 5").starts_with(&modulator_title("Mod 5", true, "LFO  Free  Bi  → --- ─")));
     // An envelope's times down its left and its levels down its right.
-    let (top, left) = device_at(&lines, "Env 1");
+    let (top, left) = device_at(&lines, "Mod 1");
     let row = |at: usize| from_column(&lines[top + at], left);
     let on = vt_tui::glyphs::SWITCH_ON.to_string();
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
-    // An LFO's shape, rate and depth down its left, and its phase and retrig, a toggle that's
-    // off, down its right, with a hole under them.
-    let (top, left) = device_at(&lines, "LFO 1");
+    // An LFO's shape, rate and depth down its left, and its phase down its right, with holes
+    // under it, as its mode is in its title.
+    let (top, left) = device_at(&lines, "Mod 4");
     let row = |at: usize| from_column(&lines[top + at], left);
-    let off = vt_tui::glyphs::SWITCH_OFF.to_string();
     assert!(
         row(2).starts_with("│  Shape     Tri        Phase     90°"),
         "{}",
         row(2)
     );
-    assert!(row(4).starts_with(&format!("│  Rate      1/8d       Retrig    {off}")));
+    let inside: String = row(4).chars().take(44).collect();
+    assert_eq!(inside.trim_end(), "│  Rate      1/8d");
     let inside: String = row(6).chars().take(73).collect();
     assert_eq!(inside.trim_end(), "│  Depth     +40");
     press(&mut app, "H");
@@ -1516,7 +1523,9 @@ fn page_text(app: &App) -> String {
 #[test]
 fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     let (mut app, _realtime) = app();
-    app.envelope_images = Some([0x01_02_03, 0x04_05_06, 0x07_08_09]);
+    app.mod_images = Some([
+        0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
+    ]);
     press(&mut app, " 4L");
     // As much of the page as the author's screen has room for, beside the meter.
     let buffer = {
@@ -1532,7 +1541,7 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
         // Each envelope's device is the left of its band, a device tall, under the page's title.
         let top = 2 + 9 * slot as u16;
         let title: String = (0..9).map(|x| buffer[(x, top)].symbol()).collect();
-        assert_eq!(title, format!("╭─ Env {} ", slot + 1));
+        assert_eq!(title, format!("╭─ Mod {} ", slot + 1));
         // Its panel is against its right side, 2 in from its frame, in a faint box that's as tall
         // as all inside the frame, the half size's 24 by 5 inside it.
         assert_eq!(buffer[(73, top)].symbol(), "╮");
@@ -1574,31 +1583,28 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     press(&mut app, " 4L");
     // The envelopes' shapes and the LFOs' cycles, all at the half size.
-    assert_eq!(
-        sync(&mut app, &mut graphics).0,
-        vt_model::constants::TRACK_ENVELOPES + vt_model::lfo::LFOS_PER_TRACK
-    );
-    let first = app.envelope_images.unwrap();
+    assert_eq!(sync(&mut app, &mut graphics).0, MOD_SLOTS);
+    let first = app.mod_images.unwrap();
     assert_ne!(first[0], first[1]);
     assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
 
     // Each envelope's other look is sent once, and after that the cursor only swaps between them.
     press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 2);
-    let moved = app.envelope_images.unwrap();
+    let moved = app.mod_images.unwrap();
     assert!(moved[0] != first[0] && moved[1] != first[1]);
     press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    assert_eq!(app.envelope_images.unwrap(), first);
+    assert_eq!(app.mod_images.unwrap(), first);
     press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    assert_eq!(app.envelope_images.unwrap(), moved);
+    assert_eq!(app.mod_images.unwrap(), moved);
 
     // A change makes a new image, and the old one is forgotten only after the screen moves on.
-    press(&mut app, "=");
+    press(&mut app, "j=");
     let (sent, out) = sync(&mut app, &mut graphics);
     assert_eq!(sent, 1);
-    let changed = app.envelope_images.unwrap();
+    let changed = app.mod_images.unwrap();
     assert_ne!(changed[1], moved[1]);
     assert_eq!(changed[0], moved[0]);
     let forget = format!("a=d,d=I,i={},q=2", moved[1]);
@@ -1610,9 +1616,9 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
 fn an_lfos_shape_is_a_word_in_its_grid_with_no_glyph_beside_it() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
-    assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Tri);
+    assert_eq!(app.song().tracks[0].mods[3].lfo.shape, Shape::Tri);
     let lines = screen_cells(&mut app);
-    let (top, left) = device_at(&lines, "LFO 1");
+    let (top, left) = device_at(&lines, "Mod 4");
     let row = from_column(&lines[top + 2], left);
     assert!(
         row.starts_with("│  Shape     Tri        Phase     0°"),
@@ -1621,7 +1627,7 @@ fn an_lfos_shape_is_a_word_in_its_grid_with_no_glyph_beside_it() {
     // Nothing after the shape's name but the room to the next column: the wave the study draws
     // beside it (#384) will say it, so a glyph would say it twice.
     press(&mut app, &format!("{}j=", to_lfo(0)));
-    assert_eq!(app.song().tracks[0].lfos[0].shape, Shape::Saw);
+    assert_eq!(app.song().tracks[0].mods[3].lfo.shape, Shape::Saw);
     let lines = screen_cells(&mut app);
     let row = from_column(&lines[top + 2], left);
     assert!(
@@ -1700,7 +1706,7 @@ fn the_filter_curve_moves_with_what_plays() {
         reduction: Default::default(),
         bypassed: Default::default(),
         after_trim: Default::default(),
-        lfos: Default::default(),
+        mods: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -1800,11 +1806,11 @@ fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
 fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    // Every envelope's and every LFO's.
+    // Every slot's.
     press(&mut app, " 4L/dep");
     assert_eq!(
         jump_labels(&app).len(),
-        vt_model::constants::TRACK_ENVELOPES + vt_model::lfo::LFOS_PER_TRACK,
+        MOD_SLOTS,
         "{:?}",
         jump_labels(&app)
     );
@@ -1823,15 +1829,15 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     press(&mut app, "/dep");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(column_name(&app), "Dest", "it hasn't moved");
+    assert_eq!(column_name(&app), "Type", "it hasn't moved");
 
-    // Enter goes to the nearest, `Env 1`'s, in its own device.
+    // Enter goes to the nearest, `Mod 1`'s, in its own device.
     press(&mut app, "/dep");
     special(&mut app, KeyCode::Enter);
     assert_eq!(column_name(&app), "Depth");
     assert_eq!(
         app.track_control(),
-        vt_tui::track_page::Control::Envelope(0, vt_tui::track_page::EnvelopeField::Depth)
+        vt_tui::track_page::Control::Mod(0, vt_tui::track_page::ModField::Depth)
     );
 }
 
@@ -1895,7 +1901,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 
 #[test]
 fn a_jumps_labels_also_follow_the_names_being_searched() {
-    use vt_tui::track_page::{Control, EnvelopeField};
+    use vt_tui::track_page::{Control, ModField};
     let (mut app, _realtime) = app();
     press(&mut app, " 4/cu");
     let line = from_name;
@@ -1920,11 +1926,11 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
         .field_jump
         .as_ref()
         .unwrap()
-        .label(Control::Envelope(1, EnvelopeField::Depth))
+        .label(Control::Mod(1, ModField::Depth))
         .unwrap();
     let row = |app: &mut App| {
         let lines = screen_cells(app);
-        let (top, left) = device_at(&lines, "Env 2");
+        let (top, left) = device_at(&lines, "Mod 2");
         from_column(&lines[top + 4], left)
     };
     let labelled = row(&mut app);
@@ -2223,8 +2229,7 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
         6
     );
     let sent = vt_tui::screenshot::sent_images(&out);
-    let ids = app.envelope_images.unwrap().into_iter();
-    for id in ids.chain(app.lfo_images.unwrap()) {
+    for id in app.mod_images.unwrap() {
         assert_eq!(png_size(&sent[&id]), (360, 195));
         assert!(sent[&id].len() < 6000, "{}", sent[&id].len());
     }
@@ -2428,7 +2433,7 @@ fn a_return_has_no_accumulator() {
     press(&mut app, " 4LG");
     let text = screen_cells(&mut app).join("\n");
     assert!(
-        text.contains("╭─ LFO 3 ") && !text.contains("Accumulator"),
+        text.contains("╭─ Mod 6 ") && !text.contains("Accumulator"),
         "{text}"
     );
 }
@@ -2440,7 +2445,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_tui::views::widgets::toggle;
     let (mut app, _realtime) = app();
     // Across to the LFOs and down past them, onto its first row, as its title has nothing.
-    press(&mut app, " 4Ll3}");
+    press(&mut app, " 4L$l3}");
     let rows = |app: &mut App| {
         let lines = screen_cells(app);
         let (top, left) = device_at(&lines, "Arpeggio");
@@ -2575,7 +2580,7 @@ fn a_return_has_no_arpeggio() {
     press(&mut app, " 4LG");
     let text = screen_cells(&mut app).join("\n");
     assert!(
-        text.contains("╭─ LFO 3 ") && !text.contains("Arpeggio"),
+        text.contains("╭─ Mod 6 ") && !text.contains("Arpeggio"),
         "{text}"
     );
 }
@@ -2637,26 +2642,27 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     press(&mut app, "b");
     assert_eq!(value_of(&app, "Peak Clip").1, theme::OVERLAY0);
 
-    // On the Mod page, an envelope's Reset and the LFOs' and the arpeggio's Retrig, after their
-    // names in the second column of their devices: each band is a device tall, the left device's
-    // second column 24 in and the right device's 76 further, and a value 10 after its name.
+    // On the Mod page, an envelope's Reset and the arpeggio's Retrig, after their names in the
+    // second column of their devices: each band is a device tall, the left device's second
+    // column 24 in and the right device's 76 further, and a value 10 after its name. An LFO's
+    // mode is in its title, as a word, so its grid has no toggle.
     press(&mut app, "H");
     let buffer = track_page_buffer(&app);
     let top = |band: u16| 2 + 9 * band;
     for band in 0..3 {
         let reset = (34, top(band) + 6);
-        assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Env {}", band + 1);
-        let retrig = (76 + 34, top(band) + 4);
-        assert_eq!(glyph_at(&buffer, retrig).0, SWITCH_OFF, "LFO {}", band + 1);
+        assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Mod {}", band + 1);
+        let under_phase = (76 + 34, top(band) + 4);
+        assert_eq!(glyph_at(&buffer, under_phase).0, ' ', "Mod {}", band + 4);
     }
     // The arpeggio's values have room for its longest mode, so its second column is further in.
     assert_eq!(buffer[(76 + 27, top(3) + 4)].symbol(), "R");
     assert_eq!(glyph_at(&buffer, (76 + 37, top(3) + 4)), off);
     // `=` on the first envelope's Reset flips it, and its name stays where it was.
-    press(&mut app, "ggjjjl");
+    press(&mut app, "gg0jjjl");
     assert_eq!(app.track_control().label(), "Reset");
     press(&mut app, "=");
-    assert!(!app.song().tracks[0].envelopes[0].reset);
+    assert!(!app.song().tracks[0].mods[0].adsr.reset);
     press(&mut app, "k");
     let buffer = track_page_buffer(&app);
     assert_eq!(glyph_at(&buffer, (34, top(0) + 6)).0, SWITCH_OFF);
@@ -3020,9 +3026,7 @@ fn full_screen_text(app: &mut App) -> Vec<String> {
 
 #[test]
 fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
-    use vt_model::constants::TRACK_ENVELOPES;
     use vt_model::insert::{INSERTS, Insert};
-    use vt_model::lfo::LFOS_PER_TRACK;
     let mut song = Song::new(1);
     // A different effect in each slot, with a compressor's curve beside the last.
     song.tracks[0].inserts = [
@@ -3057,8 +3061,8 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
             .map(|line| line.matches(text).count())
             .sum()
     };
-    for envelope in 1..=TRACK_ENVELOPES {
-        let name = format!("Env {envelope}");
+    for slot in 1..=MOD_SLOTS {
+        let name = format!("Mod {slot}");
         assert_eq!(
             count(&name),
             1,
@@ -3066,19 +3070,14 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
             modulation.join("\n")
         );
     }
-    for lfo in 1..=LFOS_PER_TRACK {
-        assert_eq!(count(&format!("LFO {lfo}")), 1, "{}", modulation.join("\n"));
-    }
 }
 
 #[test]
 fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
-    use vt_model::constants::TRACK_ENVELOPES;
     use vt_model::insert::{INSERTS, Insert};
-    use vt_model::lfo::LFOS_PER_TRACK;
     use vt_model::settings::Effect;
     use vt_model::step::FxCommand;
-    use vt_tui::track_page::{Control, EnvelopeField, LfoField};
+    use vt_tui::track_page::{Control, ModField};
     let (mut app, _realtime) = app();
     // A delay in the last slot.
     press(&mut app, " 4LL");
@@ -3103,35 +3102,29 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     let step = &app.phrase_here().unwrap().steps()[0];
     assert_eq!(step.fx[0].command, Some(FxCommand::Set(bypass)));
 
-    // The last LFO on the delay's feedback, and the last envelope on the last LFO's depth.
+    // The last slot, an LFO, on the delay's feedback, and the last envelope on its depth.
     press(&mut app, " 4H");
-    press(&mut app, &to_lfo(LFOS_PER_TRACK - 1));
-    press(&mut app, "0");
+    press(&mut app, &to_lfo(2));
+    press(&mut app, "$");
     assert_eq!(
         app.track_control(),
-        Control::Lfo(LFOS_PER_TRACK - 1, LfoField::Destination)
+        Control::Mod(MOD_SLOTS - 1, ModField::Destination)
     );
     press(&mut app, "K/");
     press(&mut app, "feedback");
     special(&mut app, KeyCode::Enter);
     let feedback = SettingId::slot(INSERTS - 1, Effect::Delay, 1).unwrap();
     assert_eq!(
-        app.song().tracks[0].lfos[LFOS_PER_TRACK - 1].destination,
+        app.song().tracks[0].mods[MOD_SLOTS - 1].destination,
         Some(feedback)
     );
-    press(&mut app, "h");
-    assert_eq!(
-        app.track_control(),
-        Control::Envelope(TRACK_ENVELOPES - 1, EnvelopeField::Destination)
-    );
+    press(&mut app, "0h");
+    assert_eq!(app.track_control(), Control::Mod(2, ModField::Destination));
     press(&mut app, "K/");
-    press(&mut app, &format!("l{LFOS_PER_TRACK} depth"));
+    press(&mut app, &format!("m{MOD_SLOTS} depth"));
     special(&mut app, KeyCode::Enter);
-    let depth = SettingId::lfo(LFOS_PER_TRACK - 1, 0).unwrap();
-    assert_eq!(
-        app.song().tracks[0].envelopes[TRACK_ENVELOPES - 1].destination,
-        Some(depth)
-    );
+    let depth = SettingId::modulator(MOD_SLOTS - 1, 0).unwrap();
+    assert_eq!(app.song().tracks[0].mods[2].destination, Some(depth));
 
     // All of it comes back from the saved song.
     let folder = folder();
@@ -3139,11 +3132,8 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     let saved = vt_model::project::load_song(&folder).unwrap();
     let track = &saved.tracks[0];
     assert_eq!(track.inserts, app.song().tracks[0].inserts);
-    assert_eq!(track.lfos[LFOS_PER_TRACK - 1].destination, Some(feedback));
-    assert_eq!(
-        track.envelopes[TRACK_ENVELOPES - 1].destination,
-        Some(depth)
-    );
+    assert_eq!(track.mods[MOD_SLOTS - 1].destination, Some(feedback));
+    assert_eq!(track.mods[2].destination, Some(depth));
     let step = track.phrases[&0].steps()[0].to_string();
     assert!(step.contains(&format!("{INSERTS}.bypass:01")), "{step}");
     std::fs::remove_dir_all(&folder).unwrap();

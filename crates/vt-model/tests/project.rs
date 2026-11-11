@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points, SliceParams};
 use vt_model::constants::{FIXED_TRACKS, FORMAT_VERSION, MAX_GROUPS};
 use vt_model::insert::{Compressor, CompressorType, Insert};
+use vt_model::lfo::LfoMode;
+use vt_model::modulation::ModKind;
 use vt_model::project::{
     ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
     save_song,
@@ -82,16 +84,60 @@ fn a_switched_out_modulator_is_saved_and_only_then() {
         !text.contains("bypassed"),
         "nothing switched out, nothing written"
     );
-    song.tracks[0].lfos[1].bypassed = true;
-    song.tracks[0].envelopes[2].bypassed = true;
+    song.tracks[0].mods[4].bypassed = true;
+    song.tracks[0].mods[2].bypassed = true;
     save_song(&dir, &song).unwrap();
     let text = fs::read_to_string(dir.join("song.ron")).unwrap();
     assert_eq!(text.matches("bypassed: true").count(), 2, "{text}");
     let loaded = load_song(&dir).unwrap();
-    assert!(loaded.tracks[0].lfos[1].bypassed);
-    assert!(loaded.tracks[0].envelopes[2].bypassed);
-    assert!(!loaded.tracks[0].lfos[0].bypassed);
+    assert!(loaded.tracks[0].mods[4].bypassed);
+    assert!(loaded.tracks[0].mods[2].bypassed);
+    assert!(!loaded.tracks[0].mods[3].bypassed);
     assert_eq!(loaded, song);
+}
+
+#[test]
+fn a_track_saves_its_six_mod_slots_with_only_what_differs_from_each_types_defaults() {
+    let dir = folder();
+    let mut song = Song::new(1);
+    song.tracks[0].mods[3].kind = ModKind::Adsr;
+    song.tracks[0].mods[3].adsr.attack_ms = 300;
+    song.tracks[0].mods[3].kind = ModKind::Lfo;
+    song.tracks[0].mods[1].lfo.mode = LfoMode::Trig;
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert!(text.contains("mods: (("), "{text}");
+    assert!(
+        !text.contains("lfos") && !text.contains("envelopes"),
+        "{text}"
+    );
+    assert!(
+        text.contains("attack_ms: 300"),
+        "a type's own, kept: {text}"
+    );
+    assert!(text.contains("mode: Trig"), "{text}");
+    let loaded = load_song(&dir).unwrap();
+    assert_eq!(loaded.tracks[0].mods, song.tracks[0].mods);
+    assert_eq!(loaded, song);
+}
+
+#[test]
+fn a_format_8_song_is_refused_by_name() {
+    let dir = folder();
+    let song = Song::new(1);
+    save_song(&dir, &song).unwrap();
+    let path = dir.join("song.ron");
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(
+        &path,
+        text.replace("format_version: 9", "format_version: 8"),
+    )
+    .unwrap();
+    let message = load_song(&dir).unwrap_err().to_string();
+    assert!(
+        message.contains("format 8") && message.contains("format 9"),
+        "{message}"
+    );
 }
 
 #[test]

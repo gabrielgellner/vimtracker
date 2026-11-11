@@ -34,8 +34,8 @@ fn song_with_notes(tracks: usize, steps: &[usize]) -> Song {
         song.sample_on(track, "flat");
     }
     for track in &mut song.tracks {
-        track.envelopes[0].attack_ms = 0;
-        track.envelopes[0].release_ms = 0;
+        track.mods[0].adsr.attack_ms = 0;
+        track.mods[0].adsr.release_ms = 0;
     }
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for step in steps {
@@ -587,7 +587,7 @@ fn a_ninth_held_preview_takes_over_the_oldest() {
     // With every voice held but one let go and still ringing, that one is taken over rather than
     // the oldest.
     let mut ringing = song_with_notes(1, &[]);
-    ringing.tracks[0].envelopes[0].release_ms = 2000;
+    ringing.tracks[0].mods[0].adsr.release_ms = 2000;
     let samples = pool(&[("flat", flat(SECOND * 4, 0.02))]);
     let mut engine = Engine::new(48_000, version(ringing, samples));
     for note in 60..68 {

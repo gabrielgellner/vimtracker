@@ -22,7 +22,7 @@ use vt_tui::input::mode::View;
 use vt_tui::roto::devices::{Family, knob, live_devices, name, placement};
 use vt_tui::roto::edits::value_text;
 use vt_tui::roto::{Connection, RotoSetting};
-use vt_tui::track_page::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField, Page};
+use vt_tui::track_page::{AccumulatorField, ArpField, Control, ModField, Page};
 
 /// A song with a sound track of every machine, each with a different effect in its slots and a
 /// different filter, and its groups, returns and master, so every kind of device is in it.
@@ -111,7 +111,7 @@ fn each_kind_of_setting_has_its_feel() {
     };
     // A list of up to 16, each named.
     assert_eq!(steps(Control::FilterType, &track), FilterType::ALL.len());
-    assert_eq!(steps(Control::Lfo(0, LfoField::Shape), &track), 7);
+    assert_eq!(steps(Control::Mod(3, ModField::Shape), &track), 7);
     assert_eq!(steps(Control::Arpeggio(ArpField::Mode), &track), 5);
     // Of 17 to 24, stepped all the same, with names for the first 16 as the Roto shows them.
     assert_eq!(steps(Control::Choke, &track), 17);
@@ -123,23 +123,17 @@ fn each_kind_of_setting_has_its_feel() {
         Feel::Smooth
     );
     assert_eq!(
-        feel(Control::Lfo(0, LfoField::Destination), &track),
+        feel(Control::Mod(3, ModField::Destination), &track),
         Feel::Smooth
     );
     assert_eq!(
-        feel(Control::Envelope(0, EnvelopeField::Destination), &track),
+        feel(Control::Mod(0, ModField::Destination), &track),
         Feel::Smooth
     );
     assert_eq!(feel(Control::Sample, &track), Feel::Smooth);
     // Off and on is a switch.
-    assert_eq!(
-        feel(Control::Lfo(0, LfoField::Retrig), &track),
-        Feel::Switch
-    );
-    assert_eq!(
-        feel(Control::Envelope(0, EnvelopeField::Reset), &track),
-        Feel::Switch
-    );
+    assert_eq!(feel(Control::Mod(3, ModField::Mode), &track), Feel::Switch);
+    assert_eq!(feel(Control::Mod(0, ModField::Reset), &track), Feel::Switch);
     assert_eq!(feel(Control::Limiter, &master), Feel::Switch);
     let ping_pong = Insert::ALL[2]
         .params()
@@ -161,7 +155,7 @@ fn each_kind_of_setting_has_its_feel() {
     );
     assert_eq!(feel(Control::Trim, &track), Feel::CentreNotch);
     assert_eq!(
-        feel(Control::Lfo(0, LfoField::Depth), &track),
+        feel(Control::Mod(3, ModField::Depth), &track),
         Feel::CentreNotch
     );
     // Anything else turns smoothly.
@@ -171,7 +165,7 @@ fn each_kind_of_setting_has_its_feel() {
     );
     assert_eq!(feel(Control::Level, &track), Feel::Smooth);
     assert_eq!(
-        feel(Control::Envelope(0, EnvelopeField::Attack), &track),
+        feel(Control::Mod(0, ModField::Attack), &track),
         Feel::Smooth
     );
 }
@@ -216,7 +210,7 @@ fn a_family_has_one_colour_wherever_it_is_and_the_families_differ() {
         Family::Space.scheme()
     );
     assert_eq!(
-        colour(Control::Lfo(0, LfoField::Depth)),
+        colour(Control::Mod(3, ModField::Depth)),
         Family::Modulation.scheme()
     );
     let families = [
@@ -691,7 +685,7 @@ fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
     ports.from_roto(vec![page]);
     assert!(tick_until(&mut app, &ports, |fake| fake.first_plugin == 8));
     tap(&ports, 1, false);
-    assert!(tick_until_song(&mut app, |song| song.tracks[0].lfos[0].bypassed));
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].mods[3].bypassed));
     assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 9) == Some(false)));
     assert_eq!(ports.with(|fake| fake.first_plugin), 8, "the bank stays");
     // The accumulator has no switch: it stays on, and is sent so again.
@@ -725,7 +719,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             ]
         });
         ports.from_roto(messages);
-        assert!(tick_until_song(&mut app, |song| song.tracks[0].lfos[0].bypassed));
+        assert!(tick_until_song(&mut app, |song| song.tracks[0].mods[3].bypassed));
         // SEL let go: it asks for the knobs of the device it now shows, and may say so.
         let mut messages = ports.with(|fake| {
             vec![fake.press(FromRoto::ControlMapped {
@@ -751,7 +745,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             "LFO 1's knobs, {says_so}"
         );
         assert!(
-            !app.song().tracks[0].lfos[0].bypassed,
+            !app.song().tracks[0].mods[3].bypassed,
             "chosen, not switched"
         );
         assert_eq!(app.history.undo_depth(), depth, "and no undo step left");
@@ -1009,7 +1003,7 @@ fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
     // The envelope's reset is on its sixth knob, as two steps.
     let envelope = live_devices(&app.song().tracks[0], app.song(), false)
         .into_iter()
-        .find(|device| device.name.as_str() == "Env 1")
+        .find(|device| device.name.as_str() == "M1 ADSR")
         .unwrap();
     assert_eq!(envelope.controls[5].as_ref().unwrap().feel, Feel::Switch);
 }

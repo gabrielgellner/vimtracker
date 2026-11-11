@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::modulation::{ModSlot, default_mod};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::{SHORTEST_GATE, SettingId};
@@ -34,8 +35,8 @@ fn song(rows: &[&str]) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
     song.sample_on(0, "flat");
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     song.tracks[0]
         .phrases
@@ -147,7 +148,7 @@ fn a_full_gate_plays_exactly_as_none() {
         "E-3 --",
     ];
     let mut none = song(&rows);
-    none.tracks[0].envelopes[0] = Default::default();
+    none.tracks[0].mods[0] = default_mod(0);
     let mut full = none.clone();
     full.tracks[0].gate_length = Some(0xFF);
     assert_eq!(render(&none, 8), render(&full, 8));
@@ -169,13 +170,15 @@ fn a_len_lock_sets_its_rows_gate_and_ends_with_its_note() {
 fn an_lfo_moves_the_gate() {
     // A square at full depth takes `Gate` from `FF` right down for its second half.
     let mut song = song(&["C-3 --", "C-3 --", "C-3 --", "C-3 --"]);
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::GATE_LENGTH),
-        shape: Shape::Square,
-        rate: Rate::Steps(4),
-        depth: 0xFF,
-        ..Lfo::default()
-    };
+    song.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::GATE_LENGTH),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Steps(4),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0xFF);
     let out = render(&song, 4);
     assert!(sounding(&out, STEP - NEAR), "held through the first step");
     assert!(
@@ -188,7 +191,7 @@ fn an_lfo_moves_the_gate() {
 fn closing_the_gate_releases_the_note_without_a_click() {
     // At the default envelope, which releases over 50 ms, as `OFF` does.
     let mut song = gated(&["C-3 -- MLT4", "--- --"], 0x40);
-    song.tracks[0].envelopes[0] = Default::default();
+    song.tracks[0].mods[0] = default_mod(0);
     let out = render(&song, 5);
     let closes = STEP * 0x40 / 0xFF;
     let release = RATE as usize * 50 / 1000;
@@ -214,7 +217,7 @@ fn closing_the_gate_releases_the_note_without_a_click() {
 fn acid(rows: &[&str]) -> Song {
     let mut song = song(rows);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
-    song.tracks[0].envelopes[0] = Default::default();
+    song.tracks[0].mods[0] = default_mod(0);
     song
 }
 
@@ -355,13 +358,15 @@ fn an_lfo_on_gate_moves_a_rows_own_length() {
         "C-3 -- SGL1 80",
         "C-3 -- SGL1 80",
     ]);
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::GATE_LENGTH),
-        shape: Shape::Square,
-        rate: Rate::Steps(4),
-        depth: 0x40,
-        ..Lfo::default()
-    };
+    song.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::GATE_LENGTH),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Steps(4),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x40);
     let out = render(&song, 4);
     assert!(lasted(&out, 1, 0xC0), "{}", heard_for(&out, 1));
     assert!(lasted(&out, 3, 0x40), "{}", heard_for(&out, 3));
@@ -427,8 +432,8 @@ fn lengths_of_100_percent_and_an_ldlt_of_80_play_exactly_as_none() {
         "E-3 -- SGL1 FF",
     ];
     let mut none = song(&plain);
-    none.tracks[0].envelopes[0] = Default::default();
+    none.tracks[0].mods[0] = default_mod(0);
     let mut set = song(&full);
-    set.tracks[0].envelopes[0] = Default::default();
+    set.tracks[0].mods[0] = default_mod(0);
     assert_eq!(render(&none, 8), render(&set, 8));
 }
