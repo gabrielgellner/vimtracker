@@ -4,14 +4,19 @@
 //! `l`, and down each with `j`, `k`, `{` and `}`. The settings themselves are in `track_page.rs`.
 
 use ratatui::crossterm::event::KeyCode;
+use vt_engine::link::Realtime;
+use vt_engine::track_state::{LfoNow, LiveValues};
+use vt_model::action::Action;
 use vt_model::constants::TRACK_ENVELOPES;
-use vt_model::lfo::LFOS_PER_TRACK;
+use vt_model::lfo::{LFOS_PER_TRACK, Lfo, Rate, Shape, wave};
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
+use vt_tui::kitty::{DEFAULT_CELL, Graphics, dot_pixels};
+use vt_tui::screenshot::sent_placements;
 use vt_tui::track_page::{
     AccumulatorField, ArpField, Control, DeviceCursor, EnvelopeField, LfoField, Page, TrackPage,
 };
@@ -370,6 +375,7 @@ fn each_modulators_destination_is_in_its_title() {
 fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     let (mut app, _realtime) = app();
     app.envelope_images = Some([0x01_02_03, 0x04_05_06, 0x07_08_09]);
+    app.lfo_images = Some([0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12]);
     press(&mut app, " 4L");
     for keys_mode in [false, true] {
         if keys_mode {
@@ -407,17 +413,38 @@ fn the_mod_page_fills_the_keys_box_at_163_by_42() {
         if keys_mode {
             assert!(lines[bottom + 1].starts_with('╰'), "{text}");
         }
-        // Each envelope's shape is in its panel, against the device's right side, and the
-        // settings beside it stop before it, with room between.
+        // Each envelope's shape and each LFO's cycle is in its panel at the half size, 24 by 5,
+        // against the device's right side, and the settings beside it stop before it, with room
+        // between.
         for band in 0..3 {
             let top = first + 9 * band;
-            let row = from_column(&lines[top + 2], left);
-            let image = row.find('▒').map(|at| row[..at].chars().count()).unwrap();
-            // Its frame's last column, 2 of room, the box's edge, then the shape's 28.
-            assert_eq!(image, width - 1 - 2 - 1 - 28, "{row}");
-            assert!(row.contains("Sustain"), "{row}");
-            let before: String = row.chars().take(image - 1).collect();
-            assert!(before.ends_with("  "), "{row}");
+            for (column, setting) in [(left, "Sustain"), (left + width + 2, "Phase")] {
+                let device: Vec<String> = lines[top..top + 9]
+                    .iter()
+                    .map(|line| from_column(line, column).chars().take(width).collect())
+                    .collect();
+                let row = &device[2];
+                let image = row.find('▒').map(|at| row[..at].chars().count()).unwrap();
+                // Its frame's last column, 2 of room, the box's edge, then the picture's 24.
+                assert_eq!(image, width - 1 - 2 - 1 - 24, "{row}");
+                assert!(row.contains(setting), "{row}");
+                let before: String = row.chars().take(image - 1).collect();
+                assert!(before.ends_with("  "), "{row}");
+                // Five rows of it, in its box on the device's inside rows.
+                let rows: Vec<usize> = (0..9)
+                    .filter(|at| device[*at].chars().nth(image) == Some('▒'))
+                    .collect();
+                assert_eq!(rows, [2, 3, 4, 5, 6], "{}", device.join("\n"));
+                assert_eq!(device[1].chars().nth(image - 1), Some('┌'), "{text}");
+                assert_eq!(device[7].chars().nth(image + 24), Some('┘'), "{text}");
+                let pictured = device[4].chars().filter(|cell| *cell == '▒').count();
+                assert_eq!(pictured, 24, "{}", device[4]);
+                // And the terminal is told where each LFO's is, for its dot.
+                if setting == "Phase" {
+                    let at = ((column + image) as u16, (top + 2) as u16);
+                    assert_eq!(app.lfo_cycles_at[band], Some(at), "{text}");
+                }
+            }
         }
     }
 }
@@ -561,4 +588,338 @@ fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
     press(&mut app, "b");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
     assert_eq!(app.envelope_images.unwrap(), shown);
+}
+
+/// An app on the Mod page of a song whose first track has these LFOs, with its audio side.
+fn with_lfos(lfos: [Lfo; LFOS_PER_TRACK]) -> (App, Realtime) {
+    let (mut app, realtime) = app();
+    for (slot, lfo) in lfos.into_iter().enumerate() {
+        app.apply(&Action::SetLfo {
+            track: 0,
+            slot,
+            lfo,
+        });
+    }
+    press(&mut app, " 4L");
+    (app, realtime)
+}
+
+/// An LFO on a destination, with a shape, a phase and a depth.
+fn lfo_on(destination: SettingId, shape: Shape, phase: u16, depth: i16) -> Lfo {
+    Lfo {
+        destination: Some(destination),
+        shape,
+        phase,
+        depth,
+        ..Lfo::default()
+    }
+}
+
+/// What the engine would report for the LFOs at these places in their waves, as it works them
+/// out.
+fn reported(app: &App, turns: [Option<f64>; LFOS_PER_TRACK]) -> LiveValues {
+    let lfos = &app.song().tracks[0].lfos;
+    LiveValues {
+        lfos: std::array::from_fn(|slot| {
+            let turns = turns[slot]?;
+            Some(LfoNow::of(turns, wave(lfos[slot].shape, turns, 0)))
+        }),
+        ..LiveValues::default()
+    }
+}
+
+/// Bring the terminal's images up to date, draw the screen, and place what the program places
+/// itself, giving back what was sent for each.
+fn frame(app: &mut App, graphics: &mut Graphics) -> (String, String) {
+    let mut synced = Vec::new();
+    graphics.sync(app, &mut synced).unwrap();
+    screen_cells(app);
+    let mut placed = Vec::new();
+    graphics.place(app, &mut placed).unwrap();
+    (
+        String::from_utf8_lossy(&synced).into_owned(),
+        String::from_utf8_lossy(&placed).into_owned(),
+    )
+}
+
+/// Where each dot's middle is, as everything sent has left it, in the author's screen's pixels,
+/// with its image's id, top to bottom, which is the LFOs' order.
+fn dot_middles(sent: &str) -> Vec<(u32, (f32, f32))> {
+    let placements = sent_placements(sent.as_bytes(), DEFAULT_CELL);
+    let half = dot_pixels(DEFAULT_CELL) as f32 / 2.0;
+    let mut middles: Vec<_> = placements
+        .placed
+        .iter()
+        .map(|placed| {
+            let x = usize::from(placed.column) * DEFAULT_CELL.0 + placed.across;
+            let y = usize::from(placed.row) * DEFAULT_CELL.1 + placed.down;
+            (placed.id, (x as f32 + half, y as f32 + half))
+        })
+        .collect();
+    middles.sort_by(|a, b| a.1.1.total_cmp(&b.1.1));
+    middles
+}
+
+/// Where a point on an LFO's cycle is in the author's screen's pixels: `x` across the cycle from 0
+/// to 1 and `level` up it, in the picture at `corner`, the line's half width in from its edges.
+fn on_cycle(corner: (u16, u16), x: f64, level: f64) -> (f32, f32) {
+    let (width, height) = (24.0 * DEFAULT_CELL.0 as f64, 5.0 * DEFAULT_CELL.1 as f64);
+    let left = f64::from(corner.0) * DEFAULT_CELL.0 as f64;
+    let top = f64::from(corner.1) * DEFAULT_CELL.1 as f64;
+    (
+        (left + 1.0 + x * (width - 2.0)) as f32,
+        (top + 1.0 + (1.0 - level) * (height - 2.0)) as f32,
+    )
+}
+
+#[test]
+fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_placing() {
+    let (mut app, _realtime) = with_lfos([
+        lfo_on(SettingId::CUT, Shape::Sine, 0, 0x40),
+        // A quarter turn in, and upside down.
+        lfo_on(SettingId::PAN, Shape::Ramp, 90, -0x30),
+        // Going nowhere, so it never has a dot, whatever's reported.
+        Lfo::default(),
+    ]);
+    let mut graphics = Graphics::new();
+    let (synced, placed) = frame(&mut app, &mut graphics);
+    assert!(synced.contains("a=T"), "the cycles are sent");
+    assert_eq!(placed, "", "nothing reported, so no dot");
+
+    // Each running LFO's dot is where its wave is, on its cycle drawn from its phase.
+    let turns = [Some(0.1), Some(0.6), Some(0.3)];
+    app.live = Some(reported(&app, turns));
+    let (synced, placed) = frame(&mut app, &mut graphics);
+    assert!(!synced.contains("a=T"), "the cycles are as they were");
+    assert_eq!(
+        placed.matches("a=t,").count(),
+        2,
+        "a dot in each of two shades, once"
+    );
+    assert_eq!(placed.matches("a=p,").count(), 2, "{placed:?}");
+    let expected = |app: &App, turns: [Option<f64>; LFOS_PER_TRACK]| {
+        let lfos = app.song().tracks[0].lfos;
+        (0..2)
+            .map(|slot| {
+                let lfo = lfos[slot];
+                let turns = turns[slot].unwrap();
+                let x = (turns - f64::from(lfo.phase) / 360.0).rem_euclid(1.0);
+                let sign = if lfo.depth < 0 { -1.0 } else { 1.0 };
+                let level = 0.5 + 0.5 * sign * f64::from(wave(lfo.shape, turns, 0));
+                on_cycle(app.lfo_cycles_at[slot].unwrap(), x, level)
+            })
+            .collect::<Vec<_>>()
+    };
+    let check = |placed: &str, want: Vec<(f32, f32)>| {
+        let middles = dot_middles(placed);
+        assert_eq!(middles.len(), 2, "{placed:?}");
+        for ((_, found), want) in middles.iter().zip(want) {
+            assert!(
+                (found.0 - want.0).abs() <= 1.0 && (found.1 - want.1).abs() <= 1.0,
+                "{found:?} against {want:?}"
+            );
+        }
+    };
+    let mut all = placed.clone();
+    check(&all, expected(&app, turns));
+    // The sine's dot, a tenth of the way round, is in the cycle's top half, and the flipped
+    // ramp's, past its middle, in the bottom half.
+    let middles = dot_middles(&all);
+    let middle_row = |slot: usize| on_cycle(app.lfo_cycles_at[slot].unwrap(), 0.0, 0.5).1;
+    assert!(middles[0].1.1 < middle_row(0));
+    assert!(middles[1].1.1 > middle_row(1));
+    assert!(placed.contains(",Y="), "{placed:?}");
+
+    // Moving on, each is placed again, and nothing is sent: no image, only the two placements.
+    let ids: Vec<u32> = middles.iter().map(|(id, _)| *id).collect();
+    let turns = [Some(0.35), Some(0.95), Some(0.5)];
+    app.live = Some(reported(&app, turns));
+    let (synced, placed) = frame(&mut app, &mut graphics);
+    assert!(
+        !synced.contains("a=T") && !placed.contains("a=t"),
+        "{placed:?}"
+    );
+    assert_eq!(placed.matches("a=p,").count(), 2, "{placed:?}");
+    assert!(
+        placed.len() < 2 * 80,
+        "about 60 bytes a move: {}",
+        placed.len()
+    );
+    all.push_str(&placed);
+    check(&all, expected(&app, turns));
+    let now: Vec<u32> = dot_middles(&all).iter().map(|(id, _)| *id).collect();
+    assert_eq!(now, ids);
+    // Where nothing moved, nothing is sent.
+    let (_, placed) = frame(&mut app, &mut graphics);
+    assert_eq!(placed, "");
+
+    // With the cursor in LFO 1, its dot is the focused shade's, which is the other image.
+    press(&mut app, &to_lfo(0));
+    let (_, placed) = frame(&mut app, &mut graphics);
+    assert!(placed.contains("a=d,d=i,"), "{placed:?}");
+    all.push_str(&placed);
+    let now: Vec<u32> = dot_middles(&all).iter().map(|(id, _)| *id).collect();
+    assert_ne!(now[0], ids[0]);
+    assert_eq!(now[1], ids[1]);
+    check(&all, expected(&app, turns));
+
+    // Switched out, its dot goes, and back in, it comes back.
+    press(&mut app, "b");
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert_eq!(dot_middles(&all).len(), 1, "{placed:?}");
+    press(&mut app, "b");
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert_eq!(dot_middles(&all).len(), 2, "{placed:?}");
+
+    // Under the help, no dot shows through.
+    app.mode = Mode::Help;
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert!(dot_middles(&all).is_empty(), "{placed:?}");
+    app.mode = Mode::Normal;
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+
+    // Stopped, the engine reports none running, and they go.
+    app.live = Some(reported(&app, [None; LFOS_PER_TRACK]));
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert!(dot_middles(&all).is_empty(), "{placed:?}");
+    // And off the Mod page too.
+    app.live = Some(reported(&app, turns));
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert_eq!(dot_middles(&all).len(), 2);
+    press(&mut app, "H");
+    let (_, placed) = frame(&mut app, &mut graphics);
+    all.push_str(&placed);
+    assert!(dot_middles(&all).is_empty(), "{placed:?}");
+}
+
+#[test]
+fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_or_depths_sign() {
+    let (mut app, _realtime) = with_lfos([
+        lfo_on(SettingId::CUT, Shape::Sine, 0, 0x40),
+        Lfo::default(),
+        Lfo::default(),
+    ]);
+    let mut graphics = Graphics::new();
+    let mut sync = |app: &mut App| {
+        let mut sent = Vec::new();
+        graphics.sync(app, &mut sent).unwrap();
+        (
+            app.lfo_images.unwrap()[0],
+            // The panels' pictures, and not the scope's.
+            String::from_utf8_lossy(&sent).matches(",c=24,r=5,").count(),
+        )
+    };
+    let (first, sent) = sync(&mut app);
+    assert_eq!(sent, 6, "three envelopes and three cycles");
+    let set = |app: &mut App, change: &dyn Fn(&mut Lfo)| {
+        let mut lfo = app.song().tracks[0].lfos[0];
+        change(&mut lfo);
+        app.apply(&Action::SetLfo {
+            track: 0,
+            slot: 0,
+            lfo,
+        });
+    };
+    // Its rate, the size of its depth, its destination and its retrig leave it alone.
+    set(&mut app, &|lfo| lfo.rate = Rate::Note(240));
+    set(&mut app, &|lfo| lfo.depth = 0x7F);
+    set(&mut app, &|lfo| lfo.destination = Some(SettingId::PAN));
+    set(&mut app, &|lfo| lfo.retrig = true);
+    assert_eq!(sync(&mut app), (first, 0));
+    // Its wave, its phase and its depth's sign each send it again.
+    let changes: [&dyn Fn(&mut Lfo); 3] = [
+        &|lfo| lfo.shape = Shape::Square,
+        &|lfo| lfo.phase = 45,
+        &|lfo| lfo.depth = -0x7F,
+    ];
+    let mut seen = vec![first];
+    for change in changes {
+        set(&mut app, change);
+        // Two frames on, as one changed a frame after another waits a frame.
+        sync(&mut app);
+        let (id, _) = sync(&mut app);
+        assert!(!seen.contains(&id), "{id} in {seen:?}");
+        seen.push(id);
+    }
+    // Switched out, it's sent faint, and back in, its own is placed again with nothing sent.
+    press(&mut app, &to_lfo(0));
+    let (focused, _) = sync(&mut app);
+    press(&mut app, "b");
+    let (faint, sent) = sync(&mut app);
+    assert_ne!(faint, focused);
+    assert_eq!(sent, 1, "its faint cycle");
+    press(&mut app, "b");
+    assert_eq!(sync(&mut app), (focused, 0));
+}
+
+/// What the dots cost: three LFOs moving, at a quarter, an eighth and a bar, run as the program
+/// runs them, a frame of audio, a tick, a sync, a drawing and the placing every 33 ms. It prints
+/// what it measures with `--nocapture`.
+#[test]
+fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
+    use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
+    let quarter = TICKS_PER_QUARTER as u32;
+    let lfo = |destination, shape, ticks| Lfo {
+        rate: Rate::Note(ticks),
+        ..lfo_on(destination, shape, 0, 0x40)
+    };
+    let (mut app, mut realtime) = with_lfos([
+        lfo(SettingId::CUT, Shape::Sine, quarter),
+        lfo(SettingId::PAN, Shape::Tri, quarter / 2),
+        lfo(SettingId::RES, Shape::Smooth, quarter * 4),
+    ]);
+    app.handle
+        .send(vt_engine::link::Command::PlayFrom { step: 0 });
+    let mut graphics = Graphics::new();
+    let frames = 4 * 1000 / FRAME_MS as usize;
+    let audio = 48_000 * FRAME_MS as usize / 1000;
+    let mut out = vec![0.0; audio * 2];
+    let (mut placements, mut bytes, mut cycles_sent, mut all_moved) = (0, 0, 0, 0);
+    let mut placing = std::time::Duration::ZERO;
+    for at in 0..frames {
+        realtime.process(&mut out);
+        app.tick();
+        let mut synced = Vec::new();
+        graphics.sync(&mut app, &mut synced).unwrap();
+        screen_cells(&mut app);
+        let mut placed = Vec::new();
+        let started = std::time::Instant::now();
+        graphics.place(&app, &mut placed).unwrap();
+        placing += started.elapsed();
+        let placed = String::from_utf8_lossy(&placed);
+        // After the first frame, which sends the pictures and the dots' two images.
+        if at > 0 {
+            cycles_sent += String::from_utf8_lossy(&synced)
+                .matches(",c=24,r=5,")
+                .count();
+            assert!(!placed.contains("a=t"), "{placed:?}");
+            let moved = placed.matches("a=p,").count();
+            placements += moved;
+            bytes += placed.len();
+            all_moved += usize::from(moved == 3);
+        }
+    }
+    let seconds = (frames - 1) as f32 * FRAME_MS as f32 / 1000.0;
+    eprintln!(
+        "three LFOs' dots: {placements} placements in {seconds:.1} s, {:.1} a second; {bytes} \
+         bytes, {:.0} a placement and {:.2} KB a second; all three moved in {all_moved} of {} \
+         frames; the cycles sent again {cycles_sent} times; {:.3} ms a frame to place them",
+        placements as f32 / seconds,
+        bytes as f32 / placements.max(1) as f32,
+        bytes as f32 / seconds / 1024.0,
+        frames - 1,
+        placing.as_secs_f32() * 1000.0 / frames as f32,
+    );
+    assert_eq!(
+        cycles_sent, 0,
+        "the cycles never change with the LFOs moving"
+    );
+    assert!(all_moved > (frames - 1) * 9 / 10, "{all_moved}");
+    assert!(bytes <= placements * 80, "{bytes} for {placements}");
 }

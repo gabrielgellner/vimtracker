@@ -1269,6 +1269,71 @@ mod tests {
     }
 
     #[test]
+    fn each_lfos_place_in_its_wave_is_reported_for_the_track_watched_without_allocating() {
+        use vt_model::constants::TICKS_PER_QUARTER;
+        use vt_model::lfo::{Lfo, Rate, Shape, wave};
+        let pool = samples();
+        let mut one = song(1, 16);
+        let quarter = Rate::Note(TICKS_PER_QUARTER as u32);
+        let lfo = |shape, phase, bypassed| Lfo {
+            destination: Some(SettingId::CUT),
+            shape,
+            rate: quarter,
+            depth: 0x40,
+            phase,
+            bypassed,
+            ..Lfo::default()
+        };
+        one.tracks[0].lfos = [
+            lfo(Shape::Sine, 90, false),
+            // Going nowhere, and switched out from the start, neither runs.
+            Lfo {
+                destination: None,
+                ..lfo(Shape::Tri, 0, false)
+            },
+            lfo(Shape::Ramp, 0, true),
+        ];
+        let engine = Engine::new(48_000, published(one, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert_eq!(blocks(&mut rt, 2), 0);
+        assert_eq!(
+            handle.latest().unwrap().live.lfos,
+            [None; 3],
+            "stopped, none moves"
+        );
+        handle.send(Command::PlayFrom { step: 0 });
+        let mut phases = Vec::new();
+        for _ in 0..8 {
+            assert_eq!(blocks(&mut rt, 1), 0, "the report never allocates");
+            let lfos = handle.latest().unwrap().live.lfos;
+            assert_eq!(lfos[1..], [None, None], "{lfos:?}");
+            let now = lfos[0].unwrap();
+            // Its value is the wave's where it says it is, its `Phase` of a quarter turn included.
+            let turns = f64::from(now.phase) / 65536.0;
+            let expected = wave(Shape::Sine, turns, 0) * f32::from(i16::MAX);
+            assert!(
+                (f32::from(now.value) - expected).abs() < 40.0,
+                "{now:?} {expected}"
+            );
+            phases.push(now.phase);
+        }
+        // It starts a quarter of the way round, and goes on round as the song plays: a quarter
+        // note is 24,000 frames at 120 BPM, and each block 256 of them.
+        assert!(phases[0].abs_diff(16384) < 2000, "{phases:?}");
+        assert!(
+            phases.windows(2).all(|pair| pair[1] > pair[0]),
+            "{phases:?}"
+        );
+        let turn = f64::from(phases[7] - phases[0]) / 65536.0;
+        let expected = 7.0 * BLOCK as f64 / 24_000.0;
+        assert!((turn - expected).abs() < 0.01, "{turn} {expected}");
+        // Stopped again, it's gone.
+        handle.send(Command::Return);
+        assert_eq!(blocks(&mut rt, 2), 0);
+        assert_eq!(handle.latest().unwrap().live.lfos, [None; 3]);
+    }
+
+    #[test]
     fn a_silent_track_count_of_one_eight_and_sixty_four_all_run() {
         let pool = samples();
         for tracks in [1, 8, 64] {

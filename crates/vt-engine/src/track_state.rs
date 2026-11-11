@@ -139,6 +139,31 @@ pub struct LiveValues {
     /// filter, as a gain: what the Output device's meter shows, so the trim can be set by eye.
     /// The report fills it in from `Engine::take_after_trim`.
     pub after_trim: [f32; 2],
+    /// Where each LFO is in its wave now, for one that's running: none while the song is stopped,
+    /// or for one with nowhere to go, no depth, or switched out once it has faded.
+    pub lfos: [Option<LfoNow>; LFOS_PER_TRACK],
+}
+
+/// Where an LFO is in its wave and what the wave gives there, before its depth, for the Mod page's
+/// moving dot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LfoNow {
+    /// How far round its wave it is, its `Phase` included, from `0` to a whole turn at
+    /// `u16::MAX + 1`.
+    pub phase: u16,
+    /// The wave's value there, from `-i16::MAX` at its bottom to `i16::MAX` at its top.
+    pub value: i16,
+}
+
+impl LfoNow {
+    /// Where a wave is from its turns, `cycles` with its phase added, and its value from -1 to 1.
+    pub fn of(cycles: f64, value: f32) -> Self {
+        let turn = f64::from(u16::MAX) + 1.0;
+        Self {
+            phase: (cycles.rem_euclid(1.0) * turn) as u32 as u16,
+            value: (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16,
+        }
+    }
 }
 
 /// A value moving in a straight line, by song position, so it keeps up with tempo changes.
@@ -625,6 +650,8 @@ pub struct TrackState {
     /// switching one doesn't jump.
     envelope_shares: [f32; TRACK_ENVELOPES],
     lfo_shares: [f32; LFOS_PER_TRACK],
+    /// Where each LFO was in its wave when the modulation was last worked out, if it ran.
+    lfo_now: [Option<LfoNow>; LFOS_PER_TRACK],
     /// The frames rendered when the shares last moved.
     shared_at: u64,
     /// The loaded voice's held settings, in its order, on `0..=1`.
@@ -823,6 +850,7 @@ impl TrackState {
             bypassed: [false; INSERTS],
             envelope_shares: [1.0; TRACK_ENVELOPES],
             lfo_shares: [1.0; LFOS_PER_TRACK],
+            lfo_now: [None; LFOS_PER_TRACK],
             shared_at: 0,
             filter_moving: false,
             key: [0.0; 2],
@@ -983,6 +1011,7 @@ impl TrackState {
             self.offsets[index] = 0.0;
         }
         let mut marks = 0;
+        self.lfo_now = [None; LFOS_PER_TRACK];
         let offsets = &mut self.offsets;
         for (slot, (lfo, start)) in track.lfos.iter().zip(&self.lfo_starts).enumerate() {
             let Some(destination) = lfo.destination else {
@@ -1008,6 +1037,7 @@ impl TrackState {
             let key = now.seed ^ ((index as u64) << 8 | slot as u64);
             let phase = f64::from(phase_of(phase) + moved_by(1));
             let value = wave(lfo.shape, cycles + phase, key);
+            self.lfo_now[slot] = Some(LfoNow::of(cycles + phase, value));
             let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
             offsets[destination.index()] += value * depth / 255.0 * share;
             self.offset_marks[marks] = Some(destination.index());
@@ -1148,6 +1178,7 @@ impl TrackState {
             // Taken, as it's the highest since it last was, by `Engine::take_after_trim`, which the
             // report fills this in from.
             after_trim: [0.0; 2],
+            lfos: self.lfo_now,
         }
     }
 

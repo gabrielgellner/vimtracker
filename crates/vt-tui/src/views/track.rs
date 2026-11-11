@@ -37,7 +37,10 @@ use crate::views::widgets::toggle;
 mod modulation;
 mod sound;
 
-pub(crate) use modulation::{DIAGRAM_HEIGHT, DIAGRAM_WIDTH, envelope_being_edited};
+pub use modulation::CyclesAt;
+pub(crate) use modulation::{
+    MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, envelope_being_edited, lfo_being_edited,
+};
 
 /// The size of the Sound page's large panels, in characters: the filter's curve, a sampler's
 /// thumbnail and the Output's meter, each beside a grid of two columns. At the author's 15 by 39
@@ -502,6 +505,11 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
 
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+    draw_finding_cycles(frame, area, app);
+}
+
+/// Draw the view, giving back where the Mod page's LFO cycles are, for their dots.
+pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> CyclesAt {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
     let area = if app.mode == Mode::Keys {
         let block = widgets::window_border()
@@ -515,7 +523,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let Some(track) = app.song().tracks.get(app.cursor.track) else {
         frame.render_widget(Paragraph::new("This track doesn't exist."), area);
-        return;
+        return CyclesAt::default();
     };
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let tabs = Page::ALL.map(|page| {
@@ -555,6 +563,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     match app.track_page.page {
         Page::Sound => sound::draw(frame, rest, app, track),
         Page::Fx => draw_fx(frame, rest, app, track),
-        Page::Mod => modulation::draw(frame, rest, app, track),
+        Page::Mod => return modulation::draw(frame, rest, app, track),
     }
+    CyclesAt::default()
 }

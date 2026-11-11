@@ -4,13 +4,15 @@
 //! and nothing is stretched, as the picture is the size of the characters it covers.
 //!
 //! Every curve is drawn here: the compressor's and the EQ's on the FX page, the filter's on the
-//! Sound page and the envelopes on the Mod page.
+//! Sound page, and the envelopes and the LFOs' cycles on the Mod page, with the dot that rides an
+//! LFO's.
 
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
+use vt_model::lfo::{self, Lfo, wave};
 use vt_model::song::{FilterType, Track};
 
 use super::{indexed_png, rgb};
@@ -119,13 +121,9 @@ impl Plot {
     }
 
     /// Where a point falls in pixels, at `x` from 0 to 1 across and `level` from 0 at the bottom
-    /// to 1 at the top. The line's centre is kept half its width in from the edges, so it's
-    /// whole at the top and bottom.
+    /// to 1 at the top, as [`point_at`] has it.
     pub fn at(&self, x: f32, level: f32) -> (f32, f32) {
-        let margin = LINE_PIXELS / 2.0;
-        let across = margin + x.clamp(0.0, 1.0) * (self.width as f32 - 2.0 * margin);
-        let down = margin + (1.0 - level.clamp(0.0, 1.0)) * (self.height as f32 - 2.0 * margin);
-        (across, down)
+        point_at((self.width, self.height), x, level)
     }
 
     /// The pixel a point in pixels is in, if it's in the picture.
@@ -233,6 +231,16 @@ impl Plot {
     }
 }
 
+/// Where a point falls in pixels in a picture this many across and down, at `x` from 0 to 1 across
+/// and `level` from 0 at the bottom to 1 at the top. The line's centre is kept half its width in
+/// from the edges, so it's whole at the top and bottom.
+pub fn point_at((width, height): (usize, usize), x: f32, level: f32) -> (f32, f32) {
+    let margin = LINE_PIXELS / 2.0;
+    let across = margin + x.clamp(0.0, 1.0) * (width.max(1) as f32 - 2.0 * margin);
+    let down = margin + (1.0 - level.clamp(0.0, 1.0)) * (height.max(1) as f32 - 2.0 * margin);
+    (across, down)
+}
+
 /// How far a point is from the nearest point of a segment.
 fn distance(point: (f32, f32), from: (f32, f32), to: (f32, f32)) -> f32 {
     let along = (to.0 - from.0, to.1 - from.1);
@@ -337,11 +345,129 @@ fn filter_open(track: &Track) -> bool {
 }
 
 /// An envelope's shape, from silence, with a point at the end of each stage so its corners are
-/// sharp.
+/// sharp, over a dotted baseline and fainter dotted lines down it between the stages, so each of
+/// its times has a part of the picture to point at.
 pub fn envelope(envelope: &Envelope, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
-    plot.curve(|x| level_at(envelope, x), 0.0, &stage_ends(envelope));
+    plot.across(0.0, Mark::Grid);
+    let ends = stage_ends(envelope);
+    // Between attack and decay, decay and sustain, and sustain and release.
+    for end in &ends[..3] {
+        plot.down(*end, Mark::Fainter);
+    }
+    plot.curve(|x| level_at(envelope, x), 0.0, &ends);
     plot
+}
+
+/// How far either side of a jump in a wave its two points are, as a share of the cycle, so the
+/// jump is drawn straight up or down.
+const JUMP: f32 = 1e-4;
+
+/// What an LFO's cycle is drawn from: its wave, where in it the cycle starts, in degrees, and
+/// whether a negative depth turns it upside down. Its rate and the size of its depth aren't in
+/// it, so the picture never changes with them: the dot's speed shows the rate, and the depth's
+/// number is beside it. The random waves draw only their centre line, so neither their phase nor
+/// their sign is in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LfoDrawing {
+    pub shape: lfo::Shape,
+    pub phase: u16,
+    pub flipped: bool,
+}
+
+impl LfoDrawing {
+    /// What an LFO's settings draw.
+    pub fn of(lfo: &Lfo) -> Self {
+        if lfo_draws_its_wave(lfo.shape) {
+            Self {
+                shape: lfo.shape,
+                phase: lfo.phase % 360,
+                flipped: lfo.depth < 0,
+            }
+        } else {
+            Self {
+                shape: lfo.shape,
+                phase: 0,
+                flipped: false,
+            }
+        }
+    }
+
+    /// How far round its wave the cycle starts, from 0 to 1.
+    fn start(self) -> f64 {
+        f64::from(self.phase) / 360.0
+    }
+
+    /// Where a wave's value, from -1 to 1, is up the picture, from 0 at the bottom to 1 at the top,
+    /// upside down for a negative depth.
+    pub fn level_of(self, value: f32) -> f32 {
+        let value = if self.flipped { -value } else { value };
+        0.5 + 0.5 * value.clamp(-1.0, 1.0)
+    }
+
+    /// The cycle's level at `x` from 0 to 1 across: the engine's own wave, from the cycle's start.
+    /// The right edge has the end of the cycle, rather than the start of the next, so a saw's fall
+    /// isn't drawn up the edge.
+    pub fn level_at(self, x: f32) -> f32 {
+        let turns = f64::from(x.min(1.0 - JUMP)) + self.start();
+        self.level_of(wave(self.shape, turns, 0))
+    }
+
+    /// Where a point so far round the wave, from 0 to 1, is across the cycle drawn.
+    pub fn x_of(self, turns: f64) -> f32 {
+        (turns - self.start()).rem_euclid(1.0) as f32
+    }
+
+    /// Where the wave has a corner across the cycle: a point at each peak, and one either side of
+    /// each jump, so the line goes straight up or down there.
+    fn corners(self) -> Vec<f32> {
+        let (peaks, jumps): (&[f64], &[f64]) = match self.shape {
+            lfo::Shape::Tri => (&[0.25, 0.75], &[]),
+            lfo::Shape::Saw | lfo::Shape::Ramp => (&[], &[0.0]),
+            lfo::Shape::Square => (&[], &[0.0, 0.5]),
+            _ => (&[], &[]),
+        };
+        let mut corners: Vec<f32> = peaks.iter().map(|turns| self.x_of(*turns)).collect();
+        for jump in jumps.iter().map(|turns| self.x_of(*turns)) {
+            if jump > 0.0 {
+                corners.extend([jump - JUMP, jump]);
+            }
+        }
+        corners
+    }
+}
+
+/// Whether an LFO's cycle draws its wave: every shape but the random ones, whose values aren't
+/// known ahead, so drawing a made-up staircase would say something untrue.
+pub fn lfo_draws_its_wave(shape: lfo::Shape) -> bool {
+    !matches!(shape, lfo::Shape::Random | lfo::Shape::Smooth)
+}
+
+/// One cycle of an LFO, from its `Phase`, at full height, over a dotted centre line. A random one
+/// has the centre line alone.
+pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
+    let mut plot = Plot::new(width, height);
+    plot.across(0.5, Mark::Grid);
+    if lfo_draws_its_wave(drawing.shape) {
+        let level = |x: f32| drawing.level_at(x);
+        plot.curve(level, level(0.0), &drawing.corners());
+    }
+    plot
+}
+
+/// A round dot this many pixels across, smooth at its edge, as a PNG in a colour: what's placed on
+/// an LFO's cycle where it is now.
+pub fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
+    let mut plot = Plot::new(diameter, diameter);
+    let radius = diameter as f32 / 2.0;
+    for y in 0..plot.height {
+        for x in 0..plot.width {
+            let from = (x as f32 + 0.5 - radius).hypot(y as f32 + 0.5 - radius);
+            let share = (radius + 0.5 - from).clamp(0.0, 1.0);
+            plot.cover[y * plot.width + x] = (share * f32::from(STEPS)).round() as u8;
+        }
+    }
+    plot.png(color)
 }
 
 #[cfg(test)]
@@ -650,13 +776,196 @@ mod tests {
             release_ms: 50,
             ..Envelope::default()
         };
-        let plot = envelope(&shape, (420, 156));
+        let plot = envelope(&shape, (360, 195));
         // The attack of a millisecond still reaches the top, whole.
         let top = plot.at(0.0, 1.0).1 as usize;
-        assert!((0..20).any(|x| plot.cover[top * 420 + x] == STEPS));
+        assert!((0..20).any(|x| plot.cover[top * 360 + x] == STEPS));
         // It starts from the bottom and ends on it.
         let bottom = plot.at(0.0, 0.0).1;
-        assert!(plot.cover[bottom as usize * 420] > 0);
-        assert!((middle(&plot, 419).unwrap() - bottom).abs() < 0.5);
+        assert!(plot.cover[bottom as usize * 360] > 0);
+        assert!((middle(&plot, 359).unwrap() - bottom).abs() < 0.5);
+    }
+
+    /// Whether a curve is steep around `x`, where a column's middle isn't its level: within two
+    /// pixels either side, as far as the line reaches, it moves by more than a pixel and a half.
+    fn steep(plot: &Plot, level: impl Fn(f32) -> f32, x: f32) -> bool {
+        let pixel = 2.0 / plot.width as f32;
+        let (before, after) = (level((x - pixel).max(0.0)), level((x + pixel).min(1.0)));
+        (before - after).abs() * plot.height as f32 > 1.5
+    }
+
+    #[test]
+    fn an_envelopes_shape_is_its_adsr_within_a_pixel_over_its_baseline_and_stages() {
+        let size = (360, 195);
+        for (attack_ms, decay_ms, sustain, release_ms) in
+            [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)]
+        {
+            let shape = Envelope {
+                attack_ms,
+                decay_ms,
+                sustain,
+                release_ms,
+                ..Envelope::default()
+            };
+            let plot = envelope(&shape, size);
+            let level = |x: f32| level_at(&shape, x);
+            // At each column the line's middle is where the envelope's own stages put it, within
+            // a pixel, where it isn't too steep for a column to have a middle.
+            for x in 1..size.0 - 1 {
+                let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
+                if steep(&plot, level, share) {
+                    continue;
+                }
+                let expected = plot.at(share, level(share)).1;
+                let found = middle(&plot, x).unwrap();
+                assert!(
+                    (found - expected).abs() < 1.0,
+                    "{shape:?} {x}: {found} against {expected}"
+                );
+            }
+            // The sustain is flat at its level for a quarter of the way.
+            let ends = stage_ends(&shape);
+            let sustain = plot.at(0.0, shape.sustain_level()).1;
+            let held = (ends[1] + ends[2]) / 2.0;
+            let column = plot.at(held, 0.0).0 as usize;
+            assert!((middle(&plot, column).unwrap() - sustain).abs() < 0.5);
+            let pixels = plot.pixels();
+            // A dotted baseline under the rest of it, after the release.
+            let bottom = plot.at(0.0, 0.0).1 as usize;
+            let after = plot.at(ends[3], 0.0).0 as usize;
+            let row = |y: usize| &pixels[y * size.0..(y + 1) * size.0];
+            assert!(
+                (bottom - 1..=bottom + 1).any(|y| row(y).contains(&GRID)),
+                "{shape:?}"
+            );
+            assert!(after < size.0, "{shape:?}");
+            // A fainter dotted line down between each stage and the next, where the line isn't.
+            for end in &ends[..3] {
+                let x = plot.at(*end, 0.0).0 as usize;
+                let marked = (0..size.1).filter(|y| pixels[y * size.0 + x] == FAINTER);
+                assert!(marked.count() > 30, "{shape:?} at {end}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_lfos_cycle_is_the_engines_wave_within_a_pixel_from_its_phase_and_flipped_by_its_sign() {
+        use vt_model::lfo::Shape as Wave;
+        let size = (360, 195);
+        for shape in [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square] {
+            for (phase, depth) in [(0, 0x40), (90, 0x40), (200, -0x30)] {
+                let lfo = Lfo {
+                    shape,
+                    phase,
+                    depth,
+                    ..Lfo::default()
+                };
+                let drawing = LfoDrawing::of(&lfo);
+                let plot = lfo_cycle(drawing, size);
+                // What the engine plays, worked out here from its own wave, with the depth's sign.
+                let sign = if depth < 0 { -1.0 } else { 1.0 };
+                let level = |x: f32| {
+                    let turns = f64::from(x.min(0.9999)) + f64::from(phase) / 360.0;
+                    0.5 + 0.5 * sign * wave(shape, turns, 0)
+                };
+                for x in 1..size.0 - 1 {
+                    let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
+                    if steep(&plot, level, share) {
+                        continue;
+                    }
+                    let expected = plot.at(share, level(share)).1;
+                    let found = middle(&plot, x).unwrap();
+                    assert!(
+                        (found - expected).abs() < 1.0,
+                        "{shape:?} {phase} {depth} {x}: {found} against {expected}"
+                    );
+                }
+                // A jump inside the cycle is drawn straight up or down: a column of the line from
+                // top to bottom. A saw from 0 has its jump at the cycle's ends.
+                if shape == Wave::Square || matches!(shape, Wave::Saw | Wave::Ramp) && phase != 0 {
+                    let jump = (0..size.0)
+                        .any(|x| (2..size.1 - 2).all(|y| plot.cover[y * size.0 + x] > 0));
+                    assert!(jump, "{shape:?} {phase}");
+                }
+                // Over its dotted centre line.
+                let centre = plot.at(0.0, 0.5).1 as usize;
+                let pixels = plot.pixels();
+                let marked = (0..size.0)
+                    .filter(|x| (centre - 1..=centre + 1).any(|y| pixels[y * size.0 + x] == GRID));
+                assert!(marked.count() > 60, "{shape:?} {phase}");
+                assert!(plot.png([255; 3]).len() < 6000, "{shape:?} {phase}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_random_lfo_draws_only_its_centre_line_whatever_its_phase_and_sign() {
+        use vt_model::lfo::Shape as Wave;
+        for shape in [Wave::Random, Wave::Smooth] {
+            let plain = LfoDrawing::of(&Lfo {
+                shape,
+                ..Lfo::default()
+            });
+            let moved = LfoDrawing::of(&Lfo {
+                shape,
+                phase: 120,
+                depth: -0x40,
+                ..Lfo::default()
+            });
+            assert_eq!(plain, moved, "the same picture, so it isn't sent again");
+            let plot = lfo_cycle(plain, (360, 195));
+            assert!(plot.cover.iter().all(|cover| *cover == 0), "{shape:?}");
+            assert!(plot.pixels().contains(&GRID));
+        }
+        // A wave that's drawn changes with both.
+        let tri = |phase, depth| {
+            LfoDrawing::of(&Lfo {
+                phase,
+                depth,
+                ..Lfo::default()
+            })
+        };
+        assert_ne!(tri(0, 0x40), tri(90, 0x40));
+        assert_ne!(tri(0, 0x40), tri(0, -0x40));
+        assert_eq!(tri(0, 0x40), tri(0, 0x10), "but not with the depth's size");
+    }
+
+    #[test]
+    fn where_a_wave_is_goes_across_the_cycle_from_its_phase() {
+        let drawing = LfoDrawing::of(&Lfo {
+            phase: 90,
+            ..Lfo::default()
+        });
+        // The cycle starts a quarter of the way round, so that's its left edge.
+        assert!((drawing.x_of(0.25) - 0.0).abs() < 1e-6);
+        assert!((drawing.x_of(0.75) - 0.5).abs() < 1e-6);
+        assert!((drawing.x_of(0.0) - 0.75).abs() < 1e-6);
+        // And the level there is the wave's.
+        assert!(
+            (drawing.level_at(0.5) - drawing.level_of(wave(lfo::Shape::Tri, 0.75, 0))).abs() < 1e-6
+        );
+    }
+
+    #[test]
+    fn a_dot_is_round_and_solid_in_the_middle() {
+        let png = dot(7, [10, 20, 30]);
+        let mut plot = Plot::new(7, 7);
+        let radius = 3.5_f32;
+        for y in 0..7 {
+            for x in 0..7 {
+                let from = (x as f32 + 0.5 - radius).hypot(y as f32 + 0.5 - radius);
+                plot.cover[y * 7 + x] = ((radius + 0.5 - from).clamp(0.0, 1.0) * 8.0).round() as u8;
+            }
+        }
+        assert_eq!(png, plot.png([10, 20, 30]));
+        // Solid across its middle, nothing in its corners, and the same each way round.
+        assert!(plot.cover[3 * 7..4 * 7].iter().all(|cover| *cover == STEPS));
+        assert_eq!(plot.cover[0], 0);
+        for y in 0..7 {
+            for x in 0..7 {
+                assert_eq!(plot.cover[y * 7 + x], plot.cover[x * 7 + (6 - y)]);
+            }
+        }
+        assert!(png.len() < 200, "{}", png.len());
     }
 }
