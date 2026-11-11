@@ -9,6 +9,7 @@ pub mod audio_page;
 pub mod auditioning;
 pub mod autosave;
 pub mod banking;
+pub mod bench;
 pub mod command_line;
 pub mod config;
 pub mod dsp_probe;

@@ -33,7 +33,8 @@ ron.workspace = true
 flate2.workspace = true
 roxmltree.workspace = true
 toml.workspace = true
-
-# For the big image example, which tries sending through shared memory.
-[dev-dependencies]
+# For `vimtracker bench --device`: a thread's own CPU time and how the system runs it, and the
+# queues back from the callback it measures. The big image example also uses libc, to try
+# sending through shared memory.
 libc.workspace = true
+rtrb.workspace = true

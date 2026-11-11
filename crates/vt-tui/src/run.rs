@@ -114,7 +114,7 @@ pub fn write_stems(
 /// Read or work out the bank's analyses before playing, with no terminal, so a normalised sample
 /// plays at its level from the first frame. A file that can't be analysed is said on stderr, and
 /// plays as it is.
-fn analyse_now(folder: Option<&Path>, song: &Song, pool: &mut SamplePool) {
+pub(crate) fn analyse_now(folder: Option<&Path>, song: &Song, pool: &mut SamplePool) {
     let cache = analysis::cache_folder();
     for error in project::analyse_samples(folder, song, cache.as_deref(), pool) {
         eprintln!("{error}");
@@ -155,50 +155,6 @@ pub fn render(request: &RenderRequest) -> Result<(), RunError> {
         request.out.display(),
         samples.len() as f64 / 2.0 / f64::from(request.rate)
     );
-    Ok(())
-}
-
-/// `vimtracker bench`: play a project through the engine in blocks as fast as it goes, stopped and
-/// then playing, and print the share of each block's time it took, as the status line works it out
-/// for the audio thread. A block has no deadline here, so this is the engine's own cost, without
-/// the device or how the system schedules its thread.
-pub fn bench(folder: &Path, rate: u32, block: usize, seconds: u32) -> Result<(), RunError> {
-    let song = project::load_song(folder)?;
-    let mut pool = SamplePool::default();
-    let errors = project::load_samples(Some(folder), &song, rate, &mut pool);
-    if let Some(first) = errors.first() {
-        return Err(RunError::MissingSample(first.to_string()));
-    }
-    analyse_now(Some(folder), &song, &mut pool);
-    let version = Arc::new(Published::new(Arc::new(song), Arc::new(pool)));
-    let block = block.max(1);
-    let blocks = (seconds as usize * rate as usize).div_ceil(block);
-    let budget = block as f64 / f64::from(rate);
-    let mut engine = Engine::new(rate, version);
-    let mut out = vec![0.0_f32; block * 2];
-    let mut measure = |engine: &mut Engine| {
-        let (mut total, mut worst) = (0.0_f64, 0.0_f64);
-        for _ in 0..blocks {
-            let started = Instant::now();
-            engine.process(&mut out);
-            let spent = started.elapsed().as_secs_f64();
-            total += spent;
-            worst = worst.max(spent);
-        }
-        (
-            total / blocks as f64 / budget * 100.0,
-            worst / budget * 100.0,
-        )
-    };
-    let (stopped, stopped_worst) = measure(&mut engine);
-    engine.play_from(0);
-    let (playing, playing_worst) = measure(&mut engine);
-    println!(
-        "{} at {rate} Hz in blocks of {block}, {seconds} s each",
-        folder.display()
-    );
-    println!("stopped  {stopped:5.2}% of a core, worst block {stopped_worst:5.1}%");
-    println!("playing  {playing:5.2}% of a core, worst block {playing_worst:5.1}%");
     Ok(())
 }
 

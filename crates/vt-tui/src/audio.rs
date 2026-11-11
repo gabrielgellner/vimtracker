@@ -366,6 +366,193 @@ impl Output {
     }
 }
 
+/// What one callback of a measured stream took, for `vimtracker bench --device`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CallbackTime {
+    /// The frames the device asked for.
+    pub frames: u32,
+    /// The whole callback, as the status line times it.
+    pub callback: Duration,
+    /// The callback's end of the queues, the engine and the report.
+    pub process: Duration,
+    /// The engine alone.
+    pub engine: Duration,
+    /// The callback's thread's own CPU time, which leaves out any time it was put aside for
+    /// another thread.
+    pub cpu: Duration,
+}
+
+/// How the system runs the callback's thread, as it says from inside the first callback.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CallbackThread {
+    /// Whether it has a real-time policy: so much computation in each period, before a deadline.
+    pub real_time: bool,
+    /// That policy's period, computation and constraint, in microseconds.
+    pub period_us: u32,
+    pub computation_us: u32,
+    pub constraint_us: u32,
+}
+
+/// The CPU time the calling thread has had.
+pub fn thread_cpu_time() -> Duration {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `time` is a valid timespec for the call to fill.
+    unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut time) };
+    Duration::new(time.tv_sec as u64, time.tv_nsec as u32)
+}
+
+/// How the system runs the calling thread.
+#[cfg(target_os = "macos")]
+// libc would have the mach2 crate used for the timebase, which isn't worth a dependency here.
+#[allow(deprecated)]
+fn this_thread() -> CallbackThread {
+    let mut policy = libc::thread_time_constraint_policy {
+        period: 0,
+        computation: 0,
+        constraint: 0,
+        preemptible: 0,
+    };
+    let mut count = (size_of::<libc::thread_time_constraint_policy>() / size_of::<u32>()) as u32;
+    let mut default = 0;
+    // SAFETY: the policy and its count are valid for the call to fill, and the thread is this one.
+    let status = unsafe {
+        libc::thread_policy_get(
+            libc::pthread_mach_thread_np(libc::pthread_self()),
+            libc::THREAD_TIME_CONSTRAINT_POLICY as u32,
+            (&raw mut policy).cast(),
+            &raw mut count,
+            &raw mut default,
+        )
+    };
+    let mut timebase = libc::mach_timebase_info { numer: 0, denom: 0 };
+    // SAFETY: `timebase` is valid for the call to fill.
+    unsafe { libc::mach_timebase_info(&raw mut timebase) };
+    let us = |ticks: u32| {
+        (u64::from(ticks) * u64::from(timebase.numer) / u64::from(timebase.denom.max(1)) / 1000)
+            as u32
+    };
+    CallbackThread {
+        real_time: status == 0 && default == 0,
+        period_us: us(policy.period),
+        computation_us: us(policy.computation),
+        constraint_us: us(policy.constraint),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn this_thread() -> CallbackThread {
+    CallbackThread::default()
+}
+
+/// What a measured stream sends back.
+pub struct Measured {
+    /// Each callback's times, as they come.
+    pub times: rtrb::Consumer<CallbackTime>,
+    /// The thread the callbacks run on, once the first has.
+    pub thread: rtrb::Consumer<CallbackThread>,
+    /// The callback's end, once `stop` is set and the next callback has given it up.
+    pub realtime: rtrb::Consumer<Realtime>,
+    /// Set to have the callback stop playing and give its end back.
+    pub stop: Arc<AtomicBool>,
+    /// Underruns the system reported.
+    pub xruns: Arc<AtomicU64>,
+}
+
+impl Output {
+    /// Play through the device as [`Output::start`] does, timing each callback, but send the
+    /// device only silence. For `vimtracker bench --device`, which hears nothing. The times of
+    /// up to `blocks` callbacks wait to be read.
+    pub fn start_measured(
+        self,
+        realtime: Realtime,
+        blocks: usize,
+    ) -> Result<(cpal::Stream, Measured), AudioError> {
+        let channels = usize::from(self.config.channels);
+        let mut scratch = vec![0.0_f32; MAX_BLOCK * 2];
+        let (mut times_in, times) = rtrb::RingBuffer::new(blocks.max(1));
+        let (mut thread_in, thread) = rtrb::RingBuffer::new(1);
+        let (mut realtime_in, realtime_out) = rtrb::RingBuffer::new(1);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = Arc::clone(&stop);
+        let mut realtime = Some(realtime);
+        let mut first = true;
+        let xruns = Arc::new(AtomicU64::new(0));
+        let counting = Arc::clone(&xruns);
+        let stream = self
+            .device
+            .build_output_stream(
+                self.config,
+                move |out: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    let started = Instant::now();
+                    let cpu = thread_cpu_time();
+                    if first {
+                        first = false;
+                        let _ = thread_in.push(this_thread());
+                    }
+                    if stopping.load(Ordering::Acquire)
+                        && let Some(done) = realtime.take()
+                    {
+                        let _ = realtime_in.push(done);
+                    }
+                    let Some(realtime) = &mut realtime else {
+                        out.fill(0.0);
+                        return;
+                    };
+                    let (mut process, mut engine) = (Duration::ZERO, Duration::ZERO);
+                    for frames in out.chunks_mut(MAX_BLOCK * channels) {
+                        let count = frames.len() / channels;
+                        let block = &mut scratch[..count * 2];
+                        let processing = Instant::now();
+                        realtime.process(block);
+                        process += processing.elapsed();
+                        engine += realtime.engine_time();
+                        // The same as the stream that plays, so it costs the same.
+                        for (frame, stereo) in frames
+                            .chunks_exact_mut(channels)
+                            .zip(block.as_chunks::<2>().0)
+                        {
+                            frame[0] = stereo[0].clamp(-1.0, 1.0);
+                            frame[1] = stereo[1].clamp(-1.0, 1.0);
+                            frame[2..].fill(0.0);
+                        }
+                    }
+                    // Then nothing is heard.
+                    std::hint::black_box(&mut *out).fill(0.0);
+                    let _ = times_in.push(CallbackTime {
+                        frames: (out.len() / channels) as u32,
+                        callback: started.elapsed(),
+                        process,
+                        engine,
+                        cpu: thread_cpu_time().saturating_sub(cpu),
+                    });
+                },
+                move |error| {
+                    if error.kind() == ErrorKind::Xrun {
+                        counting.fetch_add(1, Ordering::Relaxed);
+                    }
+                },
+                None,
+            )
+            .map_err(|e| AudioError::Device(e.to_string()))?;
+        stream
+            .play()
+            .map_err(|e| AudioError::Device(e.to_string()))?;
+        Ok((
+            stream,
+            Measured {
+                times,
+                thread,
+                realtime: realtime_out,
+                stop,
+                xruns,
+            },
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
