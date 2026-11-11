@@ -83,16 +83,27 @@ loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
+| Run | How many rows each value holds for |
 | Where | Which rows change, with `Amount` below it for some |
+
+`Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
+`00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
+It counts the rows it changes, so on Velocity it's that many notes.
 
 `Wave` swings between the ends, for movement like a pulse across a hat's
 velocities, and shows these in place of Curve and S:
 
 | Row | Does |
 |---|---|
-| Shape | `Sine`, `Tri`, `Saw`, `Ramp` or `Square`, as on an LFO |
+| Shape | `Sine`, `Tri`, `Saw`, `Ramp`, `Square` or `Smooth`, as on an LFO |
 | Rate | How long one swing takes, like `1/2`, `1/8d`, `2 bars` or `7st` |
 | Phase | Where in the swing the first row selected falls, in degrees |
+| Run | How many rows each value holds for, sampled where the run starts |
+
+`Smooth` wanders from one random value to the next, a drift that `r` picks
+anew. A Rate of `x3` fits three whole swings into the rows selected, however
+many there are, so the selection loops round smoothly: type it with `i`, or
+choose `x1` to `x8` with `K`, and `=` `-` add or take one.
 
 Each row's value comes from where it falls in time, counting from the first row
 selected, so the movement keeps its timing however the notes are spaced. As on an

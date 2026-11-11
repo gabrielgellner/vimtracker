@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
-use vt_model::lfo::{Rate, Shape as Wave, note_rates};
+use vt_model::lfo::{Shape as Wave, note_rates};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
     DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
-    Where, default_ends, open_rows,
+    WaveRate, Where, default_ends, open_rows,
 };
 use vt_model::song::Song;
 
@@ -37,6 +37,8 @@ const RUN_JUMP: i16 = 4;
 const EUCLID_JUMP: i16 = 4;
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
+/// The counts of cycles across the selection that `K` on `Rate` lists after the times.
+const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /// A row of the panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,15 +105,21 @@ impl ShapePanel {
     pub fn rows(&self) -> Vec<ShapeRow> {
         let mut rows = vec![ShapeRow::Fill];
         rows.extend_from_slice(match self.shape.kind {
-            FillKind::Ramp | FillKind::Random | FillKind::Scale => {
-                &[ShapeRow::From, ShapeRow::To, ShapeRow::Curve, ShapeRow::S]
-            }
+            FillKind::Ramp | FillKind::Random => &[
+                ShapeRow::From,
+                ShapeRow::To,
+                ShapeRow::Curve,
+                ShapeRow::S,
+                ShapeRow::Run,
+            ],
+            FillKind::Scale => &[ShapeRow::From, ShapeRow::To, ShapeRow::Curve, ShapeRow::S],
             FillKind::Wave => &[
                 ShapeRow::From,
                 ShapeRow::To,
                 ShapeRow::Wave,
                 ShapeRow::Rate,
                 ShapeRow::Phase,
+                ShapeRow::Run,
             ],
             FillKind::Alternate => &[ShapeRow::From, ShapeRow::To, ShapeRow::Run],
             FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
@@ -558,7 +566,11 @@ impl App {
                     .unwrap_or(0),
             ),
             ShapeRow::Rate => {
-                let rates = note_rates();
+                let rates: Vec<WaveRate> = note_rates()
+                    .into_iter()
+                    .map(WaveRate::Time)
+                    .chain(LISTED_CYCLES.map(WaveRate::Cycles))
+                    .collect();
                 let position = rates
                     .iter()
                     .position(|rate| *rate == panel.shape.rate)
@@ -597,7 +609,7 @@ impl App {
         self.change_shape(|panel| panel.shape.wave = wave);
     }
 
-    pub(crate) fn pick_shape_rate(&mut self, rate: Rate) {
+    pub(crate) fn pick_shape_rate(&mut self, rate: WaveRate) {
         self.change_shape(|panel| panel.shape.rate = rate);
     }
 
@@ -717,11 +729,11 @@ impl App {
                     _ => refused = Some("Hits and Rotate are whole numbers"),
                 },
                 // A wave here is laid out by rows, so a rate has to be in time with them.
-                ShapeRow::Rate => match text.parse::<Rate>() {
-                    Ok(Rate::Hertz(_)) | Err(_) => {
-                        refused = Some("A rate here is like 1/4, 1/8d, 1/16t, 2 bars or 7st");
-                    }
+                ShapeRow::Rate => match text.parse::<WaveRate>() {
                     Ok(rate) => shape.rate = rate,
+                    Err(_) => {
+                        refused = Some("A rate here is like 1/4, 1/8d, 2 bars, 7st, or x3 cycles");
+                    }
                 },
                 ShapeRow::Phase => match text.parse::<u16>() {
                     Ok(phase) if phase < 360 => shape.phase = phase,

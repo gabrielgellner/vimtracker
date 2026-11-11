@@ -1468,7 +1468,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
     assert!(app.status.contains("Fill"), "{}", app.status);
 
     // Where, from Commands to All rows, writes the command on the empty rows.
-    keys(&mut app, "jjjjKall<Enter>");
+    keys(&mut app, "jjjjjKall<Enter>");
     assert_eq!(app.mode, Mode::Shape);
     // A ramp on a setting fills its fine part, so it moves evenly.
     assert_eq!(fx(&app), ["cut:10", "cut:1AAB", "cut:2555", "cut:30"]);
@@ -1502,7 +1502,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
     // An Esc from a picker goes back to the panel.
     keys(&mut app, "gvS");
     assert_eq!(app.mode, Mode::Shape);
-    keys(&mut app, "jjjjjK<Esc>");
+    keys(&mut app, "jjjjjjK<Esc>");
     assert_eq!(app.mode, Mode::Shape);
     keys(&mut app, "<Esc>");
     assert_eq!(app.mode, Mode::Normal);
@@ -1606,6 +1606,34 @@ fn the_transforms_rework_the_values_there_as_one_undo() {
     assert_eq!(app.history.undo_depth(), 1);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
+}
+
+#[test]
+fn a_ramp_holds_for_its_run_and_a_wave_takes_a_rate_in_cycles() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_with(&["C-3 40 --- --- ---"; 8]);
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    keys(&mut app, "ji00ji30jjj");
+    assert_eq!(panel(&app).row, ShapeRow::Run);
+    keys(&mut app, "=");
+    assert_eq!(vel(&app), ["00", "00", "10", "10", "20", "20", "30", "30"]);
+    keys(&mut app, "kkkkkKwave<Enter>");
+    assert_eq!(panel(&app).shape.run, 2, "a run is kept across fills");
+    keys(&mut app, "jjjKsmooth<Enter>");
+    assert_eq!(panel(&app).shape.wave.name(), "Smooth");
+    keys(&mut app, "ji0<Enter>");
+    assert!(app.status.contains("x3"), "{}", app.status);
+    keys(&mut app, "ix2<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "x2");
+    keys(&mut app, "=");
+    assert_eq!(panel(&app).shape.rate.to_string(), "x3");
+    keys(&mut app, "Kx5<Enter>");
+    assert_eq!(panel(&app).shape.rate.to_string(), "x5");
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.rate.to_string(), "1/2");
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), 1);
 }
 
 #[test]
