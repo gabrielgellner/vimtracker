@@ -15,19 +15,22 @@ each machine.
 
 | Keys | Does |
 |---|---|
-| `H` `L` | The Sound page or the Mod page |
+| `H` `L` | The previous or next page: Sound, Mod or FX |
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row, back in the column they left |
+| `gg` `G` | The top or bottom of this column of devices |
 | `{` `}` | Previous or next device, on the same row and column. `2}` goes two |
 | `h` `l` | Previous or next setting. `0` and `$` go to the line's ends |
 | `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
+| `C-a` `C-x` | The same as `=` `-` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
 | `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
 | `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
+| `b` | Switch a slot, envelope or LFO out, or back in |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
 A note holds for as long as its key is down, and several keys down play a
@@ -56,7 +59,7 @@ and its settings in up to four columns of three.
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` |
 
 A machine's type is the setting that changes its character: the sample the sampler
-plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chiptune`.
+plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chip`.
 Other synths have none. `K` lists whatever's under the cursor in a title, as on a
 setting, and `g d` on the sample opens the sample page. Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
@@ -68,7 +71,13 @@ TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` an
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
 in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and
 `2}` to `Pitch`. The device with the cursor has the brighter frame. A sampler's
-waveform is in a box at the right of the Machine.
+Machine shows the slice it plays in a box on its right, with a teal line where `Start`
+puts a note's start and a red one where `Length` ends it.
+
+The Output's box is a meter of the track right after `Trim`, before the filter, so
+`Trim` can be set by eye: `L` and `R` bars from -60 dB to +6 dB, each side's peak,
+with a faint mark at the highest it reached lately. The mixer's meters are after the
+fader.
 
 A group's, a return's and the master's Sound page is the same Output, with a gap
 where it lacks a setting, and under it a device of what feeds it, which the cursor
@@ -81,8 +90,9 @@ doesn't stop in:
 | Master | `Trim` `Level`; `Limiter` | |
 
 Both lists follow the song as it changes, three down each column, and past 12 the
-last says how many more there are. The master's Output has no meter, as the main
-meter beside it shows what it plays.
+last says how many more there are. A group's and a return's meter reads after `Trim`,
+before their slots. The master's Output has no meter, as the main meter beside it
+shows what it plays.
 
 ## The filter
 
@@ -146,7 +156,8 @@ names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP`, `05`
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
-`Mode`. It moves with what's playing `Cut` and `Res`, including step commands,
+`Mode`, over faint lines at 0 dB, 100 Hz, 1 kHz and 10 kHz, with a dashed line up to
+it at `Cut` unless the filter is open. It moves with what's playing `Cut` and `Res`, including step commands,
 LFOs and envelopes, but it doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
 adds.
 
@@ -154,7 +165,7 @@ adds.
 
 Press `/` and type part of a setting's name, like `cu`, and each match on this page
 gets a label over its value, and again in its name, just after what you've typed. Press a label to land on
-that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `Ctrl-O`
+that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `C-o`
 comes back after a jump.
 
 A label is never a letter that could carry on your search, so you can keep typing to
@@ -166,10 +177,13 @@ and `H` and `L` change page.
 The FX page has 4 slots, which the sound goes through in order after the filters and
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
-Each slot is a device: a frame with the slot's number, its effect and the effect's type in its
-title, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`, a box on
-the right with its curve or how far it's turning down. The device with the cursor has the
-brighter frame. An empty slot keeps its frame, so nothing moves when an effect goes in.
+Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
+type in its title, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
+a box on the right with its curve or how far it's turning down. The switch is green while the
+slot is in and faint while it's bypassed. A setting that's off or on, such as a Comp's `Auto`,
+shows the same switch rather than a word. The device with the cursor has the brighter frame. An
+empty slot keeps its frame, says `Empty` and `K  pick an effect`, so nothing moves when an
+effect goes in.
 
 | Keys | Does |
 |---|---|
@@ -207,14 +221,18 @@ plays, the page fades the slot as it's heard, so it goes faint and comes back wi
 `K` lists it with the slot's effect, and LFOs and envelopes can't move it.
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
-on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. Each mode has its
-own setting: `Amount` for how hard the four shaping modes drive, `Bits` on `Crush`, whole
-numbers from `12` to `2`, where anything quieter than half a step drops out, and `Rate` on
-`Down`, how long each sample is held. A mode keeps its own as you change to another and back.
-Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the sound
-going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can make it
-much louder, on the level scale,
-where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
+on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Overdrive` and
+`Distortion` are guitar pedals, as an acid line often goes through: `Overdrive` is a Tube
+Screamer's circuit, which clips the mids softly and adds them to the clean sound, so the bass
+stays tight, and `Distortion` an op-amp distortion, as a RAT is, with high gain and a hard clip.
+Each mode has its own setting: `Amount` for how hard the four shaping modes and the pedals
+drive, `Bits` on `Crush`, whole numbers from `12` to `2`, where anything quieter than half a
+step drops out, and `Rate` on `Down`, how long each sample is held. The pedals have a `Tone`
+as well, dark at `00` and bright at `FF`. A mode keeps its own as you change to another and
+back. Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the
+sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can
+make it much louder, on the level scale, where `E0` leaves it as it is and every `10` is 4 dB.
+Every effect but `Comp` has one; a `Comp` has `Makeup`.
 
 An LFO can move the ones after it: `LFO 1`'s `Dest` has `L2 Depth`, `L2 Phase`, `L3 Depth` and
 `L3 Phase`, `LFO 2`'s has `LFO 3`'s, and an envelope's has every LFO's, so `Env 2` can bring in
@@ -226,7 +244,7 @@ into a category, `h` closes it, and typing searches them all. See **Lists** in
 **Navigation** for every key.
 
 `Dest` and step commands only list what's loaded: a synth's settings under their names on
-that voice, on a track playing it. One already chosen stays, reads like `Har ---`, and does
+that voice, on a track playing it. One already chosen stays, reads like `Punch ---`, and does
 nothing until it's back.
 
 `Delay` and `Reverb` can go in any slot, starting half wet. Their tails carry on after a
@@ -245,7 +263,7 @@ note ends. `Reverb` has these:
 |---|---|
 | `Time` | A note division, up to `1 bar`. A change glides |
 | `Feedback` | How much comes round again. `FF` keeps going |
-| `Ping-pong` | `On` goes side to side, and `Off` stays put |
+| `Ping-pong` | On, it goes side to side; off, it stays put |
 | `Width` | From `00`, sides together, to `FF`, fully apart |
 | `Low cut`, `High cut` | Take more from each repeat |
 | `Drive` | Saturates louder repeats each time round |
@@ -296,10 +314,11 @@ rather than the times they take, and it settles lower the slower its attack is.
 | `Ratio` | How much: 2, 4 or 10 to 1, on `Clean` 1:1 to a limiter |
 | `Attack`, `Release` | How fast it turns down and lets go |
 | `Source` | `Self`, a track by its number, `A`, `B`, or `G1` to `G4` |
-| `Auto` | `On` makes it come out as loud as it went in |
+| `Auto` | Switched on, it comes out as loud as it went in |
 | `Mix` | Below `FF`, the dry sound blends in, for parallel compression |
 | `Range` | `Glue` only: the most it turns down, up to 70 dB at `FF` |
 | `Makeup` | Turns up what it turned down, from 0 dB to +24 dB |
+| `Peak Clip` | `Glue` only: on, it soft clips what comes out, last |
 
 `Limit` keeps a sound's peaks under a ceiling. It looks 2 ms ahead, so it's already
 turned down when a peak arrives, and nothing gets over, however hard it's pushed. Its
@@ -402,7 +421,7 @@ Instruments' Beads. It starts half wet, with about seven grains a second.
 | `Size` | How long each grain is. Below `55` they play backwards |
 | `Density` | How often grains start: evenly below `80`, at random above |
 | `Spread` | How far the grains spread across the sides |
-| `Freeze` | `On` stops recording, so the grains keep playing what's held |
+| `Freeze` | On, it stops recording, so grains play what's held |
 | `Random` | How far each grain's time, size and shape stray at random |
 | `Pitch` | How far each grain is shifted, in semitones, two octaves |
 | `Shape` | The envelope, from square through decay and bell to swell |
@@ -580,7 +599,7 @@ Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them w
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
 
-## Output
+## Output and Play
 
 `Trim`, at the top, is the gain at the track's input, for gain staging, so `Level`
 is left for the mix, as a console's input trim and fader are. It's a quarter of a dB a
@@ -622,6 +641,14 @@ every voice: a synth by its pitch, a sample by its speed. `Off`, dimmed, jumps, 
 on `Acid`, shown as `Slide`, slides by the voice's own `Slide`. `=` and `-` move it
 a step, `+` and `_` sixteen, `i` takes a time in ms or `off`, and `x` turns it off.
 `GLD` on a step sets it for that tie. See **Note entry**.
+
+`Reset` is how many of the song's steps the track's chain plays before it starts
+again from its top, counted from where it last started, so a short part can keep to a
+bar while the others drift. `Off`, the default, plays on. `=` and `-` move it a step,
+`+` and `_` to the next or previous whole bar, `i` takes a number of steps up to 1024,
+bars as `2bar`, or `off`, and `x` turns it off. For a one-off, `Space a` starts the
+chain again at the next line of the launch grid: see **Jamming** in **Phrases and
+chains**.
 
 ## Groups
 
@@ -724,7 +751,7 @@ no notes to move, so their page ends with the LFOs.
 Each envelope and LFO has its `Dest` in its title, as a slot has its effect, so
 `LFO 1     Cut` reads as what it's for. `---` there is dim, as it goes nowhere.
 Between the name and the `Dest` is its switch, green while it's in. Its settings
-are in two columns of three, and an envelope's shape is in a box on its right. The
+are in two columns of three, and its shape or cycle is in a box on its right. The
 device with the cursor has the brighter frame.
 
 | Keys | Does |
@@ -757,22 +784,23 @@ levels and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
-| Dest | `Vol` `Cut` `Res` `Pan` `SendA` `SendB` `Pitch` `Gate`, or `---` for off |
+| Dest | What it moves, such as `Vol` or `Cut`, or `---` for off |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
 | Release | Milliseconds, after the note ends |
 | Depth | How far full moves it, in hex. Negative flips it |
-| Reset | `on` starts from zero on each note. `off` goes on from there |
+| Reset | On, it starts from zero each note; off, it goes on |
 
 `Env 1` starts on `Vol` and shapes each note, so it has no depth. `Env 2` starts
 on `Cut` with no depth, so raise its depth to open the filter on each note. `Env 3`
 starts on `---`, with `Env 2`'s decay, ready to be given somewhere to go. On
 `Pitch`, depth is in semitones and in hex, so `+0C` is an octave.
 
-A note lasts until the next note on its track or an `OFF`, and the next note
-fades the last one quickly rather than running its release. So a drum is often
-a Decay with Sustain at `0%`, and Release only runs on an `OFF`. To make notes
-shorter, use `OFF` on a step or the `OFF` command.
+A note lasts until the next note on its track, an `OFF`, or its gate closing,
+and the next note fades the last one quickly rather than running its release. So
+a drum is often a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs
+on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
+length of its own, or put `OFF` on a step.
 
 Decays and releases fall fast and then slow, as an analog envelope does, and an
 attack starts slowly.
@@ -780,16 +808,19 @@ attack starts slowly.
 ## LFOs
 
 Each track has three. An LFO moves around the current value, so `CUT40` on a
-step moves the centre and the LFO carries on around it.
+step moves the centre and the LFO carries on around it. Each draws one cycle of
+its wave in a box on its right, starting from its `Phase`, upside down for a
+negative `Depth`, with a dot riding it where the LFO is now. `Random` and `Smooth`
+draw only a centre line, as their values aren't known ahead.
 
 | Setting | Value |
 |---|---|
-| Dest | `Cut` `Res` `Pan` `Vol` `SendA` `SendB` `Pitch` `Gate`, or `---` for off |
+| Dest | What it moves, such as `Cut` or `Pan`, or `---` for off |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
-| Retrig | `on` restarts it with each note on this track |
+| Retrig | On, it restarts with each note on this track |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
@@ -815,7 +846,7 @@ Playing from the top restarts every LFO. A `:reset` doesn't, since that is
 about patterns. To follow the steps, turn on `Retrig`. While stopped, a track
 sits at its held values, so `;` hears those. Pausing freezes the LFO.
 
-`Vol`, `SendA` and `SendB` swing in dB, on the level scale in **Phrases and
+`Vol`, `Send A` and `Send B` swing in dB, on the level scale in **Phrases and
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
 is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
 on a step.
@@ -834,7 +865,7 @@ types a limit and `K` lists the others. See **FX commands**.
 
 The `Arpeggio` device, beside the accumulator, says how the track's `ARP`s play: `Rate`, how long each note
 is, `Tick` or a note division from `1/128` to `1/8`, as a share of the track's step;
-`Mode`, `Up` `Down` `Up-down` or `Random`; `Oct`, how many octaves it climbs, 1 to 4;
+`Mode`, `Up` `Down` `Up-down` `Up-down-inc` or `Random`; `Oct`, how many octaves it climbs, 1 to 4;
 and `Retrig`, `off` to only change the pitch, sliding on `Acid`, or `on` to start
 each note again. `=` and `-` move each, `i` types the octaves and `K` lists the
 others. See **FX commands**.
@@ -845,12 +876,15 @@ Press `Space 6` for a strip for each track: its name, a meter of what it's playi
 with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
 `Level`, `Pan`, `Send A`, `Send B`, mute and solo. It opens on `Level`. The meters are on the same scale as the main one,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
-tracks, `j` and `k` up and down the strip, and values edit as they do on the track page,
-with `=` `-` `+` `_` or Cmd with `l` `h` `k` `j`. On mute and solo, `=` switches on,
-`-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
+tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and `gg` and
+`G` to its top or bottom. Values edit as they do on the track page, with `=` `-` `+` `_`,
+`C-a` `C-x`, or Cmd with `l` `h` `k` `j`, and `x` puts one back to its default. On mute
+and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
-part. Under a track's name is the group it's in, and under a group's name the tracks
+part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the
+master being under `Returns`. The part with the cursor has the brighter rule. Under a
+track's name is the group it's in, and under a group's name the tracks
 in it, as `01-04 07`. `z a` folds a group's strips into its own, `z M` folds them all
 and `z R` opens them; see **Folding a group**.

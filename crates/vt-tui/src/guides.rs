@@ -325,6 +325,125 @@ mod tests {
         }
     }
 
+    /// Every guide's text, as one.
+    fn every_guide() -> String {
+        GUIDES.map(|guide| guide.source).join("\n")
+    }
+
+    /// Whether a guide names this as `code` of its own, as `Comp` and not `Compressor`.
+    fn names(guide: &str, name: &str) -> bool {
+        guide.contains(&format!("`{name}`"))
+    }
+
+    #[test]
+    fn every_key_sequence_is_in_a_guide() {
+        let guides = every_guide();
+        let mut missing = Vec::new();
+        for binding in crate::input::bindings::bindings() {
+            // The guides write `gg` and `Space fb` for `g g` and `Space f b`, and name Option and
+            // Shift in full.
+            let keys = binding
+                .keys
+                .replace("M-", "Option-")
+                .replace("S-Tab", "Shift-Tab");
+            let joined = match keys.split_once(' ') {
+                Some(("Space", rest)) => format!("Space {}", rest.replace(' ', "")),
+                _ => keys.replace(' ', ""),
+            };
+            let found = [&keys, &joined].iter().any(|spelled| {
+                [
+                    format!("`{spelled}`"),
+                    format!("`{spelled} "),
+                    format!(" {spelled}`"),
+                ]
+                .iter()
+                .any(|written| guides.contains(written))
+            });
+            if !found && !missing.contains(&binding.keys) {
+                missing.push(binding.keys);
+            }
+        }
+        assert!(missing.is_empty(), "not in a guide: {missing:?}");
+    }
+
+    #[test]
+    fn every_command_is_in_a_guide() {
+        let guides = every_guide();
+        for command in crate::input::command::COMMANDS {
+            let named = format!("`:{}", command.name);
+            let found = guides
+                .match_indices(&named)
+                .any(|(at, _)| guides[at + named.len()..].starts_with(['`', ' ', '=']));
+            assert!(found, ":{} isn't in a guide", command.name);
+        }
+    }
+
+    #[test]
+    fn every_effect_its_types_and_its_settings_are_in_the_track_page_guide() {
+        let tracks = GUIDES[8].source;
+        assert_eq!(GUIDES[8].title(), "The track page, envelopes and LFOs");
+        let mut missing = Vec::new();
+        for effect in vt_model::insert::Insert::ALL {
+            if !names(tracks, effect.name()) {
+                missing.push(effect.name().to_owned());
+            }
+            // Each type or mode has settings of its own, so every one is checked.
+            let kinds: Vec<_> = match effect.type_param() {
+                Some(at) => {
+                    let param = effect.params()[at];
+                    (0..param.choices.len())
+                        .map(|choice| effect.write(param.setting, choice as f32))
+                        .collect()
+                }
+                None => vec![effect],
+            };
+            for kind in kinds {
+                // The type is named by what it is, as `Glue`, and its settings by theirs.
+                let type_name = kind
+                    .type_param()
+                    .map(|at| kind.params()[at].choices[usize::from(kind.value(at))]);
+                let mut named: Vec<&str> = kind.params().iter().map(|param| param.name).collect();
+                if let (Some(at), Some(type_name)) = (kind.type_param(), type_name) {
+                    named[at] = type_name;
+                }
+                for name in named {
+                    if !names(tracks, name) {
+                        let kind = type_name.unwrap_or(effect.name());
+                        missing.push(format!("{} {kind}: {name}", effect.name()));
+                    }
+                }
+            }
+        }
+        missing.dedup();
+        assert!(missing.is_empty(), "not in the guide: {missing:?}");
+    }
+
+    #[test]
+    fn every_machine_and_its_settings_are_in_the_sounds_guide() {
+        let sounds = GUIDES[6].source;
+        assert_eq!(GUIDES[6].title(), "Sounds, samples and kits");
+        for machine in vt_model::song::Machine::ALL {
+            assert!(names(sounds, machine.name()), "{}", machine.name());
+            for setting in machine.settings() {
+                assert!(
+                    names(sounds, setting.name()),
+                    "{}'s {}",
+                    machine.name(),
+                    setting.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_fx_command_a_new_track_has_is_in_a_guide() {
+        let guides = every_guide();
+        let track = vt_model::song::Track::default();
+        for command in vt_model::step::FxCommand::on_track(&track) {
+            assert!(names(&guides, &command.name()), "{}", command.name());
+        }
+    }
+
     #[test]
     fn tables_line_up_and_lose_their_rule() {
         let guide = Guide {
