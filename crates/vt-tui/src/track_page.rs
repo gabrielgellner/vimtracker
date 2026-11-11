@@ -19,14 +19,11 @@ pub use device::{DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec};
 pub use fx::TakenInsert;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
 pub use modulation::{ACCUMULATOR, ARPEGGIO, ENVELOPES, FIXED_MOD_ROWS, LFOS, MOD_ROWS};
-pub use sound::{
-    GROUP_ROWS, MASTER_ROWS, RETURN_ROWS, SAMPLE_ROWS, SYNTH_ROWS, SYNTH3_ROWS, SYNTH8_ROWS,
-};
+pub use sound::{GROUP_ROWS, MASTER_ROWS, RETURN_ROWS};
 
 use std::sync::Arc;
 
 use vt_model::selection::Motion;
-use vt_model::settings::voice_entries;
 use vt_model::song::{Machine, Track, TrackKind};
 
 use crate::app::{App, Entry};
@@ -63,8 +60,8 @@ impl Page {
     }
 
     /// The page's devices, top to bottom, on a page that's a rack of them, each page's from its
-    /// own file. Only the FX page is one yet, its slots; a page with none is rows of settings
-    /// (`Page::rows`). The cursor, `j`, `k`, `{` and `}` go through whatever devices a page gives,
+    /// own file: a sound track's Sound page, and the FX page's slots. A page with none is rows of
+    /// settings (`Page::rows`). The cursor, `j`, `k`, `{` and `}` go through whatever devices a page gives,
     /// so a page becomes a rack by giving them.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         match self {
@@ -77,22 +74,26 @@ impl Page {
     /// The page's rows, top to bottom, for a track with this machine.
     pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
         match (self, machine) {
-            (Self::Sound, Machine::Sampler) => &SAMPLE_ROWS,
-            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 4 => &SYNTH8_ROWS,
-            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
-            (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
             (Self::Mod, _) => &MOD_ROWS,
-            // It's a rack, whose rows depend on what's in each slot: see `Page::devices`.
-            (Self::Fx, _) => &[],
+            // Each is a rack, whose rows depend on the machine or on what's in each slot: see
+            // `Page::devices`.
+            (Self::Sound | Self::Fx, _) => &[],
         }
     }
 }
 
 /// The place nearest a row and field that holds a setting: in a row with none, the nearest row
 /// above with some, and on a hole, the nearest setting along the row, the left one of two as near.
-fn place_in(rows: &[Vec<Option<Control>>], row: usize, field: usize) -> (usize, usize) {
+/// On a rack, a device's title with nothing in it, as the Sound page's `Output` has, stands for
+/// the device's first row with some, so `}` onto it lands in the device rather than above it.
+fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize) -> (usize, usize) {
+    let empty = |row: usize| rows[row].iter().all(Option::is_none);
     let mut row = row.min(rows.len().saturating_sub(1));
-    while row > 0 && rows[row].iter().all(Option::is_none) {
+    if rack && row.is_multiple_of(DEVICE_ROWS) && row < rows.len() && empty(row) {
+        let end = (row + DEVICE_ROWS).min(rows.len());
+        row = (row..end).find(|at| !empty(*at)).unwrap_or(row);
+    }
+    while row > 0 && empty(row) {
         row -= 1;
     }
     let places = rows.get(row).map_or(&[][..], Vec::as_slice);
@@ -183,7 +184,8 @@ impl TrackPage {
     /// title at least. On a hole, it's the nearest setting along the row, the left one of two as
     /// near.
     pub fn place(&self, track: Option<&Track>) -> (usize, usize) {
-        place_in(&self.rows(track), self.row, self.field)
+        let rack = !self.devices(track).is_empty();
+        place_in(&self.rows(track), rack, self.row, self.field)
     }
 
     /// What the cursor is on.
@@ -212,7 +214,8 @@ impl TrackPage {
     /// Put the cursor at the place nearest a row and field that holds a setting, off any fine
     /// digits.
     pub fn move_to(&mut self, track: Option<&Track>, row: usize, field: usize) {
-        (self.row, self.field) = place_in(&self.rows(track), row, field);
+        let rack = !self.devices(track).is_empty();
+        (self.row, self.field) = place_in(&self.rows(track), rack, row, field);
         self.fine = false;
     }
 

@@ -1384,10 +1384,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
             column,
         })
     };
-    // It opens on the Sound page, which isn't a rack, and `L` twice goes to FX.
+    // It opens on the Sound page, a rack of its own four, and `L` twice goes to FX.
     let mut page = TrackPage::default();
     assert_eq!(page.page, Page::Sound);
-    assert!(page.devices(track).is_empty());
+    assert_eq!(page.devices(track).len(), 4);
     page.key(Cmd::NextPage, 1, track);
     page.key(Cmd::NextPage, 1, track);
     assert_eq!(page.page, Page::Fx);
