@@ -29,8 +29,8 @@ start a project in the folder `my-song`.
 
 The pictures of the program in this manual are made from the program itself, with
 `just screenshots`, so they show what it really draws. That includes the drawings the
-terminal is sent as images, like a track's filter curve on its Sound page, and beside
-it the waveform of the sample it plays:
+terminal is sent as images, like a track's filter curve on its Sound page, and above
+it, in the Machine, the waveform of the sample it plays:
 
 ![A track's Sound page, with its filter curve and its sample's waveform](images/track-sound.svg)
 

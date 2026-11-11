@@ -138,7 +138,8 @@ impl App {
                 self.jump_to_view(View::Sample);
             }
             View::Track => {
-                self.status = "g d opens the sample page from the Sample row".to_owned();
+                self.status =
+                    "g d opens the sample page from the sample, in the Machine's title".to_owned();
             }
             View::Phrase => {
                 if !self.open_slice_of_step() {

@@ -585,19 +585,25 @@ back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine 
 `pickers.rs` (`K`) and `typing.rs` (`i`), with `b`, `dd` and `p` in `fx.rs`. `App::track_control`
 is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
 
-*   **Each page's settings in its own file:** `sound.rs` has the Sound page's row tables for each
-    kind of track and machine, `modulation.rs` the Mod page's, and `fx.rs` the slots;
-    `controls.rs` has `Control`, what each setting is called and holds on a track.
+*   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
+    track and its row tables for the fixed tracks, `modulation.rs` the Mod page's, and `fx.rs` the
+    slots; `controls.rs` has `Control`, what each setting is called and holds on a track.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s, the FX
     page a slot each (`DeviceSpec::slot`); a `DeviceSpec` is its identity, its title controls over
     the grid's first columns and its grid of `Control`s, built by `DeviceSpec::new` from a model's
     `Grid` (`vt-model`'s `grid.rs`), as `Insert::grid` is. A page with devices is a rack: its cursor
     rows are the devices' rows one after another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0`
     and `$` step over and `j` and `k` land beside, `TrackPage::device_cursor` reads the cursor as a
-    device, a row (the title is 0) and a column, and `{` and `}` move by devices. The Sound and Mod
-    pages give none yet (`sound::devices` and `modulation::devices` are empty), so they're rows of
-    settings (`Page::rows`) with no holes; giving devices makes either a rack, with the cursor
-    already working through them.
+    device, a row (the title is 0) and a column, and `{` and `}` move by devices; a title with
+    nothing in it stands for its device's first settings row. A sound track's Sound page is a rack
+    of four (`sound::devices`): the Machine, from `Machine::grid` with `Machine::type_param` in its
+    title, and the Filter, Output and Play, each a fixed grid of the track's own controls. A page
+    or track that gives none is rows of settings (`Page::rows`, `TrackPage::page_rows`) with no
+    holes, as the fixed tracks' Sound pages are.
+*   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs`: a device's
+    frame and title (`widgets::device`), its grid read through a `CellSource` (`widgets::grid`,
+    `CellWidths::FX` and `CellWidths::SOUND`, whose value has room for its fine digits), and its
+    panel (`widgets::panel`).
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -1380,7 +1386,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 
 **Key conventions.** Keys inherited from Vim keep Vim's meaning. New bindings follow the author's Neovim rules: a capital is the wider version of its lowercase key, and a doubled key is the ordinary case. A key may be both an action and a prefix only if losing a timeout does nothing wrong.
 
-**Status line.** It always shows the mode, groove and BPM. Errors and notices go here. How the program itself is running, meaning CPU load (callback time divided by buffer duration), the late count and xruns, sits at the top right of the view instead, and turns red on a dropout. A dim leaf before it says the system is running the audio thread slowly to save power, and on the audio page the line under the status line says how slowed and about what the load would be at full speed (decision 149).
+**Status line.** It always shows the mode, groove and BPM. Errors and notices go here. How the program itself is running, meaning CPU load (callback time divided by buffer duration), the late count and xruns, sits at the top right of the view instead, and turns red on a dropout. A dim leaf before it says the system is running the audio thread slowly to save power, and on the audio page the line under the status line says how slowed and about what the load would be at full speed (decision 150).
 
 **Step numbers.** The phrase view shows each step's number in hex and, more faintly to its left, its distance from the cursor in decimal, which is the count to type before `j` or `k`.
 

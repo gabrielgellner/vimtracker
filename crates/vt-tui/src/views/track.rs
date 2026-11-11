@@ -6,12 +6,11 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row};
 use vt_engine::engine::Transport;
-use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::Insert;
 use vt_model::lfo::depth_text;
-use vt_model::settings::{Kind, SettingId, gate_percent};
+use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
 
@@ -26,7 +25,7 @@ use crate::track_page::{
 };
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
-use crate::views::widgets::bar::{BAR_ENDS, ValueBar};
+use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
 use crate::views::widgets::group;
@@ -34,8 +33,10 @@ use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
-use crate::views::widgets::table::{Cells, Columns, blank_row, take_top};
+use crate::views::widgets::table::{Columns, blank_row, take_top};
 use crate::views::widgets::toggle;
+
+mod sound;
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
@@ -80,82 +81,6 @@ const EMPTY_HINT_ROW: u16 = ROW_STEP;
 const NAME_WIDTH: u16 = 10;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
 const BAR_CELLS: usize = 9;
-/// The Sound page's columns, in each half: a setting's name, its value, its fine part and a gap,
-/// and its bar. A word takes all of those after the name, and the room after the bar, as a long
-/// file name needs; a choice's name takes the bar's room and what's after it. A gap parts the
-/// halves.
-const SOUND_LABEL: u16 = 10;
-const SOUND_VALUE: u16 = 2;
-const SOUND_FINE: u16 = 3;
-const SOUND_BAR: u16 = BAR_CELLS as u16 + BAR_ENDS;
-const SOUND_AFTER_BAR: u16 = FILE_WIDTH - SOUND_VALUE - SOUND_FINE - SOUND_BAR;
-const SOUND_GAP: u16 = 2;
-const SOUND_HALF: [u16; 6] = [
-    SOUND_LABEL,
-    SOUND_VALUE,
-    SOUND_FINE,
-    SOUND_BAR,
-    SOUND_AFTER_BAR,
-    SOUND_GAP,
-];
-/// Where the right half starts, the output's column, which the waveform sits under.
-const SOUND_COLUMN: u16 = SOUND_LABEL + FILE_WIDTH + SOUND_GAP;
-/// The longest file name shown on the Sound page.
-const FILE_WIDTH: u16 = 24;
-
-/// What a control with a bar is playing with right now.
-fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
-    match control {
-        Control::Level => Some(live.level),
-        Control::Base(TrackControl::Pan) => Some(live.pan),
-        Control::Setting(setting) => live.machine.get(setting).copied(),
-        Control::Base(TrackControl::Cutoff) => Some(live.cutoff),
-        Control::Base(TrackControl::Resonance) => Some(live.resonance),
-        Control::Base(TrackControl::SendA) => Some(live.send_a),
-        Control::Base(TrackControl::SendB) => Some(live.send_b),
-        _ => None,
-    }
-}
-
-/// The choice a machine's setting that's a list is on, such as 6-op's patch, shown on its row.
-fn choice_name(control: Control, track: &Track) -> Option<String> {
-    let id = control.setting_on(track)?;
-    let Kind::Stepped { choices, .. } = id.entry().kind else {
-        return None;
-    };
-    choices
-        .get(usize::from(track.setting(id)))
-        .map(|choice| (*choice).to_owned())
-}
-
-/// The value a control shows a bar for, and how. True is a mark either side of a centre.
-fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
-    let level = |value| Some((value, false));
-    match control {
-        Control::Level => level(track.level),
-        // 0 dB is in the middle, so it shows a cut or a boost either side of it, as pan does.
-        Control::Trim => Some((track.trim, true)),
-        Control::Base(TrackControl::Pan) => Some((track.pan, true)),
-        Control::Base(TrackControl::Pitch) => Some((track.pitch, true)),
-        // Those with a middle that's a setting of its own show where they are around it.
-        Control::Setting(_) => {
-            let id = control.setting_on(track)?;
-            match id.entry().kind {
-                Kind::Continuous { middle: false, .. } => level(track.setting(id)),
-                Kind::Continuous { middle: true, .. } => Some((track.setting(id), true)),
-                Kind::Stepped { .. } => None,
-            }
-        }
-        Control::Base(TrackControl::Cutoff) => level(track.cutoff),
-        Control::Base(TrackControl::Resonance) => level(track.resonance),
-        Control::Base(TrackControl::SendA) => level(track.send_a),
-        Control::Base(TrackControl::SendB) => level(track.send_b),
-        Control::Base(TrackControl::Drive) => level(track.drive),
-        Control::Base(TrackControl::LowCut) => level(track.low_cut),
-        Control::Base(TrackControl::HighCut) => level(track.high_cut),
-        _ => None,
-    }
-}
 
 /// Whether a setting is left at its default, which matters less, so its value is dim: a track
 /// following the project's groove shows what it plays, dimmed as it isn't its own.
@@ -166,137 +91,6 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Reset && track.reset.is_none()
         || control == Control::Glide && track.glide == 0
         || control == Control::FilterMode && !track.filter.has_modes()
-}
-
-/// The Sound page's columns: its two halves side by side.
-fn sound_columns() -> Columns {
-    Columns::new([SOUND_HALF, SOUND_HALF].concat())
-}
-
-/// A row of the Sound page: a control on the left, and on the right perhaps one.
-fn sound_row(app: &App, track: &Track, controls: &[Control], columns: &Columns) -> Row<'static> {
-    let mut cells = columns.row();
-    sound_cells(app, track, controls, &mut cells);
-    cells.done()
-}
-
-/// A Sound page row's controls, put in their halves.
-fn sound_cells(app: &App, track: &Track, controls: &[Control], cells: &mut Cells<'_>) {
-    let current = app.track_control();
-    for control in controls {
-        // A sound track's output is always on the right, even on a row with nothing on the left,
-        // and so is a group's, with its tracks on the left. A return or the master has only
-        // output, so it's all on the left.
-        let half = usize::from(control.column() > 0 && (track.is_sound() || track.is_group()));
-        cells.to(half * SOUND_HALF.len());
-        cells.cell(name_line(
-            app,
-            control.label_on(track),
-            &jump_label(app, *control),
-            SOUND_LABEL,
-        ));
-        let here = *control == current;
-        let on_fine = here && app.track_page.fine;
-        let on_value = here && !on_fine;
-        let text = setting::text(app, on_value, || value(*control, track, app.song()));
-        let mut style = setting::style(app, on_value, at_default(*control, track));
-        // The group a track is in is in its colour, as on the mixer.
-        if *control == Control::Group
-            && !on_value
-            && let Some(tint) = group::style(app.song(), app.cursor.track)
-        {
-            style = tint;
-        }
-        let value = Line::from(value_spans(app, *control, text, style));
-        // A setting that sweeps shows its fine part, set back.
-        let fine = control.fine_on(track).map(|id| {
-            let fine = setting::text(app, on_fine, || format!("{:02X}", track.fine(id)));
-            Line::styled(fine, setting::style(app, on_fine, true))
-        });
-        let name = if control.setting_on(track) == Some(SettingId::SLICE) {
-            Some(app.slice_choice(track))
-        } else {
-            choice_name(*control, track)
-        };
-        let bar = bar_value(*control, track);
-        if name.is_none() && bar.is_none() && fine.is_none() {
-            // A word, with all the room after the name.
-            cells.span(value, 4);
-            continue;
-        }
-        cells.cell(value).cell(fine.unwrap_or_default());
-        if let Some(name) = name {
-            // A patch number says nothing as a bar, so its name takes the bar's place.
-            cells.span(Line::styled(name, Style::new().fg(theme::MAUVE)), 2);
-        } else if let Some((value, centred)) = bar {
-            let live = app
-                .live
-                .and_then(|live| live_value(*control, &live))
-                .unwrap_or(value);
-            cells.cell(
-                ValueBar::new(value, BAR_CELLS)
-                    .playing(live)
-                    .centred(centred),
-            );
-        }
-    }
-}
-
-/// A group's Sound page: the tracks it sums down the left, where a sound track's machine is, each
-/// with its own mute or solo, and its output on the right, where a sound track's is, so its level
-/// stays in the same place as its tracks'. A list longer than the page ends with how many more.
-fn group_rows(app: &App, track: &Track, columns: &Columns, room: usize) -> Vec<Row<'static>> {
-    let song = app.song();
-    let members: Vec<usize> = song.group_members(app.cursor.track).collect();
-    let controls = app.track_page.page_rows(Some(track));
-    let lines = members.len().max(1).min(room).max(controls.len());
-    let cut = members.len() > lines;
-    let mut rows = Vec::new();
-    for line in 0..lines {
-        let mut cells = columns.row();
-        let label = if line == 0 { "Tracks" } else { "" };
-        cells.cell(Line::styled(label, theme::dim()));
-        let member = members.get(line).copied();
-        let text = match member {
-            _ if cut && line == lines - 1 => {
-                Line::styled(format!("+{} more", members.len() - line), theme::faint())
-            }
-            None if line == 0 => Line::styled("None", theme::dim()),
-            None => Line::default(),
-            Some(member) => member_line(app, member),
-        };
-        cells.span(text, 4);
-        if let Some(controls) = controls.get(line) {
-            sound_cells(app, track, controls, &mut cells);
-        }
-        rows.push(cells.done());
-    }
-    rows
-}
-
-/// One of a group's tracks, by its number and name, with its own mute or solo after it, dim while
-/// it's muted.
-fn member_line(app: &App, member: usize) -> Line<'static> {
-    let song = app.song();
-    let name = format!("{:02} {}", member + 1, song.tracks[member].name);
-    let live = app.levels.get(member).copied().unwrap_or_default();
-    let style = if live.mute {
-        theme::dim()
-    } else {
-        Style::new()
-    };
-    let mut spans = vec![Span::styled(name.trim_end().to_owned(), style)];
-    let glyph = if live.mute {
-        Some(glyphs::MUTE)
-    } else if live.solo {
-        Some(glyphs::SOLO)
-    } else {
-        None
-    };
-    if let Some(glyph) = glyph {
-        spans.push(Span::styled(format!(" {glyph}"), theme::active()));
-    }
-    Line::from(spans)
 }
 
 /// A setting's value as text.
@@ -837,18 +631,6 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
     panel.beside(scale, REDUCTION_SCALE_WIDTH)
 }
 
-/// The filter's curve in a box, under its rows, and beside it under the output's column, the
-/// waveform of the sample the track plays, if it has one, each in a cell of a grid.
-fn draw_curves(frame: &mut Frame, area: Rect, filter: u32, waveform: Option<u32>) {
-    let columns = Columns::new([SOUND_COLUMN, WAVEFORM_WIDTH as u16 + 2]);
-    let filter = image::boxed(filter, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT);
-    frame.render_widget(Paragraph::new(filter), columns.area_of(area, 0, 1));
-    if let Some(waveform) = waveform {
-        let waveform = image::boxed(waveform, WAVEFORM_WIDTH, WAVEFORM_HEIGHT);
-        frame.render_widget(Paragraph::new(waveform), columns.area_of(area, 1, 1));
-    }
-}
-
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
@@ -902,32 +684,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut rest = area;
     frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
     match app.track_page.page {
-        Page::Sound if track.is_group() => {
-            let columns = sound_columns();
-            let rows = group_rows(app, track, &columns, usize::from(rest.height));
-            columns.stack(frame, &mut rest, rows);
-        }
-        Page::Sound => {
-            let columns = sound_columns();
-            let mut rows = Vec::new();
-            for controls in app.track_page.page_rows(Some(track)) {
-                // The filter stands apart from the machine above it.
-                if controls.first() == Some(&Control::FilterType) {
-                    rows.push(blank_row());
-                }
-                rows.push(sound_row(app, track, controls, &columns));
-            }
-            columns.stack(frame, &mut rest, rows);
-            if track.is_sound()
-                && let Some(filter) = app.filter_image
-            {
-                let waveform = app
-                    .waveform_image
-                    .filter(|_| track.machine == vt_model::song::Machine::Sampler);
-                let rows = FILTER_CURVE_HEIGHT as u16 + 2;
-                draw_curves(frame, take_top(&mut rest, rows), filter, waveform);
-            }
-        }
+        Page::Sound => sound::draw(frame, rest, app, track),
         Page::Fx => draw_fx(frame, rest, app, track),
         Page::Mod => {
             let envelopes = mod_columns(&ENVELOPES[0]);
