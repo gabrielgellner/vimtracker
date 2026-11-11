@@ -1564,6 +1564,51 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
 }
 
 #[test]
+fn the_transforms_rework_the_values_there_as_one_undo() {
+    use vt_tui::shaping::ShapeRow;
+    let start = [
+        "C-3 10 --- --- ---",
+        E,
+        "C-3 30 --- --- ---",
+        "C-3 70 --- --- ---",
+    ];
+    let (mut app, _rt) = app_with(&start);
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    keys(&mut app, "Kinvert<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Invert);
+    assert_eq!(panel(&app).rows(), [ShapeRow::Fill, ShapeRow::Where]);
+    assert_eq!(vel(&app), ["70", "--", "50", "10"]);
+    keys(&mut app, "=");
+    assert_eq!(panel(&app).shape.kind, FillKind::Shuffle);
+    let dealt = vel(&app);
+    let mut sorted = dealt.clone();
+    sorted.sort();
+    assert_eq!(sorted, ["--", "10", "30", "70"]);
+    for _ in 0..8 {
+        keys(&mut app, "r");
+        if vel(&app) != dealt {
+            break;
+        }
+    }
+    assert_ne!(vel(&app), dealt, "r deals again");
+    keys(&mut app, "=");
+    assert_eq!(panel(&app).shape.kind, FillKind::Reverse);
+    assert_eq!(vel(&app), ["70", "--", "30", "10"]);
+    keys(&mut app, "-");
+    keys(&mut app, "-");
+    keys(&mut app, "-");
+    assert_eq!(panel(&app).shape.kind, FillKind::Scale);
+    assert!(panel(&app).rows().contains(&ShapeRow::Curve));
+    keys(&mut app, "ji40ji60");
+    assert_eq!(vel(&app), ["40", "--", "4B", "60"]);
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), 1);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), start);
+}
+
+#[test]
 fn random_fill_stays_in_range_and_rerolls() {
     let rows = vec!["C-3 40 --- --- ---".to_owned(); 64];
     let (mut app, _rt) = app_of(&rows);

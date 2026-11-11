@@ -79,7 +79,7 @@ loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Wave`, `Alternate` or `List`. `r` picks anew |
+| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List` or a transform. `r` picks anew |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -109,6 +109,21 @@ comes by itself, so `704055` types `70 40 55`. It starts as the two ends. `Run`
 works as for `Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the
 list round.
 
+The last four fills are transforms: rather than making new values, they rework
+the ones already in the rows `Where` chooses, and a row it chooses with no value
+in the column is left alone.
+
+| Fill | Does |
+|---|---|
+| Scale | Maps the values from their own lowest and highest onto From and To |
+| Invert | Flips each value within their range, the loudest to the softest |
+| Shuffle | Deals the values to the rows in a new order. `r` deals again |
+| Reverse | Gives the rows their values in the opposite order |
+
+`Scale` tames a take into `40` to `60`, or widens a hat's accents. Curve and S
+bend it as they bend a ramp, and From above To turns it upside down. The others
+have no settings but `Where`, and keep the rhythm: only the values move.
+
 The ends start as the first and last values selected, or if those match, the
 lowest and highest.
 
@@ -137,8 +152,8 @@ selected, and a row holding a different command keeps it.
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
 `.` applies the same shape to another selection. A ramp or random fill takes that
-selection's own ends, `Wave` and `Alternate` keep theirs, and `List` keeps its
-list.
+selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
+its list, and the other transforms rework that selection's own values.
 
 ## Values and small edits
 
