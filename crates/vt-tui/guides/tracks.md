@@ -761,7 +761,8 @@ Press `Space 6` for a strip for each track: its name, a meter of what it's playi
 with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
 `Level`, `Pan`, `Send A`, `Send B`, mute and solo. It opens on `Level`. The meters are on the same scale as the main one,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
-tracks, `j` and `k` up and down the strip, and values edit as they do on the track page. On mute and solo, `=` switches on,
+tracks, `j` and `k` up and down the strip, and values edit as they do on the track page,
+with `=` `-` `+` `_` or Cmd with `l` `h` `k` `j`. On mute and solo, `=` switches on,
 `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track.
 

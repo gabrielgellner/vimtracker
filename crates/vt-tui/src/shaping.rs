@@ -14,7 +14,7 @@ use vt_model::shape::{
 use vt_model::song::Song;
 
 use crate::app::{App, Selection};
-use crate::input::bindings::Cmd;
+use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
@@ -327,7 +327,15 @@ impl App {
             KeyCode::BackTab => return self.run(Cmd::PlayFromStart),
             _ => {}
         }
-        if self.shape.as_ref().is_some_and(|p| p.typing.is_some()) {
+        let typing = self.shape.as_ref().is_some_and(|p| p.typing.is_some());
+        // Cmd with a movement key is the `=` `-` `+` or `_` it stands for, as everywhere, but
+        // types nothing.
+        let key = match (key.command, adjusting_key(key)) {
+            (false, _) => key,
+            (true, Some(plain)) if !typing => plain,
+            (true, _) => return,
+        };
+        if typing {
             self.shape_typing_key(key.code);
             return;
         }
