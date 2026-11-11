@@ -1,0 +1,14 @@
+symbols-nerd-font-mono.woff2 is Symbols Nerd Font Mono from Nerd Fonts v3.5.1
+(https://github.com/ryanoasis/nerd-fonts), cut down by scripts/symbols-font.sh to the symbols
+listed in codepoints.txt. Nerd Fonts is under the MIT licence, in LICENSE beside this file.
+The same script writes those symbols' outlines to crates/vt-tui/src/screenshot/symbols.rs, which
+the manual's screenshots draw them with, under the same licences.
+
+The symbols in it come from these icon sets, under their own licences:
+
+- Material Design Icons, U+F0000 and up, by Pictogrammers, under the Apache License 2.0:
+  https://github.com/Templarian/MaterialDesign-Font
+- Font Awesome, U+F204, U+F205 and U+EE32, by Fonticons, under CC BY 4.0:
+  https://github.com/FortAwesome/Font-Awesome
+- Fira Code's progress spinner, U+EE06 to U+EE0B, by Nikita Prokopov, under the SIL Open Font
+  License 1.1: https://github.com/tonsky/FiraCode

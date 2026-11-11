@@ -19,6 +19,7 @@ On Linux, the audio output needs the ALSA headers (`libasound2-dev` on Debian an
 just run my-song      # a release build: a debug build uses far more CPU, even when idle
 just test             # every test
 just screenshots      # remake the manual's screenshots
+just symbols-font     # after adding a Nerd Font symbol, cut the manual's font down to them again
 just docs-serve       # the manual in a browser, rebuilt as it changes
 just live start       # the program in a kitty window of its own, to check a change by hand
 ```

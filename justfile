@@ -30,6 +30,10 @@ docs:
 docs-serve:
     mdbook serve docs/manual --open
 
+# Cut the manual's Nerd Font down to the symbols in glyphs.rs, and write their paths for the screenshots
+symbols-font:
+    scripts/symbols-font.sh
+
 # Run every test
 test:
     cargo test --workspace

@@ -12,3 +12,5 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 # The address on GitHub Pages, so the not-found page links back to the manual.
 site-url = "/vimtracker/"
+# The Nerd Font symbols the guides show, as a browser has none of its own.
+additional-css = ["theme/symbols.css"]
