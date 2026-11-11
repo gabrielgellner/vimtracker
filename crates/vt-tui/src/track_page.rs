@@ -1,8 +1,8 @@
 //! The track page, `Space 4`: a track's Sound, Mod and FX pages. `TrackPage` is the page as a
 //! component, which page shows and where its cursor is, with the moves that need only the cursor's
 //! track; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
-//! own (`sound`, `modulation`, `fx`), a page that's a rack of devices (`device`) gives them from
-//! `Page::devices`, and `editing`, `pickers` and `typing` change the one under the cursor.
+//! own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's a rack
+//! (`device`), and `editing`, `pickers` and `typing` change the setting under the cursor.
 
 mod controls;
 mod device;
@@ -62,17 +62,15 @@ impl Page {
         Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
-    /// The page's devices, top to bottom, on a page that's a rack of them: the FX page's slots.
-    /// The other pages are rows of settings, for now.
+    /// The page's devices, top to bottom, on a page that's a rack of them, each page's from its
+    /// own file. Only the FX page is one yet, its slots; a page with none is rows of settings
+    /// (`Page::rows`). The cursor, `j`, `k`, `{` and `}` go through whatever devices a page gives,
+    /// so a page becomes a rack by giving them.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         match self {
-            Self::Fx => track
-                .inserts
-                .iter()
-                .enumerate()
-                .map(|(slot, insert)| DeviceSpec::slot(slot, *insert))
-                .collect(),
-            Self::Sound | Self::Mod => Vec::new(),
+            Self::Sound => sound::devices(track),
+            Self::Mod => modulation::devices(track),
+            Self::Fx => fx::devices(track),
         }
     }
 

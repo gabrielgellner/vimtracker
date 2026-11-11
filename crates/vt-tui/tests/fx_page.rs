@@ -1356,3 +1356,64 @@ fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
     app.transport = Transport::Stopped;
     assert_eq!(switch(&app), off);
 }
+
+/// The track page's cursor is a component of its own: given a track, `TrackPage` goes through a
+/// rack's devices with no `App`, as the Sound and Mod pages' will once they give devices too.
+#[test]
+fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
+    use vt_model::insert::Insert;
+    use vt_model::selection::Motion;
+    use vt_model::song::Track;
+    use vt_tui::input::bindings::Cmd;
+    use vt_tui::track_page::{Control, DeviceCursor, Outcome, Page, TrackPage};
+    let effect = |name| {
+        *Insert::ALL
+            .iter()
+            .find(|insert| insert.name() == name)
+            .unwrap()
+    };
+    let mut track = Track::default();
+    // An EQ, an empty slot, a Distort and another empty slot.
+    track.inserts[0] = effect("EQ3");
+    track.inserts[2] = effect("Distort");
+    let track = Some(&track);
+    let at = |device, row, column| {
+        Some(DeviceCursor {
+            device,
+            row,
+            column,
+        })
+    };
+    // It opens on the Sound page, which isn't a rack, and `L` twice goes to FX.
+    let mut page = TrackPage::default();
+    assert_eq!(page.page, Page::Sound);
+    assert!(page.devices(track).is_empty());
+    page.key(Cmd::NextPage, 1, track);
+    page.key(Cmd::NextPage, 1, track);
+    assert_eq!(page.page, Page::Fx);
+    assert_eq!(page.devices(track).len(), 4);
+    assert_eq!(page.control(track), Control::Insert(0));
+    assert_eq!(page.key(Cmd::Move(Motion::Down), 1, track), Outcome::Done);
+    assert_eq!(page.device_cursor(track), at(0, 1, 0));
+    // `}` keeps the row and column: an empty slot shows the cursor on its title, and the next
+    // device has them again.
+    page.key(Cmd::Move(Motion::NextBeat), 1, track);
+    assert_eq!(page.device_cursor(track), at(1, 0, 0));
+    page.key(Cmd::Move(Motion::NextBeat), 1, track);
+    assert_eq!(page.device_cursor(track), at(2, 1, 0));
+    // `j` and `k` pass an empty slot's grid by, from its title.
+    page.key(Cmd::Move(Motion::Up), 2, track);
+    assert_eq!(page.device_cursor(track), at(1, 0, 0));
+    // The EQ's last row has a hole in the first column, so the cursor lands beside it.
+    page.key(Cmd::Move(Motion::Up), 1, track);
+    assert_eq!(page.device_cursor(track), at(0, 3, 1));
+    // An edit isn't the page's own, and the page beside isn't a rack.
+    assert_eq!(page.key(Cmd::Increase, 1, track), Outcome::Passed);
+    page.key(Cmd::PreviousPage, 1, track);
+    assert_eq!(page.page, Page::Mod);
+    assert_eq!(page.device_cursor(track), None);
+    assert_eq!(
+        page.key(Cmd::Move(Motion::NextBeat), 1, track),
+        Outcome::Refused("{ and } go between slots on the FX page")
+    );
+}

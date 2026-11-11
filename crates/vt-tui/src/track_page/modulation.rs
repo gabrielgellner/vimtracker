@@ -2,8 +2,16 @@
 
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::lfo::LFOS_PER_TRACK;
+use vt_model::song::Track;
 
-use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+use super::{AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField};
+
+/// The Mod page's devices, on a track whose Mod page is a rack. It isn't yet on any: the page is a
+/// row of settings for each modulator, the tables below, until each is a half-width device of its
+/// own (the track pages study, `docs/designs/track-pages.md`, §2.2).
+pub(super) fn devices(_track: &Track) -> Vec<DeviceSpec> {
+    Vec::new()
+}
 
 const fn lfo_row(slot: usize) -> [Control; 6] {
     [

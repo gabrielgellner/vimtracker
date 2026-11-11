@@ -1,8 +1,7 @@
 //! A page as a rack of devices: each device's title and grid of settings as the cursor sees them,
 //! and where the cursor is among them. The views draw them with `views/widgets/device`.
 
-use vt_model::grid::{GRID_COLUMNS, GRID_ROWS};
-use vt_model::insert::Insert;
+use vt_model::grid::{GRID_COLUMNS, GRID_ROWS, Grid};
 
 use super::Control;
 
@@ -27,21 +26,20 @@ pub struct DeviceSpec {
 }
 
 impl DeviceSpec {
-    /// A slot on the FX page: its effect over the grid's first column and its type over the
-    /// second, then its effect's grid. An empty slot has only its effect.
-    pub fn slot(slot: usize, insert: Insert) -> Self {
-        let mut title = [None; DEVICE_COLUMNS];
-        title[0] = Some(Control::Insert(slot));
-        title[1] = insert.type_param().map(|at| Control::InsertParam(slot, at));
-        let grid = insert.grid();
+    /// A device with its title's controls over a grid a model states, such as `Insert::grid`, by
+    /// the number of each setting in it, which `control` makes the cursor's control. It has no
+    /// switch until it's given one.
+    pub fn new(
+        identity: impl Into<String>,
+        title: [Option<Control>; DEVICE_COLUMNS],
+        grid: Grid,
+        control: impl Fn(usize) -> Control,
+    ) -> Self {
         Self {
-            identity: (slot + 1).to_string(),
-            switchable: insert != Insert::Empty,
+            identity: identity.into(),
+            switchable: false,
             title,
-            grid: std::array::from_fn(|row| {
-                grid.row(row)
-                    .map(|at| at.map(|at| Control::InsertParam(slot, at)))
-            }),
+            grid: std::array::from_fn(|row| grid.row(row).map(|at| at.map(&control))),
         }
     }
 

@@ -2,9 +2,18 @@
 //! track is and what it plays.
 
 use vt_model::action::TrackControl;
+use vt_model::song::Track;
 
-use super::Control;
 use super::controls::base;
+use super::{Control, DeviceSpec};
+
+/// The Sound page's devices, on a track whose Sound page is a rack. It isn't yet on any: the page
+/// is rows of settings, the tables below, until it's made of a machine, a filter, an output and
+/// a device for how it plays, each from a grid of its own (the track pages study,
+/// `docs/designs/track-pages.md`, §2.1).
+pub(super) fn devices(_track: &Track) -> Vec<DeviceSpec> {
+    Vec::new()
+}
 
 /// The Sound page of a track playing a sample, top to bottom, with output on the right: its
 /// `Sample`, then the sampler's `Slice`, `Start`, `Length` and `Play`, as a synth's settings are,
