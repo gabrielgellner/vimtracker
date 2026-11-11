@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 use common::{app, press};
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
+use vt_model::settings::SettingId;
 use vt_model::song::{FilterType, Machine, Song, Track};
+use vt_roto::cc::ControlEvent;
 use vt_roto::fake::{FakePorts, FakeRoto};
 use vt_roto::link::Options;
 use vt_roto::live::{Feel, KNOB_TOP};
@@ -18,6 +20,7 @@ use vt_roto::sysex::{PluginKind, ToRoto};
 use vt_tui::app::App;
 use vt_tui::input::mode::View;
 use vt_tui::roto::devices::{Family, knob, knob_order, live_devices, name};
+use vt_tui::roto::edits::value_text;
 use vt_tui::roto::{Connection, RotoSetting};
 use vt_tui::track_page::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField, Page};
 
@@ -376,7 +379,6 @@ fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
 
 #[test]
 fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
-    use vt_roto::cc::ControlEvent;
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
@@ -477,4 +479,438 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
     }
     let shown = text(&app);
     assert!(shown.contains("On, connected, firmware 3.3.0"), "{shown}");
+}
+
+/// An app connected to a fake Roto in PLUGIN mode, showing the `device`th device of the cursor's
+/// track, its first page's knobs learned.
+fn showing(device: u8) -> (App, vt_engine::link::Realtime, FakePorts) {
+    let (mut app, realtime, ports) = app_with_a_fake_roto();
+    app.roto.gesture_pause = Duration::ZERO;
+    app.set_roto(true);
+    assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
+    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(device))]);
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.shown == Some((device, 0))
+            && (1..=8).all(|index| {
+                fake.knob(index)
+                    .is_some_and(|knob| knob.learned.is_some() || knob.unmapped)
+            })
+    }));
+    (app, realtime, ports)
+}
+
+fn turn(ports: &FakePorts, knob: u8, value: u16) {
+    let ccs = ports.with(|fake| fake.control(ControlEvent::Knob { index: knob, value }));
+    ports.from_roto(ccs);
+}
+
+fn touch(ports: &FakePorts, knob: u8, touched: bool) {
+    let ccs = ports.with(|fake| {
+        fake.control(ControlEvent::Touch {
+            index: knob,
+            touched,
+        })
+    });
+    ports.from_roto(ccs);
+}
+
+/// Ticks the app until the song is as wanted, for up to five seconds.
+fn tick_until_song(app: &mut App, done: impl Fn(&Song) -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        app.tick();
+        if done(app.song()) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    false
+}
+
+/// Ticks the app for a while, for what's sent to settle.
+fn settle(app: &mut App, for_ms: u64) {
+    let until = Instant::now() + Duration::from_millis(for_ms);
+    while Instant::now() < until {
+        app.tick();
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+/// Every value the Roto was told to show on a knob, in order.
+fn values_shown(fake: &FakeRoto, knob: u8) -> Vec<String> {
+    fake.received
+        .iter()
+        .filter_map(|message| match message {
+            ToRoto::ShowControlValue { index, value, .. } if *index == knob => {
+                Some(value.as_str().to_owned())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The Output device, the third, has `Trim` on its first knob and `Level` on its fifth.
+const OUTPUT: u8 = 2;
+const TRIM_KNOB: u8 = 0;
+const LEVEL_KNOB: u8 = 4;
+
+#[test]
+fn a_knob_edits_its_own_track_whatever_the_cursor_is_on() {
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    assert_eq!(app.roto.track, 0);
+    // The cursor goes to the second track, and to the phrase view.
+    app.cursor.track = 1;
+    press(&mut app, " 3");
+    let other = app.song().tracks[1].level;
+    let top = SettingId::VOL.entry().kind.top();
+    turn(&ports, LEVEL_KNOB, KNOB_TOP);
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].level == top));
+    assert_eq!(app.song().tracks[1].level, other, "not the cursor's track");
+    assert_eq!(app.cursor.track, 1, "the cursor stays");
+    // Its value, as the app writes it.
+    let text = value_text(Control::Level, &app.song().tracks[0], app.song());
+    assert!(text.ends_with("dB"), "{text}");
+    assert!(tick_until(&mut app, &ports, |fake| {
+        values_shown(fake, LEVEL_KNOB).last() == Some(&text)
+    }));
+}
+
+#[test]
+fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    let was = app.song().tracks[0].level;
+    let depth = app.history.undo_depth();
+    touch(&ports, LEVEL_KNOB, true);
+    for value in [2000, 5000, 8000, 11_000] {
+        turn(&ports, LEVEL_KNOB, value);
+        let level = |song: &Song| song.tracks[0].level;
+        let before = level(app.song());
+        assert!(tick_until_song(&mut app, |song| level(song) != before));
+        settle(&mut app, 10);
+    }
+    assert!(
+        app.history.undo_depth() > depth + 1,
+        "each frame's move is an edit"
+    );
+    touch(&ports, LEVEL_KNOB, false);
+    settle(&mut app, 30);
+    assert_eq!(
+        app.history.undo_depth(),
+        depth + 1,
+        "one step for the touch"
+    );
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[0].level, was);
+    // Turned without a touch, as a hard twist can be, it's a step of its own once it settles.
+    turn(&ports, LEVEL_KNOB, 3000);
+    turn(&ports, LEVEL_KNOB, 4000);
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].level != was));
+    settle(&mut app, 30);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+}
+
+#[test]
+fn a_stepped_knob_moves_through_its_list() {
+    use vt_model::speed::Speed;
+    use vt_roto::live::position_of;
+    // The Play device's second knob is `Speed`.
+    let (mut app, _realtime, ports) = showing(3);
+    for (at, speed) in Speed::ALL.iter().enumerate().rev() {
+        turn(&ports, 1, position_of(at, Speed::ALL.len()));
+        assert!(tick_until_song(&mut app, |song| song.tracks[0].speed == *speed));
+        assert!(tick_until(&mut app, &ports, |fake| {
+            values_shown(fake, 1).last().map(String::as_str) == Some(speed.name())
+        }));
+    }
+}
+
+#[test]
+fn a_knob_being_touched_is_never_sent_its_own_value_back() {
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    let positions = |ports: &FakePorts, knob: u8| ports.with(|fake| fake.knob_position(knob));
+    let was = app.song().tracks[0].level;
+    touch(&ports, LEVEL_KNOB, true);
+    turn(&ports, LEVEL_KNOB, 3000);
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].level != was));
+    settle(&mut app, 30);
+    assert_eq!(
+        positions(&ports, LEVEL_KNOB),
+        None,
+        "not sent its own value"
+    );
+    // Another knob's setting moved by the keys is sent: its motor follows.
+    app.apply(&vt_model::action::Action::SetTrackTrim {
+        track: 0,
+        trim: 0xC0,
+    });
+    let trim = knob(Control::Trim, &app.song().tracks[0], app.song()).unwrap();
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.knob_position(TRIM_KNOB) == Some(trim.position)
+    }));
+    // And shows its value as it goes, as a knob turned by hand does.
+    let text = value_text(Control::Trim, &app.song().tracks[0], app.song());
+    assert!(tick_until(&mut app, &ports, |fake| {
+        values_shown(fake, TRIM_KNOB).last() == Some(&text)
+    }));
+    // The touched knob's own setting moved by the keys waits for the hand to let go.
+    app.apply(&vt_model::action::Action::SetTrackLevel {
+        track: 0,
+        level: 0x10,
+    });
+    settle(&mut app, 30);
+    assert_eq!(
+        positions(&ports, LEVEL_KNOB),
+        None,
+        "not moved under the hand"
+    );
+    touch(&ports, LEVEL_KNOB, false);
+    let level = knob(Control::Level, &app.song().tracks[0], app.song()).unwrap();
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.knob_position(LEVEL_KNOB) == Some(level.position)
+    }));
+    // Turned and let go, with nothing else moving it, it's left where the hand put it.
+    let sent = ports.with(|fake| fake.received_ccs.len());
+    touch(&ports, LEVEL_KNOB, true);
+    turn(&ports, LEVEL_KNOB, 9000);
+    touch(&ports, LEVEL_KNOB, false);
+    settle(&mut app, 50);
+    assert_eq!(ports.with(|fake| fake.received_ccs.len()), sent, "no echo");
+}
+
+#[test]
+fn values_are_shown_at_most_twelve_times_a_second_and_the_last_always() {
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    let started = Instant::now();
+    for step in 0..40u16 {
+        turn(&ports, LEVEL_KNOB, 400 * step);
+        app.tick();
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    let elapsed = started.elapsed();
+    let shown = ports.with(|fake| values_shown(fake, LEVEL_KNOB).len());
+    let most = 1 + elapsed.as_millis() / vt_tui::roto::VALUE_EVERY.as_millis();
+    assert!(
+        (1..=most as usize).contains(&shown),
+        "{shown} values in {elapsed:?}"
+    );
+    settle(&mut app, 200);
+    let last = value_text(Control::Level, &app.song().tracks[0], app.song());
+    assert_eq!(
+        ports.with(|fake| values_shown(fake, LEVEL_KNOB).last().cloned()),
+        Some(last),
+        "the last value is shown"
+    );
+}
+
+#[test]
+fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
+    use vt_model::action::Action;
+    use vt_roto::sysex::FromRoto;
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    let tap = |ports: &FakePorts, index: u8, enabled: bool| {
+        let bytes = ports.with(|fake| fake.press(FromRoto::SetPluginEnabled { index, enabled }));
+        ports.from_roto(vec![bytes]);
+    };
+    let enabled = |fake: &FakeRoto, device: u8| fake.plugins.get(&device).map(|p| p.enabled);
+    app.apply(&Action::SetInsert {
+        track: 0,
+        slot: 0,
+        insert: Insert::ALL[2],
+    });
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(true)));
+    // Tapping SEL and the slot bypasses it.
+    tap(&ports, 4, false);
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].bypassed[0]));
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(false)));
+    // `b` in the app, as its action, brings it back, which shows on the Roto.
+    app.apply(&Action::SetBypass {
+        track: 0,
+        slot: 0,
+        bypassed: false,
+    });
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(true)));
+    // On the second bank, counted from it as the Roto counts: its second device is LFO 1.
+    let page = ports.with(|fake| fake.press(FromRoto::SetFirstPlugin(8)));
+    ports.from_roto(vec![page]);
+    assert!(tick_until(&mut app, &ports, |fake| fake.first_plugin == 8));
+    tap(&ports, 1, false);
+    assert!(tick_until_song(&mut app, |song| song.tracks[0].lfos[0].bypassed));
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 9) == Some(false)));
+    assert_eq!(ports.with(|fake| fake.first_plugin), 8, "the bank stays");
+    // The accumulator has no switch: it stays on, and is sent so again.
+    let (sent, undo) = (
+        ports.with(|fake| fake.received.len()),
+        app.history.undo_depth(),
+    );
+    tap(&ports, 6, false);
+    assert!(tick_until(&mut app, &ports, |fake| fake.received.len() > sent));
+    assert_eq!(ports.with(|fake| enabled(fake, 14)), Some(true));
+    assert_eq!(app.history.undo_depth(), undo, "and nothing changed");
+}
+
+#[test]
+fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
+    use vt_roto::sysex::{ControlType, FromRoto};
+    // The real Roto says it's chosen with `ROTO SELECT PLUGIN` sometimes, and sometimes only by
+    // asking for the device's knobs.
+    for says_so in [true, false] {
+        let (mut app, _realtime, ports) = showing(OUTPUT);
+        let depth = app.history.undo_depth();
+        // Tapping SEL, paging to the second bank, then holding SEL and pressing LFO 1, the
+        // tenth device: the Roto switches it as the button goes down.
+        let messages = ports.with(|fake| {
+            vec![
+                fake.press(FromRoto::SetFirstPlugin(8)),
+                fake.press(FromRoto::SetPluginEnabled {
+                    index: 1,
+                    enabled: false,
+                }),
+            ]
+        });
+        ports.from_roto(messages);
+        assert!(tick_until_song(&mut app, |song| song.tracks[0].lfos[0].bypassed));
+        // SEL let go: it asks for the knobs of the device it now shows, and may say so.
+        let mut messages = ports.with(|fake| {
+            vec![fake.press(FromRoto::ControlMapped {
+                index: 1,
+                hash: FakeRoto::knob_hash(1),
+                control: ControlType::Knob,
+                control_index: 0,
+                macro_param: true,
+            })]
+        });
+        if says_so {
+            messages.push(ports.with(|fake| fake.choose_plugin(1)));
+        }
+        ports.from_roto(messages);
+        let lfo = live_devices(&app.song().tracks[0], app.song())[9].clone();
+        let first = lfo.control(1).unwrap().name.clone();
+        assert!(tick_until(&mut app, &ports, |fake| {
+            fake.shown == Some((9, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
+        }));
+        assert_eq!(
+            app.roto.view.selected_index(),
+            9,
+            "LFO 1's knobs, {says_so}"
+        );
+        assert!(
+            !app.song().tracks[0].lfos[0].bypassed,
+            "chosen, not switched"
+        );
+        assert_eq!(app.history.undo_depth(), depth, "and no undo step left");
+        assert_eq!(
+            ports.with(|fake| fake.plugins.get(&9).map(|p| p.enabled)),
+            Some(true)
+        );
+    }
+}
+
+#[test]
+fn func_chooses_the_track_the_roto_shows_and_the_cursor_stays() {
+    use vt_model::action::Action;
+    use vt_roto::sysex::FromRoto;
+    let (mut app, _realtime, ports) = showing(OUTPUT);
+    ports.with(|fake| {
+        assert_eq!(fake.tracks[&0].name.as_str(), "Track 01");
+        assert_eq!(fake.tracks[&1].name.as_str(), "Track 02");
+        assert_eq!(
+            fake.selected_track.as_ref().map(|track| track.index),
+            Some(0)
+        );
+    });
+    let machine = Machine::ALL[3];
+    app.apply(&Action::SetTrackMachine { track: 1, machine });
+    let choose = ports.with(|fake| fake.press(FromRoto::RotoSelectTrack(1)));
+    ports.from_roto(vec![choose]);
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.plugins
+            .get(&0)
+            .is_some_and(|p| p.name.as_str() == machine.name())
+    }));
+    assert_eq!(app.roto.track, 1);
+    assert_eq!(app.cursor.track, 0, "the cursor stays");
+    assert_eq!(app.roto.view.selected_index(), OUTPUT, "on the same device");
+    // Its knobs now edit that track.
+    let top = SettingId::VOL.entry().kind.top();
+    let first = app.song().tracks[0].level;
+    turn(&ports, LEVEL_KNOB, KNOB_TOP);
+    assert!(tick_until_song(&mut app, |song| song.tracks[1].level == top));
+    assert_eq!(app.song().tracks[0].level, first);
+    // The arrows page through the tracks: the groups, the returns and the master after them.
+    let page = ports.with(|fake| fake.press(FromRoto::SetFirstTrack(8)));
+    ports.from_roto(vec![page]);
+    let last = app.song().tracks.len() - 1;
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.tracks
+            .get(&(last as u16))
+            .is_some_and(|track| track.name.as_str() == "Master")
+    }));
+    ports.with(|fake| {
+        let group = fake
+            .tracks
+            .values()
+            .find(|track| track.name.as_str() == "Group 1");
+        assert!(group.is_some_and(|group| group.grouped));
+    });
+}
+
+#[test]
+fn every_knob_left_where_it_is_edits_nothing_and_each_end_is_an_edit_that_holds() {
+    use vt_model::action::edit;
+    use vt_tui::roto::devices::{control_at, track_devices};
+    use vt_tui::roto::edits::turned;
+    let song = std::sync::Arc::new(every_kind_of_device());
+    let mut checked = 0;
+    for (at, track) in song.tracks.iter().enumerate() {
+        for (device, (_, _, spec)) in track_devices(track).into_iter().enumerate() {
+            for (place, control) in knob_order(&spec).into_iter().enumerate() {
+                let Some(control) = control else { continue };
+                assert_eq!(control_at(track, device, place as u16 + 1), Some(control));
+                let Some(shown) = knob(control, track, &song) else {
+                    continue;
+                };
+                let what = format!("{control:?} in {} on {:?}", spec.identity, track.kind);
+                assert_eq!(turned(control, at, &song, shown.position), None, "{what}");
+                for end in [0, KNOB_TOP / 3, KNOB_TOP] {
+                    let Some(action) = turned(control, at, &song, end) else {
+                        continue;
+                    };
+                    let next = edit(&song, &action).unwrap_or_else(|e| panic!("{what}: {e}"));
+                    assert_eq!(turned(control, at, &next, end), None, "{what} at {end}");
+                    checked += 1;
+                }
+            }
+        }
+    }
+    assert!(checked > 500, "{checked}");
+}
+
+#[test]
+fn a_smooth_knob_sets_the_fine_digits_and_values_read_as_the_app_writes_them() {
+    use vt_model::action::edit;
+    use vt_tui::roto::edits::turned;
+    let mut song = Song::new(1);
+    song.tracks[0].inserts[0] = Insert::ALL[1];
+    let song = std::sync::Arc::new(song);
+    let cut = Control::Base(TrackControl::Cutoff);
+    let next = edit(&song, &turned(cut, 0, &song, 5000).unwrap()).unwrap();
+    let track = &next.tracks[0];
+    assert_ne!(track.fine(SettingId::CUT), 0, "the fine digits are set");
+    let back = knob(cut, track, &next).unwrap().position;
+    assert!(back.abs_diff(5000) <= 1, "{back}");
+    assert!(value_text(cut, track, &next).ends_with("Hz"));
+    let level = value_text(Control::Level, track, &next);
+    assert!(level.ends_with(" dB"), "{level}");
+    assert_eq!(value_text(Control::Speed, track, &next), "1/16");
+    assert_eq!(value_text(Control::Insert(0), track, &next), "Distort");
+    // Distort's `Type` turned to its seventh of eight.
+    let kind = Insert::ALL[1]
+        .params()
+        .iter()
+        .position(|param| param.name == "Type")
+        .unwrap();
+    let control = Control::InsertParam(0, kind);
+    let at = vt_roto::live::position_of(6, 8);
+    let next = edit(&next, &turned(control, 0, &next, at).unwrap()).unwrap();
+    assert_eq!(value_text(control, &next.tracks[0], &next), "Overdrive");
 }

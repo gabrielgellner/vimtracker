@@ -26,12 +26,12 @@ use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{MAX_LFO_DEPTH, Rate, Shape};
 use vt_model::settings::{Kind, SettingId, Units};
-use vt_model::song::{FilterType, Machine, Song, Track};
+use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
-use vt_roto::live::{Feel, LiveControl, LiveDevice, position_at, position_of};
+use vt_roto::live::{Feel, LiveControl, LiveDevice, LiveTrack, position_at, position_of};
 use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 
 use ratatui::style::Color;
@@ -78,10 +78,7 @@ impl Family {
 
     /// The Roto's colour scheme nearest the family's colour.
     pub fn scheme(self) -> u8 {
-        let Color::Rgb(red, green, blue) = self.colour() else {
-            return 0;
-        };
-        colour::nearest(Rgb::new(red, green, blue))
+        scheme_of(self.colour())
     }
 
     /// A setting of the registry's family, by its units.
@@ -220,20 +217,33 @@ fn registry(id: SettingId, coarse: u8, fine: u8) -> (Feel, u16) {
     }
 }
 
-/// How far along an envelope's times one is, by the steps `=` takes: 1 ms to 10 ms, 5 ms to
-/// 100 ms, then 25 ms, so a short time is as easy to set on the knob as with keys.
-fn time_position(ms: u16) -> u16 {
-    let index = |ms: u16| match ms {
+/// Where an envelope's time is among the steps `=` takes: 1 ms to 10 ms, 5 ms to 100 ms, then
+/// 25 ms.
+fn time_index(ms: u16) -> u16 {
+    match ms {
         0..=9 => ms,
         10..=99 => 10 + (ms - 10) / 5,
         _ => 28 + (ms - 100) / 25,
-    };
-    position_at(f64::from(index(ms)) / f64::from(index(MAX_ENVELOPE_MS)))
+    }
+}
+
+/// Every time the steps `=` takes go through, from 0 ms to the longest.
+pub(crate) fn time_steps() -> Vec<u16> {
+    (0..10)
+        .chain((10..100).step_by(5))
+        .chain((100..=MAX_ENVELOPE_MS).step_by(25))
+        .collect()
+}
+
+/// How far along an envelope's times one is, by the steps `=` takes, so a short time is as easy
+/// to set on the knob as with keys.
+pub(crate) fn time_position(ms: u16) -> u16 {
+    position_at(f64::from(time_index(ms)) / f64::from(time_index(MAX_ENVELOPE_MS)))
 }
 
 /// How fast an LFO is, from its slowest, 64 bars a cycle, to its fastest, 100 Hz, evenly in
 /// octaves, at 120 BPM for the rates in hertz, so every kind of rate has a place on one knob.
-fn rate_position(rate: Rate) -> u16 {
+pub(crate) fn rate_position(rate: Rate) -> u16 {
     const SLOWEST: f64 = -6.0;
     const FASTEST: f64 = 7.65;
     let bar_ticks = (BAR_STEPS as u64 * TICKS_PER_STEP) as f64;
@@ -587,6 +597,15 @@ pub fn live_device(
 /// A track's devices as the Roto's plugin list shows them, in the order the design note's §3 has:
 /// the Sound page's, then the FX page's slots, then the Mod page's.
 pub fn live_devices(track: &Track, song: &Song) -> Vec<LiveDevice> {
+    track_devices(track)
+        .into_iter()
+        .map(|(page, slot, spec)| live_device(page, slot, &spec, track, song))
+        .collect()
+}
+
+/// A track's devices in the order the Roto's list has them, each with its page and its place
+/// on that page.
+pub fn track_devices(track: &Track) -> Vec<(Page, usize, DeviceSpec)> {
     [Page::Sound, Page::Fx, Page::Mod]
         .into_iter()
         .flat_map(|page| {
@@ -596,6 +615,58 @@ pub fn live_devices(track: &Track, song: &Song) -> Vec<LiveDevice> {
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
         })
-        .map(|(page, slot, spec)| live_device(page, slot, &spec, track, song))
         .collect()
+}
+
+/// The setting on the knob the Roto numbers `index`, from 1 across the pages, of a track's
+/// `device`th device, if there's one there.
+pub fn control_at(track: &Track, device: usize, index: u16) -> Option<Control> {
+    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    let at = usize::from(index.checked_sub(1)?);
+    knob_order(&spec).get(at).copied().flatten()
+}
+
+/// What switches a track's `device`th device in and out, as its enabled state on the Roto: an
+/// FX slot's bypass, or an envelope's or an LFO's own switch. Other devices are always in.
+pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
+    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    match spec.title[0]? {
+        control @ Control::Insert(_) => Some(control),
+        control => crate::track_page::modulator_bypassed(control, track).map(|_| control),
+    }
+}
+
+/// The song's tracks as the Roto's track list shows them, which PLUGIN mode's FUNC chooses from:
+/// a sound track by its number and name, as the grid's header has it, a fixed track by its
+/// title; each in its group's colour, and a group marked as one.
+pub fn live_tracks(song: &Song) -> Vec<LiveTrack> {
+    song.tracks
+        .iter()
+        .enumerate()
+        .map(|(at, track)| {
+            let name = match track.kind {
+                TrackKind::Sound if track.name.is_empty() => format!("Track {:02}", at + 1),
+                TrackKind::Sound => format!("{:02} {}", at + 1, track.name),
+                kind => kind.title(),
+            };
+            let group = match track.kind {
+                TrackKind::Group(group) => Some(group),
+                _ => track.group,
+            };
+            let colour = group.map_or(theme::TEXT, theme::group);
+            LiveTrack {
+                name: Label::new(&name),
+                colour: scheme_of(colour),
+                grouped: matches!(track.kind, TrackKind::Group(_)),
+            }
+        })
+        .collect()
+}
+
+/// The Roto's colour scheme nearest one of the app's colours.
+fn scheme_of(colour: Color) -> u8 {
+    match colour {
+        Color::Rgb(red, green, blue) => colour::nearest(Rgb::new(red, green, blue)),
+        _ => 0,
+    }
 }

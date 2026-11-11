@@ -10,7 +10,8 @@
 //! *   [`link`]: the Roto's own thread, which finds its ports by name, opens them, does the
 //!     handshake, and reconnects when it's plugged back in.
 //! *   [`live`]: devices shown live in PLUGIN mode, their knobs' names, feel and colours sent as
-//!     the Roto asks for them, with nothing stored on it.
+//!     the Roto asks for them, with nothing stored on it, what changes sent back as it changes,
+//!     and the track list FUNC chooses from.
 //! *   [`transport`]: the ports, through `midir` and `serialport`.
 //! *   [`fake`]: a Roto in memory that speaks both protocols, for tests.
 //! *   [`probe`]: `vimtracker roto-probe`.

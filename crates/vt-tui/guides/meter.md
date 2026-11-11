@@ -115,16 +115,40 @@ with its firmware. Turning it off, or quitting, gives the Roto back: a running L
 the Roto's control surface takes it again by itself. If it doesn't, choose the Roto in
 Live's control surface list again, or unplug it and plug it back in.
 
-In its PLUGIN mode the Roto shows the devices of the track the cursor was on when it
-connected: the Sound page's, then the FX slots, then the Mod page's. SEL chooses one,
-and the arrows turn its pages. Each knob has its setting's name and colour, and feels
-like the setting: a list clicks through its choices, a centred value such as `Pan` has
-a notch at its middle, an off/on setting has two steps, and the rest turn smoothly. A
-device's knobs go row by row through its grid, then its title: knobs 1 to 4 are the top
-row, 5 to 8 the middle, and its second page is the bottom row and then the title, such
-as an effect's type. Nothing is stored on the Roto, so its setups for Live stay as they
-are.
+The Roto works beside the keyboard, not through the screen: it has a track and a
+device of its own, which the cursor never moves, so a knob can change an effect while the
+keys edit an instrument on another track.
 
-As a knob that steps turns, its screen shows the step's name, such as `4:1` or `On`. The
-knobs don't change the song yet, so a smooth knob shows no value, and the mixer isn't on
-it yet.
+In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the machine,
+`Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the envelopes,
+the LFOs, `Accumulator` and `Arpeggio`). Its buttons work as they do for Live and
+Bitwig:
+
+*   **FUNC** shows the tracks on the buttons, eight at a time, with the arrows paging
+    through them to the groups, the returns and the master. A button chooses which
+    track the Roto shows. When the Roto first connects it shows the cursor's.
+*   **Hold SEL** and press a button to choose a device. The arrows page through the
+    devices eight at a time.
+*   **Tap SEL** to see the devices' on and off states, and press a button to switch one
+    in or out: an FX slot's bypass, or an envelope's or an LFO's switch, as `b` does on
+    the FX and Mod pages. Only these can be switched off: the others are always on, and
+    an empty slot always off. Pressing one of those flips its light for a moment, which is
+    the Roto's own doing; it's lit as it should be the next time the list comes up. A
+    device chosen while the switches are up, by holding SEL, is only chosen, never
+    switched too.
+*   **The arrows**, with a device shown, turn its pages of knobs.
+
+Each knob has its setting's name and colour, and feels like the setting: a list clicks
+through its choices, a centred value such as `Pan` has a notch at its middle, an off/on
+setting has two steps, and the rest turn smoothly. The Roto's buttons don't take a
+device's off/on settings, so `Retrig` or `Ping-pong` is a knob of two steps. A device's
+knobs go row by row through its grid, then its title: knobs 1 to 4 are the top row, 5
+to 8 the middle, and its second page is the bottom row and then the title, such as an
+effect's type. Nothing is stored on the Roto, so its setups for Live stay as they are.
+
+Turning a knob edits the song as keys do, and `u` undoes it: everything from touching a
+knob to letting it go is one undo step. A smooth knob sets the fine digits too. Its
+screen shows the value as the app writes it, such as `-14.8 dB`, `1/16` or `Overdrive`,
+as it turns or when it's touched. When the keys, an undo or another song change a
+setting the Roto shows, its knob turns to it by itself and shows the new value; a knob
+being touched is never moved under your hand. MIX mode isn't vimtracker's mixer yet.

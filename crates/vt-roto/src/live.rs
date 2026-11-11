@@ -17,9 +17,12 @@
 //! devices, and says what to send for each message from the Roto, so the link and the tests drive
 //! the same code.
 
+use std::collections::BTreeMap;
+
 use crate::bytes::{Label, ParamHash, PluginHash};
 use crate::sysex::{
     CONTROLS, ControlType, FromRoto, LearnParam, MAX_STEPS, PluginDetails, PluginKind, ToRoto,
+    TrackDetails,
 };
 
 /// The most pages of eight knobs a device can have, as the Roto keeps 64 controls a plugin.
@@ -115,6 +118,22 @@ pub fn position_at(share: f64) -> u16 {
     (share.clamp(0.0, 1.0) * f64::from(KNOB_TOP)).round() as u16
 }
 
+/// Which of `count` places a knob at a position is nearest, as it clicks through its steps: the
+/// way back from [`position_of`].
+pub fn step_at(position: u16, count: usize) -> usize {
+    if count < 2 {
+        return 0;
+    }
+    let last = count - 1;
+    let top = usize::from(KNOB_TOP);
+    ((usize::from(position.min(KNOB_TOP)) * last + top / 2) / top).min(last)
+}
+
+/// How far along a knob is, from 0 to 1: the way back from [`position_at`].
+pub fn share_of(position: u16) -> f64 {
+    f64::from(position.min(KNOB_TOP)) / f64::from(KNOB_TOP)
+}
+
 /// One device in the Roto's plugin list, its knobs in order, a page of eight after another, with
 /// a hole wherever the device has nothing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -146,6 +165,15 @@ impl LiveDevice {
         self.controls.get(at)?.as_ref()
     }
 
+    /// Whether it shows in the plugin list as `other` does: the same name, state and pages, under
+    /// the same key.
+    fn listed_as(&self, other: &Self) -> bool {
+        self.key == other.key
+            && self.name == other.name
+            && self.enabled == other.enabled
+            && self.pages() == other.pages()
+    }
+
     fn details(&self, index: u8) -> PluginDetails {
         PluginDetails {
             index,
@@ -167,6 +195,17 @@ pub struct PluginView {
     first: u8,
     selected: u8,
     page: u8,
+    /// The hash the Roto gave each knob of the chosen device it asked for, by its number, so a
+    /// knob whose name or feel changes can be learned again without its asking.
+    mapped: BTreeMap<u16, ParamHash>,
+}
+
+/// What to send the Roto after the devices changed: SysEx, and knobs to move, each by its place
+/// on the page shown.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Refresh {
+    pub messages: Vec<ToRoto>,
+    pub positions: Vec<(u8, u16)>,
 }
 
 impl PluginView {
@@ -192,18 +231,156 @@ impl PluginView {
         self.page
     }
 
+    /// The first device of the bank shown, a multiple of 8.
+    pub fn first(&self) -> u8 {
+        self.first
+    }
+
     /// Shows these devices, keeping the one chosen where it can, and says what to send.
     pub fn show(&mut self, devices: Vec<LiveDevice>) -> Vec<ToRoto> {
-        let count = devices.len().min(0x7F);
+        let before = self.selected().map(|device| device.key.clone());
+        self.take(devices);
+        if self.selected().map(|device| &device.key) != before.as_ref() {
+            self.mapped.clear();
+        }
+        self.push()
+    }
+
+    /// Holds these devices, keeping the one chosen, its page and the bank shown where they still
+    /// are. The bank is the Roto's to page through, so it stays where SEL's arrows left it
+    /// whichever device is chosen, as Bitwig's script keeps it: sent from the chosen device's
+    /// bank, toggling a device of the second bank on or off sent the Roto back to the first.
+    fn take(&mut self, mut devices: Vec<LiveDevice>) {
+        devices.truncate(0x7F);
+        let count = devices.len();
         self.devices = devices;
-        self.devices.truncate(count);
         if usize::from(self.selected) >= count {
             self.selected = 0;
         }
         let pages = self.selected().map_or(1, LiveDevice::pages);
         self.page = self.page.min(pages - 1);
+        if usize::from(self.first) >= count {
+            let last = count.saturating_sub(1) as u8;
+            self.first = last - last % CONTROLS as u8;
+        }
+    }
+
+    /// Takes a device, by its place in the whole list, as the one the Roto shows, from its first
+    /// page if it's another, in its bank.
+    pub fn choose(&mut self, index: u8) {
+        if usize::from(index) >= self.devices.len() {
+            return;
+        }
+        if index != self.selected {
+            self.selected = index;
+            self.page = 0;
+            self.mapped.clear();
+        }
         self.first = self.selected - self.selected % CONTROLS as u8;
-        self.push()
+    }
+
+    /// Shows the bank the chosen device is in, as on connecting, when the Roto has no bank of its
+    /// own yet.
+    pub fn bank_to_chosen(&mut self) {
+        self.first = self.selected - self.selected % CONTROLS as u8;
+    }
+
+    /// Whether the chosen device is in the bank shown.
+    fn selected_in_bank(&self) -> bool {
+        (self.first..self.first.saturating_add(CONTROLS as u8)).contains(&self.selected)
+    }
+
+    /// The number the Roto gives a knob of the page shown, from 1 across the device's pages.
+    pub fn index_of(&self, knob: u8) -> u16 {
+        u16::from(self.page) * CONTROLS as u16 + u16::from(knob % CONTROLS as u8) + 1
+    }
+
+    /// The device the Roto means by an index in `ROTO SELECT PLUGIN` or `SET PLUGIN ENABLED`. The
+    /// real Roto counts it from the bank shown (firmware 3.3.0: holding SEL on the second bank and
+    /// pressing its second button sent 1), as both vendor scripts read it. A place in the whole
+    /// list is taken as it is, as the two can't be mistaken: a place in the bank is below 8, and
+    /// a later bank's first device is at 8 or more.
+    pub fn device_for(&self, index: u8) -> u8 {
+        if index < self.first {
+            self.first.saturating_add(index)
+        } else {
+            index
+        }
+    }
+
+    /// Shows the devices as they are after an edit, sending only what changed: the list again if
+    /// a device's name, state or pages did, a knob of the page shown learned again if its name,
+    /// feel or colour did, and a knob moved if only its position did. A knob `touched` isn't
+    /// moved under the hand, and keeps the position last sent, so it goes where it should once
+    /// it's let go if something else moved its setting meanwhile. A knob just `turned` on the
+    /// Roto takes its setting's position without being sent it, as it's there already.
+    pub fn refresh(
+        &mut self,
+        mut devices: Vec<LiveDevice>,
+        touched: [bool; CONTROLS],
+        turned: [bool; CONTROLS],
+    ) -> Refresh {
+        devices.truncate(0x7F);
+        let listed = devices.len() == self.devices.len()
+            && devices
+                .iter()
+                .zip(&self.devices)
+                .all(|(new, old)| new.listed_as(old));
+        let before = self.selected().cloned();
+        let indices: Vec<u16> = (0..CONTROLS as u8)
+            .map(|knob| self.index_of(knob))
+            .collect();
+        if let (Some(old), Some(new)) = (&before, devices.get_mut(usize::from(self.selected))) {
+            for (knob, index) in indices.iter().enumerate() {
+                let at = usize::from(index - 1);
+                if touched[knob]
+                    && !turned[knob]
+                    && let (Some(Some(was)), Some(Some(now))) =
+                        (old.controls.get(at), new.controls.get_mut(at))
+                {
+                    now.position = was.position;
+                }
+            }
+        }
+        let page = self.page;
+        self.take(devices);
+        let mut refresh = Refresh::default();
+        if !listed {
+            refresh.messages = self.push();
+        }
+        let (Some(old), Some(new)) = (before, self.selected()) else {
+            return refresh;
+        };
+        if self.page != page {
+            return refresh;
+        }
+        let same_device = old.key == new.key;
+        for (knob, index) in indices.into_iter().enumerate() {
+            let was = old.control(index).filter(|_| same_device);
+            match (was, new.control(index)) {
+                (Some(_), None) => refresh.messages.push(ToRoto::UnmapControl {
+                    control: ControlType::Knob,
+                    index: knob as u8,
+                }),
+                (None, None) => {}
+                (Some(was), Some(now))
+                    if was.name == now.name && was.feel == now.feel && was.colour == now.colour =>
+                {
+                    if was.position != now.position && !touched[knob] && !turned[knob] {
+                        refresh.positions.push((knob as u8, now.position));
+                    }
+                }
+                (_, Some(now)) => {
+                    if let Some(hash) = self.mapped.get(&index) {
+                        refresh
+                            .messages
+                            .push(ToRoto::LearnParam(now.learn(index, *hash)));
+                        refresh.messages.push(now.details(index));
+                    }
+                }
+            }
+        }
+        refresh
     }
 
     /// Everything the Roto needs to show the view: how many devices, the bank, each device in it,
@@ -223,7 +400,8 @@ impl PluginView {
             messages.push(ToRoto::PluginDetails(device.details(index as u8)));
         }
         messages.push(ToRoto::PluginDetailsEnd);
-        if self.selected().is_some() {
+        // Only from the bank shown, as Bitwig's script sends it, so the Roto stays on its bank.
+        if self.selected().is_some() && self.selected_in_bank() {
             messages.push(ToRoto::DawSelectPlugin {
                 index: self.selected,
                 macro_page: self.page,
@@ -244,12 +422,10 @@ impl PluginView {
                 self.first = first - first % CONTROLS as u8;
                 self.push()
             }
-            FromRoto::RotoSelectPlugin(index) if usize::from(index) < self.devices.len() => {
-                if index != self.selected {
-                    self.selected = index;
-                    self.page = 0;
-                }
-                self.first = self.selected - self.selected % CONTROLS as u8;
+            FromRoto::RotoSelectPlugin(index)
+                if usize::from(self.device_for(index)) < self.devices.len() =>
+            {
+                self.choose(self.device_for(index));
                 self.push()
             }
             FromRoto::MacroPluginPageIndex(page) => {
@@ -277,6 +453,7 @@ impl PluginView {
                 if let Some(at) = index.checked_sub(1) {
                     self.turn_to((at / CONTROLS as u16).min(0x7F) as u8);
                 }
+                self.mapped.insert(index, hash);
                 self.answer_mapped(index, hash, control_index)
             }
             _ => Vec::new(),
@@ -301,13 +478,10 @@ impl PluginView {
         if names.len() < 2 {
             return Vec::new();
         }
-        let last = names.len() - 1;
-        let step = (usize::from(position.min(KNOB_TOP)) * last + usize::from(KNOB_TOP) / 2)
-            / usize::from(KNOB_TOP);
         vec![ToRoto::ShowControlValue {
             control: ControlType::Knob,
             index: knob,
-            value: names[step.min(last)].clone(),
+            value: names[step_at(position, names.len())].clone(),
         }]
     }
 
@@ -327,9 +501,116 @@ impl PluginView {
     }
 }
 
+/// One track as the Roto's track list shows it, on the buttons PLUGIN mode's FUNC shows, to
+/// choose which track's devices it shows.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LiveTrack {
+    pub name: Label,
+    /// An index into [`crate::colour::SCHEMES`].
+    pub colour: u8,
+    /// Whether it's a group.
+    pub grouped: bool,
+}
+
+/// The Roto's track list: every track, the bank of eight shown, and the one chosen, whose devices
+/// PLUGIN mode shows. The Roto's FUNC shows the bank on its buttons, its arrows page through the
+/// banks (`SET FIRST TRACK`), and a button chooses a track (`ROTO SELECT TRACK`), as with Ableton
+/// Live's and Bitwig Studio's scripts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TrackList {
+    tracks: Vec<LiveTrack>,
+    /// The first track of the bank shown, a multiple of 8.
+    first: u16,
+    selected: u16,
+}
+
+impl TrackList {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn tracks(&self) -> &[LiveTrack] {
+        &self.tracks
+    }
+
+    pub fn selected(&self) -> u16 {
+        self.selected
+    }
+
+    /// Shows these tracks with one chosen, and says what to send: nothing if it's all as shown.
+    pub fn update(&mut self, tracks: Vec<LiveTrack>, selected: u16) -> Vec<ToRoto> {
+        if tracks == self.tracks && selected == self.selected {
+            return Vec::new();
+        }
+        self.show(tracks, selected)
+    }
+
+    /// Shows these tracks with one chosen, in the bank it's in, and says what to send.
+    pub fn show(&mut self, mut tracks: Vec<LiveTrack>, selected: u16) -> Vec<ToRoto> {
+        tracks.truncate(usize::from(crate::bytes::PAIR_MAX));
+        self.tracks = tracks;
+        self.selected = selected.min(self.last());
+        self.first = self.selected - self.selected % CONTROLS as u16;
+        self.push()
+    }
+
+    fn last(&self) -> u16 {
+        self.tracks.len().saturating_sub(1) as u16
+    }
+
+    fn details(&self, index: u16) -> Option<TrackDetails> {
+        let track = self.tracks.get(usize::from(index))?;
+        Some(TrackDetails {
+            index,
+            name: track.name.clone(),
+            colour: track.colour,
+            grouped: track.grouped,
+        })
+    }
+
+    /// Everything the Roto needs to show the list: how many tracks, the bank, each track in it,
+    /// and the one chosen, as Ableton's script sends them.
+    pub fn push(&self) -> Vec<ToRoto> {
+        let count = self.tracks.len() as u16;
+        let mut messages = vec![ToRoto::NumTracks(count), ToRoto::FirstTrack(self.first)];
+        let bank = self.first..(self.first + CONTROLS as u16).min(count);
+        messages.extend(bank.filter_map(|index| self.details(index).map(ToRoto::TrackDetails)));
+        messages.push(ToRoto::TrackDetailsEnd);
+        messages.extend(self.details(self.selected).map(ToRoto::DawSelectTrack));
+        messages
+    }
+
+    /// What to send for a message from the Roto, and the track chosen on it, if one was.
+    pub fn receive(&mut self, message: &FromRoto) -> (Vec<ToRoto>, Option<u16>) {
+        match *message {
+            FromRoto::SetFirstTrack(first) if first <= self.last() => {
+                self.first = first - first % CONTROLS as u16;
+                (self.push(), None)
+            }
+            FromRoto::RotoSelectTrack(index) if usize::from(index) < self.tracks.len() => {
+                self.selected = index;
+                self.first = index - index % CONTROLS as u16;
+                (Vec::new(), Some(index))
+            }
+            _ => (Vec::new(), None),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_step_is_found_back_from_its_position() {
+        for count in 2..=24 {
+            for at in 0..count {
+                assert_eq!(step_at(position_of(at, count), count), at);
+            }
+        }
+        assert_eq!(step_at(KNOB_TOP, 1), 0);
+        assert!((share_of(position_at(0.3)) - 0.3).abs() < 1e-4);
+    }
 
     #[test]
     fn positions_spread_steps_from_the_bottom_to_the_top() {
