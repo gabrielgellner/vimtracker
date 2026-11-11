@@ -95,7 +95,9 @@ sample gathered into it, ready to move or share.
 without a terminal or sound device. `vimtracker probe-keys` shows what your terminal sends, with
 the kitty keyboard protocol on as the program has it, and runs in any terminal.
 `vimtracker bench <project> [--rate n] [--block n] [--seconds n]` measures how much of a core a
-project takes to play, stopped and playing. `cargo build --profile profiling` builds with symbols
+project takes to play, stopped and playing; `--tracks` adds each track's, slot's, group's,
+return's and the master's share, and `--device` plays silently through the output device to time
+its callback as the status line does. `cargo build --profile profiling` builds with symbols
 for a profiler. `vimtracker probe <spec.toml> <out.wav> [--case name]` plays one voice or effect
 with no song, from a spec that [tools/compare](tools/compare/README.md) also renders through a
 reference plugin, to compare the two.

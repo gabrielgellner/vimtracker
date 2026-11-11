@@ -72,6 +72,16 @@ enum Command {
         /// How long to play, in seconds of audio.
         #[arg(long, default_value_t = 60)]
         seconds: u32,
+        /// Also say how long each track, slot, group, return and the master take while playing.
+        #[arg(long)]
+        tracks: bool,
+        /// Play each block when its time comes rather than flat out, as the audio thread does.
+        #[arg(long, conflicts_with = "device")]
+        paced: bool,
+        /// Play through the output device's callback, with its rate and buffer, sending it only
+        /// silence, and split the callback's time into the engine's and the rest.
+        #[arg(long)]
+        device: bool,
     },
 }
 
@@ -100,7 +110,24 @@ fn main() -> std::process::ExitCode {
             rate,
             block,
             seconds,
-        }) => vt_tui::run::bench(&project, rate, block, seconds).map_err(|e| e.to_string()),
+            tracks,
+            paced,
+            device,
+        }) => vt_tui::bench::run(&vt_tui::bench::BenchRequest {
+            project,
+            rate,
+            block,
+            seconds,
+            pace: if device {
+                vt_tui::bench::Pace::Device
+            } else if paced {
+                vt_tui::bench::Pace::Paced
+            } else {
+                vt_tui::bench::Pace::FlatOut
+            },
+            tracks,
+        })
+        .map_err(|e| e.to_string()),
         Some(Command::Render {
             project,
             out,

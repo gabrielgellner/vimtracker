@@ -24,6 +24,7 @@ use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::mixer::Reading;
 use crate::rng::Pcg32;
+use crate::timing::SlotTimes;
 use crate::voice::{Cut, NoteOn, Voice};
 
 /// How many envelopes and LFOs a track has, each moving at most one setting.
@@ -617,6 +618,8 @@ pub struct TrackState {
     filter_moving: bool,
     /// Its sound after its slots in the latest frame, for a compressor on another track to hear.
     pub key: [f32; 2],
+    /// How long each slot has taken, while `vimtracker bench --tracks` times the engine.
+    pub slot_times: SlotTimes,
 }
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
@@ -804,6 +807,7 @@ impl TrackState {
             bypassed: [false; INSERTS],
             filter_moving: false,
             key: [0.0; 2],
+            slot_times: SlotTimes::default(),
         }
     }
 
@@ -1701,7 +1705,9 @@ impl TrackState {
             } else {
                 smoothing
             };
-            filtered = insert.process(filtered, keeping_up, rate, keys);
+            filtered = self.slot_times.time(slot, !insert.is_empty(), || {
+                insert.process(filtered, keeping_up, rate, keys)
+            });
         }
         self.key = filtered;
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
@@ -1747,7 +1753,9 @@ impl TrackState {
             } else {
                 smoothing
             };
-            frame = insert.process(frame, keeping_up, rate, keys);
+            frame = self.slot_times.time(slot, !insert.is_empty(), || {
+                insert.process(frame, keeping_up, rate, keys)
+            });
         }
         self.key = frame;
         let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
