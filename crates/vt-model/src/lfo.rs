@@ -10,7 +10,7 @@ use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::settings::SettingId;
 
 /// How many a track has.
-pub const LFOS_PER_TRACK: usize = 2;
+pub const LFOS_PER_TRACK: usize = 3;
 /// The furthest either way a depth goes, in the units of what it moves.
 pub const MAX_LFO_DEPTH: i16 = 0xFF;
 

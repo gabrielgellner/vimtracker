@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::insert::{Distort, DistortType, Insert};
+use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
@@ -535,9 +535,10 @@ fn a_preview_goes_through_its_tracks_sound() {
     assert_eq!(no_sample, 0.0);
 }
 
-fn distorted(inserts: [Insert; 3]) -> Vec<[f32; 2]> {
+/// A sine through these in the first slots, and the rest empty.
+fn distorted(inserts: &[Insert]) -> Vec<[f32; 2]> {
     let mut song = song(&["C-4 -- --- --- ---"]);
-    song.tracks[0].inserts = inserts;
+    song.tracks[0].inserts[..inserts.len()].copy_from_slice(inserts);
     let sine = (0..9600).map(|frame| {
         let t = frame as f32 / RATE as f32;
         [(t * 220.0 * std::f32::consts::TAU).sin() * 0.5; 2]
@@ -559,20 +560,18 @@ fn distort(kind: DistortType, amount: u8) -> Insert {
 
 #[test]
 fn empty_inserts_change_nothing_and_an_effect_changes_the_sound() {
-    let plain = distorted([Insert::Empty; 3]);
+    let plain = distorted(&[]);
     assert!(plain.iter().any(|frame| frame[0] != 0.0));
-    let crushed = distorted([
+    let crushed = distorted(&[
         distort(DistortType::Crush, 0xFF),
         Insert::Empty,
         Insert::Empty,
     ]);
     assert_ne!(plain, crushed);
     // Whichever slot it's in, alone it does the same.
-    let later = distorted([
-        Insert::Empty,
-        Insert::Empty,
-        distort(DistortType::Crush, 0xFF),
-    ]);
+    let mut last = [Insert::Empty; INSERTS];
+    last[INSERTS - 1] = distort(DistortType::Crush, 0xFF);
+    let later = distorted(&last);
     assert_eq!(crushed, later);
 }
 
@@ -586,8 +585,8 @@ fn inserts_run_in_order() {
         seen.dedup();
         seen.len()
     };
-    let crushed_last = distorted([hard, crush, Insert::Empty]);
-    let crushed_first = distorted([crush, hard, Insert::Empty]);
+    let crushed_last = distorted(&[hard, crush, Insert::Empty]);
+    let crushed_first = distorted(&[crush, hard, Insert::Empty]);
     assert_ne!(crushed_last, crushed_first);
     // Crushing last leaves only its steps, scaled by the level after it.
     assert!(
@@ -601,7 +600,7 @@ fn inserts_run_in_order() {
 #[test]
 fn a_chorus_and_an_ensemble_each_change_the_sound_and_spread_it() {
     use vt_model::insert::{Chorus, ChorusType};
-    let plain = distorted([Insert::Empty; 3]);
+    let plain = distorted(&[]);
     let chorus = |kind| {
         Insert::Chorus(Chorus {
             kind,
@@ -609,8 +608,8 @@ fn a_chorus_and_an_ensemble_each_change_the_sound_and_spread_it() {
             ..Chorus::DEFAULT
         })
     };
-    let one = distorted([chorus(ChorusType::Chorus), Insert::Empty, Insert::Empty]);
-    let other = distorted([chorus(ChorusType::Ensemble), Insert::Empty, Insert::Empty]);
+    let one = distorted(&[chorus(ChorusType::Chorus), Insert::Empty, Insert::Empty]);
+    let other = distorted(&[chorus(ChorusType::Ensemble), Insert::Empty, Insert::Empty]);
     assert_ne!(one, plain);
     assert_ne!(one, other);
     for out in [&one, &other] {
@@ -626,15 +625,15 @@ fn a_chorus_and_an_ensemble_each_change_the_sound_and_spread_it() {
 #[test]
 fn a_flat_eq_changes_nothing_and_a_boost_does() {
     use vt_model::insert::Equaliser;
-    let plain = distorted([Insert::Empty; 3]);
-    let flat = distorted([Insert::Eq(Equaliser::DEFAULT), Insert::Empty, Insert::Empty]);
+    let plain = distorted(&[]);
+    let flat = distorted(&[Insert::Eq(Equaliser::DEFAULT), Insert::Empty, Insert::Empty]);
     assert_eq!(flat, plain, "a flat band mixes back exactly what went in");
     let boosted = Insert::Eq(Equaliser {
         mid_frequency: 0x6E,
         mid: 0xFF,
         ..Equaliser::DEFAULT
     });
-    let loud = distorted([boosted, Insert::Empty, Insert::Empty]);
+    let loud = distorted(&[boosted, Insert::Empty, Insert::Empty]);
     let peak = |out: &[[f32; 2]]| out.iter().fold(0.0_f32, |most, f| most.max(f[0].abs()));
     assert!(
         peak(&loud) > peak(&plain) * 2.0,
@@ -723,9 +722,9 @@ fn a_limiter_delays_a_quiet_sound_and_holds_a_loud_one_under_its_ceiling() {
             .flatten()
             .fold(0.0_f32, |most, s| most.max(s.abs()))
     };
-    let plain = distorted([Insert::Empty; 3]);
+    let plain = distorted(&[]);
     // At its defaults, a sound at half level comes through as it was, 2 ms late.
-    let quiet = distorted([
+    let quiet = distorted(&[
         Insert::Limit(Limiter::DEFAULT),
         Insert::Empty,
         Insert::Empty,
@@ -743,7 +742,7 @@ fn a_limiter_delays_a_quiet_sound_and_holds_a_loud_one_under_its_ceiling() {
         ceiling: 0x00,
         ..Limiter::DEFAULT
     };
-    let loud = distorted([Insert::Limit(hard), Insert::Empty, Insert::Empty]);
+    let loud = distorted(&[Insert::Limit(hard), Insert::Empty, Insert::Empty]);
     // What the slot let out, as the track's level and pan scale both the same.
     let ceiling = 10_f32.powf(ceiling_db(0.0) / 20.0);
     let most = peak(&plain) / 0.5 * ceiling;
@@ -753,8 +752,8 @@ fn a_limiter_delays_a_quiet_sound_and_holds_a_loud_one_under_its_ceiling() {
 
 /// The sound through one slot, which must change it, spread it, and keep it finite and bounded.
 fn changes_and_spreads(insert: Insert) -> Vec<[f32; 2]> {
-    let plain = distorted([Insert::Empty; 3]);
-    let out = distorted([insert, Insert::Empty, Insert::Empty]);
+    let plain = distorted(&[]);
+    let out = distorted(&[insert, Insert::Empty, Insert::Empty]);
     assert_ne!(out, plain);
     // Each side sweeps its own way, so even a sound in the middle comes out wide.
     assert!(out.iter().any(|[l, r]| (l - r).abs() > 0.01), "it spreads");
@@ -796,8 +795,8 @@ fn a_flanger_changes_the_sound_and_spreads_it_with_feedback_either_way() {
 fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
     use vt_model::insert::Tape;
     let peak = |out: &[[f32; 2]]| out.iter().flatten().fold(0.0_f32, |a, b| a.max(b.abs()));
-    let plain = distorted([Insert::Empty; 3]);
-    let gentle = distorted([Insert::Tape(Tape::DEFAULT), Insert::Empty, Insert::Empty]);
+    let plain = distorted(&[]);
+    let gentle = distorted(&[Insert::Tape(Tape::DEFAULT), Insert::Empty, Insert::Empty]);
     assert_ne!(gentle, plain);
     // As it starts, it's about as loud as it was.
     assert!(
@@ -807,7 +806,7 @@ fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
         peak(&plain)
     );
     // Driven hard, it clips under -0.5 dB of what went in at full scale, which is a half here.
-    let driven = distorted([
+    let driven = distorted(&[
         Insert::Tape(Tape {
             drive: 0xFF,
             ..Tape::DEFAULT
@@ -824,19 +823,19 @@ fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
 #[test]
 fn a_plate_rings_on_after_a_short_hit_wide_and_dying_away() {
     use vt_model::insert::Plate;
-    let hit = |inserts: [Insert; 3]| {
+    let hit = |inserts: &[Insert]| {
         let mut song = song(&["C-4 -- --- --- ---"]);
-        song.tracks[0].inserts = inserts;
+        song.tracks[0].inserts[..inserts.len()].copy_from_slice(inserts);
         render(song, pool(vec![[0.8, 0.8]; 400]), STEP * 8)
     };
     let loudest = |out: &[[f32; 2]]| out.iter().flatten().fold(0.0_f32, |a, b| a.max(b.abs()));
-    let dry = hit([Insert::Empty; 3]);
+    let dry = hit(&[]);
     assert_eq!(loudest(&dry[2000..]), 0.0);
     let plate = Insert::Plate(Plate {
         mix: 0xFF,
         ..Plate::DEFAULT
     });
-    let wet = hit([plate, Insert::Empty, Insert::Empty]);
+    let wet = hit(&[plate, Insert::Empty, Insert::Empty]);
     assert!(wet.iter().flatten().all(|s| s.is_finite()));
     let (early, late) = (loudest(&wet[2000..STEP]), loudest(&wet[STEP * 7..]));
     assert!(early > 0.01, "{early}");
@@ -1062,7 +1061,7 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
 
 /// How far each slot of the first track is turning down, in dB, once a loud note has played a
 /// while, and once it's stopped.
-fn reduction_playing_and_after(insert: Insert, slot: usize) -> ([f32; 3], [f32; 3]) {
+fn reduction_playing_and_after(insert: Insert, slot: usize) -> ([f32; INSERTS], [f32; INSERTS]) {
     let mut song = song(&["C-4 -- --- --- ---", "OFF -- --- --- ---"]);
     song.tracks[0].inserts[slot] = insert;
     let version = Arc::new(Published::new(Arc::new(song), flat(0.9)));
@@ -1098,8 +1097,8 @@ fn a_compressor_reports_how_far_its_turning_down() {
         playing[1] > 3.0 && playing[1] <= most + 0.5,
         "{playing:?}, {most}"
     );
-    assert_eq!([playing[0], playing[2]], [0.0, 0.0]);
-    assert_eq!(after, [0.0; 3], "once nothing plays through it");
+    assert_eq!([playing[0], playing[2], playing[3]], [0.0; 3]);
+    assert_eq!(after, [0.0; INSERTS], "once nothing plays through it");
 }
 
 #[test]
@@ -1295,6 +1294,29 @@ fn a_bypass_lock_lasts_its_note_and_a_held_one_stays() {
     assert!(
         (level_at(&held, 2 * STEP + 3000) - dry).abs() < 1e-4,
         "held, it stays"
+    );
+}
+
+#[test]
+fn the_last_slots_bypass_is_locked_by_its_digit() {
+    use vt_model::settings::SettingId;
+    let last = SettingId::bypass(INSERTS - 1).unwrap();
+    assert_eq!(last.key(), format!("{INSERTS}.bypass"));
+    assert_eq!(last.label(), Some(format!("{INSERTS}BYP")));
+    let mut song = song(&[
+        "C-4 -- --- --- ---",
+        &format!("--- -- {INSERTS}.bypass:01 --- ---"),
+    ]);
+    song.tracks[0].inserts[INSERTS - 1] = Insert::Distort(Distort {
+        gain: 0x80,
+        ..Distort::DEFAULT
+    });
+    let out = render(song, flat(0.25), STEP * 2);
+    let dry = 0.25;
+    assert!(level_at(&out, STEP - 1) < dry * 0.2, "the last slot plays");
+    assert!(
+        (level_at(&out, 2 * STEP - 1) - dry).abs() < 1e-4,
+        "and the lock switches it out"
     );
 }
 

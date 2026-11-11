@@ -445,16 +445,16 @@ impl Track {
     /// A fixed track: named for what it is, and with no chain until one is given to it, so it
     /// doesn't change how long a section is.
     fn fixed(kind: TrackKind) -> Self {
+        let mut inserts = [Insert::Empty; INSERTS];
+        inserts[0] = match kind {
+            TrackKind::ReturnA => Insert::RETURN_DELAY,
+            TrackKind::ReturnB => Insert::RETURN_REVERB,
+            TrackKind::Sound | TrackKind::Group(_) | TrackKind::Master => Insert::Empty,
+        };
         Self {
             kind,
             name: kind.letter(),
-            inserts: match kind {
-                TrackKind::ReturnA => [Insert::RETURN_DELAY, Insert::Empty, Insert::Empty],
-                TrackKind::ReturnB => [Insert::RETURN_REVERB, Insert::Empty, Insert::Empty],
-                TrackKind::Sound | TrackKind::Group(_) | TrackKind::Master => {
-                    [Insert::Empty; INSERTS]
-                }
-            },
+            inserts,
             ..Self::default()
         }
     }

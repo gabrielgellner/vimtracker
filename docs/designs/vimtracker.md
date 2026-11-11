@@ -387,8 +387,8 @@ Song                               song.ron, refused unless format_version is FO
     track's own controls are fields. A machine's settings are a map by `SettingId`, saved by key,
     holding only what's changed from its default, so switching voice and back finds the first as it
     was. A continuous value has a fine byte as well, in `fine`.
-*   **Inserts.** Three slots in order after the filters, each an `Insert` holding its effect and that
-    effect's settings, and each can be bypassed.
+*   **Inserts.** `INSERTS` (4) slots in order after the filters, each an `Insert` holding its
+    effect and that effect's settings, and each can be bypassed.
 *   **The bank.** Numbered `01` to `FF`, with `00` as no sample, after Elektron's project pool. A
     `BankEntry` is metadata over audio that's never written: its `SampleEdit` names the file by its
     path and content hash, and holds its `Points` and `PlayParams`, in frames at the file's own
@@ -406,8 +406,8 @@ Song                               song.ron, refused unless format_version is FO
     slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, or a lock of any
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
-*   **LFOs and envelopes.** Each track has two of each, on its Mod page, each with a destination
-    setting. An LFO's rate is a note division or bars, a count of steps, or hertz. An envelope is an
+*   **LFOs and envelopes.** Each track has `LFOS_PER_TRACK` (3) LFOs and `TRACK_ENVELOPES` (3)
+    envelopes, on its Mod page, each with a destination setting. An LFO's rate is a note division or bars, a count of steps, or hertz. An envelope is an
     ADSR in milliseconds, with a depth and a reset.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
@@ -422,7 +422,7 @@ Song                               song.ron, refused unless format_version is FO
     sample analyses are in the cache folder.
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
-123, 126 and 136;
+123, 126, 136 and 138;
 the [M9](#m9-design-fx-inserts), [M10](#m10-design-tracks-that-process),
 [M12](#m12-design-lanes) and [M13](#m13-design-pulses) designs, and [song-flow.md](song-flow.md) for
 sections; and the [FX interpreter](#fx-interpreter) for LFOs and envelopes.
@@ -758,7 +758,7 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
     with old state and jump.
 
 **Envelopes.** Each track has two ADSR envelopes on its page, as Elektron's tracks do, rather than on instruments as on the M8 and Polyend. `Env 1` defaults to
-`Vol`, where it shapes each note in the voice, and replaced the instrument's attack and release. `Env 2` defaults to `Cut` with no depth. Both can go to any LFO destination or to `Pitch`,
+`Vol`, where it shapes each note in the voice, and replaced the instrument's attack and release. `Env 2` defaults to `Cut` with no depth, and `Env 3`, added later, to no destination. Each can go to any LFO destination or to `Pitch`,
 whose depth is in semitones. A second envelope on `Vol` moves the level by its depth on the level scale. The shape of `Env 1`, if it's not on `Vol`, is a plain 1 ms attack and 50 ms release.
 
 *   **Curves:** taken from Mutable Instruments' Peaks rather than Polyend's straight segments, which on level hang on and then drop. An attack follows `t^3.32`, and decay and release
@@ -925,7 +925,7 @@ A track owns everything about its sound, and steps no longer pick an instrument.
 
 ```text
 Machine -> Filter -> Utility filter -> FX inserts -> Level, Pan -> Sends or a bus
-           (2 envelopes and 2 LFOs can reach any of these)
+           (3 envelopes and 3 LFOs can reach any of these)
 ```
 
 *   A **machine** makes the sound: first the one-shot sampler, then a slicer, then a kick synth, then voices after Plaits, whose code is MIT licensed.
@@ -1762,7 +1762,7 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
                           |-- Send B --> B -> slots -> Level, Pan --^
 ```
 
-*   **A return or the master is a `Track` with no machine.** It makes no sound of its own, so it has no Machine or filter rows on its Sound page, and notes on its steps do nothing. It has everything else a track has: 3 slots, LFOs, envelopes, phrases, a mixer strip and a meter, with no new code.
+*   **A return or the master is a `Track` with no machine.** It makes no sound of its own, so it has no Machine or filter rows on its Sound page, and notes on its steps do nothing. It has everything else a track has: 4 slots, LFOs, envelopes, phrases, a mixer strip and a meter, with no new code.
 *   **Its own steps reach it.** A `1 Decay 40` on `B`'s phrase sequences its reverb, and no other track's steps can, as on the Syntakt, which keeps a phrase self-contained.
 *   **Sends.** The `Delay` and `Reverb` settings on a track become `Send A` and `Send B`, and the `DLY` and `REV` commands follow. A return has no sends, so there's no feedback between them.
 *   **Solo and mute.** Soloing a track keeps the returns and master sounding, as in Ableton. Soloing a return plays what comes back from it, with what sends to it still playing but not heard. Muting a return silences it, and the master can't be muted or soloed. **Names.** The commands are `SNA` and `SNB`.

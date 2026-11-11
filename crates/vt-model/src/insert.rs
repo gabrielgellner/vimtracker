@@ -6,7 +6,7 @@ use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
 /// How many a track has.
-pub const INSERTS: usize = 3;
+pub const INSERTS: usize = 4;
 
 /// One of a track's slots.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

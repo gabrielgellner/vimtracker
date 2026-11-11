@@ -6,7 +6,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{Distort, DistortType, Insert};
-use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::lfo::{LFOS_PER_TRACK, Lfo, Rate, Shape};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::{Effect, SettingId};
@@ -898,6 +898,35 @@ fn an_lfo_on_a_locked_depth_adds_to_it() {
         .unwrap();
     *phrase.step_mut(0).unwrap() = "C-4 -- lfo2.depth:8FF0 --- ---".parse().unwrap();
     assert_eq!(live_after(moved, 1).cutoff, 0xC0);
+}
+
+#[test]
+fn the_last_lfo_moves_its_destination_and_a_lock_and_the_first_lfo_move_it() {
+    let last = LFOS_PER_TRACK - 1;
+    let depth = SettingId::lfo(last, 0).unwrap();
+    assert_eq!(depth.key(), format!("lfo{LFOS_PER_TRACK}.depth"));
+    assert_eq!(depth.label(), Some(format!("DEP{LFOS_PER_TRACK}")));
+    let on_cut = |texts: &[&str]| {
+        let mut song = waiting_lfo(texts);
+        song.tracks[0].lfos.swap(0, last);
+        song
+    };
+    // `9FE0` is a depth of +40, as on the first LFO.
+    let lock = format!("C-4 -- lfo{LFOS_PER_TRACK}.depth:9FE0 --- ---");
+    let locked = on_cut(&[&lock]);
+    assert_eq!(live_after(locked.clone(), 1).cutoff, 0xC0);
+    assert_eq!(live_after(locked, 3).cutoff, 0x40);
+    // The first LFO, a half note up and then down, gives it a depth of +20 and then -20.
+    let mut moved = on_cut(&["C-4 -- --- --- ---"]);
+    moved.tracks[0].lfos[0] = Lfo {
+        destination: Some(depth),
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER * 2),
+        depth: 0x20,
+        ..Lfo::default()
+    };
+    assert_eq!(live_after(moved.clone(), 1).cutoff, 0xA0);
+    assert_eq!(live_after(moved, 5).cutoff, 0x60);
 }
 
 #[test]

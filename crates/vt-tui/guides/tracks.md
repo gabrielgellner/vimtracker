@@ -120,7 +120,7 @@ and `H` and `L` change page.
 
 ## Effects
 
-The FX page has 3 slots, which the sound goes through in order after the filters and
+The FX page has 4 slots, which the sound goes through in order after the filters and
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 | Keys | Does |
@@ -159,9 +159,9 @@ going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amoun
 much louder, on the level scale,
 where `E0` leaves it as it is and every `10` is 4 dB. Every effect has one.
 
-An LFO can move another: `LFO 1`'s `Dest` has `L2 Depth` and `L2 Phase`, and an envelope's has
-both LFOs', so `Env 2` can bring in an LFO's depth with each note. It only goes one way, so
-`LFO 2` can't reach `LFO 1`. `Rate` can't be moved, as LFOs work out where they are from the
+An LFO can move the ones after it: `LFO 1`'s `Dest` has `L2 Depth`, `L2 Phase`, `L3 Depth` and
+`L3 Phase`, `LFO 2`'s has `LFO 3`'s, and an envelope's has every LFO's, so `Env 2` can bring in
+an LFO's depth with each note. It only goes one way, so `LFO 3` can't reach `LFO 1` or `LFO 2`. `Rate` can't be moved, as LFOs work out where they are from the
 song's position.
 
 `K` on `Dest` lists them in categories, opening inside the one with what's chosen: `l` goes
@@ -641,7 +641,7 @@ They make no sound of their own, so they have no machine or filter, and their So
 page has just `Trim`, `Level` and `Pan`, and the master only `Trim` and `Level`. `Trim` is
 at the input, before the slots, so it sets how hard what's sent, or the whole mix, hits
 them, and `Level` after them sets what goes on. The rest works as on any
-track: 3 slots on the FX page, the Mod page, a strip on the mixer, and phrases. To give
+track: 4 slots on the FX page, the Mod page, a strip on the mixer, and phrases. To give
 one a phrase, type a chain number in its column on the Song view. A note on one plays
 nothing, but it does start the track's envelopes. Steps on a return only reach that
 return, so `VOL` on `B`'s phrase rides the reverb.
@@ -652,7 +652,7 @@ can't be muted or soloed.
 
 ## Envelopes
 
-Each track has two, which start with each note. The page draws their shapes.
+Each track has three, which start with each note. The page draws their shapes.
 Time is stretched in the drawing, so a short attack still shows, and a stage's
 width depends only on its own time.
 
@@ -666,7 +666,8 @@ width depends only on its own time.
 | Reset | `on` starts from zero on each note. `off` goes on from there |
 
 `Env 1` starts on `Vol` and shapes each note, so it has no depth. `Env 2` starts
-on `Cut` with no depth, so raise its depth to open the filter on each note. On
+on `Cut` with no depth, so raise its depth to open the filter on each note. `Env 3`
+starts on `---`, with `Env 2`'s decay, ready to be given somewhere to go. On
 `Pitch`, depth is in semitones and in hex, so `+0C` is an octave.
 
 A note lasts until the next note on its track or an `OFF`, and the next note
@@ -679,7 +680,7 @@ attack starts slowly.
 
 ## LFOs
 
-Each track has two. An LFO moves around the current value, so `CUT40` on a
+Each track has three. An LFO moves around the current value, so `CUT40` on a
 step moves the centre and the LFO carries on around it.
 
 | Setting | Value |
