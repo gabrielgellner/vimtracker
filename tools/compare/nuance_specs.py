@@ -15,7 +15,9 @@ The specs are written into `specs/`, and kept there, so this is only run again t
 - `nuance-extremes`: every knob at its bottom or top, with every other's, 32 cases.
 - `nuance-chirp`: one note at high Res over the knobs that shape its sweep, 64 cases, for the
   resonant peak over time (#348, #349).
-- `nuance-chirp-riff`: the Blade riff's Acid line, from `confusion-pump-panel`, the same way.
+- `nuance-chirp-riff`: a song's Acid line, the same way. Only a stub naming the song is written
+  here; `run.py` reads the line from the song each time it runs and writes the whole spec into
+  `out/songs/` (`song_line.py`), so no line is kept in the repository.
 
 ABL3 is set up as a stock 303 (README, "The plugins"): its hardware mods' trims at their stock
 50%, no drive, distortion or extra high-pass, its noise and flutter off, and in its Note mode,
@@ -434,52 +436,56 @@ def chirp_spec() -> None:
     )
 
 
-# The Blade riff, as `confusion-pump-panel` plays it: its Acid track's two phrases, each row its
-# note, whether it's accented (`7F`, or plain `64`), its gate and its pulses.
-RIFF_BPM = 136.0
-RIFF_KNOBS = {"cutoff": 64, "resonance": 208, "envmod": 200, "decay": 104, "accent": 200}
-RIFF_ROWS = [
-    ("G#3", True, "SGL", 2), ("G#3", True, "SGL", 1), ("G#3", True, "HLD", 3), ("E-1", False, "HLD", 4),
-    ("G-1", False, "SGL", 3), ("G-2", False, "SGL", 1), ("A-2", False, "SGL", 2),
-    ("A-1", True, "HLD", 3), ("G-1", True, "HLD", 1), ("F-1", True, "HLD", 1), ("D#1", False, "SGL", 1),
-    ("G-2", False, "SGL", 4), ("A-2", True, "SGL", 2), ("A-2", True, "SGL", 4),
-]
-NOTE_NAMES = ["C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"]
-
-
-def midi_of(name: str) -> int:
-    """A note's MIDI number by the program's name for it, where C-4 is 60."""
-    return 12 * (int(name[2]) + 1) + NOTE_NAMES.index(name[:2])
+# The song whose Acid line `nuance-chirp-riff` plays, unless `run.py --song` or `VT_COMPARE_SONG`
+# names another (`song_line.py`). The line itself is never written into the repository.
+RIFF_SONG = "~/Music/vimtracker/projects/303-patterns/confusion-pump-panel"
+# The Acid's waves, by the number songs store, and each reference's: Acid V's waveform knob turns
+# from its saw at 0 to its square at 1, and ABL3 switches between its two.
+WAVES = ["Saw", "Square"]
+ACID_V_WAVES = [0.0, 1.0]
+ABL3_WAVES = ["303 Saw", "303 Square"]
+# Our knobs that both references have, in `knobs`' order.
+KNOBS = ("cutoff", "resonance", "envmod", "decay", "accent")
 
 
 def riff_spec() -> None:
-    """The Blade riff's notes, as the song plays them, on every side."""
-    step = 60.0 / RIFF_BPM / 4.0
-    shares = {k: v / 255.0 for k, v in RIFF_KNOBS.items()}
-    ours, acid_v, abl3 = knobs(shares["cutoff"], shares["resonance"], shares["envmod"], shares["decay"], shares["accent"])
-    notes, time = [], 0.05
-    for name, accent, gate, pulses in RIFF_ROWS:
-        # A `SGL` closes halfway through its last pulse, at the Acid's 50% gate; a `HLD` ties on
-        # into the next row's note, which the harness plays as a slide.
-        held = gate == "HLD"
-        length = pulses * step if held else (pulses - 0.5) * step
-        notes.append(note(time, length, midi_of(name), accent=accent, slide=held))
-        time += pulses * step
-    body = header(round(time + 0.4, 3), ours, acid_v, abl3)
-    body += report(
-        {"kind": "chirp", "title": "The Blade riff's chirp, against Acid V and ABL3", "columns": 1, "tuning": CHIRP_TUNING},
-        CHIRP_ABOUT + "\n\nThe Acid line of `confusion-pump-panel`, the Blade riff, once through its \\\n"
-        "two phrases at 136 BPM with its knobs: Cutoff `40`, Res `D0`, Env Mod `C8`, Decay `68` \\\n"
-        "and Accent `C8`. A `SGL` row is held to halfway through its last step, the Acid's 50% \\\n"
-        "gate, and a `HLD` row slides into the next.\n\n" + ABOUT_REFERENCES,
-    )
-    body += case("blade", notes=notes)
+    """The stub: which song's line to play, which `run.py` turns into the whole spec with
+    `song_spec` each time it runs."""
     write(
         "nuance-chirp-riff",
-        "The Blade riff's notes, from confusion-pump-panel, against Arturia's Acid V and AudioRealism's\n"
-        "ABL3, for the chirp (#348, #349). Written by nuance_specs.py.",
-        body,
+        "A song's Acid line against Arturia's Acid V and AudioRealism's ABL3, for the chirp (#348,\n"
+        "#349). The notes, tempo and knobs are read from the song each time it runs, by `vimtracker\n"
+        "notes`, and the whole spec is written into out/songs/ (song_line.py). Written by\n"
+        "nuance_specs.py.",
+        "[song]\n" + lines({"project": RIFF_SONG, "machine": "acid"}),
     )
+
+
+def song_spec(line: dict, project: Path) -> str:
+    """The whole of `nuance-chirp-riff` for a track's line as `vimtracker notes` wrote it: its
+    notes once through, at its knobs and wave, on every side."""
+    settings = line["settings"]
+    knob = {name: int(settings[f"acid.{name}"]) for name in KNOBS}
+    ours, acid_v, abl3 = knobs(*(knob[name] / 255.0 for name in KNOBS))
+    wave = int(settings.get("acid.wave", 0))
+    ours["acid.wave"] = WAVES[wave]
+    acid_v["osc_waveform"] = ACID_V_WAVES[wave]
+    abl3["waveform"] = ABL3_WAVES[wave]
+    start = 0.05
+    notes = [
+        note(start + n["time"], n["length"], n["note"], accent=n["accent"], slide=n["slide"]) for n in line["notes"]
+    ]
+    body = header(round(start + line["seconds"] + 0.4, 3), ours, acid_v, abl3)
+    body += report(
+        {"kind": "chirp", "title": "A song's Acid line: the chirp against Acid V and ABL3", "columns": 1, "tuning": CHIRP_TUNING},
+        CHIRP_ABOUT + f"\n\nTrack `{line['track']}` of `{line['song']}`, read from `{project}` as this \\\n"
+        f"ran, once through its chain at {line['bpm']:g} BPM with its knobs: Cutoff `{knob['cutoff']:02X}`, \\\n"
+        f"Res `{knob['resonance']:02X}`, Env Mod `{knob['envmod']:02X}`, Decay `{knob['decay']:02X}` and \\\n"
+        f"Accent `{knob['accent']:02X}`, on its {WAVES[wave].lower()}. Each note is held as the sequencer \\\n"
+        "holds it, and a `HLD` before a note slides into it. The track's drive, filter and effects \\\n"
+        "are left out, so every side is the voice alone.\n\n" + ABOUT_REFERENCES,
+    )
+    return body + case("song", notes=notes)
 
 
 def main() -> None:

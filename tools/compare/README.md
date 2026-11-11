@@ -64,6 +64,32 @@ which `run.py` asks for with a sweep, so what's heard can be checked against wha
 `check_plugin.py <plugin> instrument|effect` is the load check from #186, for trying a new
 reference plugin.
 
+### A song's line
+
+`nuance-chirp-riff`, and `pedal-riff` and `live-pedal-riff` through it, play the Acid line of a
+song of yours rather than one written here, as no 303 pattern's transcription is kept in the
+repository (decision 141). The spec is a stub whose `[song]` names a project folder and the track
+to read, by `machine` or `track` name. Each run, `song_line.py` has `vimtracker notes` read that
+track's notes once through its chain, the song's tempo and the track's knobs and wave, with the
+program's own model and without writing to the song, and writes the whole spec, notes and every
+side's knobs, into `out/songs/`, where every side then reads it. The track's drive, filter and
+effects are left out, so every side plays the voice alone.
+
+The folder is `~/Music/vimtracker/projects/303-patterns/confusion-pump-panel` unless another is
+given, by `--song` or by `VT_COMPARE_SONG`, the flag first:
+
+```sh
+uv run run.py specs/nuance-chirp-riff.toml --song ~/Music/vimtracker/projects/my-song
+VT_COMPARE_SONG=~/Music/vimtracker/projects/my-song uv run run.py --suite nuance
+../../target/release/vimtracker notes ~/Music/vimtracker/projects/my-song line.toml --machine acid
+```
+
+With no song in the folder, as on another machine, the spec and those whose input it renders are
+skipped with a message, and a suite carries on without them. A track whose rows use FX, lanes,
+nudges or a groove other than `Straight` is refused with the row named, rather than played
+differently from the song. The song is read again on every run, so its numbers move as it's
+edited.
+
 ## The specs
 
 | Spec | Ours | Against | Report |
@@ -102,10 +128,10 @@ reference plugin.
 | `nuance-gate` | one note held from a 128th to a quarter | Acid V and ABL3 | its level as it's held and its release (`gate`) |
 | `nuance-extremes` | every knob at its bottom or top, 32 ways, two plain notes and two accents | Acid V and ABL3 | as `nuance-accents` |
 | `nuance-chirp` | one plain or accented C-2 at Res 75, 85, 95 and 100%, Env Mod 50 and 100%, Cutoff low and mid, Decay short and long, 64 ways | Acid V and ABL3 | the resonant peak over time: its place, its height over the fundamental and the passband, the skirt an octave over it, and the note's start (`chirp`) |
-| `nuance-chirp-riff` | the Blade riff's Acid line from `confusion-pump-panel`, once through | Acid V and ABL3 | the same, note by note along the riff |
+| `nuance-chirp-riff` | a song's Acid line, read from the song as it runs, once through ([A song's line](#a-songs-line)) | Acid V and ABL3 | the same, note by note along the line |
 | `pedal-distortion-harmonics` | Distort's `Distortion` at `Amount` `40`, `80` and `FF`, stepped levels at 110 Hz and 1 kHz | Dist OPAMP-21, `Modern`, at 25, 50 and 100% `Drive` | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `pedal-distortion-response` | `Distortion` given a sweep too quiet to clip, `Tone` open and at its default | Dist OPAMP-21, `Modern` and `Normal` | the EQ around the clip (`response`) |
-| `pedal-riff` | `nuance-chirp-riff`'s Blade riff as our Acid plays it, through `Distortion` at three drives | Dist OPAMP-21, the same samples in | the long-term spectrum's shape, level, crest factor and level over time (`spectrum`) |
+| `pedal-riff` | `nuance-chirp-riff`'s song line as our Acid plays it, through `Distortion` at three drives | Dist OPAMP-21, the same samples in | the long-term spectrum's shape, level, crest factor and level over time (`spectrum`) |
 | `pedal-overdrive` | Distort's `Overdrive` at stepped levels at 110 Hz and 1 kHz, four drives | none, as no reference is a Tube Screamer | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `pedal-acid-v` | our Acid's held, open note through `Overdrive` and `Distortion` | Acid V through its own `Overdrive` and `Distorsion` | a held note's harmonics (`harmonics`), against each side's own note with no distortion |
 | `live-glue-static` | the compressor's `Glue` type at 2, 4 and 10:1 | Live's Glue Compressor | static curve |
@@ -115,7 +141,7 @@ reference plugin.
 | `live-glue-detector` | `Glue` at 4:1 from a 100 Hz tone | Glue Compressor | static curve, unfitted |
 | `live-pedal-overdrive` | Distort's `Overdrive`, stepped levels at 110 Hz and 1 kHz | Live's Pedal, Overdrive | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
-| `live-pedal-riff` | the Blade riff through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
+| `live-pedal-riff` | the same song line through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -228,7 +254,7 @@ and 90th percentiles, over the windows within 40 dB of the loudest, are its quie
 moments. Against a reference it gives how far apart the shapes are, as the RMS of their
 difference over the bands from 40 Hz to 16 kHz, and the levels over time once their overall
 difference is taken out. Its input is usually a `file` that `made_by` renders first: our side of
-another spec's case, such as `nuance-chirp-riff`'s riff, written where the input reads it, so
+another spec's case, such as `nuance-chirp-riff`'s song line, written where the input reads it, so
 every side is given the same samples and only the effect differs.
 
 The Arturia distortions are started from their `Default` preset as Acid V is. Dist OPAMP-21, after
