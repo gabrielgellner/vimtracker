@@ -377,7 +377,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
- |   |- lfos[2], envelopes[2]
+ |   |- lfos[3], envelopes[3]     each with its settings, and whether it's switched out
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
  |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order
  |       '- Step                   note, velocity, nudge, gate, fx[]

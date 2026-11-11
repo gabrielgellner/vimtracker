@@ -1,7 +1,7 @@
 //! The Mod page: a rack of half-width devices, each envelope on the left beside the LFO of its
 //! number on the right, and the accumulator beside the arpeggio under them. An envelope's or an
-//! LFO's title has its destination, after the room for the switch that turns it off (#385), and an
-//! envelope draws its shape in a panel on its right.
+//! LFO's title has its switch, then its destination, and an envelope draws its shape in a panel on
+//! its right. One switched out is faint but for the cursor, as a bypassed FX slot is.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -9,12 +9,14 @@ use ratatui::text::Line;
 use vt_model::song::Track;
 
 use crate::app::App;
+use crate::theme;
 use crate::track_page::{
-    Control, DeviceSpec, DeviceWidth, EnvelopeField, LfoField, Page, rack_places,
+    Control, DeviceSpec, DeviceWidth, EnvelopeField, LfoField, Page, modulator_bypassed,
+    rack_places,
 };
 use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{Device, rack_areas};
-use crate::views::widgets::grid::{CellSource, CellWidths, SettingsGrid};
+use crate::views::widgets::grid::{CellSource, CellWidths, SettingsGrid, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
@@ -113,8 +115,9 @@ fn envelope_panel(app: &App, slot: usize) -> GraphicPanel {
     GraphicPanel::new().boxed(lines, DIAGRAM_WIDTH as u16, None)
 }
 
-/// One of the Mod page's devices: its frame and title, its settings in compact cells, and an
-/// envelope's shape in its panel, with the settings stopping short of it.
+/// One of the Mod page's devices: its frame and title, with an envelope's or an LFO's switch, its
+/// settings in compact cells, and an envelope's shape in its panel, with the settings stopping
+/// short of it. One switched out is faint, its title's destination too, but for the cursor.
 fn draw_device(
     frame: &mut Frame,
     area: Rect,
@@ -123,12 +126,16 @@ fn draw_device(
     device: &DeviceSpec,
     focused: bool,
 ) {
-    let controls = title_controls(app, track, device);
+    let bypassed = device.switchable
+        && device.title[0].and_then(|control| modulator_bypassed(control, track)) == Some(true);
+    let fade = bypassed.then(|| theme::cursor(app.mode));
+    let mut controls = title_controls(app, track, device);
+    if let Some(keep) = fade {
+        controls = controls.into_iter().map(|line| faded(line, keep)).collect();
+    }
     let mut widget = Device::new(device.identity.clone());
-    // An envelope or an LFO keeps the room for the switch #385 gives it, so its destination stays
-    // where it is when that comes.
-    if !controls.is_empty() {
-        widget = widget.switch_room();
+    if device.switchable {
+        widget = widget.switch(!bypassed);
     }
     frame.render_widget(widget.controls(controls).focused(focused), area);
     let panel = match device.title[0] {
@@ -149,7 +156,8 @@ fn draw_device(
     };
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let source = ModCells { app, track };
-    frame.render_widget(SettingsGrid::new(&source, rows, widths), settings);
+    let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
+    frame.render_widget(grid, settings);
 }
 
 /// The Mod page: its devices in their rack, two to a band. Four bands fill the rows inside the

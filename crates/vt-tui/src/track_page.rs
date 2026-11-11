@@ -20,6 +20,7 @@ pub use device::{
 };
 pub use fx::TakenInsert;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
+pub(crate) use modulation::modulator_bypassed;
 pub use sound::{GROUP_ROWS, MASTER_ROWS, RETURN_ROWS};
 
 use std::sync::Arc;
@@ -464,10 +465,14 @@ impl App {
             Cmd::RemoveRow | Cmd::Paste if self.track_page.page != Page::Fx => {
                 self.status = "dd and p move effects, on the FX page".to_owned();
             }
-            Cmd::Bypass if self.track_page.page != Page::Fx => {
-                self.status = "b bypasses an effect, on the FX page".to_owned();
-            }
-            Cmd::Bypass => self.toggle_bypass(),
+            Cmd::Bypass => match self.track_page.page {
+                Page::Fx => self.toggle_bypass(),
+                Page::Mod => self.toggle_modulator(),
+                Page::Sound => {
+                    self.status =
+                        "b switches an effect or a modulator, on the FX and Mod pages".to_owned();
+                }
+            },
             Cmd::RemoveRow => self.take_insert(),
             Cmd::Paste => self.put_insert(),
             Cmd::Increase if fine => self.adjust_fine(true, times, false),

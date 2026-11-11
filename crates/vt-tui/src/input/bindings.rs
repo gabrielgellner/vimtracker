@@ -436,7 +436,11 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
     ("d d", Cmd::RemoveRow, "Take an effect out of its slot"),
     ("p", Cmd::Paste, "Put the effect taken in this slot"),
-    ("b", Cmd::Bypass, "Bypass this slot, or bring it back"),
+    (
+        "b",
+        Cmd::Bypass,
+        "Switch this effect or modulator out, or back in",
+    ),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     (
         "g d",
