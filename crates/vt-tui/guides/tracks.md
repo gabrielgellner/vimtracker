@@ -123,19 +123,33 @@ and `H` and `L` change page.
 The FX page has 4 slots, which the sound goes through in order after the filters and
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
+Each slot is a device: a frame with the slot's number, its effect and the effect's type in its
+title, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`, a box on
+the right with its curve or how far it's turning down. The device with the cursor has the
+brighter frame. An empty slot keeps its frame, so nothing moves when an effect goes in.
+
 | Keys | Does |
 |---|---|
 | `K` or `i` on the effect | Choose what's in the slot. `=` and `-` step through |
+| `K` on the type | Choose the effect's type, such as a Comp's `Glue` |
 | `x` on the effect | Empty the slot |
 | `x` on a setting | Back to its default |
+| `h` `j` `k` `l` | Through the settings, and up to the title |
+| `0` `$` | The first or last setting on the row |
 | `{` `}` | Previous or next slot, staying on the same setting |
 | `dd` | Take the effect out of this slot |
 | `p` | Put it in this slot, swapping with what's there |
 | `b` | Bypass this slot, to hear without it, or bring it back |
 
-A slot's settings are in columns of two. `j` and `k` go up and down them and on to the
-next slot, and on the effect they go straight between slots. `2j` goes to the same place as `}`.
-On a slot's bottom line, `0` goes to its first setting there, and `h` from it to the effect.
+Each effect places its own settings: what comes out, `Mix` and `Gain`, is in its last column, a
+`Comp`'s detector, times and output each have a column, an `EQ3`'s bands are its columns, and a
+`Delay`'s repeats, their tone and what comes out are its. A row can have gaps, which `h` and `l`
+step over. `j` and `k` keep to the column you were in, landing on the nearest setting where the
+row has nothing there, and go on into the next slot's title. The effect is over the first column
+and its type over the second: the `Type` of a `Distort`, `Chorus` or `Comp`, and the `Mode` of
+an `LPG` or `Comb`, are in the title rather than among the settings. `{` and `}` keep the row
+and column, so they come back after an empty slot, and `2j` goes two rows down. `b`, `dd` and
+`p` work from any row of a slot.
 
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.

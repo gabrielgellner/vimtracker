@@ -7072,14 +7072,45 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
     assert_eq!(peach(&app), 0);
 }
 
-/// The FX page's text for a slot: the line with its number, and the line below.
+/// The FX page's lines, drawn as wide and tall as the page is beside the main meter at 163x42.
+fn fx_page_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..40)
+        .map(|y| (0..150).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+/// The FX page's text for a slot: its device's lines, from its title on its frame's top to its
+/// frame's bottom.
 fn fx_line(app: &App, slot: usize) -> String {
-    let lines = track_page_text(app);
+    let lines = fx_page_text(app);
     let at = lines
         .iter()
-        .position(|line| line.starts_with(&format!("{}  ", slot + 1)))
+        .position(|line| line.starts_with(&format!("╭─ {} ", slot + 1)))
         .unwrap();
-    format!("{}\n{}", lines[at], lines[at + 1])
+    lines[at..at + 9].join("\n")
+}
+
+/// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back
+/// on the first slot's effect.
+fn four_devices(app: &mut App) {
+    for (effect, kind) in [
+        ("Comp", "=="),
+        ("EQ3", ""),
+        ("Distort", "--"),
+        ("Delay", ""),
+    ] {
+        press(app, "K");
+        press(app, effect);
+        special(app, KeyCode::Enter);
+        press(app, &format!("l{kind}h}}"));
+    }
+    press(app, "gg");
 }
 
 fn on_fx_page() -> (App, vt_engine::link::Realtime) {
@@ -7098,8 +7129,12 @@ fn l_reaches_the_fx_page_and_stops_there() {
     press(&mut app, "H");
     assert_eq!(app.track_page, Page::Mod);
     press(&mut app, "L");
-    assert!(fx_line(&app, 0).starts_with("1  ---  "));
-    assert!(fx_line(&app, 2).starts_with("3  ---  "));
+    for slot in [0, 2] {
+        let device = fx_line(&app, slot);
+        let title = format!("╭─ {}     Empty ─", slot + 1);
+        assert!(device.starts_with(&title), "{device}");
+        assert!(device.contains("│  K  pick an effect"), "{device}");
+    }
 }
 
 #[test]
@@ -7116,45 +7151,49 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    // The effect and its type are in the title, and its settings in its grid.
     let line = fx_line(&app, 0);
-    assert!(line.starts_with("1  Distort"), "{line}");
-    assert!(line.contains("Type     Soft"), "{line}");
-    assert!(line.contains("Amount   40 ▕"), "{line}");
-    assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
+    assert!(line.starts_with("╭─ 1     Distort  Soft ─"), "{line}");
+    assert!(line.contains("│  Amount    40 ▕"), "{line}");
+    assert!(line.contains("Mix       FF ▕█████████▏"), "{line}");
     assert!(line.contains("Gain      E0 ▕"), "{line}");
+    assert!(!line.contains("Type"), "{line}");
 
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Type");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Type     Hard"));
+    assert!(fx_line(&app, 0).contains("Distort  Hard"));
     press(&mut app, "-");
     press(&mut app, "-");
     let line = fx_line(&app, 0);
     assert!(
-        line.contains("Type     Distortion"),
+        line.contains("Distort  Distortion"),
         "it goes round: {line}"
     );
     // A pedal has a tone control as well.
     assert!(line.contains("Tone      80 ▕"), "{line}");
     press(&mut app, "-");
-    assert!(fx_line(&app, 0).contains("Type     Overdrive"));
+    assert!(fx_line(&app, 0).contains("Distort  Overdrive"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
-    assert!(fx_line(&app, 0).contains("Type     Fold"));
+    assert!(fx_line(&app, 0).contains("Distort  Fold"));
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
     special(&mut app, KeyCode::Esc);
 
+    // Under the type is the grid's second column, what comes out.
     press(&mut app, "j");
+    assert_eq!(column_name(&app), "Mix");
+    press(&mut app, "h");
     assert_eq!(column_name(&app), "Amount");
     press(&mut app, "+");
-    assert!(fx_line(&app, 0).contains("Amount   50"));
+    assert!(fx_line(&app, 0).contains("Amount    50"));
     press(&mut app, "ia7");
-    assert!(fx_line(&app, 0).contains("Amount   A7"));
+    assert!(fx_line(&app, 0).contains("Amount    A7"));
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Amount   40"));
+    assert!(fx_line(&app, 0).contains("Amount    40"));
     let depth = app.history.undo_depth();
     press(&mut app, "x");
     assert_eq!(
@@ -7163,7 +7202,7 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
         "already there, so no undo step"
     );
 
-    press(&mut app, "kl");
+    press(&mut app, "l");
     assert_eq!(column_name(&app), "Mix");
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Gain");
@@ -7184,18 +7223,18 @@ fn emptying_a_slot_keeps_the_cursor_valid() {
     use vt_model::insert::Insert;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
-    press(&mut app, "=$");
+    press(&mut app, "=j$");
     assert_eq!(column_name(&app), "Mix");
-    press(&mut app, "0x");
+    press(&mut app, "k0x");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     // Undo puts the settings back, and taking them away again leaves the cursor on the effect.
-    press(&mut app, "u$");
+    press(&mut app, "uj$");
     assert_eq!(column_name(&app), "Mix");
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     assert_eq!(column_name(&app), "Effect");
     // Another track's slot being empty does the same.
-    press(&mut app, "=$W");
+    press(&mut app, "=j$W");
     assert_eq!(column_name(&app), "Effect");
     press(&mut app, "B");
     assert_eq!(column_name(&app), "Mix");
@@ -7210,13 +7249,13 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
-    press(&mut app, "lj");
+    press(&mut app, "j");
     press(&mut app, "i10");
-    press(&mut app, "0K");
+    press(&mut app, "kK");
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Amount   10"),
+        fx_line(&app, 0).contains("Amount    10"),
         "{}",
         fx_line(&app, 0)
     );
@@ -7234,7 +7273,7 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
         "nothing to find yet"
     );
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "=j=");
+    press(&mut app, "=}=");
     press(&mut app, "/amo");
     let jump = app.field_jump.as_ref().unwrap();
     assert!(jump.label(Control::InsertParam(0, 1)).is_some());
@@ -7243,12 +7282,12 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     // The name and the value both carry it, in the columns they had.
     let line = fx_line(&app, 1);
     assert!(
-        line.contains(&format!("Amo{second}nt   {second}0 ▕")),
+        line.contains(&format!("Amo{second}nt    {second}0 ▕")),
         "{line}"
     );
     press(&mut app, &second.to_string());
     assert_eq!(column_name(&app), "Amount");
-    assert_eq!(app.track_row, 3);
+    assert_eq!(app.track_row, 5, "the second slot's first row of settings");
 }
 
 #[test]
@@ -7272,44 +7311,133 @@ fn an_insert_set_on_the_page_is_heard() {
 }
 
 #[test]
-fn settings_are_in_columns_of_two_and_keys_move_as_they_are_seen() {
+fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
+    use ratatui::style::Modifier;
+    use vt_tui::theme;
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(150, 40);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let (mut app, _realtime) = on_fx_page();
+    // A Distort in the first slot and a Delay in the second, with the cursor on the Distort's
+    // Amount.
+    press(&mut app, "=}K");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "{j");
+    let (first, second) = (2, 11);
+    let buffer = draw(&app);
+    // The frames, and the effects' names in the titles, after the slot's digit and the room for
+    // its switch.
+    assert_eq!(buffer[(0, first)].fg, theme::OVERLAY2);
+    assert_eq!(buffer[(0, second)].fg, theme::SURFACE1);
+    assert_eq!(buffer[(149, first + 4)].fg, theme::OVERLAY2);
+    assert_eq!(buffer[(9, first)].symbol(), "D");
+    assert!(buffer[(9, first)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(9, second)].symbol(), "D");
+    assert!(!buffer[(9, second)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(3, first)].fg, theme::OVERLAY2, "the digit is dim");
+    // Beyond the title, the top border keeps its frame's colour.
+    assert_eq!(buffer[(40, first)].symbol(), "─");
+    assert_eq!(buffer[(40, first)].fg, theme::OVERLAY2);
+
+    // Bypassed, everything in a slot is faint, its title's effect too, but for the cursor.
+    press(&mut app, "b");
+    assert!(app.song().tracks[0].bypassed[0]);
+    let buffer = draw(&app);
+    let amount_value = (13, first + 2);
+    assert_eq!(buffer[(3, first + 2)].symbol(), "A");
+    assert_eq!(buffer[(3, first + 2)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(9, first)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[amount_value].bg, theme::ROSEWATER, "the cursor");
+    assert_eq!(buffer[(30, first + 2)].symbol(), "M");
+    assert_eq!(buffer[(30, first + 2)].fg, theme::OVERLAY0);
+    // The other slot isn't.
+    assert_eq!(buffer[(3, second + 2)].fg, theme::OVERLAY2);
+}
+
+#[test]
+fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
-    press(&mut app, "=j=gg");
+    // Glue, an EQ, an empty slot, and a Distort.
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "l==h}K");
+    press(&mut app, "EQ3");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "}}=gg");
     let name = |app: &App| column_name(app);
+    let at = |app: &App| (name(app), app.track_row);
     assert_eq!(name(&app), "Effect");
-    // On the effect, j goes straight to the next slot's effect.
+    // The title has the effect and its type, and the cursor stays in it along the row.
+    press(&mut app, "l");
+    assert_eq!(name(&app), "Type");
+    press(&mut app, "l");
+    assert_eq!(name(&app), "Type", "it stops at the last");
+    press(&mut app, "h");
+    assert_eq!(name(&app), "Effect");
+
+    // Down the grid, keeping the column, and a hole takes the nearest setting in its row.
     press(&mut app, "j");
-    assert_eq!((name(&app).as_str(), app.track_row), ("Effect", 2));
+    assert_eq!(at(&app), ("Threshold".to_owned(), 1));
+    press(&mut app, "lll");
+    assert_eq!(name(&app), "Mix");
+    press(&mut app, "j");
+    assert_eq!(name(&app), "Peak Clip");
+    press(&mut app, "j");
+    assert_eq!(at(&app), ("Source".to_owned(), 3));
+    press(&mut app, "j");
+    assert_eq!(at(&app), ("Effect".to_owned(), 4), "the next slot's title");
+    press(&mut app, "j");
+    assert_eq!(name(&app), "Gain", "the column it was in");
+    press(&mut app, "j");
+    assert_eq!(name(&app), "High");
+    press(&mut app, "j");
+    assert_eq!(at(&app), ("Mid Q".to_owned(), 7));
+    // An empty slot has only its effect, and the rows after it are passed by.
+    press(&mut app, "j");
+    assert_eq!(at(&app), ("Effect".to_owned(), 8));
     press(&mut app, "j");
     assert_eq!(
-        (name(&app).as_str(), app.track_row),
-        ("Effect", 4),
-        "an empty slot too"
+        at(&app),
+        ("Type".to_owned(), 12),
+        "the nearest to the column"
     );
     press(&mut app, "j");
-    assert_eq!(name(&app), "Effect", "it stops at the last");
-    press(&mut app, "gg");
-
-    // Across then down the columns: 1 over 2, 3 over 4.
-    press(&mut app, "l");
-    assert_eq!(name(&app), "Type");
-    press(&mut app, "j");
-    assert_eq!(name(&app), "Amount");
-    press(&mut app, "l");
-    assert_eq!(name(&app), "Gain");
-    press(&mut app, "k");
     assert_eq!(name(&app), "Mix");
-    press(&mut app, "h");
-    assert_eq!(name(&app), "Type");
-
-    // On through the next slot, and a count goes as far as it says.
     press(&mut app, "jj");
-    assert_eq!((name(&app).as_str(), app.track_row), ("Type", 2));
+    assert_eq!(at(&app), ("Gain".to_owned(), 14), "it stops at the last");
+
+    // Up again, and from the first row k reaches the type in the title.
+    press(&mut app, "kk");
+    assert_eq!(at(&app), ("Type".to_owned(), 12));
+    press(&mut app, "kk");
+    assert_eq!(at(&app), ("Mid Q".to_owned(), 7));
+    // `0` and `$` go to a row's ends, over its holes.
     press(&mut app, "k");
-    assert_eq!((name(&app).as_str(), app.track_row), ("Amount", 1));
-    press(&mut app, "2j");
-    assert_eq!((name(&app).as_str(), app.track_row), ("Amount", 3));
+    assert_eq!(name(&app), "High", "still aiming for the last column");
+    press(&mut app, "0");
+    assert_eq!(name(&app), "Low");
+    press(&mut app, "l");
+    assert_eq!(name(&app), "Mid");
+    press(&mut app, "$");
+    assert_eq!(name(&app), "High");
+    press(&mut app, "l");
+    assert_eq!(name(&app), "High", "nothing after it");
+
+    // `gg` and `G` are the first and last rows, and a count goes as far as it says.
+    press(&mut app, "G");
+    assert_eq!(at(&app), ("Gain".to_owned(), 14));
+    press(&mut app, "gg");
+    assert_eq!(at(&app), ("Type".to_owned(), 0));
+    press(&mut app, "h2j");
+    assert_eq!(at(&app), ("Ratio".to_owned(), 2));
 }
 
 #[test]
@@ -7317,20 +7445,25 @@ fn braces_go_to_the_same_setting_in_the_next_slot() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=}={"); // Slots 1 and 2 hold an effect.
-    press(&mut app, "lj");
+    press(&mut app, "j");
     assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 1));
     press(&mut app, "}");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 3));
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 5));
     // An empty slot has only its effect, and the setting comes back after it.
     press(&mut app, "}");
     assert_eq!(column_name(&app), "Effect");
     press(&mut app, "{");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 3));
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 5));
     press(&mut app, "{{{");
     assert_eq!(app.track_row, 1, "it stops at the first");
+    // From the title, it's the next slot's title.
+    press(&mut app, "kl}");
+    assert_eq!((column_name(&app).as_str(), app.track_row), ("Type", 4));
     // A count, and nothing on the other pages but saying so.
-    press(&mut app, "2}");
-    assert_eq!(app.track_row, 5);
+    press(&mut app, "{j2}");
+    assert_eq!(app.track_row, 9);
+    press(&mut app, "9}");
+    assert_eq!(app.track_row, 13, "it stops at the last");
     press(&mut app, "H");
     let (row, field) = (app.track_row, app.track_field);
     press(&mut app, "}");
@@ -7355,7 +7488,7 @@ fn a_jump_labels_a_slots_effect_once() {
         3
     );
     press(&mut app, &labels[2].to_string());
-    assert_eq!(app.track_row, 4);
+    assert_eq!(app.track_row, 8);
 }
 
 #[test]
@@ -7365,25 +7498,25 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "=lK");
     press(&mut app, "crush");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "j");
+    press(&mut app, "hj");
     assert_eq!(column_name(&app), "Bits");
     let line = fx_line(&app, 0);
-    assert!(line.contains("Bits     9"), "{line}");
+    assert!(line.contains("Bits      9"), "{line}");
     assert!(!line.contains("Amount"), "{line}");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Bits     10"));
+    assert!(fx_line(&app, 0).contains("Bits      10"));
     press(&mut app, "=====");
     assert!(
-        fx_line(&app, 0).contains("Bits     12"),
+        fx_line(&app, 0).contains("Bits      12"),
         "it stops at the top"
     );
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Bits     9"));
+    assert!(fx_line(&app, 0).contains("Bits      9"));
     for _ in 0..12 {
         press(&mut app, "-");
     }
     assert!(
-        fx_line(&app, 0).contains("Bits     2"),
+        fx_line(&app, 0).contains("Bits      2"),
         "it stops at the bottom"
     );
     // It's a list to choose from, and not typed.
@@ -7392,19 +7525,19 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "6");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Bits     6"),
+        fx_line(&app, 0).contains("Bits      6"),
         "{}",
         fx_line(&app, 0)
     );
     // Another mode has its own setting, as it was.
-    press(&mut app, "k-");
+    press(&mut app, "kl-");
     assert!(
-        fx_line(&app, 0).contains("Type     Sine"),
+        fx_line(&app, 0).contains("Distort  Sine"),
         "{}",
         fx_line(&app, 0)
     );
     assert!(
-        fx_line(&app, 0).contains("Amount   40"),
+        fx_line(&app, 0).contains("Amount    40"),
         "{}",
         fx_line(&app, 0)
     );
@@ -7584,8 +7717,8 @@ fn the_fx_pages_bars_follow_what_plays() {
     app.live = Some(live);
     let line = fx_line(&app, 0);
     // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
-    assert!(line.contains("Amount   40 ▕█│███▏"), "{line}");
-    assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
+    assert!(line.contains("Amount    40 ▕██│██████▏"), "{line}");
+    assert!(line.contains("Mix       FF ▕█████████▏"), "{line}");
 }
 
 #[test]
@@ -8732,35 +8865,36 @@ fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
 }
 
 #[test]
-fn zero_and_dollar_on_the_fx_page_stay_on_the_line_the_cursor_is_on() {
+fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
     use vt_tui::track_page::Control;
     let (mut app, _rt) = app();
     press(&mut app, " 4LL");
     press(&mut app, "K");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
-    // Down onto the slot's bottom line, whose first setting is Feedback.
-    press(&mut app, "lj");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 1));
+    // Delay's first row is Time, Low cut and Width.
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 0));
     press(&mut app, "$");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 7));
+    assert_eq!(app.track_control(), Control::InsertParam(0, 3));
     press(&mut app, "0");
-    assert_eq!(
-        app.track_control(),
-        Control::InsertParam(0, 1),
-        "not the effect, drawn on the line above"
-    );
+    assert_eq!(app.track_control(), Control::InsertParam(0, 0));
+    // Its last is Ping-pong, Drive and Gain.
+    press(&mut app, "jj$");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    press(&mut app, "0");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 2));
     press(&mut app, "h");
     assert_eq!(
         app.track_control(),
-        Control::Insert(0),
-        "h still reaches it"
+        Control::InsertParam(0, 2),
+        "the effect is above, in the title, not to the left"
     );
-    // On the top line, the effect is the start.
-    press(&mut app, "lk0");
+    // The title has only the effect, as a delay has no type.
+    press(&mut app, "kkk$");
     assert_eq!(app.track_control(), Control::Insert(0));
-    press(&mut app, "$");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    press(&mut app, "0");
+    assert_eq!(app.track_control(), Control::Insert(0));
 }
 
 #[test]
@@ -8769,18 +8903,18 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     let (mut app, _rt) = app();
     press(&mut app, " 4LL");
     press(&mut app, "K");
-    press(&mut app, "delay");
+    press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
-    // Gain is the last on the top line, which is longer than the bottom.
-    press(&mut app, "$");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
-    press(&mut app, "j");
+    // Gain is the last on EQ3's top row, and the row under it has a hole there.
+    press(&mut app, "j$");
     assert_eq!(app.track_control(), Control::InsertParam(0, 7));
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 5));
     press(&mut app, "k");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    assert_eq!(app.track_control(), Control::InsertParam(0, 7));
     // A move along the row forgets the column.
     press(&mut app, "jhk");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 4));
+    assert_eq!(app.track_control(), Control::InsertParam(0, 2));
 
     // On the Sound page, down past the rows with nothing on the right and back.
     press(&mut app, "HHlgg");
@@ -9365,7 +9499,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
 
     // The attack isn't on the curve, so changing it sends nothing.
-    press(&mut app, "lll=");
+    press(&mut app, "jl=");
     assert!(matches!(
         app.song().tracks[0].inserts[0],
         Insert::Compressor(Compressor { attack: 0x56, .. })
@@ -9407,7 +9541,10 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).kind, CompressorType::Clean);
     let clean = screen(&app);
-    assert!(clean.contains("Type") && clean.contains("Clean"), "{clean}");
+    assert!(
+        clean.contains("Comp  Clean"),
+        "its type is in its title: {clean}"
+    );
     assert!(clean.contains("Auto"), "{clean}");
 
     // `=` on Type steps it to Console, which shows its switches, and Auto and Makeup as Clean
@@ -9423,8 +9560,9 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     assert!(!console.contains("Gain"), "{console}");
     assert_eq!(compressor(&app).console_release, CONSOLE_AUTO_RELEASE);
 
-    // The ratio is picked from its switch's three with `K`, and the release from its five.
-    press(&mut app, "jl");
+    // The ratio is picked from its switch's three with `K`, and the release from its five. Under
+    // the type is the attack, and the ratio under the threshold.
+    press(&mut app, "jhj");
     press(&mut app, "K");
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
     press(&mut app, "10:1");
@@ -9437,7 +9575,7 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     assert_eq!(compressor(&app).console_release, 1);
 
     // Back to Clean, its own settings are as they were, and the console's are kept.
-    press(&mut app, "khh-");
+    press(&mut app, "kk-");
     let back = compressor(&app);
     assert_eq!(back.kind, CompressorType::Clean);
     assert_eq!(back.ratio, Compressor::DEFAULT.ratio);
@@ -9465,7 +9603,7 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
         assert!(glue.contains(shown), "{shown}: {glue}");
     }
     // Its attack has seven places, from 0.01 ms, and its release seven, Auto last.
-    press(&mut app, "llK");
+    press(&mut app, "jK");
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 7);
     press(&mut app, "0.01 ms");
     special(&mut app, KeyCode::Enter);
@@ -9475,8 +9613,8 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     press(&mut app, "Auto");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).glue_release, 6);
-    // The range reads in dB, all 70 of them as it starts.
-    press(&mut app, "kll");
+    // The range reads in dB, all 70 of them as it starts. It's under the ratio.
+    press(&mut app, "jh");
     let range = compressor(&app).range;
     assert_eq!(range, 0xFF);
     let shown = format!("{:.1} dB", range_db(f32::from(range)));
@@ -9495,9 +9633,10 @@ fn a_compressors_makeup_is_its_last_setting_and_reads_in_db() {
     press(&mut app, " 4LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
-    // On Console, `$` is its makeup, which starts at none and goes up in dB.
+    // On Console, Makeup heads the third column, after the attack under the type. It starts at
+    // none and goes up in dB.
     press(&mut app, "l=");
-    press(&mut app, "$");
+    press(&mut app, "jl");
     assert!(
         status_line(&app).contains("+0.0 dB"),
         "{}",
@@ -9515,7 +9654,7 @@ fn a_compressors_makeup_is_its_last_setting_and_reads_in_db() {
 fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     use vt_engine::track_state::LiveValues;
     let draw = |app: &App| {
-        let backend = ratatui::backend::TestBackend::new(163, 24);
+        let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
@@ -9526,8 +9665,8 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     press(&mut app, " 4LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
-    // On the effect, j goes straight to the next slot: a limiter in the third.
-    press(&mut app, "jjK");
+    // A limiter in the third slot.
+    press(&mut app, "}}K");
     press(&mut app, "Limit");
     special(&mut app, KeyCode::Enter);
     app.slot_images = [Some(0x01_02_03), None, None, None];
@@ -9538,34 +9677,52 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     });
     let buffer = draw(&app);
     let row_of = |text: &str| {
-        (0..24)
+        (0..40)
             .find(|y| {
-                (0..163)
+                (0..150)
                     .map(|x| buffer[(x, *y)].symbol())
                     .collect::<String>()
-                    .contains(text)
+                    .starts_with(text)
             })
             .unwrap()
     };
-    let comp = row_of("Comp");
-    // The curve's placeholders, after the sixth column of settings, then a space, then the meter.
-    assert_eq!(buffer[(138, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(138, comp)].fg, Color::Rgb(1, 2, 3));
-    assert_eq!(buffer[(141, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
-    assert_eq!(buffer[(143, comp)].symbol(), "█");
+    // The curve's placeholders in their box, then the meter in its own, captioned, against the
+    // right of the slot's frame, with two columns between it and the frame.
+    let comp = row_of("╭─ 1     Comp");
+    let text = |y: u16| {
+        (0..150)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect::<String>()
+    };
+    assert!(
+        text(comp + 2).ends_with("┌────┐  ┌──┐  │"),
+        "{}",
+        text(comp + 2)
+    );
+    assert!(
+        text(comp + 5).ends_with("└────┘  └GR┘  │"),
+        "{}",
+        text(comp + 5)
+    );
+    assert_eq!(buffer[(136, comp + 3)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(136, comp + 3)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(139, comp + 4)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
+    assert_eq!(buffer[(144, comp + 3)].symbol(), "█");
+    assert_eq!(buffer[(145, comp + 3)].symbol(), "█");
     // Half a cell filled from the top: the lower half drawn in the background's colour.
-    assert_eq!(buffer[(143, comp + 1)].symbol(), "▄");
-    assert_eq!(buffer[(143, comp + 1)].fg, vt_tui::theme::BASE);
-    // A limiter has its meter alone, where the curve would start: 3 dB is the top quarter
-    // of its top row.
-    let limit = row_of("Limit");
-    assert_eq!(buffer[(138, limit)].symbol(), "▆");
-    assert_eq!(buffer[(138, limit + 1)].symbol(), " ");
+    assert_eq!(buffer[(144, comp + 4)].symbol(), "▄");
+    assert_eq!(buffer[(144, comp + 4)].fg, vt_tui::theme::BASE);
+    // A limiter has its meter alone, where the compressor's is: 3 dB is the top quarter of its
+    // top row.
+    let limit = row_of("╭─ 3     Limit");
+    assert!(text(limit + 5).ends_with("└GR┘  │"), "{}", text(limit + 5));
+    assert_eq!(buffer[(144, limit + 3)].symbol(), "▆");
+    assert_eq!(buffer[(144, limit + 4)].symbol(), " ");
 
     // Bypassed, it turns nothing down, and its meter is empty.
     press(&mut app, "b");
     assert_eq!(app.song().tracks[0].bypassed, [false, false, true, false]);
-    assert_eq!(draw(&app)[(138, limit)].symbol(), "▔");
+    assert_eq!(draw(&app)[(144, limit + 3)].symbol(), "▔");
 }
 
 #[test]
@@ -9589,21 +9746,21 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
 
     // Away from the slot it's dim, once, and coming back sends nothing.
-    press(&mut app, "jj");
+    press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     let plain = app.slot_images[0].unwrap();
     assert_ne!(plain, picked);
-    press(&mut app, "kk");
+    press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0);
     assert_eq!(app.slot_images[0], Some(picked));
 
     // Any of its settings draws it again.
-    press(&mut app, "l=");
+    press(&mut app, "j=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     assert_ne!(app.slot_images[0], Some(picked));
 
     let buffer = {
-        let backend = ratatui::backend::TestBackend::new(163, 24);
+        let backend = ratatui::backend::TestBackend::new(150, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
@@ -9612,41 +9769,34 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     };
     let row = (0..24)
         .find(|y| {
-            (0..163)
+            (0..150)
                 .map(|x| buffer[(x, *y)].symbol())
                 .collect::<String>()
                 .contains("EQ3")
         })
         .unwrap();
-    assert_eq!(buffer[(138, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(147, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+    // In its box against the right of the slot's frame.
+    assert_eq!(buffer[(135, row + 2)].symbol(), "┌");
+    assert_eq!(buffer[(136, row + 3)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(145, row + 4)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+    assert_eq!(buffer[(146, row + 5)].symbol(), "┘");
 }
 
 #[test]
-fn the_fx_page_fits_six_columns_of_settings_beside_the_main_meter_at_163_columns() {
+fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     use vt_model::insert::{Compressor, CompressorType, Insert};
     use vt_tui::track_page::Control;
-    let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
-    press(&mut app, "Comp");
-    special(&mut app, KeyCode::Enter);
-    press(&mut app, "l==");
+    let (mut app, _realtime) = on_fx_page();
+    four_devices(&mut app);
     let compressor = |app: &App| match app.song().tracks[0].inserts[0] {
         Insert::Compressor(compressor) => compressor,
         other => panic!("{other:?}"),
     };
     assert_eq!(compressor(&app).kind, CompressorType::Glue);
-    // An EQ in the third slot, whose curve is the widest drawing.
-    press(&mut app, "hjjK");
-    press(&mut app, "EQ3");
-    special(&mut app, KeyCode::Enter);
-    app.slot_images = [Some(0x01_02_03), None, Some(0x04_05_06), None];
+    app.slot_images = [Some(0x01_02_03), Some(0x04_05_06), None, None];
+    // Each row's text, with an image's placeholder, which is several characters, as `#`.
     let rows = |app: &mut App, keys: bool| {
-        app.mode = if keys {
-            vt_tui::input::mode::Mode::Keys
-        } else {
-            vt_tui::input::mode::Mode::Normal
-        };
+        app.mode = if keys { Mode::Keys } else { Mode::Normal };
         let backend = ratatui::backend::TestBackend::new(163, 42);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
@@ -9654,60 +9804,57 @@ fn the_fx_page_fits_six_columns_of_settings_beside_the_main_meter_at_163_columns
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..42)
-            .map(|y| (0..163).map(|x| buffer[(x, y)].clone()).collect::<Vec<_>>())
+            .map(|y| {
+                (0..163)
+                    .map(|x| match buffer[(x, y)].symbol() {
+                        image if image.starts_with('\u{10EEEE}') => "#".to_owned(),
+                        symbol => symbol.to_owned(),
+                    })
+                    .collect::<String>()
+            })
             .collect::<Vec<_>>()
     };
-    let text = |row: &[ratatui::buffer::Cell]| row.iter().map(|c| c.symbol()).collect::<String>();
+    let at = |line: &str, x: usize| line.chars().nth(x).unwrap_or(' ');
+    // Four devices of nine rows fill rows 2 to 37 of the page, which is 150 wide beside the
+    // main meter, with the frames against each other.
     let screen = rows(&mut app, false);
-    let comp = screen
-        .iter()
-        .position(|row| text(row).contains("Glue"))
-        .unwrap();
-    // Glue's eleventh setting, its clip, starts a sixth column, on the top row, after Makeup's.
-    let top = text(&screen[comp]);
-    let bottom = text(&screen[comp + 1]);
-    assert!(top.contains("Peak Clip") && top.contains("Off"), "{top}");
-    assert!(
-        top.find("Range").unwrap() < top.find("Peak Clip").unwrap(),
-        "{top}"
-    );
-    assert!(
-        bottom.contains("Makeup") && !bottom.contains("Peak Clip"),
-        "{bottom}"
-    );
-    // The drawings sit after it, where every slot's does, the EQ's curve ending two columns
-    // before the main meter's, which starts at 150 with its gap.
-    let placeholder =
-        |row: &[ratatui::buffer::Cell], x: usize| row[x].symbol().starts_with('\u{10EEEE}');
-    let eq = screen
-        .iter()
-        .position(|row| text(row).contains("EQ3"))
-        .unwrap();
-    assert!(placeholder(&screen[comp], 138), "{top}");
-    assert!(placeholder(&screen[eq], 138) && placeholder(&screen[eq + 1], 147));
-    // Nothing on the page reaches the two columns before the meter's.
-    for row in &screen[comp..eq + 2] {
-        assert_eq!(
-            (row[148].symbol(), row[149].symbol()),
-            (" ", " "),
-            "{}",
-            text(row)
-        );
+    for slot in 0..4 {
+        let top = 2 + 9 * slot;
+        let title = format!("╭─ {}     ", slot + 1);
+        assert!(screen[top].starts_with(&title), "{}", screen[top]);
+        assert_eq!(at(&screen[top], 149), '╮', "{}", screen[top]);
+        for row in &screen[top + 1..top + 8] {
+            assert_eq!((at(row, 0), at(row, 149)), ('│', '│'), "{row}");
+        }
+        assert!(screen[top + 8].starts_with('╰'), "{}", screen[top + 8]);
+        assert_eq!(at(&screen[top + 8], 149), '╯');
     }
-    // In the keyboard's box, one column in on each side, it all still fits.
+    assert!(screen[38].trim().is_empty() || !screen[38].starts_with('╭'));
+    // Glue's settings fill all four columns, the last ending well before its graphics.
+    let glue = &screen[4];
+    assert!(glue.contains("│  Threshold"), "{glue}");
+    assert!(glue.contains("Mix       FF ▕█████████▏"), "{glue}");
+    assert!(screen[6].contains("Peak Clip Off"), "{}", screen[6]);
+    // In the keyboard's box, one column and row in on each side, it all still fits: the devices
+    // fill rows 3 to 38, with the box's bottom under them.
     let boxed = rows(&mut app, true);
-    let eq = boxed
-        .iter()
-        .position(|row| text(row).contains("EQ3"))
-        .unwrap();
-    assert!(placeholder(&boxed[eq + 1], 148), "{}", text(&boxed[eq + 1]));
-    assert_eq!(boxed[eq + 1][149].symbol(), "│", "{}", text(&boxed[eq + 1]));
-    // Along the bottom row the cursor stops at Makeup, the last there, and up and along is Peak
-    // Clip, picked from its two with `K`, which switches the clip in.
-    app.mode = vt_tui::input::mode::Mode::Normal;
-    press(&mut app, "kkllllll");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 9));
-    press(&mut app, "kl");
+    for slot in 0..4 {
+        let top = 3 + 9 * slot;
+        let title = format!("│╭─ {}     ", slot + 1);
+        assert!(boxed[top].starts_with(&title), "{}", boxed[top]);
+        assert_eq!(
+            (at(&boxed[top], 148), at(&boxed[top], 149)),
+            ('╮', '│'),
+            "{}",
+            boxed[top]
+        );
+        assert!(boxed[top + 8].starts_with("│╰"), "{}", boxed[top + 8]);
+    }
+    assert!(boxed[39].starts_with('╰'), "{}", boxed[39]);
+    // Down Glue's last column the cursor reaches Peak Clip, picked from its two with `K`, which
+    // switches the clip in.
+    app.mode = Mode::Normal;
+    press(&mut app, "ggj$j");
     assert_eq!(app.track_control(), Control::InsertParam(0, 10));
     press(&mut app, "K");
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 2);
@@ -13110,12 +13257,14 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
     let names = ["Distort", "Delay", "Reverb", "Comp"];
     assert_eq!(names.len(), INSERTS);
     for (slot, name) in names.iter().enumerate() {
-        // Each slot's two rows of settings, one under the other.
-        let top = format!("{}  {name}", slot + 1);
+        // Each slot's device, with its settings in its frame.
+        let top = format!("╭─ {}     {name}", slot + 1);
         let at = fx.iter().position(|line| line.starts_with(&top));
         let at = at.unwrap_or_else(|| panic!("{top} in\n{}", fx.join("\n")));
-        assert!(fx[at + 1].starts_with("             "), "{}", fx[at + 1]);
-        assert!(!fx[at + 1].trim().is_empty(), "{name}'s second row");
+        assert!(fx[at + 2].starts_with("│  "), "{}", fx[at + 2]);
+        let settings = fx[at + 2].trim_start_matches('│').trim();
+        assert!(!settings.is_empty(), "{name}'s first row");
+        assert!(fx[at + 8].starts_with('╰'), "{}", fx[at + 8]);
     }
     press(&mut app, "H");
     let modulation = full_screen_text(&mut app);

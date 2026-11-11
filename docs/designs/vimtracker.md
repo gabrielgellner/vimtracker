@@ -536,6 +536,26 @@ built from, so a new page uses them rather than working out its layout again:
 *   `group`: a group's colour, from `theme::group`, the tracks it sums as runs such as `01-04 07`,
     the `G1` mark a grouped track carries, and whether a track's mute or solo is its own or its
     group's, for the mixer, the song view, the track page and the phrase and chain views.
+*   **A rack's devices** (decision 139, [`fx-page.md`](fx-page.md)), page-agnostic, so the Sound
+    and Mod pages can take them as they are ([`track-pages.md`](track-pages.md)):
+    *   `device`: `Device`, a device's rounded frame 9 rows tall (`DEVICE_HEIGHT`), its title on
+        the top border (its identity, dim, a place for its switch, and its title controls, bold
+        while it has the cursor), its brighter frame while it has the cursor, and the areas of its
+        settings and its panel.
+    *   `grid`: `SettingsGrid`, up to four columns of three rows with holes, at `CellWidths`, read
+        through the `CellSource` trait (a setting's name, value and `ValueBar`), so it knows
+        nothing of `App`; and `faded`, for a device switched out.
+    *   `panel`: `GraphicPanel`, faint square boxes side by side, with an image's placeholders or a
+        meter's cells inside and a caption in the bottom border, such as `GR`.
+
+**The track page's rack** (`track_page.rs`). The FX page is a rack of devices: `Page::devices`
+gives a `DeviceSpec` for each slot (`DeviceSpec::slot`), with its identity, its title controls over
+the grid's first columns and its grid of `Control`s from `Insert::grid` (`vt-model`'s `grid.rs`).
+The cursor's `track_row` and `track_field` go through `App::cursor_rows`, the devices' rows one
+after another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0` and `$` step over and `j` and `k`
+land beside; `App::device_cursor` reads it as a device, a row (the title is 0) and a column, and
+`{` and `}` move by devices. The Sound and Mod pages are still rows of settings
+(`Page::rows`), whose `cursor_rows` have no holes.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -1623,7 +1643,7 @@ The shapes come from Vital's `distortion.cpp`, which is GPL 3 or later as we are
 
 **The parameter list.** An effect declares its settings in a static list: name, step command, modulation destination, highest value and default. The FX page, stepping, `x`, `K`, typing, step commands and `Dest` all read it, so a new effect needs no new page code. This covers effects only. The Sound and Mod pages' existing controls stay as they are, which goes back on the wording under A shared parameter list above: a file of about 1,000 lines that works isn't rewritten until there's a reason. That leaves two systems side by side for now.
 
-**The FX page.** A third page on the track page, with one row per slot:
+**The FX page.** *Since replaced by a rack of devices, decision 139 and [`fx-page.md`](fx-page.md).* A third page on the track page, with one row per slot:
 
 ```text
 1  Distort   Type   Soft             Mix    FF ▕█████████▏
