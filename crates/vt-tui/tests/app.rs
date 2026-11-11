@@ -5508,6 +5508,77 @@ fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
 }
 
 #[test]
+fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
+    use ratatui::buffer::Buffer;
+    use vt_tui::glyphs::{GROUP, ICON_SPACE};
+    use vt_tui::theme::{OVERLAY2, SURFACE1, TEXT};
+    let (mut app, _realtime) = app();
+    command(&mut app, "track add 4");
+    command(&mut app, "group 1 1-3");
+    command(&mut app, "group 2 4");
+    press(&mut app, " 6");
+    // Drawn at the fullscreen kitty's size.
+    let draw = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(163, 42);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    };
+    let line =
+        |buffer: &Buffer, y: u16| -> String { (0..163).map(|x| buffer[(x, y)].symbol()).collect() };
+    let column = |line: &str, text: &str| line[..line.find(text).unwrap()].chars().count();
+    let buffer = draw(&app);
+    let (title, parts, names) = (line(&buffer, 0), line(&buffer, 1), line(&buffer, 2));
+    assert!(title.starts_with("Mixer"), "{title}");
+    // Each part's name sits on a rule that starts over its first strip.
+    let g1 = format!("{GROUP}{ICON_SPACE}G1");
+    assert_eq!(column(&parts, "─ Tracks "), column(&names, "01"), "{parts}");
+    assert_eq!(column(&parts, "─ Groups "), column(&names, &g1), "{parts}");
+    assert_eq!(
+        column(&parts, "─ Returns "),
+        column(&names, "\u{a0}A") - 1,
+        "{parts}"
+    );
+    // The rule runs over its strips, and stops a column before the gap to the next part.
+    let tracks = &parts[parts.find("─ Tracks").unwrap()..parts.find("─ Groups").unwrap()];
+    assert_eq!(tracks.chars().count(), 6 * 7 + 2, "{parts}");
+    assert!(tracks.ends_with("─   "), "{parts}");
+    // Nothing else moves: the strips' names are under it, and the settings at the bottom, with
+    // `Trim` over `Level`.
+    assert!(names.trim_start().starts_with("01"), "{names}");
+    assert!(line(&buffer, 3).contains("G1"), "the routing");
+    let rows: Vec<String> = (0..42).map(|y| line(&buffer, y)).collect();
+    let trim = rows.iter().position(|row| row.starts_with("Trim")).unwrap();
+    assert!(rows[trim + 1].starts_with("Level"));
+    assert!(rows[41].starts_with("Solo"), "{}", rows[41]);
+    // The cursor's part is brighter, its rule and its name.
+    let colour = |buffer: &Buffer, text: &str, offset: usize| {
+        let parts = line(buffer, 1);
+        buffer[((column(&parts, text) + offset) as u16, 1)].fg
+    };
+    assert_eq!(colour(&buffer, "─ Tracks", 0), OVERLAY2);
+    assert_eq!(colour(&buffer, "─ Tracks", 2), TEXT);
+    assert_eq!(colour(&buffer, "─ Groups", 0), SURFACE1);
+    assert_eq!(colour(&buffer, "─ Groups", 2), OVERLAY2, "dim");
+    assert_eq!(colour(&buffer, "─ Returns", 0), SURFACE1);
+    press(&mut app, "$");
+    let buffer = draw(&app);
+    assert_eq!(colour(&buffer, "─ Tracks", 0), SURFACE1);
+    assert_eq!(colour(&buffer, "─ Tracks", 2), OVERLAY2);
+    assert_eq!(colour(&buffer, "─ Returns", 0), OVERLAY2);
+    assert_eq!(colour(&buffer, "─ Returns", 2), TEXT);
+    // A lone group's strip is too narrow for the rule, so it has its name alone.
+    let (mut app, _realtime) = self::app();
+    command(&mut app, "track add 4");
+    command(&mut app, "group 1 1-3");
+    press(&mut app, " 6");
+    let parts = line(&draw(&app), 1);
+    assert!(parts.contains("──   Groups   ─ Returns"), "{parts}");
+}
+
+#[test]
 fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     use vt_tui::glyphs::{MUTE, SOLO};
     let (mut app, _realtime) = app();
