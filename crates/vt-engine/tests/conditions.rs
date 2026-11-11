@@ -120,9 +120,59 @@ fn first_plays_only_the_first_time_round_and_not_first_after() {
 }
 
 #[test]
+fn a_build_plays_from_its_pass_on_or_only_before_it() {
+    assert_eq!(passes(&first_row("cnd:95"), 8), "....xxxx", ">5");
+    assert_eq!(passes(&first_row("cnd:A3"), 8), "xx......", "<3");
+    // From pass 16 on, past what a second digit counts to.
+    let late = passes(&first_row("cnd:B0"), 18);
+    assert_eq!(late, format!("{}xxx", ".".repeat(15)), ">16");
+}
+
+#[test]
+fn a_build_starts_again_with_a_reset_the_tracks_reset_and_a_realign() {
+    // A section's reset at 12: passes at 0, 4 and 8, then the reset is a first pass again.
+    let mut reset = first_row("cnd:A3");
+    reset.sections[0].reset = Some(12);
+    assert_eq!(hits(&reset, 24, 0), [0, 4, 12, 16]);
+    let mut from = first_row("cnd:93");
+    from.sections[0].reset = Some(12);
+    assert_eq!(hits(&from, 24, 0), [8, 20]);
+    let mut own = first_row("cnd:93");
+    own.tracks[0].reset = Some(12);
+    assert_eq!(hits(&own, 24, 0), [8, 20], "the track's own Reset");
+
+    let song = first_row("cnd:A2");
+    let mut engine = Engine::new(RATE, version(&song, hits_pool()));
+    engine.play_from(0);
+    let mut out = vec![0.0; 10 * STEP * 2];
+    engine.process(&mut out);
+    let heard = |out: &[f32], step: usize| out[step * STEP * 2].abs() > 0.001;
+    assert!(heard(&out, 0) && !heard(&out, 4) && !heard(&out, 8));
+    engine.realign();
+    let mut after = vec![0.0; 2 * STEP * 2];
+    engine.process(&mut after);
+    assert!(heard(&after, 0) || heard(&after, 1), "<2 plays again");
+}
+
+#[test]
+fn playing_from_a_step_hears_the_build_as_playing_to_it_would() {
+    let rows = ["C-3 -- cnd:93", "--- --", "--- --", "--- --"];
+    let song = song(&[&rows, &["--- --"; 16]]);
+    let mut engine = Engine::new(RATE, version(&song, hits_pool()));
+    // Step 4 is the second pass, so it's silent, and step 8 the third, which `>3` plays.
+    engine.play_from(4);
+    let mut out = vec![0.0; 8 * STEP * 2];
+    engine.process(&mut out);
+    assert!(out[0].abs() < 0.001, "the second pass is before the build");
+    assert!(out[4 * STEP * 2].abs() > 0.001, "the third has joined it");
+}
+
+#[test]
 fn a_value_that_isnt_a_condition_plays_as_none() {
     assert_eq!(passes(&first_row("cnd:09"), 4), "xxxx");
     assert_eq!(passes(&first_row("cnd:21"), 4), "xxxx");
+    assert_eq!(passes(&first_row("cnd:91"), 4), "xxxx");
+    assert_eq!(passes(&first_row("cnd:A0"), 4), "xxxx");
 }
 
 #[test]

@@ -353,7 +353,9 @@ P0's pass:   0  -  1  -             P0's pass:   0  1  2  3
 
 As it's worked out from the count, a pass is what the count is: it follows the
 track's own speed, starts over wherever the count does, and playing from a step
-hears the pass playing up to it would. A `CND` in a lane counts the lane's loops
+hears the pass playing up to it would. So a build needs no counter of its own: `>5`
+plays from the fifth pass on and `<3` only on the first two, and both start again
+with the section, a reset or a realign. A `CND` in a lane counts the lane's loops
 instead, its count divided by the lane's length.
 
 A failed condition skips its row's note, events and own locks, while columns with

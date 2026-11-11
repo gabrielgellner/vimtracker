@@ -17,10 +17,18 @@ pub enum Condition {
     /// On pass `pass` of every `of`, counting from 1, so `1:2` is every other pass and `4:4` the
     /// last of four.
     Passes { pass: u8, of: u8 },
+    /// From this pass on, counting from 1, so a part joins a build and stays: `>2` is `!1ST`.
+    From(u8),
+    /// Only on the passes before this one, so a part drops out of a build: `<2` is `1ST`.
+    Until(u8),
 }
 
 /// The most passes a cycle can count, as on Elektron's machines.
 pub const MOST_PASSES: u8 = 8;
+
+/// The latest pass a build can start or end on. `9n` and `An` count from 2 to 15 by their second
+/// digit, and `Bn` and `Cn` carry on from 16 to 31.
+pub const LATEST_BUILD: u8 = 31;
 
 /// The named conditions, in Elektron's order, whose values are `01` to `08`.
 const NAMED: [Condition; 8] = [
@@ -50,19 +58,30 @@ pub struct Situation {
 
 impl Condition {
     /// Every condition, in the order a list shows them: the named ones, then each pass of each
-    /// cycle from 2 to 8, as Elektron lists them.
+    /// cycle from 2 to 8, as Elektron lists them, then the builds, from each pass and until each.
     pub fn all() -> impl Iterator<Item = Self> {
-        NAMED.into_iter().chain(
-            (2..=MOST_PASSES).flat_map(|of| (1..=of).map(move |pass| Self::Passes { pass, of })),
-        )
+        NAMED
+            .into_iter()
+            .chain(
+                (2..=MOST_PASSES)
+                    .flat_map(|of| (1..=of).map(move |pass| Self::Passes { pass, of })),
+            )
+            .chain((2..=LATEST_BUILD).map(Self::From))
+            .chain((2..=LATEST_BUILD).map(Self::Until))
     }
 
-    /// The condition a `CND` value holds, if it's one: `01` to `08` for the named ones, or two
-    /// digits `xy` for pass `x` of every `y`, so `12` is `1:2`.
+    /// The condition a `CND` value holds, if it's one: `01` to `08` for the named ones, two
+    /// digits `xy` for pass `x` of every `y`, so `12` is `1:2`, `9n` from pass `n` on and `An`
+    /// before it, so `95` is `>5` and `A3` is `<3`, and `Bn` and `Cn` the same from pass 16, so
+    /// `B4` is `>20`.
     pub fn from_value(value: u8) -> Option<Self> {
         let (pass, of) = (value >> 4, value & 0x0F);
         match pass {
             0 => NAMED.get(usize::from(of).checked_sub(1)?).copied(),
+            0x9 if of >= 2 => Some(Self::From(of)),
+            0xA if of >= 2 => Some(Self::Until(of)),
+            0xB => Some(Self::From(of + 16)),
+            0xC => Some(Self::Until(of + 16)),
             _ if (2..=MOST_PASSES).contains(&of) && pass <= of => Some(Self::Passes { pass, of }),
             _ => None,
         }
@@ -70,8 +89,14 @@ impl Condition {
 
     /// Its value in a `CND` slot.
     pub fn value(self) -> u8 {
+        let build = |low: u8, high: u8, pass: u8| match pass {
+            ..16 => low << 4 | pass,
+            _ => high << 4 | (pass - 16),
+        };
         match self {
             Self::Passes { pass, of } => pass << 4 | of,
+            Self::From(pass) => build(0x9, 0xB, pass),
+            Self::Until(pass) => build(0xA, 0xC, pass),
             named => NAMED
                 .iter()
                 .position(|n| *n == named)
@@ -94,6 +119,8 @@ impl Condition {
             Self::Neighbour(holds) => named("NEI", holds),
             Self::First(holds) => named("1ST", holds),
             Self::Passes { pass, of } => format!("{pass}:{of}"),
+            Self::From(pass) => format!(">{pass}"),
+            Self::Until(pass) => format!("<{pass}"),
         }
     }
 
@@ -109,6 +136,8 @@ impl Condition {
             Self::First(true) => "The first time round only".to_owned(),
             Self::First(false) => "Every time round but the first".to_owned(),
             Self::Passes { pass, of } => format!("Pass {pass} of every {of}"),
+            Self::From(pass) => format!("From pass {pass} on"),
+            Self::Until(pass) => format!("Before pass {pass} only"),
         }
     }
 
@@ -120,6 +149,8 @@ impl Condition {
             Self::Neighbour(_) => "Neighbour",
             Self::First(_) => "First",
             Self::Passes { .. } => "Passes",
+            Self::From(_) => "From",
+            Self::Until(_) => "Until",
         }
     }
 
@@ -131,6 +162,9 @@ impl Condition {
             Self::Neighbour(holds) => at.neighbour == holds,
             Self::First(holds) => (at.pass == 0) == holds,
             Self::Passes { pass, of } => at.pass.rem_euclid(i64::from(of)) == i64::from(pass) - 1,
+            // `at.pass` counts from 0, and the build's pass from 1.
+            Self::From(pass) => at.pass + 1 >= i64::from(pass),
+            Self::Until(pass) => at.pass + 1 < i64::from(pass),
         }
     }
 
@@ -142,14 +176,21 @@ impl Condition {
     }
 
     /// The condition this many places on in the list, stopping at either end. A large step moves
-    /// a pass to a longer or shorter cycle, keeping its place where it can, so `1:2` goes to `1:3`.
+    /// a pass to a longer or shorter cycle, keeping its place where it can, so `1:2` goes to `1:3`,
+    /// and a build's pass by four, so `>5` goes to `>9`.
     pub fn moved(self, by: i32, large: bool) -> Self {
-        if large && let Self::Passes { pass, of } = self {
-            let of = (i32::from(of) + by).clamp(2, i32::from(MOST_PASSES)) as u8;
-            return Self::Passes {
-                pass: pass.min(of),
-                of,
-            };
+        let build = |pass: u8| (i32::from(pass) + by * 4).clamp(2, i32::from(LATEST_BUILD)) as u8;
+        match self {
+            Self::Passes { pass, of } if large => {
+                let of = (i32::from(of) + by).clamp(2, i32::from(MOST_PASSES)) as u8;
+                return Self::Passes {
+                    pass: pass.min(of),
+                    of,
+                };
+            }
+            Self::From(pass) if large => return Self::From(build(pass)),
+            Self::Until(pass) if large => return Self::Until(build(pass)),
+            _ => {}
         }
         let list: Vec<Self> = Self::all().collect();
         let at = list.iter().position(|c| *c == self).unwrap_or(0) as i32;
@@ -164,7 +205,7 @@ mod tests {
     #[test]
     fn every_condition_has_one_value_and_reads_back() {
         let all: Vec<Condition> = Condition::all().collect();
-        assert_eq!(all.len(), 8 + (2..=8).sum::<usize>());
+        assert_eq!(all.len(), 8 + (2..=8).sum::<usize>() + 2 * 30);
         for condition in &all {
             assert_eq!(Condition::from_value(condition.value()), Some(*condition));
         }
@@ -175,7 +216,13 @@ mod tests {
             Some(Condition::Passes { pass: 1, of: 2 })
         );
         assert_eq!(Condition::from_value(0x07), Some(Condition::First(true)));
-        for value in [0x00, 0x09, 0x11, 0x21, 0x19, 0x99, 0xFF] {
+        assert_eq!(Condition::from_value(0x95), Some(Condition::From(5)));
+        assert_eq!(Condition::from_value(0xA3), Some(Condition::Until(3)));
+        assert_eq!(Condition::from_value(0xB0), Some(Condition::From(16)));
+        assert_eq!(Condition::from_value(0xCF), Some(Condition::Until(31)));
+        for value in [
+            0x00, 0x09, 0x11, 0x21, 0x19, 0x90, 0x91, 0xA0, 0xA1, 0xD0, 0xFF,
+        ] {
             assert_eq!(Condition::from_value(value), None, "{value:02X}");
         }
     }
@@ -225,6 +272,29 @@ mod tests {
     }
 
     #[test]
+    fn a_build_holds_from_its_pass_on_or_only_before_it() {
+        let holds = |condition: Condition| -> String {
+            (0..8)
+                .map(|pass| {
+                    let at = Situation {
+                        pass,
+                        ..Situation::default()
+                    };
+                    if condition.holds(at) { 'x' } else { '.' }
+                })
+                .collect()
+        };
+        assert_eq!(holds(Condition::From(5)), "....xxxx");
+        assert_eq!(holds(Condition::Until(3)), "xx......");
+        assert_eq!(holds(Condition::From(2)), holds(Condition::First(false)));
+        assert_eq!(holds(Condition::Until(2)), holds(Condition::First(true)));
+        assert_eq!(
+            (Condition::From(5).label(), Condition::Until(16).label()),
+            (">5".to_owned(), "<16".to_owned())
+        );
+    }
+
+    #[test]
     fn moving_goes_through_the_list_and_a_large_step_changes_the_cycle() {
         let one_of_two = Condition::Passes { pass: 1, of: 2 };
         assert_eq!(Condition::First(false).moved(1, false), one_of_two);
@@ -242,7 +312,16 @@ mod tests {
         );
         assert_eq!(
             Condition::Passes { pass: 8, of: 8 }.moved(1, false),
-            Condition::Passes { pass: 8, of: 8 }
+            Condition::From(2)
+        );
+        assert_eq!(Condition::From(31).moved(1, false), Condition::Until(2));
+        assert_eq!(Condition::From(5).moved(1, true), Condition::From(9));
+        assert_eq!(Condition::Until(30).moved(1, true), Condition::Until(31));
+        assert_eq!(Condition::From(3).moved(-1, true), Condition::From(2));
+        assert_eq!(
+            Condition::Until(31).moved(1, false),
+            Condition::Until(31),
+            "the list's last"
         );
     }
 }

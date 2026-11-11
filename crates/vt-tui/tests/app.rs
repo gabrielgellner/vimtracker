@@ -8617,6 +8617,17 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
         value_shown(&app).as_deref(),
         Some("1ST, the first time round only")
     );
+
+    // A build is in the list too, and `+` moves its pass by four.
+    press(&mut app, "K>5");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, ">5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).coarse(), 0x95);
+    assert_eq!(value_shown(&app).as_deref(), Some(">5, from pass 5 on"));
+    press(&mut app, "+");
+    assert_eq!(slot(&app).coarse(), 0x99);
+    press(&mut app, "rA3");
+    assert_eq!(value_shown(&app).as_deref(), Some("<3, before pass 3 only"));
 }
 
 #[test]
