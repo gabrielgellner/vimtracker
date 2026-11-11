@@ -59,7 +59,7 @@ use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::recording::Recording;
 use crate::shaping::ShapePanel;
-use crate::track_page::{MIXER_START, Page, TakenInsert};
+use crate::track_page::{MIXER_START, TakenInsert, TrackPage};
 use crate::tree::{ChainColumn, Place};
 
 /// A run of steps and columns.
@@ -228,7 +228,7 @@ pub struct App {
     pub library: Option<PathBuf>,
     pub mode: Mode,
     pub view: View,
-    /// The track page's row and setting.
+    /// The mixer's row.
     pub mixer_row: usize,
     pub song_column: usize,
     /// The section the engine is on.
@@ -237,7 +237,8 @@ pub struct App {
     pub looping: Option<usize>,
     /// What each track is launched onto and cued to, as the engine last said.
     pub jam: Vec<JamState>,
-    pub track_page: Page,
+    /// The track page: which of its pages shows, and where its cursor is.
+    pub track_page: TrackPage,
     /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
     pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
     /// The id of the image of the filter's curve, likewise.
@@ -255,14 +256,6 @@ pub struct App {
     /// page's playheads.
     pub playheads: [Option<Playhead>; PLAYHEADS],
     watched: usize,
-    pub track_row: usize,
-    pub track_field: usize,
-    /// Where `j` and `k` last left the cursor, as its row and field, and the field it was on before
-    /// a shorter row moved it in. Moving up or down from there goes back to that field where a row
-    /// has it, as Vim keeps its column.
-    pub(crate) track_wanted: Option<(usize, usize, usize)>,
-    /// Whether the cursor is on the fine digits of the track page's setting.
-    pub track_fine: bool,
     /// The project page's row and setting, whether the cursor is on the tempo's fine part, and
     /// the field `j` and `k` aim for, as on the track page.
     pub project_row: usize,
@@ -460,7 +453,7 @@ impl App {
             playing_section: 0,
             looping: None,
             jam: vec![JamState::default(); MAX_TRACKS],
-            track_page: Page::Sound,
+            track_page: TrackPage::default(),
             envelope_images: None,
             filter_image: None,
             waveform_image: None,
@@ -470,9 +463,6 @@ impl App {
             live: None,
             playheads: [None; PLAYHEADS],
             watched: 0,
-            track_row: 0,
-            track_field: 0,
-            track_wanted: None,
             project_row: 0,
             project_field: 0,
             project_fine: false,
@@ -483,7 +473,6 @@ impl App {
             settings: Settings::none(),
             library: None,
             audio_row: 0,
-            track_fine: false,
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_column: ChainColumn::Phrase,

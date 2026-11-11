@@ -551,14 +551,31 @@ built from, so a new page uses them rather than working out its layout again:
     *   `panel`: `GraphicPanel`, faint square boxes side by side, with an image's placeholders or a
         meter's cells inside and a caption in the bottom border, such as `GR`.
 
-**The track page's rack** (`track_page.rs`). The FX page is a rack of devices: `Page::devices`
-gives a `DeviceSpec` for each slot (`DeviceSpec::slot`), with its identity, its title controls over
-the grid's first columns and its grid of `Control`s from `Insert::grid` (`vt-model`'s `grid.rs`).
-The cursor's `track_row` and `track_field` go through `App::cursor_rows`, the devices' rows one
-after another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0` and `$` step over and `j` and `k`
-land beside; `App::device_cursor` reads it as a device, a row (the title is 0) and a column, and
-`{` and `}` move by devices. The Sound and Mod pages are still rows of settings
-(`Page::rows`), whose `cursor_rows` have no holes.
+**The track page** (`track_page.rs` and `track_page/`, decision 145) is the first page that's a
+component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod or FX),
+the cursor's row and field, the field `j` and `k` aim for, and whether it's on a value's fine
+digits. Its methods are given the cursor's track (`App::track_here`) and read no `App`:
+`TrackPage::rows`, `place`, `control`, `devices` and `device_cursor` say where the cursor is and on
+what, and `TrackPage::key` runs the page's own keys, the moves, `{` and `}` and the pages either
+side, returning an `Outcome`: done, refused with a reason for the status line, or passed back.
+`App::run_track_page` settles the cursor, hands each key to `TrackPage::key`, and runs what's passed
+back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine digits and `x`),
+`pickers.rs` (`K`) and `typing.rs` (`i`), with `b`, `dd` and `p` in `fx.rs`. `App::track_control`
+is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
+
+*   **Each page's settings in its own file:** `sound.rs` has the Sound page's row tables for each
+    kind of track and machine, `modulation.rs` the Mod page's, and `fx.rs` the slots;
+    `controls.rs` has `Control`, what each setting is called and holds on a track.
+*   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s, the FX
+    page a slot each (`DeviceSpec::slot`); a `DeviceSpec` is its identity, its title controls over
+    the grid's first columns and its grid of `Control`s, built by `DeviceSpec::new` from a model's
+    `Grid` (`vt-model`'s `grid.rs`), as `Insert::grid` is. A page with devices is a rack: its cursor
+    rows are the devices' rows one after another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0`
+    and `$` step over and `j` and `k` land beside, `TrackPage::device_cursor` reads the cursor as a
+    device, a row (the title is 0) and a column, and `{` and `}` move by devices. The Sound and Mod
+    pages give none yet (`sound::devices` and `modulation::devices` are empty), so they're rows of
+    settings (`Page::rows`) with no holes; giving devices makes either a rack, with the cursor
+    already working through them.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 
@@ -581,7 +598,7 @@ tracks go through `Folds::step`, so they step over what's hidden. After each key
 `Folds::stand_in` gives, its group or the next shown. Folds are view state: not in the song, not
 saved, and reset when another project opens.
 
-**Where it's going** (#320, not built yet). Each page becomes a component that owns its state, keys
+**Where it's going** (#320, the track page's cursor and moves done). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
 chain views among them, with `fn key(&mut self, key, ctx: &mut Ctx) -> Outcome` and
 `fn draw(&self, frame, area, ctx: &Ctx)`. `Ctx` borrows the services every page shares: the song and
@@ -589,11 +606,13 @@ history, the engine's handle, the sample pool and analyses, graphics, settings a
 `App` shrinks to those services, the current view, the modes and popups that span pages (the picker,
 the command line and help) and the jump list, and the feature files become methods on the page or
 service they belong to. It goes a page per PR, the track page first, with keys, drawing and
-screenshots unchanged. `SamplePage` is already half there: it keeps its own cursor, zoom, scroll,
+screenshots unchanged. `TrackPage` has its state and the keys that need only the cursor's track,
+given to it rather than borrowed through a `Ctx`, while its edits are still `impl App` blocks;
+`SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
-**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126 and 128, with #320 and #330.
+**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128 and 145, with #320 and #330.
 
 ### Graphics
 
@@ -699,7 +718,7 @@ These need no terminal and no sound device, so they run anywhere.
 
 ### Testing
 
-About 1,850 tests. CI runs `cargo fmt --check`, `cargo clippy` and `cargo test` on Apple silicon
+About 2,000 tests. CI runs `cargo fmt --check`, `cargo clippy` and `cargo test` on Apple silicon
 macOS, the one platform the golden hashes hold on.
 
 | Kind | Where | What it checks |
@@ -709,7 +728,7 @@ macOS, the one platform the golden hashes hold on.
 | Golden renders | `crates/vt-engine/tests/golden/`, through `tests/support/` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, under `rt_guard` | That a block allocates and frees nothing |
-| Interface | `crates/vt-tui/tests/app.rs`, `grammar.rs` and `sample_page.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
+| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's Sound and Mod pages (`track_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
 | Graphics | Unit tests in `kitty.rs` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/probe.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, the analysis thread and its cache, and importing kits from Ableton |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |

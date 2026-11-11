@@ -84,7 +84,7 @@ impl App {
                 .map(|row| row.iter().copied().map(Some).collect())
                 .collect()
         } else {
-            self.cursor_rows()
+            self.track_page.rows(self.track_here())
         }
     }
 
@@ -100,7 +100,7 @@ impl App {
         let (from_row, from_field) = if self.view == View::Mixer {
             (0, self.mixer_row)
         } else {
-            (self.track_row, self.track_field)
+            (self.track_page.row, self.track_page.field)
         };
         let mut hits: Vec<_> = self
             .jump_rows()
