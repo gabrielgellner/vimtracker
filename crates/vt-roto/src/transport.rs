@@ -125,6 +125,17 @@ pub trait Ports: Send {
     fn open(&mut self, incoming: Box<dyn Deliver>) -> Result<Box<dyn MidiSend>, LinkError>;
 }
 
+/// Ports chosen as the program runs, the system's or a test's fake.
+impl<P: Ports + ?Sized> Ports for Box<P> {
+    fn present(&mut self) -> bool {
+        (**self).present()
+    }
+
+    fn open(&mut self, incoming: Box<dyn Deliver>) -> Result<Box<dyn MidiSend>, LinkError> {
+        (**self).open(incoming)
+    }
+}
+
 /// The system's MIDI ports, through `midir`: CoreMIDI on macOS and ALSA on Linux.
 pub struct SystemPorts {
     lister: Option<midir::MidiInput>,

@@ -6274,7 +6274,11 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
         lines[4].contains("512 frames, 10.7 ms, the device's own"),
         "{lines:?}"
     );
-    assert!(lines[6].contains("21.3 ms"), "{lines:?}");
+    assert!(
+        lines[5].contains("Roto") && lines[5].contains("Off, so Live can have it"),
+        "{lines:?}"
+    );
+    assert!(lines[7].contains("21.3 ms"), "{lines:?}");
     app.audio.running = false;
     assert!(text(&app).iter().any(|line| line.contains("Stopped")));
 }

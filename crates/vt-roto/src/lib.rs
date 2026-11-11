@@ -9,6 +9,8 @@
 //! *   [`session`]: the handshake, with no I/O, so the link and the tests drive the same code.
 //! *   [`link`]: the Roto's own thread, which finds its ports by name, opens them, does the
 //!     handshake, and reconnects when it's plugged back in.
+//! *   [`live`]: devices shown live in PLUGIN mode, their knobs' names, feel and colours sent as
+//!     the Roto asks for them, with nothing stored on it.
 //! *   [`transport`]: the ports, through `midir` and `serialport`.
 //! *   [`fake`]: a Roto in memory that speaks both protocols, for tests.
 //! *   [`probe`]: `vimtracker roto-probe`.
@@ -22,6 +24,7 @@ pub mod cc;
 pub mod colour;
 pub mod fake;
 pub mod link;
+pub mod live;
 pub mod midi;
 pub mod probe;
 pub mod serial;

@@ -32,6 +32,7 @@ pub mod points;
 pub mod probe;
 pub mod project_page;
 pub mod recording;
+pub mod roto;
 pub mod run;
 pub mod sample_page;
 pub mod sample_settings;

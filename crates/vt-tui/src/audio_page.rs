@@ -1,5 +1,7 @@
 //! The audio page: which output plays, at what rate, and with what buffer. A change takes effect
-//! as it's made, as Ableton's audio preferences do: the main loop opens the new output.
+//! as it's made, as Ableton's audio preferences do: the main loop opens the new output. Its last
+//! row turns the Roto-Control on and off (`roto`), as Live's MIDI preferences choose its control
+//! surfaces.
 
 use vt_model::selection::Motion;
 
@@ -16,16 +18,19 @@ pub enum AudioRow {
     Device,
     Rate,
     Buffer,
+    /// Whether vimtracker drives the Roto-Control, and how its link is.
+    Roto,
 }
 
 impl AudioRow {
-    pub const ALL: [Self; 3] = [Self::Device, Self::Rate, Self::Buffer];
+    pub const ALL: [Self; 4] = [Self::Device, Self::Rate, Self::Buffer, Self::Roto];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Device => "Device",
             Self::Rate => "Rate",
             Self::Buffer => "Buffer",
+            Self::Roto => "Roto",
         }
     }
 }
@@ -122,6 +127,8 @@ impl App {
                     })
                     .collect()
             }),
+            // Off or on, which its own keys switch.
+            AudioRow::Roto => Vec::new(),
         };
         let current = match row {
             AudioRow::Device => device.and_then(|device| {
@@ -137,8 +144,24 @@ impl App {
                 let size = self.audio.buffer.or(choice.buffer)?;
                 device.buffers.iter().position(|b| *b == size)
             }),
+            AudioRow::Roto => None,
         };
         (options, current)
+    }
+
+    /// What a key does on the Roto's row, as on the master's `Limiter`: `=` turns it on and `-`
+    /// off, `K`, `i` and Enter switch it, and `x` puts it back off, as it starts. Returns false
+    /// for a key that means nothing there.
+    fn run_roto_row(&mut self, cmd: Cmd) -> bool {
+        let on = self.roto.setting.on;
+        let wanted = match cmd {
+            Cmd::Increase | Cmd::IncreaseLarge => true,
+            Cmd::Decrease | Cmd::DecreaseLarge | Cmd::ClearField => false,
+            Cmd::PickValue | Cmd::EnterInsert => !on,
+            _ => return false,
+        };
+        self.set_roto(wanted);
+        true
     }
 
     /// Ask for another output, which the main loop opens.
@@ -153,6 +176,9 @@ impl App {
         let count = self.count.take();
         let times = count.unwrap_or(1).max(1);
         let last = AudioRow::ALL.len() - 1;
+        if self.audio_row_here() == AudioRow::Roto && self.run_roto_row(cmd) {
+            return true;
+        }
         match cmd {
             Cmd::Move(Motion::Down) => self.audio_row = (self.audio_row + times).min(last),
             Cmd::Move(Motion::Up) => self.audio_row = self.audio_row.saturating_sub(times),
@@ -186,6 +212,8 @@ impl App {
                         buffer: None,
                         ..self.audio.choice.clone()
                     },
+                    // The Roto's row has its own keys, above.
+                    AudioRow::Roto => return true,
                 };
                 self.choose_audio(choice);
             }

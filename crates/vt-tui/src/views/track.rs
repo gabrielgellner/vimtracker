@@ -210,7 +210,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
 /// effect's `Off`/`On` list, an envelope's `Reset`, an LFO's or the arpeggio's `Retrig`, and the
 /// master's `Limiter`, which is the song's. They show as a toggle, and the status line still says
 /// the word.
-fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
+pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
     match control {
         Control::Limiter => Some(song.limiter),
         Control::InsertParam(slot, param) => {

@@ -9,6 +9,9 @@
 //!     table and the Logic script have them as `1A` to `1D`, which is what's used here.
 //! *   `0C 0C`, the meters' states, isn't in the PDF; the Ableton script sends it.
 //! *   An index in two bytes is the high seven bits first, as the scripts send it.
+//! *   `SET PLUGIN MODE` (`0B 01`) has no data in the PDF, but the real Roto (firmware 3.3.0) sends
+//!     one byte, `00`, which Bitwig's script reads and doesn't use. It's written as the Roto sends
+//!     it, and read with or without it.
 
 use crate::bytes::{DecodeError, Label, ParamHash, PluginHash, Reader, Rgb, push_pair};
 
@@ -364,6 +367,8 @@ pub enum FromRoto {
     PageLeft,
     PageRight,
     // PLUGIN, 0B.
+    /// PLUGIN mode is chosen, or the device or page it shows changed. The real Roto sends a byte
+    /// the PDF leaves out, `00` so far.
     SetPluginMode,
     SetFirstPlugin(u8),
     RotoSelectPlugin(u8),
@@ -842,7 +847,10 @@ impl FromRoto {
             }
             Self::PageLeft => (GENERAL, 0x14),
             Self::PageRight => (GENERAL, 0x15),
-            Self::SetPluginMode => (PLUGIN, 0x01),
+            Self::SetPluginMode => {
+                data.push(0);
+                (PLUGIN, 0x01)
+            }
             Self::SetFirstPlugin(first) => {
                 data.push(*first);
                 (PLUGIN, 0x04)
@@ -951,7 +959,12 @@ impl FromRoto {
             },
             (GENERAL, 0x14) => Self::PageLeft,
             (GENERAL, 0x15) => Self::PageRight,
-            (PLUGIN, 0x01) => Self::SetPluginMode,
+            (PLUGIN, 0x01) => {
+                if reader.remaining() == 1 {
+                    reader.byte()?;
+                }
+                Self::SetPluginMode
+            }
             (PLUGIN, 0x04) => Self::SetFirstPlugin(reader.byte()?),
             (PLUGIN, 0x07) => Self::RotoSelectPlugin(reader.byte()?),
             (PLUGIN, 0x09) => Self::SetDeviceLearn(reader.flag("learn")?),
@@ -1079,6 +1092,15 @@ mod tests {
         let mut message = FromRoto::Connected.encode();
         message.insert(message.len() - 1, 0);
         assert_eq!(FromRoto::decode(&message), Err(DecodeError::Trailing(1)));
+    }
+
+    #[test]
+    fn set_plugin_mode_reads_as_the_real_roto_sends_it_and_as_the_pdf_has_it() {
+        let real = [0xF0, 0x00, 0x22, 0x03, 0x02, 0x0B, 0x01, 0x00, 0xF7];
+        assert_eq!(FromRoto::decode(&real), Ok(FromRoto::SetPluginMode));
+        assert_eq!(FromRoto::SetPluginMode.encode(), real);
+        let documented = [0xF0, 0x00, 0x22, 0x03, 0x02, 0x0B, 0x01, 0xF7];
+        assert_eq!(FromRoto::decode(&documented), Ok(FromRoto::SetPluginMode));
     }
 
     #[test]
