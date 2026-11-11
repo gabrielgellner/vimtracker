@@ -44,6 +44,12 @@ fn value(app: &App, row: AudioRow) -> String {
             "Scrolling turns the setting under the cursor. Shift-drag selects text".to_owned()
         }
         AudioRow::Wheel => "Off: the terminal keeps its mouse".to_owned(),
+        AudioRow::WheelDirection if app.wheel.setting.reversed => {
+            "Against the fingers: up or right lowers".to_owned()
+        }
+        AudioRow::WheelDirection => {
+            "With the fingers, as a bar fills: up or right raises".to_owned()
+        }
     }
 }
 
@@ -91,6 +97,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let here = index == app.audio_row;
         let line = match row {
             AudioRow::Roto | AudioRow::Wheel => switch_value(app, row, here),
+            // Dim while the wheel's off, as it does nothing then.
+            AudioRow::WheelDirection if !app.wheel.setting.on && !here => {
+                Line::styled(value(app, row), theme::dim())
+            }
             _ => Line::styled(value(app, row), setting::style(app, here, false)),
         };
         rows.push(named(row.name(), line));

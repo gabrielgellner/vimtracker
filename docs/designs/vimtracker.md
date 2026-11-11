@@ -608,12 +608,17 @@ only name Normal's keys on those pages, for the binding table.
     sends some repeats as presses.
 *   **`wheel.rs`** (beside `input/`): the mouse wheel as a knob on the cursor's setting, while its
     setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
-    reports only then. `App::mouse_event` turns a tick into a press of `=` `-` `+` `_`, or the
-    sample page's Cmd-l and Cmd-h, through `App::press`, in whatever mode binds them, so every
-    page and a locked selection take it as they take the key. Where the setting has a finer step
-    than `=`, the cursor is put on its fine part for the tick and back after. A gesture's ticks are
-    squashed into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a
-    selection `Adjustments::join_from` keeps its running total in step (decision 162).
+    reports only then. `App::mouse_event` reads both axes as one knob, flipped to follow the
+    fingers under macOS's natural scrolling (`wheel::natural_scrolling`, read at start) and by
+    the setting's `reversed`. A gesture drops a tick the other way that comes too soon, as a
+    bounce, and keeps a decaying speed that sizes each tick by `wheel::tick_size`, the constants
+    all in `wheel::feel`. Ticks are owed, and `App::wheel_frame`, each frame, or any key, makes
+    what's owed as one press of `=` `-` `+` `_`, or the sample page's Cmd-l and Cmd-h, with a
+    count, through `App::press`, in whatever mode binds them, so every page and a locked
+    selection take it as they take the key. Where the setting has a finer step than `=`, the
+    cursor is put on its fine part for the press and back after. A gesture's presses are squashed
+    into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
+    `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys

@@ -254,6 +254,8 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         app.wheel.setting = crate::wheel::WheelSetting::load_from(&path);
         app.wheel.setting_path = Some(path);
     }
+    // So the value follows the fingers whichever way the system scrolls.
+    app.wheel.natural = crate::wheel::natural_scrolling();
     app.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();

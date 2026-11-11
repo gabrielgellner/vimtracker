@@ -911,7 +911,7 @@ impl App {
         self.take_loaded();
         self.take_analyses();
         self.tick_roto();
-        self.end_paused_wheel(now);
+        self.wheel_frame(now);
         self.follow_recording();
         let working = self.loader.is_waiting() || self.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
