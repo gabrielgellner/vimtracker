@@ -1896,7 +1896,7 @@ impl App {
 
     /// When a realign or a switch on the grid lands: on the launch grid's next line, or on the next
     /// bar when launches wait for a chain's end, as each track's chain ends somewhere else.
-    fn grid_when(&self) -> String {
+    pub(crate) fn grid_when(&self) -> String {
         match self.song().launch {
             Launch::ChainEnd => "on the next bar".to_owned(),
             every => every.when(),
