@@ -56,9 +56,9 @@ impl App {
         Place {
             view: self.view,
             cursor: self.cursor,
-            track_page: self.track_page,
-            track_row: self.track_row,
-            track_field: self.track_field,
+            track_page: self.track_page.page,
+            track_row: self.track_page.row,
+            track_field: self.track_page.field,
             mixer_row: self.mixer_row,
             sample_cursor: self.sample_page.cursor,
             sample_pinned: self.sample_page.pinned,
@@ -82,7 +82,7 @@ impl App {
         self.cursor = place.cursor;
         self.clamp_cursor();
         if place.view == View::Track {
-            self.track_page = place.track_page;
+            self.track_page.page = place.track_page;
             self.move_control(place.track_row, place.track_field);
         }
         if place.view == View::Mixer {

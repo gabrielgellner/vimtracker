@@ -1349,18 +1349,18 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
 fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     use vt_tui::track_page::{MOD_ROWS, Page, SAMPLE_ROWS};
     let (mut app, _realtime) = on_track_page();
-    assert_eq!(app.track_page, Page::Sound);
+    assert_eq!(app.track_page.page, Page::Sound);
     press(&mut app, "H");
-    assert_eq!(app.track_page, Page::Sound, "it stops at the first");
+    assert_eq!(app.track_page.page, Page::Sound, "it stops at the first");
     press(&mut app, "j$");
     press(&mut app, "L");
-    assert_eq!(app.track_page, Page::Mod);
-    assert_eq!(app.track_row, 0);
+    assert_eq!(app.track_page.page, Page::Mod);
+    assert_eq!(app.track_page.row, 0);
     let row = MOD_ROWS[0];
     assert!(row.contains(&app.track_control()), "the cursor stays valid");
     press(&mut app, "GH");
-    assert_eq!(app.track_page, Page::Sound);
-    assert_eq!(app.track_row, 0);
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert_eq!(app.track_page.row, 0);
     let all: Vec<_> = SAMPLE_ROWS
         .iter()
         .chain(&MOD_ROWS)
@@ -1692,6 +1692,7 @@ fn jump_labels(app: &App) -> Vec<String> {
     let jump = app.field_jump.as_ref().unwrap();
     let mut labels: Vec<String> = app
         .track_page
+        .page
         .rows(app.song().tracks[app.cursor.track].machine)
         .iter()
         .flat_map(|row| row.iter())
@@ -1790,7 +1791,7 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     press(&mut app, "/dep");
     special(&mut app, KeyCode::Enter);
     assert_eq!(column_name(&app), "Depth");
-    assert_eq!(app.track_row, 0);
+    assert_eq!(app.track_page.row, 0);
 }
 
 #[test]
@@ -1799,22 +1800,22 @@ fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4jj");
-    let start = (app.track_row, app.track_field);
+    let start = (app.track_page.row, app.track_page.field);
     press(&mut app, "/res");
     special(&mut app, KeyCode::Enter);
     assert_eq!(column_name(&app), "Res");
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
-    assert_eq!((app.track_row, app.track_field), start);
+    assert_eq!((app.track_page.row, app.track_page.field), start);
     assert_eq!(app.view, View::Track);
 
     // It goes back to the page it left, too.
     press(&mut app, "/res");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "L");
-    assert_eq!(app.track_page, Page::Mod);
+    assert_eq!(app.track_page.page, Page::Mod);
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
-    assert_eq!(app.track_page, Page::Sound);
-    assert_eq!((app.track_row, app.track_field), start);
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert_eq!((app.track_page.row, app.track_page.field), start);
 }
 
 #[test]
@@ -1960,7 +1961,7 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
     press(&mut app, "-");
     assert_eq!(cut(&app), (0xFE, 0));
     press(&mut app, "l");
-    assert!(app.track_fine);
+    assert!(app.track_page.fine);
     assert_eq!(column_name(&app), "Cut", "still Cut, on its fine digits");
     press(&mut app, "i80");
     assert_eq!(cut(&app), (0xFE, 0x80));
@@ -1993,7 +1994,7 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(column_name(&app), "Drive");
     press(&mut app, "l");
-    assert!(!app.track_fine);
+    assert!(!app.track_page.fine);
 }
 
 #[test]

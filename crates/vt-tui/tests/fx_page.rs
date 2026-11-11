@@ -28,11 +28,11 @@ fn fx_line(app: &App, slot: usize) -> String {
 fn l_reaches_the_fx_page_and_stops_there() {
     use vt_tui::track_page::Page;
     let (mut app, _realtime) = on_fx_page();
-    assert_eq!(app.track_page, Page::Fx);
+    assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "L");
-    assert_eq!(app.track_page, Page::Fx, "it stops at the last");
+    assert_eq!(app.track_page.page, Page::Fx, "it stops at the last");
     press(&mut app, "H");
-    assert_eq!(app.track_page, Page::Mod);
+    assert_eq!(app.track_page.page, Page::Mod);
     press(&mut app, "L");
     for slot in [0, 2] {
         let device = fx_line(&app, slot);
@@ -195,7 +195,10 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     );
     press(&mut app, &second.to_string());
     assert_eq!(column_name(&app), "Amount");
-    assert_eq!(app.track_row, 5, "the second slot's first row of settings");
+    assert_eq!(
+        app.track_page.row, 5,
+        "the second slot's first row of settings"
+    );
 }
 
 #[test]
@@ -281,7 +284,7 @@ fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "}}=gg");
     let name = |app: &App| column_name(app);
-    let at = |app: &App| (name(app), app.track_row);
+    let at = |app: &App| (name(app), app.track_page.row);
     assert_eq!(name(&app), "Effect");
     // The title has the effect and its type, and the cursor stays in it along the row.
     press(&mut app, "l");
@@ -354,28 +357,40 @@ fn braces_go_to_the_same_setting_in_the_next_slot() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=}={"); // Slots 1 and 2 hold an effect.
     press(&mut app, "j");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 1));
+    assert_eq!(
+        (column_name(&app).as_str(), app.track_page.row),
+        ("Amount", 1)
+    );
     press(&mut app, "}");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 5));
+    assert_eq!(
+        (column_name(&app).as_str(), app.track_page.row),
+        ("Amount", 5)
+    );
     // An empty slot has only its effect, and the setting comes back after it.
     press(&mut app, "}");
     assert_eq!(column_name(&app), "Effect");
     press(&mut app, "{");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Amount", 5));
+    assert_eq!(
+        (column_name(&app).as_str(), app.track_page.row),
+        ("Amount", 5)
+    );
     press(&mut app, "{{{");
-    assert_eq!(app.track_row, 1, "it stops at the first");
+    assert_eq!(app.track_page.row, 1, "it stops at the first");
     // From the title, it's the next slot's title.
     press(&mut app, "kl}");
-    assert_eq!((column_name(&app).as_str(), app.track_row), ("Type", 4));
+    assert_eq!(
+        (column_name(&app).as_str(), app.track_page.row),
+        ("Type", 4)
+    );
     // A count, and nothing on the other pages but saying so.
     press(&mut app, "{j2}");
-    assert_eq!(app.track_row, 9);
+    assert_eq!(app.track_page.row, 9);
     press(&mut app, "9}");
-    assert_eq!(app.track_row, 13, "it stops at the last");
+    assert_eq!(app.track_page.row, 13, "it stops at the last");
     press(&mut app, "H");
-    let (row, field) = (app.track_row, app.track_field);
+    let (row, field) = (app.track_page.row, app.track_page.field);
     press(&mut app, "}");
-    assert_eq!((app.track_row, app.track_field), (row, field));
+    assert_eq!((app.track_page.row, app.track_page.field), (row, field));
     assert!(app.status.contains("FX page"), "{}", app.status);
 }
 
@@ -396,7 +411,7 @@ fn a_jump_labels_a_slots_effect_once() {
         3
     );
     press(&mut app, &labels[2].to_string());
-    assert_eq!(app.track_row, 8);
+    assert_eq!(app.track_page.row, 8);
 }
 
 #[test]

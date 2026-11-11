@@ -196,7 +196,7 @@ fn sound_cells(app: &App, track: &Track, controls: &[Control], cells: &mut Cells
             SOUND_LABEL,
         ));
         let here = *control == current;
-        let on_fine = here && app.track_fine;
+        let on_fine = here && app.track_page.fine;
         let on_value = here && !on_fine;
         let text = setting::text(app, on_value, || value(*control, track, app.song()));
         let mut style = setting::style(app, on_value, at_default(*control, track));
@@ -248,7 +248,7 @@ fn sound_cells(app: &App, track: &Track, controls: &[Control], cells: &mut Cells
 fn group_rows(app: &App, track: &Track, columns: &Columns, room: usize) -> Vec<Row<'static>> {
     let song = app.song();
     let members: Vec<usize> = song.group_members(app.cursor.track).collect();
-    let controls = app.page_rows();
+    let controls = app.track_page.page_rows(Some(track));
     let lines = members.len().max(1).min(room).max(controls.len());
     let cut = members.len() > lines;
     let mut rows = Vec::new();
@@ -732,7 +732,10 @@ fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &D
 /// to keep the cursor's in view.
 fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
-    let cursor = app.device_cursor().map_or(0, |cursor| cursor.device);
+    let cursor = app
+        .track_page
+        .device_cursor(Some(track))
+        .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
     let mut rest = area;
     for device in Page::Fx.devices(track).iter().skip(first).take(fit) {
@@ -866,7 +869,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let tabs = Page::ALL.map(|page| {
         let text = format!(" {} ", page.name());
-        if page == app.track_page {
+        if page == app.track_page.page {
             Span::styled(text, bold)
         } else {
             Span::styled(text, theme::dim())
@@ -898,7 +901,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     title.extend(tabs);
     let mut rest = area;
     frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
-    match app.track_page {
+    match app.track_page.page {
         Page::Sound if track.is_group() => {
             let columns = sound_columns();
             let rows = group_rows(app, track, &columns, usize::from(rest.height));
@@ -907,7 +910,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Page::Sound => {
             let columns = sound_columns();
             let mut rows = Vec::new();
-            for controls in app.page_rows() {
+            for controls in app.track_page.page_rows(Some(track)) {
                 // The filter stands apart from the machine above it.
                 if controls.first() == Some(&Control::FilterType) {
                     rows.push(blank_row());
