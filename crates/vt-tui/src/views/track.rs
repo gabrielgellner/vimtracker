@@ -35,6 +35,7 @@ use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::{Cells, Columns, blank_row, take_top};
+use crate::views::widgets::toggle;
 
 /// The size of an envelope's diagram, in characters.
 pub(crate) const DIAGRAM_WIDTH: usize = 28;
@@ -67,9 +68,6 @@ const REDUCTION_METER_WIDTH: usize = 2;
 /// The caption on a gain reduction meter's box.
 const REDUCTION_CAPTION: &str = "GR";
 
-/// How much room a slot's title leaves for its switch, which #375 puts there, so its effect stays
-/// where it is when it comes.
-const SWITCH_ROOM: &str = " ";
 /// What an empty slot says, under its title.
 const EMPTY_SLOT: &str = "Empty";
 /// The row of an empty slot's settings its hint is on, the middle one.
@@ -411,6 +409,51 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     }
 }
 
+/// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
+/// effect's `Off`/`On` list, an envelope's `Reset`, and an LFO's or the arpeggio's `Retrig`. They
+/// show as a toggle, and the status line still says the word.
+fn toggle_on(control: Control, track: &Track) -> Option<bool> {
+    match control {
+        Control::InsertParam(slot, param) => {
+            let insert = track.inserts[slot];
+            let found = insert.params().get(param)?;
+            found.is_toggle().then(|| insert.value(param) != 0)
+        }
+        Control::Envelope(slot, EnvelopeField::Reset) => Some(track.envelopes[slot].reset),
+        Control::Lfo(slot, LfoField::Retrig) => Some(track.lfos[slot].retrig),
+        Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
+        _ => None,
+    }
+}
+
+/// A setting's value as a page shows it, with a jump's label over it: what's being typed in its
+/// place, a toggle in its own colour if it's off or on, or its value in the cursor's colour under
+/// the cursor and dim at its default.
+fn value_line(
+    app: &App,
+    track: &Track,
+    control: Control,
+    here: bool,
+    default: bool,
+) -> Line<'static> {
+    let typing = here && app.mode == Mode::Insert;
+    let (text, style) = match toggle_on(control, track) {
+        Some(on) if !typing => {
+            let style = if here {
+                theme::cursor(app.mode)
+            } else {
+                toggle::style(on)
+            };
+            (toggle::text(on), style)
+        }
+        _ => (
+            setting::text(app, here, || value(control, track, app.song())),
+            setting::style(app, here, default),
+        ),
+    };
+    Line::from(value_spans(app, control, text, style))
+}
+
 /// How wide a setting's column is on the Mod page, with a space between columns, so columns line
 /// up and don't move as values change.
 fn width(control: Control) -> u16 {
@@ -481,9 +524,13 @@ fn row(
     let current = app.track_control();
     for control in controls {
         let here = *control == current;
-        let text = setting::text(app, here, || value(*control, track, app.song()));
-        let style = setting::style(app, here, at_default(*control, track));
-        cells.cell(value_spans(app, *control, text, style));
+        cells.cell(value_line(
+            app,
+            track,
+            *control,
+            here,
+            at_default(*control, track),
+        ));
         // An LFO's shape has its icon after its name, where it has one, in the active colour while
         // the cursor is on that LFO.
         if let Control::Lfo(slot, LfoField::Shape) = *control {
@@ -592,11 +639,7 @@ impl CellSource for SlotCells<'_> {
 
     fn value(&self, control: Control) -> Line<'static> {
         let here = control == self.app.track_control();
-        let text = setting::text(self.app, here, || {
-            value(control, self.track, self.app.song())
-        });
-        let style = setting::style(self.app, here, false);
-        Line::from(value_spans(self.app, control, text, style))
+        value_line(self.app, self.track, control, here, false)
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -635,9 +678,9 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
         .collect()
 }
 
-/// A slot as a device: its frame and title, then its settings in its effect's grid, or a hint if
-/// it's empty, and its graphic panel. A bypassed slot's contents are faint but for the cursor and
-/// its images.
+/// A slot as a device: its frame and its title, with its bypass's toggle, then its settings in its
+/// effect's grid, or a hint if it's empty, and its graphic panel. A bypassed slot's contents are
+/// faint but for the cursor and its images.
 fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &DeviceSpec) {
     let Some(Control::Insert(slot)) = device.title[0] else {
         return;
@@ -648,8 +691,13 @@ fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &D
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
-    let frame_widget = Device::new(device.identity.clone())
-        .switch(Span::raw(SWITCH_ROOM))
+    let frame_widget = Device::new(device.identity.clone());
+    // Its bypass as it's heard, so a lock flips it with its step. An empty slot has none.
+    let frame_widget = match track.inserts[slot] {
+        Insert::Empty => frame_widget.switch_room(),
+        _ => frame_widget.switch(fade.is_none()),
+    };
+    let frame_widget = frame_widget
         .controls(controls)
         .focused(slot_being_edited(app) == Some(slot));
     frame.render_widget(frame_widget, area);

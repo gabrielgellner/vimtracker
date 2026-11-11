@@ -533,14 +533,17 @@ built from, so a new page uses them rather than working out its layout again:
     cells.
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
+*   `toggle`: the switch glyph pair, `nf-fa-toggle_on` green and `nf-fa-toggle_off` faint, for
+    everything that's on or off (decision 140): a device's switch, a two-state setting's value on
+    the FX, Mod and sample pages, and a hint's switches.
 *   `group`: a group's colour, from `theme::group`, the tracks it sums as runs such as `01-04 07`,
     the `G1` mark a grouped track carries, and whether a track's mute or solo is its own or its
     group's, for the mixer, the song view, the track page and the phrase and chain views.
 *   **A rack's devices** (decision 139, [`fx-page.md`](fx-page.md)), page-agnostic, so the Sound
     and Mod pages can take them as they are ([`track-pages.md`](track-pages.md)):
     *   `device`: `Device`, a device's rounded frame 9 rows tall (`DEVICE_HEIGHT`), its title on
-        the top border (its identity, dim, a place for its switch, and its title controls, bold
-        while it has the cursor), its brighter frame while it has the cursor, and the areas of its
+        the top border (its identity, dim, its switch's `toggle` or the room for one, and its
+        title controls, bold while it has the cursor), its brighter frame while it has the cursor, and the areas of its
         settings and its panel.
     *   `grid`: `SettingsGrid`, up to four columns of three rows with holes, at `CellWidths`, read
         through the `CellSource` trait (a setting's name, value and `ValueBar`), so it knows

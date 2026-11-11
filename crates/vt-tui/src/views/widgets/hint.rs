@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 
 use crate::glyphs;
 use crate::theme;
+use crate::views::widgets::toggle;
 
 /// A key that flips something on and off, and the word that names what.
 pub struct Switch {
@@ -19,13 +20,8 @@ pub struct Switch {
 pub fn hint_line(hint: &str, switches: &[Switch]) -> Line<'static> {
     let mut spans = vec![Span::styled(format!(" {hint}"), theme::dim())];
     for switch in switches {
-        let (glyph, style) = if switch.on {
-            (glyphs::SWITCH_ON, theme::active())
-        } else {
-            (glyphs::SWITCH_OFF, theme::faint())
-        };
         spans.push(Span::styled(format!("  {} ", switch.key), theme::dim()));
-        spans.push(Span::styled(glyph.to_string(), style));
+        spans.push(toggle::span(switch.on));
         let space = glyphs::ICON_SPACE;
         spans.push(Span::styled(
             format!("{space}{}", switch.name),
