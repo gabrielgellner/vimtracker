@@ -8,6 +8,12 @@ pub const UNITY_LEVEL: u8 = 0xE0;
 pub const MAX_LEVEL: u8 = 0xF8;
 /// How many dB one step of a level value is.
 pub const DB_PER_LEVEL: f32 = 0.25;
+/// The trim value that leaves what comes into a channel as it is, at 0 dB, in the middle of its
+/// range so it can cut and boost (decision 136).
+pub const UNITY_TRIM: u8 = 0x80;
+/// How many dB one step of a trim value is: a level value's, so `FF` is +31.75 dB, `01` is
+/// -31.75 dB, and `00` is off.
+pub const DB_PER_TRIM: f32 = DB_PER_LEVEL;
 /// Tracks that play sounds a song can have.
 pub const MAX_SOUND_TRACKS: usize = 64;
 /// The group tracks every song has after those, each summing the tracks put in it (decision 123).

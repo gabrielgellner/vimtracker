@@ -19,6 +19,7 @@ use vt_model::scale::Scale;
 use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{
     ChainPosition, Launch, Machine, Section, SectionStart, Song, SynthVoice, Track, level_gain,
+    trim_gain,
 };
 use vt_model::speed::Speed;
 use vt_model::step::{
@@ -232,10 +233,11 @@ impl Engine {
         engine
     }
 
-    /// Move each track's level toward the current version's.
+    /// Move each track's level and trim toward the current version's.
     fn follow_levels(&mut self) {
         for (state, track) in self.tracks.iter_mut().zip(&self.current.song.tracks) {
             state.level.target = level_gain(f32::from(track.level));
+            state.input_trim.target = trim_gain(track.trim);
         }
     }
 

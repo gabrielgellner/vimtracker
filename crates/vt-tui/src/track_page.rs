@@ -97,6 +97,8 @@ pub enum Control {
     Solo,
     Base(TrackControl),
     Level,
+    /// The gain at its input, for gain staging, which the fader then leaves free for the mix.
+    Trim,
     /// Its own groove, or the project's.
     Groove,
     /// The choke group it's in, or none.
@@ -170,7 +172,8 @@ pub const ARPEGGIO: [Control; 4] = [
 ];
 
 /// The mixer's columns.
-pub const MIXER: [Control; 6] = [
+pub const MIXER: [Control; 7] = [
+    Control::Trim,
     Control::Level,
     Control::Base(TrackControl::Pan),
     Control::Base(TrackControl::SendA),
@@ -178,6 +181,9 @@ pub const MIXER: [Control; 6] = [
     Control::Mute,
     Control::Solo,
 ];
+
+/// The mixer's row it opens on, its `Level`, as it's for the mix.
+pub const MIXER_START: usize = 1;
 
 /// The mixer's columns, as rows like a page's.
 pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
@@ -229,28 +235,12 @@ const fn base(control: TrackControl) -> Control {
 /// `Sample`, then the sampler's `Slice`, `Start`, `Length` and `Play`, as a synth's settings are,
 /// with the filter below them as on a synth with more than four.
 pub const SAMPLE_ROWS: [&[Control]; 13] = [
-    &[Control::Machine, Control::Level],
-    &[Control::Sample, base(TrackControl::Pan)],
-    &[Control::Setting(1), base(TrackControl::SendA)],
-    &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), Control::Group],
-    &[Control::Setting(4), base(TrackControl::Pitch)],
-    &[Control::FilterType, Control::Groove],
-    &[Control::FilterMode, Control::Choke],
-    &[base(TrackControl::Cutoff), Control::GateLength],
-    &[base(TrackControl::Resonance), Control::Speed],
-    &[base(TrackControl::Drive), Control::Reset],
-    &[base(TrackControl::LowCut), Control::Glide],
-    &[base(TrackControl::HighCut)],
-];
-/// The Sound page of a track playing a synth with four settings: its settings down the left, and
-/// output on the right.
-pub const SYNTH_ROWS: [&[Control]; 12] = [
-    &[Control::Machine, Control::Level],
-    &[Control::Setting(0), base(TrackControl::Pan)],
-    &[Control::Setting(1), base(TrackControl::SendA)],
-    &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), Control::Group],
+    &[Control::Machine, Control::Trim],
+    &[Control::Sample, Control::Level],
+    &[Control::Setting(1), base(TrackControl::Pan)],
+    &[Control::Setting(2), base(TrackControl::SendA)],
+    &[Control::Setting(3), base(TrackControl::SendB)],
+    &[Control::Setting(4), Control::Group],
     &[Control::FilterType, base(TrackControl::Pitch)],
     &[Control::FilterMode, Control::Groove],
     &[base(TrackControl::Cutoff), Control::Choke],
@@ -259,51 +249,74 @@ pub const SYNTH_ROWS: [&[Control]; 12] = [
     &[base(TrackControl::LowCut), Control::Reset],
     &[base(TrackControl::HighCut), Control::Glide],
 ];
+/// The Sound page of a track playing a synth with four settings: its settings down the left, and
+/// output on the right, which is a row longer.
+pub const SYNTH_ROWS: [&[Control]; 13] = [
+    &[Control::Machine, Control::Trim],
+    &[Control::Setting(0), Control::Level],
+    &[Control::Setting(1), base(TrackControl::Pan)],
+    &[Control::Setting(2), base(TrackControl::SendA)],
+    &[Control::Setting(3), base(TrackControl::SendB)],
+    &[Control::FilterType, Control::Group],
+    &[Control::FilterMode, base(TrackControl::Pitch)],
+    &[base(TrackControl::Cutoff), Control::Groove],
+    &[base(TrackControl::Resonance), Control::Choke],
+    &[base(TrackControl::Drive), Control::GateLength],
+    &[base(TrackControl::LowCut), Control::Speed],
+    &[base(TrackControl::HighCut), Control::Reset],
+    &[Control::Glide],
+];
 /// The same for a synth with more than four, whose later settings carry on down the left.
 pub const SYNTH8_ROWS: [&[Control]; 16] = [
-    &[Control::Machine, Control::Level],
-    &[Control::Setting(0), base(TrackControl::Pan)],
-    &[Control::Setting(1), base(TrackControl::SendA)],
-    &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Setting(3), Control::Group],
-    &[Control::Setting(4), base(TrackControl::Pitch)],
-    &[Control::Setting(5), Control::Groove],
-    &[Control::Setting(6), Control::Choke],
-    &[Control::Setting(7), Control::GateLength],
-    &[Control::FilterType, Control::Speed],
-    &[Control::FilterMode, Control::Reset],
-    &[base(TrackControl::Cutoff), Control::Glide],
-    &[base(TrackControl::Resonance)],
+    &[Control::Machine, Control::Trim],
+    &[Control::Setting(0), Control::Level],
+    &[Control::Setting(1), base(TrackControl::Pan)],
+    &[Control::Setting(2), base(TrackControl::SendA)],
+    &[Control::Setting(3), base(TrackControl::SendB)],
+    &[Control::Setting(4), Control::Group],
+    &[Control::Setting(5), base(TrackControl::Pitch)],
+    &[Control::Setting(6), Control::Groove],
+    &[Control::Setting(7), Control::Choke],
+    &[Control::FilterType, Control::GateLength],
+    &[Control::FilterMode, Control::Speed],
+    &[base(TrackControl::Cutoff), Control::Reset],
+    &[base(TrackControl::Resonance), Control::Glide],
     &[base(TrackControl::Drive)],
     &[base(TrackControl::LowCut)],
     &[base(TrackControl::HighCut)],
 ];
-/// The same for a synth with three, whose fifth row has only its group, on the right.
-pub const SYNTH3_ROWS: [&[Control]; 12] = [
-    &[Control::Machine, Control::Level],
-    &[Control::Setting(0), base(TrackControl::Pan)],
-    &[Control::Setting(1), base(TrackControl::SendA)],
-    &[Control::Setting(2), base(TrackControl::SendB)],
-    &[Control::Group],
-    &[Control::FilterType, base(TrackControl::Pitch)],
-    &[Control::FilterMode, Control::Groove],
-    &[base(TrackControl::Cutoff), Control::Choke],
-    &[base(TrackControl::Resonance), Control::GateLength],
-    &[base(TrackControl::Drive), Control::Speed],
-    &[base(TrackControl::LowCut), Control::Reset],
-    &[base(TrackControl::HighCut), Control::Glide],
+/// The same for a synth with three, whose fifth row has only its `Send B`, on the right.
+pub const SYNTH3_ROWS: [&[Control]; 13] = [
+    &[Control::Machine, Control::Trim],
+    &[Control::Setting(0), Control::Level],
+    &[Control::Setting(1), base(TrackControl::Pan)],
+    &[Control::Setting(2), base(TrackControl::SendA)],
+    &[base(TrackControl::SendB)],
+    &[Control::FilterType, Control::Group],
+    &[Control::FilterMode, base(TrackControl::Pitch)],
+    &[base(TrackControl::Cutoff), Control::Groove],
+    &[base(TrackControl::Resonance), Control::Choke],
+    &[base(TrackControl::Drive), Control::GateLength],
+    &[base(TrackControl::LowCut), Control::Speed],
+    &[base(TrackControl::HighCut), Control::Reset],
+    &[Control::Glide],
 ];
 /// The Sound page of a return, which has no machine or filter.
-pub const RETURN_ROWS: [&[Control]; 2] = [&[Control::Level], &[base(TrackControl::Pan)]];
+pub const RETURN_ROWS: [&[Control]; 3] = [
+    &[Control::Trim],
+    &[Control::Level],
+    &[base(TrackControl::Pan)],
+];
 /// The Sound page of a group, which sends to the returns as well.
-pub const GROUP_ROWS: [&[Control]; 4] = [
+pub const GROUP_ROWS: [&[Control]; 5] = [
+    &[Control::Trim],
     &[Control::Level],
     &[base(TrackControl::Pan)],
     &[base(TrackControl::SendA)],
     &[base(TrackControl::SendB)],
 ];
 /// The Sound page of the master.
-pub const MASTER_ROWS: [&[Control]; 1] = [&[Control::Level]];
+pub const MASTER_ROWS: [&[Control]; 2] = [&[Control::Trim], &[Control::Level]];
 /// The Mod page's rows, top to bottom.
 pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] = [
     &ENVELOPES[0],
@@ -396,6 +409,7 @@ impl Control {
             Self::FilterType => "Filter",
             Self::FilterMode => "Mode",
             Self::Level => "Level",
+            Self::Trim => "Trim",
             Self::Groove => "Groove",
             Self::Lfo(_, LfoField::Destination) => "Dest",
             Self::Lfo(_, LfoField::Shape) => "Shape",
@@ -455,6 +469,7 @@ impl Control {
     pub fn column(self) -> usize {
         match self {
             Self::Level
+            | Self::Trim
             | Self::Groove
             | Self::Choke
             | Self::Group
@@ -570,7 +585,7 @@ impl Control {
     fn is_hex(self) -> bool {
         matches!(
             self,
-            Self::Base(_) | Self::Level | Self::InsertParam(..) | Self::Setting(_)
+            Self::Base(_) | Self::Level | Self::Trim | Self::InsertParam(..) | Self::Setting(_)
         )
     }
 
@@ -776,6 +791,7 @@ impl App {
                 track,
                 level: value,
             }),
+            Control::Trim => self.apply(&Action::SetTrackTrim { track, trim: value }),
             _ => {}
         }
     }
@@ -843,6 +859,7 @@ impl App {
                 self.set_hex(control, change(value));
             }
             Control::Level => self.set_hex(control, change(track.level)),
+            Control::Trim => self.set_hex(control, change(track.trim)),
             Control::Insert(slot) => self.set_insert(slot, track.inserts[slot].stepped(up)),
             Control::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
@@ -1404,6 +1421,8 @@ impl App {
             }
             Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
             Control::Level => {}
+            Control::Trim if track.trim != fresh.trim => self.set_hex(control, fresh.trim),
+            Control::Trim => {}
             Control::Groove if track.groove.is_some() => self.set_track_groove(None),
             Control::Groove => {}
             Control::Choke if track.choke.is_some() => {
@@ -2074,7 +2093,7 @@ impl App {
                     self.set_insert(slot, insert.with_value(param, value));
                 }
             }
-            Control::Base(_) | Control::Level | Control::Setting(_) => {
+            Control::Base(_) | Control::Level | Control::Trim | Control::Setting(_) => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {
                     self.set_hex(control, value);
                 }

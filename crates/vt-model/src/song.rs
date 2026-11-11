@@ -11,9 +11,9 @@ use crate::accumulator::Accumulation;
 use crate::arpeggio::Arpeggio;
 use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
-    BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS, FIXED_TRACKS,
-    FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_PHRASE_STEPS, MAX_TRACK_RESET,
-    TRACK_ENVELOPES, UNITY_LEVEL,
+    BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DB_PER_TRIM, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS,
+    FIXED_TRACKS, FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_PHRASE_STEPS,
+    MAX_TRACK_RESET, TRACK_ENVELOPES, UNITY_LEVEL, UNITY_TRIM,
 };
 use crate::envelope::{Envelope, default_envelopes};
 use crate::groove::{Groove, GrooveId};
@@ -34,6 +34,27 @@ pub fn level_gain(level: f32) -> f32 {
     }
     let level = level.min(f32::from(MAX_LEVEL));
     10.0_f32.powf((level - f32::from(UNITY_LEVEL)) * DB_PER_LEVEL / 20.0)
+}
+
+/// What a trim value does in dB, a quarter of a dB a step either side of `80`, or `None` for `00`,
+/// which is off.
+pub fn trim_db(trim: u8) -> Option<f32> {
+    (trim > 0).then(|| (f32::from(trim) - f32::from(UNITY_TRIM)) * DB_PER_TRIM)
+}
+
+/// The gain of a trim value: exactly 1 at `80`, and 0 at `00`.
+pub fn trim_gain(trim: u8) -> f32 {
+    trim_db(trim).map_or(0.0, |db| 10.0_f32.powf(db / 20.0))
+}
+
+/// A trim value as the status line shows it: `+12.0 dB`, `-0.25 dB`, or `-inf dB` for off. Its
+/// quarters are shown, as each step is one.
+pub fn trim_text(trim: u8) -> String {
+    match trim_db(trim) {
+        None => "-inf dB".to_owned(),
+        Some(db) if (db * 2.0).fract() == 0.0 => format!("{db:+.1} dB"),
+        Some(db) => format!("{db:+.2} dB"),
+    }
 }
 
 /// A track's filter.
@@ -311,6 +332,12 @@ pub struct Track {
     /// returns.
     #[serde(default = "unity_level")]
     pub level: u8,
+    /// What comes into it is turned up or down by, before anything else it does: a sound track's
+    /// voice before its filter, and a fixed track's input before its slots. It's for gain staging,
+    /// set outside its patterns and never modulated, `80` for 0 dB as [`trim_db`] has it, and
+    /// `00` silences it.
+    #[serde(default = "unity_trim", skip_serializing_if = "is_unity_trim")]
+    pub trim: u8,
     /// What the track's held `CUT` starts from, and what its LFOs move around until a step sets it.
     #[serde(default = "open_cutoff")]
     pub cutoff: u8,
@@ -648,6 +675,7 @@ impl Default for Track {
             solo: false,
             groove: None,
             level: unity_level(),
+            trim: unity_trim(),
             cutoff: open_cutoff(),
             resonance: 0,
             filter: FilterType::default(),
@@ -679,6 +707,14 @@ impl Default for Track {
 
 fn unity_level() -> u8 {
     UNITY_LEVEL
+}
+
+fn unity_trim() -> u8 {
+    UNITY_TRIM
+}
+
+fn is_unity_trim(trim: &u8) -> bool {
+    *trim == UNITY_TRIM
 }
 
 fn open_cutoff() -> u8 {
@@ -2050,6 +2086,35 @@ mod tests {
         let track: Track = ron::from_str("(mute: false, solo: true)").unwrap();
         assert_eq!(track.level, UNITY_LEVEL);
         assert!(track.solo);
+    }
+
+    #[test]
+    fn a_tracks_trim_saves_and_loads_and_0_db_is_left_out() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.trim, UNITY_TRIM);
+        assert!(!ron::to_string(&track).unwrap().contains("trim"));
+        for trim in [0x00, 0x40, 0xFF] {
+            let track = Track {
+                trim,
+                ..Track::default()
+            };
+            let text = ron::to_string(&track).unwrap();
+            assert!(text.contains(&format!("trim:{trim}")), "{text}");
+            let loaded: Track = ron::from_str(&text).unwrap();
+            assert_eq!(loaded.trim, trim);
+        }
+    }
+
+    #[test]
+    fn a_trim_reads_in_db_to_its_quarter() {
+        assert_eq!(trim_text(0x80), "+0.0 dB");
+        assert_eq!(trim_text(0x81), "+0.25 dB");
+        assert_eq!(trim_text(0x82), "+0.5 dB");
+        assert_eq!(trim_text(0x7D), "-0.75 dB");
+        assert_eq!(trim_text(0xC0), "+16.0 dB");
+        assert_eq!(trim_text(0xFF), "+31.75 dB");
+        assert_eq!(trim_text(0x01), "-31.75 dB");
+        assert_eq!(trim_text(0x00), "-inf dB");
     }
 
     #[test]

@@ -13,7 +13,7 @@ use vt_model::constants::{BAR_STEPS, TICKS_PER_STEP};
 use vt_model::lfo::{Rate, note_rates};
 
 use vt_model::settings::{SettingId, glide_ms};
-use vt_model::song::{SynthVoice, Track};
+use vt_model::song::{SynthVoice, Track, trim_text};
 use vt_model::step::{FxCommand, Note};
 
 use crate::app::{App, Field};
@@ -145,6 +145,9 @@ pub fn value_shown(app: &App) -> Option<String> {
     }
     if app.view == View::Track && app.track_control() == Control::Reset {
         return Some(reset_shown(track.reset));
+    }
+    if matches!(app.view, View::Track | View::Mixer) && app.track_control() == Control::Trim {
+        return Some(trim_text(track.trim));
     }
     let (id, value) = match app.view {
         View::Phrase => match app.cursor.field {

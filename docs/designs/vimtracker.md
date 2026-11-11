@@ -240,10 +240,10 @@ file doesn't hold up the screen.
 | history of song versions       |                           | Engine: transport,          |
 | Published::after: bank entries |  old versions, buffers    |   sequencing, FX            |
 |   compiled into Playables      |  and files, freed here    | sound tracks: machine,      |
-| saving, autosave, :render      |<--------------------------|   filters, inserts, sends   |
-| ratatui drawing, kitty images  |  telemetry, scope,        | groups -> returns -> master |
-|                                |  jam changes              |   -> limit                  |
-|                                |<--------------------------|                             |
+| saving, autosave, :render      |<--------------------------|   trim, filters, inserts,   |
+| ratatui drawing, kitty images  |  telemetry, scope,        |   sends                     |
+|                                |  jam changes              | groups -> returns -> master |
+|                                |<--------------------------|   -> limit                  |
 +--------------------------------+                           +-----------------------------+
       |  ^              |  ^
       v  |              v  |
@@ -357,7 +357,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- settings{id}, fine{id}     machine settings changed from their defaults
  |   |- filter, filter_mode, cutoff, resonance, drive, low_cut, high_cut
  |   |- inserts[3], bypassed[3]    an effect and its settings in each slot
- |   |- level, pan, send_a, send_b
+ |   |- level, trim, pan, send_a, send_b
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
@@ -422,7 +422,7 @@ Song                               song.ron, refused unless format_version is FO
     sample analyses are in the cache folder.
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
-123 and 126;
+123, 126 and 136;
 the [M9](#m9-design-fx-inserts), [M10](#m10-design-tracks-that-process),
 [M12](#m12-design-lanes) and [M13](#m13-design-pulses) designs, and [song-flow.md](song-flow.md) for
 sections; and the [FX interpreter](#fx-interpreter) for LFOs and envelopes.
@@ -787,10 +787,13 @@ means full. Velocity runs `00` to `7F`, matching MIDI, and is still linear. `Aci
 does, since a linear one covers only 6 dB in its top half: 4 steps is 1 dB, `E0` is 0 dB and the default, `F8` is +6 dB of headroom, `01` is -55.75 dB
 and `00` is silent, so every `10` in hex is 4 dB. Anything entered above `F8` snaps to it, and the engine treats any higher value in a file the same way. Track level, instrument volume, `VOL`, `DLY` and `REV` use it, as do LFOs moving those. The scale follows
 Polyend Tracker's gain tables and Ableton Live's fader, which run about -36 to +6 dB and -70 to +6 dB. Track level comes before the sends, so it scales them too, and it belongs on mixer pages
-once those exist. Transposed notes clamp to the note range.
+once those exist. A track's trim comes before everything else it does: on a sound track straight after the voice,
+before the filter and its drive, and on a group, a return or the master before its slots. It runs a quarter of a dB a
+step either side of `80`, to +31.75 dB at `FF` and off at `00`, is set outside patterns and isn't modulated, and
+glides as the level does (decision 136). Transposed notes clamp to the note range.
 
 Tracks feed a mixer with shared delay and reverb sends, a track in a group through its group's
-slots, level and pan, then a
+trim, slots, level and pan, then a
 safety limiter: nothing changes up to full level, and anything above it clips hard, since the fix for hearing it is
 the mix. A non-finite sample becomes silence. `:set limiter=off` lets a float render keep levels over full, and the
 live output clips at full either way. Processing is 32-bit float at the device's sample rate. Samples are converted to that
