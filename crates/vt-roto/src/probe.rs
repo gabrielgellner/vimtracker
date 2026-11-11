@@ -2,7 +2,9 @@
 //! it's there, and asks it only what changes nothing: its firmware and API versions, its mode, and
 //! the PLUGIN setups it stores. It writes nothing to the Roto's setups and doesn't change its
 //! mode, so it's safe to run beside Ableton Live: the handshake takes the Roto from Live while it
-//! runs, and it says `DAW STARTED` as it ends, so a running Live takes it back.
+//! runs, and it says `DAW STARTED` as it ends, so a running Live takes it back. Removing
+//! vimtracker's own stored setups is `vimtracker roto-probe --clear-own`, which asks first and is
+//! the app's, as it knows which setups are its own.
 
 use std::io::Write;
 use std::time::{Duration, Instant};

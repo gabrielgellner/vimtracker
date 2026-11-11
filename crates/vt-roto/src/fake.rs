@@ -166,6 +166,54 @@ impl FakeRoto {
         messages
     }
 
+    /// What the real one sends when it shows a page of the plugin shown: a macro plugin's knobs,
+    /// or a stored plugin's knobs and switches, each as its setup has it, a knob then the switch
+    /// under it, as the real one sent them (firmware 3.3.0).
+    fn map_shown(&mut self, page: u8) -> Vec<FromRoto> {
+        let Some(stored) = self
+            .shown
+            .and_then(|(plugin, _)| self.plugins.get(&plugin))
+            .filter(|plugin| plugin.kind != PluginKind::Macro)
+            .and_then(|plugin| self.setup_at(plugin.hash))
+        else {
+            return self.map_page(page);
+        };
+        let setup = &self.setups[stored];
+        let mut messages = vec![FromRoto::SetPluginMode];
+        for control_index in 0..CONTROLS as u8 {
+            let control = page * CONTROLS as u8 + control_index;
+            if let Some(knob) = setup.knobs.get(&control) {
+                messages.push(FromRoto::ControlMapped {
+                    index: knob.param_index,
+                    hash: knob.param_hash,
+                    control: ControlType::Knob,
+                    control_index,
+                    macro_param: false,
+                });
+            }
+            if let Some(switch) = setup.switches.get(&control) {
+                messages.push(FromRoto::ControlMapped {
+                    index: switch.param_index,
+                    hash: switch.param_hash,
+                    control: ControlType::Switch,
+                    control_index,
+                    macro_param: false,
+                });
+            }
+        }
+        messages
+    }
+
+    /// Whether the program last lit a button, by its place on the page, or nothing if it never
+    /// sent its light.
+    pub fn light(&self, button: u8) -> Option<bool> {
+        self.received_ccs
+            .iter()
+            .rev()
+            .find(|cc| cc[0] == cc::CONTROL_CHANGE && cc[1] == cc::SWITCH + button)
+            .map(|cc| cc[2] >= 0x40)
+    }
+
     /// The numbers of the shown page's knobs.
     fn shown_page(&self) -> Option<std::ops::RangeInclusive<u16>> {
         let (_, page) = self.shown?;
@@ -181,7 +229,7 @@ impl FakeRoto {
         };
         self.shown = Some((plugin, page));
         let mut messages = vec![FromRoto::MacroPluginPageIndex(page)];
-        messages.extend(self.map_page(page).into_iter().skip(1));
+        messages.extend(self.map_shown(page).into_iter().skip(1));
         messages.iter().map(FromRoto::encode).collect()
     }
 
@@ -274,21 +322,20 @@ impl FakeRoto {
                 Vec::new()
             }
             // The real one answers only a change of what's shown, in PLUGIN mode, of a macro
-            // plugin.
+            // plugin or one it stores.
             ToRoto::DawSelectPlugin {
                 index, macro_page, ..
             } if self.mode == Mode::Plugin
                 && self.shown != Some((index, macro_page))
-                && self
-                    .plugins
-                    .get(&index)
-                    .is_some_and(|plugin| plugin.kind == PluginKind::Macro) =>
+                && self.plugins.get(&index).is_some_and(|plugin| {
+                    plugin.kind == PluginKind::Macro || self.setup_at(plugin.hash).is_some()
+                }) =>
             {
                 if self.shown.is_none_or(|(shown, _)| shown != index) {
                     self.knobs.clear();
                 }
                 self.shown = Some((index, macro_page));
-                self.map_page(macro_page)
+                self.map_shown(macro_page)
             }
             // Only for a knob of the page shown, as the real one drops the rest.
             ToRoto::LearnParam(param)

@@ -1,9 +1,11 @@
-//! Devices shown live on the Roto, with nothing stored on it, as Bitwig Studio's script shows a
-//! device's remote controls. Each device is a macro plugin of as many pages of eight knobs as it
-//! needs; the Roto asks for each knob of the page it shows with `CONTROL MAPPED`, and is answered
-//! with the knob's name, feel and position in `LEARN PARAM` and its name and colour in `SET PLUGIN
-//! CONTROL DETAILS`. None of this touches the Roto's 64 stored PLUGIN setups, which the serial API
-//! writes and this never does, so a user's Ableton setups stay as they are.
+//! Devices shown on the Roto, as Bitwig Studio's script shows a device's remote controls. Most
+//! are macro plugins sent live, of as many pages of eight knobs as they need; the Roto asks for
+//! each knob of the page it shows with `CONTROL MAPPED`, and is answered with the knob's name,
+//! feel and position in `LEARN PARAM` and its name and colour in `SET PLUGIN CONTROL DETAILS`. A
+//! device with buttons is one of the program's own stored setups ([`crate::store`]), sent as a
+//! normal plugin under its setup's hash: the Roto asks for its knobs, answered the same way with
+//! the macro flag off, and its buttons, whose names are the setup's and whose lights the program
+//! sends as CCs (`docs/designs/roto-control.md` §4.3).
 //!
 //! What the real Roto does (firmware 3.3.0, checked on 2026-11-11, `docs/designs/roto-control.md`
 //! §4): after `DAW SELECT PLUGIN` it says `SET PLUGIN MODE`, then sends `CONTROL MAPPED` for each
@@ -78,12 +80,13 @@ pub struct LiveControl {
 
 impl LiveControl {
     /// Its `LEARN PARAM`, as the answer to the Roto's `CONTROL MAPPED` for the knob numbered
-    /// `index` with `hash`.
-    pub fn learn(&self, index: u16, hash: ParamHash) -> LearnParam {
+    /// `index` with `hash`: a macro device's, or with the macro flag off a stored device's, which
+    /// Ableton's script answers so, and whose knob turns nothing until it's answered.
+    pub fn learn(&self, index: u16, hash: ParamHash, macro_param: bool) -> LearnParam {
         LearnParam {
             index,
             hash,
-            macro_param: true,
+            macro_param,
             centre_indent: self.feel == Feel::CentreNotch,
             steps: self.feel.steps(),
             position: self.position.min(KNOB_TOP),
@@ -100,6 +103,11 @@ impl LiveControl {
             name: self.name.clone(),
             colour: self.colour,
         }
+    }
+
+    /// Whether it's on, as a button is: past the middle of its range.
+    pub fn is_on(&self) -> bool {
+        self.position > KNOB_TOP / 2
     }
 }
 
@@ -135,7 +143,8 @@ pub fn share_of(position: u16) -> f64 {
 }
 
 /// One device in the Roto's plugin list, its knobs in order, a page of eight after another, with
-/// a hole wherever the device has nothing.
+/// a hole wherever the device has nothing. A device the Roto stores (`stored`) has buttons too,
+/// as only a stored setup has them, and is found by its key's hash among its setups.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LiveDevice {
     /// What it's known by, such as `vimtracker/fx1/delay`, which its hash is made from.
@@ -143,16 +152,29 @@ pub struct LiveDevice {
     pub name: Label,
     /// Whether it's switched in, as an FX slot or a modulator can be switched out.
     pub enabled: bool,
+    /// Whether it's one of vimtracker's setups stored on the Roto, rather than a macro device
+    /// sent live.
+    pub stored: bool,
     pub controls: Vec<Option<LiveControl>>,
+    /// A stored device's buttons, a page of eight after another, each off or on.
+    pub switches: Vec<Option<LiveControl>>,
 }
 
 impl LiveDevice {
-    /// How many pages of eight knobs it has: at least one, and at most [`MAX_PAGES`].
+    /// How many pages of eight knobs and buttons it has: at least one, and at most
+    /// [`MAX_PAGES`].
     pub fn pages(&self) -> u8 {
         self.controls
             .len()
+            .max(self.switches.len())
             .div_ceil(CONTROLS)
             .clamp(1, usize::from(MAX_PAGES)) as u8
+    }
+
+    /// The button the Roto numbers `index`, from 1 across the pages, if it holds a setting.
+    pub fn switch(&self, index: u16) -> Option<&LiveControl> {
+        let at = usize::from(index.checked_sub(1)?);
+        self.switches.get(at)?.as_ref()
     }
 
     pub fn hash(&self) -> PluginHash {
@@ -171,6 +193,7 @@ impl LiveDevice {
         self.key == other.key
             && self.name == other.name
             && self.enabled == other.enabled
+            && self.stored == other.stored
             && self.pages() == other.pages()
     }
 
@@ -180,8 +203,14 @@ impl LiveDevice {
             hash: self.hash(),
             enabled: self.enabled,
             name: self.name.clone(),
-            kind: PluginKind::Macro,
-            macro_pages: self.pages(),
+            // A stored device's pages are its setup's, and the API has 0 for one that isn't a
+            // macro.
+            kind: if self.stored {
+                PluginKind::Normal
+            } else {
+                PluginKind::Macro
+            },
+            macro_pages: if self.stored { 0 } else { self.pages() },
         }
     }
 }
@@ -198,6 +227,9 @@ pub struct PluginView {
     /// The hash the Roto gave each knob of the chosen device it asked for, by its number, so a
     /// knob whose name or feel changes can be learned again without its asking.
     mapped: BTreeMap<u16, ParamHash>,
+    /// Buttons of the page shown to light or put out, each by its place on the page, waiting to
+    /// be sent as CCs: a stored device's lights are the program's to draw.
+    lights: Vec<(u8, bool)>,
 }
 
 /// What to send the Roto after the devices changed: SysEx, and knobs to move, each by its place
@@ -355,6 +387,7 @@ impl PluginView {
             return refresh;
         }
         let same_device = old.key == new.key;
+        let mut lights = Vec::new();
         for (knob, index) in indices.into_iter().enumerate() {
             let was = old.control(index).filter(|_| same_device);
             match (was, new.control(index)) {
@@ -372,15 +405,53 @@ impl PluginView {
                 }
                 (_, Some(now)) => {
                     if let Some(hash) = self.mapped.get(&index) {
-                        refresh
-                            .messages
-                            .push(ToRoto::LearnParam(now.learn(index, *hash)));
+                        refresh.messages.push(ToRoto::LearnParam(now.learn(
+                            index,
+                            *hash,
+                            !new.stored,
+                        )));
                         refresh.messages.push(now.details(index));
                     }
                 }
             }
+            // A stored device's button whose setting changed is lit as it now is; a device
+            // newly shown has its lights sent as the Roto asks for its buttons.
+            if same_device
+                && let Some(now) = new.switch(index)
+                && old.switch(index).map(LiveControl::is_on) != Some(now.is_on())
+            {
+                lights.push((knob as u8, now.is_on()));
+            }
         }
+        self.lights.extend(lights);
         refresh
+    }
+
+    /// The buttons of the page shown to light or put out since this was last asked, each by its
+    /// place on the page.
+    pub fn take_lights(&mut self) -> Vec<(u8, bool)> {
+        // Each button once, as it was last asked to be.
+        let mut lights: Vec<(u8, bool)> = Vec::new();
+        for (button, lit) in std::mem::take(&mut self.lights) {
+            lights.retain(|(other, _)| *other != button);
+            lights.push((button, lit));
+        }
+        lights
+    }
+
+    /// Lights a button of the page shown as its setting is, as after it's pressed: the Roto
+    /// draws a press itself, and the light shows the setting only once it's sent.
+    pub fn relight(&mut self, button: u8) {
+        if let Some(lit) = self.button(button).map(LiveControl::is_on) {
+            self.lights.push((button, lit));
+        }
+    }
+
+    /// The setting on a button of the page shown, if the device chosen is stored and has one
+    /// there.
+    pub fn button(&self, button: u8) -> Option<&LiveControl> {
+        let index = self.index_of(button);
+        self.selected().and_then(|device| device.switch(index))
     }
 
     /// Everything the Roto needs to show the view: how many devices, the bank, each device in it,
@@ -456,6 +527,23 @@ impl PluginView {
                 self.mapped.insert(index, hash);
                 self.answer_mapped(index, hash, control_index)
             }
+            // A stored device's button, numbered from 1 across its pages as its knobs are: it
+            // has its name and colours from the setup, and its light is the program's to send.
+            FromRoto::ControlMapped {
+                index,
+                control: ControlType::Switch,
+                control_index,
+                ..
+            } => {
+                if let Some(at) = index.checked_sub(1) {
+                    self.turn_to((at / CONTROLS as u16).min(0x7F) as u8);
+                }
+                if let Some(switch) = self.selected().and_then(|device| device.switch(index)) {
+                    let lit = switch.is_on();
+                    self.lights.push((control_index % CONTROLS as u8, lit));
+                }
+                Vec::new()
+            }
             _ => Vec::new(),
         }
     }
@@ -487,9 +575,11 @@ impl PluginView {
 
     /// The answer to `CONTROL MAPPED` for the knob numbered `index`.
     fn answer_mapped(&self, index: u16, hash: ParamHash, control_index: u8) -> Vec<ToRoto> {
-        match self.selected().and_then(|device| device.control(index)) {
+        let device = self.selected();
+        let stored = device.is_some_and(|device| device.stored);
+        match device.and_then(|device| device.control(index)) {
             Some(control) => vec![
-                ToRoto::LearnParam(control.learn(index, hash)),
+                ToRoto::LearnParam(control.learn(index, hash, !stored)),
                 control.details(index),
             ],
             // A hole: nothing on that knob.

@@ -1,11 +1,13 @@
 # The Roto-Control: a second, separate way of working
 
-**Status:** steps 1, 2 and 4 of milestone M30 (#410, #411 and #413), with decisions 158 to 160.
-This note covers the whole milestone, #410 to #415, so the protocol layer fits what the later steps
-need. Step 1 built the protocol, the link and `vimtracker roto-probe`; step 2 shows a track's
-devices live on the Roto, storing nothing, behind an on/off setting on the audio page, off by
+**Status:** steps 1, 2 and 4 of milestone M30 (#410, #411 and #413) and #419, with decisions
+158 to 161. This note covers the whole milestone, #410 to #415, so the protocol layer fits what
+the later steps need. Step 1 built the protocol, the link and `vimtracker roto-probe`; step 2
+shows a track's devices live on the Roto behind an on/off setting on the audio page, off by
 default (§4); step 4 makes its knobs edit the song, chooses its track and devices with its own
-FUNC and SEL, and switches devices in and out (§4.2). §8 has the author's answers.
+FUNC and SEL, and switches devices in and out (§4.2); #419 lays each kind of device out for the
+Roto from data, and stores the devices with off/on settings on it, for their buttons (§4.3). §8
+has the author's answers.
 
 **The rule (the author's):** the Roto works independently of the screen. It's a separate,
 supplementary way of working: the mixer can be on the Roto while the sample page is on screen, and a
@@ -123,7 +125,8 @@ mode instead. The meters are each track's peak from `Handle::latest`, the levels
 draws. The Roto shows up to 64 tracks in its manual; vimtracker has up to 64 sound tracks and 4
 groups, so #412 checks how far `NUM TRACKS`' two bytes go before choosing what to leave off.
 
-**PLUGIN mode is the device racks** (#413). The Roto's plugin list is one track's devices, in the
+**PLUGIN mode is the device racks** (#413; the knob order below was #411's, and is now each kind of
+device's layout, §4.3). The Roto's plugin list is one track's devices, in the
 order the track page has them: the Sound page's Machine, Filter, Output and Play; the FX page's four
 slots; the Mod page's envelopes, LFOs, Accumulator and Arpeggio. Each device's knobs are its
 settings in the order of its `DeviceSpec`: the title's controls, then `Insert::grid()` or
@@ -139,7 +142,7 @@ an FX slot's bypass or a modulator's switch, is the plugin's enabled state, whic
 | `Stepped` with up to 16 choices | `KNOB_N_STEP`, a click for each, each named | the step's name |
 | `Stepped` with 17 to 24 | stepped: `LEARN PARAM` carries names only for 16 steps or fewer | `SHOW CONTROL VALUE` with the choice, as for any stepped knob |
 | `Stepped` with more, or that changes per track (`Dest`, the song's samples) | smooth, full range | `SHOW CONTROL VALUE` with the choice |
-| An off/on toggle | a 2-step knob, its steps named `Off` and `On`; a macro plugin maps no switches | lit while on |
+| An off/on toggle | a button on a stored device (§4.3); on a live one a 2-step knob, its steps named `Off` and `On`, as a macro plugin maps no switches | lit while on |
 | `Continuous` with `middle` (Pan, Trim, Pitch, a depth, a band's boost) | centre notch | the value as the app formats it |
 | Any other `Continuous` | `KNOB_300`, smooth | the value as the app formats it |
 
@@ -149,10 +152,25 @@ its place among the steps, spread from 0 to 16383. An envelope's times go by the
 ms to 10 ms, 5 ms to 100 ms, then 25 ms), and an LFO's rate evenly in octaves from 64 bars a cycle
 to 100 Hz, at 120 BPM for one in hertz, so every kind of rate has a place on one knob. Names are
 the track page's labels, an effect's settings by their own names, cut to 12 characters by
-`Label::new`, which none of today's needs. Colours are `colour::nearest` of the app's semantic
-colours, by the setting's family wherever it is (decision 159): level and dynamics green, the
-filter and the EQ blue, pan teal, time and pitch yellow, modulation mauve, character peach, and a
-choice of machine, effect, sample or type in the text's colour.
+`Label::new`, which none of today's needs.
+
+**Colours** are by the setting's family wherever it is, from one table, `roto/devices.rs`'s
+`FAMILY_COLOURS`, which the guide's legend repeats. A setting goes by its units, so an effect's
+`Gain` is green and its `Low cut` blue, with a few by their key: a resonance and an effect's cuts
+are tone, an effect's `Mix` is level, a ratio chosen from a list is level and a time chosen from
+one is time. A layout's slot can give another family, as the pitch an effect chooses from a list.
+Decision 159 took the scheme nearest each of the app's pastel colours; on the Roto's small
+screens those read too alike, so #419 takes the vivid scheme of the same hue:
+
+| Family | What has it | Screen | Roto scheme |
+|---|---|---|---|
+| Level | levels, sends, trims, mixes, gains, and a compressor's dynamics | green | 19, green |
+| Tone | a filter's cutoff, resonance, type and cuts, and an EQ's bands | blue | 22, blue |
+| Space | pan | teal | 20, teal |
+| Time | times, rates, lengths, glides and pitches | yellow | 17, yellow |
+| Modulation | what an envelope, an LFO, the accumulator or the arpeggio does | mauve | 24, violet |
+| Character | drive, and a machine's or an effect's own character | peach | 15, orange |
+| Choice | choices: a machine, an effect, a sample, a type, off and on | text | 13, white |
 
 ## 4. The setup store
 
@@ -173,8 +191,9 @@ centre notch in `LEARN PARAM` as its page comes up, which covers everything in �
 PDF says it's "used normally in Logic Pro", and whether it works for a macro plugin is the first
 thing #411 checks on the Roto.
 
-**The author chose live devices** (question 1, §8), so nothing is stored: the serial API's SET,
-CLEAR and factory reset commands are never sent, and the app opens no serial port at all.
+**The author chose live devices** (question 1, §8), and then, for buttons, **the middle path**
+(#419, §4.3): the devices with off/on settings are stored, 9 setups, and every other device is
+live. Only vimtracker's own setups are ever written or cleared, and a factory reset is never sent.
 
 ### 4.1 Live devices, as built (#411)
 
@@ -282,8 +301,9 @@ every message each way):
     `SET PLUGIN CONTROL DETAILS` of type Switch, a `LEARN PARAM` numbered past its 64 knobs, and
     the buttons' light CCs gave the Roto no switch: it sent `CONTROL MAPPED` for knobs alone, and
     the serial API's read-only `GET PLUGIN SWITCH CONFIG` answered `NoPlugin` for each of the
-    current device's switches. Only a stored setup has switches, and nothing is stored (§8,
-    question 1), so Auto, Peak Clip, Ping-pong, Freeze, Reset and Retrig stay two-step knobs.
+    current device's switches. Only a stored setup has switches, so #413 left Auto, Peak Clip,
+    Ping-pong, Freeze, Reset and Retrig as two-step knobs; #419 stores the devices that have them
+    (§4.3).
 *   **A light flips as it's pressed.** Tapping `Accumulator` in the switches flips its light
     there and then, though the list sent straight back has it on; the next time the list comes up
     it's lit as sent. The firmware draws the press itself, and a value put on a button in the
@@ -312,6 +332,122 @@ otherwise its position as CCs, with its value on its screen. A touched knob isn'
 goes where its setting is once it's let go; a knob just turned takes its new position without
 being sent it. Values, the app's own text (`edits::value_text`, the status line's units, or the
 grid's text), are shown at most 12 times a second a knob, the last always.
+
+### 4.3 Layouts, and stored setups for buttons, as built (#419)
+
+**The Roto doesn't follow the screen.** The track page's grid is laid out for the screen; the
+Roto has a row of eight knobs over eight buttons, and is laid out for that. Each kind of device
+has a declared layout (`vt-tui`'s `roto/layouts.rs`, in `vt-roto`'s `layout::Layout`): pages, each
+named, of eight knob slots and eight button slots, each a setting by its key, a gap left on
+purpose, or the row's end. The same shape serves every machine, effect, track device and
+modulator, and the mapping reads only it. A setting's key is the one songs store it by for a
+machine's or an effect's (`cutoff`, `glueratio`), and a name of its own for the track's
+(`level`, `attack`, `retrig`). A slot can override its colour or how its knob turns; the rest
+comes from the setting's kind, as §3's table has it.
+
+**The order is musical**, by the same rules for every device:
+
+*   **The Roto plays and tweaks; the app builds** (the author's rule, 2026-11-11). What a device
+    is, its machine, its effect, or an effect's type or mode (a Compressor's `Clean`, `Console`
+    or `Glue`, a Distort's kinds, an LPG's or a Comb's mode), is chosen in the app with `K`,
+    never on the Roto: each changes what the device is and swaps its whole layout under the hand,
+    so it's easy to bump by mistake. Musical lists stay: a ratio's, an attack's and a release's
+    steps, an LFO's shape, Acid's `Wave`, the filter's type and mode. An empty slot shows a page
+    of nothing.
+*   The settings played most come first, in the order the sound meets them: an envelope's
+    attack, decay, sustain and release; a filter's cutoff and resonance; a compressor's
+    threshold and ratio, then its times; a TB-303's cutoff, resonance, env mod, decay and accent
+    (the author: "the acid mapping is perfect").
+*   What comes out ends a page: an effect's `Mix` and `Gain` are always knobs 7 and 8, and every
+    track's `Level` is knob 1 and `Trim` knob 5.
+*   **One page, unless there's a reason.** A page is two rows, eight knobs over eight buttons, and
+    a device keeps to its first unless it has more than eight knobs or eight buttons, as Grains'
+    `Shape` is on its second, or a page meant for it: a modulator's `Dest`, a long list that
+    changes with the track and is easy to turn by mistake, is on a page of its own, one arrow
+    on. A device's off/on settings are on its first page's buttons, beside its main knobs. A page
+    with few knobs and many buttons, or the reverse, is fine.
+*   A modulator's first page is what it plays: an envelope's `Attack`, `Decay`, `Sustain`,
+    `Release` and `Depth`; an LFO's `Rate`, `Shape`, `Depth` and `Phase`.
+*   **A button is always under a knob**, of what it belongs with, as the Roto draws a button's
+    label only under a knob that's set (firmware 3.3.0: an LFO's `Retrig` on button 8, with
+    nothing on knob 8, lit and switched but had no label). A restart is under what it starts
+    again: an envelope's `Reset` under `Attack`, an LFO's `Retrig` under `Phase`, the arpeggio's
+    under `Mode`. Glue's `Auto` is under `Makeup` and `Peak Clip` under `Mix`, Delay's
+    `Ping-pong` under `Width`, Grains' `Freeze` under `Time`, the master's `Limiter` under
+    `Level`.
+*   **A stored knob's feel is its setup's.** The Roto keeps a stored knob's steps, at most 16,
+    and a live answer can't add more: an LFO's `Rate` sent 24 steps in `LEARN PARAM` turned
+    smoothly. So the LFO stays stored, for its labelled `Retrig`, and its `Rate` turns smoothly
+    over every kind of rate, its value shown as it turns and a note value staying one (the
+    author's choice, 2026-11-11). A device can't mix stored and live knobs: the Roto asks only
+    for a stored setup's own controls.
+*   **Text is ASCII.** The Roto's font draws nothing else (`°` came out as `?`), so every name
+    and value is written in ASCII, `°` as `deg` (`90deg`), `×` as `x`, a dash as `-`
+    (`Label::new`).
+*   **Approved by the author** on the Roto, 2026-11-11: Acid ("the acid mapping is perfect"),
+    the envelope and the arpeggio.
+
+**The Roto has no way to name a page.** SysEx API 1.6 has none: `MACRO PLUGIN PAGE INDEX`, `PAGE
+LEFT` and `PAGE RIGHT` carry only an index, `PLUGIN DETAILS` only the device's page count, and
+neither vendor script sends one (Bitwig's reads its remote pages' names only to compare them).
+So a page's name is for this note and the guide.
+
+**Buttons need a stored setup** (the author's choice of 2026-11-11, the middle path). Tried on
+the Roto (firmware 3.3.0): on a live macro device its buttons send nothing at all, not even their
+CCs, light for no CC, and show no label from `SET PLUGIN CONTROL DETAILS` or `SHOW CONTROL VALUE`
+of type Switch. On a setup stored over the serial API, as Ableton's and the Roto-Setup app's are,
+they work: the Roto shows each button's stored name and colour, sends its CC (20 to 27 on channel
+16) as it's pressed, lights it as the program sends that CC back, and clicks a stored knob through
+its steps once its `CONTROL MAPPED` is answered with `LEARN PARAM`, macro flag off, as Ableton's
+script answers it (unanswered, a stored knob sends nothing and doesn't click). So:
+
+*   **A device with off/on settings is stored**: the Compressor's three types, the Delay, Grains,
+    each envelope, LFO and the arpeggio, and the master's output, 9 setups. Each is sent in
+    `PLUGIN DETAILS` as a normal plugin under its setup's hash, and its knobs are answered as a
+    stored device's. **Every other device stays live**, as §4.1 has it.
+*   **One layout drives both.** A stored device's knobs and buttons are its layout's; a live
+    device's buttons go on two-step knobs instead, each on the knob above its button if that's
+    free, or the nearest free knob of its page, left first, and those that still don't fit on a
+    page of their own just after it. Shown live until vimtracker's setups are on the Roto, or if
+    they can't be written, a stored kind falls back the same way.
+*   **Push buttons, lit from the song.** A stored button is a push button (`PUSH`): pressed, it
+    sends 127 and let go 0; vimtracker switches the setting on the press, one undo step, and sends
+    the light from the song, so a key, an undo or another song lights it too. The Roto's own
+    `TOGGLE` keeps a state of its own, which drifted from the song in the check: once lit by the
+    program, every press sent 0. A button's light is its family's colour when on and scheme 70,
+    dark, when off, as Ableton's stored switches are.
+
+**Writing only vimtracker's own** (the author's terms, 2026-11-11), in `vt-roto`'s `store.rs`:
+
+*   Each setup's hash is `PluginHash::of` a key in vimtracker's namespace, `vimtracker:` and the
+    kind of device (`vimtracker:fx/comp-glue`), and its name starts `vt ` (`vt Glue`), so it's
+    told apart here and in the Roto-Setup app.
+*   Before anything is written the store is listed; a setup under one of vimtracker's hashes
+    whose name isn't one of vimtracker's stops it with nothing written, and so does a store with
+    no room. Every change goes through `Guarded`, which refuses any request that isn't to one of
+    vimtracker's own hashes, outside the start and end of a config update: no other setup, no MIDI
+    setup, never a factory reset.
+*   **Versioned:** a setup's version is a hash of every byte written to store it. Each one written
+    is kept by its key in `roto-setups.ron` in the cache folder, and one is written again only if
+    it's missing or its version has changed, so connecting costs a listing of the store, about a
+    second, and the Roto's flash isn't worn. On another machine, without the record, they're
+    written once more. The first time, the 9 took about 12 seconds, on a thread of their own while
+    the devices showed live.
+*   **Removing them:** `vimtracker roto-probe --clear-own` lists vimtracker's setups on the Roto,
+    asks for `yes`, and clears those alone, in one config update.
+*   **A notice can follow a reply.** A device chosen on the Roto while its setups are written
+    makes it send `PLUGIN SELECTED` straight after a reply, in the same read; it's taken as the
+    notice it is (`SerialLink::exchange`). Before that, it failed the writing, and the devices
+    with buttons fell back to live, the Glue's buttons on a page of knobs after its first.
+
+**Checked on the author's Roto** (firmware 3.3.0, 2026-11-11): the five Ableton setups were the
+same before and after every run, read with the read-only `roto-probe`; the 9 setups were written
+beside them, and later runs rewrote only those whose layouts had changed. A test setup under
+`vimtracker:test/buttons` found the facts above and was cleared afterwards. The author, at the
+Roto, saw Acid's, the envelope's and the arpeggio's pages as they should be, Glue's `Auto` and
+`Peak Clip` on its one page, labelled, switching both ways and lit from the song, LFO 1's
+`Retrig` labelled under `Phase`, its `Rate` showing each value as it turned and its `Phase` in
+`deg`.
 
 ## 5. Edits, feedback and rates
 
@@ -352,8 +488,10 @@ on every knob. So **only one may drive it at a time**: vimtracker answers the Ro
 Roto setting is on, which is off by default (the author's answer to question 2, built in #411),
 and Live's control surface should be set to None while it is. Turning vimtracker's off, or
 quitting, sends `DAW STARTED` and then stays silent, so a Live that's running with the Roto's
-script answers the pings and takes it back without a replug. The serial port is exclusive, but
-only the Roto-Setup app and `roto-probe` use it; vimtracker itself never opens it.
+script answers the pings and takes it back without a replug. The serial port is exclusive:
+vimtracker opens it only for the second or so it takes, as the Roto connects, to check its own
+stored setups (§4.3), and with the Roto-Setup app holding it they're left as they are and the
+devices with buttons are shown live.
 
 ## 7. Where the work happens
 
@@ -367,8 +505,9 @@ only the Roto-Setup app and `roto-probe` use it; vimtracker itself never opens i
                                                                            (what RotoView changed)
 ```
 
-*   **The roto thread** owns the MIDI output and the session; no serial port, as nothing is
-    stored (§4).
+*   **The roto thread** owns the MIDI output and the session. The serial port is a thread's of
+    its own, `roto setups`, opened as the Roto connects to check vimtracker's stored setups and
+    closed when that's done (§4.3).
     Everything reaches it on one channel: the bytes midir's callback hands over, copied and nothing
     more, and what the edit thread asks to send. It answers pings itself, so the handshake doesn't
     wait for a frame.
@@ -392,10 +531,14 @@ IOKit on macOS and from `/sys` on Linux. Both are pinned, as every dependency is
 **All four decided by the author on 2026-11-11** (decision 159):
 
 1.  **Live devices, storing nothing on the Roto,** in Bitwig's mode, as recommended. Colours work
-    there (§4.1).
+    there (§4.1). **Revised for #419** (decision 161): the devices with off/on settings are stored
+    after all, so they have buttons, the middle path of #419's comment, writing only vimtracker's
+    own setups and only when they change (§4.3).
 2.  **Roto support is off by default.** Turning it on, on the audio page, takes the Roto; turning
     it off, or quitting, sends `DAW STARTED` and closes the link, so a running Live takes it back.
-3.  **Knob order is row by row**, as recommended.
+3.  **Knob order is row by row**, as recommended. **Replaced by #419** (decision 161): the Roto
+    doesn't follow the screen's grid; each kind of device has a layout of its own, in a musical
+    order (§4.3).
 4.  **The extra transport buttons are unassigned for now**: session record, loop, punch in and
     out, and automation stay dark. Play, stop and record go to vimtracker's transport, and the
     arrows move between sections (#415).

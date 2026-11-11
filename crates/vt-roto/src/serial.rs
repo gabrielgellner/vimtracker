@@ -864,6 +864,20 @@ impl Request {
         )
     }
 
+    /// The PLUGIN setup a change writes or clears, if it's one that changes a single setup: the
+    /// only changes [`crate::store`] sends, each checked against vimtracker's own.
+    pub fn plugin_changed(&self) -> Option<PluginHash> {
+        match self {
+            Self::AddPlugin { hash, .. }
+            | Self::SetPluginName { hash, .. }
+            | Self::ClearPlugin(hash) => Some(*hash),
+            Self::SetPluginKnobConfig(config) => Some(config.plugin),
+            Self::SetPluginSwitchConfig(config) => Some(config.plugin),
+            Self::ClearPluginControlConfig { plugin, .. } => Some(*plugin),
+            _ => None,
+        }
+    }
+
     /// Whether the Roto only takes it inside a config update.
     pub fn needs_config_update(&self) -> bool {
         matches!(

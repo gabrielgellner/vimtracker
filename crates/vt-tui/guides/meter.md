@@ -139,12 +139,39 @@ Bitwig:
 *   **The arrows**, with a device shown, turn its pages of knobs.
 
 Each knob has its setting's name and colour, and feels like the setting: a list clicks
-through its choices, a centred value such as `Pan` has a notch at its middle, an off/on
-setting has two steps, and the rest turn smoothly. The Roto's buttons don't take a
-device's off/on settings, so `Retrig` or `Ping-pong` is a knob of two steps. A device's
-knobs go row by row through its grid, then its title: knobs 1 to 4 are the top row, 5
-to 8 the middle, and its second page is the bottom row and then the title, such as an
-effect's type. Nothing is stored on the Roto, so its setups for Live stay as they are.
+through its choices, a centred value such as `Pan` has a notch at its middle, and the
+rest turn smoothly. The Roto is laid out for its row of eight knobs over eight buttons,
+not like the screen, the same way for every device:
+
+*   What you play most comes first: an envelope's `Attack`, `Decay`, `Sustain` and
+    `Release`, a filter's `Cut` and `Res`, a compressor's `Threshold` and `Ratio`.
+*   An effect's `Mix` and `Gain` are always knobs 7 and 8, and every track's `Level` is
+    knob 1 and `Trim` knob 5.
+*   A device keeps to one page, its off/on settings on its buttons, unless it has more
+    than eight knobs. An envelope's or an LFO's `Dest` is on the page after, one arrow on.
+*   The Roto plays and tweaks; the app builds: choose a machine, an effect or an effect's
+    type with `K` in the app. Each would swap the device's whole layout under your hand.
+
+Off/on settings are on the buttons, under the knob they go with, such as Glue's `Auto`
+under `Makeup` and an LFO's `Retrig` under `Phase`: a press switches it, `u` undoes it, and its light is on while it is. The
+Roto shows buttons only for devices stored on it, so vimtracker stores the ones that
+have off/on settings there, 9 setups named `vt ...`, beside Live's, when it first
+connects and again only when one changes. It never touches another program's setups.
+`vimtracker roto-probe --clear-own` removes vimtracker's, asking first. Until they're
+written, or if the Roto-Setup app has the Roto's serial port, those devices are shown
+with their off/on settings on knobs of two steps.
+
+A knob's or a button's colour says what kind of setting it is:
+
+| Colour | What has it |
+|---|---|
+| Green | Levels, sends, trims, mixes, gains, and a compressor's dynamics |
+| Blue | A filter's cutoff, resonance, type and cuts, and an EQ's bands |
+| Teal | Pan |
+| Yellow | Times, rates, lengths, glides and pitches |
+| Violet | What an envelope, an LFO, the accumulator or the arpeggio does |
+| Orange | Drive, and a machine's or an effect's own character |
+| White | Choices: a machine, an effect, a sample, a type, off and on |
 
 Turning a knob edits the song as keys do, and `u` undoes it: everything from touching a
 knob to letting it go is one undo step. A smooth knob sets the fine digits too. Its

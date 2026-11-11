@@ -242,6 +242,11 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         app.roto.setting = crate::roto::RotoSetting::load_from(&path);
         app.roto.setting_path = Some(path);
     }
+    // Its devices with buttons are vimtracker's own setups stored on it, written over its serial
+    // port when they're missing or changed, with their versions kept in the cache folder.
+    app.roto.serial = Some(crate::roto::system_serial());
+    app.roto.versions_path = vt_model::analysis::program_cache_folder()
+        .map(|folder| folder.join(crate::roto::VERSIONS_FILE));
     app.start_roto_if_on();
     app.status = status;
     app.offer_restore();

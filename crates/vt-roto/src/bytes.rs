@@ -25,26 +25,56 @@ pub enum DecodeError {
     Value { what: &'static str, value: u8 },
 }
 
-/// A name as the Roto shows it: up to 12 printable ASCII characters. Anything else is replaced by
-/// `?` and anything past 12 is cut, so a label always reads back as it was written.
+/// A name as the Roto shows it: up to 12 printable ASCII characters, as its font has no others
+/// (firmware 3.3.0 drew `°` as `?`). A character it hasn't is written as its nearest in ASCII,
+/// such as `°` as `deg`, or else `?`, and anything past 12 is cut, so a label always reads back
+/// as it was written.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]
 pub struct Label(String);
 
+/// A character the Roto's font hasn't, in ASCII, if it has a near one.
+fn in_ascii(character: char) -> Option<&'static str> {
+    Some(match character {
+        '°' => "deg",
+        '×' => "x",
+        '–' | '—' | '−' => "-",
+        '·' | '•' => ".",
+        '…' => "...",
+        '‘' | '’' => "'",
+        '“' | '”' => "\"",
+        'µ' | 'μ' => "u",
+        '♯' => "#",
+        '♭' => "b",
+        '½' => "1/2",
+        'á' | 'à' | 'â' | 'ä' => "a",
+        'é' | 'è' | 'ê' | 'ë' => "e",
+        'í' | 'ì' | 'î' | 'ï' => "i",
+        'ó' | 'ò' | 'ô' | 'ö' => "o",
+        'ú' | 'ù' | 'û' | 'ü' => "u",
+        _ => return None,
+    })
+}
+
 impl Label {
-    /// A label from any text, cut to 12 characters, with each character the Roto can't show as `?`.
+    /// A label from any text, in ASCII the Roto can show and cut to 12 characters.
     pub fn new(text: &str) -> Self {
-        Self(
-            text.chars()
-                .take(LABEL_CHARS)
-                .map(|character| {
-                    if character == ' ' || character.is_ascii_graphic() {
-                        character
-                    } else {
-                        '?'
-                    }
-                })
-                .collect(),
-        )
+        let mut shown = String::new();
+        for character in text.chars() {
+            if character == ' ' || character.is_ascii_graphic() {
+                shown.push(character);
+            } else {
+                shown.push_str(in_ascii(character).unwrap_or("?"));
+            }
+        }
+        Self(shown.chars().take(LABEL_CHARS).collect())
+    }
+
+    /// Whether text shows on the Roto as it means, with nothing in it the Roto's font can't
+    /// draw or write near enough.
+    pub fn shows_whole(text: &str) -> bool {
+        text.chars().all(|character| {
+            character == ' ' || character.is_ascii_graphic() || in_ascii(character).is_some()
+        })
     }
 
     /// No name, as a slot with nothing in it has.
@@ -253,7 +283,9 @@ mod tests {
     fn a_label_is_cut_to_twelve_printable_characters() {
         assert_eq!(Label::new("Overdrive").as_str(), "Overdrive");
         assert_eq!(Label::new("A very long name").as_str(), "A very long ");
-        assert_eq!(Label::new("Délai").as_str(), "D?lai");
+        assert_eq!(Label::new("Délai").as_str(), "Delai");
+        assert_eq!(Label::new("90°").as_str(), "90deg");
+        assert_eq!(Label::new("a☃").as_str(), "a?");
     }
 
     #[test]

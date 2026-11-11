@@ -1,7 +1,10 @@
 //! The Roto-Control, as vimtracker drives it (`docs/designs/roto-control.md`): the setting that
 //! turns it on, kept for this machine in `roto.ron` beside `audio.ron`; the link to it while it's
-//! on; and what its PLUGIN mode shows, a track's devices sent live with nothing stored on the
-//! Roto ([`devices`]). Off, as it starts, nothing is opened and the Roto is left to Live.
+//! on; and what its PLUGIN mode shows, a track's devices, each laid out by its kind's layout
+//! ([`layouts`], [`devices`]): live, or for a device with off/on settings one of vimtracker's own
+//! setups stored on the Roto, written over its serial port on a thread of its own when they're
+//! missing or changed, so those settings are on its buttons. Off, as it starts, nothing is opened
+//! and the Roto is left to Live.
 //!
 //! Only one program may drive the Roto at a time (§6 of the note), so turning it on takes the
 //! Roto, and turning it off, or quitting, says `DAW STARTED` and closes the link, so a running
@@ -17,13 +20,16 @@
 //! move of a frame is one edit, and everything from touching a knob to letting go is one undo
 //! step. Each value is shown on the knob's screen as the app writes it, at most 12 times a
 //! second. After any edit, from the Roto, the keys or an undo, what changed is sent back, but a
-//! knob being touched is never moved under the hand. MIX mode is #412's.
+//! knob being touched is never moved under the hand. A stored device's button switches its
+//! setting as it's pressed, and its light is sent back from the song. MIX mode is #412's.
 
 pub mod devices;
 pub mod edits;
+pub mod layouts;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -32,10 +38,11 @@ use vt_model::song::Song;
 use vt_roto::Label;
 use vt_roto::cc::{self, ControlEvent};
 use vt_roto::link::{Event, Link, Options};
-use vt_roto::live::{LiveDevice, PluginView, TrackList};
+use vt_roto::live::{KNOB_TOP, LiveDevice, PluginView, TrackList};
 use vt_roto::session::Change;
+use vt_roto::store::{self, Serial, Synced, Versions};
 use vt_roto::sysex::{CONTROLS, ControlType, FromRoto, ToRoto};
-use vt_roto::transport::{Ports, SystemPorts};
+use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 
 use crate::track_page::Control;
 
@@ -43,6 +50,35 @@ use crate::app::App;
 
 /// The setting's file, in the config folder beside `audio.ron`.
 pub const SETTING_FILE: &str = "roto.ron";
+
+/// Which version of each of vimtracker's stored setups is on the Roto, in the program's cache
+/// folder, so a setup is written again only when it changes.
+pub const VERSIONS_FILE: &str = "roto-setups.ron";
+
+/// How many times the serial port is tried, and how long apart, before the devices with buttons
+/// are left live.
+const SERIAL_TRIES: usize = 3;
+const SERIAL_RETRY: Duration = Duration::from_secs(1);
+
+/// Opens the Roto's serial port, or the fake Roto's, for writing vimtracker's setups.
+pub type OpenSerial = Arc<dyn Fn() -> Result<Box<dyn Serial + Send>, LinkError> + Send + Sync>;
+
+/// The versions of vimtracker's setups last written, kept at `path`, or none if there's no file.
+pub fn load_versions(path: &Path) -> Versions {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| ron::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Keeps the versions of vimtracker's setups at `path`.
+pub fn save_versions(versions: &Versions, path: &Path) -> std::io::Result<()> {
+    if let Some(folder) = path.parent() {
+        std::fs::create_dir_all(folder)?;
+    }
+    let text = ron::to_string(versions).map_err(std::io::Error::other)?;
+    std::fs::write(path, text)
+}
 
 /// Whether vimtracker drives the Roto, remembered for this machine rather than the song.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,6 +229,16 @@ pub struct Roto {
     /// The song as the Roto was last sent it, to tell when it changed.
     sent_song: Option<Arc<Song>>,
     switched: Option<Switched>,
+    /// Opens the serial port that writes vimtracker's stored setups, or nothing, as in a test
+    /// that doesn't give one: then every device is shown live.
+    pub serial: Option<OpenSerial>,
+    /// Where the stored setups' versions are kept between runs, or nowhere.
+    pub versions_path: Option<PathBuf>,
+    /// Whether vimtracker's setups are on the Roto, so the devices with buttons are shown as
+    /// them.
+    pub stored_on_roto: bool,
+    /// The setups being checked and written, on a thread of their own.
+    syncing: Option<Receiver<Result<(Synced, Versions), String>>>,
 }
 
 impl Default for Roto {
@@ -215,8 +261,60 @@ impl Default for Roto {
             values: Default::default(),
             sent_song: None,
             switched: None,
+            serial: None,
+            versions_path: None,
+            stored_on_roto: false,
+            syncing: None,
         }
     }
+}
+
+/// `vimtracker roto-probe --clear-own`: lists vimtracker's own setups on the Roto, asks, and
+/// removes them and nothing else, then forgets their versions so they're written afresh next
+/// time. The Roto's other setups, such as Ableton Live's, are listed as kept.
+pub fn clear_own_setups(
+    out: &mut impl std::io::Write,
+    answer: &mut impl std::io::BufRead,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let ours: Vec<_> = devices::stored_setups()
+        .iter()
+        .map(store::OwnSetup::hash)
+        .collect();
+    let mut serial = SerialLink::find()?;
+    let own = store::own_stored(&mut serial, ours.iter().copied())?;
+    if own.is_empty() {
+        writeln!(out, "The Roto stores none of vimtracker's setups.")?;
+        return Ok(());
+    }
+    writeln!(out, "vimtracker's setups on the Roto:")?;
+    for setup in &own {
+        writeln!(out, "  {}", setup.name.as_str())?;
+    }
+    write!(
+        out,
+        "Remove these {}, and nothing else? Type yes to remove them: ",
+        own.len()
+    )?;
+    out.flush()?;
+    let mut reply = String::new();
+    answer.read_line(&mut reply)?;
+    if reply.trim() != "yes" {
+        writeln!(out, "Nothing removed.")?;
+        return Ok(());
+    }
+    let removed = store::clear_own(&mut serial, ours)?;
+    writeln!(out, "Removed {} of vimtracker's setups.", removed.len())?;
+    if let Some(path) =
+        vt_model::analysis::program_cache_folder().map(|folder| folder.join(VERSIONS_FILE))
+    {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
+}
+
+/// The system's serial port to the Roto, found as `roto-probe` finds it.
+pub fn system_serial() -> OpenSerial {
+    Arc::new(|| SerialLink::find().map(|link| Box::new(link) as Box<dyn Serial + Send>))
 }
 
 impl Roto {
@@ -300,6 +398,65 @@ impl Roto {
         }
         self.send(messages);
     }
+
+    /// Lights or puts out the buttons whose settings changed, as a stored device's lights are
+    /// the program's to draw.
+    fn send_lights(&mut self) {
+        let lights = self.view.take_lights();
+        if let Some(link) = &self.link
+            && !lights.is_empty()
+        {
+            let ccs = lights
+                .into_iter()
+                .map(|(button, lit)| cc::switch_light(button, lit))
+                .collect();
+            link.send_ccs(ccs);
+        }
+    }
+
+    /// Checks vimtracker's stored setups on the Roto, and writes those it hasn't or that have
+    /// changed, on a thread of its own, as the serial port is slow: a setup is about 15 requests
+    /// of 80 ms each. Until it's done the devices are shown as before.
+    fn start_sync(&mut self) {
+        let Some(open) = self.serial.clone() else {
+            return;
+        };
+        if self.syncing.is_some() {
+            return;
+        }
+        let setups = devices::stored_setups();
+        let mut versions = self
+            .versions_path
+            .as_deref()
+            .map(load_versions)
+            .unwrap_or_default();
+        let (tell, hear) = mpsc::channel();
+        let spawned = std::thread::Builder::new()
+            .name("roto setups".to_owned())
+            .spawn(move || {
+                // The serial port can be slow to answer just after the Roto connects, so it's
+                // tried a few times before the devices are left live.
+                let mut opened = open();
+                for _ in 1..SERIAL_TRIES {
+                    if opened.is_ok() {
+                        break;
+                    }
+                    std::thread::sleep(SERIAL_RETRY);
+                    opened = open();
+                }
+                let result = opened
+                    .map_err(|error| error.to_string())
+                    .and_then(|mut serial| {
+                        store::sync(serial.as_mut(), &setups, &mut versions)
+                            .map(|synced| (synced, versions))
+                            .map_err(|error| error.to_string())
+                    });
+                let _ = tell.send(result);
+            });
+        if spawned.is_ok() {
+            self.syncing = Some(hear);
+        }
+    }
 }
 
 impl Drop for Roto {
@@ -348,7 +505,7 @@ impl App {
         let Some(track) = tracks.get(self.roto.track).or_else(|| tracks.first()) else {
             return Vec::new();
         };
-        devices::live_devices(track, self.song())
+        devices::live_devices(track, self.song(), self.roto.stored_on_roto)
     }
 
     /// Sends the Roto everything PLUGIN mode shows: the track list and the track's devices.
@@ -363,12 +520,14 @@ impl App {
     /// Takes what the Roto said since the last frame, and answers it: knobs' moves become edits,
     /// one for each knob's last move, and what the song now shows goes back.
     pub(crate) fn tick_roto(&mut self) {
+        self.roto_poll_sync();
         let events = match &self.roto.link {
             Some(link) => link.poll(),
             None => return,
         };
         let now = Instant::now();
         let mut moves: [Option<u16>; CONTROLS] = [None; CONTROLS];
+        let mut presses = Vec::new();
         let mut let_go = false;
         for event in events {
             match event {
@@ -389,6 +548,9 @@ impl App {
                     // the bank the chosen device is in, as a new session has no bank of its own.
                     self.roto.view.bank_to_chosen();
                     self.roto_push();
+                    // Its devices with buttons are vimtracker's stored setups, checked each time
+                    // it connects, as another program may have changed its store meanwhile.
+                    self.roto.start_sync();
                 }
                 Event::Session(Change::FirmwareVersion(version)) => {
                     self.roto.connection = Connection::Connected {
@@ -424,13 +586,96 @@ impl App {
                         }
                     }
                 }
+                // A stored device's button, a push button: pressed, it says 127, and let go 0.
+                Event::Control(ControlEvent::Switch { index, value }) => {
+                    if value >= 0x40 {
+                        presses.push(index);
+                    }
+                }
                 Event::Control(_) => {}
             }
+        }
+        for button in &presses {
+            self.roto_press(*button);
         }
         let turned = self.roto_turn(moves, now);
         self.roto_close_gesture(now);
         self.roto_send_back(turned, let_go);
         self.roto.send_values(now);
+        // A button pressed is lit as its setting now is, whatever the Roto drew as it went down.
+        for button in presses {
+            self.roto.view.relight(button);
+        }
+        self.roto.send_lights();
+    }
+
+    /// A button of a stored device pressed: its off/on setting switched, as its two-step knob
+    /// on a live device does, on the Roto's track whatever the cursor is on. Its light is sent back
+    /// from the song, so it's lit only once the song has it on. One press is one undo step.
+    fn roto_press(&mut self, button: u8) {
+        let Some(on) = self.roto.view.button(button).map(|switch| switch.is_on()) else {
+            return;
+        };
+        let at = self.roto.track;
+        let index = self.roto.view.index_of(button);
+        let device = usize::from(self.roto.view.selected_index());
+        let control =
+            self.song().tracks.get(at).and_then(|track| {
+                devices::button_at(track, device, index, self.roto.stored_on_roto)
+            });
+        if let Some(control) = control {
+            let position = if on { 0 } else { KNOB_TOP };
+            if let Some(action) = edits::turned(control, at, self.song(), position) {
+                self.roto_apply(&action);
+            }
+        }
+    }
+
+    /// Takes the stored setups' check when it's done: the devices with buttons are shown as
+    /// vimtracker's stored setups from then on, or live if they couldn't be written.
+    fn roto_poll_sync(&mut self) {
+        let Some(hear) = &self.roto.syncing else {
+            return;
+        };
+        let result = match hear.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => Err("its thread stopped".to_owned()),
+        };
+        self.roto.syncing = None;
+        let was = self.roto.stored_on_roto;
+        match result {
+            Ok((synced, versions)) => {
+                if let Some(path) = self.roto.versions_path.clone()
+                    && let Err(error) = save_versions(&versions, &path)
+                {
+                    self.status = format!("{}: couldn't be saved: {error}", path.display());
+                }
+                if !synced.written.is_empty() {
+                    self.status = format!(
+                        "Roto-Control: wrote {} of vimtracker's setups to it, for its devices' \
+                         buttons",
+                        synced.written.len()
+                    );
+                }
+                self.roto.stored_on_roto = true;
+                if (!was || !synced.written.is_empty())
+                    && matches!(self.roto.connection, Connection::Connected { .. })
+                {
+                    self.roto_push();
+                }
+            }
+            Err(why) => {
+                self.status = format!(
+                    "Roto-Control: buttons need vimtracker's setups on it, which couldn't be \
+                     written, so they're knobs for now: {why}"
+                );
+                self.roto.stored_on_roto = false;
+                if was && matches!(self.roto.connection, Connection::Connected { .. }) {
+                    self.roto_push();
+                }
+            }
+        }
     }
 
     /// The setting on a knob of the page shown, and the track it's on.
@@ -439,7 +684,8 @@ impl App {
         let track = self.song().tracks.get(at)?;
         let index = self.roto.view.index_of(knob);
         let device = usize::from(self.roto.view.selected_index());
-        devices::control_at(track, device, index).map(|control| (control, at))
+        devices::control_at(track, device, index, self.roto.stored_on_roto)
+            .map(|control| (control, at))
     }
 
     /// Each knob's last move of the frame as an edit of its own setting, on the Roto's track

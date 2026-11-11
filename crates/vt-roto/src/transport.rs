@@ -276,8 +276,30 @@ impl SerialLink {
     }
 
     fn exchange(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
-        let reply = self.exchange_raw(request)?;
+        let mut reply = self.exchange_raw(request)?;
+        // A notice can come straight after the reply, as when a device is chosen on the Roto
+        // while its setups are written (firmware 3.3.0: `PLUGIN SELECTED`, 13 bytes): it's a
+        // notice, not part of the reply.
+        let wanted = if reply.get(1) == Some(&0) {
+            2 + request.reply_len()
+        } else {
+            2
+        };
+        if reply.len() > wanted {
+            let surplus = reply.split_off(wanted);
+            self.keep_notices(&surplus);
+        }
         Ok(request.decode_reply(&reply)?)
+    }
+
+    /// Keeps the notices in bytes that came after a reply.
+    fn keep_notices(&mut self, mut bytes: &[u8]) {
+        while let Some(length) = serial::frame_len(bytes).filter(|length| *length <= bytes.len()) {
+            if let Ok(notice) = Notice::decode(&bytes[..length]) {
+                self.notices.push(notice);
+            }
+            bytes = &bytes[length..];
+        }
     }
 
     /// A read-only request's reply as the bytes that came, `A5` first, for checking what the

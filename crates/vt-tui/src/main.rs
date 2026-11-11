@@ -19,7 +19,11 @@ enum Command {
     ProbeKeys,
     /// List the MIDI and serial ports, and if a Roto-Control is there, connect to it and read its
     /// firmware and API versions, its mode and the setups it stores, changing none of them.
-    RotoProbe,
+    RotoProbe {
+        /// Instead, remove vimtracker's own setups from the Roto, asking first, and nothing else.
+        #[arg(long)]
+        clear_own: bool,
+    },
     /// Render a saved project to a WAV file.
     Render {
         project: PathBuf,
@@ -121,7 +125,12 @@ fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
-        Some(Command::RotoProbe) => vt_roto::probe::run(
+        Some(Command::RotoProbe { clear_own: true }) => vt_tui::roto::clear_own_setups(
+            &mut std::io::stdout().lock(),
+            &mut std::io::stdin().lock(),
+        )
+        .map_err(|e| e.to_string()),
+        Some(Command::RotoProbe { clear_own: false }) => vt_roto::probe::run(
             &mut std::io::stdout().lock(),
             vt_roto::link::Options::default().daw,
         )
