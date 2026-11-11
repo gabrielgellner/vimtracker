@@ -119,7 +119,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-sound",
         rows: GATES,
-        keys: " 4jjji60<Enter>ji90<Enter>k",
+        keys: " 4jli60<Enter>ji90<Enter>k",
         play: 0,
         voice: None,
         kick: true,
@@ -350,7 +350,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
         "track-mod" => (WIDTH, MOD_HEIGHT),
-        "sample" | "track-fx" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        "sample" | "track-fx" | "track-sound" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
         _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));

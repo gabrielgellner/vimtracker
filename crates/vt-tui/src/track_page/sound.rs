@@ -1,93 +1,102 @@
-//! The Sound page: the machine, its filter and the track's output, in rows that depend on what the
-//! track is and what it plays.
+//! The Sound page: a sound track's is a rack of four devices, its machine, its filter, its output
+//! and how it plays its notes, each with a grid of its own (the track pages study,
+//! `docs/designs/track-pages.md`, §2.1). A group's, a return's and the master's are still rows of
+//! their output's settings, the tables below.
 
 use vt_model::action::TrackControl;
-use vt_model::song::Track;
+use vt_model::grid::GRID_ROWS;
+use vt_model::song::{Machine, Track};
 
 use super::controls::base;
-use super::{Control, DeviceSpec};
+use super::{Control, DEVICE_COLUMNS, DeviceSpec};
 
-/// The Sound page's devices, on a track whose Sound page is a rack. It isn't yet on any: the page
-/// is rows of settings, the tables below, until it's made of a machine, a filter, an output and
-/// a device for how it plays, each from a grid of its own (the track pages study,
-/// `docs/designs/track-pages.md`, §2.1).
-pub(super) fn devices(_track: &Track) -> Vec<DeviceSpec> {
-    Vec::new()
+/// The Sound page's devices on a sound track, top to bottom: its machine, its filter, its output
+/// and how it plays. Each is a full-width device, and the four fill the rows inside the
+/// keyboard's box, as the FX page's slots do. Other tracks have none, and their page is rows.
+pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
+    if !track.is_sound() {
+        return Vec::new();
+    }
+    vec![
+        machine(track.machine),
+        device(
+            "Filter",
+            [Some(Control::FilterType), Some(Control::FilterMode)],
+            &FILTER,
+        ),
+        device("Output", [], &OUTPUT),
+        device("Play", [], &PLAY),
+    ]
 }
 
-/// The Sound page of a track playing a sample, top to bottom, with output on the right: its
-/// `Sample`, then the sampler's `Slice`, `Start`, `Length` and `Play`, as a synth's settings are,
-/// with the filter below them as on a synth with more than four.
-pub const SAMPLE_ROWS: [&[Control]; 13] = [
-    &[Control::Machine, Control::Trim],
-    &[Control::Sample, Control::Level],
-    &[Control::Setting(1), base(TrackControl::Pan)],
-    &[Control::Setting(2), base(TrackControl::SendA)],
-    &[Control::Setting(3), base(TrackControl::SendB)],
-    &[Control::Setting(4), Control::Group],
-    &[Control::FilterType, base(TrackControl::Pitch)],
-    &[Control::FilterMode, Control::Groove],
-    &[base(TrackControl::Cutoff), Control::Choke],
-    &[base(TrackControl::Resonance), Control::GateLength],
-    &[base(TrackControl::Drive), Control::Speed],
-    &[base(TrackControl::LowCut), Control::Reset],
-    &[base(TrackControl::HighCut), Control::Glide],
+/// The filter's settings, in columns: the filter itself, then the utility filter's two cuts.
+const FILTER: [&[Control]; 2] = [
+    &[
+        base(TrackControl::Cutoff),
+        base(TrackControl::Resonance),
+        base(TrackControl::Drive),
+    ],
+    &[base(TrackControl::LowCut), base(TrackControl::HighCut)],
 ];
 
-/// The Sound page of a track playing a synth with four settings: its settings down the left, and
-/// output on the right, which is a row longer.
-pub const SYNTH_ROWS: [&[Control]; 13] = [
-    &[Control::Machine, Control::Trim],
-    &[Control::Setting(0), Control::Level],
-    &[Control::Setting(1), base(TrackControl::Pan)],
-    &[Control::Setting(2), base(TrackControl::SendA)],
-    &[Control::Setting(3), base(TrackControl::SendB)],
-    &[Control::FilterType, Control::Group],
-    &[Control::FilterMode, base(TrackControl::Pitch)],
-    &[base(TrackControl::Cutoff), Control::Groove],
-    &[base(TrackControl::Resonance), Control::Choke],
-    &[base(TrackControl::Drive), Control::GateLength],
-    &[base(TrackControl::LowCut), Control::Speed],
-    &[base(TrackControl::HighCut), Control::Reset],
-    &[Control::Glide],
+/// The output's, in the order the signal meets them down each column, as decision 136 has `Trim`
+/// before `Level`: its gain, fader and place, then what it sends and the group it goes through.
+const OUTPUT: [&[Control]; 2] = [
+    &[Control::Trim, Control::Level, base(TrackControl::Pan)],
+    &[
+        base(TrackControl::SendA),
+        base(TrackControl::SendB),
+        Control::Group,
+    ],
 ];
 
-/// The same for a synth with more than four, whose later settings carry on down the left.
-pub const SYNTH8_ROWS: [&[Control]; 16] = [
-    &[Control::Machine, Control::Trim],
-    &[Control::Setting(0), Control::Level],
-    &[Control::Setting(1), base(TrackControl::Pan)],
-    &[Control::Setting(2), base(TrackControl::SendA)],
-    &[Control::Setting(3), base(TrackControl::SendB)],
-    &[Control::Setting(4), Control::Group],
-    &[Control::Setting(5), base(TrackControl::Pitch)],
-    &[Control::Setting(6), Control::Groove],
-    &[Control::Setting(7), Control::Choke],
-    &[Control::FilterType, Control::GateLength],
-    &[Control::FilterMode, Control::Speed],
-    &[base(TrackControl::Cutoff), Control::Reset],
-    &[base(TrackControl::Resonance), Control::Glide],
-    &[base(TrackControl::Drive)],
-    &[base(TrackControl::LowCut)],
-    &[base(TrackControl::HighCut)],
+/// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
+/// what cuts them off.
+const PLAY: [&[Control]; 3] = [
+    &[
+        base(TrackControl::Pitch),
+        Control::Glide,
+        Control::GateLength,
+    ],
+    &[Control::Speed, Control::Groove, Control::Reset],
+    &[Control::Choke],
 ];
 
-/// The same for a synth with three, whose fifth row has only its `Send B`, on the right.
-pub const SYNTH3_ROWS: [&[Control]; 13] = [
-    &[Control::Machine, Control::Trim],
-    &[Control::Setting(0), Control::Level],
-    &[Control::Setting(1), base(TrackControl::Pan)],
-    &[Control::Setting(2), base(TrackControl::SendA)],
-    &[base(TrackControl::SendB)],
-    &[Control::FilterType, Control::Group],
-    &[Control::FilterMode, base(TrackControl::Pitch)],
-    &[base(TrackControl::Cutoff), Control::Groove],
-    &[base(TrackControl::Resonance), Control::Choke],
-    &[base(TrackControl::Drive), Control::GateLength],
-    &[base(TrackControl::LowCut), Control::Speed],
-    &[base(TrackControl::HighCut), Control::Reset],
-    &[Control::Glide],
-];
+/// The machine's device: the machine in its title, and its type after it, the sample a sampler
+/// plays or a synth's setting that gives it its character, then its settings in its own grid.
+fn machine(machine: Machine) -> DeviceSpec {
+    let kind = match machine {
+        Machine::Sampler => Some(Control::Sample),
+        Machine::Plaits(_) => machine.type_param().map(Control::Setting),
+    };
+    DeviceSpec::new(
+        "Machine",
+        [Some(Control::Machine), kind, None, None],
+        machine.grid(),
+        Control::Setting,
+    )
+}
+
+/// A device of the track's own settings, with these title controls over its first columns and
+/// these columns of settings, each from the top.
+fn device<const TITLE: usize>(
+    identity: &str,
+    title: [Option<Control>; TITLE],
+    columns: &[&[Control]],
+) -> DeviceSpec {
+    let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
+    for (column, controls) in columns.iter().enumerate() {
+        for (row, control) in controls.iter().enumerate() {
+            grid[row][column] = Some(*control);
+        }
+    }
+    DeviceSpec {
+        identity: identity.to_owned(),
+        switchable: false,
+        title: std::array::from_fn(|at| title.get(at).copied().flatten()),
+        grid,
+    }
+}
 
 /// The Sound page of a return, which has no machine or filter.
 pub const RETURN_ROWS: [&[Control]; 3] = [

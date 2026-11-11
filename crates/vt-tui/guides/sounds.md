@@ -293,7 +293,7 @@ background, so the list doesn't wait for it, and the last few are kept.
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
-settings cut the sample further, below `Sample` on the Sound page, and a step can lock
+settings cut the sample further, in the Sound page's Machine, and a step can lock
 any of them:
 
 | Setting | Step | Does |
@@ -337,7 +337,7 @@ track's `Start` and `Length` then count from what it kept.
 
 A sample can be cut into slices, numbered from `00` by where they start, as
 Vim numbers lines. Each plays from its start to the next one's, and the last
-to the sample's end. The track's `Slice`, under `Sample` on the Sound page and
+to the sample's end. The track's `Slice`, in the Sound page's Machine, and
 `SLI` on a step, chooses which one a note plays, so `SLI 00` to `0F` down a
 phrase plays a loop cut in 16 back in order, and a lock plays another slice for
 one note. Past the last slice it plays the last, and a sample with no slices
