@@ -52,7 +52,7 @@ fn level_at(out: &[[f32; 2]], frame: usize) -> f32 {
 fn vol_changes_track_gain_and_holds() {
     let out = render(
         song(&[
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- vol:40 --- ---",
             "--- -- --- --- ---",
         ]),
@@ -69,7 +69,7 @@ fn vol_changes_track_gain_and_holds() {
 #[test]
 fn vol_changes_are_smoothed() {
     let out = render(
-        song(&["C-4 -- --- --- ---", "--- -- vol:00 --- ---"]),
+        song(&["C-3 -- --- --- ---", "--- -- vol:00 --- ---"]),
         flat(0.5),
         STEP * 2,
     );
@@ -84,13 +84,13 @@ fn vol_changes_are_smoothed() {
 
 #[test]
 fn pan_moves_between_channels() {
-    let out = render(song(&["C-4 -- pan:00 --- ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- pan:00 --- ---"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!(last[0] > 0.3 && last[1].abs() < 1e-3, "{last:?}");
-    let out = render(song(&["C-4 -- pan:FF --- ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- pan:FF --- ---"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!(last[1] > 0.3 && last[0].abs() < 1e-3, "{last:?}");
-    let out = render(song(&["C-4 -- pan:80 --- ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- pan:80 --- ---"]), flat(0.5), STEP);
     let last = out[STEP - 1];
     assert!((last[0] - last[1]).abs() < 1e-5, "{last:?}");
 }
@@ -103,8 +103,8 @@ fn cut_filters_high_frequencies() {
             [value, value]
         })
         .collect();
-    let open = render(song(&["C-4 -- --- --- ---"]), pool(tone.clone()), STEP);
-    let closed = render(song(&["C-4 -- cut:40 --- ---"]), pool(tone), STEP);
+    let open = render(song(&["C-3 -- --- --- ---"]), pool(tone.clone()), STEP);
+    let closed = render(song(&["C-3 -- cut:40 --- ---"]), pool(tone), STEP);
     let peak = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert!(
         peak(&closed) < peak(&open) * 0.1,
@@ -124,11 +124,11 @@ fn resonance_raises_a_tone_at_the_cutoff() {
         })
         .collect();
     let flat_response = render(
-        song(&["C-4 -- cut:80 res:00 ---"]),
+        song(&["C-3 -- cut:80 res:00 ---"]),
         pool(tone.clone()),
         STEP,
     );
-    let resonant = render(song(&["C-4 -- cut:80 res:FF ---"]), pool(tone), STEP);
+    let resonant = render(song(&["C-3 -- cut:80 res:FF ---"]), pool(tone), STEP);
     let peak = |out: &[[f32; 2]]| out[3000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert!(peak(&resonant) > peak(&flat_response) * 2.0);
     assert!(peak(&resonant).is_finite());
@@ -136,17 +136,17 @@ fn resonance_raises_a_tone_at_the_cutoff() {
 
 #[test]
 fn del_delays_the_note_by_groove_units() {
-    let out = render(song(&["C-4 -- del:02 --- ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- del:02 --- ---"]), flat(0.5), STEP);
     let first = out.iter().position(|f| f[0] != 0.0);
     assert_eq!(first, Some(UNIT * 2));
 }
 
 #[test]
 fn kil_cuts_after_groove_units_counted_from_a_delayed_start() {
-    let out = render(song(&["C-4 -- kil:03 --- ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- kil:03 --- ---"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 3 - 1][0], 0.0);
     assert_eq!(out[UNIT * 3 + 100][0], 0.0);
-    let out = render(song(&["C-4 -- del:02 kil:01 ---"]), flat(0.5), STEP);
+    let out = render(song(&["C-3 -- del:02 kil:01 ---"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 2 + 100][0], 0.0);
     assert_eq!(out[UNIT * 3 + 100][0], 0.0);
 }
@@ -154,7 +154,7 @@ fn kil_cuts_after_groove_units_counted_from_a_delayed_start() {
 #[test]
 fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
     let out = render(
-        song(&["C-4 -- --- --- ---", "--- -- kil:01 --- ---"]),
+        song(&["C-3 -- --- --- ---", "--- -- kil:01 --- ---"]),
         flat(0.5),
         STEP * 2,
     );
@@ -164,7 +164,7 @@ fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
 
 #[test]
 fn off_starts_the_notes_release() {
-    let mut with_release = song(&["C-4 -- off:01 --- ---"]);
+    let mut with_release = song(&["C-3 -- off:01 --- ---"]);
     with_release.tracks[0].envelopes[0].release_ms = 20;
     let out = render(with_release, flat(0.5), STEP);
     let at_off = level_at(&out, UNIT - 1);
@@ -176,7 +176,7 @@ fn off_starts_the_notes_release() {
 #[test]
 fn a_new_note_cancels_a_pending_cut() {
     let out = render(
-        song(&["C-4 -- kil:FF --- ---", "C-4 -- --- --- ---"]),
+        song(&["C-3 -- kil:FF --- ---", "C-3 -- --- --- ---"]),
         flat(0.5),
         STEP * 3,
     );
@@ -191,7 +191,7 @@ fn a_new_note_cancels_a_pending_cut() {
 fn ret_retriggers_every_y_units_and_stops_at_the_next_step() {
     // A short sample, so each retrigger shows up separately.
     let out = render(
-        song(&["C-4 -- ret:02 --- ---"]),
+        song(&["C-3 -- ret:02 --- ---"]),
         pool(vec![[1.0, 1.0]; 10]),
         STEP * 2,
     );
@@ -202,7 +202,7 @@ fn ret_retriggers_every_y_units_and_stops_at_the_next_step() {
 #[test]
 fn ret_with_y_zero_does_nothing() {
     let out = render(
-        song(&["C-4 -- ret:10 --- ---"]),
+        song(&["C-3 -- ret:10 --- ---"]),
         pool(vec![[1.0, 1.0]; 10]),
         STEP,
     );
@@ -213,7 +213,7 @@ fn ret_with_y_zero_does_nothing() {
 #[test]
 fn ret_x_changes_level_on_each_retrigger() {
     let out = render(
-        song(&["C-4 -- ret:52 --- ---"]),
+        song(&["C-3 -- ret:52 --- ---"]),
         pool(vec![[0.5, 0.5]; 10]),
         STEP,
     );
@@ -228,7 +228,7 @@ fn ret_x_changes_level_on_each_retrigger() {
 }
 
 fn fire_pattern(seed: u64, track_count: usize) -> Vec<bool> {
-    let mut song = song(&vec!["C-4 -- cha:80 --- ---"; 16]);
+    let mut song = song(&vec!["C-3 -- cha:80 --- ---"; 16]);
     song.seed = seed;
     for _ in 1..track_count {
         song.add_track();
@@ -252,10 +252,10 @@ fn adding_a_track_doesnt_change_another_tracks_results() {
 
 #[test]
 fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
-    let out = render(song(&["C-4 -- cha:FF --- ---"]), flat(0.5), 100);
+    let out = render(song(&["C-3 -- cha:FF --- ---"]), flat(0.5), 100);
     assert_ne!(out[50][0], 0.0);
     let out = render(
-        song(&["C-4 -- --- --- ---", "C-4 -- cha:00 vol:00 ---"]),
+        song(&["C-3 -- --- --- ---", "C-3 -- cha:00 vol:00 ---"]),
         flat(0.5),
         STEP * 2,
     );
@@ -265,7 +265,7 @@ fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
 
 #[test]
 fn chance_varies_across_loop_passes() {
-    let mut song = song(&["C-4 -- cha:80 --- ---"]);
+    let mut song = song(&["C-3 -- cha:80 --- ---"]);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_len(1);
     let out = render(song, pool(vec![[1.0, 1.0]; 10]), STEP * 32);
@@ -277,14 +277,14 @@ fn chance_varies_across_loop_passes() {
 fn delay_and_reverb_sends_add_a_tail() {
     // Without sends a short hit ends, and with them it keeps sounding.
     let dry = render(
-        song(&["C-4 -- --- --- ---"]),
+        song(&["C-3 -- --- --- ---"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
     let late = |out: &[[f32; 2]]| out[2000..].iter().fold(0.0_f32, |p, f| p.max(f[0].abs()));
     assert_eq!(late(&dry), 0.0);
     let delayed = render(
-        song(&["C-4 -- sna:F8 --- ---"]),
+        song(&["C-3 -- sna:F8 --- ---"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -293,7 +293,7 @@ fn delay_and_reverb_sends_add_a_tail() {
     assert_eq!(delayed[17_000][0], 0.0);
     assert_ne!(delayed[18_100][0], 0.0);
     let reverbed = render(
-        song(&["C-4 -- snb:F8 --- ---"]),
+        song(&["C-3 -- snb:F8 --- ---"]),
         pool(vec![[0.8, 0.8]; 400]),
         STEP * 8,
     );
@@ -305,7 +305,7 @@ fn delay_and_reverb_sends_add_a_tail() {
 fn held_values_reset_on_return_and_keep_on_resume() {
     let samples = flat(0.5);
     let version = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- vol:00 --- ---"])),
+        Arc::new(song(&["C-3 -- vol:00 --- ---"])),
         samples,
     ));
     let mut engine = Engine::new(RATE, Arc::clone(&version));
@@ -321,7 +321,7 @@ fn held_values_reset_on_return_and_keep_on_resume() {
     // Going back to the top resets it, so a step with no VOL plays at full level.
     engine.return_to_start();
     let plain = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- --- --- ---"])),
+        Arc::new(song(&["C-3 -- --- --- ---"])),
         flat(0.5),
     ));
     engine.swap(plain);
@@ -333,7 +333,7 @@ fn held_values_reset_on_return_and_keep_on_resume() {
 #[test]
 fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     let version = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- vol:00h --- ---", "C-4 -- --- --- ---"])),
+        Arc::new(song(&["C-3 -- vol:00h --- ---", "C-3 -- --- --- ---"])),
         flat(0.5),
     ));
     let mut engine = Engine::new(RATE, version);
@@ -349,7 +349,7 @@ fn starting_from_the_top_resets_held_values_and_repeats_chance() {
     assert!(out[2 * 3999].abs() < 0.001, "not from the top, so it holds");
     engine.play_from(0);
     let plain = Arc::new(Published::new(
-        Arc::new(song(&["C-4 -- --- --- ---"])),
+        Arc::new(song(&["C-3 -- --- --- ---"])),
         flat(0.5),
     ));
     engine.swap(plain);
@@ -361,7 +361,7 @@ fn starting_from_the_top_resets_held_values_and_repeats_chance() {
 #[test]
 fn track_level_scales_the_track_and_multiplies_with_velocity() {
     // Quiet enough that the master limiter is doing nothing.
-    let text = ["C-4 -- --- --- ---"];
+    let text = ["C-3 -- --- --- ---"];
     let full = render(song(&text), flat(0.02), STEP);
     let mut lower = song(&text);
     lower.tracks[0].level = 0x80;
@@ -370,7 +370,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
     let down = level_gain(128.0);
     assert!((halved / full - down).abs() < 1e-3, "{halved} vs {full}");
 
-    let soft = ["C-4 40 --- --- ---"];
+    let soft = ["C-3 40 --- --- ---"];
     let mut both = song(&soft);
     both.tracks[0].level = 0x80;
     let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
@@ -380,7 +380,7 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
 
 #[test]
 fn track_level_also_turns_down_the_sends() {
-    let text = ["C-4 -- sna:F8 snb:F8 ---"];
+    let text = ["C-3 -- sna:F8 snb:F8 ---"];
     let mut silent = song(&text);
     silent.tracks[0].level = 0;
     let out = render(silent, flat(0.5), STEP * 8);
@@ -393,7 +393,7 @@ fn track_level_also_turns_down_the_sends() {
 
 #[test]
 fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
-    let text = ["C-4 -- --- --- ---"];
+    let text = ["C-3 -- --- --- ---"];
     let mut quiet = song(&text);
     quiet.tracks[0].level = 0x40;
     Arc::make_mut(quiet.tracks[0].phrases.get_mut(&0).unwrap()).set_len(1);
@@ -405,14 +405,14 @@ fn track_level_stays_in_force_after_the_loop_returns_to_the_top() {
 
 /// Two tracks with a note each on step 0, one on track 1 on step 1, and nothing on step 2.
 fn two_tracks() -> Song {
-    let mut song = song(&["C-4 -- --- --- ---"]);
+    let mut song = song(&["C-3 -- --- --- ---"]);
     song.add_track();
     song.sample_on(1, "s");
     let chain = song.sections[0].chains[1].unwrap();
     let phrase = song.tracks[1].chains[&chain].entries[0].phrase;
     let steps = Arc::make_mut(song.tracks[1].phrases.get_mut(&phrase).unwrap());
-    *steps.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
-    *steps.step_mut(1).unwrap() = "C-4 40 --- --- ---".parse().unwrap();
+    *steps.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
+    *steps.step_mut(1).unwrap() = "C-3 40 --- --- ---".parse().unwrap();
     song
 }
 
@@ -442,8 +442,8 @@ fn audition_sounds_every_track_on_the_row_and_stays_stopped() {
 
 #[test]
 fn audition_uses_velocity_and_is_cut_by_the_next_one() {
-    let full = auditioned(song(&["C-4 -- --- --- ---"]), 0.02, |e| e.audition(0));
-    let soft = auditioned(song(&["C-4 40 --- --- ---"]), 0.02, |e| e.audition(0));
+    let full = auditioned(song(&["C-3 -- --- --- ---"]), 0.02, |e| e.audition(0));
+    let soft = auditioned(song(&["C-3 40 --- --- ---"]), 0.02, |e| e.audition(0));
     assert!(
         (soft / full - 64.0 / 127.0).abs() < 1e-3,
         "{soft} vs {full}"
@@ -472,13 +472,13 @@ fn audition_respects_mute_and_solo() {
 
 #[test]
 fn audition_does_not_run_fx_or_change_later_playback() {
-    let text = ["C-4 -- vol:00 --- ---", "--- -- --- --- ---"];
+    let text = ["C-3 -- vol:00 --- ---", "--- -- --- --- ---"];
     let heard = auditioned(song(&text), 0.02, |engine| engine.audition(0));
     assert!(heard > 0.0, "vol:00 did not run");
 
     let play = |audition: bool| {
         let version = Arc::new(Published::new(
-            Arc::new(song(&["C-4 -- --- --- ---"])),
+            Arc::new(song(&["C-3 -- --- --- ---"])),
             flat(0.02),
         ));
         let mut engine = Engine::new(RATE, version);
@@ -537,7 +537,7 @@ fn a_preview_goes_through_its_tracks_sound() {
 
 /// A sine through these in the first slots, and the rest empty.
 fn distorted(inserts: &[Insert]) -> Vec<[f32; 2]> {
-    let mut song = song(&["C-4 -- --- --- ---"]);
+    let mut song = song(&["C-3 -- --- --- ---"]);
     song.tracks[0].inserts[..inserts.len()].copy_from_slice(inserts);
     let sine = (0..9600).map(|frame| {
         let t = frame as f32 / RATE as f32;
@@ -652,7 +652,7 @@ fn ducked(compressor: Insert) -> Vec<[f32; 2]> {
         song.tracks[track].envelopes[0].attack_ms = 0;
         song.tracks[track].envelopes[0].release_ms = 0;
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
-        *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+        *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
     song.tracks[1].inserts[0] = compressor;
     let mut engine = Engine::new(RATE, Arc::new(Published::new(Arc::new(song), flat(0.5))));
@@ -694,7 +694,7 @@ fn a_compressor_hearing_a_muted_track_ducks_under_it() {
 #[test]
 fn a_bypassed_slot_lets_the_sound_through_as_it_was() {
     let quieter = |bypassed: bool| {
-        let mut song = song(&["C-4 -- --- --- ---"]);
+        let mut song = song(&["C-3 -- --- --- ---"]);
         song.tracks[0].inserts[0] = Insert::Distort(Distort {
             gain: 0x80,
             ..Distort::DEFAULT
@@ -703,7 +703,7 @@ fn a_bypassed_slot_lets_the_sound_through_as_it_was() {
         level_at(&render(song, flat(0.25), STEP), STEP - 1)
     };
     let plain = level_at(
-        &render(song(&["C-4 -- --- --- ---"]), flat(0.25), STEP),
+        &render(song(&["C-3 -- --- --- ---"]), flat(0.25), STEP),
         STEP - 1,
     );
     assert!(quieter(false) < plain * 0.2, "{} {plain}", quieter(false));
@@ -824,7 +824,7 @@ fn a_tape_colours_the_sound_and_drive_holds_it_under_its_clip() {
 fn a_plate_rings_on_after_a_short_hit_wide_and_dying_away() {
     use vt_model::insert::Plate;
     let hit = |inserts: &[Insert]| {
-        let mut song = song(&["C-4 -- --- --- ---"]);
+        let mut song = song(&["C-3 -- --- --- ---"]);
         song.tracks[0].inserts[..inserts.len()].copy_from_slice(inserts);
         render(song, pool(vec![[0.8, 0.8]; 400]), STEP * 8)
     };
@@ -854,7 +854,7 @@ fn a_pitch_shifter_up_twelve_plays_an_octave_up_and_down_twelve_an_octave_down()
     let window = grain_ms(f32::from(Pitch::DEFAULT.size)) / 1000.0;
     let tone = 22.0 / window;
     let played = |shift: Option<i8>| {
-        let mut song = song(&["C-4 -- --- --- ---"]);
+        let mut song = song(&["C-3 -- --- --- ---"]);
         if let Some(semitones) = shift {
             song.tracks[0].inserts[0] = Insert::Pitch(Pitch {
                 shift: (MOST_SHIFT as i8 + semitones) as u8,
@@ -909,7 +909,7 @@ fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
     });
     let samples = pool(tone.collect());
     let played = |freeze: bool| {
-        let mut song = song(&["C-4 -- --- --- ---"]);
+        let mut song = song(&["C-3 -- --- --- ---"]);
         // Reading three quarters of a second back, so a second in it's in the middle of the tone.
         song.tracks[0].inserts[0] = Insert::Grains(Grains {
             time: 0x30,
@@ -968,7 +968,7 @@ fn strength(out: &[[f32; 2]], hertz: f32) -> f32 {
 #[test]
 fn warps_ring_modulates_one_track_by_another_thats_muted() {
     use vt_model::insert::Warps;
-    // A 300 Hz tone, which the first track plays at `C-4` and the second a tritone up, so none of
+    // A 300 Hz tone, which the first track plays at `C-3` and the second a tritone up, so none of
     // what comes out lands on either tone.
     let tone: Vec<[f32; 2]> = (0..RATE as usize * 4)
         .map(|frame| [(frame as f32 / RATE as f32 * 300.0 * std::f32::consts::TAU).sin() * 0.5; 2])
@@ -977,7 +977,7 @@ fn warps_ring_modulates_one_track_by_another_thats_muted() {
     let tritone = 300.0 * std::f32::consts::SQRT_2;
     let played = |source| {
         let mut song = Song::new(2);
-        for (track, note) in [(0, "C-4"), (1, "F#4")] {
+        for (track, note) in [(0, "C-3"), (1, "F#3")] {
             song.sample_on(track, "s");
             song.tracks[track].envelopes[0].attack_ms = 0;
             song.tracks[track].envelopes[0].release_ms = 0;
@@ -1028,7 +1028,7 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
     // A pad holding a note on the second track, gated by the first, which hits once and is muted.
     let played = |source| {
         let mut song = Song::new(2);
-        for (track, text) in [(0, "C-4 -- kil:02 --- ---"), (1, "C-4 -- --- --- ---")] {
+        for (track, text) in [(0, "C-3 -- kil:02 --- ---"), (1, "C-3 -- --- --- ---")] {
             song.sample_on(track, "s");
             song.tracks[track].envelopes[0].attack_ms = 0;
             song.tracks[track].envelopes[0].release_ms = 0;
@@ -1062,7 +1062,7 @@ fn a_low_pass_gate_opens_for_another_track_thats_muted() {
 /// How far each slot of the first track is turning down, in dB, once a loud note has played a
 /// while, and once it's stopped.
 fn reduction_playing_and_after(insert: Insert, slot: usize) -> ([f32; INSERTS], [f32; INSERTS]) {
-    let mut song = song(&["C-4 -- --- --- ---", "OFF -- --- --- ---"]);
+    let mut song = song(&["C-3 -- --- --- ---", "OFF -- --- --- ---"]);
     song.tracks[0].inserts[slot] = insert;
     let version = Arc::new(Published::new(Arc::new(song), flat(0.9)));
     let mut engine = Engine::new(RATE, version);
@@ -1116,12 +1116,12 @@ fn a_limiter_reports_how_far_its_turning_down() {
 #[test]
 fn a_resonator_rings_at_the_note_the_track_plays() {
     use vt_model::insert::Resonator;
-    // Clicks, every tenth of a second, played up a fifth at `G-4`.
+    // Clicks, every tenth of a second, played up a fifth at `G-3`.
     let clicks: Vec<[f32; 2]> = (0..RATE as usize * 4)
         .map(|frame| [if frame % 4800 == 0 { 0.8 } else { 0.0 }; 2])
         .collect();
     let played = |reso: bool| {
-        let mut song = song(&["G-4 -- --- --- ---"]);
+        let mut song = song(&["G-3 -- --- --- ---"]);
         if reso {
             song.tracks[0].inserts[0] = Insert::Reso(Resonator {
                 bright: 0x00,
@@ -1151,12 +1151,12 @@ fn a_resonator_rings_at_the_note_the_track_plays() {
 #[test]
 fn a_comb_rings_at_the_note_the_track_plays() {
     use vt_model::insert::Comb;
-    // Clicks, every tenth of a second, played up a fifth at `G-4`.
+    // Clicks, every tenth of a second, played up a fifth at `G-3`.
     let clicks: Vec<[f32; 2]> = (0..RATE as usize * 4)
         .map(|frame| [if frame % 4800 == 0 { 0.8 } else { 0.0 }; 2])
         .collect();
     let played = |comb: bool| {
-        let mut song = song(&["G-4 -- --- --- ---"]);
+        let mut song = song(&["G-3 -- --- --- ---"]);
         if comb {
             song.tracks[0].inserts[0] = Insert::Comb(Comb {
                 feedback: 0xFC,
@@ -1187,7 +1187,7 @@ fn a_comb_rings_at_the_note_the_track_plays() {
 #[test]
 fn a_vowel_filter_says_its_vowel_whatever_the_note() {
     use vt_model::insert::Vowel;
-    // White noise, played at `C-4` and an octave up, through `A` and through `I`.
+    // White noise, played at `C-3` and an octave up, through `A` and through `I`.
     let mut seed = 1_u32;
     let noise: Vec<[f32; 2]> = (0..RATE as usize * 4)
         .map(|_| {
@@ -1210,9 +1210,9 @@ fn a_vowel_filter_says_its_vowel_whatever_the_note() {
             .map(|step| strength(out, hertz * (step as f32 / 240.0).exp2()))
             .sum::<f32>()
     };
-    // Their first formants, in the middle voice: `A`'s at `E-5` and `I`'s at `C-4`.
+    // Their first formants, in the middle voice: `A`'s at `E-4` and `I`'s at `C-3`.
     let (a_first, i_first) = (659.26, 261.63);
-    for note in ["C-4", "C-5"] {
+    for note in ["C-3", "C-4"] {
         let (a, i) = (played(0x00, note), played(0x80, note));
         assert!(a.iter().flatten().all(|s| s.is_finite() && s.abs() <= 1.0));
         assert!(around(&a, a_first) > around(&i, a_first) * 4.0, "{note}");
@@ -1233,7 +1233,7 @@ fn bypassing(texts: &[&str]) -> Vec<[f32; 2]> {
 #[test]
 fn a_step_locks_a_slots_bypass_and_it_switches_without_a_click() {
     let out = bypassing(&[
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
         "--- -- 1.bypass:01 --- ---",
         "--- -- 1.bypass:00 --- ---",
     ]);
@@ -1273,9 +1273,9 @@ fn a_step_locks_a_slots_bypass_and_it_switches_without_a_click() {
 #[test]
 fn a_bypass_lock_lasts_its_note_and_a_held_one_stays() {
     let locked = bypassing(&[
-        "C-4 -- 1.bypass:01 --- ---",
+        "C-3 -- 1.bypass:01 --- ---",
         "--- -- --- --- ---",
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
     ]);
     let dry = 0.25;
     assert!(
@@ -1287,9 +1287,9 @@ fn a_bypass_lock_lasts_its_note_and_a_held_one_stays() {
         "the next note brings it back"
     );
     let held = bypassing(&[
-        "C-4 -- 1.bypass:01h --- ---",
+        "C-3 -- 1.bypass:01h --- ---",
         "--- -- --- --- ---",
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
     ]);
     assert!(
         (level_at(&held, 2 * STEP + 3000) - dry).abs() < 1e-4,
@@ -1304,7 +1304,7 @@ fn the_last_slots_bypass_is_locked_by_its_digit() {
     assert_eq!(last.key(), format!("{INSERTS}.bypass"));
     assert_eq!(last.label(), Some(format!("{INSERTS}BYP")));
     let mut song = song(&[
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
         &format!("--- -- {INSERTS}.bypass:01 --- ---"),
     ]);
     song.tracks[0].inserts[INSERTS - 1] = Insert::Distort(Distort {
@@ -1322,8 +1322,8 @@ fn the_last_slots_bypass_is_locked_by_its_digit() {
 
 #[test]
 fn a_bypass_lock_on_an_empty_slot_does_nothing() {
-    let locked = song(&["C-4 -- 1.bypass:01 --- ---"]);
-    let plain = song(&["C-4 -- --- --- ---"]);
+    let locked = song(&["C-3 -- 1.bypass:01 --- ---"]);
+    let plain = song(&["C-3 -- --- --- ---"]);
     assert_eq!(
         render(locked, flat(0.25), STEP),
         render(plain, flat(0.25), STEP)

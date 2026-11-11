@@ -32,7 +32,7 @@ fn version() -> Arc<Published> {
     });
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for index in 0..16 {
-        *phrase.step_mut(index).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+        *phrase.step_mut(index).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
     Arc::new(Published::new(Arc::new(song), Arc::new(pool)))
 }

@@ -435,10 +435,10 @@ mod tests {
     #[test]
     fn random_picks_rows_that_take_time_until_the_pass_is_full() {
         let mut steps: Vec<Step> = (0..8)
-            .map(|_| "C-4 -- SGL1 --- --- ---".parse().unwrap())
+            .map(|_| "C-3 -- SGL1 --- --- ---".parse().unwrap())
             .collect();
         for skipped in [1, 3, 5, 7] {
-            steps[skipped] = "C-4 -- SGL0 --- --- ---".parse().unwrap();
+            steps[skipped] = "C-3 -- SGL0 --- --- ---".parse().unwrap();
         }
         let dealer = Dealer::new(3, 2);
         let mut seen = [false; 8];
@@ -458,7 +458,7 @@ mod tests {
     fn random_picks_rows_that_fit_what_the_pass_has_left() {
         // Three steps a pass, from a row of two and a row of one: whatever comes first, the pass
         // is filled without splitting a row.
-        let steps: Vec<Step> = ["C-4 -- SGL2 --- --- ---", "C-4 -- SGL1 --- --- ---"]
+        let steps: Vec<Step> = ["C-3 -- SGL2 --- --- ---", "C-3 -- SGL1 --- --- ---"]
             .iter()
             .map(|text| text.parse().unwrap())
             .collect();

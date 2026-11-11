@@ -83,9 +83,9 @@ fn a_step_locks_another_sample_for_its_note_and_the_next_goes_back() {
         song(
             1,
             &[
-                "C-4 -- --- --- ---",
-                "C-4 -- sampler.sample:02 --- ---",
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
+                "C-3 -- sampler.sample:02 --- ---",
+                "C-3 -- --- --- ---",
             ],
         ),
         STEP * 3,
@@ -102,9 +102,9 @@ fn a_held_sample_lock_stays_for_the_notes_after_it() {
         song(
             1,
             &[
-                "C-4 -- --- --- ---",
-                "C-4 -- sampler.sample:03h --- ---",
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
+                "C-3 -- sampler.sample:03h --- ---",
+                "C-3 -- --- --- ---",
             ],
         ),
         STEP * 3,
@@ -122,10 +122,10 @@ fn a_lock_without_a_note_leaves_the_sounding_note_and_ends_with_the_next() {
         song(
             1,
             &[
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
                 "--- -- sampler.sample:02 --- ---",
-                "C-4 -- --- --- ---",
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
+                "C-3 -- --- --- ---",
             ],
         ),
         STEP * 4,
@@ -137,9 +137,9 @@ fn a_lock_without_a_note_leaves_the_sounding_note_and_ends_with_the_next() {
         song(
             1,
             &[
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
                 "--- -- sampler.sample:02h --- ---",
-                "C-4 -- --- --- ---",
+                "C-3 -- --- --- ---",
             ],
         ),
         STEP * 3,
@@ -153,9 +153,9 @@ fn off_and_a_number_with_nothing_in_it_are_silent() {
         song(
             2,
             &[
-                "C-4 -- sampler.sample:00 --- ---",
-                "C-4 -- sampler.sample:05 --- ---",
-                "C-4 -- --- --- ---",
+                "C-3 -- sampler.sample:00 --- ---",
+                "C-3 -- sampler.sample:05 --- ---",
+                "C-3 -- --- --- ---",
             ],
         ),
         STEP * 3,
@@ -163,7 +163,7 @@ fn off_and_a_number_with_nothing_in_it_are_silent() {
     assert_eq!(on_step(&out, 0), 0.0);
     assert_eq!(on_step(&out, 1), 0.0);
     assert!(on_step(&out, 2) > 0.0);
-    let new_track = render(song(0, &["C-4 -- --- --- ---"]), STEP);
+    let new_track = render(song(0, &["C-3 -- --- --- ---"]), STEP);
     assert!(
         new_track.iter().all(|value| *value == 0.0),
         "a new track, at 00, plays nothing"
@@ -172,11 +172,11 @@ fn off_and_a_number_with_nothing_in_it_are_silent() {
 
 #[test]
 fn two_tracks_play_one_entry_and_each_locks_its_own() {
-    let mut song = song(1, &["C-4 -- sampler.sample:02 --- ---"]);
+    let mut song = song(1, &["C-3 -- sampler.sample:02 --- ---"]);
     song.add_track();
     song.tracks[1].set_setting(SettingId::SAMPLE, 1);
     let phrase = Arc::make_mut(song.tracks[1].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     // Panned apart, so each channel is one track's.
     song.tracks[0].pan = 0x00;
     song.tracks[1].pan = 0xFF;
@@ -188,8 +188,8 @@ fn two_tracks_play_one_entry_and_each_locks_its_own() {
 
 #[test]
 fn an_entrys_gain_and_tune_are_its_own_on_any_track() {
-    let plain = render(song(4, &["C-4 -- --- --- ---"]), STEP);
-    let mut tuned = song(4, &["C-4 -- --- --- ---"]);
+    let plain = render(song(4, &["C-3 -- --- --- ---"]), STEP);
+    let mut tuned = song(4, &["C-3 -- --- --- ---"]);
     let ramp = BankEntry {
         edit: vt_model::bank::SampleEdit {
             play: PlayParams {
@@ -211,7 +211,7 @@ fn an_entrys_gain_and_tune_are_its_own_on_any_track() {
 
 #[test]
 fn an_lfo_on_sample_moves_which_entry_a_note_starts_with() {
-    let mut moved = song(2, &["--- -- --- --- ---", "C-4 -- --- --- ---"]);
+    let mut moved = song(2, &["--- -- --- --- ---", "C-3 -- --- --- ---"]);
     moved.tracks[0].lfos[0] = Lfo {
         destination: Some(SettingId::SAMPLE),
         shape: Shape::Square,
@@ -221,7 +221,7 @@ fn an_lfo_on_sample_moves_which_entry_a_note_starts_with() {
     };
     let out = render(moved, STEP * 2);
     let heard = on_step(&out, 1);
-    let quiet = render(song(1, &["C-4 -- --- --- ---"]), STEP);
+    let quiet = render(song(1, &["C-3 -- --- --- ---"]), STEP);
     let quiet = on_step(&quiet, 0);
     assert!(
         (heard - quiet).abs() < 1e-3 || (heard - quiet * 3.0).abs() < 1e-3,

@@ -59,7 +59,7 @@ fn version(song: &Song) -> Arc<Published> {
 
 /// Rows of notes, one a step.
 fn rows(count: usize) -> Vec<&'static str> {
-    vec!["C-4 40"; count]
+    vec!["C-3 40"; count]
 }
 
 /// Where in its chain a track is heard, as its playhead is drawn: its count since its chain
@@ -144,7 +144,7 @@ fn two_sections() -> Song {
     track.reset = Some(8);
     track.phrases.insert(
         1,
-        Arc::new(Phrase::from_steps(vec!["D-4 40".parse().unwrap(); 5])),
+        Arc::new(Phrase::from_steps(vec!["D-3 40".parse().unwrap(); 5])),
     );
     track.chains.insert(
         1,
@@ -251,7 +251,7 @@ fn played(song: &Song, steps: usize) -> Vec<f32> {
 
 #[test]
 fn a_reset_plays_the_same_as_the_bar_written_out_swing_and_all() {
-    let part = ["C-4 40", "D-4 20", "--- --", "E-4 30", "G-4 10"];
+    let part = ["C-3 40", "D-3 20", "--- --", "E-3 30", "G-3 10"];
     let mut reset = song(&[&part]);
     reset.groove = GrooveId::swing(60).unwrap();
     reset.tracks[0].reset = Some(16);
@@ -264,7 +264,7 @@ fn a_reset_plays_the_same_as_the_bar_written_out_swing_and_all() {
 #[test]
 fn a_reset_is_a_chain_start_so_a_first_pass_condition_plays_again() {
     // `CND 1ST` on the first row, with quieter rows after, so a loud step is the first row heard.
-    let mut first = song(&[&["C-4 40 cnd:07", "C-4 10", "C-4 10"]]);
+    let mut first = song(&[&["C-3 40 cnd:07", "C-3 10", "C-3 10"]]);
     first.tracks[0].reset = Some(8);
     let out = played(&first, 24);
     let level = |step: usize| out[(step * STEP + 100) * 2];
@@ -355,7 +355,7 @@ fn every_tracks_realign_takes_one_tracks_with_it() {
 fn one_tracks_realign_keeps_its_swing_on_the_songs_beat() {
     // Realigned on an odd step, its next step still swings as the song's odd steps do: the same
     // as the bar written out from that step.
-    let mut swung = song(&[&["C-4 40", "D-4 20", "E-4 30"]]);
+    let mut swung = song(&[&["C-3 40", "D-3 20", "E-3 30"]]);
     swung.groove = GrooveId::swing(66).unwrap();
     swung.launch = Launch::named("step").unwrap();
     let mut engine = Engine::new(RATE, version(&swung));
@@ -367,7 +367,7 @@ fn one_tracks_realign_keeps_its_swing_on_the_songs_beat() {
     engine.process(&mut rest);
     out.extend(rest);
     let mut written = song(&[&[
-        "C-4 40", "D-4 20", "C-4 40", "D-4 20", "E-4 30", "C-4 40", "D-4 20", "E-4 30",
+        "C-3 40", "D-3 20", "C-3 40", "D-3 20", "E-3 30", "C-3 40", "D-3 20", "E-3 30",
     ]]);
     written.groove = swung.groove;
     assert_eq!(out, played(&written, 8));

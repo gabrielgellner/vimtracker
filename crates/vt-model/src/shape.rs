@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn a_ramp_on_a_setting_fills_its_fine_part() {
         let steps: Vec<Step> = (0..4)
-            .map(|_| "C-4 -- cut:40 --- ---".parse().unwrap())
+            .map(|_| "C-3 -- cut:40 --- ---".parse().unwrap())
             .collect();
         let column = ShapeColumn::Fx {
             slot: 0,
@@ -497,7 +497,7 @@ mod tests {
             command: FxCommand::Del,
         };
         let steps: Vec<Step> = (0..4)
-            .map(|_| "C-4 -- del:40 --- ---".parse().unwrap())
+            .map(|_| "C-3 -- del:40 --- ---".parse().unwrap())
             .collect();
         let whole: Vec<u16> = exact_values(&steps, all(&steps), events, &ramp(0x40, 0x41, 0, 0))
             .into_iter()
@@ -524,7 +524,7 @@ mod tests {
     }
 
     fn notes(count: usize) -> Vec<Step> {
-        rows(&vec!["C-4 -- --- --- ---"; count])
+        rows(&vec!["C-3 -- --- --- ---"; count])
     }
 
     fn written(steps: &[Step], shape: Shape) -> Vec<u8> {
@@ -582,11 +582,11 @@ mod tests {
     #[test]
     fn rows_keep_their_spacing_along_a_ramp() {
         let steps = rows(&[
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]);
         let out = values(&steps, all(&steps), VEL, &ramp(0, 0x40, 0, 0));
         assert_eq!(out, [(0, 0x00), (1, 0x10), (4, 0x40)]);
@@ -596,8 +596,8 @@ mod tests {
     fn the_ends_are_the_first_and_last_rows_filled() {
         let steps = rows(&[
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
         ]);
         let out = values(&steps, all(&steps), VEL, &ramp(0x10, 0x20, 0, 0));
@@ -607,11 +607,11 @@ mod tests {
     #[test]
     fn velocity_only_ever_goes_on_notes() {
         let steps = rows(&[
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]);
         let picked = |place| targets(&steps, all(&steps), VEL, place, 1);
         assert_eq!(picked(Where::Notes), [0, 2, 4]);
@@ -622,9 +622,9 @@ mod tests {
     #[test]
     fn fx_rows_can_be_narrowed_and_other_commands_are_kept() {
         let steps = rows(&[
-            "C-4 -- cut:10 --- ---",
+            "C-3 -- cut:10 --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- res:10 --- ---",
             "--- -- cut:30 --- ---",
         ]);
@@ -729,10 +729,10 @@ mod tests {
     fn a_wave_goes_by_where_a_row_falls_counting_from_the_first_selected() {
         let steps = rows(&[
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]);
         let out = values(&steps, all(&steps), VEL, &waving(Wave::Tri, 0, 0x40));
         assert_eq!(out, [(1, 0x30), (3, 0x30), (4, 0x20)]);
@@ -764,13 +764,13 @@ mod tests {
     #[test]
     fn alternate_flips_on_every_note_however_they_are_spaced() {
         let steps = rows(&[
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]);
         let out = values(&steps, all(&steps), VEL, &alternating(1, 0x70, 0x40));
         assert_eq!(out, [(0, 0x70), (3, 0x40), (4, 0x70), (6, 0x40)]);
@@ -801,12 +801,12 @@ mod tests {
     #[test]
     fn a_list_counts_only_the_rows_it_fills_and_stops_at_the_columns_top() {
         let steps = rows(&[
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]);
         let out = values(&steps, all(&steps), VEL, &listing(1, &[0x70, 0xFF, 0x20]));
         assert_eq!(out, [(0, 0x70), (2, 0x7F), (3, 0x20), (5, 0x70)]);
@@ -852,20 +852,20 @@ mod tests {
     #[test]
     fn default_ends_prefer_the_first_and_last_values() {
         let steps = rows(&[
-            "C-4 50 --- --- ---",
-            "C-4 7F --- --- ---",
-            "C-4 20 --- --- ---",
+            "C-3 50 --- --- ---",
+            "C-3 7F --- --- ---",
+            "C-3 20 --- --- ---",
         ]);
         assert_eq!(default_ends(&steps, all(&steps), VEL), (0x50, 0x20));
 
         let same_ends = rows(&[
-            "C-4 40 --- --- ---",
-            "C-4 7F --- --- ---",
-            "C-4 40 --- --- ---",
+            "C-3 40 --- --- ---",
+            "C-3 7F --- --- ---",
+            "C-3 40 --- --- ---",
         ]);
         assert_eq!(default_ends(&same_ends, all(&same_ends), VEL), (0x40, 0x7F));
 
-        let one_value = rows(&["C-4 40 --- --- ---"; 3]);
+        let one_value = rows(&["C-3 40 --- --- ---"; 3]);
         assert_eq!(default_ends(&one_value, all(&one_value), VEL), (0, 0x7F));
 
         let empty = rows(&["--- -- --- --- ---"; 2]);
@@ -874,7 +874,7 @@ mod tests {
 
     #[test]
     fn default_ends_count_a_note_with_no_velocity_as_full() {
-        let steps = rows(&["C-4 -- --- --- ---", "C-4 20 --- --- ---"]);
+        let steps = rows(&["C-3 -- --- --- ---", "C-3 20 --- --- ---"]);
         assert_eq!(default_ends(&steps, all(&steps), VEL), (0x7F, 0x20));
     }
 

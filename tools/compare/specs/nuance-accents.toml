@@ -74,7 +74,7 @@ title = "Accents in a row and apart, against Acid V and ABL3"
 columns = 3
 step = 0.125
 about = """
-A plain C-2, then a pattern of accents twice through, a sixteenth a step at 120 BPM: \
+A plain C-1, then a pattern of accents twice through, a sixteenth a step at 120 BPM: \
 `AAAA`, four accents in a row; `A.A.`, an accent every other step with a rest between; \
 and `AA..`, two accents and two rests. Each pattern plays at Res 0, 50% and 90%, with \
 Cutoff a quarter up and Env Mod, Decay and Accent at noon. A 303's accents build on each \

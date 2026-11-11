@@ -20,11 +20,11 @@ const MS: usize = RATE as usize / 1000;
 const RAMP_FRAMES: usize = RATE as usize * 8;
 /// A glide's time constant is a third of its time, so it's halfway there in this share of it.
 const HALFWAY: f64 = std::f64::consts::LN_2 / 3.0;
-/// A tie from `C-4` to `C-5`, an octave up, with two and a half seconds after it to hear the
+/// A tie from `C-3` to `C-4`, an octave up, with two and a half seconds after it to hear the
 /// glide land before the phrase comes round.
 const TIE: [&str; 21] = [
-    "C-4 -- HLD1",
-    "C-5 --",
+    "C-3 -- HLD1",
+    "C-4 --",
     "--- --",
     "--- --",
     "--- --",
@@ -84,7 +84,7 @@ fn render(song: &Song, steps: usize) -> Vec<f32> {
         .collect()
 }
 
-/// How far above `C-4` the ramp plays around a frame, in semitones, by how fast it climbs.
+/// How far above `C-3` the ramp plays around a frame, in semitones, by how fast it climbs.
 fn semitones_at(out: &[f32], at: usize) -> f64 {
     let (from, to) = (at - 12, at + 12);
     let climb = f64::from(out[to] - out[from]) / (to - from) as f64;
@@ -107,7 +107,7 @@ fn a_tie_glides_a_sample_an_octave_up_in_its_time() {
     let out = render(&song(&TIE, Machine::Sampler, Some(100.0)), 4);
     // It starts from the note it ties from, is halfway in pitch at the time constant's share,
     // nearly there when its time is up, and lands on the note.
-    assert!(semitones_at(&out, 12).abs() < 0.01, "C-4 before it");
+    assert!(semitones_at(&out, 12).abs() < 0.01, "C-3 before it");
     assert!(semitones_at(&out, STEP + 12) < 0.5);
     let halfway = STEP + (100.0 * HALFWAY * MS as f64) as usize;
     let at_halfway = semitones_at(&out, halfway);
@@ -135,7 +135,7 @@ fn with_glide_off_a_tie_jumps_as_before() {
     assert!((next - 12.0).abs() < 0.01, "{next}");
     // A note that isn't tied doesn't glide whatever the setting.
     let struck = render(
-        &song(&["C-4 --", "C-5 --"], Machine::Sampler, Some(400.0)),
+        &song(&["C-3 --", "C-4 --"], Machine::Sampler, Some(400.0)),
         2,
     );
     // Past the note before's fade, which a new note's start cuts it with.
@@ -147,14 +147,14 @@ fn a_lock_on_either_row_of_a_tie_sets_its_glide() {
     let halfway = STEP + (100.0 * HALFWAY * MS as f64) as usize;
     let glide = format!("glide:{:02X}", glide_value(100.0));
     let on_the_tie = [
-        &format!("C-4 -- HLD1 {glide}"),
-        "C-5 --",
+        &format!("C-3 -- HLD1 {glide}"),
+        "C-4 --",
         "--- --",
         "--- --",
     ];
     let on_the_next = [
-        "C-4 -- HLD1",
-        &format!("C-5 -- {glide}"),
+        "C-3 -- HLD1",
+        &format!("C-4 -- {glide}"),
         "--- --",
         "--- --",
     ];

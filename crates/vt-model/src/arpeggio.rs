@@ -325,7 +325,7 @@ mod tests {
             root: 9,
             kind: ScaleKind::Minor,
         };
-        // A minor from A-4: up two degrees is C, up four E.
+        // A minor from A-3: up two degrees is C, up four E.
         assert_eq!(Cycle::new(69, 0x24, 1, minor, 0).notes(), [69, 72, 76]);
         let major = Scale {
             on: true,

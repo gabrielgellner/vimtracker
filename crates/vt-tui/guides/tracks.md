@@ -449,7 +449,7 @@ whole multiples of it, ringing for about a third of a second, all wet.
 It follows the track's note and `Pitch`, and glides to a new one over a
 moment, so a note change bends the ringing rather than clicking. A sample
 plays faster at a higher note, so to keep a loop at its own speed, play it
-at `C-4` and set `Tune` from steps, as `1TUNE`. `Material` is in tune
+at `C-3` and set `Tune` from steps, as `1TUNE`. `Material` is in tune
 from `40` to `4B`, and `Position` towards `FF` leaves out the even
 partials, for a hollow ring. A second pickup wanders slowly along it, as
 Elements' does, and `Width` spreads what it hears apart from the first
@@ -476,7 +476,7 @@ under half a second at middle C, all wet.
 | `Spread` | How far under `Tone` it reaches: a narrow band at `00`, all at `FF` |
 
 Like `Reso`, it follows the track's note and `Pitch`, glides to a new one,
-and to keep a sample loop at its own speed, play it at `C-4` and set `Tune`
+and to keep a sample loop at its own speed, play it at `C-3` and set `Tune`
 from steps. Below `80`, `Feedback` rings on the note's odd harmonics alone,
 hollower, like a clarinet, but at the same pitch. At `FF` with `Tone` up
 it rings for many seconds. As a `Comb`, `Feedback` `80` is only the sound;

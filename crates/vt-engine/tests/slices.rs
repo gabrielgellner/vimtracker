@@ -76,7 +76,7 @@ fn channels(out: &[f32]) -> (Vec<f32>, Vec<f32>) {
 /// What the track does to a level: a steady sample's level through it, over the steady 0.5.
 fn through() -> f32 {
     let (left, _) = channels(&render(
-        song("steady", |_| {}, &["C-4 -- --- --- ---"]),
+        song("steady", |_| {}, &["C-3 -- --- --- ---"]),
         1000,
     ));
     left[500] / 0.5
@@ -88,7 +88,7 @@ fn read_at(level: f32, through: f32) -> f32 {
 }
 
 fn slice_row(slice: usize) -> String {
-    format!("C-4 -- sampler.slice:{slice:02X} --- ---")
+    format!("C-3 -- sampler.slice:{slice:02X} --- ---")
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn sli_by_a_letter_keeps_playing_its_chop_as_slices_are_added_before_it() {
     let named = |entry: &mut BankEntry| {
         assert!(entry.edit.points.set_mark('a', 5));
     };
-    let first = song("ramp", named, &["C-4 -- sampler.slice:'a --- ---"]);
+    let first = song("ramp", named, &["C-3 -- sampler.slice:'a --- ---"]);
     let (left, _) = channels(&render(first.clone(), STEP));
     assert!((read_at(left[1000], through) - 31_000.0).abs() < 2.0);
     // Two splits before it make it slice 07, and the step plays the same sound unchanged.
@@ -210,8 +210,8 @@ fn sli_by_a_letter_keeps_playing_its_chop_as_slices_are_added_before_it() {
 fn sli_by_a_letter_naming_no_slice_plays_the_tracks_own() {
     let through = through();
     let rest = "--- -- --- --- ---";
-    let none = "C-4 -- sampler.slice:'z --- ---";
-    let rows = [none, rest, "C-4 -- sampler.slice:03h --- ---", rest, none];
+    let none = "C-3 -- sampler.slice:'z --- ---";
+    let rows = [none, rest, "C-3 -- sampler.slice:03h --- ---", rest, none];
     let mut song = song("ramp", |_| {}, &rows);
     song.tracks[0].set_setting(SettingId::SLICE, 2);
     let (left, _) = channels(&render(song, 5 * STEP));

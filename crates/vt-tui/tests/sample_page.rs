@@ -967,7 +967,7 @@ fn step_with(app: &mut App, step: usize, text: &str) {
 fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
     let (mut app, _realtime) = app();
     command(&mut app, "slice 4");
-    step_with(&mut app, 2, "C-4 -- --- sampler.slice:02 ---");
+    step_with(&mut app, 2, "C-3 -- --- sampler.slice:02 ---");
     let shown = value_shown(&app).unwrap_or_default();
     assert!(shown.contains("02 of 4: from 0.948 s"), "{shown}");
     keys(&mut app, "g d");
@@ -983,7 +983,7 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
         number: 2,
         entry: Some(sliced),
     });
-    step_with(&mut app, 3, "C-4 -- sampler.sample:02 sampler.slice:01 ---");
+    step_with(&mut app, 3, "C-3 -- sampler.sample:02 sampler.slice:01 ---");
     keys(&mut app, "g d");
     assert_eq!(app.sample_shown().unwrap().number, 2);
     assert_eq!(cursor(&app), 48_000);
@@ -1001,7 +1001,7 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
 fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
     let (mut app, _realtime) = app();
     command(&mut app, "slice 4");
-    step_with(&mut app, 0, "C-4 -- --- sampler.slice:01 ---");
+    step_with(&mut app, 0, "C-3 -- --- sampler.slice:01 ---");
     keys(&mut app, "K");
     let labels: Vec<String> = app
         .picker
@@ -1051,7 +1051,7 @@ fn a_slices_own_settings_need_slices_and_a_count_has_a_limit() {
 fn slicing_again_moves_the_steps_locks_with_their_sound_and_one_u_takes_both_back() {
     let (mut app, _realtime) = app();
     command(&mut app, "slice 4");
-    step_with(&mut app, 0, "C-4 -- --- sampler.slice:03 ---");
+    step_with(&mut app, 0, "C-3 -- --- sampler.slice:03 ---");
     let depth = app.history.undo_depth();
     command(&mut app, "slice 8");
     assert!(app.status.contains("SLI locks follow"), "{}", app.status);
@@ -1422,7 +1422,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
     command(&mut app, "mark b 2");
     command(&mut app, "mark a 2");
     command(&mut app, "mark d 3");
-    step_with(&mut app, 0, "C-4 -- --- sampler.slice:01 ---");
+    step_with(&mut app, 0, "C-3 -- --- sampler.slice:01 ---");
     keys(&mut app, "K");
     let labels: Vec<String> = app
         .picker

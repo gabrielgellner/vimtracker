@@ -74,9 +74,9 @@ fn levels(song: Song, steps: usize) -> Vec<f32> {
         .collect()
 }
 
-const A: &str = "C-4 40 --- --- ---";
-const B: &str = "C-4 20 --- --- ---";
-const C: &str = "C-4 10 --- --- ---";
+const A: &str = "C-3 40 --- --- ---";
+const B: &str = "C-3 20 --- --- ---";
+const C: &str = "C-3 10 --- --- ---";
 const AV: f32 = 0x40 as f32 / 0x7F as f32;
 const BV: f32 = 0x20 as f32 / 0x7F as f32;
 const CV: f32 = 0x10 as f32 / 0x7F as f32;
@@ -110,9 +110,9 @@ fn a_set_length_cuts_a_section_short_or_lets_its_chains_loop_on() {
 
 /// Three different notes tell which step of a chain is playing.
 const STEPS: [&str; 3] = [
-    "C-4 40 --- --- ---",
-    "C-4 20 --- --- ---",
-    "C-4 10 --- --- ---",
+    "C-3 40 --- --- ---",
+    "C-3 20 --- --- ---",
+    "C-3 10 --- --- ---",
 ];
 
 #[test]
@@ -125,7 +125,7 @@ fn a_different_chain_starts_from_its_top() {
 
 /// A chain of six steps, on two sections of three.
 fn spanning() -> Song {
-    let mut span = song(&[&["C-4 40 --- --- ---"], &STEPS]);
+    let mut span = song(&[&["C-3 40 --- --- ---"], &STEPS]);
     let steps: Vec<_> = STEPS
         .iter()
         .chain(&[A, B, C])

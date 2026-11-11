@@ -1,5 +1,5 @@
 # Arturia's Acid V against our Acid: the Cutoff knob in sixteen steps at Res 90%, on one held
-# C-2 with no envelope, read from its harmonics: where the filter rings across the knob, the
+# C-1 with no envelope, read from its harmonics: where the filter rings across the knob, the
 # clearest view of the cutoff's taper and range (#295, decision 117).
 #
 #   uv run run.py specs/acid-cutoff-peak.toml --report out/acid-cutoff-peak.html
@@ -53,7 +53,7 @@ measure = "filter"
 window = [1, 2]
 about = """
 Our Acid's Cutoff and Acid V's, each turned from bottom to top in sixteen even steps, with Res at \
-90% and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-2 and reads the \
+90% and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-1 and reads the \
 filter's shape from its harmonics a second in. The peak's frequency is where the filter rings, \
 which shows the knob's taper and range; under about 200 Hz it falls between the note's harmonics \
 and reads as the nearest one.

@@ -82,7 +82,7 @@ envelope falls, the 303's squelch. Each note's peak is tracked over time from \
 pitch-synchronous spectra, two cycles of the note at a time, every 2 ms: where it is, and \
 how far it stands over the fundamental and over the harmonics an octave and more under it.
 
-One plain or accented C-2 from rest in each case, held for 0.45 s: Res at \
+One plain or accented C-1 from rest in each case, held for 0.45 s: Res at \
 75, 85, 95 and 100%, Env Mod at 50 and 100%, Cutoff low, 20%, and mid, 50%, and Decay \
 short, 20%, and long, 80%, with Accent at noon. A case's name gives each: `R95-E100-Clow-\
 Dlong-accent` has Res at 95%, Env Mod full, Cutoff low and Decay long, accented.

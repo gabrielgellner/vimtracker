@@ -77,7 +77,7 @@ fn song(tracks: &[&[&str]]) -> Song {
 
 /// A row of notes this many steps long.
 fn notes(steps: usize) -> Vec<&'static str> {
-    vec!["C-4 --"; steps]
+    vec!["C-3 --"; steps]
 }
 
 /// A project playing one of its own grooves.
@@ -165,7 +165,7 @@ fn an_early_step_after_a_late_one_still_plays_in_order() {
     // The latest a step can land and the earliest the next can land are the same moment, and
     // the later step's note is the one left sounding.
     let groove = Groove::pattern(&[0, 120, -120, 0]);
-    let rows = ["C-4 20", "C-4 40", "C-4 7F", "C-4 40"];
+    let rows = ["C-3 20", "C-3 40", "C-3 7F", "C-3 40"];
     let played = with_own(song(&[&rows]), groove);
     let out = render(&played, flat_pool(), 4, 0);
     let level = |velocity: u8| 0.5 * f32::from(velocity) / f32::from(0x7F_u8);
@@ -245,7 +245,7 @@ fn the_playhead_stays_on_the_step_heard_while_the_next_is_worked_out_early() {
 #[test]
 fn a_groove_shapes_each_steps_velocity() {
     let groove = Groove::pattern(&[0, 0]).with_velocity(1, 50);
-    let played = with_own(song(&[&["C-4 60", "C-4 60"]]), groove);
+    let played = with_own(song(&[&["C-3 60", "C-3 60"]]), groove);
     let out = render(&played, flat_pool(), 2, 0);
     let (first, second) = (out[100].abs(), out[STEP + 100].abs());
     assert!(
@@ -254,7 +254,7 @@ fn a_groove_shapes_each_steps_velocity() {
     );
     // Over 100% it's louder, up to the most a velocity is.
     let louder = with_own(
-        song(&[&["C-4 40", "C-4 40"]]),
+        song(&[&["C-3 40", "C-3 40"]]),
         Groove::pattern(&[0, 0]).with_velocity(1, 150),
     );
     let out = render(&louder, flat_pool(), 2, 0);
@@ -291,7 +291,7 @@ fn humanise_is_random_within_its_ticks_and_repeats_from_the_seed() {
 
 #[test]
 fn humanise_leaves_chance_rolling_as_it_did() {
-    let rows = vec!["C-4 -- cha:80"; 16];
+    let rows = vec!["C-3 -- cha:80"; 16];
     let plain = song(&[&rows]);
     let humanised = with_own(plain.clone(), Groove::pattern(&[0]).with_humanise(4));
     let played = |song: &Song| {
@@ -322,17 +322,17 @@ fn a_steps_groove_lock_plays_that_step_with_it() {
     let late = sample_of_tick(old_swing_ticks(700), RATE, 120_000) as usize;
     // `01` is Straight, so the second step lands on the grid, and the fourth is swung again, as
     // the third's note ended the lock.
-    let rows = ["C-4 --", "C-4 -- groove:01", "C-4 --", "C-4 --"];
+    let rows = ["C-3 --", "C-3 -- groove:01", "C-3 --", "C-3 --"];
     let mut locked = song(&[&rows]);
     locked.groove = GrooveId::swing(70).unwrap();
     assert_eq!(hits(&locked, 4, 0), [0, STEP, STEP * 2, STEP * 3 + late]);
     // Held, it stays until something changes it: a fill goes straight.
-    let rows = ["C-4 --", "C-4 -- groove:01h", "C-4 --", "C-4 --"];
+    let rows = ["C-3 --", "C-3 -- groove:01h", "C-3 --", "C-3 --"];
     let mut held = song(&[&rows]);
     held.groove = GrooveId::swing(70).unwrap();
     assert_eq!(hits(&held, 4, 0), [0, STEP, STEP * 2, STEP * 3]);
     // `00` is the project's, from a track with its own.
-    let rows = ["C-4 --", "C-4 -- groove:00", "C-4 --", "C-4 --"];
+    let rows = ["C-3 --", "C-3 -- groove:00", "C-3 --", "C-3 --"];
     let mut project = song(&[&rows]);
     project.groove = GrooveId::swing(70).unwrap();
     project.tracks[0].groove = Some(GrooveId::STRAIGHT);
@@ -343,8 +343,8 @@ fn a_steps_groove_lock_plays_that_step_with_it() {
 fn a_lock_on_an_early_step_is_worked_out_before_it_lands() {
     // Pushed early by its own groove, which only the lock chooses.
     let pushed = GrooveId::named("Push").unwrap();
-    let lock = format!("C-4 -- groove:{:02X}", pushed.index() + 1);
-    let rows = ["C-4 --", "C-4 --", lock.as_str(), "C-4 --"];
+    let lock = format!("C-3 -- groove:{:02X}", pushed.index() + 1);
+    let rows = ["C-3 --", "C-3 --", lock.as_str(), "C-3 --"];
     let locked = song(&[&rows]);
     assert_eq!(
         hits(&locked, 4, 0),
@@ -354,7 +354,7 @@ fn a_lock_on_an_early_step_is_worked_out_before_it_lands() {
 
 #[test]
 fn each_pulse_of_a_row_is_a_grooved_step() {
-    let mut pulses = song(&[&["C-4 -- MLT4", "--- --", "--- --", "--- --"]]);
+    let mut pulses = song(&[&["C-3 -- MLT4", "--- --", "--- --", "--- --"]]);
     pulses.groove = GrooveId::swing(70).unwrap();
     let late = sample_of_tick(old_swing_ticks(700), RATE, 120_000) as usize;
     assert_eq!(
@@ -366,7 +366,7 @@ fn each_pulse_of_a_row_is_a_grooved_step() {
 #[test]
 fn a_lane_plays_on_the_grooved_steps() {
     // A lane of volume, three long, under one long note: its second step turns it down late.
-    let mut laned = song(&[&["C-4 --", "--- -- vol:00", "--- --", "--- --"]]);
+    let mut laned = song(&[&["C-3 --", "--- -- vol:00", "--- --", "--- --"]]);
     let phrase = Arc::make_mut(laned.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_lane(
         0,
@@ -385,7 +385,7 @@ fn a_lane_plays_on_the_grooved_steps() {
 
 #[test]
 fn a_delay_adds_to_where_the_groove_lands_a_step() {
-    let mut delayed = song(&[&["C-4 --", "C-4 -- del:02"]]);
+    let mut delayed = song(&[&["C-3 --", "C-3 -- del:02"]]);
     delayed.grooves = vec![Groove::swing(750)];
     delayed.groove = GrooveId::custom(0).unwrap();
     // 120 ticks late, then two units of 40.
@@ -394,7 +394,7 @@ fn a_delay_adds_to_where_the_groove_lands_a_step() {
 
 #[test]
 fn a_notes_length_follows_how_long_the_groove_makes_its_step() {
-    let mut gated = song(&[&["C-4 --", "C-4 --", "--- --"]]);
+    let mut gated = song(&[&["C-3 --", "C-3 --", "--- --"]]);
     gated.tracks[0].gate_length = Some(0x80);
     gated.groove = GrooveId::swing(66).unwrap();
     let out = render(&gated, flat_pool(), 3, 0);
@@ -424,7 +424,7 @@ fn a_notes_length_follows_how_long_the_groove_makes_its_step() {
 #[test]
 fn a_long_notes_length_runs_to_where_its_last_pulse_lands() {
     // A note of two pulses, with the second pushed 40 ticks late and the third on the grid.
-    let mut gated = song(&[&["C-4 -- SGL2", "--- --", "--- --"]]);
+    let mut gated = song(&[&["C-3 -- SGL2", "--- --", "--- --"]]);
     gated.tracks[0].gate_length = Some(0x80);
     let gated = with_own(gated, Groove::pattern(&[0, 40, 0]));
     let out = render(&gated, flat_pool(), 3, 0);

@@ -1060,11 +1060,11 @@ The shape panel is already what makes ramps here. It needs only to learn glide.
 
 ```text
     Note V  FX1      FX2
-00  C-4 64  CUT40 .  ---00
+00  C-3 64  CUT40 .  ---00
 01  --- --  ---00    ---00
-02  C-4 64  CUT80 g  DLY30 h
+02  C-3 64  CUT80 g  DLY30 h
 03  --- --  ---00    ---00
-04  C-4 64  CUTC0 .  ---00
+04  C-3 64  CUTC0 .  ---00
 ```
 
 *   **`.` lock**, the default: lasts until the next note on the track or the next value of that parameter, so it covers a whole note rather than snapping back while it rings. A lock on a row with no note works the same way, which changes a sound mid-note.
@@ -1255,10 +1255,10 @@ These apply to every issue. Change them by updating this document.
 **Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space. A hold or glide adds one letter, as in `CUT40h`.
 
 ```text
-Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
+Step:  NOTE VOL INST FX FX FX     C-3 64 01 CUT40 ---00 RET14
 ```
 
-*   `NOTE`: `C-4` or `C#4`, from `C-0` (MIDI 12) to `G-9` (MIDI 127). `C-4` is MIDI 60. `---` is empty and `OFF` is a note-off. MIDI 0-11 are not available.
+*   `NOTE`: `C-3` or `C#3`, from `c_1` (MIDI 12) to `G-8` (MIDI 127). `C-3` is MIDI 60, middle C, as Ableton Live names it (decision 146). Octave -1 is written with a small letter and `_` or `+`, as Furnace does, to fit three characters: `c_1`, `c+1`. `---` is empty and `OFF` is a note-off. MIDI 0-11 are not available.
 *   `VEL`: `00` to `7F`, or `--` for full. Gain is the value divided by 127.
 *   `INST`: 2 or more hex digits, or `--`. A note with `--` keeps the track's previous instrument, and is silent if there is none.
 *   `FX`: a three-character uppercase command and a two-digit hex value. `---00` is empty.
@@ -1298,7 +1298,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Normal | `gp` | Paste over, and land just after it |
 | Normal | `gm` | Merge paste: empty cells in the copy leave what is there alone |
 | Normal | `K` | On the Instrument column, choose this step's instrument from those that exist, labels first |
-| Normal | `;` | Audition: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-4 |
+| Normal | `;` | Audition: hear this row on every track while not playing, with no FX, changing nothing playback relies on. In the chain view, the start of that row. In the instrument view, that instrument at C-3 |
 | Normal | `s` | Clear this field and start Insert there, as in Vim. An FX value keeps its command for the value typed next. `.` doesn't repeat it |
 | Normal | `r` | Replace this field as in Vim, with no move, and return to Normal. A note takes one note key and keeps its velocity and instrument. Other columns take a whole value, and an FX command goes on to its value. `.` repeats it |
 | Normal | `"a` before `d`, `y` or `p` | Use register `a` to `z`. `"0` holds the last `y`, which a cut can't replace |
@@ -1331,7 +1331,7 @@ Step:  NOTE VOL INST FX FX FX     C-4 64 01 CUT40 ---00 RET14
 | Insert (note) | `a w s e d f t g y h u j` | C to B, current octave, as in Ableton's computer keyboard |
 | Insert (note) | `k o l p ;` | C to E, one octave up |
 | Insert (note) | `1` | Note-off |
-| Insert (note) | `z x` | Octave down or up. Starts at octave 4, where `a` is `C-4`, which Live calls C3 |
+| Insert (note) | `z x` | Octave down or up. Starts at octave 3, where `a` is `C-3`, middle C, as Live names it. From -1 to 8 |
 | Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves by the top digit from `04` up to `74`, then `7F`. The note heard while typing uses it |
 | Insert | `Tab`, `Shift-Tab` | Play or pause, and play from the start |
 | Insert | `Up Down` | Move one step without writing |
@@ -1409,7 +1409,7 @@ The subcommands are `vimtracker render <project> <out.wav> [--rate n] [--rows n]
 
 A timed value past the step's end keeps running across the next step, and a new note on the track cancels it. An unknown command in a loaded file is a load error.
 
-**Audio.** Voice: linear-interpolated playback, with `C-4` at original pitch, and a 1 ms attack and 50 ms release as instrument defaults. A new note fades the old one over `DECLICK_FRAMES`. Filter: a TPT state-variable low-pass. Delay: stereo at 3/16 note time, with its buffer allocated for 20 BPM, about 2.25 seconds. Reverb: Freeverb-style. Sample import accepts 16-bit, 24-bit and 32-bit float WAV, mono or stereo, and refuses others with a message naming the file; AIFF and FLAC are read too (decision 63). Rate conversion uses `rubato`.
+**Audio.** Voice: linear-interpolated playback, with `C-3` at original pitch, and a 1 ms attack and 50 ms release as instrument defaults. A new note fades the old one over `DECLICK_FRAMES`. Filter: a TPT state-variable low-pass. Delay: stereo at 3/16 note time, with its buffer allocated for 20 BPM, about 2.25 seconds. Reverb: Freeverb-style. Sample import accepts 16-bit, 24-bit and 32-bit float WAV, mono or stereo, and refuses others with a message naming the file; AIFF and FLAC are read too (decision 63). Rate conversion uses `rubato`.
 
 **Audio output.** Use the default output device and its default configuration. If its format is not `F32`, or it has fewer than two channels, exit with a message. Mix to the first two channels. Late means callback time exceeded buffer duration. Nothing prints from the callback.
 
@@ -1587,7 +1587,7 @@ Made with the author's agreement on 2026-11-06. It keeps each change small, and 
 
 **No `Sound` type or machine enum yet.** A track's sound is everything on `Track` apart from mute, solo, swing and name, and that's saved in the song. A separate type comes when a sound can be saved alone or a second machine exists, as nothing needs one before then. That's M15, or sooner if a jam asks.
 
-**Step text.** `NOTE VEL FX FX FX`, as in `C-4 64 CUT40 ---00 RET14`. Field and column numbers shift down by one.
+**Step text.** `NOTE VEL FX FX FX`, as in `C-3 64 CUT40 ---00 RET14`. Field and column numbers shift down by one.
 
 **Names and kits.** `:name BD` names the current track, under the existing label rule of two characters starting with a letter, and `:name` alone clears it. A named track shows its name where its number was. `:kit` puts a kit's sounds on tracks from the first in order, as one undo step, adding tracks if it has more sounds than there are tracks. A sound's `label` becomes its track's name, and other settings on those tracks stay.
 
@@ -2011,7 +2011,7 @@ Made with the author's agreement on 2026-11-07, after a review, and revised with
 *   **The cell** shows as `HLD3`, or `----` when empty, between velocity and FX 1, so the cell itself shows each row's length.
 *   **Keys** are an FX cell's: `K` chooses the gate command, `=` and `-` change the pulses, typing `HLD3` enters it, and `x` empties it. It's a column group for selections, paste and the shape panel.
 *   **Beat rows.** A row is lit as a beat when it starts on a beat in time. Row numbers still count rows, so `5G` is still the fifth row.
-*   **The step text** gains the cell after velocity when a row has one: `C-4 64 HLD3 CUT40 ...`. A row without one is written as before, so saved songs and every step written as text in the tests stay as they are.
+*   **The step text** gains the cell after velocity when a row has one: `C-3 64 HLD3 CUT40 ...`. A row without one is written as before, so saved songs and every step written as text in the tests stay as they are.
 *   **Only sound tracks** have a gate column. Returns and the master have no notes.
 
 **Alternatives considered.**

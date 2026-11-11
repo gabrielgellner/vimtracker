@@ -82,7 +82,7 @@ reference_knob = "accent"
 measure = "accents"
 about = """
 Our Acid's Accent and Acid V's, each turned from bottom to top in sixteen even steps, with the \
-cutoff at a quarter and the other knobs at noon. Each step plays a plain C-2, a sixteenth's rest, \
+cutoff at a quarter and the other knobs at noon. Each step plays a plain C-1, a sixteenth's rest, \
 then four accents a sixteenth's rest apart at 120 BPM. On a 303 an accent shortens the filter \
 envelope and adds a sweep from a capacitor that drains more slowly than accents come, so accents \
 in a row build up and accents apart don't.

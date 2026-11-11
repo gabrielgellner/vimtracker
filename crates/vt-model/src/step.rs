@@ -8,10 +8,41 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::constants::FX_SLOTS;
 use crate::settings::{Kind, SettingId};
 
-/// Lowest note the format can write, `C-0`.
+/// Lowest note the format can write, `c_1`: the C in octave -1.
 pub const MIN_NOTE: u8 = 12;
-/// Highest note the format can write, `G-9`.
+/// Highest note the format can write, `G-8`.
 pub const MAX_NOTE: u8 = 127;
+/// Middle C, MIDI note 60 at 261.63 Hz, which is `C-3`.
+pub const MIDDLE_C: u8 = 60;
+/// The octave MIDI note 0 is in. Octaves are numbered as Ableton Live, Logic and Cubase number
+/// them, from -2 at MIDI 0, so middle C is `C-3` and a note reads the same here as in Live.
+const OCTAVE_OF_NOTE_ZERO: i16 = -2;
+/// The lowest octave a step's note can be in, the one [`MIN_NOTE`] starts.
+pub const LOWEST_OCTAVE: i8 = -1;
+/// The highest octave a step's note can be in, the one [`MAX_NOTE`] is in.
+pub const HIGHEST_OCTAVE: i8 = 8;
+/// The names of the notes in an octave from 0 up, before the octave's digit: a letter, then `-`
+/// for a natural or `#` for a sharp.
+pub(crate) const NOTE_NAMES: [&str; 12] = [
+    "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-",
+];
+/// The names of the notes in an octave below 0, before the digit of how far below it is, so
+/// octave -1 fits the same three characters: a small letter, then `_` for a natural or `+` for a
+/// sharp, as Furnace writes them. `c_1` is the C an octave under `C-0`.
+pub(crate) const NOTE_NAMES_BELOW_ZERO: [&str; 12] = [
+    "c_", "c+", "d_", "d+", "e_", "f_", "f+", "g_", "g+", "a_", "a+", "b_",
+];
+
+/// The octave a MIDI note is in, as its name shows it: 3 for middle C.
+pub fn octave_of(midi: u8) -> i8 {
+    (i16::from(midi) / 12 + OCTAVE_OF_NOTE_ZERO) as i8
+}
+
+/// The MIDI number of the C an octave starts on: 60 for octave 3. It can be outside the notes a
+/// step holds, for an octave out of their range.
+pub fn octave_start(octave: i8) -> i16 {
+    (i16::from(octave) - OCTAVE_OF_NOTE_ZERO) * 12
+}
 /// The highest velocity, full level, which is also MIDI's.
 pub const MAX_VELOCITY: u8 = 0x7F;
 /// The lowest velocity that accents a note on a voice with an accent of its own, like `Acid`.
@@ -381,17 +412,19 @@ impl<'de> Deserialize<'de> for Step {
 }
 
 impl fmt::Display for Note {
+    /// Three characters: `---`, `OFF`, or a note's name and octave, from `c_1` to `G-8`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const NAMES: [&str; 12] = [
-            "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-",
-        ];
         match self {
             Self::Empty => f.write_str("---"),
             Self::Off => f.write_str("OFF"),
             Self::On(midi) => {
-                let name = NAMES[usize::from(midi % 12)];
-                let octave = i16::from(*midi) / 12 - 1;
-                write!(f, "{name}{octave}")
+                let class = usize::from(midi % 12);
+                match octave_of(*midi) {
+                    octave if octave < 0 => {
+                        write!(f, "{}{}", NOTE_NAMES_BELOW_ZERO[class], -octave)
+                    }
+                    octave => write!(f, "{}{octave}", NOTE_NAMES[class]),
+                }
             }
         }
     }

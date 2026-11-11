@@ -110,7 +110,7 @@ fn level(velocity: u8) -> f32 {
 
 #[test]
 fn a_nudge_lands_a_note_that_many_24ths_early_or_late() {
-    let nudged = song(&[&["C-4 --", "C-4 -- +5", "C-4 -- -3", "C-4 -- -B"]]);
+    let nudged = song(&[&["C-3 --", "C-3 -- +5", "C-3 -- -3", "C-3 -- -B"]]);
     assert_eq!(
         hits(&nudged, 4, 0),
         [
@@ -127,7 +127,7 @@ fn a_nudge_adds_to_where_the_groove_lands_a_step() {
     // Grid, then groove, then nudge: half a step late and just under half again, and the same
     // early, which is as far as either goes.
     let late = with_own(
-        song(&[&["C-4 --", "C-4 -- +B", "C-4 --"]]),
+        song(&[&["C-3 --", "C-3 -- +B", "C-3 --"]]),
         Groove::pattern(&[0, 120, 0]),
     );
     assert_eq!(
@@ -135,7 +135,7 @@ fn a_nudge_adds_to_where_the_groove_lands_a_step() {
         [0, STEP + 120 * TICK + 11 * NUDGE, 2 * STEP]
     );
     let early = with_own(
-        song(&[&["C-4 --", "C-4 -- -B", "C-4 --"]]),
+        song(&[&["C-3 --", "C-3 -- -B", "C-3 --"]]),
         Groove::pattern(&[0, -120, 0]),
     );
     assert_eq!(
@@ -143,7 +143,7 @@ fn a_nudge_adds_to_where_the_groove_lands_a_step() {
         [0, STEP - 120 * TICK - 11 * NUDGE, 2 * STEP]
     );
     // On a swung step, as Swing 66 lands it.
-    let mut swung = song(&[&["C-4 --", "C-4 -- -2"]]);
+    let mut swung = song(&[&["C-3 --", "C-3 -- -2"]]);
     swung.groove = GrooveId::swing(66).unwrap();
     assert_eq!(hits(&swung, 2, 0), [0, STEP + 77 * TICK - 2 * NUDGE]);
 }
@@ -153,7 +153,7 @@ fn a_rows_note_never_lands_before_the_last_rows() {
     // The second row lands as late as it can and the third as early, which would put the third
     // first. It waits for the second instead, and is the note left sounding.
     let groove = Groove::pattern(&[0, 120, -120, 0]);
-    let rows = ["C-4 20", "C-4 40 +B", "C-4 7F -B", "--- --"];
+    let rows = ["C-3 20", "C-3 40 +B", "C-3 7F -B", "--- --"];
     let crossed = with_own(song(&[&rows]), groove);
     let out = render(&crossed, flat_pool(), 4, 0);
     let at = STEP + 120 * TICK + 11 * NUDGE;
@@ -164,7 +164,7 @@ fn a_rows_note_never_lands_before_the_last_rows() {
         out[at + 200]
     );
     // Without a groove, the furthest nudges either way still leave rows in order.
-    let apart = song(&[&["C-4 --", "C-4 -- +B", "C-4 -- -B"]]);
+    let apart = song(&[&["C-3 --", "C-3 -- +B", "C-3 -- -B"]]);
     assert_eq!(
         hits(&apart, 3, 0),
         [0, STEP + 11 * NUDGE, 2 * STEP - 11 * NUDGE]
@@ -174,7 +174,7 @@ fn a_rows_note_never_lands_before_the_last_rows() {
 #[test]
 fn a_rows_own_fx_move_with_its_nudge() {
     // A row with no note, nudged late, turns the long note before it down where it lands.
-    let nudged = song(&[&["C-4 --", "--- -- +6 vol:00", "--- --"]]);
+    let nudged = song(&[&["C-3 --", "--- -- +6 vol:00", "--- --"]]);
     let out = render(&nudged, flat_pool(), 3, 0);
     let lands = STEP + 6 * NUDGE;
     assert!(out[lands - 100].abs() > 0.4, "{}", out[lands - 100]);
@@ -185,7 +185,7 @@ fn a_rows_own_fx_move_with_its_nudge() {
 fn an_early_note_starts_with_the_lanes_value_from_before() {
     // The first column is a lane: its second step turns the track down on the grid, after the
     // note nudged early on that step has started at the level before.
-    let laned = with_lane(song(&[&["C-4 20", "C-4 7F -6 vol:00", "--- --"]]), 2);
+    let laned = with_lane(song(&[&["C-3 20", "C-3 7F -6 vol:00", "--- --"]]), 2);
     let out = render(&laned, flat_pool(), 3, 0);
     let starts = STEP - 6 * NUDGE;
     assert!((out[starts - 100] - level(0x20)).abs() < 1e-3);
@@ -198,7 +198,7 @@ fn an_early_note_starts_with_the_lanes_value_from_before() {
 fn a_lanes_lock_on_a_late_notes_step_lasts_that_note() {
     // The lane's lock lands on the grid and turns down the note before, and the note nudged late
     // on its step starts under it rather than ending it.
-    let laned = with_lane(song(&[&["C-4 --", "C-4 -- +6 vol:00", "--- --"]]), 2);
+    let laned = with_lane(song(&[&["C-3 --", "C-3 -- +6 vol:00", "--- --"]]), 2);
     let out = render(&laned, flat_pool(), 3, 0);
     let starts = STEP + 6 * NUDGE;
     assert!(out[STEP - 100].abs() > 0.4);
@@ -208,16 +208,16 @@ fn a_lanes_lock_on_a_late_notes_step_lasts_that_note() {
 
 #[test]
 fn del_counts_from_where_the_nudge_lands_the_note() {
-    let delayed = song(&[&["C-4 --", "C-4 -- +6 del:02"]]);
+    let delayed = song(&[&["C-3 --", "C-3 -- +6 del:02"]]);
     assert_eq!(hits(&delayed, 2, 0), [0, STEP + 6 * NUDGE + 80 * TICK]);
     // Early, too: a sixth late from a quarter early.
-    let delayed = song(&[&["C-4 --", "C-4 -- -6 del:01"]]);
+    let delayed = song(&[&["C-3 --", "C-3 -- -6 del:01"]]);
     assert_eq!(hits(&delayed, 2, 0), [0, STEP - 6 * NUDGE + 40 * TICK]);
 }
 
 #[test]
 fn every_pulse_of_a_multi_moves_with_its_rows_nudge() {
-    let multi = song(&[&["C-4 -- +3 MLT3", "--- --"]]);
+    let multi = song(&[&["C-3 -- +3 MLT3", "--- --"]]);
     assert_eq!(
         hits(&multi, 4, 0),
         [3 * NUDGE, STEP + 3 * NUDGE, 2 * STEP + 3 * NUDGE]
@@ -227,7 +227,7 @@ fn every_pulse_of_a_multi_moves_with_its_rows_nudge() {
 #[test]
 fn a_nudged_note_keeps_its_length() {
     // As Elektron's micro-timing moves a whole trig, the note's end moves with its start.
-    let mut gated = song(&[&["--- --", "C-4 -- +6", "--- --", "--- --"]]);
+    let mut gated = song(&[&["--- --", "C-3 -- +6", "--- --", "--- --"]]);
     gated.tracks[0].gate_length = Some(0x80);
     let out = render(&gated, flat_pool(), 4, 0);
     let starts = STEP + 6 * NUDGE;
@@ -249,19 +249,19 @@ fn only_an_early_nudge_makes_the_engine_work_ahead() {
         let published = version(&song(&[rows]), hits_pool());
         (published.lead, published.nudges)
     };
-    assert_eq!(lead(&["C-4 --", "C-4 --"]), (0, false));
-    assert_eq!(lead(&["C-4 --", "C-4 -- +B"]), (0, true));
-    assert_eq!(lead(&["C-4 -- -3", "C-4 -- -1"]), (30, true));
+    assert_eq!(lead(&["C-3 --", "C-3 --"]), (0, false));
+    assert_eq!(lead(&["C-3 --", "C-3 -- +B"]), (0, true));
+    assert_eq!(lead(&["C-3 -- -3", "C-3 -- -1"]), (30, true));
     // On top of the groove's own.
-    let pushed = with_own(song(&[&["C-4 -- -2"]]), Groove::pattern(&[0, -40]));
+    let pushed = with_own(song(&[&["C-3 -- -2"]]), Groove::pattern(&[0, -40]));
     assert_eq!(version(&pushed, hits_pool()).lead, 60);
 }
 
 #[test]
 fn an_early_nudge_on_one_track_leaves_the_others_as_they_were() {
-    let plain = ["C-4 --", "C-4 40", "C-4 --", "D-4 --"];
-    let without = song(&[&plain, &["C-4 --", "C-4 --"]]);
-    let with = song(&[&plain, &["C-4 --", "C-4 -- -B"]]);
+    let plain = ["C-3 --", "C-3 40", "C-3 --", "D-3 --"];
+    let without = song(&[&plain, &["C-3 --", "C-3 --"]]);
+    let with = song(&[&plain, &["C-3 --", "C-3 -- -B"]]);
     // The other track's events split the blocks rendered differently, which moves nothing by
     // more than a float's rounding.
     let (without, with) = (
@@ -280,12 +280,12 @@ fn an_early_nudge_on_one_track_leaves_the_others_as_they_were() {
 fn nudges_never_change_how_long_a_loop_takes() {
     let rows: Vec<&str> = (0..16)
         .map(|step| match step % 4 {
-            1 => "C-4 -- -B",
-            3 => "C-4 -- +B",
-            _ => "C-4 --",
+            1 => "C-3 -- -B",
+            3 => "C-3 -- +B",
+            _ => "C-3 --",
         })
         .collect();
-    let straight = song(&[&vec!["C-4 --"; 16]]);
+    let straight = song(&[&vec!["C-3 --"; 16]]);
     let nudged = song(&[&rows]);
     let length =
         |song: &Song| render_loop(version(song, hits_pool()), RATE, RenderOptions::default()).len();

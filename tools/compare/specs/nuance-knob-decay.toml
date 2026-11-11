@@ -83,7 +83,7 @@ measure = "decay"
 about = """
 Our Acid's Decay and Acid V's, each turned from bottom to top in sixteen even steps, with Env
 Mod full, the cutoff at its bottom and no resonance, so the note's brightness follows the filter
-envelope. Each step holds a C-2 for 4 s; its spectral centroid is read every 5 ms and fitted
+envelope. Each step holds a C-1 for 4 s; its spectral centroid is read every 5 ms and fitted
 with an exponential, whose time constant is the decay measured. It's measured through the
 brightness, so it's shorter than the envelope's own time constant, the same way on both sides.
 

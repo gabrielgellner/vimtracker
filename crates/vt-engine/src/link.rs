@@ -826,7 +826,7 @@ mod tests {
         let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
         for step in 0..8 {
             *phrase.step_mut(step).unwrap() =
-                "C-4 -- 1.distort.amount:80g 2.distort.gain:40 3.distort.mix:20h"
+                "C-3 -- 1.distort.amount:80g 2.distort.gain:40 3.distort.mix:20h"
                     .parse()
                     .unwrap();
         }
@@ -844,9 +844,9 @@ mod tests {
             let phrase = Arc::make_mut(marked.tracks[id as usize].phrases.get_mut(&0).unwrap());
             for step in 0..16 {
                 let text = match step % 4 {
-                    0 => "C-4 -- cut:40g vol:80 pan:C0h",
+                    0 => "C-3 -- cut:40g vol:80 pan:C0h",
                     1 => "--- -- res:20g --- ---",
-                    2 => "C-4 -- cut:F0h vol:A0g ---",
+                    2 => "C-3 -- cut:F0h vol:A0g ---",
                     _ => "--- -- --- res:40 ---",
                 };
                 *phrase.step_mut(step).unwrap() = text.parse().unwrap();
@@ -957,10 +957,10 @@ mod tests {
             fx.sample_on(track, "flat");
         }
         let texts = [
-            "C-4 01 vol:80 pan:20 cut:40",
-            "C-4 -- res:C0 sna:80 snb:80",
-            "C-4 -- del:02 kil:03 off:01",
-            "C-4 -- ret:52 cha:80 ---",
+            "C-3 01 vol:80 pan:20 cut:40",
+            "C-3 -- res:C0 sna:80 snb:80",
+            "C-3 -- del:02 kil:03 off:01",
+            "C-3 -- ret:52 cha:80 ---",
             "OFF -- --- --- ---",
         ];
         for id in 0..2 {
@@ -1044,7 +1044,7 @@ mod tests {
                     .unwrap()
                     .key()
             };
-            *phrase.step_mut(0).unwrap() = format!("C-2 7F {}:40 --- ---", key(1)).parse().unwrap();
+            *phrase.step_mut(0).unwrap() = format!("C-1 7F {}:40 --- ---", key(1)).parse().unwrap();
             // Half way up the first setting, which may be a list as short as the chords.
             let first = vt_model::settings::SettingId::voice(voice, 0)
                 .unwrap()
@@ -1053,12 +1053,12 @@ mod tests {
                 .top()
                 / 2;
             *phrase.step_mut(4).unwrap() =
-                format!("G-2 7F {}:20 {}:{first:02X} ---", key(2), key(0))
+                format!("G-1 7F {}:20 {}:{first:02X} ---", key(2), key(0))
                     .parse()
                     .unwrap();
             // A plain note held into the next, which `Acid` slides to.
-            *phrase.step_mut(2).unwrap() = "D-2 64 HLD1".parse().unwrap();
-            *phrase.step_mut(3).unwrap() = "E-2 64".parse().unwrap();
+            *phrase.step_mut(2).unwrap() = "D-1 64 HLD1".parse().unwrap();
+            *phrase.step_mut(3).unwrap() = "E-1 64".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -1075,7 +1075,7 @@ mod tests {
         }
         for id in 0..2 {
             let phrase = Arc::make_mut(played.tracks[id as usize].phrases.get_mut(&0).unwrap());
-            *phrase.step_mut(0).unwrap() = "C-4 01 vol:80 --- ---".parse().unwrap();
+            *phrase.step_mut(0).unwrap() = "C-3 01 vol:80 --- ---".parse().unwrap();
         }
         let engine = Engine::new(48_000, published(played, &pool));
         let (mut handle, mut rt) = connect(engine);
@@ -1199,7 +1199,7 @@ mod tests {
         let mut one = song(1, 0);
         *Arc::make_mut(one.tracks[0].phrases.get_mut(&0).unwrap())
             .step_mut(0)
-            .unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+            .unwrap() = "C-3 -- --- --- ---".parse().unwrap();
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert_eq!(blocks(&mut rt, 1), 0);

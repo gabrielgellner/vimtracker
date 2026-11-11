@@ -53,7 +53,7 @@ kind = "harmonics"
 title = "Our Acid through the pedals against Acid V's own distortion"
 window = [0.6, 1.1]
 about = """
-A held A-2, the filter fully open with no resonance or envelope, on our Acid through a Distort \
+A held A-1, the filter fully open with no resonance or envelope, on our Acid through a Distort \
 slot and on Arturia's Acid V through its own distortion, whose algorithms include an `Overdrive` \
 and a `Distorsion`. Acid V's distortion is inside its voice, so the two voices' notes differ a \
 little to begin with: `dry` shows them with no distortion on either side, and the other cases show \

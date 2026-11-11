@@ -664,7 +664,7 @@ mod tests {
                 .map(|frame| (frame as f32 / RATE as f32 * hertz * TAU).sin() * 0.01)
                 .collect()
         };
-        // `A`'s first formant, in the middle voice, at `F#5`.
+        // `A`'s first formant, in the middle voice, at `F#4`.
         let first = hertz_of(TABLE[0][2][0][0].into());
         let fixed = at(0x00, 0x80, 0xFF);
         let tracking = Settings {

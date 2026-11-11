@@ -49,7 +49,7 @@ enum Stage {
     },
 }
 
-/// The frequency of `C-4`, in hertz, for a synth.
+/// The frequency of `C-3`, in hertz, for a synth.
 const MIDDLE_C: f64 = 261.625_565_3;
 
 /// A glide's time constant, as a share of its time, so it's nearly there when its time is up, as
@@ -250,7 +250,7 @@ pub struct NoteOn {
     pub sample: SampleId,
     /// A synth to play it, which ignores the sample.
     pub synth: Option<SynthVoice>,
-    /// MIDI note. `C-4` plays at original pitch.
+    /// MIDI note. `C-3` plays at original pitch.
     pub note: u8,
     pub gain: f32,
     /// The bank entry it plays, if it's a sampler's, and which of its slices.
@@ -269,7 +269,7 @@ pub struct NoteOn {
 }
 
 impl NoteOn {
-    /// How fast it plays: its note, where `C-4` is as recorded, at its entry's tune.
+    /// How fast it plays: its note, where `C-3` is as recorded, at its entry's tune.
     fn increment(&self) -> f64 {
         2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.span.map_or(1.0, |span| span.speed)
     }

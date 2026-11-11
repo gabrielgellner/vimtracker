@@ -81,7 +81,7 @@ knob = "acid.cutoff"
 reference_knob = { "Acid V" = "cutoff", ABL3 = "cutoff" }
 about = """
 Our Acid's Cutoff and Arturia's Acid V's, each turned from bottom to top in sixteen even steps,
-00 to FF on ours and 0 to 1 on Acid V, with the other knobs at noon. Each step plays one C-2 for
+00 to FF on ours and 0 to 1 on Acid V, with the other knobs at noon. Each step plays one C-1 for
 0.6 s, and the whole render's spectral centroid and peak level are measured: the centroid says
 how bright the note is, the peak how loud its resonance gets.
 
