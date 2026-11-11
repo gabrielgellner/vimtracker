@@ -310,6 +310,9 @@ pub struct App {
     pub(crate) recording: Option<Recording>,
     /// The main output's level.
     pub meter: Meter,
+    /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
+    /// gain reduction meter holds at the deepest.
+    pub slot_reduction: [crate::meter::Held; vt_model::insert::INSERTS],
     /// The main output's recent sound, for the scope above the meter.
     pub scope: crate::scope::Scope,
     /// The id of the scope's image, and whether the last screen drawn had room for it.
@@ -512,6 +515,7 @@ impl App {
             now: Instant::now(),
             recording: None,
             meter: Meter::default(),
+            slot_reduction: [crate::meter::Held::new(0.0); vt_model::insert::INSERTS],
             scope: crate::scope::Scope::new(rate),
             scope_image: None,
             scope_shown: true,
@@ -870,6 +874,9 @@ impl App {
         } else if now.saturating_duration_since(self.report_at) > PLAYHEADS_KEPT {
             // Audio has stopped, so nothing is playing.
             self.playheads = [None; PLAYHEADS];
+        }
+        for (slot, held) in self.slot_reduction.iter_mut().enumerate() {
+            held.update(self.live.map_or(0.0, |live| live.reduction[slot]), seconds);
         }
         while let Some((track, state)) = self.handle.jam_change() {
             self.jam[track] = state;

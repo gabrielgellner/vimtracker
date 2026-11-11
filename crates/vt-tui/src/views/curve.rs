@@ -1,10 +1,9 @@
-//! Lines through a grid of dots, which the track page's drawings are made from.
+//! The shapes the track page's drawings follow, from 0 to 1 across them, which
+//! [`kitty::plot`](crate::kitty::plot) draws.
 
 use vt_model::constants::MAX_ENVELOPE_MS;
 use vt_model::envelope::{Envelope, fall, rise};
 
-/// How many places to look within each column of dots.
-const SAMPLES_PER_COLUMN: usize = 8;
 /// The most of a diagram's width each stage can take, with a sustain always taking this much.
 const STAGE_SHARE: f32 = 0.25;
 
@@ -42,48 +41,19 @@ pub(crate) fn level_at(envelope: &Envelope, x: f32) -> f32 {
     0.0
 }
 
-/// The rows a line covers in each column of a grid of dots, top first, with row 0 at the top. It
-/// runs across `x` from 0 to 1, starting from `start`, and each level is from 0 to 1. It joins up,
-/// so a steep part is a line rather than scattered dots.
-pub(crate) fn line_columns(
-    level_at: impl Fn(f32) -> f32,
-    start: f32,
-    columns: usize,
-    rows: usize,
-) -> Vec<(usize, usize)> {
-    let bottom = rows - 1;
-    let row_of = |level: f32| ((1.0 - level.clamp(0.0, 1.0)) * bottom as f32).round() as usize;
-    let mut last = row_of(start);
-    (0..columns)
-        .map(|column| {
-            // Look across the whole column, so a peak between two columns isn't missed.
-            let (mut high, mut low) = (last, last);
-            for sample in 0..=SAMPLES_PER_COLUMN {
-                let x =
-                    (column as f32 + sample as f32 / SAMPLES_PER_COLUMN as f32) / columns as f32;
-                let row = row_of(level_at(x));
-                high = high.min(row);
-                low = low.max(row);
-                last = row;
-            }
-            (high, low)
-        })
-        .collect()
-}
-
-/// The rows an envelope's line covers in each column, from silence.
-pub(crate) fn envelope_columns(
-    envelope: &Envelope,
-    columns: usize,
-    rows: usize,
-) -> Vec<(usize, usize)> {
-    let mut spans = line_columns(|x| level_at(envelope, x), 0.0, columns, rows);
-    // An attack ends on full, however short it is and whatever comes next.
-    if envelope.attack_ms > 0 {
-        let peak = (stage_width(envelope.attack_ms) * columns as f32) as usize;
-        spans[peak].0 = 0;
-    }
-    spans
+/// Where each of an envelope's stages ends across its diagram, from 0 to 1, as [`level_at`] has
+/// them: its attack, decay, sustain and release. A drawing puts a point at each, so a corner is
+/// sharp and an attack of a millisecond still reaches full.
+pub(crate) fn stage_ends(envelope: &Envelope) -> [f32; 4] {
+    let attack = stage_width(envelope.attack_ms);
+    let decay = attack + stage_width(envelope.decay_ms);
+    let sustain = decay + STAGE_SHARE;
+    [
+        attack,
+        decay,
+        sustain,
+        sustain + stage_width(envelope.release_ms),
+    ]
 }
 
 #[cfg(test)]
@@ -100,42 +70,43 @@ mod tests {
         }
     }
 
-    /// The highest dot in each column, as a level from 0 at the bottom row.
-    fn tops(envelope: &Envelope, columns: usize, rows: usize) -> Vec<usize> {
-        envelope_columns(envelope, columns, rows)
-            .into_iter()
-            .map(|(high, _)| rows - 1 - high)
+    /// Its level at points across its diagram.
+    fn levels(envelope: &Envelope, points: usize) -> Vec<f32> {
+        (0..=points)
+            .map(|point| level_at(envelope, point as f32 / points as f32))
             .collect()
     }
 
     #[test]
     fn it_rises_to_full_settles_on_the_sustain_and_ends_at_silence() {
-        let levels = tops(&adsr(100, 100, 50, 100), 56, 16);
-        assert_eq!(levels.len(), 56);
-        assert_eq!(levels[0], 0);
-        assert_eq!(*levels.iter().max().unwrap(), 15, "reaches the top row");
-        assert_eq!(*levels.last().unwrap(), 0);
-        // The sustain sits on the flat part, about half way up.
+        let envelope = adsr(100, 100, 50, 100);
+        let levels = levels(&envelope, 200);
+        assert_eq!(levels[0], 0.0);
+        assert_eq!(level_at(&envelope, stage_ends(&envelope)[0]), 1.0);
+        assert_eq!(*levels.last().unwrap(), 0.0);
+        // The sustain is the flat part, all of a quarter of the way.
+        let sustain = envelope.sustain_level();
         assert!(
-            levels.iter().filter(|level| **level == 8).count() >= 4,
+            levels.iter().filter(|level| **level == sustain).count() >= 45,
             "{levels:?}"
         );
     }
 
     #[test]
     fn a_short_attack_still_shows() {
-        let levels = tops(&adsr(1, 180, 0, 50), 56, 16);
-        let peak = levels.iter().position(|level| *level == 15).unwrap();
-        assert!(peak < 8, "the attack is near the start, at {peak}");
-        assert!(levels[peak + 8] < 15, "and it comes back down");
+        let envelope = adsr(1, 180, 0, 50);
+        let [attack, decay, ..] = stage_ends(&envelope);
+        assert!(attack < 0.03, "the attack is near the start, at {attack}");
+        assert_eq!(level_at(&envelope, attack), 1.0);
+        assert!(
+            level_at(&envelope, (attack + decay) / 2.0) < 1.0,
+            "and it comes back down"
+        );
     }
 
     #[test]
     fn a_stage_only_moves_what_comes_after_it() {
-        let peak = |attack_ms, decay_ms| {
-            let spans = envelope_columns(&adsr(attack_ms, decay_ms, 0, 50), 112, 32);
-            spans.iter().position(|(high, _)| *high == 0).unwrap()
-        };
+        let peak = |attack_ms, decay_ms| stage_ends(&adsr(attack_ms, decay_ms, 0, 50))[0];
         for decay_ms in [0, 1, 50, 200, 8000] {
             assert_eq!(peak(1, decay_ms), peak(1, 0), "with a decay of {decay_ms}");
         }
@@ -144,23 +115,23 @@ mod tests {
 
     #[test]
     fn the_longest_envelope_fits_and_a_short_one_leaves_room() {
-        let longest = envelope_columns(&adsr(8000, 8000, 50, 8000), 112, 32);
-        assert_eq!(longest.len(), 112);
-        assert_eq!(longest[111].1, 31);
-        // A short envelope's line has reached silence by half way.
-        let short = envelope_columns(&adsr(1, 0, 100, 10), 112, 32);
-        assert!(
-            short[56..]
-                .iter()
-                .all(|(high, low)| (*high, *low) == (31, 31))
-        );
+        let longest = stage_ends(&adsr(8000, 8000, 50, 8000));
+        assert!(longest[3] <= 1.0, "{longest:?}");
+        // A short envelope has reached silence by half way.
+        let short = adsr(1, 0, 100, 10);
+        assert!(stage_ends(&short)[3] < 0.5);
+        assert!(levels(&short, 100)[50..].iter().all(|level| *level == 0.0));
     }
 
     #[test]
     fn an_instant_envelope_is_safe_to_draw() {
-        let spans = envelope_columns(&adsr(0, 0, 100, 0), 56, 16);
-        assert_eq!(spans.len(), 56);
-        assert!(spans.iter().all(|(high, low)| high <= low && *low < 16));
-        assert_eq!(spans[2].0, 0);
+        let envelope = adsr(0, 0, 100, 0);
+        assert!(
+            levels(&envelope, 100)
+                .iter()
+                .all(|level| (0.0..=1.0).contains(level))
+        );
+        assert!(stage_ends(&envelope).iter().all(|end| end.is_finite()));
+        assert_eq!(level_at(&envelope, 0.0), envelope.sustain_level());
     }
 }

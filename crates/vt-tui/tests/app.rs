@@ -6413,9 +6413,14 @@ fn the_filter_curve_moves_with_what_plays() {
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
     assert_ne!(app.filter_image.unwrap(), moved);
 
-    // Back on the setting, it's drawn from the setting again.
+    // Back on the setting the next frame, as an LFO moves it, it keeps the last for a frame, so
+    // it's sent at most every other frame, and then it's drawn from the setting again.
+    let resonant = app.filter_image.unwrap();
     app.live = Some(live(track.cutoff, track.resonance));
+    assert_eq!(sync(&mut app, &mut graphics).0, 0);
+    assert_eq!(app.filter_image.unwrap(), resonant);
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
+    assert_ne!(app.filter_image.unwrap(), resonant);
 }
 
 #[test]
@@ -9482,7 +9487,10 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
-        String::from_utf8(out).unwrap().matches(",c=4,r=2,").count()
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=13,r=5,")
+            .count()
     };
     press(&mut app, " 4LL");
     assert_eq!(sync(&mut app, &mut graphics), 0, "no slot has a drawing");
@@ -9670,7 +9678,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     press(&mut app, "Limit");
     special(&mut app, KeyCode::Enter);
     app.slot_images = [Some(0x01_02_03), None, None, None];
-    // 18 dB is three quarters of the meter: all of its top row and half of the one below.
+    // 18 dB is nine tenths of the meter's 20: all of its top four rows and half of the last.
     app.live = Some(LiveValues {
         reduction: [18.0, 0.0, 3.0, 0.0],
         ..LiveValues::default()
@@ -9686,43 +9694,82 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
             })
             .unwrap()
     };
-    // The curve's placeholders in their box, then the meter in its own, captioned, against the
-    // right of the slot's frame, with two columns between it and the frame.
+    // The curve's placeholders in their box, 13 by 5, then the meter in its own, captioned, and
+    // its scale, against the right of the slot's frame, with two columns between it and the
+    // frame, filling the seven rows inside it.
     let comp = row_of("╭─ 1     Comp");
-    let text = |y: u16| {
+    let text = |buffer: &ratatui::buffer::Buffer, y: u16| {
         (0..150)
             .map(|x| buffer[(x, y)].symbol())
             .collect::<String>()
     };
+    let rule = "─".repeat(13);
     assert!(
-        text(comp + 2).ends_with("┌────┐  ┌──┐  │"),
+        text(&buffer, comp + 1).ends_with(&format!("┌{rule}┐  ┌──┐      │")),
         "{}",
-        text(comp + 2)
+        text(&buffer, comp + 1)
     );
     assert!(
-        text(comp + 5).ends_with("└────┘  └GR┘  │"),
+        text(&buffer, comp + 7).ends_with(&format!("└{rule}┘  └GR┘      │")),
         "{}",
-        text(comp + 5)
+        text(&buffer, comp + 7)
     );
-    assert_eq!(buffer[(136, comp + 3)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(136, comp + 3)].fg, Color::Rgb(1, 2, 3));
-    assert_eq!(buffer[(139, comp + 4)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
-    assert_eq!(buffer[(144, comp + 3)].symbol(), "█");
-    assert_eq!(buffer[(145, comp + 3)].symbol(), "█");
+    assert_eq!(buffer[(123, comp + 2)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(123, comp + 2)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(136, comp + 4)].symbol(), "│");
+    // The scale beside it, 0 at the top and 4 dB a row.
+    for (offset, scale) in [
+        (2, "   0"),
+        (3, "    "),
+        (4, "  -8"),
+        (5, "    "),
+        (6, " -16"),
+    ] {
+        let line = text(&buffer, comp + offset);
+        assert!(line.ends_with(&format!("│{scale}  │")), "{line}");
+    }
+    for row in 2..6 {
+        assert_eq!(buffer[(140, comp + row)].symbol(), "█");
+        assert_eq!(buffer[(141, comp + row)].symbol(), "█");
+    }
     // Half a cell filled from the top: the lower half drawn in the background's colour.
-    assert_eq!(buffer[(144, comp + 4)].symbol(), "▄");
-    assert_eq!(buffer[(144, comp + 4)].fg, vt_tui::theme::BASE);
-    // A limiter has its meter alone, where the compressor's is: 3 dB is the top quarter of its
-    // top row.
+    assert_eq!(buffer[(140, comp + 6)].symbol(), "▄");
+    assert_eq!(buffer[(140, comp + 6)].fg, vt_tui::theme::BASE);
+    // A limiter has its meter alone, with its scale, where the compressor's is: 3 dB is the top
+    // three quarters of its top row, six eighths at half a dB each.
     let limit = row_of("╭─ 3     Limit");
-    assert!(text(limit + 5).ends_with("└GR┘  │"), "{}", text(limit + 5));
-    assert_eq!(buffer[(144, limit + 3)].symbol(), "▆");
-    assert_eq!(buffer[(144, limit + 4)].symbol(), " ");
+    assert!(
+        text(&buffer, limit + 7).ends_with("└GR┘      │"),
+        "{}",
+        text(&buffer, limit + 7)
+    );
+    assert!(text(&buffer, limit + 6).ends_with("│  │ -16  │"));
+    assert_eq!(buffer[(140, limit + 2)].symbol(), "▂");
+    assert_eq!(buffer[(140, limit + 3)].symbol(), " ");
 
-    // Bypassed, it turns nothing down, and its meter is empty.
+    // The deepest it went lately is held as a faint mark below what it's turning down now: 12 dB
+    // is the bottom of the third row.
+    app.slot_reduction[2].update(12.0, 0.0);
+    let held = draw(&app);
+    assert_eq!(held[(140, limit + 2)].symbol(), "▂");
+    assert_eq!(held[(140, limit + 3)].symbol(), " ");
+    assert_eq!(held[(140, limit + 4)].symbol(), "▁");
+    assert_eq!(held[(141, limit + 4)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(held[(140, limit + 5)].symbol(), " ");
+    // 9 dB is just past the top of the third row.
+    let mut lately = vt_tui::meter::Held::new(0.0);
+    lately.update(9.0, 0.0);
+    app.slot_reduction[2] = lately;
+    let held = draw(&app);
+    assert_eq!(held[(140, limit + 4)].symbol(), "▔");
+    assert_eq!(held[(140, limit + 3)].symbol(), " ");
+
+    // Bypassed, it turns nothing down and holds nothing, and its meter is empty.
     press(&mut app, "b");
     assert_eq!(app.song().tracks[0].bypassed, [false, false, true, false]);
-    assert_eq!(draw(&app)[(144, limit + 3)].symbol(), "▔");
+    let bypassed = draw(&app);
+    assert_eq!(bypassed[(140, limit + 2)].symbol(), "▔");
+    assert_eq!(bypassed[(140, limit + 4)].symbol(), " ");
 }
 
 #[test]
@@ -9735,7 +9782,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
         graphics.sync(app, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
-            .matches(",c=10,r=2,")
+            .matches(",c=33,r=5,")
             .count()
     };
     press(&mut app, " 4LLK");
@@ -9775,11 +9822,230 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
                 .contains("EQ3")
         })
         .unwrap();
-    // In its box against the right of the slot's frame.
-    assert_eq!(buffer[(135, row + 2)].symbol(), "┌");
-    assert_eq!(buffer[(136, row + 3)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(145, row + 4)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
-    assert_eq!(buffer[(146, row + 5)].symbol(), "┘");
+    // In its box against the right of the slot's frame, two columns in, 33 by 5 inside, filling
+    // the seven rows inside the frame.
+    let corner = |row: usize, column: usize| {
+        let line: Vec<char> = vt_tui::kitty::placeholder_lines(33, 5)[row]
+            .chars()
+            .collect();
+        line[column * 3..column * 3 + 3].iter().collect::<String>()
+    };
+    assert_eq!(buffer[(112, row + 1)].symbol(), "┌");
+    assert_eq!(buffer[(113, row + 2)].symbol(), corner(0, 0));
+    assert_eq!(buffer[(145, row + 6)].symbol(), corner(4, 32));
+    assert_eq!(buffer[(146, row + 7)].symbol(), "┘");
+    assert_eq!(buffer[(149, row + 4)].symbol(), "│");
+}
+
+/// A PNG's chunk, by its name.
+fn png_chunk(png: &[u8], name: &[u8; 4]) -> Vec<u8> {
+    let mut at = 8;
+    while at + 8 <= png.len() {
+        let length = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+        if &png[at + 4..at + 8] == name {
+            return png[at + 8..at + 8 + length].to_vec();
+        }
+        at += 12 + length;
+    }
+    panic!("no {name:?} chunk")
+}
+
+/// A PNG's width and height in pixels.
+fn png_size(png: &[u8]) -> (u32, u32) {
+    let header = png_chunk(png, b"IHDR");
+    let number = |at: usize| u32::from_be_bytes(header[at..at + 4].try_into().unwrap());
+    (number(0), number(4))
+}
+
+/// The colour a panel's PNG draws its line in, the first after the see-through one.
+fn line_color(png: &[u8]) -> Color {
+    let palette = png_chunk(png, b"PLTE");
+    Color::Rgb(palette[3], palette[4], palette[5])
+}
+
+/// What one sync sends: the images, by id.
+fn synced(
+    app: &mut App,
+    graphics: &mut vt_tui::kitty::Graphics,
+) -> std::collections::HashMap<u32, Vec<u8>> {
+    let mut out = Vec::new();
+    graphics.sync(app, &mut out).unwrap();
+    vt_tui::screenshot::sent_images(&out)
+}
+
+#[test]
+fn a_bypassed_slots_curve_is_faint_and_each_shade_is_sent_once() {
+    use vt_tui::theme;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    let sent = synced(&mut app, &mut graphics);
+    let focused = app.slot_images[0].unwrap();
+    assert_eq!(line_color(&sent[&focused]), theme::active().fg.unwrap());
+
+    // Switched out, it's faint, a picture of its own sent once.
+    press(&mut app, "b");
+    assert!(app.song().tracks[0].bypassed[0]);
+    let sent = synced(&mut app, &mut graphics);
+    let faint = app.slot_images[0].unwrap();
+    assert_ne!(faint, focused);
+    assert_eq!(line_color(&sent[&faint]), theme::faint().fg.unwrap());
+    assert!(synced(&mut app, &mut graphics).is_empty());
+    // Away from it, it stays faint.
+    press(&mut app, "}");
+    assert!(synced(&mut app, &mut graphics).is_empty());
+    assert_eq!(app.slot_images[0], Some(faint));
+
+    // Back in, away from it, it's dim, and with the cursor on it again, the bright one comes back
+    // with nothing sent.
+    press(&mut app, "{b}");
+    assert!(!app.song().tracks[0].bypassed[0]);
+    let sent = synced(&mut app, &mut graphics);
+    let dim = app.slot_images[0].unwrap();
+    assert_eq!(line_color(&sent[&dim]), theme::dim().fg.unwrap());
+    press(&mut app, "{");
+    assert!(synced(&mut app, &mut graphics).is_empty());
+    assert_eq!(app.slot_images[0], Some(focused));
+    press(&mut app, "b");
+    assert!(synced(&mut app, &mut graphics).is_empty());
+    assert_eq!(app.slot_images[0], Some(faint));
+}
+
+#[test]
+fn the_panels_are_drawn_at_the_screens_pixels_and_sent_again_after_a_clear() {
+    use ratatui::crossterm::terminal::WindowSize;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "}K");
+    press(&mut app, "EQ3");
+    special(&mut app, KeyCode::Enter);
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    let sizes = |app: &App, sent: &std::collections::HashMap<u32, Vec<u8>>| {
+        [0, 1].map(|slot| png_size(&sent[&app.slot_images[slot].unwrap()]))
+    };
+    // At the author's 15 by 39 pixels a character: the compressor's 13 by 5 is square.
+    let sent = synced(&mut app, &mut graphics);
+    assert_eq!(sizes(&app, &sent), [(195, 195), (495, 195)]);
+    let first = app.slot_images;
+
+    // A font of another size draws each again at its pixels, with new ids.
+    let window = |columns: u16, rows: u16, cell: (u16, u16)| WindowSize {
+        columns,
+        rows,
+        width: columns * cell.0,
+        height: rows * cell.1,
+    };
+    graphics.use_window(window(163, 42, (10, 22)));
+    let sent = synced(&mut app, &mut graphics);
+    assert_eq!(sizes(&app, &sent), [(130, 110), (330, 110)]);
+    let smaller = app.slot_images;
+    assert!(smaller[..2].iter().zip(first).all(|(now, was)| *now != was));
+    assert!(synced(&mut app, &mut graphics).is_empty());
+
+    // The window changing size clears the screen, so each is stored again under a new id, and
+    // the old ones are forgotten, as the clear has taken them off the screen.
+    graphics.use_window(window(150, 40, (10, 22)));
+    let mut out = Vec::new();
+    graphics.sync(&mut app, &mut out).unwrap();
+    assert_eq!(vt_tui::screenshot::sent_images(&out).len(), 2);
+    assert!(
+        app.slot_images[..2]
+            .iter()
+            .zip(smaller)
+            .all(|(now, was)| *now != was)
+    );
+    let out = String::from_utf8(out).unwrap();
+    for id in smaller.iter().flatten() {
+        assert!(out.contains(&format!("a=d,d=I,i={id},q=2")), "{id}");
+    }
+    assert!(synced(&mut app, &mut graphics).is_empty());
+}
+
+#[test]
+fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
+    let (mut app, _realtime) = app();
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    press(&mut app, " 4");
+    let mut out = Vec::new();
+    graphics.sync(&mut app, &mut out).unwrap();
+    let sent = vt_tui::screenshot::sent_images(&out);
+    // The filter's curve keeps its 24 by 3 characters, now at their pixels, in a palette with an
+    // alpha for each of its entries: the line at eighths, and the gridlines.
+    assert!(String::from_utf8(out).unwrap().contains(",c=24,r=3,"));
+    let filter = &sent[&app.filter_image.unwrap()];
+    assert_eq!(png_size(filter), (360, 117));
+    assert_eq!(png_chunk(filter, b"tRNS").len(), 11);
+    // The envelopes keep their 28 by 4.
+    press(&mut app, "L");
+    let mut out = Vec::new();
+    graphics.sync(&mut app, &mut out).unwrap();
+    assert_eq!(
+        String::from_utf8(out.clone())
+            .unwrap()
+            .matches(",c=28,r=4,")
+            .count(),
+        3
+    );
+    let sent = vt_tui::screenshot::sent_images(&out);
+    for id in app.envelope_images.unwrap() {
+        assert_eq!(png_size(&sent[&id]), (420, 156));
+        assert!(sent[&id].len() < 6000, "{}", sent[&id].len());
+    }
+}
+
+#[test]
+fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
+    use vt_engine::track_state::LiveValues;
+    use vt_model::insert::MAX_PARAMS;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "}K");
+    press(&mut app, "EQ3");
+    special(&mut app, KeyCode::Enter);
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    synced(&mut app, &mut graphics);
+    let track = app.song().tracks[0].clone();
+    // A second of frames, 30 of them, with the compressor's threshold and the EQ's low band
+    // moving at every one, as an LFO moves them.
+    let moved = |slot: usize, name: &str, by: u8| {
+        let insert = track.inserts[slot];
+        let mut values = [0; MAX_PARAMS];
+        for (param, value) in values.iter_mut().enumerate().take(insert.params().len()) {
+            *value = insert.value(param);
+        }
+        let param = insert
+            .params()
+            .iter()
+            .position(|param| param.name == name)
+            .unwrap();
+        values[param] = values[param].wrapping_add(by);
+        values
+    };
+    let (mut sends, mut bytes) = (0, 0);
+    for frame in 0..30_u8 {
+        let mut inserts = [[0; MAX_PARAMS]; vt_model::insert::INSERTS];
+        inserts[0] = moved(0, "Threshold", 4 * frame + 1);
+        inserts[1] = moved(1, "Low", 2 * frame + 1);
+        app.live = Some(LiveValues {
+            inserts,
+            ..LiveValues::default()
+        });
+        let mut out = Vec::new();
+        graphics.sync(&mut app, &mut out).unwrap();
+        let commands = String::from_utf8(out.clone()).unwrap();
+        sends += commands.matches("a=T,").count();
+        bytes += out.len();
+    }
+    // 15 times a second for each, as the scope is.
+    assert_eq!(sends, 30);
+    let each = bytes / sends;
+    assert!(each < 8000, "{each} bytes a picture");
 }
 
 #[test]
@@ -9830,6 +10096,30 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
         assert_eq!(at(&screen[top + 8], 149), '╯');
     }
     assert!(screen[38].trim().is_empty() || !screen[38].starts_with('╭'));
+    // Glue's panel: its curve's box, 13 by 5 inside, the meter's, captioned, and its scale,
+    // against the frame with two columns between, filling the seven rows inside it; and EQ3's
+    // curve, 33 by 5 inside.
+    let span = |line: &str, from: usize| line.chars().take(150).skip(from).collect::<String>();
+    let rule = |width: usize| "─".repeat(width);
+    assert_eq!(
+        span(&screen[3], 122),
+        format!("┌{}┐  ┌──┐      │", rule(13))
+    );
+    assert_eq!(
+        span(&screen[4], 122),
+        format!("│{}│  │▔▔│   0  │", "#".repeat(13))
+    );
+    assert_eq!(
+        span(&screen[8], 122),
+        format!("│{}│  │  │ -16  │", "#".repeat(13))
+    );
+    assert_eq!(
+        span(&screen[9], 122),
+        format!("└{}┘  └GR┘      │", rule(13))
+    );
+    assert_eq!(span(&screen[12], 112), format!("┌{}┐  │", rule(33)));
+    assert_eq!(span(&screen[13], 112), format!("│{}│  │", "#".repeat(33)));
+    assert_eq!(span(&screen[18], 112), format!("└{}┘  │", rule(33)));
     // Glue's settings fill all four columns, the last ending well before its graphics.
     let glue = &screen[4];
     assert!(glue.contains("│  Threshold"), "{glue}");

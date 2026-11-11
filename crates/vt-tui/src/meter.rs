@@ -74,7 +74,8 @@ pub struct Held {
 }
 
 impl Held {
-    fn new(floor: f32) -> Self {
+    /// Resting at `floor`.
+    pub fn new(floor: f32) -> Self {
         Self {
             floor,
             now: floor,
@@ -83,7 +84,8 @@ impl Held {
         }
     }
 
-    fn update(&mut self, value: f32, seconds: f32) {
+    /// Move on by some seconds, given what it is now.
+    pub fn update(&mut self, value: f32, seconds: f32) {
         let fall = FALL_DB_PER_SECOND * seconds;
         self.now = (self.now - fall).max(value).max(self.floor);
         if self.now >= self.top {

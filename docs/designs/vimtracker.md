@@ -610,6 +610,19 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     screen is about to show, before ratatui draws, and only when what it shows has changed. A
     picture can have up to 15 colours that each mean something, and a big one is compressed inside
     its PNG.
+*   **One drawing path for curves, `kitty/plot.rs`.** The FX page's compressor and EQ curves, the
+    Sound page's filter curve and the Mod page's envelopes are drawn by `kitty::plot` at the
+    terminal's own pixels, the characters they cover times `Graphics::cell`, so nothing is
+    stretched. Its `Plot` is an anti-aliased 2-pixel line, each pixel covered in eighths by its
+    distance from the line, over faint dotted gridlines, as a PNG whose palette has an alpha for
+    each entry, always compressed, about 1 to 2 KB. The waveforms and the scope stay solid dots.
+*   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
+    `(PanelKey, Shade)`: the filter, the sample's waveform, each envelope and each FX slot, each in
+    up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
+    from. `Graphics::panel` sends one only when its shape is new, and one that changes again within
+    a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a
+    second, as the scope is. Moving the cursor or switching a slot out and back sends nothing once
+    each shade has been sent.
 *   **Direct placements with `X=`, for thin lines and markers.** A placeholder can only sit on a
     character, about 15 pixels wide on the author's screen, which is too coarse for the sample
     page's cursor line, its playheads and its ruler's marks. Their images are stored once with
@@ -621,13 +634,14 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
 *   **Storing again after a screen clear.** ratatui clears the screen when the window changes size,
     and in kitty and Ghostty a clear frees an image placed directly, though not one shown through
     placeholders. So `Graphics::use_window` retires the lines' and marks' images when the window's
-    size changes, and they're stored again under new ids. Retired images are deleted with
-    `a=d,d=I` at the start of the next frame.
+    size changes, and they're stored again under new ids. The panels' images are retired too, and
+    whenever the character's size in pixels changes, so they're drawn again at the new pixels and
+    none is left blank. Retired images are deleted with `a=d,d=I` at the start of the next frame.
 
 `just screenshots` puts the pictures in its SVGs as the terminal would be sent them.
 `docs/terminal-notes.md` has what's been measured and what's left to check by hand.
 
-**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109 and 114.
+**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114 and 140.
 
 ### Offline paths
 

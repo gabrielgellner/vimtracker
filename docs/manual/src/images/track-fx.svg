@@ -10,6 +10,8 @@
 <text x="36" y="52" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     Comp  Glue </text>
 <text x="180" y="52" fill="#51576d" textLength="1170" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮</text>
 <text x="0" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1098" y="71" fill="#737994" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌─────────────┐</text>
+<text x="1251" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──┐</text>
 <text x="1341" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="0" y="90" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="27" y="90" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Threshold </text>
@@ -28,16 +30,19 @@
 <text x="873" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="882" y="90" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
 <text x="963" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="1215" y="90" fill="#737994" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌────┐</text>
-<text x="1287" y="90" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──┐</text>
+<text x="1098" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1224" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1260" y="90" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
+<text x="1278" y="90" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│   0</text>
 <text x="1341" y="90" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1350" y="90" fill="#c6d0f5" font-weight="bold" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     Main</text>
 <text x="0" y="109" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1215" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1260" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1287" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1296" y="109" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
-<text x="1314" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1098" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1224" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="109" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1260" y="109" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
+<text x="1278" y="109" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│    </text>
 <text x="1341" y="109" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1350" y="109" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">        -9 </text>
 <text x="1449" y="109" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0</text>
@@ -49,20 +54,23 @@
 <text x="513" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Auto      </text>
 <text x="603" y="128" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off              </text>
 <text x="756" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Peak Clip </text>
-<text x="846" y="128" fill="#c6d0f5" textLength="369" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off                                      </text>
-<text x="1215" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1260" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1287" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1296" y="128" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
-<text x="1314" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="846" y="128" fill="#c6d0f5" textLength="252" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off                         </text>
+<text x="1098" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1224" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1260" y="128" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
+<text x="1278" y="128" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  -8</text>
 <text x="1341" y="128" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1350" y="128" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   6 </text>
 <rect x="1395" y="114" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="114" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="114" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="147" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1215" y="147" fill="#737994" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└────┘</text>
-<text x="1287" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└GR┘</text>
+<text x="1098" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1224" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="147" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1260" y="147" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
+<text x="1278" y="147" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│    </text>
 <text x="1341" y="147" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="133" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="133" width="18" height="19" fill="#292c3c"/>
@@ -74,12 +82,19 @@
 <text x="153" y="166" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
 <text x="234" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="270" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Source    </text>
-<text x="360" y="166" fill="#c6d0f5" textLength="981" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Self                                                                                                         </text>
+<text x="360" y="166" fill="#c6d0f5" textLength="738" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Self                                                                              </text>
+<text x="1098" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1224" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1260" y="166" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
+<text x="1278" y="166" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ -16</text>
 <text x="1341" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="152" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="152" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="152" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="185" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1098" y="185" fill="#737994" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└─────────────┘</text>
+<text x="1251" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└GR┘</text>
 <text x="1341" y="185" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="171" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="171" width="18" height="19" fill="#292c3c"/>
@@ -97,6 +112,7 @@
 <rect x="1422" y="209" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="209" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="242" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1008" y="242" fill="#737994" textLength="315" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌─────────────────────────────────┐</text>
 <text x="1341" y="242" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="228" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="228" width="18" height="19" fill="#292c3c"/>
@@ -122,13 +138,14 @@
 <text x="873" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="882" y="261" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███████▉ </text>
 <text x="963" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="1215" y="261" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──────────┐</text>
+<text x="1008" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1314" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="261" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="247" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="247" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="247" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="280" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1215" y="280" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1008" y="280" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="280" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="280" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1350" y="280" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  -6 </text>
@@ -151,14 +168,15 @@
 <text x="630" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="639" y="299" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">████▌    </text>
 <text x="720" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="1215" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1008" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="285" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="285" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="285" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="318" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1215" y="318" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└──────────┘</text>
+<text x="1008" y="318" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1314" y="318" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="318" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="304" width="18" height="19" fill="#292c3c"/>
 <text x="1395" y="318" fill="#d5ca8e" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▔▔</text>
@@ -171,11 +189,14 @@
 <text x="387" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="396" y="337" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██▎      </text>
 <text x="477" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="1008" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1314" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="323" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="323" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="323" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="356" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1008" y="356" fill="#737994" textLength="315" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└─────────────────────────────────┘</text>
 <text x="1341" y="356" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1350" y="356" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> -12 </text>
 <rect x="1395" y="342" width="18" height="19" fill="#292c3c"/>
@@ -194,6 +215,7 @@
 <rect x="1422" y="380" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="380" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="413" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="413" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──┐</text>
 <text x="1341" y="413" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="399" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="399" width="18" height="19" fill="#292c3c"/>
@@ -208,13 +230,14 @@
 <text x="387" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="396" y="432" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
 <text x="477" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="1287" y="432" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌──┐</text>
+<text x="1251" y="432" fill="#737994" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│▔▔│   0</text>
 <text x="1341" y="432" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ -18 </text>
 <rect x="1395" y="418" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="418" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="418" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="451" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1287" y="451" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│▔▔│</text>
+<text x="1251" y="451" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1278" y="451" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│    </text>
 <text x="1341" y="451" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="437" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="437" width="18" height="19" fill="#292c3c"/>
@@ -230,14 +253,15 @@
 <text x="387" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="396" y="470" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███████▉ </text>
 <text x="477" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="1287" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1314" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1278" y="470" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  -8</text>
 <text x="1341" y="470" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="456" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="456" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="456" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="489" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<text x="1287" y="489" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└GR┘</text>
+<text x="1251" y="489" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1278" y="489" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│    </text>
 <text x="1341" y="489" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="475" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="475" width="18" height="19" fill="#292c3c"/>
@@ -248,6 +272,8 @@
 <text x="144" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="153" y="508" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██████   </text>
 <text x="234" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="1251" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1278" y="508" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ -16</text>
 <text x="1341" y="508" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ -24 </text>
 <rect x="1395" y="494" width="18" height="19" fill="#292c3c"/>
 <text x="1395" y="508" fill="#657a64" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▃▃</text>
@@ -255,6 +281,7 @@
 <text x="1422" y="508" fill="#657a64" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▃▃</text>
 <rect x="1449" y="494" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="527" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1251" y="527" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└GR┘</text>
 <text x="1341" y="527" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="513" width="18" height="19" fill="#292c3c"/>
 <text x="1395" y="527" fill="#657a64" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
@@ -349,6 +376,6 @@
 <text x="144" y="774" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">󰐊</text>
 <text x="153" y="774" fill="#c6d0f5" textLength="1314" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  120 BPM  Groove Straight  Oct 4 Vel 64  TVol E0 *                                                                                               </text>
 <image x="1359" y="0" width="108" height="57" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANgAAABsAQMAAAAyte7NAAAABlBMVEUAAACUnLveOgbxAAAAAXRSTlMAQObYZgAAC9tJREFUeAEB0Asv9AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////8AAAAAAAf/////8AAAAAAAf/////gAAA//////AAAAAAAH//////AAAAAAAH/////4AAAP/////wAAAAAAB//////wAAAAAAB/////+AAADgAAAf/////////gAAAcf///////8AAAAf//8A4AAAH/////////4AAAHH////////AAAAH///AOAAAB/////////+AAABx////////wAAAB///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMASXEGcNfnUAAAAAElFTkSuQmCC"/>
-<image x="1224" y="95" width="36" height="38" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABIAQMAAABvIyEEAAAABlBMVEUAAACUnLveOgbxAAAAAXRSTlMAQObYZgAAAttJREFUeAEB0AIv/QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAH/AAAAAAAAAAAB/wAAAAAAAAD//8AAAAAAAAAA///AAAAAAAAAAP//wAAAAAAAf//gAAAAAAAAAH//4AAAAAAAAAB//+AAAAAAAAD/8AAAAAAAAAAA//AAAAAAAAAAAP/wAAAAAAAAAf/gAAAAAAAAAAH/4AAAAAAAAAAB/+AAAAAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAAAAPwAAAAAAAAAAAfgAAAAAAAAAAAH4AAAAAAAAAAAB+AAAAAAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAAAAPwAAAAAAAAAAAfgAAAAAAAAAAAH4AAAAAAAAAAAB+AAAAAAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAAAAPwAAAAAAAAAAADgAAAAAAAAAAAA4AAAAAAAAAAAAOAAAAAAAAAAABuwK/M8TdlEAAAAAElFTkSuQmCC"/>
-<image x="1224" y="266" width="90" height="38" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAABIAQMAAABlU00TAAAABlBMVEUAAACUnLveOgbxAAAAAXRSTlMAQObYZgAABstJREFUeAEBwAY/+QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////gAAAAAAAAAAAAAAAAAAAAAAAAAAD////gAAAAAAAAAAAAAAAAAAAAAAAAAAD////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//8AAAAAAAD////////8AAAAAAAAAAAD//8AAAAAAAD////////8AAAAAAAAAAAD//8AAAAAAAD////////8AAAAAAAAAAAAAAf/gAAAD//gAAAAAAAAAAAAAAAAAAAAAAf/gAAAD//gAAAAAAAAAAAAAAAAAAAAAAf/gAAAD//gAAAAAAAAAAAAAAAAAAAAAAAD/8AD/gAAAAAAAAAAAAAAAAAAAAAAAAAD/8AD/gAAAAAAAAAAAAAAAAAAAAAAAAAD/8AD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAf//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAf//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAf//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL7zTY/B2xMjAAAAAElFTkSuQmCC"/>
+<image x="1107" y="76" width="117" height="95" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMMAAADDBAMAAADNUbiZAAAAIVBMVEUAAACUnLuUnLuUnLuUnLuUnLuUnLuUnLuUnLtzeZRzeZQcBLaCAAAAC3RSTlMAHz9ff5+/3/+MWoKT++0AAANgSURBVHic5VpNb9NAFFwHcfAtaiskbpEI94JUxBWqFI5AkOgVNUDuUJQjF5I97pV/y64T105i5+3HG3ttT1T141mezMx73o1dIdpHGlpXAk2BRwPvgLapEaPCKGxEhKH9XtghxChLESEU+CQagK0If6OiaacQRCXCNwsHEb4Ug5oJAz+jnNop1rU7khW7QKRr94BW7ALuRjmLiH9PC4F7O0U4F4OcCQM3o7xEuFEMbsUu4GKUZzvFdY2KbsUuENU1qhcz4Q9bowIyiWcuQpgsVUTeTnYqBrtiF7AxKlCEDcWAV+wCtFHB7RTDNSqKmUhV9sq/l15KpTWv+krVi34LRP2f6AE4Bjslqi3dA+FExLvYfbS8p1UC7VX0K3YB6vkENAtF1DsBvm1HVJ/1uNGxlKnnE7AsFFHvBHi34inxt87ORWdW7AKtXKMUUUdwdgCp4+8MFK51fkYGIG4UND4Xiqhz8zV1VmZWUDuVT6uIeieAunlG7ZgIo0azD8Kewr2eTL9I+UdYwznXs9lKyvV8LEDIBMhvL22O9TLKTUB+CkXUC2wFLF4IFM5ujIBrjwTsZiKZ/vAQQH26LlUyAb/dBdjGnQnY+CdAzsRo5iegAJHEs7AWIo1KrpaBQ0w8n8givrcaYoqlGufaoc3niYDB9ND6OvwyV3cnNotAO8Syj1KVBKtdD4HWbjMFm8VEcOFIxOhGZzyfCGu4Pr/YEjzFPb8wGWz2xiw8i/Q0ATemEILSVJzrOViMK44IhMpPMXqnCSai6k3wILnSk4xZ73cNd7GU67cCgu2z7ERPwt341DGhNBcr+ffyRF0EnV1/aQmbTwIGncSjpbyfCCSeSzknDgkySolXcn2J/MSaJu/lL+T1SM/zrbwTUGiGrJNwRiW38o3VKfwpXsuPAovHcIZk+TP/EWXUk/XY9t/cPCmS5VfUFiyHFgGmMCIE1igjAkuRicAiEwHFgQiEUTsRwCxyEcCmzZPAUTwkgTPqoZ1gFH2cCQNuo0oiQFmURYCatpwEhmIvCYxRe+0EoejrTBhwGnUgApDFoQhA0x4mwU9xlAS/UUftxE7R55kw4DKqQgRzFlUimJu2KgleisokeI2qbCdWir7PhAGHUTUiGLOoE8HYtHVJMFLUJcFo1PcxmuI/hP3Nz3RIHoIAAAAASUVORK5CYII="/>
+<image x="1017" y="247" width="297" height="95" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAe8AAADDBAMAAABZvoQHAAAAIVBMVEUAAACUnLuUnLuUnLuUnLuUnLuUnLuUnLuUnLtzeZRzeZQcBLaCAAAAC3RSTlMAHz9ff5+/3/+MWoKT++0AAAUASURBVHic7dzBWxpHGAbwd9EemlMEc0eUnq2g9thG1FxbwXBto8i9ieyxhyh7TK89vdf+l50FakBAYeclgPP9fJ6osBqHmW9295v5AMycXkGOUCP0gm24CY3FuA6hRhjjy2Jch1AjjPFlQ92Yl83O4zqEGmGML4txHUKNMMaXxbgOoUYY48tiXIdQI4zxZTGuQ6gRxviyGNch1AhjfFmM6xBqhDG+1n2otxOn23FarVajUa9VDkpbmMGLaPiYTqtxUnqNFy/ackqlUqVSrTUuW51B82/rBwjMVql62orTILj6ccohL/l0lq9eurbfn0wc8y/8PB7tvXfd/htClD9zvT4+4EO4csu5pl8FMMdPUGgm9/ujD4VyrX6YdH9BkArt5A8EKddMPgx9G9BtaXSe/Pn1u6Dux4+HWx6U45HRHpLjhxkutNTTefJr/4vgcm7vkp8RpKh5X0SQNuK79FOA6eXN3kktxLz6D/9PcMH5KdlHkNwE9zrMJaSN+HOga2dvkt8RpuNQr2PgwhxihBqh58IcYoQasQDfhZqKCjXMX6VhXoQSoUbouYbnxGFOqBGLsRlsDi7E25X+Jas0H0OoEXr9hkfNru5GjVAjFibXDjUTtRnfhbWC/HBbup18FrWcUCP0vt6Pv1G1nFAjFqos6/N1U07uigjFSOqpPLZTJAtCjdAbzbltK3aKEGrEwm20kw9hBnqumdwFkW0fTy8fJZ6dTqgRehPy6oV20n2L7Ag14tuIDpPk3qfp6yvd/Tllu/NSDDbil0q7lYFqLbWP779k/Pgn/ffL+OOFs3SX+84sv+PxT/87w888+fF33jWwVms0Wq2bTidOpvsLmU1fO8uduf/yNkO3E9lE+d3q6eVNZ1KNSb/YptW6bgzUBz2+EFG17br9evGFHVF+UEnR1+24BtZqlUqptLO1tZyAK6Td3q3vYGHy1cbNoL231/WTg52Ziqf8PbtM3CtumGvIc+Yjo93LuN/k+pPVUoTeLOvjucO0T6bW8zzG2Q6Lqu/7NVInz44nYml6Q/72rSze+uOoe728U+bMOyL69TwXM/yhfPaI3Glv5ph51iSWq3duv/Duo7QsKLledhHgfHtg0q56tul8+ldkePWI5YsOY5/r+N618JreBqR/+6ciMvF71aSybPfKuWnuYvrTnPZEoekGOTIg9LLtc9trP5Gn4ZTHXYbjqogsiJURufE+X6nqRnNSheca2m4nH+eYm8vximUxs2/pjM6nZOE5+ViPvDWh57OXtTx5uHPsEZe6/VhEdsSKSbPwMxy2HSeZJvMV5obw8wuN5ZUs5PXdtn00Huh8fIT3UiSh571ffbw/OfxN9G6uyX8yYhVtxk+c0WecBdbTo8LsYdtxsqrvyKEozXBT3HAY8+Er1bRG6GlqUo6GL0c5+Pzo9fBArKy9eGy4F9qCaW31uVls5B5k/ruYb0xWfhW5u85PvaYzTUjHyv0FhJ6w7szlGZL7+kmlctrLx0KHWHG9ZHlvaeQigOge4Vb/Go3aOrx/nL0vqw6hRhjjy2Jch1AjjPFlMa5DqBHG+LIY1yHUCGN8WYzrEGqEMb4sxnUINcIYXxbjOoQaYYwvi3EdQo0wxpfFuA6hRhjjy2Jch1AjjPFlMa5DqBHG+LIY1yHUCGN8WYzrEGqEMb4sxnUINcIYXxbjOoQaYYwvi3EdQo0wxpfFuA6hxqnP/AckkMkByq+3uQAAAABJRU5ErkJggg=="/>
 </svg>

@@ -53,19 +53,23 @@ pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
 pub(crate) const WAVEFORM_WIDTH: usize = FILTER_CURVE_WIDTH;
 pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
 
-/// The size of a compressor's curve on the FX page, in characters, about square, and the rows a
-/// slot's drawing takes, which are its two rows of settings.
-pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 4;
-pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
-/// The size of an EQ's curve on the FX page, in characters, which is the room a slot's drawing
-/// has.
-pub(crate) const EQ_CURVE_WIDTH: usize = 10;
-/// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom, and
-/// how wide it is, which leaves room for its box's caption.
-const REDUCTION_METER_DB: f32 = 24.0;
+/// The size of a compressor's curve on the FX page, in characters, the graphic panel's small
+/// size, which is square at the author's 15 by 39 pixels a character: 195 by 195. The rows a
+/// slot's drawing takes are all of a panel's, inside its box.
+pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 13;
+pub(crate) const SLOT_DRAWING_HEIGHT: usize = 5;
+/// The size of an EQ's curve on the FX page, in characters, the graphic panel's middle size: 495
+/// by 195 pixels at the author's.
+pub(crate) const EQ_CURVE_WIDTH: usize = 33;
+/// How much a gain reduction meter covers, in dB, from the top of its rows to the bottom, which
+/// is half a dB an eighth of a row, and how wide it is, which leaves room for its box's caption.
+const REDUCTION_METER_DB: f32 = 20.0;
 const REDUCTION_METER_WIDTH: usize = 2;
 /// The caption on a gain reduction meter's box.
 const REDUCTION_CAPTION: &str = "GR";
+/// The meter's scale beside its box, a line for each row: the dB at the top of every other row.
+const REDUCTION_SCALE: [&str; SLOT_DRAWING_HEIGHT] = ["   0", "", "  -8", "", " -16"];
+const REDUCTION_SCALE_WIDTH: u16 = 4;
 
 /// How much room a slot's title leaves for its switch, which #375 puts there, so its effect stays
 /// where it is when it comes.
@@ -569,7 +573,7 @@ fn draw_diagrams(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
 
 /// Whether a slot is switched out as it's heard: while the song plays, a step's lock of its bypass
 /// counts, so the slot fades and comes back with the lock, and otherwise it's the slot's own.
-fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
+pub(crate) fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
     match app.live {
         Some(live) if app.transport == Transport::Playing => live.bypassed[slot],
         _ => track.bypassed[slot],
@@ -689,19 +693,43 @@ fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     }
 }
 
-/// One row of a gain reduction meter, which hangs down from the top of its two rows as it turns
-/// down more, as the main meter's does. An empty one shows a faint mark, so it's seen to be there.
-fn reduction_cell(db: f32, row: usize, color: Color) -> Span<'static> {
+/// Where a gain reduction meter's held mark goes for the deepest it has turned down lately, if it
+/// has: the row that depth ends in, and a faint line at that row's top or bottom, whichever is
+/// nearer, so it's within a quarter of a row, 1 dB.
+fn held_mark(held: f32) -> Option<(usize, char)> {
+    let rows = SLOT_DRAWING_HEIGHT;
+    let eighths = ((held / REDUCTION_METER_DB).clamp(0.0, 1.0) * (rows * 8) as f32).round();
+    let eighths = eighths as usize;
+    let row = eighths.checked_sub(1)? / 8;
+    let into = eighths - row * 8;
+    Some((row, if into <= 4 { '▔' } else { '▁' }))
+}
+
+/// One row of a gain reduction meter, which hangs down from the top of its rows as it turns down
+/// more, as the main meter's does, with a faint mark where it went deepest lately, while it isn't
+/// as deep now. An empty one that holds nothing shows a faint mark at the top, so it's seen to be
+/// there.
+fn reduction_cell(db: f32, held: f32, row: usize, color: Color) -> Span<'static> {
     let filled = hanging_eighths(db / REDUCTION_METER_DB, row, SLOT_DRAWING_HEIGHT);
-    if filled == 0 && row == 0 {
-        return Span::styled("▔".repeat(REDUCTION_METER_WIDTH), theme::faint());
+    if filled == 0 {
+        let mark = match held_mark(held) {
+            Some((at, mark)) => (at == row).then_some(mark),
+            None => (row == 0).then_some('▔'),
+        };
+        if let Some(mark) = mark {
+            return Span::styled(
+                mark.to_string().repeat(REDUCTION_METER_WIDTH),
+                theme::faint(),
+            );
+        }
     }
     hanging_cell(filled, color, theme::BASE, REDUCTION_METER_WIDTH)
 }
 
 /// A slot's graphic panel on the FX page: a compressor's curve and how far it's turning down, a
-/// limiter's meter alone, or an EQ's curve, each in its box. A curve's box is left out until its
-/// image has been sent. A bypassed slot's meter is faint, and its images keep their colour.
+/// limiter's meter alone, or an EQ's curve, each in its box, with the meter's scale beside it. A
+/// curve's box is left out until its image has been sent. A bypassed slot's meter is faint, and
+/// so is its curve, which is an image of its own.
 fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
     let style = if slot_being_edited(app) == Some(slot) {
         theme::active()
@@ -714,11 +742,16 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
         .live
         .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
+    let held = if bypassed {
+        0.0
+    } else {
+        app.slot_reduction[slot].top
+    };
     let cursor = theme::cursor(app.mode);
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
     let meter = || {
         let lines = (0..SLOT_DRAWING_HEIGHT)
-            .map(|row| fade(Line::from(reduction_cell(reduction, row, color))))
+            .map(|row| fade(Line::from(reduction_cell(reduction, held, row, color))))
             .collect();
         (lines, REDUCTION_METER_WIDTH as u16, Some(REDUCTION_CAPTION))
     };
@@ -731,18 +764,26 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
             (lines, width as u16, None)
         })
     };
-    let parts = match track.inserts[slot] {
-        Insert::Compressor(_) => [curve(DYNAMICS_CURVE_WIDTH), Some(meter())],
-        Insert::Limit(_) => [Some(meter()), None],
-        Insert::Eq(_) => [curve(EQ_CURVE_WIDTH), None],
-        _ => [None, None],
+    let (parts, scale) = match track.inserts[slot] {
+        Insert::Compressor(_) => ([curve(DYNAMICS_CURVE_WIDTH), Some(meter())], true),
+        Insert::Limit(_) => ([Some(meter()), None], true),
+        Insert::Eq(_) => ([curve(EQ_CURVE_WIDTH), None], false),
+        _ => ([None, None], false),
     };
-    parts
+    let panel = parts
         .into_iter()
         .flatten()
         .fold(GraphicPanel::new(), |panel, (lines, width, caption)| {
             panel.boxed(lines, width, caption)
-        })
+        });
+    if !scale {
+        return panel;
+    }
+    let scale = REDUCTION_SCALE
+        .iter()
+        .map(|text| Line::styled(format!("{text:>4}"), theme::faint()))
+        .collect();
+    panel.beside(scale, REDUCTION_SCALE_WIDTH)
 }
 
 /// The filter's curve in a box, under its rows, and beside it under the output's column, the

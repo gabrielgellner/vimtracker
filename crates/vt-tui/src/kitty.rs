@@ -14,15 +14,10 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
-use vt_engine::dsp::compressor::curve_db;
-use vt_engine::dsp::eq::response_db as eq_response_db;
-use vt_engine::dsp::filter::track_response_db;
 use vt_engine::engine::PLAYHEADS;
 use vt_model::bank::{BankEntry, ContentHash, Points};
 use vt_model::constants::TRACK_ENVELOPES;
-use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
-use vt_model::sample::SampleData;
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
@@ -32,7 +27,6 @@ use crate::sample_page::SamplePage;
 use crate::sample_wave::Drawing;
 use crate::theme;
 use crate::track_page::{Control, Page};
-use crate::views::curve::{envelope_columns, line_columns};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
@@ -44,9 +38,15 @@ use crate::views::sample::{
 use crate::views::track::{
     DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
     FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    envelope_being_edited, filter_being_edited, slot_being_edited,
+    envelope_being_edited, filter_being_edited, heard_bypassed, slot_being_edited,
 };
 use crate::waveform;
+
+mod panels;
+pub mod plot;
+
+use panels::{Found, PanelImages, PanelKey, Shape};
+use plot::{Plot, Shade};
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
@@ -358,26 +358,17 @@ pub(crate) const POSITIONS: [char; MOST_CELLS] = [
 /// picture is a new image, which costs the terminal more than the program: at every frame, kitty
 /// took 4.5% of a core to show it, and at every other frame, under 3%.
 const SCOPE_FRAMES: usize = 2;
+/// A panel's picture that changes is sent again at most once in this many frames, as the scope is,
+/// so one that follows an LFO costs the terminal no more than the scope does.
+const PANEL_FRAMES: usize = SCOPE_FRAMES;
 /// The most base64 the protocol takes in one command.
 const CHUNK: usize = 4096;
-/// The grid of dots an envelope is drawn on, for each character.
+/// The grid of dots a waveform or the scope is drawn on, for each character.
 const CELL_DOTS_ACROSS: usize = 6;
 const CELL_DOTS_DOWN: usize = 12;
 /// The pixels across and down each dot. Kitty smooths an image it scales, so a dot is a solid block
 /// that's already near its final size, which keeps its edges crisp.
 const DOT_PIXELS: usize = 3;
-
-/// What a filter curve's height covers, in dB, with the frequency across it from 20 Hz to 20 kHz. It
-/// has more room below than above, as a filter takes away more than it adds.
-const CURVE_BOTTOM_DB: f32 = -36.0;
-const CURVE_TOP_DB: f32 = 24.0;
-
-/// How far down a compressor's curve goes, in dB, both in and out, from `0` at the top and right.
-/// It's as far down as the threshold goes.
-const DYNAMICS_RANGE_DB: f32 = 60.0;
-
-/// How far up and down an EQ's curve goes, in dB.
-const EQ_RANGE_DB: f32 = 18.0;
 
 /// Lines of placeholders for an image of this size, up to [`MOST_CELLS`] across and down.
 pub fn placeholder_lines(width: usize, height: usize) -> Vec<String> {
@@ -478,57 +469,72 @@ impl Picture {
     /// screen, 2400 by 546 pixels in four colours, goes from 876 KB sent to 16 KB, so writing it
     /// never waits on the terminal to read it.
     pub fn png(&self) -> Vec<u8> {
-        assert!(self.colors.len() < 16, "a picture has a few colours");
-        let depth = match self.colors.len() {
-            1 => 1,
-            2..=3 => 2,
-            _ => 4,
-        };
-        let per_byte = 8 / depth;
-        let mut lines = Vec::with_capacity((self.width.div_ceil(per_byte) + 1) * self.height);
-        for row in self.pixels.chunks(self.width) {
-            lines.push(0);
-            lines.extend(row.chunks(per_byte).map(|pixels| {
-                pixels
-                    .iter()
-                    .enumerate()
-                    .fold(0_u8, |byte, (index, pixel)| {
-                        byte | (pixel << (8 - depth * (index + 1)))
-                    })
-            }));
-        }
-        let data = if lines.len() <= STORED_BLOCK {
-            stored(&lines)
-        } else {
-            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(&lines).expect("writing to memory");
-            encoder.finish().expect("writing to memory")
-        };
-
-        let mut header = Vec::new();
-        header.extend((self.width as u32).to_be_bytes());
-        header.extend((self.height as u32).to_be_bytes());
-        // Colours from a palette, and the usual settings for the rest.
-        header.extend([depth as u8, 3, 0, 0, 0]);
-        let mut palette = vec![0; 3];
-        palette.extend(self.colors.iter().flatten());
-        let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
-        let chunks: [(&[u8; 4], &[u8]); 5] = [
-            (b"IHDR", &header),
-            (b"PLTE", &palette),
-            // The first colour is see-through.
-            (b"tRNS", &[0]),
-            (b"IDAT", &data),
-            (b"IEND", &[]),
-        ];
-        for (name, data) in chunks {
-            out.extend((data.len() as u32).to_be_bytes());
-            out.extend(*name);
-            out.extend(data);
-            out.extend(crc32(&[name, data]).to_be_bytes());
-        }
-        out
+        indexed_png(self.width, &self.pixels, &self.colors, &[0], false)
     }
+}
+
+/// Pixels as a PNG with a palette, each pixel the number of a colour, with `0` for nothing, which
+/// is see-through. `alphas` is how see-through each palette entry is, from that first one, and the
+/// entries after it are solid. It uses as few bits for each pixel as its colours need: one for a
+/// single colour, two for up to 3, and four for up to 15. The pixels are compressed if `compress`
+/// says to, or if they're more than one stored block.
+fn indexed_png(
+    width: usize,
+    pixels: &[u8],
+    colors: &[[u8; 3]],
+    alphas: &[u8],
+    compress: bool,
+) -> Vec<u8> {
+    assert!(colors.len() < 16, "a picture has a few colours");
+    let height = pixels.len() / width.max(1);
+    let depth = match colors.len() {
+        1 => 1,
+        2..=3 => 2,
+        _ => 4,
+    };
+    let per_byte = 8 / depth;
+    let mut lines = Vec::with_capacity((width.div_ceil(per_byte) + 1) * height);
+    for row in pixels.chunks(width) {
+        lines.push(0);
+        lines.extend(row.chunks(per_byte).map(|pixels| {
+            pixels
+                .iter()
+                .enumerate()
+                .fold(0_u8, |byte, (index, pixel)| {
+                    byte | (pixel << (8 - depth * (index + 1)))
+                })
+        }));
+    }
+    let data = if lines.len() <= STORED_BLOCK && !compress {
+        stored(&lines)
+    } else {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&lines).expect("writing to memory");
+        encoder.finish().expect("writing to memory")
+    };
+
+    let mut header = Vec::new();
+    header.extend((width as u32).to_be_bytes());
+    header.extend((height as u32).to_be_bytes());
+    // Colours from a palette, and the usual settings for the rest.
+    header.extend([depth as u8, 3, 0, 0, 0]);
+    let mut palette = vec![0; 3];
+    palette.extend(colors.iter().flatten());
+    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+    let chunks: [(&[u8; 4], &[u8]); 5] = [
+        (b"IHDR", &header),
+        (b"PLTE", &palette),
+        (b"tRNS", alphas),
+        (b"IDAT", &data),
+        (b"IEND", &[]),
+    ];
+    for (name, data) in chunks {
+        out.extend((data.len() as u32).to_be_bytes());
+        out.extend(*name);
+        out.extend(data);
+        out.extend(crc32(&[name, data]).to_be_bytes());
+    }
+    out
 }
 
 /// A line as a PNG of solid dots, with each dot a block of pixels.
@@ -542,60 +548,6 @@ fn line_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
         }
     }
     png(&dots, color)
-}
-
-/// An envelope's shape as a PNG: a plain line of solid dots, as on a small LCD.
-pub fn envelope_png(envelope: &Envelope, color: [u8; 3], columns: usize, rows: usize) -> Vec<u8> {
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&envelope_columns(envelope, across, down), down, color)
-}
-
-/// A track's filter and utility filter as a PNG, showing what they let through at each frequency.
-pub fn filter_png(
-    track: &Track,
-    rate: u32,
-    color: [u8; 3],
-    columns: usize,
-    rows: usize,
-) -> Vec<u8> {
-    let level = |x: f32| {
-        let db = track_response_db(track, rate, 20.0 * 1000_f32.powf(x));
-        (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
-    };
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&line_columns(level, level(0.0), across, down), down, color)
-}
-
-/// A compressor's static curve as a PNG: how loud a steady level comes out, against how loud it
-/// went in, each from -60 dB to 0, as the compressor works it out.
-pub fn compressor_png(
-    settings: Compressor,
-    color: [u8; 3],
-    columns: usize,
-    rows: usize,
-) -> Vec<u8> {
-    let level = |x: f32| {
-        let out = curve_db(DYNAMICS_RANGE_DB * (x - 1.0), settings);
-        out / DYNAMICS_RANGE_DB + 1.0
-    };
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&line_columns(level, level(0.0), across, down), down, color)
-}
-
-/// An EQ's curve as a PNG: what it does at each frequency, from 20 Hz to 20 kHz across it, as the
-/// filter's curve is drawn, and from -18 dB to +18 dB up it, a little more than a band can do.
-pub fn eq_png(
-    settings: Equaliser,
-    rate: u32,
-    color: [u8; 3],
-    columns: usize,
-    rows: usize,
-) -> Vec<u8> {
-    let level = |x: f32| {
-        eq_response_db(settings, rate, 20.0 * 1000_f32.powf(x)) / (2.0 * EQ_RANGE_DB) + 0.5
-    };
-    let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-    line_png(&line_columns(level, level(0.0), across, down), down, color)
 }
 
 /// The scope's picture as a PNG, from the rows it covers in each column of dots.
@@ -832,11 +784,11 @@ pub fn supports_graphics() -> io::Result<bool> {
 type PreviewImages = (Vec<Option<u32>>, Option<u32>);
 
 /// The settings a filter curve is drawn from.
-type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
+pub(crate) type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
 
 /// What an FX slot's drawing shows, which is all that's compared to tell if it's changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SlotDrawing {
+pub(crate) enum SlotDrawing {
     /// A compressor's curve, from its type, threshold and ratio, with what doesn't bend it left
     /// as it starts.
     Compressor(Compressor),
@@ -879,12 +831,11 @@ impl SlotDrawing {
         }
     }
 
-    fn png(self, color: [u8; 3], rate: u32) -> Vec<u8> {
+    /// Its picture, this many pixels across and down.
+    fn plot(self, rate: u32, size: (usize, usize)) -> Plot {
         match self {
-            Self::Eq(settings) => eq_png(settings, rate, color, self.width(), SLOT_DRAWING_HEIGHT),
-            Self::Compressor(settings) => {
-                compressor_png(settings, color, self.width(), SLOT_DRAWING_HEIGHT)
-            }
+            Self::Eq(settings) => plot::eq(settings, rate, size),
+            Self::Compressor(settings) => plot::compressor(settings, size),
         }
     }
 }
@@ -910,8 +861,8 @@ fn color(active: bool) -> [u8; 3] {
     }
 }
 
-/// The images the terminal has. Each envelope keeps one with the cursor on it and one without, so
-/// moving the cursor sends nothing.
+/// The images the terminal has. Each graphic panel keeps one for each of its shades, so moving the
+/// cursor sends nothing.
 ///
 /// A changed image gets a new id, rather than replacing the one with the old id. Kitty only looks at
 /// placeholders on lines that have changed, and replacing an image disconnects them, so it would stay
@@ -919,13 +870,9 @@ fn color(active: bool) -> [u8; 3] {
 pub struct Graphics {
     base: u32,
     next: u32,
-    images: [[Option<(Envelope, u32)>; 2]; TRACK_ENVELOPES],
-    filter: [Option<(FilterSettings, u32)>; 2],
-    /// The waveform of the sample the cursor's track plays. It's drawn once for each sample, which
-    /// is held so another loaded later can't be mistaken for it.
-    waveform: [Option<(Arc<SampleData>, u32)>; 2],
-    /// Each FX slot's drawing, with the cursor on its slot or not, and the settings it shows.
-    slots: [[Option<(SlotDrawing, u32)>; 2]; INSERTS],
+    /// The track page's panels: the filter's curve and the sample's waveform, the envelopes and
+    /// the FX slots' curves.
+    panels: PanelImages,
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// The picker's preview and its images.
@@ -965,10 +912,7 @@ impl Graphics {
         Self {
             base: (std::process::id() & 0xFFFF) << 8,
             next: 0,
-            images: [[None; 2]; TRACK_ENVELOPES],
-            filter: [None; 2],
-            waveform: [None, None],
-            slots: [[None; 2]; INSERTS],
+            panels: PanelImages::default(),
             scope: None,
             preview: None,
             sample_wave: None,
@@ -987,17 +931,20 @@ impl Graphics {
         }
     }
 
-    /// Draw the sample page's pictures for characters of this many pixels, as the terminal says
-    /// its window has.
+    /// Draw the pictures for characters of this many pixels, as the terminal says its window has.
+    /// The panels' pictures are drawn at those pixels, so when they change size, as the font's
+    /// size does, each is drawn and sent again.
     pub fn use_cell(&mut self, cell: (usize, usize)) {
-        if cell.0 > 0 && cell.1 > 0 {
+        if cell.0 > 0 && cell.1 > 0 && cell != self.cell {
             self.cell = cell;
+            self.retired.extend(self.panels.clear());
         }
     }
 
     /// Take in the window's size as the terminal says it, in characters and pixels. ratatui clears
     /// a window that's changed size, and in kitty and Ghostty a clear frees an image that isn't
-    /// shown through placeholders, so the cursor's line and the ruler's marks are sent again.
+    /// shown through placeholders, so the cursor's line and the ruler's marks are sent again. The
+    /// panels' pictures are too, with new ids, so none is left blank after the clear.
     pub fn use_window(&mut self, size: terminal::WindowSize) {
         self.use_cell((
             usize::from(size.width) / usize::from(size.columns.max(1)),
@@ -1014,6 +961,7 @@ impl Graphics {
             self.retired
                 .extend(self.mark_images.take().into_iter().flat_map(|(_, ids)| ids));
             self.marks_placed.clear();
+            self.retired.extend(self.panels.clear());
         }
         self.window = Some(characters);
     }
@@ -1023,20 +971,7 @@ impl Graphics {
         loop {
             self.next = self.next % 0xFF + 1;
             let id = self.base | self.next;
-            let in_use = self
-                .images
-                .iter()
-                .flatten()
-                .flatten()
-                .any(|image| image.1 == id)
-                || self.filter.iter().flatten().any(|image| image.1 == id)
-                || self.waveform.iter().flatten().any(|image| image.1 == id)
-                || self
-                    .slots
-                    .iter()
-                    .flatten()
-                    .flatten()
-                    .any(|image| image.1 == id)
+            let in_use = self.panels.ids().any(|held| held == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
                 || self.sample_wave.as_ref().is_some_and(|image| image.1 == id)
                 || self
@@ -1228,29 +1163,22 @@ impl Graphics {
             track.low_cut,
             track.high_cut,
         );
-        let active = filter_being_edited(app);
-        let held = self.filter[usize::from(active)];
-        let id = match held {
-            Some((drawn, id)) if drawn == settings => id,
-            _ => {
-                let id = self.new_id();
-                let png = filter_png(
-                    &Track {
-                        cutoff,
-                        resonance,
-                        ..track.clone()
-                    },
-                    app.rate,
-                    color(active),
-                    FILTER_CURVE_WIDTH,
-                    FILTER_CURVE_HEIGHT,
-                );
-                self.send(out, id, &png, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)?;
-                self.retired.extend(held.map(|(_, old)| old));
-                self.filter[usize::from(active)] = Some((settings, id));
-                id
-            }
-        };
+        let shade = Shade::of(filter_being_edited(app), false);
+        let rate = app.rate;
+        let id = self.panel(
+            out,
+            (PanelKey::Filter, shade),
+            Shape::Filter(settings),
+            (FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT),
+            |size| {
+                let playing = Track {
+                    cutoff,
+                    resonance,
+                    ..track.clone()
+                };
+                plot::filter(&playing, rate, size).png(shade.color())
+            },
+        )?;
         app.filter_image = Some(id);
         app.waveform_image = None;
         if track.machine == Machine::Sampler {
@@ -1277,32 +1205,27 @@ impl Graphics {
         else {
             return Ok(());
         };
-        let active = app.track_control() == Control::Sample;
-        let id = match self.waveform[usize::from(active)].take() {
-            Some((drawn, id)) if Arc::ptr_eq(&drawn, sample) => {
-                self.waveform[usize::from(active)] = Some((drawn, id));
-                id
-            }
-            held => {
-                self.retired.extend(held.map(|(_, old)| old));
-                let id = self.new_id();
-                let png = waveform_png(
+        let shade = Shade::of(app.track_control() == Control::Sample, false);
+        let id = self.panel(
+            out,
+            (PanelKey::Waveform, shade),
+            Shape::Waveform(Arc::clone(sample)),
+            (WAVEFORM_WIDTH, WAVEFORM_HEIGHT),
+            |_| {
+                waveform_png(
                     &sample.frames,
-                    color(active),
+                    shade.color(),
                     WAVEFORM_WIDTH,
                     WAVEFORM_HEIGHT,
-                );
-                self.send(out, id, &png, WAVEFORM_WIDTH, WAVEFORM_HEIGHT)?;
-                self.waveform[usize::from(active)] = Some((Arc::clone(sample), id));
-                id
-            }
-        };
+                )
+            },
+        )?;
         app.waveform_image = Some(id);
         Ok(())
     }
 
     /// Send the drawings of the FX page's slots, if the terminal lacks them: a compressor's or an
-    /// EQ's curve.
+    /// EQ's curve, faint while its slot is switched out.
     /// Each is drawn from the settings it shows, so it's sent again only when they change.
     fn sync_fx(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let edited = slot_being_edited(app);
@@ -1313,19 +1236,15 @@ impl Graphics {
             let Some(shown) = SlotDrawing::of(*insert, live) else {
                 continue;
             };
-            let active = edited == Some(slot);
-            let held = self.slots[slot][usize::from(active)];
-            ids[slot] = Some(match held {
-                Some((drawn, id)) if drawn == shown => id,
-                _ => {
-                    self.retired.extend(held.map(|(_, old)| old));
-                    let id = self.new_id();
-                    let png = shown.png(color(active), app.rate);
-                    self.send(out, id, &png, shown.width(), SLOT_DRAWING_HEIGHT)?;
-                    self.slots[slot][usize::from(active)] = Some((shown, id));
-                    id
-                }
-            });
+            let shade = Shade::of(edited == Some(slot), heard_bypassed(app, track, slot));
+            let rate = app.rate;
+            ids[slot] = Some(self.panel(
+                out,
+                (PanelKey::Slot(slot), shade),
+                Shape::Slot(shown),
+                (shown.width(), SLOT_DRAWING_HEIGHT),
+                |size| shown.plot(rate, size).png(shade.color()),
+            )?);
         }
         app.slot_images = ids;
         Ok(())
@@ -1565,26 +1484,48 @@ impl Graphics {
 
     /// Send the Mod page's envelopes, if the terminal lacks them. The LFOs' shapes are glyphs.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
-        let envelopes = track.envelopes;
         let edited = envelope_being_edited(app);
         let mut envelope_ids = [0; TRACK_ENVELOPES];
-        for (slot, envelope) in envelopes.iter().enumerate() {
-            let active = edited == Some(slot);
-            let held = self.images[slot][usize::from(active)];
-            envelope_ids[slot] = match held {
-                Some((drawn, id)) if drawn == *envelope => id,
-                _ => {
-                    let id = self.new_id();
-                    let png = envelope_png(envelope, color(active), DIAGRAM_WIDTH, DIAGRAM_HEIGHT);
-                    self.send(out, id, &png, DIAGRAM_WIDTH, DIAGRAM_HEIGHT)?;
-                    self.retired.extend(held.map(|(_, old)| old));
-                    self.images[slot][usize::from(active)] = Some((*envelope, id));
-                    id
-                }
-            };
+        for (slot, envelope) in track.envelopes.iter().enumerate() {
+            let shade = Shade::of(edited == Some(slot), false);
+            envelope_ids[slot] = self.panel(
+                out,
+                (PanelKey::Envelope(slot), shade),
+                Shape::Envelope(*envelope),
+                (DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+                |size| plot::envelope(envelope, size).png(shade.color()),
+            )?;
         }
         app.envelope_images = Some(envelope_ids);
         Ok(())
+    }
+
+    /// The id of a panel's picture in a shade, sending it first if the terminal lacks one that
+    /// shows `shape`, drawn by `draw` for its size in pixels, the characters it covers at the
+    /// terminal's own. One that changes is sent at most once in [`PANEL_FRAMES`] frames, with the
+    /// last kept in between, so a curve following an LFO costs no more than the scope; the image
+    /// it replaces is forgotten once the screen has moved on from it.
+    fn panel(
+        &mut self,
+        out: &mut impl Write,
+        (key, shade): (PanelKey, Shade),
+        shape: Shape,
+        cells: (usize, usize),
+        draw: impl FnOnce((usize, usize)) -> Vec<u8>,
+    ) -> io::Result<u32> {
+        match self
+            .panels
+            .find(key, shade, &shape, self.frames, PANEL_FRAMES)
+        {
+            Found::Current(id) | Found::Waiting(id) => return Ok(id),
+            Found::Missing => {}
+        }
+        let id = self.new_id();
+        let png = draw((cells.0 * self.cell.0, cells.1 * self.cell.1));
+        self.send(out, id, &png, cells.0, cells.1)?;
+        let replaced = self.panels.hold(key, shade, shape, id, self.frames);
+        self.retired.extend(replaced);
+        Ok(id)
     }
 
     /// Send one image.
@@ -1607,10 +1548,7 @@ impl Graphics {
 
     /// Have the terminal forget the images.
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
-        let held = self.images.iter().flatten().flatten().map(|image| &image.1);
-        let filter = self.filter.iter().flatten().map(|image| &image.1);
-        let waveform = self.waveform.iter().flatten().map(|image| &image.1);
-        let slots = self.slots.iter().flatten().flatten().map(|image| &image.1);
+        let panels: Vec<u32> = self.panels.ids().collect();
         let scope = self.scope.iter().map(|image| &image.1);
         let sample = self
             .sample_wave
@@ -1620,10 +1558,8 @@ impl Graphics {
             .chain(self.cursor_line.iter().map(|image| &image.1))
             .chain(self.playhead_line.iter().map(|image| &image.1))
             .chain(self.mark_images.iter().flat_map(|(_, ids)| ids));
-        for id in held
-            .chain(filter)
-            .chain(waveform)
-            .chain(slots)
+        for id in panels
+            .iter()
             .chain(scope)
             .chain(sample)
             .chain(&self.retired)
@@ -1697,16 +1633,6 @@ mod tests {
         (chunks, pixels)
     }
 
-    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
-        Envelope {
-            attack_ms,
-            decay_ms,
-            sustain,
-            release_ms,
-            ..Envelope::default()
-        }
-    }
-
     fn sent(png: &[u8]) -> Vec<u8> {
         let image = Image {
             id: 7,
@@ -1747,144 +1673,6 @@ mod tests {
         assert_eq!(answer(b""), None);
     }
 
-    /// A filter curve's height at points across it, from 0 at the bottom to 1.
-    fn curve(track: &Track) -> Vec<f32> {
-        let level = |x: f32| {
-            let db = track_response_db(track, 48_000, 20.0 * 1000_f32.powf(x));
-            (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
-        };
-        (0..=10).map(|step| level(step as f32 / 10.0)).collect()
-    }
-
-    fn open_track() -> Track {
-        Track {
-            filter: FilterType::LowPass,
-            cutoff: 0xFF,
-            resonance: 0,
-            drive: 0,
-            low_cut: 0,
-            high_cut: 0xFF,
-            ..Track::default()
-        }
-    }
-
-    #[test]
-    fn a_filter_curve_is_small_and_flat_when_the_filter_is_open() {
-        let track = open_track();
-        let png = filter_png(&track, 48_000, [255; 3], 24, 3);
-        assert!(png.len() < 7000, "{}", png.len());
-        let (_, pixels) = decode(&png);
-        let (across, down) = (24 * CELL_DOTS_ACROSS, 3 * CELL_DOTS_DOWN);
-        assert_eq!(
-            (pixels[0].len(), pixels.len()),
-            (across * DOT_PIXELS, down * DOT_PIXELS)
-        );
-        let flat = (0.0 - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB);
-        for level in curve(&track) {
-            assert!((level - flat).abs() < 0.001, "{level}");
-        }
-    }
-
-    #[test]
-    fn a_filter_curve_goes_where_the_filter_does() {
-        let mut track = Track {
-            cutoff: 0x80,
-            ..open_track()
-        };
-        let low = curve(&track);
-        assert!(low[0] > low[10]);
-        track.filter = FilterType::HighPass;
-        let high = curve(&track);
-        assert!(high[0] < high[10]);
-        // Resonance raises a peak above the plain low-pass.
-        track.filter = FilterType::LowPass;
-        track.resonance = 0xC0;
-        let peak = curve(&track).into_iter().fold(0.0, f32::max);
-        assert!(peak > low.into_iter().fold(0.0, f32::max) + 0.1);
-    }
-
-    #[test]
-    fn a_compressors_curve_is_the_compressors_own_sum() {
-        let settings = Compressor {
-            threshold: 0x80,
-            ratio: 0xC0,
-            ..Compressor::DEFAULT
-        };
-        let (columns, rows) = (4, 2);
-        let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-        let (_, pixels) = decode(&compressor_png(settings, [255; 3], columns, rows));
-        assert_eq!(
-            (pixels[0].len(), pixels.len()),
-            (across * DOT_PIXELS, down * DOT_PIXELS)
-        );
-        // At the middle of each column of dots, the line covers the row the compressor's curve
-        // puts it on.
-        for column in 0..across {
-            let input = DYNAMICS_RANGE_DB * ((column as f32 + 0.5) / across as f32 - 1.0);
-            let out = curve_db(input, settings) / DYNAMICS_RANGE_DB + 1.0;
-            let row = ((1.0 - out) * (down - 1) as f32).round() as usize;
-            let x = column * DOT_PIXELS;
-            let lit: Vec<usize> = (0..down)
-                .filter(|row| pixels[row * DOT_PIXELS][x])
-                .collect();
-            assert!(
-                lit.iter().any(|lit| lit.abs_diff(row) <= 1),
-                "column {column}: {lit:?} against {row}"
-            );
-        }
-        // Below the threshold it's the diagonal, from the bottom left, and above it, flatter.
-        assert!(pixels[(down - 1) * DOT_PIXELS][0]);
-        let top: Vec<usize> = (0..across)
-            .map(|column| {
-                (0..down)
-                    .find(|row| pixels[row * DOT_PIXELS][column * DOT_PIXELS])
-                    .unwrap()
-            })
-            .collect();
-        assert!(top[across - 1] > 0, "a ratio over 1 keeps it off the top");
-    }
-
-    #[test]
-    fn an_eqs_curve_is_the_eqs_own_sum_and_flat_when_its_flat() {
-        let (columns, rows) = (10, 2);
-        let (across, down) = (columns * CELL_DOTS_ACROSS, rows * CELL_DOTS_DOWN);
-        let rows_lit = |settings: Equaliser| {
-            let (_, pixels) = decode(&eq_png(settings, 48_000, [255; 3], columns, rows));
-            assert_eq!(
-                (pixels[0].len(), pixels.len()),
-                (across * DOT_PIXELS, down * DOT_PIXELS)
-            );
-            (0..across)
-                .map(|column| {
-                    (0..down)
-                        .filter(|row| pixels[row * DOT_PIXELS][column * DOT_PIXELS])
-                        .collect::<Vec<usize>>()
-                })
-                .collect::<Vec<_>>()
-        };
-        let middle = ((down - 1) as f32 * 0.5).round() as usize;
-        assert!(
-            rows_lit(Equaliser::DEFAULT)
-                .iter()
-                .all(|lit| *lit == [middle])
-        );
-        // A boosted low end and a cut middle: each column covers where the EQ's sum puts it.
-        let settings = Equaliser {
-            low: 0xD0,
-            mid: 0x50,
-            ..Equaliser::DEFAULT
-        };
-        for (column, lit) in rows_lit(settings).iter().enumerate() {
-            let x = (column as f32 + 0.5) / across as f32;
-            let db = eq_response_db(settings, 48_000, 20.0 * 1000_f32.powf(x));
-            let row = ((0.5 - db / (2.0 * EQ_RANGE_DB)) * (down - 1) as f32).round() as usize;
-            assert!(
-                lit.iter().any(|lit| lit.abs_diff(row) <= 1),
-                "column {column}: {lit:?} against {row}"
-            );
-        }
-    }
-
     #[test]
     fn the_scope_is_a_small_png_of_its_line() {
         let (across, down) = (
@@ -1918,37 +1706,6 @@ mod tests {
     fn the_checksums_match_known_values() {
         assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
         assert_eq!(adler32(b"Wikipedia"), 0x11E6_0398);
-    }
-
-    #[test]
-    fn an_envelope_is_a_small_png_of_one_colour_on_nothing() {
-        let png = envelope_png(&adsr(1, 200, 0, 50), [1, 2, 3], 28, 4);
-        assert!(png.len() < 10_000, "{}", png.len());
-        let (chunks, _) = decode(&png);
-        let names: Vec<&str> = chunks.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(names, ["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
-        assert_eq!(chunks[1].1, [0, 0, 0, 1, 2, 3]);
-        assert_eq!(chunks[2].1, [0]);
-    }
-
-    #[test]
-    fn the_pixels_are_the_envelopes_line_as_solid_dots() {
-        // A held half has one line part way up, with nothing above or below it.
-        let envelope = adsr(0, 0, 50, 0);
-        let (_, pixels) = decode(&envelope_png(&envelope, [255; 3], 28, 4));
-        let (across, down) = (28 * CELL_DOTS_ACROSS, 4 * CELL_DOTS_DOWN);
-        assert_eq!(
-            (pixels[0].len(), pixels.len()),
-            (across * DOT_PIXELS, down * DOT_PIXELS)
-        );
-        let spans = envelope_columns(&envelope, across, down);
-        for (y, line) in pixels.iter().enumerate() {
-            for (x, pixel) in line.iter().enumerate() {
-                let (column, row) = (x / DOT_PIXELS, y / DOT_PIXELS);
-                let (high, low) = spans[column];
-                assert_eq!(*pixel, (high..=low).contains(&row), "dot {column}, {row}");
-            }
-        }
     }
 
     #[test]
@@ -2072,8 +1829,8 @@ mod tests {
     #[test]
     fn the_existing_drawings_are_unchanged() {
         // Each PNG's size and CRC, as they were before pictures could have more colours or be
-        // compressed: the Sound page's waveform, the explorer's preview, the kit picker's and an
-        // envelope.
+        // compressed: the Sound page's waveform, the explorer's preview and the kit picker's. The
+        // envelopes are curves now, drawn by `plot`.
         let frames: Vec<[f32; 2]> = (0..3000)
             .map(|frame| {
                 let level = (frame as f32 * 0.05).sin() * (-(frame as f32) / 900.0).exp();
@@ -2093,14 +1850,8 @@ mod tests {
                 PREVIEW_WAVE_HEIGHT,
                 color,
             ),
-            envelope_png(&adsr(1, 200, 0, 50), color, 28, 4),
         ];
-        let before = [
-            (6039, 0x5bff_5631),
-            (9315, 0xf14b_3760),
-            (783, 0x143f_a841),
-            (9315, 0x8dc2_50f9),
-        ];
+        let before = [(6039, 0x5bff_5631), (9315, 0xf14b_3760), (783, 0x143f_a841)];
         for (png, (length, crc)) in drawings.iter().zip(before) {
             assert_eq!((png.len(), crc32(&[png])), (length, crc));
         }
