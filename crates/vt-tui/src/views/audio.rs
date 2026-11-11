@@ -3,12 +3,13 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
 use crate::audio_page::{AudioRow, buffer_ms};
 use crate::theme;
+use crate::views::system;
 use crate::views::widgets::setting;
 use crate::views::widgets::table::{Columns, blank_row, take_top};
 
@@ -73,22 +74,25 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Line::raw(format!("{latency:.1} ms, out of the device")),
         ));
         let trouble = audio.late > 0 || audio.xruns > 0;
-        rows.push(named(
-            "Keeping up",
-            Line::styled(
-                format!(
-                    "CPU {}%  late {}  xruns {}",
-                    app.cpu.percent(),
-                    audio.late,
-                    audio.xruns
-                ),
-                if trouble {
-                    theme::warning()
-                } else {
-                    Style::new()
-                },
+        let figures = Span::styled(
+            format!(
+                "CPU {}%  late {}  xruns {}",
+                app.cpu.percent(),
+                audio.late,
+                audio.xruns
             ),
-        ));
+            if trouble {
+                theme::warning()
+            } else {
+                Style::new()
+            },
+        );
+        // The status line says what the leaf means.
+        let line: Line = system::leaf(app.slowdown.slowed())
+            .into_iter()
+            .chain([figures])
+            .collect();
+        rows.push(named("Keeping up", line));
     } else {
         rows.push(whole(Line::styled(
             "Stopped. Choose a device to play again.",

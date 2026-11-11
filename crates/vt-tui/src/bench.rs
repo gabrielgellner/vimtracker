@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use vt_engine::engine::Engine;
 use vt_engine::link::{Command, connect};
 use vt_engine::published::Published;
+use vt_engine::slowdown::Look;
+
 use vt_engine::timing::{PartTimes, clock_cost};
 use vt_model::constants::FRAME_MS;
 use vt_model::insert::INSERTS;
@@ -22,7 +24,9 @@ use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Song};
 
-use crate::audio::{AudioChoice, CallbackTime, Output, thread_cpu_time};
+use crate::audio::{
+    AudioChoice, CallbackTime, Output, PowerState, measure_full_speed, thread_cpu_time,
+};
 use crate::run::{RunError, analyse_now};
 
 /// How the blocks are played.
@@ -46,6 +50,8 @@ pub struct BenchRequest {
     pub pace: Pace,
     /// Say how long each track, slot, group, return and the master take while playing.
     pub tracks: bool,
+    /// Through the device, the buffer to ask for in place of the audio page's choice.
+    pub buffer: Option<u32>,
 }
 
 /// A block's time on the clock, and on the CPU for its thread.
@@ -187,7 +193,10 @@ fn on_this_thread(request: &BenchRequest) -> Result<(), RunError> {
 
 /// Play through the output device, silently, and time its callbacks.
 fn through_device(request: &BenchRequest) -> Result<(), RunError> {
-    let choice = AudioChoice::load();
+    let mut choice = AudioChoice::load();
+    if request.buffer.is_some() {
+        choice.buffer = request.buffer;
+    }
     let output = Output::open(&choice).or_else(|_| Output::open(&AudioChoice::default()))?;
     let rate = output.rate();
     let name = output.name.clone();
@@ -199,9 +208,11 @@ fn through_device(request: &BenchRequest) -> Result<(), RunError> {
         engine.time_parts();
     }
     let (mut handle, realtime) = connect(engine);
+    // As the program does before it starts audio.
+    let full_speed = measure_full_speed().join().unwrap_or(Duration::MAX);
     // Room for every callback of both runs, at the smallest buffer offered.
     let room = (request.seconds as usize * 2 + 1) * rate as usize / 16;
-    let (stream, mut measured) = output.start_measured(realtime, room)?;
+    let (stream, mut measured) = output.start_measured(realtime, room, full_speed)?;
     let mut scope = Vec::with_capacity(rate as usize);
     let mut run_for = |handle: &mut vt_engine::link::Handle, times: &mut Vec<CallbackTime>| {
         let until = Instant::now() + Duration::from_secs(u64::from(request.seconds));
@@ -259,6 +270,7 @@ fn through_device(request: &BenchRequest) -> Result<(), RunError> {
         }
         print_callbacks(title, times, rate);
     }
+    print_slowdown(&stopped, &playing, full_speed, rate);
     println!(
         "{} underruns reported",
         measured.xruns.load(Ordering::Relaxed)
@@ -274,6 +286,50 @@ fn through_device(request: &BenchRequest) -> Result<(), RunError> {
         print_parts(&song, &parts, audio, engine_share);
     }
     Ok(())
+}
+
+/// What the callback's slowdown check found, stopped and playing, as the leaf beside the status
+/// line's CPU figure reads it, and what its looks cost.
+fn print_slowdown(
+    stopped: &[CallbackTime],
+    playing: &[CallbackTime],
+    full_speed: Duration,
+    rate: u32,
+) {
+    let power = PowerState::now();
+    println!(
+        "The slowdown check's kernel takes {:.2} us at full speed; Low Power Mode is {}, and the \
+         Mac {} hot",
+        full_speed.as_secs_f64() * 1e6,
+        if power.low_power { "on" } else { "off" },
+        if power.hot { "is" } else { "isn't" }
+    );
+    for (title, times) in [("stopped", stopped), ("playing", playing)] {
+        let looks: Vec<Look> = times.iter().filter_map(|time| time.look).collect();
+        if looks.is_empty() {
+            continue;
+        }
+        let mut factors: Vec<f64> = looks.iter().map(|look| look.factor).collect();
+        factors.sort_by(f64::total_cmp);
+        let median = factors[factors.len() / 2];
+        let audio: f64 = times
+            .iter()
+            .map(|time| f64::from(time.frames) / f64::from(rate))
+            .sum();
+        let callback = share(times.iter().map(|time| time.callback), audio);
+        let kernel: Duration = looks.iter().map(|look| look.time).sum();
+        let checking = share(times.iter().map(|time| time.looking), audio);
+        println!(
+            "{title:<8} slowed x{median:.2} at the median of {} looks, x{:.2} to x{:.2}, so \
+             {callback:.2}% is about {:.2}% at full speed; the kernel took {:.2} us, and the \
+             check {checking:.4}% of a core",
+            looks.len(),
+            factors[0],
+            factors[factors.len() - 1],
+            callback / median.max(1e-9),
+            kernel.as_secs_f64() / looks.len() as f64 * 1e6,
+        );
+    }
 }
 
 /// The share of some audio's time some durations take, as a percentage.

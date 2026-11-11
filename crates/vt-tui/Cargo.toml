@@ -38,3 +38,8 @@ toml.workspace = true
 # sending through shared memory.
 libc.workspace = true
 rtrb.workspace = true
+
+# Whether Low Power Mode is on or the Mac is hot, which the CPU figure's leaf explains.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-foundation.workspace = true

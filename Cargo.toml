@@ -27,6 +27,10 @@ flate2 = "=1.1.10"
 roxmltree = "=0.21.2"
 libc = "=0.2.191"
 xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
+# Low Power Mode and the thermal state, for the CPU figure's leaf. Both are already in the tree,
+# through cpal.
+objc2 = "=0.6.5"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSProcessInfo"] }
 toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 # A release build with symbols, for a profiler.

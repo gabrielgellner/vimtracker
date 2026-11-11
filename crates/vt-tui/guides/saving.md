@@ -161,7 +161,10 @@ with no sound device. It stops if a sample is missing.
 and then playing, and says how much of a core it took. The CPU figure on the
 status line reads higher for the same project: it's the share of each block's
 time, and macOS runs a lightly loaded audio thread on a slower core or clock,
-then speeds it up as the load rises.
+then speeds it up as the load rises; the `󰌪` before the figure says so. With
+`--device` it plays through the sound device, silently, as the program does, and
+says how much the system slowed it; `--buffer 128` asks the device for another
+buffer than the audio page's.
 
 ## Autosave
 

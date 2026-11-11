@@ -259,7 +259,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | Crate | Owns | May depend on |
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
-| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
+| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, and `probe` | `vt-model` and `vt-engine`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
@@ -288,8 +288,17 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 *   **The audio callback** is `cpal`'s output thread, in `audio.rs`. It calls `Realtime::process` in
     blocks of up to `MAX_BLOCK` frames, into scratch made when the stream starts, clamps the output
     at full level, and counts its load, late blocks and latency in `AudioStats`' atomics for the
-    status line. A change on the audio page builds a new engine at the new rate and connects it
-    afresh, keeping the song and its undo.
+    status line. Four times a second of audio, after its block, it times a small fixed kernel
+    (`vt-engine`'s `slowdown.rs`) against the kernel's time at full speed, and stores how many
+    times slower it ran in `AudioStats::slowdown`; the main loop smooths that in `SlowdownReadout`
+    for the leaf before the CPU figure, and asks the system every 2 s whether Low Power Mode is on
+    or the Mac is hot (`PowerState`, through `objc2-foundation`), never from the callback. A
+    change on the audio page builds a new engine at the new rate and connects it afresh, keeping
+    the song and its undo.
+*   **The full-speed thread** (`audio::measure_full_speed`) times the kernel for 100 ms as the
+    program starts, while the song loads, at the user-interactive QoS that asks for a performance
+    core, and keeps the fastest time it has ever seen in `full-speed.txt` in the cache folder, so
+    a start in Low Power Mode or on a busy machine still has full speed to go by.
 *   **The analysis thread** (`analysing.rs`) works out each of the bank's files in turn, as it joins
     the bank or a project opens: its peaks, its level and where its sound is, read from the cache
     folder by content hash if they're there.
@@ -716,7 +725,9 @@ These need no terminal and no sound device, so they run anywhere.
     how long starting to play took. `--paced` plays each block when its time comes rather than flat
     out. `--device` plays through the output device's own callback (`Output::start_measured`), at
     its rate and buffer, sending it only silence, and splits each callback's time into the
-    engine's (`Realtime::engine_time`), the queues' and the report's, and the rest. `--tracks` also
+    engine's (`Realtime::engine_time`), the queues' and the report's, and the rest, and says how
+    slowed the slowdown check found it, stopped and playing; `--buffer` asks the device for
+    another buffer than the audio page's. `--tracks` also
     times each track's voices and the rest of its work, each slot with an effect in it, each group,
     return and the master, the limiter, the mixing and the sequencing, with `Engine::time_parts`:
     a `Stopwatch` (`vt-engine`'s `timing.rs`) reads the clock between parts, and each track's
@@ -745,7 +756,7 @@ These need no terminal and no sound device, so they run anywhere.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 
-**Decisions:** 13, 68, 110, 113, 123, 125, 133 and 142, with CUJ 7 and #190 for `bench`.
+**Decisions:** 13, 68, 110, 113, 123, 125, 133, 142 and 149, with CUJ 7 and #190 for `bench`.
 
 ### Testing
 
@@ -1387,7 +1398,7 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 
 **Key conventions.** Keys inherited from Vim keep Vim's meaning. New bindings follow the author's Neovim rules: a capital is the wider version of its lowercase key, and a doubled key is the ordinary case. A key may be both an action and a prefix only if losing a timeout does nothing wrong.
 
-**Status line.** It always shows the mode, groove and BPM. Errors and notices go here. How the program itself is running, meaning CPU load (callback time divided by buffer duration), the late count and xruns, sits at the top right of the view instead, and turns red on a dropout.
+**Status line.** It always shows the mode, groove and BPM. Errors and notices go here. How the program itself is running, meaning CPU load (callback time divided by buffer duration), the late count and xruns, sits at the top right of the view instead, and turns red on a dropout. A dim leaf before it says the system is running the audio thread slowly to save power, and on the audio page the line under the status line says how slowed and about what the load would be at full speed (decision 150).
 
 **Step numbers.** The phrase view shows each step's number in hex and, more faintly to its left, its distance from the cursor in decimal, which is the count to type before `j` or `k`.
 

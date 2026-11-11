@@ -34,6 +34,9 @@ pub const WAITING: char = '\u{f051f}';
 
 /// Audio has dropped out: `nf-md-alert`, U+F0026.
 pub const WARNING: char = '\u{f0026}';
+/// Beside the CPU figure, the system is running the audio thread slowly to save power, so the
+/// figure reads higher than the same work at full speed (decision 150): `nf-md-leaf`, U+F032A.
+pub const LEAF: char = '\u{f032a}';
 
 // Machines and kinds of track, in a track's heading and the machine picker (decision 104).
 

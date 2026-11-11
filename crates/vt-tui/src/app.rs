@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::accent_slide::{HeldFlag, Written, slid};
 use crate::analysing::Analyst;
-use crate::audio::{AudioChoice, DeviceInfo, LoadReadout};
+use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
 use crate::config::Settings;
 use crate::explorer::Purpose;
 use crate::exploring::Naming;
@@ -202,6 +202,9 @@ pub struct AudioState {
     /// What's chosen, which the system's own choices fill in.
     pub choice: AudioChoice,
     pub devices: Vec<DeviceInfo>,
+    /// The slowdown check's time at full speed, measured as the program starts, for each stream
+    /// it opens.
+    pub full_speed: Duration,
 }
 
 /// The whole program's state.
@@ -317,6 +320,8 @@ pub struct App {
     pub track_meters: Vec<Meter>,
     /// The CPU figure on the status line.
     pub cpu: LoadReadout,
+    /// How slowed the audio thread is, for the leaf beside it.
+    pub slowdown: SlowdownReadout,
     last_tick: Instant,
     pub should_quit: bool,
     /// Live mute and solo per track, kept outside undo and written to the song on save.
@@ -516,6 +521,7 @@ impl App {
             scope_shown: true,
             track_meters: vec![Meter::default(); MAX_TRACKS],
             cpu: LoadReadout::default(),
+            slowdown: SlowdownReadout::default(),
             last_tick: Instant::now(),
             should_quit: false,
             levels,
