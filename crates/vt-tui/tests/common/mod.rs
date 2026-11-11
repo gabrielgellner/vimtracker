@@ -1,0 +1,329 @@
+//! What the app's test files share: an app to drive, keys to press, and ways to read the
+//! screen. Each file uses some of them.
+
+#![allow(dead_code)]
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Instant;
+
+use ratatui::crossterm::event::KeyCode;
+use ratatui::style::Color;
+use vt_engine::engine::Engine;
+use vt_engine::link::{Realtime, connect};
+use vt_engine::published::Published;
+use vt_model::samples::SamplePool;
+use vt_model::song::{Phrase, Song};
+use vt_model::step::{Note, Step};
+use vt_tui::app::App;
+use vt_tui::input::keys::{Key, parse_sequence};
+
+pub fn app() -> (App, Realtime) {
+    let song = Song::new(2);
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+pub fn press(app: &mut App, keys: &str) {
+    let now = Instant::now();
+    for c in keys.chars() {
+        app.key(Key::char(c), now);
+    }
+}
+
+/// An item as a list shows it: its name, and its meaning beside it.
+pub fn listed(item: &vt_tui::input::picker::Item) -> String {
+    if item.meaning.is_empty() {
+        item.label.clone()
+    } else {
+        format!("{}  {}", item.label, item.meaning)
+    }
+}
+
+pub fn special(app: &mut App, code: KeyCode) {
+    app.key(Key::new(code), Instant::now());
+}
+
+pub fn command(app: &mut App, line: &str) {
+    press(app, ":");
+    press(app, line);
+    special(app, KeyCode::Enter);
+}
+
+pub fn folder() -> PathBuf {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let path = std::env::temp_dir().join(format!(
+        "vt-tui-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&path);
+    path
+}
+
+/// Run the audio side for a block.
+pub fn block(realtime: &mut Realtime, app: &mut App) {
+    let mut out = vec![0.0; 512];
+    realtime.process(&mut out);
+    app.tick();
+}
+
+/// A one-frame WAV, whose value comes from its name, so files of different names are different
+/// files to the bank, which knows a file by its content.
+pub fn wav(path: &std::path::Path) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let name = path.file_name().unwrap().to_string_lossy();
+    let value = name.bytes().fold(1000_i16, |value, byte| {
+        value.wrapping_mul(31).wrapping_add(i16::from(byte))
+    });
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    writer.write_sample(value).unwrap();
+    writer.finalize().unwrap();
+}
+
+pub fn screen(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+/// A kit file beside its sounds, returning the kit's path.
+pub fn kit_file() -> PathBuf {
+    let root = folder();
+    let sounds = root.join("drums");
+    std::fs::create_dir_all(&sounds).unwrap();
+    wav(&sounds.join("kick.wav"));
+    wav(&sounds.join("snare.wav"));
+    wav(&sounds.join("hat.wav"));
+    let kit = root.join("909.ron");
+    std::fs::write(
+        &kit,
+        r#"(sounds: [
+            (path: "drums/snare.wav"),
+            (path: "drums/kick.wav"),
+            (path: "drums/hat.wav"),
+        ])"#,
+    )
+    .unwrap();
+    kit
+}
+
+/// The file a track's sampler plays, through the bank.
+pub fn file_of(song: &Song, track: usize) -> Option<String> {
+    let number = song.tracks.get(track)?.sample();
+    let entry = song.bank.get(number)?;
+    Some(entry.source()?.path.clone())
+}
+
+pub fn sample_of(app: &App, track: usize) -> Option<String> {
+    file_of(app.song(), track)
+}
+
+/// Choose a machine with `K` on the Sound page's Machine row, by typing its name.
+pub fn choose_machine(app: &mut App, name: &str) {
+    press(app, " 4gg");
+    press(app, "K");
+    press(app, name);
+    special(app, KeyCode::Enter);
+}
+
+/// Run the audio side long enough to act on what was sent, and return the loudest sample.
+pub fn loudest(realtime: &mut Realtime, frames: usize) -> f32 {
+    let mut out = vec![0.0_f32; frames * 2];
+    realtime.process(&mut out);
+    out.iter().fold(0.0, |a, b| a.max(b.abs()))
+}
+
+pub fn with_a_sound(app: &mut App) {
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("tone.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+    for _ in 0..48_000 {
+        writer.write_sample(16_000_i16).unwrap();
+    }
+    writer.finalize().unwrap();
+    command(app, &format!("sample {}", path.display()));
+}
+
+/// A selected 4-step track beside a 2-step track and an 8-step track, whose steps are numbered by
+/// their notes.
+pub fn tracks_of_different_lengths() -> (App, Realtime) {
+    let mut song = Song::new(3);
+    for (id, length) in [(0, 4), (1, 2), (2, 8)] {
+        let mut phrase = Phrase::new(length);
+        for step in 0..length {
+            *phrase.step_mut(step).unwrap() = Step {
+                note: Note::On(60 + step as u8),
+                ..Step::default()
+            };
+        }
+        song.tracks[id].phrases.insert(0, Arc::new(phrase));
+    }
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+/// Down the Mod page from its top row to an LFO's row, past every envelope's.
+pub fn to_lfo(lfo: usize) -> String {
+    "j".repeat(vt_model::constants::TRACK_ENVELOPES + lfo)
+}
+
+/// Start typing a value, type it and enter it.
+pub fn typed(app: &mut App, text: &str) {
+    press(app, "i");
+    press(app, text);
+    special(app, KeyCode::Enter);
+}
+
+/// Everything the track page draws, a line at a time.
+pub fn track_page_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..16)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+pub fn alt(app: &mut App, name: &str) {
+    app.key(parse_sequence(name).unwrap()[0], Instant::now());
+}
+
+/// A key with Cmd, pressed and let go as the terminal sends it, through the check that drops
+/// unbound Cmd keys.
+pub fn with_cmd(app: &mut App, name: &str) {
+    use ratatui::crossterm::event::KeyEventKind;
+    let key = parse_sequence(name).unwrap()[0];
+    let now = Instant::now();
+    app.key_event(key, KeyEventKind::Press, now);
+    app.key_event(key, KeyEventKind::Release, now);
+}
+
+/// The FX page's lines, drawn as wide and tall as the page is beside the main meter at 163x42.
+pub fn fx_page_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..40)
+        .map(|y| (0..150).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+/// A slot's title as the FX page writes it on its frame's top: its digit, its bypass's toggle, on
+/// or off, with the no-break space that keeps it to its cell, or on an empty slot the room for one,
+/// then what's after it.
+pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
+    let switch = match switch {
+        Some(on) => format!("{}\u{a0}", vt_tui::views::widgets::toggle::glyph(on)),
+        None => "  ".to_owned(),
+    };
+    format!("╭─ {}  {switch} {controls}", slot + 1)
+}
+
+/// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back
+/// on the first slot's effect.
+pub fn four_devices(app: &mut App) {
+    for (effect, kind) in [
+        ("Comp", "=="),
+        ("EQ3", ""),
+        ("Distort", "--"),
+        ("Delay", ""),
+    ] {
+        press(app, "K");
+        press(app, effect);
+        special(app, KeyCode::Enter);
+        press(app, &format!("l{kind}h}}"));
+    }
+    press(app, "gg");
+}
+
+pub fn on_fx_page() -> (App, vt_engine::link::Realtime) {
+    let (mut app, realtime) = app();
+    press(&mut app, " 4LL");
+    (app, realtime)
+}
+
+pub fn status_line(app: &App) -> String {
+    let backend = ratatui::backend::TestBackend::new(160, 2);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
+}
+
+/// A PNG's chunk, by its name.
+pub fn png_chunk(png: &[u8], name: &[u8; 4]) -> Vec<u8> {
+    let mut at = 8;
+    while at + 8 <= png.len() {
+        let length = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+        if &png[at + 4..at + 8] == name {
+            return png[at + 8..at + 8 + length].to_vec();
+        }
+        at += 12 + length;
+    }
+    panic!("no {name:?} chunk")
+}
+
+/// A PNG's width and height in pixels.
+pub fn png_size(png: &[u8]) -> (u32, u32) {
+    let header = png_chunk(png, b"IHDR");
+    let number = |at: usize| u32::from_be_bytes(header[at..at + 4].try_into().unwrap());
+    (number(0), number(4))
+}
+
+/// The track page drawn as wide and tall as the page is beside the main meter at 163x42.
+pub fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
+
+/// A cell's glyph and colours.
+pub fn glyph_at(buffer: &ratatui::buffer::Buffer, at: (u16, u16)) -> (char, Color, Color) {
+    let cell = &buffer[at];
+    (cell.symbol().chars().next().unwrap(), cell.fg, cell.bg)
+}
+
+/// A view drawn 160 columns wide and 24 high.
+pub fn drawn(
+    app: &App,
+    draw: fn(&mut ratatui::Frame, ratatui::layout::Rect, &App),
+) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(160, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}
