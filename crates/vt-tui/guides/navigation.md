@@ -46,13 +46,14 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 1` | Song view |
 | `Space 2` | Chain view |
 | `Space 3` | Phrase view |
-| `Space 4` | Track page: filter, output, envelopes and LFOs |
+| `Space 4` | Track page: its Sound, Mod and FX pages |
 | `Space 5` | Choose this track's sample |
 | `Space 6` | Mixer |
 | `Space 7` | Audio: the device, its rate and buffer |
 | `Space 8` | Choose a kit |
 | `Space 9` | Project: tempo, grooves, scale, saving and rendering |
-| `Space Space` | Pick a view. `Enter` flips back to the last one |
+| `Space 0` | Sample page: this track's sample, big |
+| `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
 | `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
 
@@ -121,8 +122,8 @@ for loops or one-shots decides, as in Ableton's library, and otherwise a tempo s
 
 | Keys | Does |
 |---|---|
-| `l` | Open a folder and go into it, or choose |
-| `h` | Close the folder, from inside it or on it |
+| `l` `Right` | Open a folder and go into it, or choose |
+| `h` `Left` | Close the folder, from inside it or on it |
 | `Backspace` | Go up: the folder at the top becomes its parent |
 | `H` | Show hidden files, or hide them |
 | `P` | Show the preview, or hide it |

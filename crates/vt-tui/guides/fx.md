@@ -1,6 +1,6 @@
 # FX commands
 
-Each step has FX slots to the right of the Velocity column. A slot is a
+Each step has three FX slots, to the right of its gate. A slot is a
 command and a hex value. A setting that sweeps, like `CUT`, shows four digits,
 `CUT   4080`: the bold pair is the value you type, and the dim pair after it is a
 fine part, for dialling in between two values. A list's value, like `1BITS`,
@@ -35,9 +35,13 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
+| `MODE` | The filter's mode, by its place: see the track page's guide |
 | `SNA` | Send to return `A` |
 | `SNB` | Send to return `B` |
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
+| `ACC` | A voice's Accent, how hard it's struck |
+| `SMP` | A sampler's sample, by its number in the bank. `00` is none |
+| `SLI` | A sampler's slice. `STA`, `SLEN` and `PLY` too |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
@@ -66,9 +70,12 @@ or `2FDBK`, and `K` lists them under the effect's group with the names they have
 in an LFO's `Dest`, like `1 Amount`. `Bits` takes its place among the depths,
 from 2 bits at `00`, so `04` is 6 bits. A step's setting belongs to that effect,
 and a mode's to that mode, so a `2FDBK` lock does nothing once slot 2 holds a
-Reverb, and a `1BITS` lock waits for `Crush`. A Distort's `Type` isn't set from
-a step, as choosing a mode chooses a sound.
+Reverb, a `1BITS` lock waits for `Crush`, and a `1TONE` lock for a pedal. What's in
+a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of an
+`LPG` or `Comb`, isn't set from a step, as choosing it chooses a sound, and nor is a
+`Source`.
 
+`ACC`, `SMP`, `SLI`, `STA`, `SLEN` and `PLY` are in **Sounds, samples and kits**.
 `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
 others start from the values on the track page, `Space 4`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
@@ -138,8 +145,8 @@ So `12` plays every other pass, and `44` the last of four.
 A pass is each time the track plays the row since its chain started, counting its
 own steps at its own speed, so a phrase played twice in its chain counts two passes
 each time round. Passes start again wherever the chain starts: playing from the
-top, a section that brings the chain in or resets, a launch and `:reset`. Playing
-from a step counts the passes before it, as playing up to it would.
+top, a section that brings the chain in or resets, a launch, a realign, `:reset`
+and the track's own `Reset`. Playing from a step counts the passes before it, as playing up to it would.
 
 When a condition fails, the row's note, its events and its own locks are all
 skipped, as Elektron skips a trig and its locks. A column with a lane of its own
@@ -173,7 +180,7 @@ adds first. With `C D E F` and `ACU 01` on the `C`, it plays:
 C D E F | D D E F | E D E F | F D E F
 ```
 
-The track's accumulator settings are the `Acc` row on the Mod page:
+The track's accumulator settings are the `Accumulator` device on the Mod page:
 
 | Setting | Does |
 |---|---|
@@ -194,7 +201,8 @@ starts, or `Play`, only when playing starts.
 A row that `CHA` or `CND` skips doesn't add, nor does a `RST`, and two `ACU`s on
 a row add up. Playing from the top or from a step starts every accumulator from
 the notes as written, and so does the chain starting, with `Reset` at `Chain`: a
-section that brings it in or resets, a launch and `:reset`. A phrase played twice
+section that brings it in or resets, a launch, a realign, `:reset` and the
+track's own `Reset`. A phrase played twice
 in its chain moves on each time.
 
 The grid shows notes as written. While playing, the row under the playhead shows
@@ -211,12 +219,12 @@ leaves that one out, for a two-note arpeggio: `ARP 70` and `ARP 07` both go
 between the note and its fifth. Type its two digits after choosing it with `K`;
 `=` and `-` move `y`, and `+` and `_` move `x`.
 
-The track's arpeggio settings are the `Arp` row on the Mod page:
+The track's arpeggio settings are the `Arpeggio` device on the Mod page:
 
 | Setting | Does |
 |---|---|
 | `Rate` | How long each note is: `Tick`, a sixth of a step, or `1/128` to `1/8` |
-| `Mode` | `Up`, `Down`, `Up-down` or `Random` |
+| `Mode` | `Up`, `Down`, `Up-down`, `Up-down-inc` or `Random` |
 | `Oct` | How many octaves it climbs before it starts again, 1 to 4 |
 | `Retrig` | `off` only changes the pitch, `on` starts each note again |
 
@@ -225,7 +233,7 @@ long against the track's step as on a track at `1/16`, so on a track at `1/8`
 each note is twice as long, as everything that's a share of a step is. `Up` plays
 the note, `x` then `y`, then the same an octave up for each octave; `Down` plays
 that backwards from the top, `Up-down` goes up and back without playing the ends
-twice, and `Random` picks any of them each time, the same in every render. With
+twice, `Up-down-inc` plays them twice, and `Random` picks any of them each time, the same in every render. With
 `Oct` at 2, `ARP 00` goes between the note and its octave. With `Retrig` off each
 note only changes the pitch, and on `Acid` it slides; on, each note starts again
 with its envelopes, as a `RET` does.
@@ -289,7 +297,7 @@ is the project's. `K` lists them by name.
 
 ## Speed
 
-A track's `Speed`, on its Sound page, is how long each of its steps is: `1/32`,
+A track's `Speed`, in its Sound page's Play device, is how long each of its steps is: `1/32`,
 `1/16T`, `1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`, the song's `1/16` unless
 changed. A track at `1/8` plays its rows half as fast, and everything on it
 follows its step: its pulses, its lanes, `DEL`, `KIL`, `OFF` and `RET`, its

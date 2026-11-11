@@ -71,9 +71,9 @@ isn't here: it's on the master's Sound page, after its `Level`, and `:set limite
 switches it too.
 
 It moves as the track page does: `j` `k` go between rows and keep their column,
-`h` `l` between settings, `=` `-` `+` `_` change a value, as do Cmd with `l` `h` `k`
-`j` without moving, `i` types one, as its
-command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
+`gg` `G` to the first or last row, or row n with a count, `h` `l` between settings
+and `0` `$` to the first or last. `=` `-` `+` `_` change a value, as do `C-a` `C-x`
+and Cmd with `l` `h` `k` `j`, `i` types one, as its command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
 and switches Auto-jump, and `x` puts one back as a new project has it.
 
 At the bottom are Save, Save as, Render, Open and New, which `Enter` does: they are
@@ -155,17 +155,41 @@ The file starts with every track at its start, and is as long as the `:reset`
 if there is one, or else the longest track. Tracks that don't divide that
 length won't join up when the file repeats, so set a reset or use `--rows`.
 
-From a shell, `vimtracker render my-song out.wav` renders a saved project
-with no sound device. It stops if a sample is missing.
+## From a shell
 
-`vimtracker bench my-song` plays a saved project as fast as it can, stopped
-and then playing, and says how much of a core it took. The CPU figure on the
-status line reads higher for the same project: it's the share of each block's
-time, and macOS runs a lightly loaded audio thread on a slower core or clock,
-then speeds it up as the load rises; the `󰌪` before the figure says so. With
-`--device` it plays through the sound device, silently, as the program does, and
-says how much the system slowed it; `--buffer 128` asks the device for another
-buffer than the audio page's.
+These run without opening the program, and need no kitty: give them a saved
+project's folder.
+
+| Command | Does |
+|---|---|
+| `vimtracker render my-song out.wav` | Render it, with no sound device |
+| `vimtracker bench my-song` | Say how much of a core it takes |
+| `vimtracker notes my-song out.toml` | Write a track's notes, as TOML |
+| `vimtracker probe spec.toml out.wav` | Play one voice or effect alone |
+| `vimtracker probe-keys` | Show the keys the terminal sends |
+| `vimtracker kits import-ableton` | Make a kit of each of Live's racks |
+
+`render` takes the same `--rows`, `--tail`, `--stems` and `--split` as `:render`,
+and `--seed` for another seed. It stops if a sample is missing.
+
+`bench` plays the project as fast as it can, stopped and then playing, and says
+how much of a core it took. The CPU figure on the status line reads higher for
+the same project: it's the share of each block's time, and macOS runs a lightly
+loaded audio thread on a slower core or clock, then speeds it up as the load
+rises; the `󰌪` before the figure says so. `--tracks` also says how long each
+track, slot, group, return and the master take, and `--paced` plays each block
+when its time comes, as the audio thread does. With `--device` it plays through
+the sound device, silently, as the program does, and says how much the system
+slowed it; `--buffer 128` asks the device for another buffer than the audio
+page's.
+
+`notes` and `probe` are for comparing vimtracker's sound with other instruments
+in `tools/compare`: `notes` writes one track's notes once through its chain, with
+the tempo and its machine's settings, `--track BD` for a track by name, and `probe`
+renders a voice or an effect from a spec file. `probe-keys` prints each key event
+as the program receives it, and whether the terminal has the kitty keyboard and
+graphics protocols, for when a key doesn't do what it should. **Sounds, samples
+and kits** has `kits import-ableton`.
 
 ## Autosave
 

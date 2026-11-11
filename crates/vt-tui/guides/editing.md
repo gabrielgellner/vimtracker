@@ -18,6 +18,7 @@ Follow one with a motion or a target, or double it for this whole step:
 | `dj` | Clear this column here and on the next step |
 | `d4j` | Clear this column here and on the next 4 steps |
 | `yy` | Copy this step |
+| `>>` `<<` | Shift this step's values up or down a step |
 | `dib` | Clear this beat, whole steps |
 | `dic` | Clear this column, whole phrase |
 | `dip` | Clear this phrase, whole steps |
@@ -46,16 +47,20 @@ Move to grow the selection. The cursor shows which end is moving. Then press
 A selection stays until `Esc` while you change its values, so `+ + -` can go in
 one after the other as the loop plays, as Vim's popular `vnoremap > >gv` does.
 Each press is its own undo, so `u` takes them back one at a time and the
-selection stays. The status line keeps the running total for the selection, as
-`+11 semitones` for notes, or `+1 large step, -2 steps` for other values. With
-the scale on, `=` and `-` count in degrees of it. `d`, `x`, `y`, `S` and `~` end
-the selection, and `gv` brings back the last one, even after `Esc`.
+selection stays, and past its own presses `u` takes back what came before. The
+cursor stays where it is. The status line keeps the running total for the
+selection, in its first column's unit: `+11 semitones` for notes, 24ths for a
+nudge, or `+1 large step, -2 steps` for other values. With the scale on, `=` and
+`-` count in degrees of it. `.` repeats a press and keeps the selection. `d`,
+`x`, `y`, `S` and `~` end the selection, and `gv` brings back the last one, even
+after `Esc`.
 
 `r` fills the cursor's column across the selection, as one undo: `vGra` writes
 a C on every step to the end of the loop. Notes already there keep their
 velocity. A velocity only goes on steps with a
 note, an FX value only on steps with a command, and `.` repeats it. The
-selection comes back afterwards, so another `r` picks again.
+selection comes back afterwards, so another `r` picks again, and `Esc` at its
+prompt comes back to it too. The running total starts again after a fill.
 
 ## Across tracks
 

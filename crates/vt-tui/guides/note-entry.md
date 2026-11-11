@@ -168,7 +168,8 @@ project.
 
 `Backspace` clears a note with the velocity it was written with. A `--` in the Velocity column plays at full.
 
-For how loud a whole track is, use `:tvol`. See **Phrases and chains**.
+For how loud a whole track is, use its `Level`, on the mixer or the Sound page's
+Output, or `:tvol`. See **Phrases and chains**.
 
 ## The other columns
 
@@ -246,8 +247,8 @@ lasts half its step, and `SGL3 40` two steps and a quarter. It's on the `00` to
 `FF` scale, with `FF` all of it, and drawn dim. `l` goes from the gate onto it,
 two hex digits in Insert or after `r` set it, `=` and `-` move it by one and `+`
 and `_` by 16, and `x` takes it away. It's copied and pasted with the gate. An
-empty one, `--`, is the track's `Gate`, on the track page under `Choke`, and `=`
-or `-` on it start from there.
+empty one, `--`, is the track's `Gate`, in the Sound page's Play device under
+`Glide`, and `=` or `-` on it start from there.
 
 | Gate | At `Gate` 50% |
 |---|---|

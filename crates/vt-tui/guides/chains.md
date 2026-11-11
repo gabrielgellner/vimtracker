@@ -42,7 +42,8 @@ To bring them back together on a schedule, set a reset:
 | `:reset off` | Let them run, the default |
 
 The status line shows `Reset 64` while one is on. A track longer than the
-reset never reaches its end. You can change it while playing: the beat stays
+reset never reaches its end. A single track can have a reset of its own: its
+`Reset`, in the Sound page's Play device. You can change it while playing: the beat stays
 put, and if the tracks are already past the new reset they go back on the
 next step. LFOs keep running through a reset.
 
@@ -53,10 +54,12 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | Keys | Does |
 |---|---|
 | `j` `k` | Next or previous row |
+| `gg` `G` | The first row, or the empty one at the end |
 | `h` `l` | Phrase or Transpose column. `0` and `$` do the same |
 | `gd` | Open this phrase, or add one on the empty row |
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
 | `=` `-` | Next or previous phrase, or transpose by a semitone |
+| `C-a` `C-x` | The same as `=` `-` |
 | `+` `_` | Phrase number by `10` in hex, or transpose by an octave |
 | `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
 | `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
@@ -87,9 +90,9 @@ an edit changes all of them.
 | `:track add 4` | Add 4 tracks |
 | `:track del` | Remove the last track, with its chains and phrases |
 | `:tvol C0` | Set this track's level in hex, shown as `TVol` |
-| `Space 4` | The track page: filter, envelopes, LFOs |
-| `Space m` | Mute or unmute this track |
-| `Space s` | Solo or unsolo this track |
+| `Space 4` | The track page: its sound, modulation and effects |
+| `Space m`, `:mute` | Mute or unmute this track |
+| `Space s`, `:solo` | Solo or unsolo this track |
 | `Space M` | Clear all mutes and solos |
 
 A tap of `m` or `s` switches the mute or solo and leaves it. Hold the key down
@@ -130,8 +133,10 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | Keys | Does |
 |---|---|
 | `j` `k` | Next or previous section |
+| `gg` `G` | The first or last section |
 | `h` `l` | Previous or next column |
-| `=` `-` `+` `_` | Change the value |
+| `0` `$` | The length column, or the last track's |
+| `=` `-` `+` `_` | Change the value. `C-a` and `C-x` are `=` `-` |
 | `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
 | `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
 | `i` | Type a length or repeat then `Enter`, or a chain's two hex digits |
@@ -145,6 +150,9 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `Enter` | While playing, play this chain on its track next, or stop it on `--` |
 | `C` | While playing, add a section of what's playing, and stay on it |
 | `;` | Hear its first row |
+
+`z a` folds a group's tracks into its column, `z M` folds every group and `z R`
+opens them: see **Folding a group** in **The track page, envelopes and LFOs**.
 
 Sections play in order, and the song goes round to the first at the end. A
 section lasts as long as its longest chain unless you set its length, which
@@ -191,6 +199,17 @@ waiting when the song moves on starts with the new section.
 
 `1bar` is the default. A longer chain is cut at the line, and a shorter one loops
 until it. Launching the chain already playing starts it again.
+
+Tracks that have drifted apart can be brought back together on the same grid,
+once, as a `:reset` would, without changing what they play:
+
+| Keys | Does, while playing |
+|---|---|
+| `Space A` | Send every track back to its start at the next line |
+| `Space a` | Start this track's chain again at the next line |
+
+Press either again before the line to take it back. While one waits, the status
+line shows `󰔟 REALIGN`. With `:launch chain` they wait for the next bar.
 
 `:label verse bass` names the chain under the cursor, in the song and chain views,
 and `:label` alone clears it. Its number stays what rows refer to. The status line
