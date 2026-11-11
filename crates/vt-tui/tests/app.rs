@@ -3120,7 +3120,7 @@ fn cmd_with_the_movement_keys_changes_the_mixer() {
     assert_eq!(app.song().tracks[0].level, 0xD1);
 }
 
-/// Each Cmd key does here what the key it stands for does (decision 147): the same change to the
+/// Each Cmd key does here what the key it stands for does (decision 148): the same change to the
 /// song, the cursor left where that leaves it, and the mode the same. Each is undone after, so
 /// the next starts from the same place, and at least one of them changes something.
 #[track_caller]

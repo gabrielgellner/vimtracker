@@ -40,6 +40,7 @@
 use vt_model::insert::{GateMode, LowPassGate as Settings};
 
 use crate::dsp::blocks::plaits_parts::{Svf, tan_accurate};
+use crate::dsp::blocks::sides::Sides;
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The rate Streams runs at, which its per-sample constants are for.
@@ -294,7 +295,8 @@ impl Vactrol {
 pub struct LowPassGate {
     follower: Follower,
     vactrol: Vactrol,
-    filters: [Svf; 2],
+    /// Each side's filter, worked out once for both while a sound is the same on both.
+    filters: Sides<Svf>,
     amount: Smoothed,
     base: Smoothed,
     resonance: Smoothed,
@@ -350,11 +352,12 @@ impl LowPassGate {
     }
 
     /// One frame through the gate, all wet, opened by `key`: the frame itself unless it hears
-    /// another track.
+    /// another track. `same` says the frame's two sides are the same, bit for bit.
     #[inline]
     pub fn process(
         &mut self,
         input: [f32; 2],
+        same: bool,
         key: [f32; 2],
         settings: Settings,
         smoothing: f32,
@@ -377,14 +380,12 @@ impl LowPassGate {
         let hertz = LOWEST_HERTZ * (self.cutoff.min(1.0) * OCTAVES).exp2();
         let g = tan_accurate((hertz / rate as f32).min(0.45));
         let q = LEAST_Q * (MOST_Q / LEAST_Q).powf(resonance);
-        let filtered = 1.0 - vca;
-        let mut out = [0.0; 2];
-        for ((out, filter), sample) in out.iter_mut().zip(&mut self.filters).zip(input) {
+        let (filtered, level) = (1.0 - vca, self.level);
+        self.filters.process(input, same, |filter, sample| {
             filter.set_g_q(g, q);
             let low = filter.low_pass(sample);
-            *out = (low * filtered + sample * vca) * self.level;
-        }
-        out
+            (low * filtered + sample * vca) * level
+        })
     }
 }
 
@@ -458,7 +459,7 @@ mod tests {
                 } else {
                     0.0
                 };
-                gate.process([sample; 2], [sample; 2], settings, 1.0, rate);
+                gate.process([sample; 2], true, [sample; 2], settings, 1.0, rate);
                 gate.opening().0
             })
             .collect()
@@ -495,6 +496,7 @@ mod tests {
             };
             gate.process(
                 [sample; 2],
+                true,
                 [sample; 2],
                 settings(GateMode::Gate),
                 1.0,
@@ -536,7 +538,7 @@ mod tests {
         let frames = RATE as usize;
         for frame in 0..frames {
             let sample = saw(110.0, frame, RATE) * level;
-            let out = gate.process([sample; 2], [sample; 2], settings, 1.0, RATE)[0];
+            let out = gate.process([sample; 2], true, [sample; 2], settings, 1.0, RATE)[0];
             let (above, _, _) = high.process_all(out);
             if frame >= frames / 2 {
                 energy += f64::from(above * above);
@@ -590,7 +592,7 @@ mod tests {
             let mut gate = LowPassGate::default();
             for frame in 0..RATE as usize / 2 {
                 let sample = sine(220.0, frame, RATE) * 0.8;
-                let out = gate.process([sample; 2], [0.0; 2], settings(mode), 1.0, RATE);
+                let out = gate.process([sample; 2], true, [0.0; 2], settings(mode), 1.0, RATE);
                 assert_eq!(out, [0.0; 2], "{mode:?} {frame}");
             }
         }
@@ -598,7 +600,14 @@ mod tests {
         let mut gate = LowPassGate::default();
         for frame in 0..RATE as usize / 2 {
             let sample = sine(220.0, frame, RATE) * 0.8;
-            gate.process([sample; 2], [0.0; 2], settings(GateMode::Filter), 1.0, RATE);
+            gate.process(
+                [sample; 2],
+                true,
+                [0.0; 2],
+                settings(GateMode::Filter),
+                1.0,
+                RATE,
+            );
         }
         assert_eq!(gate.opening(), (1.0, 0.0));
     }
@@ -622,7 +631,7 @@ mod tests {
                 };
                 // A steady low tone, so what moves is the gate and not the sound.
                 let sample = sine(55.0, frame, RATE) * 0.5;
-                let out = gate.process([sample; 2], [sample; 2], jumpy, smoothing, RATE)[0];
+                let out = gate.process([sample; 2], true, [sample; 2], jumpy, smoothing, RATE)[0];
                 if frame > RATE as usize / 2 {
                     assert!(
                         (out - last).abs() < 0.03,
@@ -638,7 +647,14 @@ mod tests {
         for frame in 0..RATE as usize * 2 {
             let mode = GateMode::ALL[frame / 4800 % 3];
             let sample = sine(55.0, frame, RATE) * 0.5;
-            let out = gate.process([sample; 2], [sample; 2], settings(mode), smoothing, RATE)[0];
+            let out = gate.process(
+                [sample; 2],
+                true,
+                [sample; 2],
+                settings(mode),
+                smoothing,
+                RATE,
+            )[0];
             if frame > RATE as usize / 2 {
                 assert!(
                     (out - last).abs() < 0.03,
@@ -682,7 +698,14 @@ mod tests {
                         } else {
                             0.0
                         };
-                        let out = gate.process([sample, -sample], [sample; 2], settings, 1.0, rate);
+                        let out = gate.process(
+                            [sample, -sample],
+                            false,
+                            [sample; 2],
+                            settings,
+                            1.0,
+                            rate,
+                        );
                         assert!(out.iter().all(|s| s.is_finite()), "{rate} {mode:?}");
                         most = most.max(out[0].abs()).max(out[1].abs());
                     }

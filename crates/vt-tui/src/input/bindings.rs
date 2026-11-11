@@ -278,7 +278,7 @@ const BEAT: isize = BEAT_STEPS as isize;
 /// so the hand that moves can nudge without leaving the home row: left and right a small step, up
 /// and down a large one. This is the one place the rule is kept: every mode that binds `=`, `-`,
 /// `+` or `_` gets its Cmd key beside it, meaning the same, unless the mode binds that Cmd key
-/// itself, as the sample page's frame nudge does (decision 147).
+/// itself, as the sample page's frame nudge does (decision 148).
 pub const CMD_ADJUSTS: [(&str, &str); 4] = [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")];
 
 /// The key a Cmd key stands for by [`CMD_ADJUSTS`], for the keys read outside the table, as the
@@ -729,7 +729,7 @@ const AUDIO: &[(&str, Cmd, &str)] = &[
     ("=", Cmd::Increase, "The next choice"),
     ("-", Cmd::Decrease, "The previous choice"),
     // There's no large step through a list of choices, so `+` and `_` aren't bound, but Cmd-k
-    // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision 147).
+    // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision 148).
     ("D-k", Cmd::IncreaseLarge, "The next choice, as D-l"),
     ("D-j", Cmd::DecreaseLarge, "The previous choice, as D-h"),
     ("x", Cmd::ClearField, "Back to the system's own choice"),

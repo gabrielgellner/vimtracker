@@ -143,7 +143,7 @@ enum Adjustment {
 }
 
 /// The changes made on a selection that stays until `Esc`, so the status line can say what they
-/// add up to (decision 147). Each is its own undo step, and undo and redo while it's selected take
+/// add up to (decision 148). Each is its own undo step, and undo and redo while it's selected take
 /// them back and bring them again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Adjustments {

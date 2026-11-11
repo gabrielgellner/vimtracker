@@ -333,6 +333,13 @@ and free on a thread while it's armed, and the tests in `link.rs` run whole bloc
 versions, taking long buffers and filling the scope among them. `cargo test --release` runs them
 against optimised code too.
 
+**Work skipped.** Playing from the top resets only the track states the song's versions have had a
+track in since the last reset, `Engine::used`; the rest keep the empty track's settings that reset
+gave them. A track looks once a frame at whether its sound is the same on both sides after its
+filter, and each slot passes that on: an effect that says it works each side alone
+(`Mono::OneSide`) works out one side for both, keeping each side's state in `Sides`, and one with
+linked sides (`Mono::Linked`) passes it on unchecked (decision 147).
+
 **Samples.** The pool only grows during a session, and sample IDs stay stable, so a voice keeps
 reading its sample until its note ends, and a replaced sample stays in memory until the project
 reloads.
@@ -463,9 +470,9 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
-| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `smoother`, `sine_table`, `plaits_parts` |
+| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A part that two folders would
 share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of #260,
@@ -515,12 +522,12 @@ only name Normal's keys on those pages, for the binding table.
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
     beside them, unless the mode binds one itself, and `adjusting_key` turns them into those keys
-    for the shape panel, which reads its own (decision 147).
+    for the shape panel, which reads its own (decision 148).
 *   **`grammar.rs`:** counts, registers, operators, Visual modes and `.`, on top of the table. A
     command ends in an `Action` through `App::apply`, or a `Command` to the engine. A selection
     stays through what moves or fills its values, and `Adjustments` counts those for the status
     line's running total, going back and forward with undo and redo; `SelectionPlace` is a
-    selection to come back to after `r` (decision 147).
+    selection to come back to after `r` (decision 148).
 *   **`picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
     also the file explorer. `picking.rs`, `explorer.rs` and `exploring.rs` open it and act on what it
     chooses.

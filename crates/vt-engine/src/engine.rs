@@ -100,6 +100,10 @@ pub struct Engine {
     rate: u32,
     current: Arc<Published>,
     tracks: Box<[TrackState; MAX_TRACKS]>,
+    /// How many track states, from the first, the song's versions have had tracks in since tracks
+    /// were last reset: as tracks come and go, the fixed tracks' states move with them, but never
+    /// past the most there have been. The rest have the settings that reset gave them.
+    used: usize,
     /// The voices the keyboard plays through, each tied to the note its key started.
     previews: Previews,
     /// The tracks the last audition started a note on, for letting go of them when its key is.
@@ -200,6 +204,8 @@ impl Engine {
                 .collect::<Box<[TrackState]>>()
                 .try_into()
                 .unwrap_or_else(|_| unreachable!("one state for each track")),
+            // None has been reset yet.
+            used: MAX_TRACKS,
             previews: Previews::default(),
             auditioned: [false; MAX_TRACKS],
             files: [None, None],
@@ -781,6 +787,9 @@ impl Engine {
     /// no longer exists is silent, and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
+        self.used = self
+            .used
+            .max(self.current.song.tracks.len().min(MAX_TRACKS));
         self.keep_fixed_tracks(old.song.sound_tracks());
         self.line_up_new_tracks(old.song.sound_tracks());
         self.keep_places(&old.song);
@@ -1180,14 +1189,25 @@ impl Engine {
         self.reset_tracks();
     }
 
+    /// Reset every track state's held values, random generators and LFOs, those past the song's
+    /// tracks as an empty track's. Going through every setting is most of the time this takes, so
+    /// a state past the tracks of every version since the last reset, and silent, has only the rest
+    /// reset: its settings are still the empty track's that reset gave it, as only a track the song
+    /// has changes them.
     fn reset_tracks(&mut self) {
         let seed = self.current.song.seed;
         let fresh = Track::default();
         let tracks = &self.current.song.tracks;
         for (index, state) in self.tracks.iter_mut().enumerate() {
-            let track = tracks.get(index).unwrap_or(&fresh);
-            state.reset_held(seed, index, track, self.clock);
+            let used = index < self.used || state.sounding() || state.ringing(self.rate);
+            if used {
+                let track = tracks.get(index).unwrap_or(&fresh);
+                state.reset_held(seed, index, track, self.clock);
+            } else {
+                state.reset_all_but_settings(seed, index, self.clock);
+            }
         }
+        self.used = tracks.len().min(MAX_TRACKS);
     }
 
     /// Stop sequencing but let everything sounding finish on its own, for a render's tail.

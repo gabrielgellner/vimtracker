@@ -1,5 +1,7 @@
 //! Going to twice the rate and back, for what would otherwise alias.
 
+use super::sides::SameBits;
+
 /// A chain of first-order allpass filters, `(a + z^-1) / (1 + a z^-1)`.
 #[derive(Debug, Clone, Copy, Default)]
 struct Allpass {
@@ -89,5 +91,26 @@ impl PairOversampler {
         let a = self.down[0].process(second, &HALFBAND_A);
         let b = self.down[1].process(first, &HALFBAND_B);
         0.5 * (a + b)
+    }
+}
+
+impl SameBits for Allpass {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.state.same_bits(&other.state)
+    }
+}
+
+impl SameBits for Oversampler {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.up.same_bits(&other.up) && self.down.same_bits(&other.down)
+    }
+}
+
+impl SameBits for QuadrupleOversampler {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.outer.same_bits(&other.outer) && self.inner.same_bits(&other.inner)
     }
 }
