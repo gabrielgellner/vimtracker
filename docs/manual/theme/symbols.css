@@ -1,0 +1,17 @@
+/* The Nerd Font symbols the program draws, as the guides show them. A browser has no Nerd Font,
+   so the manual carries its own, cut down to those symbols, and falls back to it for them alone. */
+@font-face {
+    font-family: "Symbols Nerd Font Mono";
+    src: url("../symbols/symbols-nerd-font-mono.woff2") format("woff2");
+    unicode-range: U+E000-F8FF, U+F0000-FFFFD;
+    font-display: block;
+}
+
+:root {
+    --mono-font: "Source Code Pro", Consolas, "Ubuntu Mono", Menlo, "DejaVu Sans Mono",
+        "Symbols Nerd Font Mono", monospace, monospace;
+}
+
+html {
+    font-family: "Open Sans", "Symbols Nerd Font Mono", sans-serif;
+}

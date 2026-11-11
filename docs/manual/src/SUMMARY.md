@@ -10,15 +10,15 @@
 
 # How it works
 
-- [How a track plays: time, gates and lanes](how-a-track-plays.md)
+- [How a track plays: time, gates, lanes and routing](how-a-track-plays.md)
 
 # Reference
 
 - [Selecting and editing](guides/editing.md)
 - [Phrases and chains](guides/chains.md)
 - [FX commands](guides/fx.md)
-- [The track page, envelopes and LFOs](guides/tracks.md)
+- [The track pages: Sound, Mod and FX](guides/tracks.md)
 - [Sounds, samples and kits](guides/sounds.md)
 - [The sample editor](guides/sample-editor.md)
-- [The meter](guides/meter.md)
+- [The meter and the audio page](guides/meter.md)
 - [Saving and rendering](guides/saving.md)
