@@ -120,10 +120,18 @@ lowest and highest.
 | No notes | Rows without a note |
 | Every | Every so many rows, counting from the first selected |
 | Chance | Each row with this percent chance |
+| Euclid | `Hits` spread as evenly as they go, with `Rotate` below it |
+
+`Euclid` spreads its hits over the rows it could change, as the Euclidean
+rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
+counts among the notes however they're spaced, so 5 hits over 16 hats accent 5
+of them. `Hits` shows how many rows it spreads them over, as in `5 of 16`.
+`Rotate` moves every hit that many of those rows later, going round, so 3 in 8
+rotated by 1 is `.x..x..x`.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
-spacing along it. A velocity only ever goes on a note, so for Velocity, Every
-and Chance choose among the notes. On an FX column, the command is the first one
+spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
+Chance and Euclid choose among the notes. On an FX column, the command is the first one
 selected, and a row holding a different command keeps it.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`

@@ -1509,6 +1509,61 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
 }
 
 #[test]
+fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
+    use vt_model::shape::Where;
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_with(&["C-3 40 --- --- ---"; 8]);
+    keys(&mut app, "lvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    keys(&mut app, "Kalt<Enter>ji7Fji00jjKeuc<Enter>");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 3, rotate: 0 }
+    );
+    // The tresillo, then Alternate counts among the rows it changes.
+    assert_eq!(vel(&app), ["7F", "40", "40", "00", "40", "40", "7F", "40"]);
+    keys(&mut app, "j");
+    assert_eq!(panel(&app).row, ShapeRow::Hits);
+    keys(&mut app, "==");
+    assert_eq!(vel(&app), ["7F", "40", "00", "7F", "40", "00", "7F", "40"]);
+    keys(&mut app, "+");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 8, rotate: 0 },
+        "no more than 8"
+    );
+    keys(&mut app, "i5<Enter>j");
+    assert_eq!(panel(&app).row, ShapeRow::Rotate);
+    keys(&mut app, "-");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 5, rotate: 7 },
+        "it goes round"
+    );
+    keys(&mut app, "i9<Enter>");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 5, rotate: 1 }
+    );
+    assert_eq!(vel(&app), ["40", "7F", "40", "00", "7F", "40", "00", "7F"]);
+    keys(&mut app, "x");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 5, rotate: 0 }
+    );
+    keys(&mut app, "kx");
+    assert_eq!(
+        panel(&app).shape.place,
+        Where::Euclid { hits: 3, rotate: 0 }
+    );
+    // Another Where hides Hits and Rotate.
+    keys(&mut app, "kKnotes<Enter>");
+    assert!(!panel(&app).rows().contains(&ShapeRow::Hits));
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), 1);
+}
+
+#[test]
 fn random_fill_stays_in_range_and_rerolls() {
     let rows = vec!["C-3 40 --- --- ---".to_owned(); 64];
     let (mut app, _rt) = app_of(&rows);
