@@ -661,7 +661,11 @@ impl App {
             Pick::Folder(folder) => self.name_in(&folder),
             Pick::Project(folder) => {
                 self.note_place_of(Purpose::Project, &folder);
-                self.line(crate::input::command::Line::Edit(Some(folder)));
+                let force = std::mem::take(&mut self.opening_discards);
+                self.line(crate::input::command::Line::Edit {
+                    path: Some(folder),
+                    force,
+                });
             }
             Pick::KitSound {
                 path,

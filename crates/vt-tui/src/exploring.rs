@@ -11,7 +11,7 @@ use vt_model::bank::BankEntry;
 use vt_model::names::numbered;
 use vt_model::project;
 
-use crate::app::App;
+use crate::app::{App, UNSAVED_OPEN};
 use crate::config::home_folder;
 use crate::explorer::{Purpose, place_name};
 use crate::input::command;
@@ -99,7 +99,7 @@ fn is_stems(flags: &str) -> bool {
 }
 
 /// The commands whose line ends in a name, which `C-r` can roll.
-const NAMED_BY: [&str; 3] = ["w", "new", "render"];
+const NAMED_BY: [&str; 4] = ["w", "new", "new!", "render"];
 
 /// A name line with a new name from `name_in`, given the folder as typed, in place of the last
 /// part of its path. The folder, an extension and `:render`'s flags are kept, and a render with no
@@ -266,12 +266,14 @@ impl App {
         self.show_picker(picker);
     }
 
-    /// `:e` with no folder: choose a project to open, beside this one.
-    pub(crate) fn open_project_explorer(&mut self) {
-        if self.dirty {
-            self.status = "Unsaved changes: use :w to save first".to_owned();
+    /// `:e` with no folder: choose a project to open, beside this one. Forced, as `:e!`, the
+    /// project chosen throws away unsaved changes.
+    pub(crate) fn open_project_explorer(&mut self, force: bool) {
+        if self.dirty && !force {
+            self.status = UNSAVED_OPEN.to_owned();
             return;
         }
+        self.opening_discards = force;
         let roots = self.places(Purpose::Project);
         let on = self.folder.clone();
         self.open_explorer(Purpose::Project, roots, on.as_deref());
