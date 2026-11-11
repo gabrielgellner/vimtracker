@@ -61,6 +61,10 @@ pub enum Cmd {
     PreviousTrack,
     ToggleMute,
     ToggleSolo,
+    /// Switch the cursor's track's mute, or its solo, at the next line of the launch grid, or
+    /// take back a switch waiting for it.
+    MuteOnGrid,
+    SoloOnGrid,
     ClearMutes,
     /// Turn fill on or off, for the conditions that play only with it or without it.
     ToggleFill,
@@ -219,6 +223,16 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Space s",
         Cmd::ToggleSolo,
         "Solo or unsolo; held, until let go",
+    ),
+    (
+        "Space g m",
+        Cmd::MuteOnGrid,
+        "Mute or unmute on the launch grid, or take it back",
+    ),
+    (
+        "Space g s",
+        Cmd::SoloOnGrid,
+        "Solo or unsolo on the launch grid, or take it back",
     ),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
     (

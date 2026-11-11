@@ -437,8 +437,13 @@ fn track_name(app: &App, track: usize) -> String {
 
 /// The glyph for a track that's muted or soloed, if it is, and its style: the active colour for
 /// its own, or its group's colour for its group's. A mute wins, as the track is silent, and one of
-/// its own wins over its group's.
+/// its own wins over its group's. A mute or solo waiting for the launch grid is the glyph for
+/// waiting, dim, until it switches.
 pub(crate) fn level_glyph(app: &App, track: usize) -> Option<(char, Style)> {
+    let jam = app.jam.get(track).copied().unwrap_or_default();
+    if jam.mute_waiting || jam.solo_waiting {
+        return Some((glyphs::WAITING, theme::dim()));
+    }
     let (muted, soloed) = (group::muted(app, track), group::soloed(app, track));
     let order = [
         (muted == Switched::Own, glyphs::MUTE, muted),

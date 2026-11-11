@@ -642,6 +642,13 @@ pub struct TrackState {
     /// Live controls, kept here rather than in the song so undo can't change them.
     pub mute: bool,
     pub solo: bool,
+    /// Whether its mute or its solo switches at the next line of the launch grid, as `Space g m`
+    /// and `Space g s` ask while playing.
+    pub mute_waiting: bool,
+    pub solo_waiting: bool,
+    /// How many switches waiting for the grid have landed, so the edit thread can tell a landing
+    /// from its own switches and follow it.
+    pub switches_landed: u8,
     /// On a return, whether it's heard, so muting fades.
     pub heard: Smoothed,
     /// On a sound track in a group, whether it plays into the group. It's what's heard, but while a
@@ -864,6 +871,9 @@ impl TrackState {
             reading: Reading::default(),
             mute: false,
             solo: false,
+            mute_waiting: false,
+            solo_waiting: false,
+            switches_landed: 0,
             heard: Smoothed::at(1.0),
             feeds: Smoothed::at(1.0),
             rng: Pcg32::new(seed, index as u64),

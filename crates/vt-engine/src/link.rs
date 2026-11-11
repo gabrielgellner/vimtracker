@@ -81,6 +81,12 @@ pub enum Command {
     /// `Space a`: start one track's chain again at the next line of the launch grid, or take back
     /// one waiting for it.
     RealignTrack { track: usize },
+    /// `Space g m`: switch a track's mute at the next line of the launch grid, or take back a
+    /// switch waiting for it.
+    MuteOnGrid { track: usize },
+    /// `Space g s`: switch a track's solo at the next line of the launch grid, or take back a
+    /// switch waiting for it.
+    SoloOnGrid { track: usize },
     /// Set the scale an `ACU` moves notes through.
     SetScale { scale: Scale },
     /// Play a chain on one track when its launch timing allows, or stop it then.
@@ -107,6 +113,13 @@ pub struct JamState {
     pub started: i64,
     /// What's added to that count for each FX column's lane.
     pub lane_offsets: [i64; FX_SLOTS],
+    /// Its mute and solo, and whether each switches at the next line of the launch grid.
+    pub mute: bool,
+    pub solo: bool,
+    pub mute_waiting: bool,
+    pub solo_waiting: bool,
+    /// How many of those switches have landed, which changes when one does.
+    pub switches_landed: u8,
 }
 
 /// What the callback reports back each block.
@@ -427,6 +440,8 @@ impl Realtime {
                 Command::SetFill { on } => self.engine.set_fill(on),
                 Command::Realign => self.engine.toggle_realign(),
                 Command::RealignTrack { track } => self.engine.toggle_realign_track(track),
+                Command::MuteOnGrid { track } => self.engine.toggle_mute_on_grid(track),
+                Command::SoloOnGrid { track } => self.engine.toggle_solo_on_grid(track),
                 Command::SetScale { scale } => self.engine.set_scale(scale),
                 Command::SetSolo { track, solo } => self.engine.set_solo(track, solo),
                 Command::Launch { track, chain } => self.engine.launch(track, chain),
