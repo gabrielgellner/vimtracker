@@ -6,7 +6,7 @@ its name. Reading it runs `vimtracker notes`, which reads the song with the prog
 never writing to it, and gives that track's notes once through its chain, the song's tempo and the
 track's settings. The whole spec is then written from them into `out/songs/` under the stub's
 name, and read in its place, so every side plays the same notes and nothing of the line is written
-into the repository (decision 141). Only `nuance-chirp-riff` is one so far, and
+into the repository (decision 142). Only `nuance-chirp-riff` is one so far, and
 `nuance_specs.song_spec` writes it.
 
 The folder can be changed without touching the spec, by `VT_COMPARE_SONG` or `run.py --song`, the

@@ -1,7 +1,7 @@
 //! `vimtracker notes`: one track's notes from a saved project, once through its chain, with the
 //! song's tempo and the track's machine settings, written as TOML for `tools/compare` to play on
 //! every side. A song's line is read from the song itself, so no line has to be copied into the
-//! repository to be compared (decision 141).
+//! repository to be compared (decision 142).
 //!
 //! The notes are timed as the sequencer plays them: each row's pulses at the track's speed, a
 //! `Single` held its gate's share of the way through its last pulse, a `Multi` sounding on each

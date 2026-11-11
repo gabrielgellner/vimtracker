@@ -685,7 +685,7 @@ These need no terminal and no sound device, so they run anywhere.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 
-**Decisions:** 13, 68, 110, 113, 123, 125, 133 and 141, with CUJ 7 and #190 for `bench`.
+**Decisions:** 13, 68, 110, 113, 123, 125, 133 and 142, with CUJ 7 and #190 for `bench`.
 
 ### Testing
 

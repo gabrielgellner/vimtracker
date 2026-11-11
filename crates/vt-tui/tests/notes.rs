@@ -1,5 +1,5 @@
 //! `vimtracker notes`: a track's notes from a song, once through its chain, timed as the sequencer
-//! plays them, for tools/compare to play on every side (decision 141).
+//! plays them, for tools/compare to play on every side (decision 142).
 
 use std::path::PathBuf;
 use std::sync::Arc;
