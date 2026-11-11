@@ -3,6 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::envelope::Envelope;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -157,31 +158,49 @@ fn turning_the_first_envelope_off_vol_leaves_notes_their_plain_shape() {
 
 #[test]
 fn an_envelope_moves_the_filter_with_its_depth() {
-    let plain = |depth: i16| {
-        let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
-        with.tracks[0].cutoff = 0x40;
-        with.tracks[0].envelopes[1] = Envelope {
-            destination: Some(SettingId::CUT),
-            depth,
-            ..adsr(0, 40, 0, 0)
-        };
-        render(with, buzz(), STEP)
-    };
     let loudness = |out: &[f32], at: usize| -> f32 {
         (at..at + 200)
             .map(|frame| left(out, frame).abs())
             .sum::<f32>()
             / 200.0
     };
-    let still = plain(0);
-    let moved = plain(0xBF);
-    assert!(
-        loudness(&moved, 2 * MS) > loudness(&still, 2 * MS) * 3.0,
-        "the filter opens"
+    // Every envelope after the first, which shapes each note, does the same.
+    for slot in 1..TRACK_ENVELOPES {
+        let plain = |depth: i16| {
+            let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
+            with.tracks[0].cutoff = 0x40;
+            with.tracks[0].envelopes[slot] = Envelope {
+                destination: Some(SettingId::CUT),
+                depth,
+                ..adsr(0, 40, 0, 0)
+            };
+            render(with, buzz(), STEP)
+        };
+        let still = plain(0);
+        let moved = plain(0xBF);
+        assert!(
+            loudness(&moved, 2 * MS) > loudness(&still, 2 * MS) * 3.0,
+            "Env {}'s filter opens",
+            slot + 1
+        );
+        let settled = 80 * MS;
+        let ratio = loudness(&moved, settled) / loudness(&still, settled);
+        assert!((ratio - 1.0).abs() < 0.05, "and closes again: {ratio}");
+    }
+}
+
+#[test]
+fn the_envelopes_after_the_second_start_with_nowhere_to_go_and_change_nothing() {
+    let plain = song(&[NOTE], adsr(5, 20, 50, 10));
+    let envelopes = &plain.tracks[0].envelopes;
+    assert!(envelopes[2..].iter().all(|e| e.destination.is_none()));
+    let mut with = plain.clone();
+    with.tracks[0].envelopes[TRACK_ENVELOPES - 1].depth = 0x40;
+    assert_eq!(
+        render(plain, flat(), STEP),
+        render(with, flat(), STEP),
+        "a depth with no Dest does nothing"
     );
-    let settled = 80 * MS;
-    let ratio = loudness(&moved, settled) / loudness(&still, settled);
-    assert!((ratio - 1.0).abs() < 0.05, "and closes again: {ratio}");
 }
 
 #[test]

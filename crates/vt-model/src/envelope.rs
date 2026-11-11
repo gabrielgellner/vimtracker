@@ -1,4 +1,4 @@
-//! ADSR envelopes, which each track has two of.
+//! ADSR envelopes, which each track has `TRACK_ENVELOPES` of.
 
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +70,15 @@ impl Envelope {
         }
     }
 
+    /// The starting point of those after the second: the filter's decay, moving nothing until it's
+    /// given somewhere to go.
+    pub fn unassigned() -> Self {
+        Self {
+            destination: None,
+            ..Self::filter_shape()
+        }
+    }
+
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
         [self.attack_ms, self.decay_ms, self.release_ms]
@@ -132,8 +141,13 @@ fn frames_of(ms: u16, rate: u32) -> u64 {
 }
 
 /// What a new track's envelopes start as.
+/// The first shapes each note and the second waits on the filter; the rest start with nowhere to go.
 pub fn default_envelopes() -> [Envelope; TRACK_ENVELOPES] {
-    [Envelope::note_shape(), Envelope::filter_shape()]
+    std::array::from_fn(|slot| match slot {
+        0 => Envelope::note_shape(),
+        1 => Envelope::filter_shape(),
+        _ => Envelope::unassigned(),
+    })
 }
 
 #[cfg(test)]

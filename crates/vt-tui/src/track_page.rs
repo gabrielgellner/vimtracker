@@ -150,9 +150,25 @@ const fn envelope_row(slot: usize) -> [Control; 7] {
 }
 
 /// Each envelope's row.
-pub const ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = [envelope_row(0), envelope_row(1)];
+pub static ENVELOPES: [[Control; 7]; TRACK_ENVELOPES] = {
+    let mut rows = [envelope_row(0); TRACK_ENVELOPES];
+    let mut slot = 0;
+    while slot < TRACK_ENVELOPES {
+        rows[slot] = envelope_row(slot);
+        slot += 1;
+    }
+    rows
+};
 /// Each LFO's row.
-pub const LFOS: [[Control; 6]; LFOS_PER_TRACK] = [lfo_row(0), lfo_row(1)];
+pub static LFOS: [[Control; 6]; LFOS_PER_TRACK] = {
+    let mut rows = [lfo_row(0); LFOS_PER_TRACK];
+    let mut slot = 0;
+    while slot < LFOS_PER_TRACK {
+        rows[slot] = lfo_row(slot);
+        slot += 1;
+    }
+    rows
+};
 /// The accumulators' row, under the LFOs, as they move notes from pass to pass as the LFOs move
 /// settings over time.
 pub const ACCUMULATOR: [Control; 6] = [
@@ -201,31 +217,30 @@ const fn insert_row(slot: usize, bottom: usize) -> [Control; FX_COLUMNS + 1] {
     row
 }
 
-const fn insert_top(slot: usize) -> [Control; FX_COLUMNS + 1] {
-    insert_row(slot, 0)
-}
-
-const fn insert_bottom(slot: usize) -> [Control; FX_COLUMNS + 1] {
-    insert_row(slot, 1)
-}
-
-const INSERT_TOPS: [[Control; FX_COLUMNS + 1]; INSERTS] =
-    [insert_top(0), insert_top(1), insert_top(2)];
-const INSERT_BOTTOMS: [[Control; FX_COLUMNS + 1]; INSERTS] =
-    [insert_bottom(0), insert_bottom(1), insert_bottom(2)];
+/// Each slot's rows, top then bottom, one slot after another.
+static INSERT_ROWS: [[Control; FX_COLUMNS + 1]; INSERTS * SLOT_ROWS] = {
+    let mut rows = [[Control::Insert(0); FX_COLUMNS + 1]; INSERTS * SLOT_ROWS];
+    let mut row = 0;
+    while row < rows.len() {
+        rows[row] = insert_row(row / SLOT_ROWS, row % SLOT_ROWS);
+        row += 1;
+    }
+    rows
+};
 /// How many columns of settings a slot has.
 pub const FX_COLUMNS: usize = MAX_PARAMS.div_ceil(2);
 /// How many rows a slot takes.
 pub const SLOT_ROWS: usize = 2;
 /// The FX page's rows, top to bottom. The cursor stops at the last setting an effect uses.
-pub const FX_ROWS: [&[Control]; INSERTS * SLOT_ROWS] = [
-    &INSERT_TOPS[0],
-    &INSERT_BOTTOMS[0],
-    &INSERT_TOPS[1],
-    &INSERT_BOTTOMS[1],
-    &INSERT_TOPS[2],
-    &INSERT_BOTTOMS[2],
-];
+pub static FX_ROWS: [&[Control]; INSERTS * SLOT_ROWS] = {
+    let mut rows: [&[Control]; INSERTS * SLOT_ROWS] = [&[]; INSERTS * SLOT_ROWS];
+    let mut row = 0;
+    while row < rows.len() {
+        rows[row] = &INSERT_ROWS[row];
+        row += 1;
+    }
+    rows
+};
 
 const fn base(control: TrackControl) -> Control {
     Control::Base(control)
@@ -318,18 +333,35 @@ pub const GROUP_ROWS: [&[Control]; 5] = [
 /// The Sound page of the master.
 pub const MASTER_ROWS: [&[Control]; 2] = [&[Control::Trim], &[Control::Level]];
 /// The Mod page's rows, top to bottom.
-pub const MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] = [
-    &ENVELOPES[0],
-    &ENVELOPES[1],
-    &LFOS[0],
-    &LFOS[1],
-    &ACCUMULATOR,
-    &ARPEGGIO,
-];
+pub static MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] = {
+    let mut rows: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2] =
+        [&[]; TRACK_ENVELOPES + LFOS_PER_TRACK + 2];
+    let mut row = 0;
+    while row < FIXED_MOD_ROWS.len() {
+        rows[row] = FIXED_MOD_ROWS[row];
+        row += 1;
+    }
+    rows[row] = &ACCUMULATOR;
+    rows[row + 1] = &ARPEGGIO;
+    rows
+};
 /// The Mod page of a return or the master, which have no notes for an accumulator or an arpeggio
-/// to play.
-pub const FIXED_MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
-    [&ENVELOPES[0], &ENVELOPES[1], &LFOS[0], &LFOS[1]];
+/// to play: each envelope's row, then each LFO's.
+pub static FIXED_MOD_ROWS: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] = {
+    let mut rows: [&[Control]; TRACK_ENVELOPES + LFOS_PER_TRACK] =
+        [&[]; TRACK_ENVELOPES + LFOS_PER_TRACK];
+    let mut slot = 0;
+    while slot < TRACK_ENVELOPES {
+        rows[slot] = &ENVELOPES[slot];
+        slot += 1;
+    }
+    let mut slot = 0;
+    while slot < LFOS_PER_TRACK {
+        rows[TRACK_ENVELOPES + slot] = &LFOS[slot];
+        slot += 1;
+    }
+    rows
+};
 
 /// An effect taken out of a slot, waiting to be put in another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

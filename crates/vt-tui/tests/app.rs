@@ -1855,13 +1855,13 @@ fn a_kit_with_all_fills_tracks_and_a_bad_one_keeps_the_last() {
 
 /// The track page as lines of text.
 fn track_text(app: &App) -> Vec<String> {
-    let backend = ratatui::backend::TestBackend::new(80, 16);
+    let backend = ratatui::backend::TestBackend::new(80, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
-    (0..16)
+    (0..24)
         .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
         .collect()
 }
@@ -3441,6 +3441,11 @@ fn on_track_page() -> (App, Realtime) {
     (app, realtime)
 }
 
+/// Down the Mod page from its top row to an LFO's row, past every envelope's.
+fn to_lfo(lfo: usize) -> String {
+    "j".repeat(vt_model::constants::TRACK_ENVELOPES + lfo)
+}
+
 /// Start typing a value, type it and enter it.
 fn typed(app: &mut App, text: &str) {
     press(app, "i");
@@ -3514,7 +3519,7 @@ fn the_track_page_types_lfo_settings() {
     let (mut app, _realtime) = on_track_page();
     let lfo = |app: &App| app.song().tracks[0].lfos[0];
     // Down to LFO 1, on Dest.
-    press(&mut app, "Ljj0");
+    press(&mut app, &format!("L{}0", to_lfo(0)));
     press(&mut app, "=");
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
     press(&mut app, "-");
@@ -3522,8 +3527,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::lfo(1, 1).unwrap()),
-        "the last for LFO 1 on a sample track"
+        Some(SettingId::lfo(vt_model::lfo::LFOS_PER_TRACK - 1, 1).unwrap()),
+        "the last for LFO 1 on a sample track: the last LFO's phase"
     );
 
     press(&mut app, "l=");
@@ -3577,13 +3582,13 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 
     // The second LFO's Dest, on the next track.
     press(&mut app, "W");
-    press(&mut app, "Ljjj0K/");
+    press(&mut app, &format!("L{}0K/", to_lfo(1)));
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        14,
-        "what a sample track has, its Sample, Slice, Start and Length, and none"
+        16,
+        "what a sample track has, its Sample, Slice, Start and Length, none, and LFO 3's two"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -4315,7 +4320,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
         special(app, KeyCode::Enter);
         assert_eq!(app.mode, Mode::Normal);
     };
-    press(&mut app, "Ljj0");
+    press(&mut app, &format!("L{}0", to_lfo(0)));
     choose(&mut app, "/cut");
     assert_eq!(lfo(&app).destination, Some(SettingId::CUT));
 
@@ -4367,7 +4372,7 @@ fn large_steps_on_the_track_page_suit_each_setting() {
         GrooveId::from_index(1),
         "a groove moves one at a time"
     );
-    press(&mut app, "Ljj0ll");
+    press(&mut app, &format!("L{}0ll", to_lfo(0)));
     press(&mut app, "+");
     assert_eq!(track(&app).lfos[0].rate, Rate::Note(480));
     press(&mut app, "_");
@@ -4439,7 +4444,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).send_b, 0);
 
     // Only the setting under the cursor goes back.
-    press(&mut app, "Ljj0=");
+    press(&mut app, &format!("L{}0=", to_lfo(0)));
     press(&mut app, "l=");
     press(&mut app, "l");
     typed(&mut app, "7st");
@@ -4508,7 +4513,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
 #[test]
 fn plus_makes_a_rate_faster_of_any_kind() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "Ljj0ll");
+    press(&mut app, &format!("L{}0ll", to_lfo(0)));
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].lfos[0].rate, Rate::Note(720));
     typed(&mut app, "7st");
@@ -4547,7 +4552,7 @@ fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
 #[test]
 fn the_track_page_shows_its_settings_in_columns() {
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "Ljj0=ll");
+    press(&mut app, &format!("L{}0=ll", to_lfo(0)));
     typed(&mut app, "1/8d");
     press(&mut app, "l");
     typed(&mut app, "+40");
@@ -4558,8 +4563,9 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(lines[2].contains("Attack") && lines[2].contains("Reset"));
     assert!(lines[3].starts_with("Env 1") && lines[3].contains("Vol"));
     assert!(lines[4].starts_with("Env 2") && lines[4].contains("Cut"));
-    assert!(lines[6].contains("Dest") && lines[6].contains("Retrig"));
-    let lfo: Vec<&str> = lines[7].split_whitespace().collect();
+    assert!(lines[5].starts_with("Env 3") && lines[5].contains("---"));
+    assert!(lines[7].contains("Dest") && lines[7].contains("Retrig"));
+    let lfo: Vec<&str> = lines[8].split_whitespace().collect();
     let triangle = vt_tui::glyphs::TRIANGLE_WAVE.to_string();
     assert_eq!(
         lfo,
@@ -4567,7 +4573,8 @@ fn the_track_page_shows_its_settings_in_columns() {
             "LFO", "1", "Cut", "Tri", &triangle, "1/8d", "+40", "90°", "off"
         ]
     );
-    assert!(lines[8].starts_with("LFO 2"));
+    assert!(lines[9].starts_with("LFO 2"));
+    assert!(lines[10].starts_with("LFO 3"));
     press(&mut app, "H");
     let lines = track_page_text(&app);
     // The trim is at the top of the output, at 0 dB in the middle of its bar.
@@ -6196,7 +6203,7 @@ fn a_stopped_track_captures_as_empty_and_nothing_playing_is_refused() {
 #[test]
 fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     let (mut app, _realtime) = app();
-    app.envelope_images = Some([0x01_02_03, 0x04_05_06]);
+    app.envelope_images = Some([0x01_02_03, 0x04_05_06, 0x07_08_09]);
     press(&mut app, " 4L");
     let buffer = {
         let backend = ratatui::backend::TestBackend::new(80, 24);
@@ -6243,7 +6250,10 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     // Nothing is sent until the page that shows them.
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     press(&mut app, " 4L");
-    assert_eq!(sync(&mut app, &mut graphics).0, 2);
+    assert_eq!(
+        sync(&mut app, &mut graphics).0,
+        vt_model::constants::TRACK_ENVELOPES
+    );
     let first = app.envelope_images.unwrap();
     assert_ne!(first[0], first[1]);
     assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
@@ -6303,7 +6313,7 @@ fn an_lfos_shape_has_its_glyph_after_its_name_and_keeps_the_columns_in_line() {
     assert_eq!(text(&plain, 31), " ");
 
     // In the active colour while the cursor is on its LFO.
-    press(&mut app, "jj");
+    press(&mut app, &to_lfo(0));
     assert_eq!(draw(&app)[(30, row)].fg, theme::active().fg.unwrap());
 
     // A falling saw has no glyph, and the columns after it stay where they were.
@@ -6575,8 +6585,14 @@ fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
 fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
+    // Every envelope's and every LFO's.
     press(&mut app, " 4L/dep");
-    assert_eq!(jump_labels(&app).len(), 4, "{:?}", jump_labels(&app));
+    assert_eq!(
+        jump_labels(&app).len(),
+        vt_model::constants::TRACK_ENVELOPES + vt_model::lfo::LFOS_PER_TRACK,
+        "{:?}",
+        jump_labels(&app)
+    );
 
     // A slip keeps the search.
     press(&mut app, "Q");
@@ -7397,8 +7413,8 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
 #[test]
 fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     let (mut app, _realtime) = app();
-    // LFO 1's Dest is on the Mod page, its third row.
-    press(&mut app, " 4Ljj");
+    // LFO 1's Dest is on the Mod page, under the envelopes.
+    press(&mut app, &format!(" 4L{}", to_lfo(0)));
     let list = |app: &mut App| {
         press(app, "K/");
         let labels: Vec<String> = app
@@ -7417,7 +7433,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     assert!(!list(&mut app).iter().any(|label| label.starts_with("1 ")));
 
     press(&mut app, "L="); // Distort in slot 1.
-    press(&mut app, "Hjj");
+    press(&mut app, &format!("H{}", to_lfo(0)));
     let labels = list(&mut app);
     assert!(
         labels
@@ -7450,7 +7466,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
 fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
-    press(&mut app, "jj");
+    press(&mut app, &to_lfo(0));
     // Past the thirteen a sample track has, as a synth's settings aren't on it.
     for _ in 0..14 {
         press(&mut app, "=");
@@ -7597,7 +7613,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
     // A sample track has no synth settings, in Dest or for a step.
-    let dest = labels(&mut app, " 4LjjK/");
+    let dest = labels(&mut app, &format!(" 4L{}K/", to_lfo(0)));
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
     let steps = labels(&mut app, " 3lllllK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
@@ -7609,7 +7625,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::Fm)
     );
-    let dest = labels(&mut app, "LggjjK/");
+    let dest = labels(&mut app, &format!("Lgg{}K/", to_lfo(0)));
     assert!(on(&dest, "Ratio") && on(&dest, "Feedback"), "{dest:?}");
     let steps = labels(&mut app, " 3K");
     assert!(on(&steps, "INDX"), "{steps:?}");
@@ -7659,24 +7675,31 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
-    let first = labels(&mut app, " 4LjjK/");
+    let first = labels(&mut app, &format!(" 4L{}K/", to_lfo(0)));
     assert!(
-        has(&first, "L2 Depth") && has(&first, "L2 Phase"),
+        has(&first, "L2 Depth") && has(&first, "L2 Phase") && has(&first, "L3 Phase"),
         "{first:?}"
     );
     assert!(!has(&first, "L1 Depth"), "{first:?}");
     let second = labels(&mut app, "jK/");
     assert!(
-        !has(&second, "L1 Depth") && !has(&second, "L2 Depth"),
+        !has(&second, "L1 Depth") && !has(&second, "L2 Depth") && has(&second, "L3 Depth"),
         "{second:?}"
+    );
+    let third = labels(&mut app, "jK/");
+    assert!(
+        !third
+            .iter()
+            .any(|label| label.starts_with('L') && label.contains(" Depth  ")),
+        "{third:?}"
     );
     let envelope = labels(&mut app, "ggK/");
     assert!(
-        has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase"),
+        has(&envelope, "L1 Depth") && has(&envelope, "L2 Phase") && has(&envelope, "L3 Phase"),
         "{envelope:?}"
     );
 
-    press(&mut app, "jjK/l2 depth");
+    press(&mut app, &format!("{}K/l2 depth", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].lfos[0].destination,
@@ -7694,7 +7717,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     // Distort in slot 1, then LFO 1's Dest.
-    press(&mut app, " 4LL=HjjK");
+    press(&mut app, &format!(" 4LL=H{}K", to_lfo(0)));
     let current = |app: &App| {
         app.picker
             .as_ref()
@@ -7776,7 +7799,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
 #[test]
 fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LjjKjl");
+    press(&mut app, &format!(" 4L{}Kjl", to_lfo(0)));
     let mut picker = app.picker.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -7840,30 +7863,33 @@ fn dd_and_p_move_an_effect_and_swap_two_as_one_undo_step() {
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "gg0");
-    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty, Insert::Empty]);
     let depth = app.history.undo_depth();
 
-    // Slot 1 into slot 3, which is empty.
+    // Slot 1 into the last slot, which is empty.
     press(&mut app, "dd");
-    assert_eq!(inserts(&app), [Insert::Empty, fold, Insert::Empty]);
+    assert_eq!(
+        inserts(&app),
+        [Insert::Empty, fold, Insert::Empty, Insert::Empty]
+    );
     assert!(app.status.contains("Distort"), "{}", app.status);
-    press(&mut app, "}}p");
-    assert_eq!(inserts(&app), [Insert::Empty, fold, soft]);
+    press(&mut app, "}}}p");
+    assert_eq!(inserts(&app), [Insert::Empty, fold, Insert::Empty, soft]);
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
     press(&mut app, "u");
-    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty, Insert::Empty]);
 
     // Slot 1 onto slot 2: they swap.
     press(&mut app, "gg");
     press(&mut app, "dd}p");
-    assert_eq!(inserts(&app), [fold, soft, Insert::Empty]);
+    assert_eq!(inserts(&app), [fold, soft, Insert::Empty, Insert::Empty]);
     assert_eq!(app.history.undo_depth(), depth + 1);
     press(&mut app, "u");
-    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty, Insert::Empty]);
 
     // Back where it came from changes nothing.
     press(&mut app, "ggddp");
-    assert_eq!(inserts(&app), [soft, fold, Insert::Empty]);
+    assert_eq!(inserts(&app), [soft, fold, Insert::Empty, Insert::Empty]);
 }
 
 #[test]
@@ -8686,22 +8712,23 @@ fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
 
 #[test]
 fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
+    use vt_model::insert::INSERTS;
     let (mut app, _realtime) = on_fx_page();
     let bypassed = |app: &App| app.song().tracks[0].bypassed;
     press(&mut app, "b");
     assert!(app.status.contains("nothing"), "{}", app.status);
-    assert_eq!(bypassed(&app), [false; 3]);
+    assert_eq!(bypassed(&app), [false; INSERTS]);
     press(&mut app, "=b");
-    assert_eq!(bypassed(&app), [true, false, false]);
+    assert_eq!(bypassed(&app), [true, false, false, false]);
     assert!(app.status.contains("Bypassed"), "{}", app.status);
     press(&mut app, "b");
-    assert_eq!(bypassed(&app), [false; 3]);
+    assert_eq!(bypassed(&app), [false; INSERTS]);
     press(&mut app, "bu");
-    assert_eq!(bypassed(&app), [false; 3]);
+    assert_eq!(bypassed(&app), [false; INSERTS]);
     press(&mut app, "b");
     // Emptying the slot brings it back in, for whatever goes there next.
     press(&mut app, "x");
-    assert_eq!(bypassed(&app), [false; 3]);
+    assert_eq!(bypassed(&app), [false; INSERTS]);
 }
 
 #[test]
@@ -9325,7 +9352,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     };
     press(&mut app, " 4LL");
     assert_eq!(sync(&mut app, &mut graphics), 0, "no slot has a drawing");
-    assert_eq!(app.slot_images, [None; 3]);
+    assert_eq!(app.slot_images, [None; vt_model::insert::INSERTS]);
     press(&mut app, "K");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
@@ -9499,13 +9526,14 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     press(&mut app, " 4LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "jjjK");
+    // On the effect, j goes straight to the next slot: a limiter in the third.
+    press(&mut app, "jjK");
     press(&mut app, "Limit");
     special(&mut app, KeyCode::Enter);
-    app.slot_images = [Some(0x01_02_03), None, None];
+    app.slot_images = [Some(0x01_02_03), None, None, None];
     // 18 dB is three quarters of the meter: all of its top row and half of the one below.
     app.live = Some(LiveValues {
-        reduction: [18.0, 0.0, 3.0],
+        reduction: [18.0, 0.0, 3.0, 0.0],
         ..LiveValues::default()
     });
     let buffer = draw(&app);
@@ -9536,7 +9564,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
 
     // Bypassed, it turns nothing down, and its meter is empty.
     press(&mut app, "b");
-    assert_eq!(app.song().tracks[0].bypassed, [false, false, true]);
+    assert_eq!(app.song().tracks[0].bypassed, [false, false, true, false]);
     assert_eq!(draw(&app)[(138, limit)].symbol(), "▔");
 }
 
@@ -9608,11 +9636,11 @@ fn the_fx_page_fits_six_columns_of_settings_beside_the_main_meter_at_163_columns
         other => panic!("{other:?}"),
     };
     assert_eq!(compressor(&app).kind, CompressorType::Glue);
-    // An EQ in the last slot, whose curve is the widest drawing.
+    // An EQ in the third slot, whose curve is the widest drawing.
     press(&mut app, "hjjK");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
-    app.slot_images = [Some(0x01_02_03), None, Some(0x04_05_06)];
+    app.slot_images = [Some(0x01_02_03), None, Some(0x04_05_06), None];
     let rows = |app: &mut App, keys: bool| {
         app.mode = if keys {
             vt_tui::input::mode::Mode::Keys
@@ -12072,7 +12100,7 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
         })
     };
     let heard = |bypassed: bool| LiveValues {
-        bypassed: [bypassed, false, false],
+        bypassed: [bypassed, false, false, false],
         ..LiveValues::default()
     };
     assert!(!faint(&app));
@@ -13044,4 +13072,147 @@ fn the_sound_page_with_its_trim_fits_at_163_by_42() {
     let bottom = high_cut + 5;
     assert!(bottom < 40, "{lines:#?}");
     assert!(lines[bottom].contains('└'), "{}", lines[bottom]);
+}
+
+/// The whole screen at the author's size, kitty full screen on a MacBook, a line at a time.
+fn full_screen_text(app: &mut App) -> Vec<String> {
+    let (width, height) = (163, 42);
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+#[test]
+fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
+    use vt_model::constants::TRACK_ENVELOPES;
+    use vt_model::insert::{INSERTS, Insert};
+    use vt_model::lfo::LFOS_PER_TRACK;
+    let mut song = Song::new(1);
+    // A different effect in each slot, with a compressor's curve beside the last.
+    song.tracks[0].inserts = [
+        Insert::ALL[1],
+        Insert::ALL[2],
+        Insert::ALL[3],
+        Insert::ALL[6],
+    ];
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 4LL");
+    let fx = full_screen_text(&mut app);
+    let names = ["Distort", "Delay", "Reverb", "Comp"];
+    assert_eq!(names.len(), INSERTS);
+    for (slot, name) in names.iter().enumerate() {
+        // Each slot's two rows of settings, one under the other.
+        let top = format!("{}  {name}", slot + 1);
+        let at = fx.iter().position(|line| line.starts_with(&top));
+        let at = at.unwrap_or_else(|| panic!("{top} in\n{}", fx.join("\n")));
+        assert!(fx[at + 1].starts_with("             "), "{}", fx[at + 1]);
+        assert!(!fx[at + 1].trim().is_empty(), "{name}'s second row");
+    }
+    press(&mut app, "H");
+    let modulation = full_screen_text(&mut app);
+    let count = |text: &str| -> usize {
+        modulation
+            .iter()
+            .map(|line| line.matches(text).count())
+            .sum()
+    };
+    for envelope in 1..=TRACK_ENVELOPES {
+        let name = format!("Env {envelope}");
+        assert_eq!(
+            count(&name),
+            2,
+            "{name}'s row and its shape\n{}",
+            modulation.join("\n")
+        );
+    }
+    for lfo in 1..=LFOS_PER_TRACK {
+        assert_eq!(count(&format!("LFO {lfo}")), 1, "{}", modulation.join("\n"));
+    }
+}
+
+#[test]
+fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
+    use vt_model::constants::TRACK_ENVELOPES;
+    use vt_model::insert::{INSERTS, Insert};
+    use vt_model::lfo::LFOS_PER_TRACK;
+    use vt_model::settings::Effect;
+    use vt_model::step::FxCommand;
+    use vt_tui::track_page::{Control, EnvelopeField, LfoField};
+    let (mut app, _realtime) = app();
+    // A delay in the last slot.
+    press(&mut app, " 4LL");
+    press(&mut app, &"}".repeat(INSERTS - 1));
+    assert_eq!(app.track_control(), Control::Insert(INSERTS - 1));
+    press(&mut app, "K");
+    press(&mut app, "delay");
+    special(&mut app, KeyCode::Enter);
+    assert!(matches!(
+        app.song().tracks[0].inserts[INSERTS - 1],
+        Insert::Delay(_)
+    ));
+
+    // A step switches it out by its digit.
+    press(&mut app, " 3lllllK");
+    press(&mut app, &format!("{INSERTS}byp"));
+    let item = app.picker.as_ref().unwrap().current().unwrap();
+    assert_eq!(listed(item), format!("{INSERTS}BYP  {INSERTS} Bypass"));
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "01");
+    let bypass = SettingId::bypass(INSERTS - 1).unwrap();
+    let step = &app.phrase_here().unwrap().steps()[0];
+    assert_eq!(step.fx[0].command, Some(FxCommand::Set(bypass)));
+
+    // The last LFO on the delay's feedback, and the last envelope on the last LFO's depth.
+    press(&mut app, " 4H");
+    press(&mut app, &"j".repeat(TRACK_ENVELOPES + LFOS_PER_TRACK - 1));
+    press(&mut app, "0");
+    assert_eq!(
+        app.track_control(),
+        Control::Lfo(LFOS_PER_TRACK - 1, LfoField::Destination)
+    );
+    press(&mut app, "K/");
+    press(&mut app, "feedback");
+    special(&mut app, KeyCode::Enter);
+    let feedback = SettingId::slot(INSERTS - 1, Effect::Delay, 1).unwrap();
+    assert_eq!(
+        app.song().tracks[0].lfos[LFOS_PER_TRACK - 1].destination,
+        Some(feedback)
+    );
+    press(&mut app, &"k".repeat(LFOS_PER_TRACK));
+    assert_eq!(
+        app.track_control(),
+        Control::Envelope(TRACK_ENVELOPES - 1, EnvelopeField::Destination)
+    );
+    press(&mut app, "K/");
+    press(&mut app, &format!("l{LFOS_PER_TRACK} depth"));
+    special(&mut app, KeyCode::Enter);
+    let depth = SettingId::lfo(LFOS_PER_TRACK - 1, 0).unwrap();
+    assert_eq!(
+        app.song().tracks[0].envelopes[TRACK_ENVELOPES - 1].destination,
+        Some(depth)
+    );
+
+    // All of it comes back from the saved song.
+    let folder = folder();
+    command(&mut app, &format!("w {}", folder.display()));
+    let saved = vt_model::project::load_song(&folder).unwrap();
+    let track = &saved.tracks[0];
+    assert_eq!(track.inserts, app.song().tracks[0].inserts);
+    assert_eq!(track.lfos[LFOS_PER_TRACK - 1].destination, Some(feedback));
+    assert_eq!(
+        track.envelopes[TRACK_ENVELOPES - 1].destination,
+        Some(depth)
+    );
+    let step = track.phrases[&0].steps()[0].to_string();
+    assert!(step.contains(&format!("{INSERTS}.bypass:01")), "{step}");
+    std::fs::remove_dir_all(&folder).unwrap();
 }

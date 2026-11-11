@@ -157,7 +157,7 @@ impl SettingId {
         settings
     }
 
-    /// What an envelope can move: what's on the track, and either LFO's settings, as envelopes run
+    /// What an envelope can move: what's on the track, and every LFO's settings, as envelopes run
     /// first.
     pub fn for_envelope(track: &Track) -> Vec<Self> {
         let mut settings = Self::to_modulate(track);
@@ -387,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn lfos_can_only_reach_those_after_them_and_envelopes_reach_both() {
+    fn lfos_can_only_reach_those_after_them_and_envelopes_reach_every_one() {
         let track = Track::default();
         let lfos = |list: Vec<SettingId>| -> Vec<String> {
             list.into_iter()
@@ -397,10 +397,17 @@ mod tests {
         };
         assert_eq!(
             lfos(SettingId::for_lfo(&track, 0)),
-            ["lfo2.depth", "lfo2.phase"]
+            ["lfo2.depth", "lfo2.phase", "lfo3.depth", "lfo3.phase"]
         );
-        assert!(lfos(SettingId::for_lfo(&track, 1)).is_empty());
-        assert_eq!(lfos(SettingId::for_envelope(&track)).len(), 4);
+        assert_eq!(
+            lfos(SettingId::for_lfo(&track, 1)),
+            ["lfo3.depth", "lfo3.phase"]
+        );
+        assert!(lfos(SettingId::for_lfo(&track, LFOS_PER_TRACK - 1)).is_empty());
+        assert_eq!(
+            lfos(SettingId::for_envelope(&track)).len(),
+            2 * LFOS_PER_TRACK
+        );
     }
 
     #[test]

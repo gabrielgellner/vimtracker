@@ -615,7 +615,7 @@ mod tests {
                 sound.send_a = 0x80;
             }
             for group in 8..8 + vt_model::constants::MAX_GROUPS {
-                next.tracks[group].inserts = [bus, COMB, LIMIT];
+                next.tracks[group].inserts = [bus, COMB, LIMIT, COMB];
                 next.tracks[group].send_b = 0x80;
             }
             next
@@ -670,25 +670,30 @@ mod tests {
         for round in 0..200 {
             let mut next = song(8, 16);
             if round % 4 == 0 {
-                next.tracks[round % 8].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
+                next.tracks[round % 8].inserts = [
+                    Insert::ALL[2],
+                    Insert::ALL[3],
+                    Insert::ALL[4],
+                    Insert::ALL[3],
+                ];
             } else if round % 4 == 2 {
-                next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT];
+                next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT, Insert::ALL[2]];
             } else if round % 4 == 1 {
-                next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER];
+                next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER, PHASER];
             } else if round % 8 == 3 {
-                next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE];
+                next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE, LIMIT];
             } else if round % 16 == 7 {
-                next.tracks[round % 8].inserts = [PLATE, TAPE, PLATE];
+                next.tracks[round % 8].inserts = [PLATE, TAPE, PLATE, TAPE];
             } else if round % 32 == 15 {
-                next.tracks[round % 8].inserts = [PITCH, PLATE, PITCH];
+                next.tracks[round % 8].inserts = [PITCH, PLATE, PITCH, PLATE];
             } else if round % 64 == 31 {
-                next.tracks[round % 8].inserts = [GRAINS, PITCH, GRAINS];
+                next.tracks[round % 8].inserts = [GRAINS, PITCH, GRAINS, PITCH];
             } else if round % 128 == 63 {
-                next.tracks[round % 8].inserts = [WARPS, GRAINS, WARPS];
+                next.tracks[round % 8].inserts = [WARPS, GRAINS, WARPS, GRAINS];
             } else if round % 256 == 127 {
-                next.tracks[round % 8].inserts = [RESO, WARPS, RESO];
+                next.tracks[round % 8].inserts = [RESO, WARPS, RESO, WARPS];
             } else {
-                next.tracks[round % 8].inserts = [COMB, RESO, COMB];
+                next.tracks[round % 8].inserts = [COMB, RESO, COMB, RESO];
             }
             handle.publish(published(next, &pool));
             handle.pump();
@@ -709,12 +714,18 @@ mod tests {
         assert_eq!(rt.engine().spare_memory(), 0, "the returns have theirs");
 
         let mut more = plain.clone();
-        more.tracks[0].inserts = [Insert::ALL[2], Insert::ALL[3], Insert::ALL[4]];
-        more.tracks[1].inserts = [LIMIT, FLANGER, TAPE];
-        more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty];
-        more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty];
-        more.tracks[4].inserts = [Insert::Empty, Insert::Empty, GRAINS];
-        more.tracks[5].inserts = [WARPS, COMB, RESO];
+        // One of each kind that needs memory, with a slot of its own, the last slot's among them.
+        more.tracks[0].inserts = [
+            Insert::ALL[2],
+            Insert::ALL[3],
+            Insert::ALL[4],
+            Insert::Empty,
+        ];
+        more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, Insert::Empty];
+        more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty, Insert::Empty];
+        more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty, Insert::Empty];
+        more.tracks[4].inserts = [Insert::Empty, Insert::Empty, Insert::Empty, GRAINS];
+        more.tracks[5].inserts = [WARPS, COMB, RESO, Insert::Empty];
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
