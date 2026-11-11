@@ -21,6 +21,8 @@ test = true
 [dependencies]
 vt-model.workspace = true
 vt-engine.workspace = true
+# The Roto-Control's protocol and link; for now only `vimtracker roto-probe` uses it.
+vt-roto.workspace = true
 ratatui.workspace = true
 cpal.workspace = true
 clap.workspace = true

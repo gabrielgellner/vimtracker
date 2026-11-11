@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/vt-model", "crates/vt-engine", "crates/vt-tui"]
+members = ["crates/vt-model", "crates/vt-engine", "crates/vt-roto", "crates/vt-tui"]
 
 [workspace.package]
 version = "0.2.0"
@@ -11,6 +11,7 @@ repository = "https://github.com/gabrielgellner/vimtracker"
 [workspace.dependencies]
 vt-model = { path = "crates/vt-model" }
 vt-engine = { path = "crates/vt-engine" }
+vt-roto = { path = "crates/vt-roto" }
 serde = { version = "=1.0.229", features = ["derive", "rc"] }
 ron = "=0.12.3"
 hound = "=3.5.1"
@@ -31,6 +32,12 @@ xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
 # through cpal.
 objc2 = "=0.6.5"
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSProcessInfo"] }
+# The Roto-Control's MIDI ports, through CoreMIDI on macOS and ALSA on Linux, which cpal already
+# links for audio.
+midir = "=0.11.1"
+# The Roto-Control's USB serial port, for reading and writing its setups. Without libudev, so
+# Linux needs no more than the ALSA headers the audio output already does.
+serialport = { version = "=4.10.1", default-features = false }
 toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 # A release build with symbols, for a profiler.

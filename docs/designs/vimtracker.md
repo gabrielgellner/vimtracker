@@ -238,7 +238,7 @@ The program has one thread that owns and edits the song, and one audio callback 
 edit thread never changes a version the callback has. Each edit makes a new version that shares
 everything unchanged with the old one, and sends it over. Sequencing happens inside the callback,
 so screen redraws don't affect timing. Two helper threads read and analyse sample files, so a long
-file doesn't hold up the screen.
+file doesn't hold up the screen, and the Roto-Control's link has a thread of its own (`vt-roto`).
 
 ```text
  Keyboard: presses, repeats and releases, through the kitty keyboard protocol
@@ -271,11 +271,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, and `probe` | `vt-model` and `vt-engine`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
-    draws or reads a terminal.
+    draws or reads a terminal. `vt-roto` knows nothing of songs; `vt-tui` uses it, for now only for
+    `vimtracker roto-probe` ([`roto-control.md`](roto-control.md)).
 *   **What the interface borrows from the engine.** Besides `Published` and the queues, `vt-tui`
     calls the engine's DSP to draw what a sound does: the track filter's response, a compressor's
     static curve and an EQ's response come from `dsp::filter`, `dsp::compressor` and `dsp::eq`, so a
@@ -285,7 +287,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
     that table.
 
-**Decisions:** 29, 30, 59 and 60, the [M14](#m14-design-one-list-of-settings) and
+**Decisions:** 29, 30, 59, 60 and 157, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
 [Detailed Implementation Plan](#detailed-implementation-plan).
 
@@ -315,6 +317,12 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     folder by content hash if they're there.
 *   **The loader thread** (`loading.rs`) reads the file the explorer's cursor is on, only the newest
     asked for, so its preview and the sound it plays don't hold up the screen.
+*   **The Roto's thread** (`vt-roto`'s `link.rs`, named `roto`) watches every second for the
+    Roto-Control's MIDI ports, opens them, does the handshake and answers its pings, and turns what
+    it sends into events; midir's callback only copies bytes to it. Nothing starts it yet but
+    `vimtracker roto-probe`; M30's later steps have the edit thread take its events each frame and
+    send what the Roto should show, and it never touches the audio thread
+    ([`roto-control.md`](roto-control.md) §7).
 
 **How a version reaches the callback** (`link.rs`):
 
@@ -366,7 +374,7 @@ gave them (decision 147). What a block skips as it plays is under
 reading its sample until its note ends, and a replaced sample stays in memory until the project
 reloads.
 
-**Decisions:** 33, 54, 57, 75, 98, 114, 147, 150 and 153, the
+**Decisions:** 33, 54, 57, 75, 98, 114, 147, 150, 153 and 157, the
 [M10 design](#m10-design-tracks-that-process)'s memory, and the first of the
 [Known Gaps From Review](#known-gaps-from-review).
 

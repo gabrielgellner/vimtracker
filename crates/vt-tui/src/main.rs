@@ -17,6 +17,9 @@ enum Command {
     /// Print the key events your terminal delivers, with the kitty keyboard protocol on as the
     /// program has it, and whether the terminal offers it and the kitty graphics protocol.
     ProbeKeys,
+    /// List the MIDI and serial ports, and if a Roto-Control is there, connect to it and read its
+    /// firmware and API versions, its mode and the setups it stores, changing none of them.
+    RotoProbe,
     /// Render a saved project to a WAV file.
     Render {
         project: PathBuf,
@@ -118,6 +121,11 @@ fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
+        Some(Command::RotoProbe) => vt_roto::probe::run(
+            &mut std::io::stdout().lock(),
+            vt_roto::link::Options::default().daw,
+        )
+        .map_err(|e| e.to_string()),
         Some(Command::Kits {
             command: KitsCommand::ImportAbleton { library, out },
         }) => vt_tui::ableton::run(library, out).map_err(|e| e.to_string()),

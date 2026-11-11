@@ -1,0 +1,13 @@
+[package]
+name = "vt-roto"
+description = "Melbourne Instruments' Roto-Control for vimtracker: its SysEx, CC and serial protocols, a fake device, and the link to the real one"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+xxhash-rust.workspace = true
+midir.workspace = true
+serialport.workspace = true

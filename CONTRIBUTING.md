@@ -74,7 +74,8 @@ pull request.
 
 CI runs on Apple silicon macOS. The render tests compare hashes of rendered audio, and the
 filter and reverb use library maths that can round differently on other platforms, so the
-hashes are only checked on one.
+hashes are only checked on one. A second job on Linux builds the program and runs `vt-roto`'s
+tests, as the Roto-Control's MIDI and serial crates build differently there.
 
 ## The manual
 

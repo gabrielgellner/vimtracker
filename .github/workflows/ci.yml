@@ -38,3 +38,31 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --locked
+
+  # The Roto-Control's MIDI and serial crates build differently on Linux, through ALSA and /sys, so
+  # the program is built there too, as the release builds it, and vt-roto's tests run, which need
+  # no audio or MIDI device. The rest of the tests stay on macOS, for the render hashes above.
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ALSA headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy -p vt-roto --all-targets --locked -- -D warnings
+
+      - name: Build
+        run: cargo build --locked -p vt-tui --bin vimtracker
+
+      - name: Test
+        run: cargo test -p vt-roto --locked
