@@ -679,10 +679,9 @@ right. The device with the cursor has the brighter frame.
 
 | Keys | Does |
 |---|---|
-| `h` `l` | Through a row's settings, and on into the device beside it, on the same row |
-| `j` `k` | Down and up, on into the device below or above, keeping to the column |
-| `k` on a first row | Up to the title, the `Dest` |
-| `{` `}` | Up or down a device in the same column, staying on the same setting |
+| `h` `l` | Along a row, and on into the device beside it |
+| `j` `k` | Down and up the column, `k` from a first row to the `Dest` |
+| `{` `}` | Up or down a device in the column, on the same setting |
 | `0` `$` | The first or last setting on the row, in the device |
 | `gg` `G` | The top or bottom of the column |
 
