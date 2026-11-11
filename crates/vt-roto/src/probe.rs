@@ -1,8 +1,8 @@
 //! `vimtracker roto-probe`: lists the MIDI and serial ports, does the handshake with the Roto if
 //! it's there, and asks it only what changes nothing: its firmware and API versions, its mode, and
 //! the PLUGIN setups it stores. It writes nothing to the Roto's setups and doesn't change its
-//! mode, so it's safe to run beside Ableton Live, though the handshake takes the Roto from Live
-//! until Live's control surface is chosen again.
+//! mode, so it's safe to run beside Ableton Live: the handshake takes the Roto from Live while it
+//! runs, and it says `DAW STARTED` as it ends, so a running Live takes it back.
 
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -134,6 +134,8 @@ fn handshake(out: &mut impl Write, daw: Daw) -> std::io::Result<()> {
     } else if versions < 2 {
         writeln!(out, "  connected, but the versions didn't both come")?;
     }
+    // Says DAW STARTED as it goes, so a running Live takes the Roto back.
+    link.hand_back();
     Ok(())
 }
 

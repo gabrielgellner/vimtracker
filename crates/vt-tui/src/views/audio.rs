@@ -1,4 +1,5 @@
-//! The audio page: the output playing, its rate and buffer, and how it's keeping up.
+//! The audio page: the output playing, its rate and buffer, how it's keeping up, and whether
+//! vimtracker drives the Roto-Control.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -12,6 +13,7 @@ use crate::theme;
 use crate::views::system;
 use crate::views::widgets::setting;
 use crate::views::widgets::table::{Columns, blank_row, take_top};
+use crate::views::widgets::toggle;
 
 /// Room for a row's name.
 const NAME_WIDTH: u16 = 12;
@@ -37,7 +39,24 @@ fn value(app: &App, row: AudioRow) -> String {
                 None => "The device's own".to_owned(),
             }
         }
+        AudioRow::Roto => app.roto.connection.describe(),
     }
+}
+
+/// The Roto's row's value: its switch in its own colour, or the cursor's, then how its link is.
+fn roto_value(app: &App, here: bool) -> Line<'static> {
+    let on = app.roto.setting.on;
+    let switch = if here {
+        Span::styled(toggle::text(on), setting::style(app, true, false))
+    } else {
+        toggle::span(on)
+    };
+    let style = if on { Style::new() } else { theme::dim() };
+    Line::from(vec![
+        switch,
+        Span::raw(" "),
+        Span::styled(value(app, AudioRow::Roto), style),
+    ])
 }
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
@@ -61,8 +80,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let mut rows = Vec::new();
     for (index, row) in AudioRow::ALL.into_iter().enumerate() {
-        let style = setting::style(app, index == app.audio_row, false);
-        rows.push(named(row.name(), Line::styled(value(app, row), style)));
+        let here = index == app.audio_row;
+        let line = match row {
+            AudioRow::Roto => roto_value(app, here),
+            _ => Line::styled(value(app, row), setting::style(app, here, false)),
+        };
+        rows.push(named(row.name(), line));
     }
     rows.push(blank_row());
     let audio = &app.audio;

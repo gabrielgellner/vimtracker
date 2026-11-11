@@ -100,3 +100,31 @@ times, `late` and `xruns` together, until the device is opened again.
 
 If the device changes or goes away while playing, audio stops and the status line says
 so. Choose one on the audio page to play again.
+
+## The Roto-Control
+
+The audio page's last row, `Roto`, turns on Melbourne Instruments' Roto-Control. It's
+off until you turn it on, so opening vimtracker with Ableton Live running never takes
+the Roto from Live. On that row, `=` turns it on and `-` off, `K`, `i` or Enter switch
+it, and `x` puts it back off. This machine remembers it, in
+`~/.config/vimtracker/roto.ron`.
+
+While it's on, the Roto is vimtracker's, so set Live's control surface for it to None
+meanwhile. The row says whether it's looking for the Roto, connecting, or connected,
+with its firmware. Turning it off, or quitting, gives the Roto back: a running Live with
+the Roto's control surface takes it again by itself. If it doesn't, choose the Roto in
+Live's control surface list again, or unplug it and plug it back in.
+
+In its PLUGIN mode the Roto shows the devices of the track the cursor was on when it
+connected: the Sound page's, then the FX slots, then the Mod page's. SEL chooses one,
+and the arrows turn its pages. Each knob has its setting's name and colour, and feels
+like the setting: a list clicks through its choices, a centred value such as `Pan` has
+a notch at its middle, an off/on setting has two steps, and the rest turn smoothly. A
+device's knobs go row by row through its grid, then its title: knobs 1 to 4 are the top
+row, 5 to 8 the middle, and its second page is the bottom row and then the title, such
+as an effect's type. Nothing is stored on the Roto, so its setups for Live stay as they
+are.
+
+As a knob that steps turns, its screen shows the step's name, such as `4:1` or `On`. The
+knobs don't change the song yet, so a smooth knob shows no value, and the mixer isn't on
+it yet.

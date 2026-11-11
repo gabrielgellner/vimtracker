@@ -119,6 +119,14 @@ impl Link {
         let _ = self.input.send(Input::Ccs(ccs));
     }
 
+    /// Gives the Roto back: says `DAW STARTED`, so whichever program is listening answers its
+    /// ping and takes it, as a running Live with the Roto's script does, then closes the link
+    /// without answering, so this one never does.
+    pub fn hand_back(self) {
+        let _ = self.input.send(Input::Send(ToRoto::DawStarted));
+        // Dropping it stops the thread once the message is sent, before any ping can come back.
+    }
+
     /// Everything that's happened since the last call, without waiting.
     pub fn poll(&self) -> Vec<Event> {
         self.events.try_iter().collect()

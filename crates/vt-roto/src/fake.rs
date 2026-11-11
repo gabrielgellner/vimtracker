@@ -7,13 +7,16 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use crate::bytes::{Label, PluginHash};
+use crate::bytes::{Label, ParamHash, PluginHash};
 use crate::cc::{self, ControlEvent};
 use crate::serial::{
     self, Code, MAX_PLUGIN_SETUPS, MIDI_SETUPS, Mode, Notice, PluginKnobConfig, PluginSwitchConfig,
     Reply, Request, StoredKind, StoredPlugin,
 };
-use crate::sysex::{Daw, FirmwareVersion, FromRoto, ToRoto};
+use crate::sysex::{
+    CONTROLS, ControlType, Daw, FirmwareVersion, FromRoto, LearnParam, PluginDetails, PluginKind,
+    ToRoto,
+};
 use crate::transport::{Deliver, LinkError, MidiSend, Ports};
 
 /// What the fake says its firmware is, unless told otherwise.
@@ -33,6 +36,20 @@ pub struct StoredSetup {
     pub knobs: BTreeMap<u8, PluginKnobConfig>,
     pub switches: BTreeMap<u8, PluginSwitchConfig>,
 }
+
+/// One knob of a live device as the fake shows it: what `LEARN PARAM` and `SET PLUGIN CONTROL
+/// DETAILS` said of it, or nothing if it was unmapped.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LiveKnob {
+    pub learned: Option<LearnParam>,
+    pub name: Label,
+    /// The real Roto's colour for a control nothing has coloured, scheme 21.
+    pub colour: u8,
+    pub unmapped: bool,
+}
+
+/// The colour the real Roto gives a live control until it's told one.
+pub const DEFAULT_CONTROL_COLOUR: u8 = 21;
 
 /// Where the fake's handshake is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +84,14 @@ pub struct FakeRoto {
     /// Whether it says which mode it's in once connected. The real one doesn't (firmware 3.3.0):
     /// it says so only when MODE is pressed, and the serial API's `GET MODE` reads it.
     pub announces_mode: bool,
+    /// The plugin list the program last sent, by index.
+    pub plugins: BTreeMap<u8, PluginDetails>,
+    /// The macro plugin shown in PLUGIN mode, and its page, once the program has chosen one.
+    pub shown: Option<(u8, u8)>,
+    /// The shown plugin's knobs, by the number the Roto gives each, from 1 across its pages.
+    pub knobs: BTreeMap<u16, LiveKnob>,
+    /// Every serial request that would change what it stores, whether or not it took it.
+    pub serial_changes: Vec<Request>,
 }
 
 impl Default for FakeRoto {
@@ -94,7 +119,66 @@ impl FakeRoto {
             received_ccs: Vec::new(),
             unreadable: Vec::new(),
             announces_mode: false,
+            plugins: BTreeMap::new(),
+            shown: None,
+            knobs: BTreeMap::new(),
+            serial_changes: Vec::new(),
         }
+    }
+
+    /// The hash the fake gives a live knob, as the real one gives each a hash of its own.
+    pub fn knob_hash(index: u16) -> ParamHash {
+        ParamHash::of(&format!("roto macro {index}"))
+    }
+
+    /// A shown knob, by the number the Roto gives it.
+    pub fn knob(&self, index: u16) -> Option<&LiveKnob> {
+        self.knobs.get(&index)
+    }
+
+    /// What the real one sends when it shows a macro plugin's page: that it's in PLUGIN mode, then
+    /// `CONTROL MAPPED` for each knob of the page, numbered from 1 across the pages.
+    fn map_page(&mut self, page: u8) -> Vec<FromRoto> {
+        let mut messages = vec![FromRoto::SetPluginMode];
+        for control_index in 0..CONTROLS as u8 {
+            let index = u16::from(page) * CONTROLS as u16 + u16::from(control_index) + 1;
+            self.knobs.entry(index).or_insert_with(|| LiveKnob {
+                colour: DEFAULT_CONTROL_COLOUR,
+                ..LiveKnob::default()
+            });
+            messages.push(FromRoto::ControlMapped {
+                index,
+                hash: Self::knob_hash(index),
+                control: ControlType::Knob,
+                control_index,
+                macro_param: true,
+            });
+        }
+        messages
+    }
+
+    /// The numbers of the shown page's knobs.
+    fn shown_page(&self) -> Option<std::ops::RangeInclusive<u16>> {
+        let (_, page) = self.shown?;
+        let first = u16::from(page) * CONTROLS as u16 + 1;
+        Some(first..=first + CONTROLS as u16 - 1)
+    }
+
+    /// The arrows turned to another page of the shown macro plugin: it says so, and asks for that
+    /// page's knobs.
+    pub fn turn_page(&mut self, page: u8) -> Vec<Vec<u8>> {
+        let Some((plugin, _)) = self.shown else {
+            return Vec::new();
+        };
+        self.shown = Some((plugin, page));
+        let mut messages = vec![FromRoto::MacroPluginPageIndex(page)];
+        messages.extend(self.map_page(page).into_iter().skip(1));
+        messages.iter().map(FromRoto::encode).collect()
+    }
+
+    /// Another plugin chosen with SEL, which the program answers by choosing it.
+    pub fn choose_plugin(&mut self, index: u8) -> Vec<u8> {
+        FromRoto::RotoSelectPlugin(index).encode()
     }
 
     /// Plugged into a computer: it starts looking for a program.
@@ -139,6 +223,8 @@ impl FakeRoto {
             }
             ToRoto::PingResponse(daw) => {
                 self.link = Link::Connected(daw);
+                // A new session shows its plugins afresh.
+                self.shown = None;
                 let mut replies = vec![FromRoto::Connected];
                 if self.announces_mode {
                     replies.push(self.mode_message());
@@ -154,6 +240,71 @@ impl FakeRoto {
                 major: self.api.0,
                 minor: self.api.1,
             }],
+            ToRoto::PluginDetails(details) => {
+                self.plugins.insert(details.index, details);
+                Vec::new()
+            }
+            ToRoto::NumPlugins(count) => {
+                self.plugins.retain(|index, _| *index < count);
+                Vec::new()
+            }
+            // The real one answers only a change of what's shown, in PLUGIN mode, of a macro
+            // plugin.
+            ToRoto::DawSelectPlugin {
+                index, macro_page, ..
+            } if self.mode == Mode::Plugin
+                && self.shown != Some((index, macro_page))
+                && self
+                    .plugins
+                    .get(&index)
+                    .is_some_and(|plugin| plugin.kind == PluginKind::Macro) =>
+            {
+                if self.shown.is_none_or(|(shown, _)| shown != index) {
+                    self.knobs.clear();
+                }
+                self.shown = Some((index, macro_page));
+                self.map_page(macro_page)
+            }
+            // Only for a knob of the page shown, as the real one drops the rest.
+            ToRoto::LearnParam(param)
+                if self
+                    .shown_page()
+                    .is_some_and(|page| page.contains(&param.index)) =>
+            {
+                let knob = self.knobs.entry(param.index).or_default();
+                knob.name = param.name.clone();
+                knob.unmapped = false;
+                knob.learned = Some(param);
+                Vec::new()
+            }
+            ToRoto::SetPluginControlDetails {
+                control: ControlType::Knob,
+                index,
+                name,
+                colour,
+            } if self.shown.is_some() => {
+                let knob = self.knobs.entry(u16::from(index)).or_default();
+                knob.name = name;
+                knob.colour = colour;
+                Vec::new()
+            }
+            ToRoto::UnmapControl {
+                control: ControlType::Knob,
+                index,
+            } => {
+                if let Some(page) = self.shown_page() {
+                    let knob = self
+                        .knobs
+                        .entry(page.start() + u16::from(index))
+                        .or_default();
+                    *knob = LiveKnob {
+                        unmapped: true,
+                        colour: DEFAULT_CONTROL_COLOUR,
+                        ..LiveKnob::default()
+                    };
+                }
+                Vec::new()
+            }
             _ => Vec::new(),
         };
         replies.iter().map(FromRoto::encode).collect()
@@ -206,6 +357,9 @@ impl FakeRoto {
             self.unreadable.push(frame.to_vec());
             return serial::encode_failure(Code::Error(0x01));
         };
+        if !request.is_read_only() {
+            self.serial_changes.push(request.clone());
+        }
         if request.needs_config_update() && !self.updating {
             return serial::encode_failure(Code::Error(0x02));
         }

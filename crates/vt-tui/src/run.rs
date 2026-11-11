@@ -237,6 +237,12 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
             status = note;
         }
     }
+    // Off unless it was turned on here before, so Live keeps the Roto otherwise.
+    if let Some(path) = crate::roto::RotoSetting::path() {
+        app.roto.setting = crate::roto::RotoSetting::load_from(&path);
+        app.roto.setting_path = Some(path);
+    }
+    app.start_roto_if_on();
     app.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();

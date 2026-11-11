@@ -225,6 +225,8 @@ pub struct App {
     pub audio_request: Option<AudioChoice>,
     /// The audio page's row: device, rate or buffer.
     pub audio_row: usize,
+    /// The Roto-Control: whether it's on, the link to it, and what it shows.
+    pub roto: crate::roto::Roto,
     /// Where this machine keeps its kits and samples.
     pub settings: Settings,
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
@@ -494,6 +496,7 @@ impl App {
             settings: Settings::none(),
             library: None,
             audio_row: 0,
+            roto: crate::roto::Roto::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_column: ChainColumn::Phrase,
@@ -904,6 +907,7 @@ impl App {
         }
         self.take_loaded();
         self.take_analyses();
+        self.tick_roto();
         self.follow_recording();
         let working = self.loader.is_waiting() || self.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
