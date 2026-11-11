@@ -585,7 +585,7 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     track.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
     page a slot each (`DeviceSpec::slot`), and the Mod page an envelope, then the LFO beside it,
-    for each number, then the accumulator and the arpeggio (decision 150). A `DeviceSpec` is its
+    for each number, then the accumulator and the arpeggio (decision 151). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're
