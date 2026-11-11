@@ -5,8 +5,9 @@
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
-    Chorus, Comb, Compressor, Delay, Distort, DistortType, Equaliser, Flanger, Grains, Insert,
-    Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Vowel, Warps,
+    Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
+    Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Vowel,
+    Warps,
 };
 use vt_model::song::level_gain;
 
@@ -14,6 +15,7 @@ use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
+use crate::dsp::dynamics::glue::PeakClip;
 use crate::dsp::effects::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::effects::pedal::Pedal;
 use crate::dsp::effects::phaser::Phaser as AllPasses;
@@ -49,8 +51,9 @@ pub struct InsertState {
     since: f32,
     /// An EQ's bands, which are small enough to keep in every slot.
     eq: ThreeBands,
-    /// A compressor's detector, small enough as well.
+    /// A compressor's detector, small enough as well, and Glue's clip after its mix.
     dynamics: Dynamics,
+    peak_clip: PeakClip,
     /// A phaser's all-passes, small enough as well.
     phaser: AllPasses,
     /// A low-pass gate's follower, vactrol and filters, small enough as well.
@@ -81,6 +84,7 @@ impl Default for InsertState {
             since: 0.0,
             eq: ThreeBands::default(),
             dynamics: Dynamics::default(),
+            peak_clip: PeakClip::default(),
             phaser: AllPasses::default(),
             gate: Gate::default(),
             vowel: Formants::default(),
@@ -272,6 +276,19 @@ impl InsertState {
                 self.eq.settle();
             }
         }
+        // Only Glue has its clip, which the other types keep while they're shown.
+        let clips = matches!(
+            insert,
+            Insert::Compressor(Compressor {
+                kind: CompressorType::Glue,
+                peak_clip: 1..,
+                ..
+            })
+        );
+        self.peak_clip.switch(clips);
+        if !same_effect(self.insert, insert) {
+            self.peak_clip.settle();
+        }
         if let Insert::Vowel(settings) = insert {
             let fresh = !same_effect(self.insert, insert);
             self.vowel.follow(settings);
@@ -439,6 +456,7 @@ impl InsertState {
         self.gain.settle();
         self.phaser.settle();
         self.pedal.settle();
+        self.peak_clip.settle();
     }
 
     /// One frame through the slot, faded toward what came in as it's bypassed.
@@ -477,10 +495,12 @@ impl InsertState {
                 // what it turned down.
                 let wet = self.dynamics.process(input, key, settings, smoothing, rate);
                 let mix = self.mix.next(smoothing);
-                return [
+                // Glue's clip is the last thing it does, after its makeup and the mix.
+                let mixed = [
                     wet[0] * mix + input[0] * (1.0 - mix),
                     wet[1] * mix + input[1] * (1.0 - mix),
                 ];
+                return self.peak_clip.process(mixed, rate);
             }
             Insert::Lpg(settings) => {
                 // It's opened by its own input, or another track's as it was after its slots.

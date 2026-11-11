@@ -9,8 +9,10 @@ use std::sync::Arc;
 
 use support::golden;
 use vt_engine::dsp::compressor::{Compressor, curve_db};
+use vt_engine::dsp::effects::distort::InsertState;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
+use vt_engine::track_state::Keys;
 use vt_model::insert::{
     CONSOLE_AUTO_RELEASE, Compressor as Settings, CompressorType, GLUE_AUTO_RELEASE, Insert,
     MOST_MAKEUP_DB, attack_ms, makeup_db, threshold_db,
@@ -530,4 +532,132 @@ fn glue_never_makes_a_nan_at_any_setting() {
             }
         }
     }
+}
+
+/// A slot with Glue in it, as `live-glue-clip` sets it: turning nothing down, as its range is
+/// 0 dB, with its clip in or out, and its mix and makeup.
+fn clipping_slot(peak_clip: u8, mix: u8, makeup: u8) -> InsertState {
+    let mut state = InsertState::default();
+    state.set(Insert::Compressor(Settings {
+        range: 0x00,
+        peak_clip,
+        mix,
+        makeup,
+        ..glue(0xFF, 1, 5, 0)
+    }));
+    state.settle();
+    state
+}
+
+/// What comes out of a slot for a mono signal.
+fn slot_through(state: &mut InsertState, signal: &[f32]) -> Vec<f32> {
+    signal
+        .iter()
+        .map(|&sample| state.process([sample; 2], 1.0, RATE, &Keys::default())[0])
+        .collect()
+}
+
+/// A 1 kHz sine stepped from -12 to +12 dBFS a decibel at a time, a tenth of a second each, as
+/// `live-glue-clip` plays it.
+fn clip_steps() -> Vec<f32> {
+    let held = RATE as usize / 10;
+    (0..25)
+        .flat_map(|step| sine(step as f32 - 12.0, held, step * held))
+        .collect()
+}
+
+#[test]
+fn glues_peak_clip_switched_out_leaves_the_sound_bit_for_bit() {
+    let signal = clip_steps();
+    assert_eq!(
+        slot_through(&mut clipping_slot(0, 0xFF, 0), &signal),
+        signal
+    );
+    // Another type keeps it, but doesn't clip.
+    let mut other = InsertState::default();
+    other.set(Insert::Compressor(Settings {
+        peak_clip: 1,
+        range: 0x00,
+        ..console(0xFF, 1, 3, 0)
+    }));
+    other.settle();
+    let loud: Vec<f32> = sine(12.0, RATE as usize / 10, 0).collect();
+    assert!(
+        slot_through(&mut other, &loud)
+            .iter()
+            .any(|s| s.abs() > 1.0)
+    );
+}
+
+#[test]
+fn glues_peak_clip_follows_glues_curve() {
+    // Glue Compressor with Peak Clip In, measured through Live by `live-glue-clip`: samples going
+    // into its clip, from its render with the clip out, and what came out with it in, from a 1 kHz
+    // sine stepped to +12 dBFS. Every sample of that render is within 8e-7 of this curve.
+    let glue_compressor = [
+        (0.500_143_9, 0.500_143_9),
+        (0.787_759_4, 0.787_759_2),
+        (0.823_645_8, 0.823_378_1),
+        (0.860_029_6, 0.857_214_2),
+        (0.890_389_2, 0.882_090_3),
+        (0.918_289_5, 0.901_445_5),
+        (0.961_249_8, 0.923_842_4),
+        (1.000_288_1, 0.936_367_9),
+        (1.036_908_7, 0.942_203_2),
+        (1.078_530_9, 0.944_022_2),
+        (1.523_409_6, 0.944_060_9),
+        (3.054_408_3, 0.944_060_9),
+    ];
+    let mut slot = clipping_slot(1, 0xFF, 0);
+    for (going_in, theirs) in glue_compressor {
+        for sign in [1.0, -1.0] {
+            let ours = slot.process([going_in * sign; 2], 1.0, RATE, &Keys::default());
+            assert!(
+                (ours[0] - theirs * sign).abs() < 1e-6,
+                "{going_in}: {ours:?} {theirs}"
+            );
+        }
+    }
+    // A sine at -1 dBFS peaks at -1.08 dBFS, as Glue's does, and everything under -2 dBFS comes
+    // through as it went in.
+    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
+    let tone: Vec<f32> = sine(-1.0, RATE as usize / 10, 0).collect();
+    let out = slot_through(&mut slot, &tone);
+    assert!((20.0 * peak(&out).log10() + 1.08).abs() < 0.005);
+    let quiet: Vec<f32> = sine(-2.1, RATE as usize / 10, 0).collect();
+    assert_eq!(slot_through(&mut slot, &quiet), quiet);
+}
+
+#[test]
+fn glues_peak_clip_comes_after_its_makeup_and_its_mix_and_adds_only_odd_harmonics() {
+    let ceiling = 10_f32.powf(-0.5 / 20.0);
+    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
+    // Turned up 12 dB, a -6 dBFS tone is clipped: the clip comes after the makeup.
+    let tone: Vec<f32> = sine(-6.0, RATE as usize / 10, 0).collect();
+    let out = slot_through(&mut clipping_slot(1, 0xFF, 0x80), &tone);
+    assert!((peak(&out) - ceiling).abs() < 1e-6, "{}", peak(&out));
+    // At half dry it clips the blend, rather than the wet half alone, which would go over it.
+    let hot: Vec<f32> = sine(6.0, RATE as usize / 10, 0).collect();
+    let out = slot_through(&mut clipping_slot(1, 0x80, 0), &hot);
+    assert!((peak(&out) - ceiling).abs() < 1e-6, "{}", peak(&out));
+    // It's odd, so a tone driven well into it has no 2nd or 4th harmonic, and a strong 3rd.
+    let out = slot_through(&mut clipping_slot(1, 0xFF, 0), &hot);
+    let harmonic = |number: f32| {
+        let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
+        for (frame, sample) in out.iter().enumerate() {
+            let phase = f64::from(TAU) * f64::from(number * TONE_HZ) * frame as f64 / 48_000.0;
+            real += f64::from(*sample) * phase.cos();
+            imaginary += f64::from(*sample) * phase.sin();
+        }
+        (real.hypot(imaginary) * 2.0 / out.len() as f64) as f32
+    };
+    let fundamental = harmonic(1.0);
+    let db = |number: f32| 20.0 * (harmonic(number) / fundamental).log10();
+    assert!(
+        db(2.0) < -100.0 && db(4.0) < -100.0,
+        "{} {}",
+        db(2.0),
+        db(4.0)
+    );
+    assert!(db(3.0) > -20.0, "{}", db(3.0));
 }

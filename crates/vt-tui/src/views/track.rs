@@ -55,7 +55,8 @@ pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
 /// slot's drawing takes, which are its two rows of settings.
 pub(crate) const DYNAMICS_CURVE_WIDTH: usize = 4;
 pub(crate) const SLOT_DRAWING_HEIGHT: usize = 2;
-/// The size of an EQ's curve on the FX page, in characters: all the room left before the meters.
+/// The size of an EQ's curve on the FX page, in characters, which is the room a slot's drawing
+/// has.
 pub(crate) const EQ_CURVE_WIDTH: usize = 10;
 /// How much a gain reduction meter covers, in dB, from the top of its two rows to the bottom.
 const REDUCTION_METER_DB: f32 = 24.0;
@@ -64,12 +65,15 @@ const REDUCTION_METER_DB: f32 = 24.0;
 const FX_INDENT: u16 = 3;
 const FX_EFFECT_WIDTH: u16 = 10;
 /// Room for a setting's name on the FX page, for its value and a gap, and for its bar and a gap,
-/// so its columns line up. A choice takes the value's and the bar's room.
-const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [10, 10, 10, 6, 7];
+/// so its columns line up. A choice takes the value's and the bar's room. Each name's room is its
+/// column's longest and a space: `Feedback`, `Ping-pong`, `High freq`, `Drive`, `Makeup` and
+/// Glue's `Peak Clip`. With the slot's drawing, the page is 148 wide, so it fits at 163 columns
+/// beside the main meter, inside the box the keyboard's mode draws around it.
+const FX_NAME_WIDTHS: [u16; FX_COLUMNS] = [9, 10, 10, 6, 7, 10];
 const FX_VALUE_WIDTH: u16 = 3;
 const FX_BAR_WIDTH: u16 = FX_BAR_CELLS as u16 + BAR_ENDS + 2;
-/// A slot's drawing comes after all its columns of settings, as a compressor's `Clean` type has
-/// five, and starts a space after them.
+/// A slot's drawing comes after all its columns of settings, the six that `MAX_PARAMS` gives every
+/// slot, whether it uses them or not, so the drawings line up, and starts a space after them.
 const FX_DRAWING_GAP: u16 = 1;
 /// The table column a slot's drawing starts in: after its number and effect, three for each
 /// column of settings, and the gap.

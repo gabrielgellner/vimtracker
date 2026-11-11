@@ -38,8 +38,13 @@
 //! **No colour.** Glue's odd harmonics are its gain following the wave, which this matches to a
 //! decibel; its 2nd is under -84 dB at 1 kHz and -64 dB at 100 Hz, and this adds none.
 //!
-//! **Left out:** Live's `Peak Clip In`, a fixed soft clip to -0.5 dBFS after Glue's output and its
-//! dry/wet, which a slot after it gives, and its side-chain EQ, as `Source` is the side-chain here.
+//! **Peak Clip** is Live's `Peak Clip In`, a fixed soft clip after Glue's output and its dry/wet,
+//! so it's the slot's [`PeakClip`], after the mix. Glue puts out exactly a curve of what comes in,
+//! sample by sample: it leaves anything under -2 dBFS as it is, bit for bit, then bends over with
+//! no kink, nor any in its slope or how that changes, to flatten at -0.5 dBFS, where it stays, a
+//! curve of degree four (`live-glue-clip`). It's odd, so it adds only odd harmonics.
+//!
+//! **Left out:** its side-chain EQ, as `Source` is the side-chain here.
 
 use vt_model::insert::{
     Compressor as Settings, GLUE_AUTO_RELEASE, GLUE_RATIOS, range_db, threshold_db,
@@ -77,6 +82,13 @@ const RANGE_OFFSET_DB: f32 = 1.886;
 /// close in dB it stops.
 const MOST_STEPS: usize = 8;
 const CLOSE_DB: f32 = 1e-4;
+/// Where `Peak Clip` starts to bend, -2 dBFS, and where it flattens, -0.5 dBFS, as gains, as Glue's
+/// measured to a part in a million (`live-glue-clip`).
+const CLIP_KNEE: f32 = 0.794_328_2;
+const CLIP_CEILING: f32 = 0.944_060_9;
+/// How long switching `Peak Clip` in or out takes, in ms, as long as switching a slot out does, so
+/// it doesn't click on a loud sound.
+const CLIP_SWITCH_MS: f32 = 5.0;
 
 /// How much of the way a one-pole goes each frame, for a time constant in seconds.
 fn takes(seconds: f32, rate: u32) -> f32 {
@@ -322,6 +334,63 @@ impl Glue {
     }
 }
 
+/// A sample through `Peak Clip`: itself under the knee, and from there a curve that leaves the
+/// knee as the line does, with no change in how it bends, and comes to the ceiling flat, with no
+/// change in how it bends there either, at twice the ceiling's height over the knee. Over that it's
+/// the ceiling. Glue's own puts out -1.08 dBFS for -1 dBFS in.
+#[inline]
+pub fn clipped(sample: f32) -> f32 {
+    let size = sample.abs();
+    if size <= CLIP_KNEE {
+        return sample;
+    }
+    // How far past the knee, from 0 to 2 where it reaches the ceiling, in the knee's height.
+    let past = ((size - CLIP_KNEE) / (CLIP_CEILING - CLIP_KNEE)).min(2.0);
+    let curve = past * (1.0 - past * past * (0.25 - past / 16.0));
+    (CLIP_KNEE + (CLIP_CEILING - CLIP_KNEE) * curve).copysign(sample)
+}
+
+/// Glue's `Peak Clip`, after its output and its mix, switched in and out over a few ms. Switched
+/// out, it leaves what comes through bit for bit.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PeakClip {
+    /// How far it's switched in, from `0` to `1`, and where it's going.
+    on: f32,
+    target: f32,
+}
+
+impl PeakClip {
+    /// Switch it in or out.
+    pub fn switch(&mut self, on: bool) {
+        self.target = if on { 1.0 } else { 0.0 };
+    }
+
+    /// Jump to where it's switched.
+    pub fn settle(&mut self) {
+        self.on = self.target;
+    }
+
+    /// One frame through it.
+    #[inline]
+    pub fn process(&mut self, frame: [f32; 2], rate: u32) -> [f32; 2] {
+        if self.on == self.target {
+            return if self.on == 0.0 {
+                frame
+            } else {
+                frame.map(clipped)
+            };
+        }
+        // A straight line, as a slot's bypass fades, so it's done within a few ms.
+        let by = 1000.0 / (CLIP_SWITCH_MS * rate as f32);
+        self.on = if self.target > self.on {
+            (self.on + by).min(self.target)
+        } else {
+            (self.on - by).max(self.target)
+        };
+        frame.map(|sample| sample + (clipped(sample) - sample) * self.on)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use vt_model::insert::CompressorType;
@@ -375,5 +444,52 @@ mod tests {
                 "{range}"
             );
         }
+    }
+
+    #[test]
+    fn the_clip_is_smooth_where_it_starts_and_where_it_flattens() {
+        let db = |gain: f32| 20.0 * gain.log10();
+        assert_eq!(clipped(0.7), 0.7);
+        assert_eq!(clipped(-CLIP_KNEE), -CLIP_KNEE);
+        // Glue's: -1 dBFS comes out at -1.08, and it's flat at -0.5 dBFS from there on.
+        assert!((db(clipped(0.891_250_9)) + 1.08).abs() < 0.005);
+        let top = CLIP_KNEE + 2.0 * (CLIP_CEILING - CLIP_KNEE);
+        for size in [top, 1.5, 1e30, f32::INFINITY] {
+            assert_eq!(clipped(size), CLIP_CEILING, "{size}");
+            assert_eq!(clipped(-size), -CLIP_CEILING, "{size}");
+        }
+        // Its slope is the line's going in and flat coming out.
+        let slope = |at: f32| (clipped(at + 1e-3) - clipped(at - 1e-3)) / 2e-3;
+        assert!(
+            (slope(CLIP_KNEE) - 1.0).abs() < 2e-3,
+            "{}",
+            slope(CLIP_KNEE)
+        );
+        assert!(slope(top).abs() < 2e-3, "{}", slope(top));
+        // It only ever turns down, and never turns round.
+        let mut last = 0.0;
+        for step in 0..2000 {
+            let size = step as f32 / 1000.0;
+            let out = clipped(size);
+            assert!(out <= size && out >= last, "{size}");
+            last = out;
+        }
+    }
+
+    #[test]
+    fn the_clip_switches_in_and_out_without_a_jump() {
+        let mut clip = PeakClip::default();
+        assert_eq!(clip.process([1.2, -0.3], 48_000), [1.2, -0.3], "out");
+        clip.switch(true);
+        let mut last = 1.2;
+        for _ in 0..48_000 / 100 {
+            let out = clip.process([1.2; 2], 48_000)[0];
+            assert!((out - last).abs() < 0.01, "{last} {out}");
+            last = out;
+        }
+        assert_eq!(last, CLIP_CEILING, "switched in");
+        clip.switch(false);
+        clip.settle();
+        assert_eq!(clip.process([1.2; 2], 48_000), [1.2; 2], "jumps when asked");
     }
 }

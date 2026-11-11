@@ -182,28 +182,25 @@ pub const MIXER: [Control; 6] = [
 /// The mixer's columns, as rows like a page's.
 pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
-/// The rows of a slot on the FX page, as columns of two settings, one over the other. The effect
-/// is in both, as one tall column, so `j` and `k` on it go between slots.
+/// The rows of a slot on the FX page, as columns of two settings, one over the other: the top row
+/// has the even ones and the bottom the odd. The effect is in both, as one tall column, so `j` and
+/// `k` on it go between slots.
+const fn insert_row(slot: usize, bottom: usize) -> [Control; FX_COLUMNS + 1] {
+    let mut row = [Control::Insert(slot); FX_COLUMNS + 1];
+    let mut column = 0;
+    while column < FX_COLUMNS {
+        row[column + 1] = Control::InsertParam(slot, 2 * column + bottom);
+        column += 1;
+    }
+    row
+}
+
 const fn insert_top(slot: usize) -> [Control; FX_COLUMNS + 1] {
-    [
-        Control::Insert(slot),
-        Control::InsertParam(slot, 0),
-        Control::InsertParam(slot, 2),
-        Control::InsertParam(slot, 4),
-        Control::InsertParam(slot, 6),
-        Control::InsertParam(slot, 8),
-    ]
+    insert_row(slot, 0)
 }
 
 const fn insert_bottom(slot: usize) -> [Control; FX_COLUMNS + 1] {
-    [
-        Control::Insert(slot),
-        Control::InsertParam(slot, 1),
-        Control::InsertParam(slot, 3),
-        Control::InsertParam(slot, 5),
-        Control::InsertParam(slot, 7),
-        Control::InsertParam(slot, 9),
-    ]
+    insert_row(slot, 1)
 }
 
 const INSERT_TOPS: [[Control; FX_COLUMNS + 1]; INSERTS] =
