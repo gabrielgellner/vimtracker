@@ -167,6 +167,8 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if !kitty::supports_graphics()? {
         return Err(RunError::NoGraphicsProtocol);
     }
+    // While the song and its samples load.
+    let full_speed = audio::measure_full_speed();
     // What this machine played through last, or the system's own choice if that won't open.
     let choice = AudioChoice::load();
     let output = Output::open(&choice).or_else(|_| Output::open(&AudioChoice::default()))?;
@@ -193,7 +195,8 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let (handle, realtime) = connect(Engine::new(rate, version));
     let stats = Arc::new(AudioStats::default());
     let device = output.name.clone();
-    let (stream, buffer) = output.start(realtime, Arc::clone(&stats))?;
+    let full_speed = full_speed.join().unwrap_or(Duration::MAX);
+    let (stream, buffer) = output.start(realtime, Arc::clone(&stats), full_speed)?;
     let mut stream = Some(stream);
     let mut app = App::new(song, path, samples, handle, rate);
     app.use_analysis_cache(analysis::cache_folder());
@@ -203,6 +206,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         running: true,
         choice,
         devices: audio::devices(),
+        full_speed,
         ..crate::app::AudioState::default()
     };
     app.library = crate::ableton::default_samples();
@@ -266,6 +270,9 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     result
 }
 
+/// How often the main loop asks whether Low Power Mode is on, or the Mac is hot.
+const POWER_EVERY: Duration = Duration::from_secs(2);
+
 fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
@@ -276,6 +283,8 @@ fn main_loop(
     let frame_time = Duration::from_millis(FRAME_MS);
     // Set at start, and again when opening, saving as or starting a new project changes it.
     let mut title = String::new();
+    // Asked about now and then, as it changes seldom.
+    let mut power_asked: Option<Instant> = None;
     while !app.should_quit {
         if app.window_title() != title {
             title = app.window_title();
@@ -310,6 +319,12 @@ fn main_loop(
         app.tick();
         app.cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
+        app.slowdown
+            .sample(stats.slowdown.load(Ordering::Relaxed), Instant::now());
+        if power_asked.is_none_or(|asked| asked.elapsed() >= POWER_EVERY) {
+            power_asked = Some(Instant::now());
+            app.slowdown.power = audio::PowerState::now();
+        }
         app.autosave_if_due(Instant::now());
         // The sample page's waveform is drawn at one pixel for each of the screen's.
         if let Ok(size) = terminal::window_size() {
@@ -349,7 +364,7 @@ fn switch_audio(
     let (handle, realtime) = connect(Engine::new(rate, version));
     let device = output.name.clone();
     let note = output.note.clone();
-    let (stream, buffer) = output.start(realtime, Arc::clone(stats))?;
+    let (stream, buffer) = output.start(realtime, Arc::clone(stats), app.audio.full_speed)?;
     app.reconnect(handle, samples, rate);
     app.audio.device = device;
     app.audio.buffer = buffer;

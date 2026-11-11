@@ -6289,6 +6289,80 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
     assert!(text(&app).iter().any(|line| line.contains("Stopped")));
 }
 
+/// The screen's rows as text, at the author's 163 by 42.
+fn screen_rows(app: &mut App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(163, 42);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..42)
+        .map(|y| (0..163).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+/// The audio thread reported as slowed so many thousandths, for long enough to settle.
+fn slowed_for_a_while(app: &mut App, thousandths: u64) {
+    let start = Instant::now();
+    for frame in 0..600 {
+        app.slowdown
+            .sample(thousandths, start + Duration::from_millis(33 * frame));
+    }
+}
+
+#[test]
+fn a_leaf_before_the_cpu_figure_shows_while_the_audio_thread_is_slowed() {
+    use vt_tui::glyphs::LEAF;
+    let (mut app, _realtime) = app();
+    let top = |app: &mut App| screen_rows(app)[0].clone();
+    let plain = top(&mut app);
+    assert!(
+        plain.trim_end().ends_with("CPU  0%  late 0  xruns 0"),
+        "{plain}"
+    );
+    assert!(!plain.contains(LEAF));
+    slowed_for_a_while(&mut app, 3600);
+    let slowed = top(&mut app);
+    assert!(
+        slowed
+            .trim_end()
+            .ends_with(&format!("{LEAF} CPU  0%  late 0  xruns 0")),
+        "{slowed}"
+    );
+    // It comes before the figure, so the figure stays where it was.
+    let trailing = |row: &str| row.len() - row.trim_end().len();
+    assert_eq!(trailing(&slowed), trailing(&plain));
+    slowed_for_a_while(&mut app, 1000);
+    assert_eq!(top(&mut app), plain, "and goes at full speed");
+}
+
+#[test]
+fn the_audio_page_says_what_the_leaf_means_on_the_status_line() {
+    use vt_tui::glyphs::LEAF;
+    let (mut app, _realtime) = on_the_audio_page();
+    app.status.clear();
+    let message = |app: &mut App| screen_rows(app)[41].trim_end().to_owned();
+    assert_eq!(message(&mut app), "", "nothing to say at full speed");
+    slowed_for_a_while(&mut app, 3600);
+    assert_eq!(
+        message(&mut app),
+        format!("{LEAF} CPU slowed ×3.6 by power saving, under 1% at full speed")
+    );
+    let rows = screen_rows(&mut app);
+    assert!(
+        rows.iter()
+            .any(|row| row.starts_with(&format!("Keeping up  {LEAF} CPU 0%"))),
+        "the page's own figure has the leaf too: {rows:#?}"
+    );
+    // A message comes first, and other pages don't say it.
+    app.status = "Playing through Speakers at 48000 Hz".to_owned();
+    assert_eq!(message(&mut app), "Playing through Speakers at 48000 Hz");
+    app.status.clear();
+    press(&mut app, " 3");
+    assert_eq!(message(&mut app), "");
+}
+
 #[test]
 fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
     let (mut app, _realtime) = app();

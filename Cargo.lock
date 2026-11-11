@@ -2437,6 +2437,8 @@ dependencies = [
  "hound",
  "libc",
  "nucleo-matcher",
+ "objc2",
+ "objc2-foundation",
  "ratatui",
  "ron",
  "roxmltree",

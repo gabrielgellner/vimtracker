@@ -1,14 +1,16 @@
-//! How the program itself is running: CPU and audio dropouts, at the top right of the view.
+//! How the program itself is running: CPU and audio dropouts, at the top right of the view, with
+//! a leaf before them while the system runs the audio thread slowly to save power.
 
 use std::sync::atomic::Ordering;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
 use crate::audio::AudioStats;
-use crate::theme;
+use crate::{glyphs, theme};
 
 /// The text, and whether something has gone wrong and needs noticing.
 pub fn text(cpu: u64, late: u64, xruns: u64) -> (String, bool) {
@@ -16,6 +18,12 @@ pub fn text(cpu: u64, late: u64, xruns: u64) -> (String, bool) {
         format!("CPU {cpu:>2}%  late {late}  xruns {xruns} "),
         late > 0 || xruns > 0,
     )
+}
+
+/// The leaf before the CPU figure, while the audio thread is slowed. It comes before the figure
+/// rather than after, so nothing else moves when it comes and goes.
+pub fn leaf(slowed: bool) -> Option<Span<'static>> {
+    slowed.then(|| Span::styled(format!("{} ", glyphs::LEAF), theme::dim()))
 }
 
 /// The row to draw on. The top one if it is free, or else the next, as a phrase with many tracks
@@ -49,8 +57,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>
     } else {
         theme::dim()
     };
-    let row = free_row(frame, area, text.len() as u16);
-    frame.render_widget(Paragraph::new(text).style(style), row);
+    let line: Line = leaf(app.slowdown.slowed())
+        .into_iter()
+        .chain([Span::styled(text, style)])
+        .collect();
+    let row = free_row(frame, area, line.width() as u16);
+    frame.render_widget(Paragraph::new(line), row);
 }
 
 #[cfg(test)]
