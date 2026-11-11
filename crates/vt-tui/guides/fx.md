@@ -46,6 +46,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
+| `VDLT` | Velocity up or down from a note's own: `80` none, `90` adds `10` |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
@@ -66,6 +67,21 @@ track's `Gate`, and `LDLT` adds to it as the note starts, as an LFO adds to what
 a step sets, from `1%` to `100%`. In an FX column with a lane of its own, its
 values drift against the notes, so the same row plays short on one pass and long
 on the next: an articulation that moves on its own. See **Note entry**.
+
+`VDLT` is its twin for velocity. It adds to each note's own velocity as the note
+starts, a step of `VDLT` a step of velocity, kept from `00` to `7F`, so `90` adds
+`10`, `70` takes `10` off, and `00` and `FF` play every note silent or full. The
+note keeps what's written, and a note that's sounding keeps the velocity it
+started with. On a step, `VDLT 90` makes one note louder without rewriting it. In
+a lane of its own, a column of `VDLT`s is an accent pattern that drifts against
+the notes. Glided, `VDLT 40g` to `VDLT C0` many rows on, it's a crescendo, each
+note on the way getting its own share. A mod slot's `Dest` lists it too, for an
+LFO's swells. It starts from the track's `Velocity`, on the Sound page's Play
+device, which the Roto has as a knob, for dynamics played live.
+
+On `Acid`, velocity only says whether a note is accented, at `70` or above, so a
+`VDLT` that takes a note across `70` switches its accent on or off, and does
+nothing else.
 
 A slot's settings can be set from a step, the same way as the rest, while the
 slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`
@@ -142,8 +158,20 @@ them again, and `=` and `-` step through them.
 | `03` `04` | `PRE` `!PRE` | When this track's last condition passed, or not |
 | `05` `06` | `NEI` `!NEI` | Likewise for the track to the left |
 | `07` `08` | `1ST` `!1ST` | The first time round only, or every time after |
+| `92` to `9F` | `>2` to `>15` | From pass `n` on, so a part joins and stays |
+| `A2` to `AF` | `<2` to `<15` | Only before pass `n`, so a part drops out |
+| `B0` to `BF` | `>16` to `>31` | From pass 16 to 31 on |
+| `C0` to `CF` | `<16` to `<31` | Only before pass 16 to 31 |
 
-So `12` plays every other pass, and `44` the last of four.
+So `12` plays every other pass, and `44` the last of four. `>` and `<` are for
+builds: a hat with `95` joins on the fifth pass and stays, and an intro fill with
+`A3` plays the first two passes and drops out. `>2` is `!1ST` and `<2` is `1ST`.
+Past 15, `B` and `C` carry on where the second digit stops, so `B4` is `>20`.
+They count the same passes as the rest, so a build starts again with its chain,
+a section's reset, `:reset` and the track's `Reset`, and a section with `Rpt 8`
+builds across its repeats unless its Start is `reset`. `PRE` and `NEI` chain
+other rows to a built one. In the list, `K`, they're under **From**
+and **Until**.
 
 A pass is each time the track plays the row since its chain started, counting its
 own steps at its own speed, so a phrase played twice in its chain counts two passes

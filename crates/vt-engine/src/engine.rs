@@ -2435,8 +2435,10 @@ impl Engine {
                 let arp = self.arpeggiate(index, &pending, arpeggiates, played, tie, start_at);
                 self.tracks[index].arp = arp;
                 let note = arp.map_or(note, |arp| arp.cycle.note(arp.place));
-                // The groove's velocity for the step scales the note's own.
-                let own = u32::from(step.velocity.unwrap_or(MAX_VELOCITY));
+                // `VDLT` moves the note's own, after the FX have run so a lock on this step
+                // counts, and the groove's velocity for the step scales that.
+                let own = self.tracks[index].velocity(step.velocity.unwrap_or(MAX_VELOCITY));
+                let own = u32::from(own);
                 let percent = u32::from(pending.groove.velocity(running));
                 let velocity = if percent == u32::from(FULL_VELOCITY) {
                     own
@@ -2735,7 +2737,7 @@ impl Engine {
             };
             let note = (i16::from(midi) + i16::from(position.transpose))
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-            let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
+            let velocity = self.tracks[index].velocity(step.velocity.unwrap_or(MAX_VELOCITY));
             let shape = self.note_shape(index);
             let Some(on) = self.note_on(index, note, velocity, shape) else {
                 continue;

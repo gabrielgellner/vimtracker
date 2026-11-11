@@ -13,7 +13,7 @@ use vt_model::modulation::{
 use vt_model::playable::Playable;
 use vt_model::settings::{
     Effect, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta,
-    gate_share, glide_ms,
+    gate_share, glide_ms, moved_velocity,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
@@ -748,6 +748,8 @@ pub struct TrackState {
     held_gate: f32,
     /// Held `LDLT`, which moves each note's length up or down from its own, with `80` as none.
     held_gate_delta: f32,
+    /// Held `VDLT`, which moves each note's velocity up or down from its own, with `80` as none.
+    held_velocity_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
     held_glide: f32,
     /// Held `SMP`, `STA`, `SLEN` and `PLY`, the sampler's settings, which its next note reads as it
@@ -805,6 +807,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::SEND_A => track.send_a,
             SettingId::SEND_B => track.send_b,
             SettingId::PITCH => track.pitch,
+            SettingId::VELOCITY_DELTA => track.velocity_delta,
             SettingId::FILTER_MODE => track.filter_mode.index(),
             SettingId::GATE_LENGTH => track.gate_length(),
             SettingId::GROOVE => track
@@ -948,6 +951,7 @@ impl TrackState {
             held_pitch: 128.0,
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
+            held_velocity_delta: f32::from(SettingId::VELOCITY_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
             held_sampler: std::array::from_fn(|at| {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
@@ -1403,6 +1407,15 @@ impl TrackState {
         gate_share(base + moved)
     }
 
+    /// A note's velocity as it starts, its own moved up or down by held `VDLT` and by what
+    /// modulation adds to it, kept to the velocity's range. It's read once, so a sounding note
+    /// keeps it.
+    pub fn velocity(&self, own: u8) -> u8 {
+        let moved =
+            self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
+        moved_velocity(own, moved)
+    }
+
     /// What a step chooses of a setting read before it plays, as `GRV` and `RATE` are, on its
     /// scale: a lock over the held value, or the held value alone once a new note has ended the
     /// locks.
@@ -1718,6 +1731,10 @@ impl TrackState {
                 }
                 SettingId::GATE_DELTA => {
                     self.held_gate_delta = value;
+                    return;
+                }
+                SettingId::VELOCITY_DELTA => {
+                    self.held_velocity_delta = value;
                     return;
                 }
                 SettingId::GLIDE => {

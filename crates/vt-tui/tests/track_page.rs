@@ -507,7 +507,8 @@ fn the_ends_of_bars_line_up_down_each_column() {
             .collect();
         columns.sort_unstable();
         columns.dedup();
-        assert_eq!(columns.len(), 2, "{mark}: {columns:?}");
+        // The first two columns', and the third, where Play has `Velocity`.
+        assert_eq!(columns.len(), 3, "{mark}: {columns:?}");
     }
 }
 
@@ -642,7 +643,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        16,
+        17,
         "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's two"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
@@ -838,6 +839,26 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     assert_eq!(track(&app).choke, None);
     press(&mut app, "=-");
     assert_eq!(track(&app).choke, None, "down from 1 is none");
+}
+
+#[test]
+fn the_track_page_moves_every_notes_velocity_from_under_choke() {
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = on_track_page();
+    let delta = |app: &App| app.song().tracks[0].velocity_delta;
+    let line = from_name(&app, "Velocity");
+    assert!(line.starts_with("Velocity  8000 ▕    │    ▏"), "{line}");
+
+    press(&mut app, "2}j$");
+    assert_eq!(app.track_control().label(), "Velocity");
+    assert_eq!(value_shown(&app).as_deref(), Some("+00 vel"));
+    press(&mut app, "i90");
+    assert_eq!(delta(&app), 0x90);
+    assert_eq!(value_shown(&app).as_deref(), Some("+10 vel"));
+    press(&mut app, "-");
+    assert_eq!(delta(&app), 0x8F);
+    press(&mut app, "x");
+    assert_eq!(delta(&app), 0x80);
 }
 
 #[test]
@@ -1281,12 +1302,12 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
-    press(&mut app, "2}j$=");
+    press(&mut app, "2}j$h=");
     assert_eq!(app.song().tracks[0].groove, GrooveId::swing(62));
     press(&mut app, "k");
     assert_eq!(groove_cell(&app), ("Swing 62".to_owned(), Color::Reset));
 
-    press(&mut app, "j$x");
+    press(&mut app, "j$hx");
     assert_eq!(app.song().tracks[0].groove, None);
     press(&mut app, "k");
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
@@ -1434,7 +1455,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
     use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
-    press(&mut app, "2}j$");
+    press(&mut app, "2}j$h");
     assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);

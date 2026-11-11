@@ -408,7 +408,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- filter, filter_mode, cutoff, resonance, drive, low_cut, high_cut
  |   |- inserts[4], bypassed[4]    an effect and its settings in each slot
  |   |- level, trim, pan, send_a, send_b
- |   |- pitch, choke, gate_length, speed, reset, glide, groove
+ |   |- pitch, velocity_delta, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
  |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
@@ -1117,11 +1117,11 @@ source** that chooses what to write. Those are built when a second generator nee
 with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there. Issue 18's live
 state is deferred until plain values are found wanting. Selecting and pressing `S` again reshapes, from the values now there.
 
-**Sweep.** A sweep covers one column, Velocity or FX, across at least two rows. A multi-column, note-column or instrument-column
+**Sweep.** A sweep covers one column, Note, Velocity, Nudge, gate length or FX, across at least two rows (decision 171 for the note's columns). A multi-column, gate-pulses or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
 highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
-first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape, rate and phase by where each row falls in time, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96). `Where` chooses the
-rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, or a percent chance. A velocity only ever goes on a note.
+first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). `Where` chooses the
+rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, a percent chance, or a Euclidean spread of `Hits` among the rows it can change, turned by `Rotate` (decision 168). A velocity only ever goes on a note.
 
 **Curve.** `f(t)` applies bias then gain, where `t` runs by row position from 0 at the first row filled to 1 at the last, and the
 value is `start + (end - start) x f(t)`. `bias(t,a) = t / ((1/a - 2)(1 - t) + 1)`, and gain is Schlick's gain built from it. The panel shows
