@@ -8,6 +8,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::lfo::{Lfo, Rate, Shape};
+use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -32,8 +33,8 @@ fn song(texts: &[&str]) -> Song {
         song.sample_on(track, "s");
     }
     song.limiter = false;
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let steps = texts.iter().map(|text| text.parse().unwrap()).collect();
     song.tracks[0]
         .phrases
@@ -149,7 +150,7 @@ fn a_note_a_failed_chance_skips_ends_nothing() {
 #[test]
 fn an_off_ends_nothing() {
     let mut start = song(&["C-3 -- vol:80 --- ---", "OFF -- --- --- ---"]);
-    start.tracks[0].envelopes[0].release_ms = 2000;
+    start.tracks[0].mods[0].adsr.release_ms = 2000;
     let out = render(start, STEP + 100);
     // Just into the release, it's still at the lock's level and hasn't jumped up.
     let level = out[STEP + 99];
@@ -179,13 +180,15 @@ fn the_rightmost_slot_wins() {
 fn an_lfo_carries_on_around_a_lock_as_around_a_hold() {
     let with = |text: &str| {
         let mut start = song(&[text]);
-        start.tracks[0].lfos[0] = Lfo {
-            destination: Some(SettingId::VOL),
-            shape: Shape::Sine,
-            rate: Rate::Hertz(400),
-            depth: 0x20,
-            ..Lfo::default()
-        };
+        start.tracks[0].mods[3] = ModSlot::lfo(
+            Some(SettingId::VOL),
+            Lfo {
+                shape: Shape::Sine,
+                rate: Rate::Hertz(400),
+                ..Lfo::default()
+            },
+        )
+        .with_depth(0x20);
         render(start, STEP)
     };
     let locked = with("C-3 -- vol:80 --- ---");

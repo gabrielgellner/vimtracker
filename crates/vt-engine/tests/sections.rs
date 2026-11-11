@@ -30,8 +30,8 @@ fn samples() -> Arc<SamplePool> {
 fn song(chains: &[&[&str]]) -> Song {
     let mut song = Song::new(1);
     song.sample_on(0, "s");
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     song.limiter = false;
     song.launch = Launch::ChainEnd;
     song.sections.clear();
@@ -300,8 +300,8 @@ fn one_section_that_wraps_keeps_its_tracks_free_running() {
         ])),
     );
     two.sections[0].length = Some(2);
-    two.tracks[1].envelopes[0].attack_ms = 0;
-    two.tracks[1].envelopes[0].release_ms = 0;
+    two.tracks[1].mods[0].adsr.attack_ms = 0;
+    two.tracks[1].mods[0].adsr.release_ms = 0;
     two.limiter = false;
     same(&levels(two, 4), &[AV, BV, CV, AV]);
 }

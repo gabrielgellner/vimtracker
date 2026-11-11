@@ -32,8 +32,8 @@ fn pool() -> Arc<SamplePool> {
 fn song(rows: &[&str]) -> Song {
     let mut song = Song::new(1);
     song.sample_on(0, "ramp");
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     song.tracks[0]
         .phrases

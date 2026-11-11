@@ -1,7 +1,7 @@
 //! Design constants and tuning values. Tuning values can change by ear with no document update.
 
 /// Current `song.ron` format.
-pub const FORMAT_VERSION: u32 = 8;
+pub const FORMAT_VERSION: u32 = 9;
 /// The level value that leaves a sound as it is, at 0 dB. Above it is headroom.
 pub const UNITY_LEVEL: u8 = 0xE0;
 /// The highest level value, at +6 dB as on Ableton Live's faders. Anything above it snaps to it.
@@ -95,8 +95,6 @@ pub const FRAME_MS: u64 = 33;
 
 /// The longest attack or release, in milliseconds.
 pub const MAX_ENVELOPE_MS: u16 = 8000;
-/// How many envelopes a track has.
-pub const TRACK_ENVELOPES: usize = 3;
 
 /// The lowest chain transpose, in semitones.
 pub const MIN_TRANSPOSE: i8 = -48;

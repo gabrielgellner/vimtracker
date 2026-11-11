@@ -1,9 +1,9 @@
-//! What a track offers: which settings it has now, for LFOs and envelopes to move and steps to
+//! What a track offers: which settings it has now, for its mod slots to move and steps to
 //! lock, and what they're called on it. A setting another voice or effect owns stays where it was
 //! chosen, and does nothing until its owner is back.
 
 use crate::insert::{INSERTS, Insert};
-use crate::lfo::LFOS_PER_TRACK;
+use crate::modulation::{MOD_SLOTS, ModKind, note_shape_slot};
 use crate::settings::{Effect, Owner, SettingId, voice_entries};
 use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
@@ -67,7 +67,10 @@ impl SettingId {
                         .iter()
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
-            (Owner::Lfo(_), _) => true,
+            // A slot's depth does nothing on the one shaping the notes, and only an LFO has a
+            // phase.
+            (Owner::Mod(slot), 0) => note_shape_slot(&track.mods) != Some(slot),
+            (Owner::Mod(slot), _) => track.mods[slot].kind == ModKind::Lfo,
             (Owner::Sampler, _) => track.is_sound() && track.machine == Machine::Sampler,
             (Owner::Bypass(slot), _) => track
                 .inserts
@@ -92,7 +95,8 @@ impl SettingId {
             (Owner::Slot { slot, .. } | Owner::Bypass(slot), _) => {
                 format!("{} {}", slot + 1, self.name())
             }
-            (Owner::Lfo(lfo), _) => format!("L{} {}", lfo + 1, self.name()),
+            (Owner::Mod(slot), _) if !here => format!("M{} {} ---", slot + 1, self.name()),
+            (Owner::Mod(slot), _) => format!("M{} {}", slot + 1, self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
         }
@@ -104,8 +108,8 @@ impl SettingId {
             (Owner::Track, at) => TRACK_MEANINGS[at].to_owned(),
             (Owner::Voice(voice), _) => format!("A setting of {}", voice.name()),
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
-            (Owner::Lfo(lfo), 0) => format!("How far LFO {} swings", lfo + 1),
-            (Owner::Lfo(lfo), _) => format!("Where LFO {} is", lfo + 1),
+            (Owner::Mod(slot), 0) => format!("How far Mod {} moves", slot + 1),
+            (Owner::Mod(slot), _) => format!("Where Mod {} is in its cycle", slot + 1),
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
             (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
@@ -157,20 +161,25 @@ impl SettingId {
         settings
     }
 
-    /// What an envelope can move: what's on the track, and every LFO's settings, as envelopes run
-    /// first.
-    pub fn for_envelope(track: &Track) -> Vec<Self> {
+    /// What a mod slot can move: what's on the track, and the settings the slots after it have,
+    /// as the slots run in order, so there's never a way back round.
+    pub fn for_mod(track: &Track, slot: usize) -> Vec<Self> {
         let mut settings = Self::to_modulate(track);
-        settings.extend(lfo_settings());
+        settings.extend(
+            mod_settings()
+                .skip((slot + 1) * 2)
+                .filter(|id| id.exists_on(track)),
+        );
         settings
     }
 
-    /// What an LFO can move: what's on the track, and the settings of the LFOs after it, as each
-    /// runs in order, so there's never a way back round.
-    pub fn for_lfo(track: &Track, lfo: usize) -> Vec<Self> {
-        let mut settings = Self::to_modulate(track);
-        settings.extend(lfo_settings().skip((lfo + 1) * 2));
-        settings
+    /// Whether a mod slot can move this: it's on the track and, if it's another slot's, that slot
+    /// comes after it. A slot pointing back, as after slots move, does nothing.
+    pub fn reached_from(self, slot: usize, track: &Track) -> bool {
+        match self.owner().0 {
+            Owner::Mod(other) if other <= slot => false,
+            _ => self.exists_on(track),
+        }
     }
 
     /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
@@ -195,19 +204,20 @@ impl SettingId {
     }
 }
 
-/// Every LFO's settings, in order.
-fn lfo_settings() -> impl Iterator<Item = SettingId> {
-    (0..LFOS_PER_TRACK).flat_map(|lfo| (0..2).filter_map(move |at| SettingId::lfo(lfo, at)))
+/// Every mod slot's settings, in order.
+fn mod_settings() -> impl Iterator<Item = SettingId> {
+    (0..MOD_SLOTS).flat_map(|slot| (0..2).filter_map(move |at| SettingId::modulator(slot, at)))
 }
 
 impl FxCommand {
-    /// The commands a step on this track can hold: what it can lock, its LFOs' settings, then
-    /// the events. A track with no sound has no note for an event to act on.
+    /// The commands a step on this track can hold: what it can lock, its mod slots' settings that
+    /// do something with their types, then the events. A track with no sound has no note for an
+    /// event to act on.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let events = Self::EVENTS.into_iter().filter(|_| track.is_sound());
         SettingId::on_track(track)
             .into_iter()
-            .chain(lfo_settings())
+            .chain(mod_settings().filter(|id| id.exists_on(track)))
             .filter(|id| id.lockable())
             .map(Self::Set)
             .chain(events)
@@ -283,10 +293,7 @@ mod tests {
         let delta = FxCommand::Set(SettingId::GATE_DELTA);
         assert!(FxCommand::on_track(&track).contains(&delta));
         assert_eq!(delta.name(), "LDLT");
-        for offered in [
-            SettingId::for_lfo(&track, 0),
-            SettingId::for_envelope(&track),
-        ] {
+        for offered in [SettingId::for_mod(&track, 3), SettingId::for_mod(&track, 0)] {
             assert!(offered.contains(&SettingId::GATE_LENGTH));
             assert!(!offered.contains(&SettingId::GATE_DELTA));
         }
@@ -378,36 +385,74 @@ mod tests {
         let commands = FxCommand::on_track(&track);
         assert!(commands.contains(&FxCommand::CUT));
         assert!(commands.contains(&FxCommand::Set(SettingId::PITCH)));
-        assert!(commands.contains(&FxCommand::Set(SettingId::lfo(1, 0).unwrap())));
+        assert!(commands.contains(&FxCommand::Set(SettingId::modulator(4, 0).unwrap())));
         assert!(commands.contains(&FxCommand::Del));
         assert_eq!(
+            FxCommand::typed("dep5", &track),
+            Some(FxCommand::Set(SettingId::modulator(4, 0).unwrap()))
+        );
+        assert_eq!(
             FxCommand::typed("dep2", &track),
-            Some(FxCommand::Set(SettingId::lfo(1, 0).unwrap()))
+            Some(FxCommand::Set(SettingId::modulator(1, 0).unwrap())),
+            "an envelope's depth can be locked"
+        );
+        assert_eq!(
+            FxCommand::typed("dep1", &track),
+            None,
+            "not the note's shape"
+        );
+        assert_eq!(
+            FxCommand::typed("phs2", &track),
+            None,
+            "an envelope has no phase"
         );
     }
 
     #[test]
-    fn lfos_can_only_reach_those_after_them_and_envelopes_reach_every_one() {
-        let track = Track::default();
-        let lfos = |list: Vec<SettingId>| -> Vec<String> {
+    fn a_slot_can_only_reach_those_after_it() {
+        let mut track = Track::default();
+        let mods = |list: Vec<SettingId>| -> Vec<String> {
             list.into_iter()
-                .filter(|id| matches!(id.owner().0, Owner::Lfo(_)))
+                .filter(|id| matches!(id.owner().0, Owner::Mod(_)))
                 .map(SettingId::key)
                 .collect()
         };
         assert_eq!(
-            lfos(SettingId::for_lfo(&track, 0)),
-            ["lfo2.depth", "lfo2.phase", "lfo3.depth", "lfo3.phase"]
+            mods(SettingId::for_mod(&track, 3)),
+            ["mod5.depth", "mod5.phase", "mod6.depth", "mod6.phase"]
         );
         assert_eq!(
-            lfos(SettingId::for_lfo(&track, 1)),
-            ["lfo3.depth", "lfo3.phase"]
+            mods(SettingId::for_mod(&track, 4)),
+            ["mod6.depth", "mod6.phase"]
         );
-        assert!(lfos(SettingId::for_lfo(&track, LFOS_PER_TRACK - 1)).is_empty());
+        assert!(mods(SettingId::for_mod(&track, MOD_SLOTS - 1)).is_empty());
         assert_eq!(
-            lfos(SettingId::for_envelope(&track)).len(),
-            2 * LFOS_PER_TRACK
+            mods(SettingId::for_mod(&track, 0)),
+            [
+                "mod2.depth",
+                "mod3.depth",
+                "mod4.depth",
+                "mod4.phase",
+                "mod5.depth",
+                "mod5.phase",
+                "mod6.depth",
+                "mod6.phase"
+            ],
+            "envelopes reach every LFO and the envelopes after them"
         );
+        track.mods[4].kind = ModKind::Adsr;
+        assert_eq!(
+            mods(SettingId::for_mod(&track, 3)),
+            ["mod5.depth", "mod6.depth", "mod6.phase"],
+            "a phase only on an LFO"
+        );
+        let depth = |slot| SettingId::modulator(slot, 0).unwrap();
+        assert!(depth(5).reached_from(3, &track));
+        assert!(!depth(3).reached_from(3, &track), "not itself");
+        assert!(!depth(2).reached_from(3, &track), "never back round");
+        assert_eq!(depth(5).name_on(&track), "M6 Depth");
+        assert_eq!(depth(0).name_on(&track), "M1 Depth ---");
+        assert_eq!(depth(0).group(), "Mod 1");
     }
 
     #[test]
@@ -431,10 +476,10 @@ mod tests {
     fn a_saved_destination_keeps_its_key_in_a_song() {
         let mut song = Song::new(1);
         let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
-        song.tracks[0].lfos[0].destination = Some(feedback);
+        song.tracks[0].mods[3].destination = Some(feedback);
         let text = ron::to_string(&song).unwrap();
         assert!(text.contains("2.delay.feedback"), "{text}");
         let back: Song = ron::from_str(&text).unwrap();
-        assert_eq!(back.tracks[0].lfos[0].destination, Some(feedback));
+        assert_eq!(back.tracks[0].mods[3].destination, Some(feedback));
     }
 }

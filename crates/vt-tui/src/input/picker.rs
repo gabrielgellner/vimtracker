@@ -17,10 +17,10 @@ use ratatui::style::Style;
 use vt_model::accumulator::Accumulation;
 use vt_model::arpeggio::Arpeggio;
 use vt_model::bank::PlayParams;
-use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
-use vt_model::lfo::{Lfo, Rate, Shape as Wave};
+use vt_model::lfo::{Rate, Shape as Wave};
+use vt_model::modulation::ModSlot;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Where};
@@ -76,11 +76,11 @@ pub enum Pick {
         track: usize,
         arpeggio: Arpeggio,
     },
-    /// Replace one of a track's LFOs.
-    Lfo {
+    /// Replace one of a track's mod slots.
+    Mod {
         track: usize,
         slot: usize,
-        lfo: Lfo,
+        modulator: ModSlot,
     },
     /// Choose a track's filter.
     FilterType {
@@ -96,12 +96,6 @@ pub enum Pick {
     Speed {
         track: usize,
         speed: Speed,
-    },
-    /// Replace one of a track's envelopes.
-    Envelope {
-        track: usize,
-        slot: usize,
-        envelope: Envelope,
     },
     /// A sound from the current kit, for this track: what its bank entry is called and how it
     /// plays, and the label the track takes as its name and its choke group.

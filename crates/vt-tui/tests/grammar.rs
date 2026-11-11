@@ -1295,8 +1295,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().items().len(),
-        33,
-        "on a sample track with nothing in its slots: empty, its own 13, SMP, SLI, STA, SLEN and PLY, the LFOs' 6 and 8 events"
+        35,
+        "on a sample track with nothing in its slots: empty, its own 13, SMP, SLI, STA, SLEN and PLY, the mod slots' 8 and 8 events"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.mode, Mode::Replace);

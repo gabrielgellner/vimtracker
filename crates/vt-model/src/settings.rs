@@ -1,5 +1,5 @@
 //! Every setting a step can lock or a source can move, registered once: the track's, each
-//! machine's, each effect's in each slot, and each LFO's. An entry has a key that songs store, a
+//! machine's, each effect's in each slot, and each mod slot's. An entry has a key that songs store, a
 //! long name for finding it, a short label for the grid, its kind and its default. A setting's
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
@@ -14,7 +14,7 @@ use crate::insert::{
     grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
     release_ms, tape_drive_db, threshold_db, vowel_blend,
 };
-use crate::lfo::{LFOS_PER_TRACK, depth_of, depth_text};
+use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::speed::{SPEED_NAMES, Speed};
@@ -47,7 +47,7 @@ pub enum Units {
     Hertz,
     /// The level scale, where `E0` is 0 dB and `00` is silent.
     Decibels,
-    /// An LFO's depth, in hex steps of what it moves, as the Mod page shows it.
+    /// A mod slot's depth, in hex steps of what it moves, as the Mod page shows it.
     Depth,
     /// Round a cycle, where `FF` is a whole turn, so it goes round past either end.
     Degrees,
@@ -956,11 +956,12 @@ fn param_entry(param: &Param) -> Entry {
     }
 }
 
-const LFO: [Entry; 2] = [
+/// A mod slot's settings that steps can lock: its depth, whatever its type, and an LFO's phase.
+const MOD: [Entry; 2] = [
     Entry {
         key: "depth",
         name: "Depth",
-        // With the LFO's number after it, as `DEP1`.
+        // With the slot's number after it, as `DEP1`.
         label: Some("DEP"),
         kind: Kind::Continuous {
             top: 0xFF,
@@ -1352,8 +1353,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + RESO_PARAMS.len()
     + COMB_PARAMS.len()
     + VOWEL_PARAMS.len();
-const LFOS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
-const BYPASS_START: usize = LFOS_START + LFOS_PER_TRACK * LFO.len();
+const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
+const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
 
 /// What a setting belongs to.
@@ -1365,7 +1366,8 @@ pub enum Owner {
         slot: usize,
         effect: Effect,
     },
-    Lfo(usize),
+    /// One of the track's mod slots, by its place, whatever its type.
+    Mod(usize),
     /// A slot's bypass, which is the slot's whatever effect is in it.
     Bypass(usize),
     /// The sampler machine's.
@@ -1451,10 +1453,10 @@ impl SettingId {
         }
     }
 
-    /// One of an LFO's settings: 0 is depth, 1 is phase.
-    pub const fn lfo(lfo: usize, setting: usize) -> Option<Self> {
-        if lfo < LFOS_PER_TRACK && setting < LFO.len() {
-            Some(Self((LFOS_START + lfo * LFO.len() + setting) as u16))
+    /// One of a mod slot's settings: 0 is depth, 1 is phase.
+    pub const fn modulator(slot: usize, setting: usize) -> Option<Self> {
+        if slot < MOD_SLOTS && setting < MOD.len() {
+            Some(Self((MODS_START + slot * MOD.len() + setting) as u16))
         } else {
             None
         }
@@ -1503,7 +1505,7 @@ impl SettingId {
                 }
             }
         }
-        if at < LFOS_START {
+        if at < MODS_START {
             let within = at - SLOTS_START;
             let (slot, within) = (within / SLOT_SIZE, within % SLOT_SIZE);
             for effect in Effect::ALL {
@@ -1513,8 +1515,8 @@ impl SettingId {
                 }
             }
         }
-        let within = at - LFOS_START;
-        (Owner::Lfo(within / LFO.len()), within % LFO.len())
+        let within = at - MODS_START;
+        (Owner::Mod(within / MOD.len()), within % MOD.len())
     }
 
     /// What its owner declares.
@@ -1523,21 +1525,21 @@ impl SettingId {
             (Owner::Track, at) => TRACK[at],
             (Owner::Voice(voice), at) => voice_entries(voice)[at],
             (Owner::Slot { effect, .. }, at) => param_entry(&effect.params()[at]),
-            (Owner::Lfo(_), at) => LFO[at],
+            (Owner::Mod(_), at) => MOD[at],
             (Owner::Bypass(_), at) => SLOT_OWN[at],
             (Owner::Sampler, at) => SAMPLER[at],
         }
     }
 
     /// The name songs store it by, which never changes, like `cut`, `string.decay`,
-    /// `2.delay.feedback` or `lfo1.depth`.
+    /// `2.delay.feedback` or `mod4.depth`.
     pub fn key(self) -> String {
         let key = self.entry().key;
         match self.owner().0 {
             Owner::Track => key.to_owned(),
             Owner::Voice(voice) => format!("{}.{key}", voice_key(voice)),
             Owner::Slot { slot, effect } => format!("{}.{}.{key}", slot + 1, effect.key()),
-            Owner::Lfo(lfo) => format!("lfo{}.{key}", lfo + 1),
+            Owner::Mod(slot) => format!("mod{}.{key}", slot + 1),
             Owner::Bypass(slot) => format!("{}.{key}", slot + 1),
             Owner::Sampler => format!("sampler.{key}"),
         }
@@ -1548,13 +1550,13 @@ impl SettingId {
         Self::all().find(|id| id.key() == key)
     }
 
-    /// Its label in the grid, with its slot's digit before an effect's and its LFO's number after
-    /// an LFO's, if steps can lock it.
+    /// Its label in the grid, with its slot's digit before an effect's and its mod slot's number
+    /// after a modulator's, if steps can lock it.
     pub fn label(self) -> Option<String> {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
-            Owner::Lfo(lfo) => format!("{label}{}", lfo + 1),
+            Owner::Mod(slot) => format!("{label}{}", slot + 1),
             _ => label.to_owned(),
         })
     }
@@ -1570,7 +1572,7 @@ impl SettingId {
             (Owner::Track, at) => TRACK_GROUPS[at].to_owned(),
             (Owner::Voice(voice), _) => voice.name().to_owned(),
             (Owner::Slot { slot, effect }, _) => format!("FX {} {}", slot + 1, effect.name()),
-            (Owner::Lfo(lfo), _) => format!("LFO {}", lfo + 1),
+            (Owner::Mod(slot), _) => format!("Mod {}", slot + 1),
             (Owner::Bypass(slot), _) => format!("FX {}", slot + 1),
             (Owner::Sampler, _) => "Sampler".to_owned(),
         }
@@ -1622,7 +1624,7 @@ mod tests {
                 (Owner::Track, at) => SettingId::track(at),
                 (Owner::Voice(voice), at) => SettingId::voice(voice, at),
                 (Owner::Slot { slot, effect }, at) => SettingId::slot(slot, effect, at),
-                (Owner::Lfo(lfo), at) => SettingId::lfo(lfo, at),
+                (Owner::Mod(slot), at) => SettingId::modulator(slot, at),
                 (Owner::Bypass(slot), _) => SettingId::bypass(slot),
                 (Owner::Sampler, at) => SettingId::sampler(at),
             };
@@ -1657,8 +1659,8 @@ mod tests {
                     assert!(label.starts_with(&(slot + 1).to_string()), "{label}");
                     &label[1..]
                 }
-                Owner::Lfo(lfo) => {
-                    assert!(label.ends_with(&(lfo + 1).to_string()), "{label}");
+                Owner::Mod(slot) => {
+                    assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
                     &label[..label.len() - 1]
                 }
                 _ => &label[..],
@@ -1686,8 +1688,8 @@ mod tests {
         let track_and_events = || {
             labels((0..TRACK.len()).filter_map(SettingId::track))
                 .into_iter()
-                .chain(labels((0..LFOS_PER_TRACK).flat_map(|lfo| {
-                    (0..2).filter_map(move |at| SettingId::lfo(lfo, at))
+                .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
+                    (0..2).filter_map(move |at| SettingId::modulator(slot, at))
                 })))
                 .chain(EVENTS.map(|event| event.name().to_owned()))
         };
@@ -1753,8 +1755,11 @@ mod tests {
         assert_eq!(shown(detune, 0x8000), "+0 %");
         let gain = SettingId::slot(0, Effect::Reverb, 6).unwrap();
         assert_eq!(shown(gain, 0xE000), "+0.0 dB");
-        let (depth, phase) = (SettingId::lfo(0, 0).unwrap(), SettingId::lfo(1, 1).unwrap());
-        assert_eq!(shown(depth, crate::lfo::depth_value(0x40)), "+40");
+        let (depth, phase) = (
+            SettingId::modulator(0, 0).unwrap(),
+            SettingId::modulator(5, 1).unwrap(),
+        );
+        assert_eq!(shown(depth, crate::modulation::depth_value(0x40)), "+40");
         assert_eq!(shown(depth, 0x8000), "00");
         assert_eq!(shown(phase, crate::lfo::phase_value(90)), "90°");
         assert_eq!(shown(SettingId::PITCH, 0x8700), "+7 st");
@@ -1768,7 +1773,7 @@ mod tests {
             (depth.label(), phase.label(), SettingId::PITCH.label()),
             (
                 Some("DEP1".into()),
-                Some("PHS2".into()),
+                Some("PHS6".into()),
                 Some("PTCH".into())
             )
         );

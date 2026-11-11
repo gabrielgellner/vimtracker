@@ -48,8 +48,8 @@ fn song(rows: &[&str], accumulation: Accumulation) -> Song {
     song.scale = C_MAJOR;
     song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     track.accumulation = accumulation;
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));

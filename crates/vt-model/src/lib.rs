@@ -15,6 +15,7 @@ pub mod insert;
 pub mod kit;
 pub mod label;
 pub mod lfo;
+pub mod modulation;
 pub mod names;
 pub mod order;
 pub mod patch_names;

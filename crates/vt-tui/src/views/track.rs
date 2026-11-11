@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
-use vt_model::lfo::depth_text;
+use vt_model::modulation::{depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
@@ -18,9 +18,7 @@ use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
-use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField, Page,
-};
+use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::bar::ValueBar;
@@ -38,9 +36,7 @@ mod modulation;
 mod sound;
 
 pub use modulation::CyclesAt;
-pub(crate) use modulation::{
-    MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, envelope_being_edited, lfo_being_edited,
-};
+pub(crate) use modulation::{MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, mod_being_edited};
 
 /// The size of the Sound page's large panels, in characters: the filter's curve, a sampler's
 /// thumbnail and the Output's meter, each beside a grid of two columns. At the author's 15 by 39
@@ -135,27 +131,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Level => hex(track.level),
         Control::Trim => hex(track.trim),
         Control::Groove => track.groove.unwrap_or(song.groove).name().to_owned(),
-        Control::Envelope(slot, field) => {
-            let envelope = &track.envelopes[slot];
-            let ms = |value: u16| format!("{value} ms");
-            match field {
-                EnvelopeField::Destination => envelope
-                    .destination
-                    .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
-                EnvelopeField::Attack => ms(envelope.attack_ms),
-                EnvelopeField::Decay => ms(envelope.decay_ms),
-                EnvelopeField::Sustain => format!("{}%", envelope.sustain),
-                EnvelopeField::Release => ms(envelope.release_ms),
-                // The first envelope on `Vol` shapes each note, rather than moving a value.
-                EnvelopeField::Depth
-                    if slot == 0 && envelope.destination == Some(SettingId::VOL) =>
-                {
-                    "--".to_owned()
-                }
-                EnvelopeField::Depth => depth_text(envelope.depth),
-                EnvelopeField::Reset => if envelope.reset { "on" } else { "off" }.to_owned(),
-            }
-        }
+        Control::Mod(slot, field) => mod_value(track, slot, field),
         Control::Accumulator(field) => {
             let accumulation = track.accumulation;
             match field {
@@ -190,24 +166,36 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
                 None => String::new(),
             }
         }
-        Control::Lfo(slot, field) => {
-            let lfo = &track.lfos[slot];
-            match field {
-                LfoField::Destination => lfo
-                    .destination
-                    .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
-                LfoField::Shape => lfo.shape.name().to_owned(),
-                LfoField::Rate => lfo.rate.to_string(),
-                LfoField::Depth => depth_text(lfo.depth),
-                LfoField::Phase => format!("{}°", lfo.phase),
-                LfoField::Retrig => if lfo.retrig { "on" } else { "off" }.to_owned(),
-            }
-        }
+    }
+}
+
+/// A mod slot's setting as the page shows it, under the slot's type.
+fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
+    let modulator = &track.mods[slot];
+    let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
+    let ms = |value: u16| format!("{value} ms");
+    match field {
+        ModField::Type => modulator.kind.name().to_owned(),
+        ModField::Mode => modulator.mode_name().unwrap_or("--").to_owned(),
+        ModField::Destination => modulator
+            .destination
+            .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
+        // The slot that shapes each note does so with its level, rather than moving a value.
+        ModField::Depth if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
+        ModField::Depth => depth_text(modulator.depth),
+        ModField::Attack => ms(adsr.attack_ms),
+        ModField::Decay => ms(adsr.decay_ms),
+        ModField::Sustain => format!("{}%", adsr.sustain),
+        ModField::Release => ms(adsr.release_ms),
+        ModField::Reset => if adsr.reset { "on" } else { "off" }.to_owned(),
+        ModField::Shape => lfo.shape.name().to_owned(),
+        ModField::Rate => lfo.rate.to_string(),
+        ModField::Phase => format!("{}°", lfo.phase),
     }
 }
 
 /// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
-/// effect's `Off`/`On` list, an envelope's `Reset`, an LFO's or the arpeggio's `Retrig`, and the
+/// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, and the
 /// master's `Limiter`, which is the song's. They show as a toggle, and the status line still says
 /// the word.
 pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
@@ -218,8 +206,7 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
             let found = insert.params().get(param)?;
             found.is_toggle().then(|| insert.value(param) != 0)
         }
-        Control::Envelope(slot, EnvelopeField::Reset) => Some(track.envelopes[slot].reset),
-        Control::Lfo(slot, LfoField::Retrig) => Some(track.lfos[slot].retrig),
+        Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].adsr.reset),
         Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
         _ => None,
     }

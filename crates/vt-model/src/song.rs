@@ -13,13 +13,12 @@ use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DB_PER_TRIM, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS,
     FIXED_TRACKS, FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_PHRASE_STEPS,
-    MAX_TRACK_RESET, TRACK_ENVELOPES, UNITY_LEVEL, UNITY_TRIM,
+    MAX_TRACK_RESET, UNITY_LEVEL, UNITY_TRIM,
 };
-use crate::envelope::{Envelope, default_envelopes};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
-use crate::lfo::{LFOS_PER_TRACK, Lfo};
+use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
 use crate::selection::Extent;
@@ -410,10 +409,9 @@ pub struct Track {
     /// starts again.
     #[serde(default, skip_serializing_if = "is_default_arpeggio")]
     pub arpeggio: Arpeggio,
-    #[serde(default)]
-    pub lfos: [Lfo; LFOS_PER_TRACK],
-    #[serde(default = "default_envelopes")]
-    pub envelopes: [Envelope; TRACK_ENVELOPES],
+    /// Its mod slots, worked out in order, each able to move only those after it.
+    #[serde(default = "default_mods")]
+    pub mods: [ModSlot; MOD_SLOTS],
     /// The chains this track can play, numbered within it.
     #[serde(default)]
     pub chains: BTreeMap<u32, Arc<Chain>>,
@@ -558,7 +556,7 @@ impl Track {
                 SettingId::SEND_B => Some(self.send_b),
                 _ => None,
             },
-            Owner::Slot { .. } | Owner::Lfo(_) | Owner::Bypass(_) => None,
+            Owner::Slot { .. } | Owner::Mod(_) | Owner::Bypass(_) => None,
         }
     }
 
@@ -698,8 +696,7 @@ impl Default for Track {
             glide: 0,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
-            lfos: Default::default(),
-            envelopes: default_envelopes(),
+            mods: default_mods(),
             chains: BTreeMap::new(),
             phrases: BTreeMap::new(),
         }
@@ -2802,7 +2799,7 @@ mod tests {
         let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
         assert_eq!(track, Track::default());
         assert_eq!((track.cutoff, track.resonance, track.pan), (0xFF, 0, 0x80));
-        assert_eq!(track.lfos, [Lfo::default(); LFOS_PER_TRACK]);
+        assert_eq!(track.mods, default_mods());
     }
 
     #[test]

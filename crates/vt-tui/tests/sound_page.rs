@@ -478,18 +478,21 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
 fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
     use vt_model::lfo::{Lfo, Rate, Shape};
+    use vt_model::modulation::ModSlot;
     use vt_tui::kitty::Graphics;
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
     song.tracks[0].cutoff = 0x80;
     song.tracks[0].resonance = 0xA0;
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
-        shape: Shape::Tri,
-        rate: Rate::Note(TICKS_PER_QUARTER as u32 * 4),
-        depth: 0x60,
-        ..Lfo::default()
-    };
+    song.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::CUT),
+        Lfo {
+            shape: Shape::Tri,
+            rate: Rate::Note(TICKS_PER_QUARTER as u32 * 4),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x60);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for step in 0..16 {
         *phrase.step_mut(step).unwrap() = "C-3 -- --- --- ---".parse().unwrap();

@@ -25,8 +25,8 @@ fn hats(open: Option<u8>, closed: Option<u8>) -> Vec<f32> {
     song.sample_on(1, "closed");
     for (track, choke) in song.tracks.iter_mut().zip([open, closed]) {
         track.choke = choke;
-        track.envelopes[0].attack_ms = 0;
-        track.envelopes[0].release_ms = 0;
+        track.mods[0].adsr.attack_ms = 0;
+        track.mods[0].adsr.release_ms = 0;
     }
     for (track, step) in [(0, 0), (1, 2)] {
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
@@ -91,8 +91,8 @@ fn a_tracks_own_pitch_moves_its_notes() {
     let mut song = Song::new(1);
     song.sample_on(0, "flat");
     let track = &mut song.tracks[0];
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     track.pitch = 0x8C;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = Step {

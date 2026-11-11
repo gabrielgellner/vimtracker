@@ -1,10 +1,8 @@
-//! ADSR envelopes, which each track has `TRACK_ENVELOPES` of.
+//! ADSR envelopes, one of a mod slot's types, and the curves every envelope's stages follow.
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::{MAX_ENVELOPE_MS, TRACK_ENVELOPES};
-use crate::lfo::MAX_LFO_DEPTH;
-use crate::settings::SettingId;
+use crate::constants::MAX_ENVELOPE_MS;
 
 /// How far `fall` curves: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
@@ -24,68 +22,45 @@ pub fn fall(t: f32) -> f32 {
     (1.0 - (-FALL_RATE * t).exp()) / (1.0 - (-FALL_RATE).exp())
 }
 
-/// One envelope's settings.
+/// An ADSR envelope's own settings: its times, its sustain and whether each note starts it from
+/// nothing. Where it goes and how far are its mod slot's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Envelope {
-    pub destination: Option<SettingId>,
+pub struct Adsr {
     pub attack_ms: u16,
     pub decay_ms: u16,
     /// Percent of full, while a note holds.
     pub sustain: u8,
     pub release_ms: u16,
-    /// How far full moves its destination, in that destination's units, with semitones for `Pitch`.
-    /// Negative flips it. The first envelope on `Vol` shapes each note instead.
-    pub depth: i16,
     /// Whether each note starts it from zero. Otherwise it goes on from where it is.
     pub reset: bool,
-    /// Whether it's switched out, to hear the track without it. It keeps running underneath, so
-    /// it comes back where it would have been. The first on `Vol` leaves notes the plain shape a
-    /// new track's have.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub bypassed: bool,
 }
 
-fn is_false(value: &bool) -> bool {
-    !*value
-}
-
-impl Default for Envelope {
+/// A modulating envelope's starting point: a decay to nothing, moving nothing until it has depth.
+impl Default for Adsr {
     fn default() -> Self {
-        Self::note_shape()
+        Self::decay()
     }
 }
 
-impl Envelope {
+impl Adsr {
     /// The shape a note has with nothing else set: a click-free start, and a short release.
-    pub fn note_shape() -> Self {
+    pub const fn note_shape() -> Self {
         Self {
-            destination: Some(SettingId::VOL),
             attack_ms: 1,
             decay_ms: 0,
             sustain: 100,
             release_ms: 50,
-            depth: 0,
             reset: true,
-            bypassed: false,
         }
     }
 
-    /// The second envelope's starting point: a decay on the filter, doing nothing until it has depth.
-    pub fn filter_shape() -> Self {
+    /// A modulating envelope's starting point: the note shape's attack and release, with a decay
+    /// to nothing, as a filter's envelope has.
+    pub const fn decay() -> Self {
         Self {
-            destination: Some(SettingId::CUT),
             decay_ms: 200,
             sustain: 0,
             ..Self::note_shape()
-        }
-    }
-
-    /// The starting point of those after the second: the filter's decay, moving nothing until it's
-    /// given somewhere to go.
-    pub fn unassigned() -> Self {
-        Self {
-            destination: None,
-            ..Self::filter_shape()
         }
     }
 
@@ -95,7 +70,6 @@ impl Envelope {
             .iter()
             .all(|ms| *ms <= MAX_ENVELOPE_MS)
             && self.sustain <= 100
-            && self.depth.abs() <= MAX_LFO_DEPTH
     }
 
     /// The sustain level, from 0 to 1.
@@ -150,29 +124,19 @@ fn frames_of(ms: u16, rate: u32) -> u64 {
     u64::from(ms) * u64::from(rate) / 1000
 }
 
-/// What a new track's envelopes start as.
-/// The first shapes each note and the second waits on the filter; the rest start with nowhere to go.
-pub fn default_envelopes() -> [Envelope; TRACK_ENVELOPES] {
-    std::array::from_fn(|slot| match slot {
-        0 => Envelope::note_shape(),
-        1 => Envelope::filter_shape(),
-        _ => Envelope::unassigned(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const RATE: u32 = 48_000;
 
-    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
-        Envelope {
+    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Adsr {
+        Adsr {
             attack_ms,
             decay_ms,
             sustain,
             release_ms,
-            ..Envelope::note_shape()
+            ..Adsr::note_shape()
         }
     }
 
@@ -245,10 +209,5 @@ mod tests {
         assert!(adsr(MAX_ENVELOPE_MS, MAX_ENVELOPE_MS, 100, MAX_ENVELOPE_MS).in_range());
         assert!(!adsr(MAX_ENVELOPE_MS + 1, 0, 100, 0).in_range());
         assert!(!adsr(0, 0, 101, 0).in_range());
-        let deep = Envelope {
-            depth: MAX_LFO_DEPTH + 1,
-            ..Envelope::default()
-        };
-        assert!(!deep.in_range());
     }
 }

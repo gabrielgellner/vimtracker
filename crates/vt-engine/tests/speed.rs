@@ -56,8 +56,8 @@ fn song(tracks: &[(Speed, &[&str])]) -> Song {
         song.sample_on(index, "s");
         let track = &mut song.tracks[index];
         track.speed = *speed;
-        track.envelopes[0].attack_ms = 0;
-        track.envelopes[0].release_ms = 0;
+        track.mods[0].adsr.attack_ms = 0;
+        track.mods[0].adsr.release_ms = 0;
         let pan = match (tracks.len(), index) {
             (1, _) => "",
             (_, 0) => " pan:00",

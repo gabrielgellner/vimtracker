@@ -6,7 +6,8 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{Distort, DistortType, Insert};
-use vt_model::lfo::{LFOS_PER_TRACK, Lfo, Rate, Shape};
+use vt_model::lfo::{Lfo, LfoMode, Rate, Shape};
+use vt_model::modulation::{MOD_SLOTS, ModSlot};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::{Effect, SettingId};
@@ -56,8 +57,8 @@ fn song(texts: &[&str]) -> Song {
     for track in 0..song.sound_tracks() {
         song.sample_on(track, "s");
     }
-    song.tracks[0].envelopes[0].attack_ms = 0;
-    song.tracks[0].envelopes[0].release_ms = 0;
+    song.tracks[0].mods[0].adsr.attack_ms = 0;
+    song.tracks[0].mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
@@ -68,11 +69,7 @@ fn song(texts: &[&str]) -> Song {
 /// A song holding `VOL 80` on one long note, with this LFO moving the volume.
 fn moving(lfo: Lfo) -> Song {
     let mut song = song(&["C-3 -- vol:80 --- ---"]);
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::VOL),
-        depth: 0x40,
-        ..lfo
-    };
+    song.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::VOL), lfo).with_depth(0x40);
     song
 }
 
@@ -177,21 +174,23 @@ fn retrig_restarts_it_on_each_note() {
         "--- -- --- --- ---",
         "C-3 -- --- --- ---",
     ];
-    let ramp = |retrig| {
+    let ramp = |mode| {
         let mut song = song(&texts);
-        song.tracks[0].lfos[0] = Lfo {
-            destination: Some(SettingId::VOL),
+        let lfo = Lfo {
             shape: Shape::Ramp,
             rate: Rate::Note(QUARTER * 4),
-            depth: 0x40,
-            retrig,
+            mode,
             ..Lfo::default()
         };
+        song.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::VOL), lfo).with_depth(0x40);
         render(song, flat(), STEP * 6)
     };
     let frame = STEP * 4 + 2000;
-    close(left(&ramp(false), frame), level_gain(HELD - SWING * 0.5));
-    close(left(&ramp(true), frame), level_gain(HELD - SWING));
+    close(
+        left(&ramp(LfoMode::Free), frame),
+        level_gain(HELD - SWING * 0.5),
+    );
+    close(left(&ramp(LfoMode::Trig), frame), level_gain(HELD - SWING));
 }
 
 #[test]
@@ -208,7 +207,7 @@ fn phase_and_negative_depth_move_the_wave() {
         rate: Rate::Note(QUARTER),
         ..Lfo::default()
     });
-    flipped.tracks[0].lfos[0].depth = -0x40;
+    flipped.tracks[0].mods[3].depth = -0x40;
     let out = render(flipped, flat(), STEP * 2);
     close(left(&out, STEP), level_gain(HELD - SWING));
 }
@@ -220,13 +219,13 @@ fn two_lfos_add_up_and_no_destination_does_nothing() {
         ..Lfo::default()
     };
     let mut both = moving(lfo);
-    both.tracks[0].lfos[1] = both.tracks[0].lfos[0];
-    both.tracks[0].lfos[1].depth = 0x20;
+    both.tracks[0].mods[4] = both.tracks[0].mods[3];
+    both.tracks[0].mods[4].depth = 0x20;
     let out = render(both, flat(), STEP * 5);
     close(left(&out, STEP * 4), level_gain(HELD + SWING * 1.5));
 
     let mut none = moving(lfo);
-    none.tracks[0].lfos[0].destination = None;
+    none.tracks[0].mods[3].destination = None;
     let out = render(none, flat(), STEP * 5);
     close(left(&out, STEP * 4), level_gain(HELD));
 }
@@ -293,12 +292,11 @@ fn the_filter_stays_running_when_an_lfo_takes_it_to_the_top() {
     // back with old state and jump.
     let mut moved = song(&["C-3 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0xFF;
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
+    let lfo = Lfo {
         rate: Rate::Note(QUARTER),
-        depth: 0xC0,
         ..Lfo::default()
     };
+    moved.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::CUT), lfo).with_depth(0xC0);
     let out = render(moved, slow_sine(), STEP * 8);
     let biggest = out
         .as_chunks::<2>()
@@ -380,7 +378,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         reduction: Default::default(),
         bypassed: Default::default(),
         after_trim: Default::default(),
-        lfos: Default::default(),
+        mods: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
 }
@@ -391,13 +389,12 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
     let moved = |destination, base: fn(&mut Song)| {
         let mut song = song(&["C-3 -- --- --- ---"]);
         base(&mut song);
-        song.tracks[0].lfos[0] = Lfo {
-            destination: Some(destination),
+        let lfo = Lfo {
             shape: Shape::Square,
             rate: Rate::Note(QUARTER),
-            depth: 0x20,
             ..Lfo::default()
         };
+        song.tracks[0].mods[3] = ModSlot::lfo(Some(destination), lfo).with_depth(0x20);
         song
     };
     let cut = moved(SettingId::CUT, |song| song.tracks[0].cutoff = 0x80);
@@ -443,7 +440,7 @@ fn live_values_follow_lfos_and_step_commands_and_stop_with_the_transport() {
 fn the_first_envelope_on_vol_does_not_move_the_level() {
     let mut song = song(&["C-3 -- --- --- ---"]);
     song.tracks[0].level = 0x90;
-    song.tracks[0].envelopes[0].attack_ms = 500;
+    song.tracks[0].mods[0].adsr.attack_ms = 500;
     assert_eq!(live_after(song, 1).level, 0x90);
 }
 
@@ -451,11 +448,11 @@ fn the_first_envelope_on_vol_does_not_move_the_level() {
 fn an_envelope_on_cut_moves_the_live_value() {
     let mut song = song(&["C-3 -- --- --- ---"]);
     song.tracks[0].cutoff = 0x40;
-    song.tracks[0].envelopes[1].destination = Some(SettingId::CUT);
-    song.tracks[0].envelopes[1].attack_ms = 0;
-    song.tracks[0].envelopes[1].decay_ms = 0;
-    song.tracks[0].envelopes[1].sustain = 100;
-    song.tracks[0].envelopes[1].depth = 0x40;
+    song.tracks[0].mods[1].destination = Some(SettingId::CUT);
+    song.tracks[0].mods[1].adsr.attack_ms = 0;
+    song.tracks[0].mods[1].adsr.decay_ms = 0;
+    song.tracks[0].mods[1].adsr.sustain = 100;
+    song.tracks[0].mods[1].depth = 0x40;
     assert_eq!(live_after(song, 1).cutoff, 0x80);
 }
 
@@ -590,15 +587,13 @@ fn moved_by_lfo(
     steps: usize,
 ) -> [u8; vt_model::insert::MAX_PARAMS] {
     let mut moved = song_with;
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(target),
+    let lfo = Lfo {
         shape: Shape::Square,
         rate: Rate::Steps(4),
-        depth,
         phase: 0,
-        retrig: false,
-        bypassed: false,
+        mode: LfoMode::Free,
     };
+    moved.tracks[0].mods[3] = ModSlot::lfo(Some(target), lfo).with_depth(depth);
     slot_live(moved, steps)
 }
 
@@ -659,11 +654,11 @@ fn an_lfo_on_an_empty_slot_does_nothing() {
 #[test]
 fn an_envelope_moves_a_slots_setting() {
     let mut moved = with_distort(song(&["C-3 -- --- --- ---"]), DistortType::Soft);
-    moved.tracks[0].envelopes[1].destination = Some(AMOUNT_TARGET);
-    moved.tracks[0].envelopes[1].depth = 0x40;
-    moved.tracks[0].envelopes[1].attack_ms = 0;
-    moved.tracks[0].envelopes[1].decay_ms = 0;
-    moved.tracks[0].envelopes[1].sustain = 100;
+    moved.tracks[0].mods[1].destination = Some(AMOUNT_TARGET);
+    moved.tracks[0].mods[1].depth = 0x40;
+    moved.tracks[0].mods[1].adsr.attack_ms = 0;
+    moved.tracks[0].mods[1].adsr.decay_ms = 0;
+    moved.tracks[0].mods[1].adsr.sustain = 100;
     assert_eq!(slot_live(moved, 1)[AMOUNT], 0x80);
 }
 
@@ -671,11 +666,8 @@ fn an_envelope_moves_a_slots_setting() {
 fn modulating_a_slot_is_heard_and_renders_the_same_each_time() {
     let render = |depth: i16| {
         let mut moved = with_distort(song(&["C-3 -- --- --- ---"]), DistortType::Soft);
-        moved.tracks[0].lfos[0] = Lfo {
-            destination: Some(AMOUNT_TARGET),
-            depth,
-            ..Lfo::default()
-        };
+        moved.tracks[0].mods[3] =
+            ModSlot::lfo(Some(AMOUNT_TARGET), Lfo::default()).with_depth(depth);
         render_frames(version(moved, flat()), RATE, STEP * 8)
     };
     assert_eq!(render(0x80), render(0x80));
@@ -695,13 +687,12 @@ fn swing_db(out: &[f32]) -> f32 {
 fn a_fast_lfo_keeps_its_depth() {
     let swing = |hertz: u32, destination| {
         let mut moved = song(&["C-3 -- --- --- ---"]);
-        moved.tracks[0].lfos[0] = Lfo {
-            destination: Some(destination),
+        let lfo = Lfo {
             shape: Shape::Sine,
             rate: Rate::Hertz(hertz * 100),
-            depth: 0x40,
             ..Lfo::default()
         };
+        moved.tracks[0].mods[3] = ModSlot::lfo(Some(destination), lfo).with_depth(0x40);
         swing_db(&render_frames(
             version(moved, flat()),
             RATE,
@@ -726,13 +717,9 @@ fn a_target_that_is_not_on_the_track_does_nothing() {
         AMOUNT_TARGET,
     ] {
         let mut dead = song(&["C-3 -- --- --- ---"]);
-        dead.tracks[0].lfos[0] = Lfo {
-            destination: Some(destination),
-            depth: 0xFF,
-            ..Lfo::default()
-        };
-        dead.tracks[0].envelopes[1].destination = Some(destination);
-        dead.tracks[0].envelopes[1].depth = 0xFF;
+        dead.tracks[0].mods[3] = ModSlot::lfo(Some(destination), Lfo::default()).with_depth(0xFF);
+        dead.tracks[0].mods[1].destination = Some(destination);
+        dead.tracks[0].mods[1].depth = 0xFF;
         assert_eq!(
             render_frames(version(dead, flat()), RATE, STEP),
             plain,
@@ -742,22 +729,21 @@ fn a_target_that_is_not_on_the_track_does_nothing() {
 }
 
 /// LFO 1 moving something of LFO 2's, which is on `Cut`.
-fn lfo_on_lfo(target: SettingId, depth: i16, second: Lfo) -> Song {
+fn lfo_on_lfo(target: SettingId, depth: i16, second_depth: i16) -> Song {
     let mut moved = song(&["C-3 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0x80;
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(target),
+    let first = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER * 2),
-        depth,
         ..Lfo::default()
     };
-    moved.tracks[0].lfos[1] = Lfo {
-        destination: Some(SettingId::CUT),
+    moved.tracks[0].mods[3] = ModSlot::lfo(Some(target), first).with_depth(depth);
+    let second = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
-        ..second
+        ..Lfo::default()
     };
+    moved.tracks[0].mods[4] = ModSlot::lfo(Some(SettingId::CUT), second).with_depth(second_depth);
     moved
 }
 
@@ -765,7 +751,7 @@ fn lfo_on_lfo(target: SettingId, depth: i16, second: Lfo) -> Song {
 fn an_lfo_moves_another_lfos_depth() {
     // LFO 2 has no depth of its own, so it only moves while LFO 1 gives it some. A half note is 8
     // steps, so LFO 1 is up for the first 4, and down for the next.
-    let moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
+    let moved = lfo_on_lfo(SettingId::modulator(4, 0).unwrap(), 0x20, 0);
     // LFO 2 is a quarter long, up for 2 steps and down for 2.
     assert_eq!(live_after(moved.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(moved.clone(), 3).cutoff, 0x60);
@@ -776,12 +762,9 @@ fn an_lfo_moves_another_lfos_depth() {
 
 #[test]
 fn an_lfo_moves_another_lfos_phase() {
-    let second = Lfo {
-        depth: 0x20,
-        ..Lfo::default()
-    };
+    let second = 0x20;
     // A depth of 0x80 is half a cycle, either way, so LFO 2 is flipped from where it would be.
-    let moved = lfo_on_lfo(SettingId::lfo(1, 1).unwrap(), 0x80, second);
+    let moved = lfo_on_lfo(SettingId::modulator(4, 1).unwrap(), 0x80, second);
     let plain = lfo_on_lfo(SettingId::PITCH, 0, second);
     assert_eq!(live_after(plain, 1).cutoff, 0xA0);
     assert_eq!(live_after(moved, 1).cutoff, 0x60);
@@ -792,19 +775,15 @@ fn an_lfo_moving_another_goes_one_way_only() {
     // LFO 2 on LFO 1's depth, set in a file, does nothing, as LFO 1 has already run.
     let mut back = song(&["C-3 -- --- --- ---"]);
     back.tracks[0].cutoff = 0x80;
-    back.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
+    let square = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
-        depth: 0x20,
         ..Lfo::default()
     };
+    back.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::CUT), square).with_depth(0x20);
     let plain = back.clone();
-    back.tracks[0].lfos[1] = Lfo {
-        destination: Some(SettingId::lfo(0, 0).unwrap()),
-        depth: 0x40,
-        ..Lfo::default()
-    };
+    back.tracks[0].mods[4] =
+        ModSlot::lfo(Some(SettingId::modulator(3, 0).unwrap()), Lfo::default()).with_depth(0x40);
     assert_eq!(
         render_frames(version(back, flat()), RATE, STEP * 8),
         render_frames(version(plain, flat()), RATE, STEP * 8)
@@ -815,25 +794,25 @@ fn an_lfo_moving_another_goes_one_way_only() {
 fn an_envelope_moves_an_lfos_depth() {
     let mut moved = song(&["C-3 -- --- --- ---"]);
     moved.tracks[0].cutoff = 0x80;
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
+    let square = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
         ..Lfo::default()
     };
-    let envelope = &mut moved.tracks[0].envelopes[1];
-    envelope.destination = Some(SettingId::lfo(0, 0).unwrap());
+    moved.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::CUT), square);
+    let envelope = &mut moved.tracks[0].mods[1];
+    envelope.destination = Some(SettingId::modulator(3, 0).unwrap());
     envelope.depth = 0x20;
-    envelope.attack_ms = 0;
-    envelope.decay_ms = 0;
-    envelope.sustain = 100;
+    envelope.adsr.attack_ms = 0;
+    envelope.adsr.decay_ms = 0;
+    envelope.adsr.sustain = 100;
     assert_eq!(live_after(moved, 1).cutoff, 0xA0);
 }
 
 #[test]
 fn an_lfo_moving_another_renders_the_same_each_time() {
     let render = || {
-        let moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
+        let moved = lfo_on_lfo(SettingId::modulator(4, 0).unwrap(), 0x20, 0);
         render_frames(version(moved, flat()), RATE, STEP * 8)
     };
     assert_eq!(render(), render());
@@ -843,13 +822,12 @@ fn an_lfo_moving_another_renders_the_same_each_time() {
 fn waiting_lfo(texts: &[&str]) -> Song {
     let mut song = song(texts);
     song.tracks[0].cutoff = 0x80;
-    song.tracks[0].lfos[0] = Lfo {
-        destination: Some(SettingId::CUT),
+    let square = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER),
-        depth: 0,
         ..Lfo::default()
     };
+    song.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::CUT), square);
     song
 }
 
@@ -857,7 +835,7 @@ fn waiting_lfo(texts: &[&str]) -> Song {
 fn a_step_locks_an_lfos_depth_until_the_next_note() {
     // `9FE0` is a depth of +40.
     let locked = waiting_lfo(&[
-        "C-3 -- lfo1.depth:9FE0 --- ---",
+        "C-3 -- mod4.depth:9FE0 --- ---",
         "--- -- --- --- ---",
         "--- -- --- --- ---",
         "--- -- --- --- ---",
@@ -874,8 +852,8 @@ fn a_step_locks_an_lfos_depth_until_the_next_note() {
 
 #[test]
 fn a_step_locks_an_lfos_phase() {
-    let mut turned = waiting_lfo(&["C-3 -- lfo1.phase:7F80 --- ---"]);
-    turned.tracks[0].lfos[0].depth = 0x40;
+    let mut turned = waiting_lfo(&["C-3 -- mod4.phase:7F80 --- ---"]);
+    turned.tracks[0].mods[3].depth = 0x40;
     let mut plain = turned.clone();
     plain.tracks[0]
         .phrases
@@ -892,42 +870,41 @@ fn a_step_locks_an_lfos_phase() {
 
 #[test]
 fn an_lfo_on_a_locked_depth_adds_to_it() {
-    let mut moved = lfo_on_lfo(SettingId::lfo(1, 0).unwrap(), 0x20, Lfo::default());
+    let mut moved = lfo_on_lfo(SettingId::modulator(4, 0).unwrap(), 0x20, 0);
     // LFO 2 alone has a depth of +20 from LFO 1. A lock of +20 more makes +40.
     let phrase = moved.tracks[0]
         .phrases
         .get_mut(&0)
         .map(Arc::make_mut)
         .unwrap();
-    *phrase.step_mut(0).unwrap() = "C-3 -- lfo2.depth:8FF0 --- ---".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "C-3 -- mod5.depth:8FF0 --- ---".parse().unwrap();
     assert_eq!(live_after(moved, 1).cutoff, 0xC0);
 }
 
 #[test]
-fn the_last_lfo_moves_its_destination_and_a_lock_and_the_first_lfo_move_it() {
-    let last = LFOS_PER_TRACK - 1;
-    let depth = SettingId::lfo(last, 0).unwrap();
-    assert_eq!(depth.key(), format!("lfo{LFOS_PER_TRACK}.depth"));
-    assert_eq!(depth.label(), Some(format!("DEP{LFOS_PER_TRACK}")));
+fn the_last_slot_moves_its_destination_and_a_lock_and_the_first_lfo_move_it() {
+    let last = MOD_SLOTS - 1;
+    let depth = SettingId::modulator(last, 0).unwrap();
+    assert_eq!(depth.key(), format!("mod{MOD_SLOTS}.depth"));
+    assert_eq!(depth.label(), Some(format!("DEP{MOD_SLOTS}")));
     let on_cut = |texts: &[&str]| {
         let mut song = waiting_lfo(texts);
-        song.tracks[0].lfos.swap(0, last);
+        song.tracks[0].mods.swap(3, last);
         song
     };
     // `9FE0` is a depth of +40, as on the first LFO.
-    let lock = format!("C-3 -- lfo{LFOS_PER_TRACK}.depth:9FE0 --- ---");
+    let lock = format!("C-3 -- mod{MOD_SLOTS}.depth:9FE0 --- ---");
     let locked = on_cut(&[&lock]);
     assert_eq!(live_after(locked.clone(), 1).cutoff, 0xC0);
     assert_eq!(live_after(locked, 3).cutoff, 0x40);
     // The first LFO, a half note up and then down, gives it a depth of +20 and then -20.
     let mut moved = on_cut(&["C-3 -- --- --- ---"]);
-    moved.tracks[0].lfos[0] = Lfo {
-        destination: Some(depth),
+    let half = Lfo {
         shape: Shape::Square,
         rate: Rate::Note(QUARTER * 2),
-        depth: 0x20,
         ..Lfo::default()
     };
+    moved.tracks[0].mods[3] = ModSlot::lfo(Some(depth), half).with_depth(0x20);
     assert_eq!(live_after(moved.clone(), 1).cutoff, 0xA0);
     assert_eq!(live_after(moved, 5).cutoff, 0x60);
 }

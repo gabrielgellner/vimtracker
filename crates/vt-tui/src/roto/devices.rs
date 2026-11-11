@@ -24,7 +24,8 @@ use vt_model::constants::{
 };
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{MAX_LFO_DEPTH, Rate, Shape};
+use vt_model::lfo::{LfoMode, Rate, Shape};
+use vt_model::modulation::{MAX_DEPTH, ModKind};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
@@ -39,9 +40,7 @@ use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
 use crate::theme;
-use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField, Page,
-};
+use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::track::toggle_on;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.
@@ -56,7 +55,7 @@ pub enum Family {
     Space,
     /// Time and pitch: rates, lengths, glides, pitches. Yellow.
     Time,
-    /// Modulation: what an LFO, an envelope, the accumulator or the arpeggio does. Mauve.
+    /// Modulation: what a mod slot, the accumulator or the arpeggio does. Mauve.
     Modulation,
     /// Character: drive and a machine's or an effect's own colour of sound. Peach.
     Character,
@@ -115,7 +114,7 @@ pub const FAMILY_COLOURS: [FamilyColour; 7] = [
         screen: theme::MAUVE,
         scheme: 24,
         name: "violet",
-        holds: "what an envelope, an LFO, the accumulator or the arpeggio does",
+        holds: "what a mod slot, the accumulator or the arpeggio does",
     },
     FamilyColour {
         family: Family::Character,
@@ -228,17 +227,13 @@ pub fn family(control: Control, track: &Track) -> Family {
         | Control::Groove
         | Control::Reset
         | Control::Glide
-        | Control::Lfo(_, LfoField::Rate)
-        | Control::Envelope(
+        | Control::Mod(
             _,
-            EnvelopeField::Attack | EnvelopeField::Decay | EnvelopeField::Release,
+            ModField::Rate | ModField::Attack | ModField::Decay | ModField::Release,
         )
         | Control::Arpeggio(ArpField::Rate) => Family::Time,
-        Control::Envelope(_, EnvelopeField::Sustain) => Family::Level,
-        Control::Lfo(..)
-        | Control::Envelope(..)
-        | Control::Accumulator(_)
-        | Control::Arpeggio(_) => Family::Modulation,
+        Control::Mod(_, ModField::Sustain) => Family::Level,
+        Control::Mod(..) | Control::Accumulator(_) | Control::Arpeggio(_) => Family::Modulation,
         _ => Family::Choice,
     }
 }
@@ -329,14 +324,25 @@ pub(crate) fn rate_position(rate: Rate) -> u16 {
     position_at((cycles_a_bar.log2() - SLOWEST) / (FASTEST - SLOWEST))
 }
 
-/// A depth either side of none, as an LFO's or an envelope's.
+/// A depth either side of none, as a mod slot's.
 fn depth(depth: i16) -> (Feel, u16) {
-    let top = MAX_LFO_DEPTH;
+    let top = MAX_DEPTH;
     value(
         (depth.clamp(-top, top) + top) as u16,
         (2 * top) as u16,
         true,
     )
+}
+
+/// Whether an LFO's mode is `Trig`, as the button under its `Phase` shows it while the mode has
+/// two, the `Retrig` it took over; #86's five make it a knob.
+fn lfo_mode_on(control: Control, track: &Track) -> Option<bool> {
+    match control {
+        Control::Mod(slot, ModField::Mode) if track.mods[slot].kind == ModKind::Lfo => {
+            Some(track.mods[slot].lfo.mode == LfoMode::Trig)
+        }
+        _ => None,
+    }
 }
 
 /// A knob's feel and where it's set, for a control on this track, or nothing if the track
@@ -346,7 +352,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
     if !control.exists_on(track) {
         return None;
     }
-    if let Some(on) = toggle_on(control, track, song) {
+    if let Some(on) = toggle_on(control, track, song).or_else(|| lfo_mode_on(control, track)) {
         return Some((Feel::Switch, if on { position_of(1, 2) } else { 0 }));
     }
     let names = |items: &[&str]| {
@@ -451,18 +457,26 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 modes.iter().position(|mode| *mode == playing).unwrap_or(0),
             )
         }
-        Control::Lfo(slot, field) => {
-            let lfo = &track.lfos[slot];
+        Control::Mod(slot, field) => {
+            let modulator = &track.mods[slot];
+            let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
             match field {
-                LfoField::Destination => {
-                    let choices = SettingId::for_lfo(track, slot);
-                    let at = lfo
+                // What a slot is, the app's alone; an LFO's mode is a switch while it has two.
+                ModField::Type | ModField::Mode | ModField::Reset => return None,
+                ModField::Destination => {
+                    let choices = SettingId::for_mod(track, slot);
+                    let at = modulator
                         .destination
                         .and_then(|to| choices.iter().position(|choice| *choice == to))
                         .map_or(0, |at| at + 1);
                     changing(at, choices.len() + 1)
                 }
-                LfoField::Shape => list(
+                ModField::Depth => depth(modulator.depth),
+                ModField::Attack => (Feel::Smooth, time_position(adsr.attack_ms)),
+                ModField::Decay => (Feel::Smooth, time_position(adsr.decay_ms)),
+                ModField::Release => (Feel::Smooth, time_position(adsr.release_ms)),
+                ModField::Sustain => value(u16::from(adsr.sustain.min(100)), 100, false),
+                ModField::Shape => list(
                     Shape::ALL.iter().map(|shape| shape.name().to_owned()),
                     Shape::ALL
                         .iter()
@@ -471,30 +485,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 ),
                 // Smooth over every kind of rate, its value shown as it turns: a stored knob keeps
                 // at most 16 steps, and a note value has 24 (the author's choice, 2026-11-11).
-                LfoField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
-                LfoField::Depth => depth(lfo.depth),
-                LfoField::Phase => value(lfo.phase.min(359), 359, false),
-                // A switch, which `toggle_on` has already given.
-                LfoField::Retrig => return None,
-            }
-        }
-        Control::Envelope(slot, field) => {
-            let envelope = &track.envelopes[slot];
-            match field {
-                EnvelopeField::Destination => {
-                    let choices = SettingId::for_envelope(track);
-                    let at = envelope
-                        .destination
-                        .and_then(|to| choices.iter().position(|choice| *choice == to))
-                        .map_or(0, |at| at + 1);
-                    changing(at, choices.len() + 1)
-                }
-                EnvelopeField::Attack => (Feel::Smooth, time_position(envelope.attack_ms)),
-                EnvelopeField::Decay => (Feel::Smooth, time_position(envelope.decay_ms)),
-                EnvelopeField::Release => (Feel::Smooth, time_position(envelope.release_ms)),
-                EnvelopeField::Sustain => value(u16::from(envelope.sustain.min(100)), 100, false),
-                EnvelopeField::Depth => depth(envelope.depth),
-                EnvelopeField::Reset => return None,
+                ModField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
+                ModField::Phase => value(lfo.phase.min(359), 359, false),
             }
         }
         Control::Accumulator(field) => {
@@ -696,6 +688,17 @@ fn identity(
             track.machine.name().to_owned(),
             format!("vimtracker/machine/{}", lower(track.machine.name())),
         ),
+        // A mod slot by its number and its type, as an FX slot is by its digit and its effect.
+        _ if matches!(spec.title[0], Some(Control::Mod(..))) => {
+            let Some(Control::Mod(at, _)) = spec.title[0] else {
+                unreachable!()
+            };
+            let kind = track.mods[at].kind.name();
+            (
+                format!("M{} {kind}", at + 1),
+                format!("vimtracker/mod{}/{}", at + 1, lower(kind)),
+            )
+        }
         _ => (
             spec.identity.clone(),
             format!("vimtracker/{}", lower(&spec.identity)),
@@ -708,8 +711,8 @@ fn identity(
     (name, key)
 }
 
-/// Whether a device is switched in: an FX slot that's filled and not bypassed, an envelope or an
-/// LFO that's in, and every other device.
+/// Whether a device is switched in: an FX slot that's filled and not bypassed, a mod slot that's
+/// in, and every other device.
 fn enabled(control: Option<Control>, track: &Track) -> bool {
     match control {
         Some(Control::Insert(slot)) => {
@@ -880,7 +883,7 @@ pub fn stored_setups() -> Vec<OwnSetup> {
 }
 
 /// What switches a track's `device`th device in and out, as its enabled state on the Roto: an
-/// FX slot's bypass, or an envelope's or an LFO's own switch. Other devices are always in.
+/// FX slot's bypass, or a mod slot's own switch. Other devices are always in.
 pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
     let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
     match spec.title[0]? {

@@ -3,8 +3,8 @@
 Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
-plays it, with a dim mark left where it's set, Mod its envelopes,
-LFOs, accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
+plays it, with a dim mark left where it's set, Mod its six mod slots,
+envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -30,7 +30,7 @@ each machine.
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
-| `b` | Switch a slot, envelope or LFO out, or back in |
+| `b` | Switch an FX slot or a mod slot out, or back in |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
 A note holds for as long as its key is down, and several keys down play a
@@ -234,10 +234,9 @@ sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as 
 make it much louder, on the level scale, where `E0` leaves it as it is and every `10` is 4 dB.
 Every effect but `Comp` has one; a `Comp` has `Makeup`.
 
-An LFO can move the ones after it: `LFO 1`'s `Dest` has `L2 Depth`, `L2 Phase`, `L3 Depth` and
-`L3 Phase`, `LFO 2`'s has `LFO 3`'s, and an envelope's has every LFO's, so `Env 2` can bring in
-an LFO's depth with each note. It only goes one way, so `LFO 3` can't reach `LFO 1` or `LFO 2`. `Rate` can't be moved, as LFOs work out where they are from the
-song's position.
+A mod slot can move the ones after it: `Mod 4`'s `Dest` has `M5 Depth`, `M5 Phase`, `M6 Depth` and
+`M6 Phase`, and `Mod 2`'s has every later slot's, so an envelope can bring in an LFO's depth with
+each note. It only goes one way, so `Mod 6` can't reach any other. See **LFOs**.
 
 `K` on `Dest` lists them in categories, opening inside the one with what's chosen: `l` goes
 into a category, `h` closes it, and typing searches them all. See **Lists** in
@@ -743,58 +742,78 @@ can't be muted or soloed.
 
 ## The Mod page
 
-The Mod page is a rack of devices in two columns, as the FX page is a rack of slots:
-`Env 1` to `Env 3` down the left, each beside the LFO of its number on the right, and
-the accumulator beside the arpeggio under them. A return, a group and the master have
-no notes to move, so their page ends with the LFOs.
+Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
+an `ADSR` envelope or an `LFO`, in any mix. A new track has three ADSRs, then three
+LFOs. The slots work out in order, so a slot can move only those after it, and never
+round again.
 
-Each envelope and LFO has its `Dest` in its title, as a slot has its effect, so
-`LFO 1     Cut` reads as what it's for. `---` there is dim, as it goes nowhere.
-Between the name and the `Dest` is its switch, green while it's in. Its settings
-are in two columns of three, and its shape or cycle is in a box on its right. The
-device with the cursor has the brighter frame.
+The page is a rack of devices in two columns, as the FX page is a rack of slots:
+`Mod 1` to `Mod 3` down the left, `Mod 4` to `Mod 6` down the right, and the
+accumulator beside the arpeggio under them. A return, a group and the master have
+no notes to move, so their page ends with the slots.
+
+A slot's title says what it is and where it goes: `Mod 4`, its switch, green while
+it's in, its type, its mode if the type has one, and `→` its `Dest`, so
+`Mod 4  LFO  Trig  → Cut` reads as what it's for. `---` there is dim, as it goes
+nowhere. Its settings are in two columns of three, and its shape or cycle is in a
+box on its right. The device with the cursor has the brighter frame.
 
 | Keys | Does |
 |---|---|
-| `h` `l` | Along a row, and on into the device beside it |
-| `j` `k` | Down and up the column, `k` from a first row to the `Dest` |
+| `h` `l` | Along a row or the title, and on into the device beside it |
+| `j` `k` | Down and up the column, `k` from a first row to the title |
 | `{` `}` | Up or down a device in the column, on the same setting |
 | `0` `$` | The first or last setting on the row, in the device |
 | `gg` `G` | The top or bottom of the column |
-| `b` | Switch this envelope or LFO out, to hear without it, or back in |
+| `K` | On the type, choose another; on the mode or `Dest`, list them |
+| `x` | On the type, put back the slot's first type |
+| `b` | Switch this slot out, to hear without it, or back in |
 
-`b` works from any row of an envelope or an LFO, as it does in a slot. Switched out,
-it goes faint, its switch too, and what it moves glides back to where it would be
-without it over 5 ms, so it doesn't click. Its settings stay as they are, and it
-keeps running underneath, so an LFO comes back in phase and an envelope where the
-note has it. It's saved with the song. `Env 1` on `Vol` switched out leaves notes
-the plain shape a new track's have, from the next one. A step can't switch one, as
-a step can a slot, but `DEP1 80` on a step takes `LFO 1` to no depth for its note.
+**Changing a type.** `K` on the type lists `ADSR` and `LFO`, each with what it
+does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
+its switch. Each slot also keeps every type's own settings, so trying an LFO in
+`Mod 2` and going back finds its envelope as it was. What it moves glides from the
+old type's to the new one's over 5 ms, so it doesn't click. `=` and `-` don't change
+a type, as a type changes what the device is: only `K` does, as only `K` chooses an
+effect.
 
-So `}` goes from `Env 1` to `Env 2`, and `3}` from `LFO 1` to the arpeggio. Where the
-screen has room for fewer than four rows of devices, the page moves by whole rows of
-them to keep the cursor's in view.
+`b` works from any row of a slot, as it does in an FX slot. Switched out, it goes
+faint, its switch too, and what it moves glides back to where it would be without
+it over 5 ms, so it doesn't click. Its settings stay as they are, and it keeps
+running underneath, so an LFO comes back in phase and an envelope where the note
+has it. It's saved with the song. A step can't switch one, as a step can an FX
+slot, but `DEP4 80` on a step takes `Mod 4` to no depth for its note.
+
+So `}` goes from `Mod 1` to `Mod 2`, and `3}` from `Mod 4` to the arpeggio. Where
+the screen has room for fewer than four rows of devices, the page moves by whole
+rows of them to keep the cursor's in view.
 
 ## Envelopes
 
-Each track has three, which start with each note. Each draws its shape in a box on
-its right. Time is stretched in the drawing, so a short attack still shows, and a
-stage's width depends only on its own time. The times are down the left, and the
-levels and `Reset` down the right.
+An `ADSR` slot starts with each note. It draws its shape in a box on its right.
+Time is stretched in the drawing, so a short attack still shows, and a stage's
+width depends only on its own time. The times are down the left, and the levels
+and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
-| Dest | What it moves, such as `Vol` or `Cut`, or `---` for off |
+| Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
 | Release | Milliseconds, after the note ends |
 | Depth | How far full moves it, in hex. Negative flips it |
 | Reset | On, it starts from zero each note; off, it goes on |
 
-`Env 1` starts on `Vol` and shapes each note, so it has no depth. `Env 2` starts
-on `Cut` with no depth, so raise its depth to open the filter on each note. `Env 3`
-starts on `---`, with `Env 2`'s decay, ready to be given somewhere to go. On
-`Pitch`, depth is in semitones and in hex, so `+0C` is an octave.
+**The notes' own shape** is the first envelope on `Vol`, whichever slot that is,
+so it has no depth and shows `--`. A new track's is `Mod 1`. Switched out, notes
+have the plain shape a new track's have, from the next one; it doesn't hand the
+job on to a later envelope. Make `Mod 1` an LFO and the next envelope on `Vol`
+shapes the notes instead, or none does.
+
+`Mod 2` starts on `Cut` with no depth, so raise its depth to open the filter on
+each note. `Mod 3` starts on `---`, with `Mod 2`'s decay, ready to be given
+somewhere to go. On `Pitch`, depth is in semitones and in hex, so `+0C` is an
+octave. An envelope's depth can be locked on a step too: `DEP2` for `Mod 2`.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
 and the next note fades the last one quickly rather than running its release. So
@@ -807,25 +826,25 @@ attack starts slowly.
 
 ## LFOs
 
-Each track has three. An LFO moves around the current value, so `CUT40` on a
-step moves the centre and the LFO carries on around it. Each draws one cycle of
-its wave in a box on its right, starting from its `Phase`, upside down for a
-negative `Depth`, with a dot riding it where the LFO is now. `Random` and `Smooth`
-draw only a centre line, as their values aren't known ahead.
+An `LFO` slot moves around the current value, so `CUT40` on a step moves the centre
+and the LFO carries on around it. It draws one cycle of its wave in a box on its
+right, starting from its `Phase`, upside down for a negative `Depth`, with a dot
+riding it where the LFO is now. `Random` and `Smooth` draw only a centre line, as
+their values aren't known ahead.
 
 | Setting | Value |
 |---|---|
-| Dest | What it moves, such as `Cut` or `Pan`, or `---` for off |
+| Mode | In the title: `Free` follows the song, `Trig` starts at each note |
+| Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
-| Retrig | On, it restarts with each note on this track |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
 from one to the next, which suits a slow drift on `Cut`. An LFO's `Shape`, `Rate`
-and `Depth` are down its left, and its `Phase` and `Retrig` down its right.
+and `Depth` are down its left, and its `Phase` down its right.
 
 | Type this as a rate | For |
 |---|---|
@@ -837,13 +856,19 @@ and `Depth` are down its left, and its `Phase` and `Retrig` down its right.
 A large step is `10` in hex, or 90° of phase. On a rate it skips
 dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 
-`i` on Dest, Shape or Retrig opens the list too. `K` on Rate lists the note
+`i` on the mode, Dest or Shape opens the list too. `K` on Rate lists the note
 divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
+
+**Reaching other slots.** A slot's `Dest` lists the depth and phase of every slot
+after it, as `M5 Depth` and `M5 Phase`, so `Mod 4` can bring in `Mod 5`'s depth,
+and an envelope in `Mod 2` can bring in an LFO's depth, or a later envelope's, with
+each note. It only goes one way, so `Mod 6` can't reach any other. `Rate` can't be
+moved, as LFOs work out where they are from the song's position.
 
 ## When an LFO restarts
 
 Playing from the top restarts every LFO. A `:reset` doesn't, since that is
-about patterns. To follow the steps, turn on `Retrig`. While stopped, a track
+about patterns. To follow the steps, set its mode to `Trig`. While stopped, a track
 sits at its held values, so `;` hears those. Pausing freezes the LFO.
 
 `Vol`, `Send A` and `Send B` swing in dB, on the level scale in **Phrases and

@@ -5,20 +5,19 @@
 
 use std::collections::BTreeMap;
 
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 
 use super::plot::{LfoDrawing, Shade};
 use super::{FilterSettings, SlotDrawing};
 use crate::sample_wave::Thumbnail;
 
-/// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, an
-/// envelope's shape or an LFO's cycle on the Mod page, or an FX slot's curve.
+/// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
+/// slot's picture on the Mod page, an envelope's shape or an LFO's cycle, or an FX slot's curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
     Waveform,
-    Envelope(usize),
-    Lfo(usize),
+    Mod(usize),
     Slot(usize),
 }
 
@@ -29,7 +28,7 @@ pub enum Shape {
     /// A sampler's slice, with where it starts and stops, drawn again only when one of those
     /// changes or the file's frames come in.
     Waveform(Thumbnail),
-    Envelope(Envelope),
+    Envelope(Adsr),
     /// An LFO's wave, where its cycle starts and its depth's sign, drawn again only when one of
     /// those changes, never for its rate or the size of its depth.
     Lfo(LfoDrawing),
@@ -141,8 +140,8 @@ mod tests {
     #[test]
     fn an_image_is_found_until_its_shape_changes_and_waits_while_it_just_changed() {
         let mut images = PanelImages::default();
-        let shape = Shape::Envelope(Envelope::default());
-        let key = PanelKey::Envelope(0);
+        let shape = Shape::Envelope(Adsr::default());
+        let key = PanelKey::Mod(0);
         assert_eq!(images.find(key, Shade::Dim, &shape, 0, 2), Found::Missing);
         assert_eq!(images.hold(key, Shade::Dim, shape.clone(), 5, 0), None);
         assert_eq!(
@@ -151,17 +150,17 @@ mod tests {
         );
         // Each shade is its own.
         assert_eq!(images.find(key, Shade::Faint, &shape, 1, 2), Found::Missing);
-        let changed = Shape::Envelope(Envelope {
+        let changed = Shape::Envelope(Adsr {
             attack_ms: 9,
-            ..Envelope::default()
+            ..Adsr::default()
         });
         // The first change is drawn at once.
         assert_eq!(images.find(key, Shade::Dim, &changed, 1, 2), Found::Missing);
         assert_eq!(images.hold(key, Shade::Dim, changed, 6, 1), Some(5));
         // Another the next frame waits for the one after.
-        let again = Shape::Envelope(Envelope {
+        let again = Shape::Envelope(Adsr {
             attack_ms: 10,
-            ..Envelope::default()
+            ..Adsr::default()
         });
         assert_eq!(
             images.find(key, Shade::Dim, &again, 2, 2),

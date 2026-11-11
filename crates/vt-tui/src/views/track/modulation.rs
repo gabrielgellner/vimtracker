@@ -1,20 +1,20 @@
-//! The Mod page: a rack of half-width devices, each envelope on the left beside the LFO of its
-//! number on the right, and the accumulator beside the arpeggio under them. An envelope's or an
-//! LFO's title has its switch, then its destination, and a panel on its right draws an envelope's
-//! shape or one cycle of an LFO, which the terminal places a dot on where the LFO is now. One
-//! switched out is faint but for the cursor, as a bypassed FX slot is.
+//! The Mod page: a rack of half-width devices, the six mod slots down two columns, `Mod 1` to
+//! `Mod 3` on the left beside `Mod 4` to `Mod 6` on the right, and the accumulator beside the
+//! arpeggio under them. A slot's title has its switch, its type, its type's mode if it has one,
+//! and `→` its destination, and a panel on its right draws an envelope's shape or one cycle of an
+//! LFO, which the terminal places a dot on where the LFO is now. One switched out is faint but for
+//! the cursor, as a bypassed FX slot is.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::Line;
-use vt_model::lfo::LFOS_PER_TRACK;
+use ratatui::text::{Line, Span};
+use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::song::Track;
 
 use crate::app::App;
 use crate::theme;
 use crate::track_page::{
-    Control, DeviceSpec, DeviceWidth, EnvelopeField, LfoField, Page, modulator_bypassed,
-    rack_places,
+    Control, DeviceSpec, DeviceWidth, ModField, Page, modulator_bypassed, rack_places,
 };
 use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{Device, rack_areas};
@@ -39,25 +39,21 @@ const ARPEGGIO_CELLS: CellWidths = CellWidths {
     ..CellWidths::COMPACT
 };
 
-/// Which envelope the cursor is on, if any.
-pub(crate) fn envelope_being_edited(app: &App) -> Option<usize> {
+/// Which mod slot the cursor is on, if any.
+pub(crate) fn mod_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
-        Control::Envelope(slot, _) => Some(slot),
+        Control::Mod(slot, _) => Some(slot),
         _ => None,
     }
 }
 
-/// Which LFO the cursor is on, if any.
-pub(crate) fn lfo_being_edited(app: &App) -> Option<usize> {
-    match app.track_control() {
-        Control::Lfo(slot, _) => Some(slot),
-        _ => None,
-    }
-}
+/// Where each LFO's cycle is on screen, by its slot and the character at its top left, for the
+/// terminal to place its dot over: none for a slot that isn't an LFO or isn't drawn.
+pub type CyclesAt = [Option<(u16, u16)>; MOD_SLOTS];
 
-/// Where each LFO's cycle is on screen, by the character at its top left, for the terminal to
-/// place its dot over: none for one not drawn.
-pub type CyclesAt = [Option<(u16, u16)>; LFOS_PER_TRACK];
+/// What comes before a slot's destination in its title, so `LFO  Trig  → Cut` doesn't read as
+/// "Trig Cut".
+const TO: &str = "→ ";
 
 /// What the Mod page's cells show for a modulator's settings.
 struct ModCells<'a> {
@@ -94,15 +90,13 @@ impl CellSource for ModCells<'_> {
 /// slot's `Empty` is dim.
 fn goes_nowhere(control: Control, track: &Track) -> bool {
     match control {
-        Control::Envelope(slot, EnvelopeField::Destination) => {
-            track.envelopes[slot].destination.is_none()
-        }
-        Control::Lfo(slot, LfoField::Destination) => track.lfos[slot].destination.is_none(),
+        Control::Mod(slot, ModField::Destination) => track.mods[slot].destination.is_none(),
         _ => false,
     }
 }
 
-/// A modulator's title controls, each in its own style: its destination.
+/// A slot's title controls, each in its own style: its type, its mode, and its destination after
+/// an arrow in the destination's style.
 fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'static>> {
     let current = app.track_control();
     device
@@ -112,8 +106,14 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
         .map(|control| {
             let here = *control == current;
             let text = setting::text(app, here, || value(*control, track, app.song()));
-            let style = setting::style(app, here, goes_nowhere(*control, track));
-            Line::from(value_spans(app, *control, text, style))
+            let nowhere = goes_nowhere(*control, track);
+            let style = setting::style(app, here, nowhere);
+            let mut spans = value_spans(app, *control, text, style);
+            if matches!(control, Control::Mod(_, ModField::Destination)) {
+                let arrow = setting::style(app, false, nowhere);
+                spans.insert(0, Span::styled(TO, arrow));
+            }
+            Line::from(spans)
         })
         .collect()
 }
@@ -131,7 +131,7 @@ fn panel(image: Option<u32>) -> GraphicPanel {
     GraphicPanel::new().boxed(lines, MOD_PANEL_WIDTH as u16, None)
 }
 
-/// One of the Mod page's devices: its frame and title, with an envelope's or an LFO's switch, its
+/// One of the Mod page's devices: its frame and title, with a slot's switch, its
 /// settings in compact cells, and an envelope's shape or an LFO's cycle in its panel, with the
 /// settings stopping short of it. One switched out is faint, its title's destination too, but for
 /// the cursor. It gives back where an LFO's cycle is, if it's drawn whole.
@@ -156,10 +156,10 @@ fn draw_device(
     }
     frame.render_widget(widget.controls(controls).focused(focused), area);
     let (panel, lfo) = match device.title[0] {
-        Some(Control::Envelope(slot, _)) => {
-            (panel(app.envelope_images.map(|ids| ids[slot])), false)
-        }
-        Some(Control::Lfo(slot, _)) => (panel(app.lfo_images.map(|ids| ids[slot])), true),
+        Some(Control::Mod(slot, _)) => (
+            panel(app.mod_images.map(|ids| ids[slot])),
+            track.mods[slot].kind == ModKind::Lfo,
+        ),
         _ => (GraphicPanel::new(), false),
     };
     let mut settings = Device::settings_area(area);
@@ -215,7 +215,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) -> C
             continue;
         };
         let cycle_at = draw_device(frame, shown, app, track, device, at == cursor);
-        if let Some(Control::Lfo(slot, _)) = device.title[0] {
+        if let Some(Control::Mod(slot, _)) = device.title[0] {
             cycles[slot] = cycle_at;
         }
     }

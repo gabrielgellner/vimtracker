@@ -830,12 +830,12 @@ mod tests {
         let target =
             vt_model::settings::SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
         song.tracks[0].inserts = [Insert::ALL[1]; INSERTS];
-        song.tracks[0].lfos[0].destination = Some(target);
-        song.tracks[0].lfos[0].depth = 0x80;
-        song.tracks[0].envelopes[1].destination = Some(target);
-        song.tracks[0].envelopes[1].depth = 0x40;
-        song.tracks[0].lfos[1].destination = Some(SettingId::CUT);
-        song.tracks[0].lfos[0].destination = Some(SettingId::lfo(1, 0).unwrap());
+        song.tracks[0].mods[3].destination = Some(target);
+        song.tracks[0].mods[3].depth = 0x80;
+        song.tracks[0].mods[1].destination = Some(target);
+        song.tracks[0].mods[1].depth = 0x40;
+        song.tracks[0].mods[4].destination = Some(SettingId::CUT);
+        song.tracks[0].mods[3].destination = Some(SettingId::modulator(4, 0).unwrap());
         let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
         for step in 0..8 {
             *phrase.step_mut(step).unwrap() =
@@ -847,6 +847,38 @@ mod tests {
         let (mut handle, mut rt) = connect(engine);
         assert!(handle.send(Command::PlayFrom { step: 0 }));
         assert_eq!(blocks(&mut rt, 400), 0);
+    }
+
+    #[test]
+    fn changing_a_slots_type_every_block_never_allocates_in_the_callback() {
+        use vt_model::modulation::ModKind;
+        let pool = samples();
+        let changing = |round: usize| {
+            let mut next = song(4, 16);
+            for track in next.tracks.iter_mut().take(4) {
+                for slot in [1, 3] {
+                    let modulator = &mut track.mods[slot];
+                    modulator.kind = if round % 2 == slot % 2 {
+                        ModKind::Adsr
+                    } else {
+                        ModKind::Lfo
+                    };
+                    modulator.destination = Some(SettingId::CUT);
+                    modulator.depth = 0x40;
+                }
+            }
+            next
+        };
+        let engine = Engine::new(48_000, published(changing(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 1..400 {
+            handle.publish(published(changing(round), &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
     }
 
     #[test]
@@ -1272,42 +1304,47 @@ mod tests {
     fn each_lfos_place_in_its_wave_is_reported_for_the_track_watched_without_allocating() {
         use vt_model::constants::TICKS_PER_QUARTER;
         use vt_model::lfo::{Lfo, Rate, Shape, wave};
+        use vt_model::modulation::ModSlot;
         let pool = samples();
         let mut one = song(1, 16);
         let quarter = Rate::Note(TICKS_PER_QUARTER as u32);
-        let lfo = |shape, phase, bypassed| Lfo {
-            destination: Some(SettingId::CUT),
-            shape,
-            rate: quarter,
-            depth: 0x40,
-            phase,
-            bypassed,
-            ..Lfo::default()
+        let lfo = |shape, phase, bypassed| {
+            let wave = Lfo {
+                shape,
+                rate: quarter,
+                phase,
+                ..Lfo::default()
+            };
+            ModSlot {
+                bypassed,
+                ..ModSlot::lfo(Some(SettingId::CUT), wave).with_depth(0x40)
+            }
         };
-        one.tracks[0].lfos = [
+        one.tracks[0].mods[3..].copy_from_slice(&[
             lfo(Shape::Sine, 90, false),
             // Going nowhere, and switched out from the start, neither runs.
-            Lfo {
+            ModSlot {
                 destination: None,
                 ..lfo(Shape::Tri, 0, false)
             },
             lfo(Shape::Ramp, 0, true),
-        ];
+        ]);
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert_eq!(blocks(&mut rt, 2), 0);
         assert_eq!(
-            handle.latest().unwrap().live.lfos,
-            [None; 3],
+            handle.latest().unwrap().live.mods,
+            [None; 6],
             "stopped, none moves"
         );
         handle.send(Command::PlayFrom { step: 0 });
         let mut phases = Vec::new();
         for _ in 0..8 {
             assert_eq!(blocks(&mut rt, 1), 0, "the report never allocates");
-            let lfos = handle.latest().unwrap().live.lfos;
-            assert_eq!(lfos[1..], [None, None], "{lfos:?}");
-            let now = lfos[0].unwrap();
+            let mods = handle.latest().unwrap().live.mods;
+            assert_eq!(mods[..3], [None; 3], "the envelopes are no LFOs: {mods:?}");
+            assert_eq!(mods[4..], [None, None], "{mods:?}");
+            let now = mods[3].unwrap();
             // Its value is the wave's where it says it is, its `Phase` of a quarter turn included.
             let turns = f64::from(now.phase) / 65536.0;
             let expected = wave(Shape::Sine, turns, 0) * f32::from(i16::MAX);
@@ -1330,7 +1367,7 @@ mod tests {
         // Stopped again, it's gone.
         handle.send(Command::Return);
         assert_eq!(blocks(&mut rt, 2), 0);
-        assert_eq!(handle.latest().unwrap().live.lfos, [None; 3]);
+        assert_eq!(handle.latest().unwrap().live.mods, [None; 6]);
     }
 
     #[test]

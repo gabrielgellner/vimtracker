@@ -61,8 +61,8 @@ fn song(file: &str, edit: impl FnOnce(&mut BankEntry), rows: &[&str]) -> Song {
     song.bank.set(1, Some(entry));
     let track = &mut song.tracks[0];
     track.set_setting(SettingId::SAMPLE, 1);
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
     for (at, text) in rows.iter().enumerate() {
         *phrase.step_mut(at).unwrap() = text.parse().unwrap();

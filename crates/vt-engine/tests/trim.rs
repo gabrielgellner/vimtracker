@@ -56,8 +56,8 @@ fn song(sample: &str) -> Song {
     song.limiter = false;
     song.sample_on(0, sample);
     let track = &mut song.tracks[0];
-    track.envelopes[0].attack_ms = 0;
-    track.envelopes[0].release_ms = 0;
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     song

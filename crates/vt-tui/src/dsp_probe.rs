@@ -535,8 +535,8 @@ fn setting_of(
             "{key} switches out slot {}, which the spec's effects leave empty",
             slot + 1
         ))),
-        (Owner::Lfo(_), _) => Err(wrong(format!(
-            "{key} is an LFO's, which a probe doesn't run yet"
+        (Owner::Mod(_), _) => Err(wrong(format!(
+            "{key} is a mod slot's, which a probe doesn't run yet"
         ))),
         (Owner::Track, _) if !TRACK_SETTINGS.contains(&id) => Err(wrong(format!(
             "{key} works on a song's steps, which a probe has none of; a probe sets {}",
@@ -633,7 +633,7 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
             SettingId::GLIDE => track.glide = value,
             _ => {}
         },
-        (Owner::Lfo(_), _) => {}
+        (Owner::Mod(_), _) => {}
     }
 }
 

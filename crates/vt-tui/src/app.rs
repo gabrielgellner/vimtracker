@@ -29,12 +29,12 @@ use vt_model::action::{Action, FieldValue, edit};
 use vt_model::condition::Condition;
 use vt_model::constants::{
     DEFAULT_NOTE_VELOCITY, DEFAULT_TRACKS, FIXED_TRACKS, MAX_PHRASE_STEPS, MAX_TRACKS,
-    TICKS_PER_STEP, TRACK_ENVELOPES,
+    TICKS_PER_STEP,
 };
 use vt_model::groove::GrooveId;
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
-use vt_model::lfo::LFOS_PER_TRACK;
+use vt_model::modulation::MOD_SLOTS;
 use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::project::{self, ProjectError};
@@ -247,10 +247,9 @@ pub struct App {
     pub jam: Vec<JamState>,
     /// The track page: which of its pages shows, and where its cursor is.
     pub track_page: TrackPage,
-    /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
-    pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
-    /// The terminal's images of the Mod page's LFOs' cycles.
-    pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
+    /// The terminal's images of the Mod page's slots, an envelope's shape or an LFO's cycle each,
+    /// by slot.
+    pub mod_images: Option<[u32; MOD_SLOTS]>,
     /// Where each LFO's cycle was last drawn, for the terminal to place its dot on.
     pub lfo_cycles_at: crate::views::track::CyclesAt,
     /// The id of the image of the filter's curve, likewise.
@@ -477,8 +476,7 @@ impl App {
             looping: None,
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: TrackPage::default(),
-            envelope_images: None,
-            lfo_images: None,
+            mod_images: None,
             lfo_cycles_at: Default::default(),
             filter_image: None,
             waveform_image: None,

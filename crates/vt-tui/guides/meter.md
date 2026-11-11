@@ -136,8 +136,9 @@ device of its own, which the cursor never moves, so a knob can change an effect 
 keys edit an instrument on another track.
 
 In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the machine,
-`Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the envelopes,
-the LFOs, `Accumulator` and `Arpeggio`). Its buttons work as they do for Live and
+`Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the six mod
+slots, named by number and type as `M1 ADSR` and `M4 LFO`, then `Accumulator` and
+`Arpeggio`). Its buttons work as they do for Live and
 Bitwig:
 
 *   **FUNC** shows the tracks on the buttons, eight at a time, with the arrows paging
@@ -146,7 +147,7 @@ Bitwig:
 *   **Hold SEL** and press a button to choose a device. The arrows page through the
     devices eight at a time.
 *   **Tap SEL** to see the devices' on and off states, and press a button to switch one
-    in or out: an FX slot's bypass, or an envelope's or an LFO's switch, as `b` does on
+    in or out: an FX slot's bypass, or a mod slot's switch, as `b` does on
     the FX and Mod pages. Only these can be switched off: the others are always on, and
     an empty slot always off. Pressing one of those flips its light for a moment, which is
     the Roto's own doing; it's lit as it should be the next time the list comes up. A
@@ -164,12 +165,13 @@ not like the screen, the same way for every device:
 *   An effect's `Mix` and `Gain` are always knobs 7 and 8, and every track's `Level` is
     knob 1 and `Trim` knob 5.
 *   A device keeps to one page, its off/on settings on its buttons, unless it has more
-    than eight knobs. An envelope's or an LFO's `Dest` is on the page after, one arrow on.
-*   The Roto plays and tweaks; the app builds: choose a machine, an effect or an effect's
-    type with `K` in the app. Each would swap the device's whole layout under your hand.
+    than eight knobs. A mod slot's `Dest` is on the page after, one arrow on.
+*   The Roto plays and tweaks; the app builds: choose a machine, an effect, an effect's
+    type or a mod slot's type with `K` in the app. Each would swap the device's whole
+    layout under your hand, as a mod slot's layout is its type's.
 
 Off/on settings are on the buttons, under the knob they go with, such as Glue's `Auto`
-under `Makeup` and an LFO's `Retrig` under `Phase`: a press switches it, `u` undoes it, and its light is on while it is. The
+under `Makeup` and an LFO's mode under `Phase`, lit for `Trig` and dark for `Free`: a press switches it, `u` undoes it, and its light is on while it is. The
 Roto shows buttons only for devices stored on it, so vimtracker stores the ones that
 have off/on settings there, 9 setups named `vt ...`, beside Live's, when it first
 connects and again only when one changes. It never touches another program's setups.
@@ -185,7 +187,7 @@ A knob's or a button's colour says what kind of setting it is:
 | Blue | A filter's cutoff, resonance, type and cuts, and an EQ's bands |
 | Teal | Pan |
 | Yellow | Times, rates, lengths, glides and pitches |
-| Violet | What an envelope, an LFO, the accumulator or the arpeggio does |
+| Violet | What a mod slot, the accumulator or the arpeggio does |
 | Orange | Drive, and a machine's or an effect's own character |
 | White | Choices: a machine, an effect, a sample, a type, off and on |
 

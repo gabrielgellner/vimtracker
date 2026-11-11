@@ -3,8 +3,8 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::constants::TRACK_ENVELOPES;
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
+use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -46,7 +46,7 @@ fn ramp() -> Arc<SamplePool> {
     pool(frames)
 }
 
-fn song(texts: &[&str], shape: Envelope) -> Song {
+fn song(texts: &[&str], shape: ModSlot) -> Song {
     let mut song = Song::new(1);
     for track in 0..song.sound_tracks() {
         song.sample_on(track, "s");
@@ -55,19 +55,24 @@ fn song(texts: &[&str], shape: Envelope) -> Song {
     for (index, text) in texts.iter().enumerate() {
         *phrase.step_mut(index).unwrap() = text.parse().unwrap();
     }
-    song.tracks[0].envelopes[0] = shape;
+    song.tracks[0].mods[0] = shape;
     song
 }
 
-fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
-    Envelope {
+/// An ADSR on `Vol`, which in the first slot shapes each note.
+fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> ModSlot {
+    let shape = Adsr {
         attack_ms,
         decay_ms,
         sustain,
         release_ms,
-        ..Envelope::note_shape()
-    }
+        ..Adsr::note_shape()
+    };
+    ModSlot::adsr(Some(SettingId::VOL), shape)
 }
+
+/// The envelope slots a new track has, before its LFOs.
+const ENVELOPE_SLOTS: usize = 3;
 
 fn render(song: Song, samples: Arc<SamplePool>, frames: usize) -> Vec<f32> {
     render_frames(
@@ -138,7 +143,7 @@ fn reset_off_carries_on_from_the_level_it_had() {
     let mut carry = adsr(50, 0, 100, 0);
     let texts = [NOTE, NOTE];
     let reset = render(song(&texts, carry), flat(), STEP + 20 * MS);
-    carry.reset = false;
+    carry.adsr.reset = false;
     let kept = render(song(&texts, carry), flat(), STEP + 20 * MS);
     // A step is 125 ms, so the first note has finished its attack.
     close(left(&kept, STEP + 10), 1.0);
@@ -147,7 +152,7 @@ fn reset_off_carries_on_from_the_level_it_had() {
 
 #[test]
 fn turning_the_first_envelope_off_vol_leaves_notes_their_plain_shape() {
-    let off = Envelope {
+    let off = ModSlot {
         destination: None,
         ..adsr(0, 50, 0, 0)
     };
@@ -165,11 +170,11 @@ fn an_envelope_moves_the_filter_with_its_depth() {
             / 200.0
     };
     // Every envelope after the first, which shapes each note, does the same.
-    for slot in 1..TRACK_ENVELOPES {
+    for slot in 1..ENVELOPE_SLOTS {
         let plain = |depth: i16| {
             let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
             with.tracks[0].cutoff = 0x40;
-            with.tracks[0].envelopes[slot] = Envelope {
+            with.tracks[0].mods[slot] = ModSlot {
                 destination: Some(SettingId::CUT),
                 depth,
                 ..adsr(0, 40, 0, 0)
@@ -192,10 +197,10 @@ fn an_envelope_moves_the_filter_with_its_depth() {
 #[test]
 fn the_envelopes_after_the_second_start_with_nowhere_to_go_and_change_nothing() {
     let plain = song(&[NOTE], adsr(5, 20, 50, 10));
-    let envelopes = &plain.tracks[0].envelopes;
+    let envelopes = &plain.tracks[0].mods[..ENVELOPE_SLOTS];
     assert!(envelopes[2..].iter().all(|e| e.destination.is_none()));
     let mut with = plain.clone();
-    with.tracks[0].envelopes[TRACK_ENVELOPES - 1].depth = 0x40;
+    with.tracks[0].mods[ENVELOPE_SLOTS - 1].depth = 0x40;
     assert_eq!(
         render(plain, flat(), STEP),
         render(with, flat(), STEP),
@@ -209,7 +214,7 @@ fn what_an_envelope_moves_stays_fast() {
     // so it's the second that shows smoothing, arriving with the envelope back at nothing and a voice
     // still sounding.
     let mut with = song(&[NOTE, NOTE], adsr(0, 0, 100, 0));
-    with.tracks[0].envelopes[1] = Envelope {
+    with.tracks[0].mods[1] = ModSlot {
         destination: Some(SettingId::PAN),
         depth: 0x7F,
         ..adsr(0, 40, 0, 0)
@@ -230,7 +235,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
     // An octave up to begin with reads the ramp at twice the speed.
     let up = |depth: i16| {
         let mut with = song(&[NOTE], adsr(0, 0, 100, 0));
-        with.tracks[0].envelopes[1] = Envelope {
+        with.tracks[0].mods[1] = ModSlot {
             destination: Some(SettingId::PITCH),
             depth,
             ..adsr(0, 0, 100, 0)
@@ -247,7 +252,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
 
     // A decay brings it back to where it started.
     let mut falling = song(&[NOTE], adsr(0, 0, 100, 0));
-    falling.tracks[0].envelopes[1] = Envelope {
+    falling.tracks[0].mods[1] = ModSlot {
         destination: Some(SettingId::PITCH),
         depth: 24,
         ..adsr(0, 20, 0, 0)
@@ -262,7 +267,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
 #[test]
 fn a_second_envelope_on_vol_moves_the_level_by_its_depth() {
     let mut with = song(&["C-3 -- vol:80 --- ---"], adsr(0, 0, 100, 0));
-    with.tracks[0].envelopes[1] = Envelope {
+    with.tracks[0].mods[1] = ModSlot {
         destination: Some(SettingId::VOL),
         depth: 0x40,
         ..adsr(0, 0, 100, 0)
@@ -275,7 +280,7 @@ fn a_second_envelope_on_vol_moves_the_level_by_its_depth() {
 fn depth_zero_and_off_do_nothing() {
     let plain = render(song(&[NOTE], adsr(5, 20, 50, 10)), flat(), STEP);
     let mut off = song(&[NOTE], adsr(5, 20, 50, 10));
-    off.tracks[0].envelopes[1].destination = None;
+    off.tracks[0].mods[1].destination = None;
     assert_eq!(plain, render(off, flat(), STEP));
 }
 

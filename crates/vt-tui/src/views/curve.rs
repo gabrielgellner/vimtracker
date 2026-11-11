@@ -2,7 +2,7 @@
 //! [`kitty::plot`](crate::kitty::plot) draws.
 
 use vt_model::constants::MAX_ENVELOPE_MS;
-use vt_model::envelope::{Envelope, fall, rise};
+use vt_model::envelope::{Adsr, fall, rise};
 
 /// The most of a diagram's width each stage can take, with a sustain always taking this much.
 const STAGE_SHARE: f32 = 0.25;
@@ -15,7 +15,7 @@ fn stage_width(ms: u16) -> f32 {
 /// An envelope's level at `x` from 0 to 1 across its diagram. A stage's width depends only on its
 /// own time, on a log scale so a 1 ms attack shows beside a long release, and changing a stage only
 /// moves what comes after it. A short envelope leaves room on the right.
-pub(crate) fn level_at(envelope: &Envelope, x: f32) -> f32 {
+pub(crate) fn level_at(envelope: &Adsr, x: f32) -> f32 {
     let (attack, decay, release) = (
         stage_width(envelope.attack_ms),
         stage_width(envelope.decay_ms),
@@ -44,7 +44,7 @@ pub(crate) fn level_at(envelope: &Envelope, x: f32) -> f32 {
 /// Where each of an envelope's stages ends across its diagram, from 0 to 1, as [`level_at`] has
 /// them: its attack, decay, sustain and release. A drawing puts a point at each, so a corner is
 /// sharp and an attack of a millisecond still reaches full.
-pub(crate) fn stage_ends(envelope: &Envelope) -> [f32; 4] {
+pub(crate) fn stage_ends(envelope: &Adsr) -> [f32; 4] {
     let attack = stage_width(envelope.attack_ms);
     let decay = attack + stage_width(envelope.decay_ms);
     let sustain = decay + STAGE_SHARE;
@@ -60,18 +60,18 @@ pub(crate) fn stage_ends(envelope: &Envelope) -> [f32; 4] {
 mod tests {
     use super::*;
 
-    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Envelope {
-        Envelope {
+    fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Adsr {
+        Adsr {
             attack_ms,
             decay_ms,
             sustain,
             release_ms,
-            ..Envelope::note_shape()
+            ..Adsr::note_shape()
         }
     }
 
     /// Its level at points across its diagram.
-    fn levels(envelope: &Envelope, points: usize) -> Vec<f32> {
+    fn levels(envelope: &Adsr, points: usize) -> Vec<f32> {
         (0..=points)
             .map(|point| level_at(envelope, point as f32 / points as f32))
             .collect()

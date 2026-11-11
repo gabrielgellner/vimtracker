@@ -10,7 +10,7 @@
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, wave};
 use vt_model::song::{FilterType, Track};
@@ -347,7 +347,7 @@ fn filter_open(track: &Track) -> bool {
 /// An envelope's shape, from silence, with a point at the end of each stage so its corners are
 /// sharp, over a dotted baseline and fainter dotted lines down it between the stages, so each of
 /// its times has a part of the picture to point at.
-pub fn envelope(envelope: &Envelope, (width, height): (usize, usize)) -> Plot {
+pub fn envelope(envelope: &Adsr, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     plot.across(0.0, Mark::Grid);
     let ends = stage_ends(envelope);
@@ -376,13 +376,13 @@ pub struct LfoDrawing {
 }
 
 impl LfoDrawing {
-    /// What an LFO's settings draw.
-    pub fn of(lfo: &Lfo) -> Self {
+    /// What an LFO's settings draw, with the depth of its slot.
+    pub fn of(lfo: &Lfo, depth: i16) -> Self {
         if lfo_draws_its_wave(lfo.shape) {
             Self {
                 shape: lfo.shape,
                 phase: lfo.phase % 360,
-                flipped: lfo.depth < 0,
+                flipped: depth < 0,
             }
         } else {
             Self {
@@ -769,12 +769,12 @@ mod tests {
 
     #[test]
     fn an_envelope_reaches_full_and_ends_at_silence() {
-        let shape = Envelope {
+        let shape = Adsr {
             attack_ms: 1,
             decay_ms: 200,
             sustain: 0x40,
             release_ms: 50,
-            ..Envelope::default()
+            ..Adsr::default()
         };
         let plot = envelope(&shape, (360, 195));
         // The attack of a millisecond still reaches the top, whole.
@@ -800,12 +800,12 @@ mod tests {
         for (attack_ms, decay_ms, sustain, release_ms) in
             [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)]
         {
-            let shape = Envelope {
+            let shape = Adsr {
                 attack_ms,
                 decay_ms,
                 sustain,
                 release_ms,
-                ..Envelope::default()
+                ..Adsr::default()
             };
             let plot = envelope(&shape, size);
             let level = |x: f32| level_at(&shape, x);
@@ -857,10 +857,9 @@ mod tests {
                 let lfo = Lfo {
                     shape,
                     phase,
-                    depth,
                     ..Lfo::default()
                 };
-                let drawing = LfoDrawing::of(&lfo);
+                let drawing = LfoDrawing::of(&lfo, depth);
                 let plot = lfo_cycle(drawing, size);
                 // What the engine plays, worked out here from its own wave, with the depth's sign.
                 let sign = if depth < 0 { -1.0 } else { 1.0 };
@@ -902,16 +901,21 @@ mod tests {
     fn a_random_lfo_draws_only_its_centre_line_whatever_its_phase_and_sign() {
         use vt_model::lfo::Shape as Wave;
         for shape in [Wave::Random, Wave::Smooth] {
-            let plain = LfoDrawing::of(&Lfo {
-                shape,
-                ..Lfo::default()
-            });
-            let moved = LfoDrawing::of(&Lfo {
-                shape,
-                phase: 120,
-                depth: -0x40,
-                ..Lfo::default()
-            });
+            let plain = LfoDrawing::of(
+                &Lfo {
+                    shape,
+                    ..Lfo::default()
+                },
+                0,
+            );
+            let moved = LfoDrawing::of(
+                &Lfo {
+                    shape,
+                    phase: 120,
+                    ..Lfo::default()
+                },
+                -0x40,
+            );
             assert_eq!(plain, moved, "the same picture, so it isn't sent again");
             let plot = lfo_cycle(plain, (360, 195));
             assert!(plot.cover.iter().all(|cover| *cover == 0), "{shape:?}");
@@ -919,11 +923,13 @@ mod tests {
         }
         // A wave that's drawn changes with both.
         let tri = |phase, depth| {
-            LfoDrawing::of(&Lfo {
-                phase,
+            LfoDrawing::of(
+                &Lfo {
+                    phase,
+                    ..Lfo::default()
+                },
                 depth,
-                ..Lfo::default()
-            })
+            )
         };
         assert_ne!(tri(0, 0x40), tri(90, 0x40));
         assert_ne!(tri(0, 0x40), tri(0, -0x40));
@@ -932,10 +938,13 @@ mod tests {
 
     #[test]
     fn where_a_wave_is_goes_across_the_cycle_from_its_phase() {
-        let drawing = LfoDrawing::of(&Lfo {
-            phase: 90,
-            ..Lfo::default()
-        });
+        let drawing = LfoDrawing::of(
+            &Lfo {
+                phase: 90,
+                ..Lfo::default()
+            },
+            0,
+        );
         // The cycle starts a quarter of the way round, so that's its left edge.
         assert!((drawing.x_of(0.25) - 0.0).abs() < 1e-6);
         assert!((drawing.x_of(0.75) - 0.5).abs() < 1e-6);

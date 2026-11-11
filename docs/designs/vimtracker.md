@@ -21,7 +21,7 @@ their code, copy their appearance or read their files.
 The first goal was to find out whether this could become an instrument the author wants to
 pick up, and the author's jams answered it (G1, below). It has since grown from an M8 or
 Polyend-sized tool into one at about an Octatrack's scale (decision 138): sampler and synth
-machines, four effect slots, three LFOs and three envelopes a track, groups, returns and a
+machines, four effect slots, six mod slots a track (decision 163), groups, returns and a
 master, used alongside Ableton Live rather than in place of it. It runs only in kitty and
 Ghostty (decisions 50 and 56).
 
@@ -362,9 +362,9 @@ its own state, so two quick presses can't act on an out-of-date view of it. **Te
 each block: where playback is, each track's place and levels, the watched track's live values, and
 up to four sample playheads. The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
-`Engine::take_after_trim` takes, for the Output device's meter, and where each running LFO is
-in its wave (`LiveValues::lfos`, a phase and a value each, which `TrackState::modulate` keeps as it
-works the LFOs out, and none while stopped), for the Mod page's dots. `Handle::latest` merges every
+`Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
+an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
+keeps as it works the slots out, and none while stopped), for the Mod page's dots. `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
 
@@ -409,7 +409,8 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
- |   |- lfos[3], envelopes[3]     each with its settings, and whether it's switched out
+ |   |- mods[6]                    ModSlot: kind, destination, depth, switch, and each type's
+ |   |                             own settings (adsr, lfo), kept while another type plays
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
  |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order
  |       '- Step                   note, velocity, nudge, gate, fx[]
@@ -454,9 +455,14 @@ Song                               song.ron, refused unless format_version is FO
     slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, or a lock of any
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
-*   **LFOs and envelopes.** Each track has `LFOS_PER_TRACK` (3) LFOs and `TRACK_ENVELOPES` (3)
-    envelopes, on its Mod page, each with a destination setting. An LFO's rate is a note division or bars, a count of steps, or hertz. An envelope is an
-    ADSR in milliseconds, with a depth and a reset.
+*   **Mod slots** (`modulation.rs`, decision 163). Each track has `MOD_SLOTS` (6) slots on its
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr` or `ModKind::Lfo`, with a destination
+    setting, a depth and a switch, which every type shares, and each type's own settings, which a
+    slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
+    rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
+    ADSR is in milliseconds, with a reset. The first envelope-type slot on `Vol` shapes the notes
+    (`note_shape_slot`). Slots work out in order, so a slot's destination can be the depth or phase
+    of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
 *   **Grooves and time.** Tempo is in thousandths of a BPM. The project has a groove, a track can have
@@ -510,7 +516,7 @@ a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than
 
 `Engine::process` (`engine.rs`) plays a block in runs. Each run goes up to the next thing that
 happens at a frame: the song's next step, a track's own step at its `Speed`, a delayed, cut,
-release, gate, retrigger or arpeggio event, or the LFOs' update every `LFO_UPDATE_FRAMES`
+release, gate, retrigger or arpeggio event, or the mod slots' update every `LFO_UPDATE_FRAMES`
 (32). So a step lands on its frame, and nothing inside a run asks whether one
 is due. `Engine::render` then plays the run's frames.
 
@@ -541,6 +547,14 @@ is due. `Engine::render` then plays the run's frames.
 *   **Smoothing.** Every continuous setting moves through a one-pole `Smoothed`
     (`blocks/smoother.rs`), over 10 ms (`SMOOTHING_MS`) for a change by hand and 1 ms
     (`FAST_SMOOTHING_MS`) while modulation moves it, so nothing clicks.
+*   **Mod slots** (`track_state.rs`). `TrackState::modulate` works a track's six slots out in
+    order, every `LFO_UPDATE_FRAMES`, through a fixed `slots: [SlotRun; MOD_SLOTS]`: each reads its
+    held depth and phase plus what earlier slots added to them, and adds to its destination, an
+    envelope's through the fast smoothers and an LFO's into `offsets`, through the slow ones. A
+    slot keeps every type's run going (its envelope's stage, its cycles' start), so a type change
+    picks the new type up as though it had always been there, and the jump between what the old
+    type last added and what the new one adds glides out over 5 ms (`SlotRun::add`). Nothing in it
+    allocates.
 *   **Timing** (`timing.rs`). For `bench --tracks`, a `Stopwatch` laps between the parts, the
     sequencing, each track's voice and the rest of its work, each slot, the mixing and the limiter,
     so they add up to the block. Unless asked, a lap is a check of an empty option.
@@ -680,8 +694,10 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
-    page a slot each (`DeviceSpec::slot`), and the Mod page an envelope, then the LFO beside it,
-    for each number, then the accumulator and the arpeggio (decision 151). A `DeviceSpec` is its
+    page a slot each (`DeviceSpec::slot`), and the Mod page each mod slot of the left column, then
+    the one three after it beside it, `Mod 1`, `Mod 4`, `Mod 2` and so on, each with its type's
+    grid and a title of its type, its mode and its destination, then the accumulator and the
+    arpeggio (decisions 151 and 163). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're
@@ -756,7 +772,7 @@ keeps track of which images the terminal has. Every command is sent with `q=2`, 
 answers never arrive as keys. A picture reaches the screen in one of two ways.
 
 *   **Unicode placeholders, for pictures that fill cells.** The filter's curve, a sampler's thumbnail
-    on its Sound page, the envelopes, the LFOs' cycles, the FX slots' drawings, the scope, the
+    on its Sound page, the mod slots' envelopes and cycles, the FX slots' drawings, the scope, the
     picker's previews, and the sample page's waveform and overview are sent with `a=T,U=1` and
     drawn as placeholder characters, whose colour is the image's id and whose marks number its rows
     and columns, up to 297 each way. As they're text, ratatui moves and clears them as it does any
@@ -778,11 +794,11 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades
     and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where
-    `LiveValues::lfos` says the LFO is, after the screen is drawn, as the sample page's lines and
+    `LiveValues::mods` says the LFO is, after the screen is drawn, as the sample page's lines and
     marks are; moving it is placing it again, about 60 bytes. The track page's drawing gives back
     where each cycle is (`CyclesAt`), and a dot is taken off under anything drawn over the page.
 *   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
-    `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each envelope, each LFO and each FX slot, each in
+    `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each mod slot, drawn by its type, and each FX slot, each in
     up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
     from. `Graphics::panel` sends one only when its shape is new, and one that changes again within
     a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a

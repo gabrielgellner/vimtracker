@@ -5,11 +5,11 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Envelope;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Lfo, MAX_LFO_DEPTH, Shape};
+use vt_model::lfo::{LfoMode, Shape};
+use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Track};
 use vt_model::speed::Speed;
@@ -18,7 +18,7 @@ use crate::app::App;
 use crate::input::command::Line;
 
 use super::controls::no_modes;
-use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+use super::{AccumulatorField, ArpField, Control, ModField};
 
 /// How far a small and a large step move a phase, in degrees.
 const PHASE_NUDGE: i32 = 15;
@@ -53,10 +53,12 @@ fn time_step(value: u16) -> u16 {
     }
 }
 
-/// Move one setting of an envelope one notch.
-fn adjust_envelope(
-    envelope: &mut Envelope,
-    field: EnvelopeField,
+/// Move one setting of a mod slot one notch, under its type. The type itself is chosen with `K`
+/// alone, as it changes what the device is.
+fn adjust_mod(
+    modulator: &mut ModSlot,
+    slot: usize,
+    field: ModField,
     up: bool,
     large: bool,
     track: &Track,
@@ -69,51 +71,90 @@ fn adjust_envelope(
             value.saturating_sub(time_step(value.saturating_sub(1)) * size)
         }
     };
+    let (adsr, lfo) = (&mut modulator.adsr, &mut modulator.lfo);
     match field {
-        EnvelopeField::Destination => {
+        ModField::Type => {}
+        ModField::Mode => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+        ModField::Destination => {
             let mut choices = vec![None];
-            choices.extend(SettingId::for_envelope(track).into_iter().map(Some));
-            envelope.destination = next_in(&choices, envelope.destination, up);
+            choices.extend(SettingId::for_mod(track, slot).into_iter().map(Some));
+            modulator.destination = next_in(&choices, modulator.destination, up);
         }
-        EnvelopeField::Attack => envelope.attack_ms = time(envelope.attack_ms),
-        EnvelopeField::Decay => envelope.decay_ms = time(envelope.decay_ms),
-        EnvelopeField::Release => envelope.release_ms = time(envelope.release_ms),
-        EnvelopeField::Sustain => {
+        ModField::Depth => {
+            let size = if large { HEX_JUMP as i16 } else { 1 };
+            let moved = modulator.depth + if up { size } else { -size };
+            modulator.depth = moved.clamp(-MAX_DEPTH, MAX_DEPTH);
+        }
+        ModField::Attack => adsr.attack_ms = time(adsr.attack_ms),
+        ModField::Decay => adsr.decay_ms = time(adsr.decay_ms),
+        ModField::Release => adsr.release_ms = time(adsr.release_ms),
+        ModField::Sustain => {
             let size = if large { SUSTAIN_JUMP } else { 1 };
             let by = if up { size } else { -size };
-            envelope.sustain = (i16::from(envelope.sustain) + by).clamp(0, 100) as u8;
+            adsr.sustain = (i16::from(adsr.sustain) + by).clamp(0, 100) as u8;
         }
-        EnvelopeField::Depth => {
-            let size = if large { HEX_JUMP as i16 } else { 1 };
-            let moved = envelope.depth + if up { size } else { -size };
-            envelope.depth = moved.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH);
-        }
-        EnvelopeField::Reset => envelope.reset = !envelope.reset,
-    }
-}
-
-/// Move one setting of an LFO one notch.
-fn adjust_lfo(lfo: &mut Lfo, slot: usize, field: LfoField, up: bool, large: bool, track: &Track) {
-    match field {
-        LfoField::Destination => {
-            let mut choices = vec![None];
-            choices.extend(SettingId::for_lfo(track, slot).into_iter().map(Some));
-            lfo.destination = next_in(&choices, lfo.destination, up);
-        }
-        LfoField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
-        LfoField::Rate if large => lfo.rate = lfo.rate.jumped(up),
-        LfoField::Rate => lfo.rate = lfo.rate.nudged(up),
-        LfoField::Depth => {
-            let size = if large { HEX_JUMP as i16 } else { 1 };
-            let moved = lfo.depth + if up { size } else { -size };
-            lfo.depth = moved.clamp(-MAX_LFO_DEPTH, MAX_LFO_DEPTH);
-        }
-        LfoField::Phase => {
+        ModField::Reset => adsr.reset = !adsr.reset,
+        ModField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
+        ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
+        ModField::Rate => lfo.rate = lfo.rate.nudged(up),
+        ModField::Phase => {
             let size = if large { PHASE_JUMP } else { PHASE_NUDGE };
             let by = if up { size } else { -size };
             lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
         }
-        LfoField::Retrig => lfo.retrig = !lfo.retrig,
+    }
+}
+
+/// A mod slot with one setting back at its default: the slot's own for what every type shares,
+/// and for a type's own the default that type has in this slot. `Type` goes back to the slot's
+/// first type, with that type's settings as they start, keeping where it goes, how far and its
+/// switch, as choosing a type does.
+fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
+    let fresh = default_mod(slot);
+    let (mut adsr, mut lfo) = (modulator.adsr, modulator.lfo);
+    match field {
+        ModField::Type => {
+            return ModSlot {
+                kind: fresh.kind,
+                adsr: if fresh.kind == ModKind::Adsr {
+                    fresh.adsr
+                } else {
+                    adsr
+                },
+                lfo: if fresh.kind == ModKind::Lfo {
+                    fresh.lfo
+                } else {
+                    lfo
+                },
+                ..modulator
+            };
+        }
+        ModField::Destination => {
+            return ModSlot {
+                destination: fresh.destination,
+                ..modulator
+            };
+        }
+        ModField::Depth => {
+            return ModSlot {
+                depth: fresh.depth,
+                ..modulator
+            };
+        }
+        ModField::Mode => lfo.mode = fresh.lfo.mode,
+        ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
+        ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
+        ModField::Sustain => adsr.sustain = fresh.adsr.sustain,
+        ModField::Release => adsr.release_ms = fresh.adsr.release_ms,
+        ModField::Reset => adsr.reset = fresh.adsr.reset,
+        ModField::Shape => lfo.shape = fresh.lfo.shape,
+        ModField::Rate => lfo.rate = fresh.lfo.rate,
+        ModField::Phase => lfo.phase = fresh.lfo.phase,
+    }
+    ModSlot {
+        adsr,
+        lfo,
+        ..modulator
     }
 }
 
@@ -211,11 +252,12 @@ impl App {
         });
     }
 
-    pub(super) fn set_lfo(&mut self, slot: usize, lfo: Lfo) {
-        self.apply(&Action::SetLfo {
+    /// Replace one of the track's mod slots, as one undo step.
+    pub(super) fn set_mod(&mut self, slot: usize, modulator: ModSlot) {
+        self.apply(&Action::SetMod {
             track: self.cursor.track,
             slot,
-            lfo,
+            modulator,
         });
     }
 
@@ -440,19 +482,18 @@ impl App {
                     self.set_track_groove(GrooveId::from_index(to));
                 }
             }
-            Control::Lfo(slot, field) => {
-                let mut lfo = track.lfos[slot];
-                for _ in 0..count.min(0x200) {
-                    adjust_lfo(&mut lfo, slot, field, up, large, &track);
-                }
-                self.set_lfo(slot, lfo);
+            Control::Mod(slot, ModField::Type) => {
+                self.status = format!(
+                    "K picks Mod {}'s type, as a type changes what the device is",
+                    slot + 1
+                );
             }
-            Control::Envelope(slot, field) => {
-                let mut envelope = track.envelopes[slot];
+            Control::Mod(slot, field) => {
+                let mut modulator = track.mods[slot];
                 for _ in 0..count.min(0x200) {
-                    adjust_envelope(&mut envelope, field, up, large, &track);
+                    adjust_mod(&mut modulator, slot, field, up, large, &track);
                 }
-                self.set_envelope(slot, envelope);
+                self.set_mod(slot, modulator);
             }
             Control::Accumulator(field) => {
                 let mut accumulation = track.accumulation;
@@ -487,14 +528,6 @@ impl App {
                 arpeggio,
             });
         }
-    }
-
-    pub(super) fn set_envelope(&mut self, slot: usize, envelope: Envelope) {
-        self.apply(&Action::SetEnvelope {
-            track: self.cursor.track,
-            slot,
-            envelope,
-        });
     }
 
     /// Move the fine part of the setting under the cursor, carrying into its value past `FF` or
@@ -670,72 +703,11 @@ impl App {
                     });
                 }
             }
-            Control::Lfo(slot, field) => {
-                let (lfo, default) = (track.lfos[slot], Lfo::default());
-                let reset = match field {
-                    LfoField::Destination => Lfo {
-                        destination: default.destination,
-                        ..lfo
-                    },
-                    LfoField::Shape => Lfo {
-                        shape: default.shape,
-                        ..lfo
-                    },
-                    LfoField::Rate => Lfo {
-                        rate: default.rate,
-                        ..lfo
-                    },
-                    LfoField::Depth => Lfo {
-                        depth: default.depth,
-                        ..lfo
-                    },
-                    LfoField::Phase => Lfo {
-                        phase: default.phase,
-                        ..lfo
-                    },
-                    LfoField::Retrig => Lfo {
-                        retrig: default.retrig,
-                        ..lfo
-                    },
-                };
-                if reset != lfo {
-                    self.set_lfo(slot, reset);
-                }
-            }
-            Control::Envelope(slot, field) => {
-                let (envelope, default) = (track.envelopes[slot], fresh.envelopes[slot]);
-                let reset = match field {
-                    EnvelopeField::Destination => Envelope {
-                        destination: default.destination,
-                        ..envelope
-                    },
-                    EnvelopeField::Attack => Envelope {
-                        attack_ms: default.attack_ms,
-                        ..envelope
-                    },
-                    EnvelopeField::Decay => Envelope {
-                        decay_ms: default.decay_ms,
-                        ..envelope
-                    },
-                    EnvelopeField::Sustain => Envelope {
-                        sustain: default.sustain,
-                        ..envelope
-                    },
-                    EnvelopeField::Release => Envelope {
-                        release_ms: default.release_ms,
-                        ..envelope
-                    },
-                    EnvelopeField::Depth => Envelope {
-                        depth: default.depth,
-                        ..envelope
-                    },
-                    EnvelopeField::Reset => Envelope {
-                        reset: default.reset,
-                        ..envelope
-                    },
-                };
-                if reset != envelope {
-                    self.set_envelope(slot, reset);
+            Control::Mod(slot, field) => {
+                let modulator = track.mods[slot];
+                let reset = mod_at_default(modulator, slot, field);
+                if reset != modulator {
+                    self.set_mod(slot, reset);
                 }
             }
             Control::Accumulator(field) => {

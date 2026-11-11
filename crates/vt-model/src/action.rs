@@ -12,11 +12,10 @@ use crate::constants::{
     MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
     MIN_TRANSPOSE,
 };
-use crate::envelope::Envelope;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
-use crate::lfo::Lfo;
+use crate::modulation::ModSlot;
 use crate::names::is_project_name;
 use crate::order::Order;
 use crate::scale::Scale;
@@ -197,11 +196,12 @@ pub enum Action {
         control: TrackControl,
         value: u8,
     },
-    /// Replace one of a track's LFOs.
-    SetLfo {
+    /// Replace one of a track's mod slots: its type, where it goes, its switch, or any type's own
+    /// settings.
+    SetMod {
         track: usize,
         slot: usize,
-        lfo: Lfo,
+        modulator: ModSlot,
     },
     /// Put an effect, or nothing, in one of a track's slots.
     SetInsert {
@@ -409,12 +409,6 @@ pub enum Action {
         track: usize,
         mode: FilterMode,
     },
-    /// Replace one of a track's envelopes.
-    SetEnvelope {
-        track: usize,
-        slot: usize,
-        envelope: Envelope,
-    },
     /// Change a chain row. A phrase that doesn't exist yet is created.
     SetChainEntry {
         track: usize,
@@ -561,8 +555,10 @@ pub enum EditError {
     LastTrack,
     #[error("those columns don't match here")]
     ColumnMismatch,
-    #[error("an envelope's times go up to {MAX_ENVELOPE_MS} ms, and its sustain to 100%")]
-    Envelope,
+    #[error(
+        "a mod slot's depth goes to FF either way, an envelope's times to {MAX_ENVELOPE_MS} ms and its sustain to 100%, and an LFO's rate and phase are in range"
+    )]
+    Mod,
     #[error("no chain {0:02X}")]
     NoChain(u32),
     #[error("chain {chain:02X} has no row {slot:02X}")]
@@ -585,8 +581,6 @@ pub enum EditError {
     Reset,
     #[error("a track's reset is from 1 to {MAX_TRACK_RESET} steps, or off")]
     TrackReset,
-    #[error("an LFO's rate, depth or phase is out of range")]
-    Lfo,
     #[error("choke group {0} isn't one of 1 to {CHOKE_GROUPS}")]
     Choke(u8),
     #[error("group {0} isn't one of 1 to {MAX_GROUPS}")]
@@ -912,17 +906,21 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 *held = *bypassed;
             }
         }
-        Action::SetLfo { track, slot, lfo } => {
-            if !lfo.in_range() {
-                return Err(EditError::Lfo);
+        Action::SetMod {
+            track,
+            slot,
+            modulator,
+        } => {
+            if !modulator.in_range() {
+                return Err(EditError::Mod);
             }
             *next
                 .tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
-                .lfos
+                .mods
                 .get_mut(*slot)
-                .ok_or(EditError::Lfo)? = *lfo;
+                .ok_or(EditError::Mod)? = *modulator;
         }
         Action::SetReset { section, reset } => {
             if *reset == Some(0) {
@@ -1294,22 +1292,6 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .filter_mode = *mode;
-        }
-        Action::SetEnvelope {
-            track,
-            slot,
-            envelope,
-        } => {
-            if !envelope.in_range() {
-                return Err(EditError::Envelope);
-            }
-            *next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .envelopes
-                .get_mut(*slot)
-                .ok_or(EditError::Envelope)? = *envelope;
         }
     }
     Ok(Arc::new(next))

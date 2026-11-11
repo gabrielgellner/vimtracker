@@ -14,17 +14,18 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Envelope;
+use vt_model::envelope::Adsr;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Lfo, MAX_LFO_DEPTH, Rate, Shape, note_rates};
+use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, note_rates};
+use vt_model::modulation::{MAX_DEPTH, ModSlot};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
 use vt_roto::live::{share_of, step_at};
 
-use crate::track_page::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
+use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
 use crate::views::track::{toggle_on, value};
 
 use super::devices::{knob, rate_position, time_steps};
@@ -115,7 +116,7 @@ fn rate_at(rate: Rate, position: u16) -> Rate {
 
 /// A depth either side of none at a position.
 fn depth_at(position: u16) -> i16 {
-    let top = MAX_LFO_DEPTH;
+    let top = MAX_DEPTH;
     whole(position, (2 * top) as u32) as i16 - top
 }
 
@@ -277,43 +278,32 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 Action::SetFilterMode { track: at, mode }
             })
         }
-        Control::Lfo(slot, field) => {
-            let was = track.lfos[slot];
-            let mut lfo = was;
+        Control::Mod(slot, field) => {
+            let was = track.mods[slot];
+            let mut modulator = was;
+            let (adsr, lfo) = (&mut modulator.adsr, &mut modulator.lfo);
             match field {
-                LfoField::Destination => {
-                    lfo.destination = destination_at(SettingId::for_lfo(track, slot), position);
+                // What a slot is, the app's alone.
+                ModField::Type => return None,
+                ModField::Mode => lfo.mode = pick(&LfoMode::ALL, position),
+                ModField::Destination => {
+                    modulator.destination =
+                        destination_at(SettingId::for_mod(track, slot), position);
                 }
-                LfoField::Shape => lfo.shape = pick(&Shape::ALL, position),
-                LfoField::Rate => lfo.rate = rate_at(lfo.rate, position),
-                LfoField::Depth => lfo.depth = depth_at(position),
-                LfoField::Phase => lfo.phase = whole(position, 359) as u16,
-                LfoField::Retrig => return None,
+                ModField::Depth => modulator.depth = depth_at(position),
+                ModField::Attack => adsr.attack_ms = time_at(position),
+                ModField::Decay => adsr.decay_ms = time_at(position),
+                ModField::Release => adsr.release_ms = time_at(position),
+                ModField::Sustain => adsr.sustain = whole(position, 100) as u8,
+                ModField::Reset => return None,
+                ModField::Shape => lfo.shape = pick(&Shape::ALL, position),
+                ModField::Rate => lfo.rate = rate_at(lfo.rate, position),
+                ModField::Phase => lfo.phase = whole(position, 359) as u16,
             }
-            changed(lfo, was, |lfo| Action::SetLfo {
+            changed(modulator, was, |modulator| Action::SetMod {
                 track: at,
                 slot,
-                lfo,
-            })
-        }
-        Control::Envelope(slot, field) => {
-            let was = track.envelopes[slot];
-            let mut envelope = was;
-            match field {
-                EnvelopeField::Destination => {
-                    envelope.destination = destination_at(SettingId::for_envelope(track), position);
-                }
-                EnvelopeField::Attack => envelope.attack_ms = time_at(position),
-                EnvelopeField::Decay => envelope.decay_ms = time_at(position),
-                EnvelopeField::Release => envelope.release_ms = time_at(position),
-                EnvelopeField::Sustain => envelope.sustain = whole(position, 100) as u8,
-                EnvelopeField::Depth => envelope.depth = depth_at(position),
-                EnvelopeField::Reset => return None,
-            }
-            changed(envelope, was, |envelope| Action::SetEnvelope {
-                track: at,
-                slot,
-                envelope,
+                modulator,
             })
         }
         Control::Accumulator(field) => {
@@ -393,20 +383,28 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
             slot,
             insert: track.inserts[slot].with_value(param, u8::from(on)),
         }),
-        Control::Envelope(slot, EnvelopeField::Reset) => Some(Action::SetEnvelope {
+        Control::Mod(slot, ModField::Reset) => Some(Action::SetMod {
             track: at,
             slot,
-            envelope: Envelope {
-                reset: on,
-                ..track.envelopes[slot]
+            modulator: ModSlot {
+                adsr: Adsr {
+                    reset: on,
+                    ..track.mods[slot].adsr
+                },
+                ..track.mods[slot]
             },
         }),
-        Control::Lfo(slot, LfoField::Retrig) => Some(Action::SetLfo {
+        // An LFO's mode on its button while it has two, `Trig` lit, until #86's five make it a
+        // knob.
+        Control::Mod(slot, ModField::Mode) => Some(Action::SetMod {
             track: at,
             slot,
-            lfo: Lfo {
-                retrig: on,
-                ..track.lfos[slot]
+            modulator: ModSlot {
+                lfo: Lfo {
+                    mode: if on { LfoMode::Trig } else { LfoMode::Free },
+                    ..track.mods[slot].lfo
+                },
+                ..track.mods[slot]
             },
         }),
         Control::Arpeggio(ArpField::Retrig) => Some(Action::SetArpeggio {

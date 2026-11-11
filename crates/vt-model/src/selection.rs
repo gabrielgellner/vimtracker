@@ -844,12 +844,12 @@ mod tests {
         assert_eq!(shifted("--- -- cut:00", -1, Shift::Fine), "--- -- cut:00");
         // A phase goes round.
         assert_eq!(
-            shifted("--- -- lfo1.phase:FF", 1, Shift::Increment),
-            "--- -- lfo1.phase:00"
+            shifted("--- -- mod4.phase:FF", 1, Shift::Increment),
+            "--- -- mod4.phase:00"
         );
         assert_eq!(
-            shifted("--- -- lfo1.phase:00", -1, Shift::Increment),
-            "--- -- lfo1.phase:FF"
+            shifted("--- -- mod4.phase:00", -1, Shift::Increment),
+            "--- -- mod4.phase:FF"
         );
         // An event or a list has no fine part, so a fine nudge leaves it.
         assert_eq!(shifted("--- -- del:10", 1, Shift::Fine), "--- -- del:10");
