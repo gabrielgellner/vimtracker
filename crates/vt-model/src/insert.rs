@@ -179,7 +179,8 @@ pub enum Setting {
     AutoGain,
     Makeup,
     /// A compressor's character, and the console and Glue types' switches: each one's ratio,
-    /// attack and release, a place among its choices. Glue's `Range` is the most it turns down.
+    /// attack and release, a place among its choices. Glue's `Range` is the most it turns down,
+    /// and its `Peak Clip` whether it soft clips what comes out, after everything else.
     CompressorType,
     ConsoleRatio,
     ConsoleAttack,
@@ -188,6 +189,7 @@ pub enum Setting {
     GlueAttack,
     GlueRelease,
     Range,
+    PeakClip,
     /// A limiter's: how hard it's driven, the most that comes out, and how fast it lets go.
     Input,
     Ceiling,
@@ -274,7 +276,7 @@ impl Setting {
             Self::Type => DistortType::ALL.len() as u8 - 1,
             Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
             Self::Source => SOURCE_NAMES.len() as u8 - 1,
-            Self::AutoGain => 1,
+            Self::AutoGain | Self::PeakClip => 1,
             Self::CompressorType => CompressorType::ALL.len() as u8 - 1,
             Self::ConsoleRatio => CONSOLE_RATIOS.len() as u8 - 1,
             Self::ConsoleAttack => CONSOLE_ATTACKS_MS.len() as u8 - 1,
@@ -302,7 +304,7 @@ impl Setting {
             Self::Type => (DistortType::ALL.len() - 1) as f32,
             Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
             Self::Source => (SOURCE_NAMES.len() - 1) as f32,
-            Self::AutoGain => 1.0,
+            Self::AutoGain | Self::PeakClip => 1.0,
             Self::CompressorType => (CompressorType::ALL.len() - 1) as f32,
             Self::ConsoleRatio => (CONSOLE_RATIOS.len() - 1) as f32,
             Self::ConsoleAttack => (CONSOLE_ATTACKS_MS.len() - 1) as f32,
@@ -345,10 +347,10 @@ pub struct Param {
 }
 
 /// The most settings any effect shows at once, in the type or mode it's in.
-pub const MAX_PARAMS: usize = 10;
+pub const MAX_PARAMS: usize = 12;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
-pub const MAX_KEPT_PARAMS: usize = 16;
+pub const MAX_KEPT_PARAMS: usize = 17;
 
 const DISTORT_TYPE_NAMES: [&str; 8] = [
     "Soft",
@@ -796,6 +798,17 @@ const RANGE_PARAM: Param = hex_param(
     Setting::Range,
     Compressor::DEFAULT.range,
 );
+/// Glue's soft clip at the very end, after its makeup and its mix, as Live's `Peak Clip In` is:
+/// off, as Live loads it, or on.
+const PEAK_CLIP_PARAM: Param = Param {
+    name: "Peak Clip",
+    key: "peakclip",
+    label: Some("PCLP"),
+    setting: Setting::PeakClip,
+    choices: &["Off", "On"],
+    wraps: true,
+    default: Compressor::DEFAULT.peak_clip,
+};
 /// A compressor's whole mix, which it starts at, for compressing in parallel when turned down.
 const COMPRESSOR_MIX_PARAM: Param = Param {
     default: 0xFF,
@@ -803,7 +816,7 @@ const COMPRESSOR_MIX_PARAM: Param = Param {
 };
 /// Every setting a compressor has in any of its types, in the order songs number them. Each type
 /// shows only its own.
-pub(crate) const COMPRESSOR_PARAMS: [Param; 16] = [
+pub(crate) const COMPRESSOR_PARAMS: [Param; 17] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
     THRESHOLD_PARAM,
@@ -820,6 +833,7 @@ pub(crate) const COMPRESSOR_PARAMS: [Param; 16] = [
     AUTO_GAIN_PARAM,
     COMPRESSOR_MIX_PARAM,
     MAKEUP_PARAM,
+    PEAK_CLIP_PARAM,
 ];
 /// `Clean`'s, in the order the page shows them: the type over what it hears, then the threshold
 /// over the ratio, the attack over the release, and Auto over the mix, with the makeup last.
@@ -847,9 +861,9 @@ const CONSOLE_PARAMS: [Param; 9] = [
     MAKEUP_PARAM,
 ];
 /// `Glue`'s: its switches as `Console` has its own, and its `Range` over the makeup, so the rest
-/// keep the places they have in the other types. Live's `Peak Clip In` isn't here, as the page
-/// shows ten settings and it's a clip after everything else, which a slot after it gives.
-const GLUE_PARAMS: [Param; 10] = [
+/// keep the places they have in the other types, then its `Peak Clip` in a column of its own, last
+/// as it's last in what Glue does.
+const GLUE_PARAMS: [Param; 11] = [
     COMPRESSOR_TYPE_PARAM,
     SOURCE_PARAM,
     THRESHOLD_PARAM,
@@ -860,6 +874,7 @@ const GLUE_PARAMS: [Param; 10] = [
     COMPRESSOR_MIX_PARAM,
     RANGE_PARAM,
     MAKEUP_PARAM,
+    PEAK_CLIP_PARAM,
 ];
 
 /// The most a compressor's `Makeup` turns up what it's turned down, in dB, as a limiter's `Input`
@@ -2266,6 +2281,8 @@ pub struct Compressor {
     pub glue_attack: u8,
     pub glue_release: u8,
     pub range: u8,
+    /// `1` for `Glue` to soft clip what comes out, after its makeup and its mix, to -0.5 dBFS.
+    pub peak_clip: u8,
     /// What it hears: `0` for its own input, a track's number, or a return after the tracks.
     pub source: u8,
     /// `1` to make up by itself how much quieter it comes out than it went in, each measured over
@@ -2288,7 +2305,7 @@ impl Compressor {
     /// As it starts: `Clean`, at -15 dB, about 3.7:1, a quick attack and a 100 ms release,
     /// hearing itself. `Console` starts at 4:1 with a 10 ms attack and `Auto` release, the G-bus's
     /// usual place on a drum bus, and `Glue` where Live loads it: 4:1, a 1 ms attack, a 0.6 s
-    /// release and all of its range.
+    /// release, all of its range and no clip.
     pub const DEFAULT: Self = Self {
         kind: CompressorType::Clean,
         threshold: 0xC0,
@@ -2302,6 +2319,7 @@ impl Compressor {
         glue_attack: 3,
         glue_release: 3,
         range: 0xFF,
+        peak_clip: 0,
         source: 0,
         auto: 0,
         mix: 0xFF,
@@ -2329,6 +2347,7 @@ impl Compressor {
             Setting::GlueAttack => self.glue_attack,
             Setting::GlueRelease => self.glue_release,
             Setting::Range => self.range,
+            Setting::PeakClip => self.peak_clip,
             Setting::Source => self.source,
             Setting::AutoGain => self.auto,
             Setting::Mix => self.mix,
@@ -2354,6 +2373,7 @@ impl Compressor {
             Setting::GlueAttack => compressor.glue_attack = value,
             Setting::GlueRelease => compressor.glue_release = value,
             Setting::Range => compressor.range = value,
+            Setting::PeakClip => compressor.peak_clip = value,
             Setting::Source => compressor.source = value,
             Setting::AutoGain => compressor.auto = value,
             Setting::Mix => compressor.mix = value,
@@ -3382,7 +3402,7 @@ mod tests {
         assert_eq!(choices(5), ["0.1 s", "0.3 s", "0.6 s", "1.2 s", "Auto"]);
         assert_eq!(console.value(3), 1, "4:1");
         assert_eq!(console.value(5), CONSOLE_AUTO_RELEASE);
-        // Glue's are Live's, and it has its range, ten settings, all the page shows.
+        // Glue's are Live's, and it has its range, and its clip after everything else.
         assert_eq!(
             names(CompressorType::Glue),
             [
@@ -3395,7 +3415,8 @@ mod tests {
                 "Auto",
                 "Mix",
                 "Range",
-                "Makeup"
+                "Makeup",
+                "Peak Clip"
             ]
         );
         let glue = compressor(CompressorType::Glue);
@@ -3412,10 +3433,21 @@ mod tests {
             ["0.1 s", "0.2 s", "0.4 s", "0.6 s", "0.8 s", "1.2 s", "Auto"]
         );
         assert_eq!(GLUE_AUTO_RELEASE, 6);
-        // It starts where Live loads it: 4:1, 1 ms, `.6` and all 70 dB of its range.
+        // It starts where Live loads it: 4:1, 1 ms, `.6`, all 70 dB of its range and no clip.
         assert_eq!(
-            (glue.value(3), glue.value(4), glue.value(5), glue.value(8)),
-            (1, 3, 3, 0xFF)
+            (
+                glue.value(3),
+                glue.value(4),
+                glue.value(5),
+                glue.value(8),
+                glue.value(10)
+            ),
+            (1, 3, 3, 0xFF, 0)
+        );
+        let clip = glue.params()[10];
+        assert_eq!(
+            (clip.key, clip.label, clip.choices),
+            ("peakclip", Some("PCLP"), &["Off", "On"][..])
         );
         assert_eq!(range_db(255.0), MOST_RANGE_DB);
         assert_eq!(range_db(0.0), 0.0);
@@ -3497,6 +3529,10 @@ mod tests {
             };
             assert_eq!((last.name, last.default), expected, "{effect:?}");
         }
+        // Glue's clip comes after its makeup, as it does in what Glue does.
+        let glue = compressor(CompressorType::Glue);
+        let names: Vec<_> = glue.params().iter().rev().take(2).map(|p| p.name).collect();
+        assert_eq!(names, ["Peak Clip", "Makeup"]);
     }
 
     #[test]

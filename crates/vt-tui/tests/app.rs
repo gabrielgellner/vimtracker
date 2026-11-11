@@ -7088,31 +7088,31 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
     let line = fx_line(&app, 0);
     assert!(line.starts_with("1  Distort"), "{line}");
-    assert!(line.contains("Type      Soft"), "{line}");
-    assert!(line.contains("Amount    40 ▕"), "{line}");
+    assert!(line.contains("Type     Soft"), "{line}");
+    assert!(line.contains("Amount   40 ▕"), "{line}");
     assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
     assert!(line.contains("Gain      E0 ▕"), "{line}");
 
     press(&mut app, "l");
     assert_eq!(column_name(&app), "Type");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Type      Hard"));
+    assert!(fx_line(&app, 0).contains("Type     Hard"));
     press(&mut app, "-");
     press(&mut app, "-");
     let line = fx_line(&app, 0);
     assert!(
-        line.contains("Type      Distortion"),
+        line.contains("Type     Distortion"),
         "it goes round: {line}"
     );
     // A pedal has a tone control as well.
     assert!(line.contains("Tone      80 ▕"), "{line}");
     press(&mut app, "-");
-    assert!(fx_line(&app, 0).contains("Type      Overdrive"));
+    assert!(fx_line(&app, 0).contains("Type     Overdrive"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
-    assert!(fx_line(&app, 0).contains("Type      Fold"));
+    assert!(fx_line(&app, 0).contains("Type     Fold"));
     press(&mut app, "i");
     assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
     special(&mut app, KeyCode::Esc);
@@ -7120,11 +7120,11 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Amount");
     press(&mut app, "+");
-    assert!(fx_line(&app, 0).contains("Amount    50"));
+    assert!(fx_line(&app, 0).contains("Amount   50"));
     press(&mut app, "ia7");
-    assert!(fx_line(&app, 0).contains("Amount    A7"));
+    assert!(fx_line(&app, 0).contains("Amount   A7"));
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Amount    40"));
+    assert!(fx_line(&app, 0).contains("Amount   40"));
     let depth = app.history.undo_depth();
     press(&mut app, "x");
     assert_eq!(
@@ -7186,7 +7186,7 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Amount    10"),
+        fx_line(&app, 0).contains("Amount   10"),
         "{}",
         fx_line(&app, 0)
     );
@@ -7213,7 +7213,7 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     // The name and the value both carry it, in the columns they had.
     let line = fx_line(&app, 1);
     assert!(
-        line.contains(&format!("Amo{second}nt    {second}0 ▕")),
+        line.contains(&format!("Amo{second}nt   {second}0 ▕")),
         "{line}"
     );
     press(&mut app, &second.to_string());
@@ -7338,22 +7338,22 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Bits");
     let line = fx_line(&app, 0);
-    assert!(line.contains("Bits      9"), "{line}");
+    assert!(line.contains("Bits     9"), "{line}");
     assert!(!line.contains("Amount"), "{line}");
     press(&mut app, "=");
-    assert!(fx_line(&app, 0).contains("Bits      10"));
+    assert!(fx_line(&app, 0).contains("Bits     10"));
     press(&mut app, "=====");
     assert!(
-        fx_line(&app, 0).contains("Bits      12"),
+        fx_line(&app, 0).contains("Bits     12"),
         "it stops at the top"
     );
     press(&mut app, "x");
-    assert!(fx_line(&app, 0).contains("Bits      9"));
+    assert!(fx_line(&app, 0).contains("Bits     9"));
     for _ in 0..12 {
         press(&mut app, "-");
     }
     assert!(
-        fx_line(&app, 0).contains("Bits      2"),
+        fx_line(&app, 0).contains("Bits     2"),
         "it stops at the bottom"
     );
     // It's a list to choose from, and not typed.
@@ -7362,19 +7362,19 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     press(&mut app, "6");
     special(&mut app, KeyCode::Enter);
     assert!(
-        fx_line(&app, 0).contains("Bits      6"),
+        fx_line(&app, 0).contains("Bits     6"),
         "{}",
         fx_line(&app, 0)
     );
     // Another mode has its own setting, as it was.
     press(&mut app, "k-");
     assert!(
-        fx_line(&app, 0).contains("Type      Sine"),
+        fx_line(&app, 0).contains("Type     Sine"),
         "{}",
         fx_line(&app, 0)
     );
     assert!(
-        fx_line(&app, 0).contains("Amount    40"),
+        fx_line(&app, 0).contains("Amount   40"),
         "{}",
         fx_line(&app, 0)
     );
@@ -7554,7 +7554,7 @@ fn the_fx_pages_bars_follow_what_plays() {
     app.live = Some(live);
     let line = fx_line(&app, 0);
     // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
-    assert!(line.contains("Amount    40 ▕█│███▏"), "{line}");
+    assert!(line.contains("Amount   40 ▕█│███▏"), "{line}");
     assert!(line.contains("Mix       FF ▕█████▏"), "{line}");
 }
 
@@ -9402,14 +9402,24 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     assert_eq!(back.ratio, Compressor::DEFAULT.ratio);
     assert_eq!((back.console_ratio, back.console_release), (2, 1));
 
-    // Two steps on is Glue, with Live's switches where Live loads them, and its Range over the
-    // makeup.
+    // Two steps on is Glue, with Live's switches where Live loads them, its Range over the
+    // makeup, and its clip after them.
     press(&mut app, "==");
     assert_eq!(compressor(&app).kind, CompressorType::Glue);
     let glue = screen(&app);
     for shown in [
-        "Glue", "Ratio", "4:1", "Attack", "1 ms", "Release", "0.6 s", "Auto", "Mix", "Range",
+        "Glue",
+        "Ratio",
+        "4:1",
+        "Attack",
+        "1 ms",
+        "Release",
+        "0.6 s",
+        "Auto",
+        "Mix",
+        "Range",
         "Makeup",
+        "Peak Clip",
     ] {
         assert!(glue.contains(shown), "{shown}: {glue}");
     }
@@ -9496,24 +9506,24 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
             .unwrap()
     };
     let comp = row_of("Comp");
-    // The curve's placeholders, then a space, then the meter.
-    assert_eq!(buffer[(117, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(117, comp)].fg, Color::Rgb(1, 2, 3));
-    assert_eq!(buffer[(120, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
-    assert_eq!(buffer[(122, comp)].symbol(), "█");
+    // The curve's placeholders, after the sixth column of settings, then a space, then the meter.
+    assert_eq!(buffer[(138, comp)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(138, comp)].fg, Color::Rgb(1, 2, 3));
+    assert_eq!(buffer[(141, comp + 1)].symbol(), "\u{10EEEE}\u{30D}\u{310}");
+    assert_eq!(buffer[(143, comp)].symbol(), "█");
     // Half a cell filled from the top: the lower half drawn in the background's colour.
-    assert_eq!(buffer[(122, comp + 1)].symbol(), "▄");
-    assert_eq!(buffer[(122, comp + 1)].fg, vt_tui::theme::BASE);
+    assert_eq!(buffer[(143, comp + 1)].symbol(), "▄");
+    assert_eq!(buffer[(143, comp + 1)].fg, vt_tui::theme::BASE);
     // A limiter has its meter alone, where the curve would start: 3 dB is the top quarter
     // of its top row.
     let limit = row_of("Limit");
-    assert_eq!(buffer[(117, limit)].symbol(), "▆");
-    assert_eq!(buffer[(117, limit + 1)].symbol(), " ");
+    assert_eq!(buffer[(138, limit)].symbol(), "▆");
+    assert_eq!(buffer[(138, limit + 1)].symbol(), " ");
 
     // Bypassed, it turns nothing down, and its meter is empty.
     press(&mut app, "b");
     assert_eq!(app.song().tracks[0].bypassed, [false, false, true]);
-    assert_eq!(draw(&app)[(117, limit)].symbol(), "▔");
+    assert_eq!(draw(&app)[(138, limit)].symbol(), "▔");
 }
 
 #[test]
@@ -9566,8 +9576,103 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
                 .contains("EQ3")
         })
         .unwrap();
-    assert_eq!(buffer[(117, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(buffer[(126, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+    assert_eq!(buffer[(138, row)].symbol(), "\u{10EEEE}\u{305}\u{305}");
+    assert_eq!(buffer[(147, row + 1)].symbol(), "\u{10EEEE}\u{30D}\u{34A}");
+}
+
+#[test]
+fn the_fx_page_fits_six_columns_of_settings_beside_the_main_meter_at_163_columns() {
+    use vt_model::insert::{Compressor, CompressorType, Insert};
+    use vt_tui::track_page::Control;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LLK");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "l==");
+    let compressor = |app: &App| match app.song().tracks[0].inserts[0] {
+        Insert::Compressor(compressor) => compressor,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(compressor(&app).kind, CompressorType::Glue);
+    // An EQ in the last slot, whose curve is the widest drawing.
+    press(&mut app, "hjjK");
+    press(&mut app, "EQ3");
+    special(&mut app, KeyCode::Enter);
+    app.slot_images = [Some(0x01_02_03), None, Some(0x04_05_06)];
+    let rows = |app: &mut App, keys: bool| {
+        app.mode = if keys {
+            vt_tui::input::mode::Mode::Keys
+        } else {
+            vt_tui::input::mode::Mode::Normal
+        };
+        let backend = ratatui::backend::TestBackend::new(163, 42);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::run::draw_screen(frame, app, None, Instant::now()))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..42)
+            .map(|y| (0..163).map(|x| buffer[(x, y)].clone()).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    };
+    let text = |row: &[ratatui::buffer::Cell]| row.iter().map(|c| c.symbol()).collect::<String>();
+    let screen = rows(&mut app, false);
+    let comp = screen
+        .iter()
+        .position(|row| text(row).contains("Glue"))
+        .unwrap();
+    // Glue's eleventh setting, its clip, starts a sixth column, on the top row, after Makeup's.
+    let top = text(&screen[comp]);
+    let bottom = text(&screen[comp + 1]);
+    assert!(top.contains("Peak Clip") && top.contains("Off"), "{top}");
+    assert!(
+        top.find("Range").unwrap() < top.find("Peak Clip").unwrap(),
+        "{top}"
+    );
+    assert!(
+        bottom.contains("Makeup") && !bottom.contains("Peak Clip"),
+        "{bottom}"
+    );
+    // The drawings sit after it, where every slot's does, the EQ's curve ending two columns
+    // before the main meter's, which starts at 150 with its gap.
+    let placeholder =
+        |row: &[ratatui::buffer::Cell], x: usize| row[x].symbol().starts_with('\u{10EEEE}');
+    let eq = screen
+        .iter()
+        .position(|row| text(row).contains("EQ3"))
+        .unwrap();
+    assert!(placeholder(&screen[comp], 138), "{top}");
+    assert!(placeholder(&screen[eq], 138) && placeholder(&screen[eq + 1], 147));
+    // Nothing on the page reaches the two columns before the meter's.
+    for row in &screen[comp..eq + 2] {
+        assert_eq!(
+            (row[148].symbol(), row[149].symbol()),
+            (" ", " "),
+            "{}",
+            text(row)
+        );
+    }
+    // In the keyboard's box, one column in on each side, it all still fits.
+    let boxed = rows(&mut app, true);
+    let eq = boxed
+        .iter()
+        .position(|row| text(row).contains("EQ3"))
+        .unwrap();
+    assert!(placeholder(&boxed[eq + 1], 148), "{}", text(&boxed[eq + 1]));
+    assert_eq!(boxed[eq + 1][149].symbol(), "│", "{}", text(&boxed[eq + 1]));
+    // Along the bottom row the cursor stops at Makeup, the last there, and up and along is Peak
+    // Clip, picked from its two with `K`, which switches the clip in.
+    app.mode = vt_tui::input::mode::Mode::Normal;
+    press(&mut app, "kkllllll");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 9));
+    press(&mut app, "kl");
+    assert_eq!(app.track_control(), Control::InsertParam(0, 10));
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 2);
+    press(&mut app, "On");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(compressor(&app).peak_clip, 1);
+    assert_eq!(Compressor::DEFAULT.peak_clip, 0, "off, as Live loads it");
 }
 
 /// Press and let go of a key that isn't a character.
