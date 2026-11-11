@@ -55,7 +55,7 @@
 <text x="576" y="641" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16   </text>
 <text x="621" y="641" fill="#ca9ee6" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Marks </text>
 <text x="675" y="641" fill="#c6d0f5" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ab   Snap </text>
-<text x="765" y="641" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="765" y="641" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
 <text x="9" y="660" fill="#ef9f76" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slice 00</text>
 <text x="81" y="660" fill="#c6d0f5" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Gain </text>
 <text x="153" y="660" fill="#949cbb" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+0.0 dB</text>
@@ -64,7 +64,7 @@
 <text x="288" y="660" fill="#c6d0f5" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Tune </text>
 <text x="360" y="660" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+0 st</text>
 <text x="405" y="660" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Reverse </text>
-<text x="504" y="660" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="504" y="660" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
 <text x="522" y="660" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Fade in </text>
 <text x="621" y="660" fill="#949cbb" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0 ms</text>
 <text x="657" y="660" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   Fade out </text>

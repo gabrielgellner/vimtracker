@@ -2040,8 +2040,10 @@ fn snap_and_reverse_are_toggles_that_flip_with_their_settings() {
         let at = line.find(name).unwrap();
         let x = (line[..at].chars().count() + name.chars().count()) as u16;
         let buffer = terminal.backend().buffer();
-        // The no-break space after it keeps it to its cell.
-        assert_eq!(buffer[(x + 1, y)].symbol(), "\u{a0}", "{line}");
+        // The plain space after it, in its colours, is the second cell it's drawn over.
+        assert_eq!(buffer[(x + 1, y)].symbol(), " ", "{line}");
+        assert_eq!(buffer[(x + 1, y)].fg, buffer[(x, y)].fg, "{line}");
+        assert_eq!(buffer[(x + 1, y)].bg, buffer[(x, y)].bg, "{line}");
         let cell = &buffer[(x, y)];
         (cell.symbol().chars().next().unwrap(), cell.fg, cell.bg)
     };

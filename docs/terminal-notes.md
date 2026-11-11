@@ -243,6 +243,15 @@ Checked on 2026-11-09: kitty 0.50's own renderer (`kitty +runpy` with
 `src/renderer/cell.zig` allows two cells only before an empty cell, U+0020 or U+2002. The
 grid itself never moves, as the terminal counts each symbol as one cell either way.
 
+**The switches use that widening on purpose** (decision 156). `nf-fa-toggle_on` and
+`nf-fa-toggle_off` are about twice as wide as they're tall, so kept to one cell they're a tiny
+pill. `widgets::toggle` writes each as its glyph and then a plain space, in the same colours,
+which both terminals draw it over, so it fills two cells. Checked on 2026-11-11 in windows of
+kitty 0.50 and Ghostty 1.4.0, captured on their own: the pill fills both cells in each, and with
+the cursor's background over both cells as well. `nf-md-toggle_switch` and
+`nf-md-toggle_switch_off` (U+F0521 and U+F0522) were tried with the same plain space and stayed
+small in both, as Material Design's square box leaves the pill a third of it.
+
 ### Glyphs for the transport, tracks, LFOs, warnings and work (decision 104)
 
 | Glyph | Name | Codepoint | Where |

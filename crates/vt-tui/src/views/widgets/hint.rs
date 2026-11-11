@@ -3,7 +3,6 @@
 
 use ratatui::text::{Line, Span};
 
-use crate::glyphs;
 use crate::theme;
 use crate::views::widgets::toggle;
 
@@ -15,18 +14,14 @@ pub struct Switch {
 }
 
 /// The hint, dim, then each switch's key, its switch, green when it's on and faint when it isn't,
-/// and its name. The gaps are two spaces, so the sample explorer's fits under its list with the
-/// preview off.
+/// and its name. The gaps are two spaces, and the switch, two cells wide, has a space either side,
+/// so the sample explorer's fits under its list with the preview off.
 pub fn hint_line(hint: &str, switches: &[Switch]) -> Line<'static> {
     let mut spans = vec![Span::styled(format!(" {hint}"), theme::dim())];
     for switch in switches {
         spans.push(Span::styled(format!("  {} ", switch.key), theme::dim()));
         spans.push(toggle::span(switch.on));
-        let space = glyphs::ICON_SPACE;
-        spans.push(Span::styled(
-            format!("{space}{}", switch.name),
-            theme::dim(),
-        ));
+        spans.push(Span::styled(format!(" {}", switch.name), theme::dim()));
     }
     spans.push(Span::raw(" "));
     Line::from(spans)

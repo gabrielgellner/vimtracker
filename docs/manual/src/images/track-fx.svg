@@ -7,8 +7,8 @@
 <text x="1125" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1</text>
-<text x="54" y="52" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve"></text>
-<text x="63" y="52" fill="#c6d0f5" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Comp  Glue </text>
+<text x="54" y="52" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="72" y="52" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Comp  Glue </text>
 <text x="180" y="52" fill="#51576d" textLength="1170" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮</text>
 <text x="0" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1098" y="71" fill="#737994" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌─────────────┐</text>
@@ -53,9 +53,9 @@
 <text x="270" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="360" y="128" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0.6 s            </text>
 <text x="513" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Auto      </text>
-<text x="603" y="128" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="603" y="128" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
 <text x="756" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Peak Clip </text>
-<text x="846" y="128" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="846" y="128" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
 <text x="1098" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1224" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1251" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -107,8 +107,8 @@
 <rect x="1449" y="190" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="223" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2</text>
-<text x="54" y="223" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve"></text>
-<text x="63" y="223" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  EQ3 </text>
+<text x="54" y="223" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<text x="72" y="223" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> EQ3 </text>
 <text x="117" y="223" fill="#51576d" textLength="1233" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮</text>
 <rect x="1395" y="209" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="209" width="18" height="19" fill="#292c3c"/>
@@ -210,7 +210,7 @@
 <rect x="1449" y="361" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="394" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="394" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3</text>
-<text x="54" y="394" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve"></text>
+<text x="54" y="394" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
 <rect x="81" y="380" width="45" height="19" fill="#f2d5cf"/>
 <text x="81" y="394" fill="#303446" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Limit</text>
 <text x="135" y="394" fill="#949cbb" textLength="1260" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     </text>

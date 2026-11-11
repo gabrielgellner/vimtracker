@@ -42,9 +42,10 @@ pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
 pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
 const PREVIEW_LABEL_WIDTH: usize = 4;
-/// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 54 so the
-/// sample explorer's hint, with its three switches, fits under it with the preview off.
-const EXPLORER_WIDTH: usize = 54;
+/// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 57 so the
+/// sample explorer's hint, with its three two-cell switches, fits under it with the preview off,
+/// with a dash of the border to spare.
+const EXPLORER_WIDTH: usize = 57;
 /// Room for a relative line number in the explorer, and the space after it.
 const NUMBER_WIDTH: usize = 3;
 /// Where an item's name starts: after a category's arrow, the mark on the item already chosen, or
