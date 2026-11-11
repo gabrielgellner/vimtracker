@@ -19,11 +19,11 @@ use vt_model::arpeggio::Arpeggio;
 use vt_model::bank::PlayParams;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
-use vt_model::lfo::{Rate, Shape as Wave};
+use vt_model::lfo::Shape as Wave;
 use vt_model::modulation::ModSlot;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
-use vt_model::shape::{FillKind, Where};
+use vt_model::shape::{FillKind, WaveRate, Where};
 use vt_model::song::{FilterMode, FilterType, Machine};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
@@ -165,7 +165,7 @@ pub enum Pick {
     /// The wave the shape panel follows.
     ShapeWave(Wave),
     /// The length of the shape panel's wave.
-    ShapeRate(Rate),
+    ShapeRate(WaveRate),
     /// Which rows the shape panel fills.
     ShapeWhere(Where),
     Use {

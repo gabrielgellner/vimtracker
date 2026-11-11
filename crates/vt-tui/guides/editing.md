@@ -73,26 +73,37 @@ up 23 semitones, a press at a time, with the selection kept.
 
 ## Shaping a column
 
-Select part of a Velocity or FX column with `v`, then press `S` for a panel
+Select part of a Note, Velocity, Nudge, length or FX column with `v`, then press `S` for a panel
 beside the grid. The column changes as you adjust it, and you hear it if the
 loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Wave`, `Alternate` or `List`. `r` picks anew |
+| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List` or a transform. `r` picks anew |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
+| Run | How many rows each value holds for |
 | Where | Which rows change, with `Amount` below it for some |
+
+`Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
+`00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
+It counts the rows it changes, so on Velocity it's that many notes.
 
 `Wave` swings between the ends, for movement like a pulse across a hat's
 velocities, and shows these in place of Curve and S:
 
 | Row | Does |
 |---|---|
-| Shape | `Sine`, `Tri`, `Saw`, `Ramp` or `Square`, as on an LFO |
+| Shape | `Sine`, `Tri`, `Saw`, `Ramp`, `Square` or `Smooth`, as on an LFO |
 | Rate | How long one swing takes, like `1/2`, `1/8d`, `2 bars` or `7st` |
 | Phase | Where in the swing the first row selected falls, in degrees |
+| Run | How many rows each value holds for, sampled where the run starts |
+
+`Smooth` wanders from one random value to the next, a drift that `r` picks
+anew. A Rate of `x3` fits three whole swings into the rows selected, however
+many there are, so the selection loops round smoothly: type it with `i`, or
+choose `x1` to `x8` with `K`, and `=` `-` add or take one.
 
 Each row's value comes from where it falls in time, counting from the first row
 selected, so the movement keeps its timing however the notes are spaced. As on an
@@ -109,6 +120,21 @@ comes by itself, so `704055` types `70 40 55`. It starts as the two ends. `Run`
 works as for `Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the
 list round.
 
+The last four fills are transforms: rather than making new values, they rework
+the ones already in the rows `Where` chooses, and a row it chooses with no value
+in the column is left alone.
+
+| Fill | Does |
+|---|---|
+| Scale | Maps the values from their own lowest and highest onto From and To |
+| Invert | Flips each value within their range, the loudest to the softest |
+| Shuffle | Deals the values to the rows in a new order. `r` deals again |
+| Reverse | Gives the rows their values in the opposite order |
+
+`Scale` tames a take into `40` to `60`, or widens a hat's accents. Curve and S
+bend it as they bend a ramp, and From above To turns it upside down. The others
+have no settings but `Where`, and keep the rhythm: only the values move.
+
 The ends start as the first and last values selected, or if those match, the
 lowest and highest.
 
@@ -120,17 +146,50 @@ lowest and highest.
 | No notes | Rows without a note |
 | Every | Every so many rows, counting from the first selected |
 | Chance | Each row with this percent chance |
+| Euclid | `Hits` spread as evenly as they go, with `Rotate` below it |
+
+`Euclid` spreads its hits over the rows it could change, as the Euclidean
+rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
+counts among the notes however they're spaced, so 5 hits over 16 hats accent 5
+of them. `Hits` shows how many rows it spreads them over, as in `5 of 16`.
+`Rotate` moves every hit that many of those rows later, going round, so 3 in 8
+rotated by 1 is `.x..x..x`.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
-spacing along it. A velocity only ever goes on a note, so for Velocity, Every
-and Chance choose among the notes. On an FX column, the command is the first one
+spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
+Chance and Euclid choose among the notes. On an FX column, the command is the first one
 selected, and a row holding a different command keeps it.
+
+### On the Note column
+
+On the Note column, `S` gives the notes already there new pitches, keeping
+their rhythm, velocities and gates, and leaving `OFF` and empty rows alone: keep
+this rhythm, give me another line. From and To are notes, typed as `C-3`, `c3`
+or `c#3`. With the scale on, every fill moves in its degrees, so it lands in key
+as it's made; with it off, in semitones. `=` and `-` move an end a degree, or a
+semitone with the scale off, and `+` and `_` an octave.
+
+A `Ramp` walks a run up or down the scale, `Random` picks degrees between the
+ends, and `Wave` draws a contour. `List` repeats a motif typed as notes, like
+`c3 d#3 g3`, and `Alternate` two notes, both written as they are. `Invert`
+turns a melody upside down within its range, in degrees with the scale on;
+`Reverse` plays it backwards and `Shuffle` deals the same notes in a new order.
+
+`Snap`, on the Note column only, moves each note to the nearest one in the
+scale, the lower of two as near, for a take played without it. It's the only
+way notes are forced into the scale: playing never does. A note outside the
+scale shows in the panel in the grid's colour for one.
+
+On Nudge, the ends run from `-B` to `+B`, in 24ths of a step, so `Random`
+between `-3` and `+3` is a humanise you can see, and a `Ramp` rushes or drags
+into a fill. On a gate's length, a `Wave` or `List` of lengths shapes the
+phrasing; a row with no length of its own, `--`, keeps it unless filled.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
 `.` applies the same shape to another selection. A ramp or random fill takes that
-selection's own ends, `Wave` and `Alternate` keep theirs, and `List` keeps its
-list.
+selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
+its list, and the other transforms rework that selection's own values.
 
 ## Values and small edits
 

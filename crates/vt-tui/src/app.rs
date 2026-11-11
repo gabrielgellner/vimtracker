@@ -911,6 +911,14 @@ impl App {
             held.update(crate::meter::to_db(level), seconds);
         }
         while let Some((track, state)) = self.handle.jam_change() {
+            // A mute or solo waiting for the grid has landed, so the live controls follow it.
+            if state.switches_landed != self.jam[track].switches_landed
+                && let Some(live) = self.levels.get_mut(track)
+            {
+                live.mute = state.mute;
+                live.solo = state.solo;
+                self.dirty = true;
+            }
             self.jam[track] = state;
         }
         self.take_loaded();
@@ -1494,6 +1502,14 @@ impl App {
                     }
                 }
             }
+            Cmd::MuteOnGrid => {
+                self.switch_on_grid(false);
+                self.repeats_ignored = true;
+            }
+            Cmd::SoloOnGrid => {
+                self.switch_on_grid(true);
+                self.repeats_ignored = true;
+            }
             Cmd::ToggleFill => {
                 let was = self.fill;
                 self.set_fill(!was);
@@ -1896,6 +1912,62 @@ impl App {
             Launch::ChainEnd => "on the next bar".to_owned(),
             every => every.when(),
         }
+    }
+
+    /// Switch the cursor's track's mute, or its solo, at the next line of the launch grid, or
+    /// take back a switch waiting for it. The engine switches it, with every other waiting for the
+    /// same line, and the live controls follow from its report. Stopped, there's no grid coming
+    /// round, so it switches at once, as `Space m` does.
+    pub(crate) fn switch_on_grid(&mut self, solo: bool) {
+        if !self.can_silence() {
+            return;
+        }
+        let track = self.cursor.track;
+        let Some(live) = self.levels.get(track).copied() else {
+            return;
+        };
+        let name = format!("Track {:02}", track + 1);
+        let (on, verb) = if solo {
+            (live.solo, if live.solo { "unsolos" } else { "solos" })
+        } else {
+            (live.mute, if live.mute { "unmutes" } else { "mutes" })
+        };
+        if self.transport != Transport::Playing {
+            if solo {
+                self.switch_solo(track);
+            } else {
+                self.switch_mute(track);
+            }
+            let done = match (solo, on) {
+                (false, false) => "muted",
+                (false, true) => "unmuted",
+                (true, false) => "soloed",
+                (true, true) => "unsoloed",
+            };
+            self.status = format!("{name} {done} at once, as nothing's playing");
+            return;
+        }
+        let command = if solo {
+            Command::SoloOnGrid { track }
+        } else {
+            Command::MuteOnGrid { track }
+        };
+        if !self.handle.send(command) {
+            return;
+        }
+        let jam = self.jam.get(track).copied().unwrap_or_default();
+        let (waiting, what, key) = if solo {
+            (jam.solo_waiting, "solo", "s")
+        } else {
+            (jam.mute_waiting, "mute", "m")
+        };
+        // The engine decides, and the status line shows it waiting from its next report.
+        self.status = if waiting {
+            format!("{name}'s {what} switch taken back")
+        } else {
+            let when = self.grid_when();
+            format!("{name} {verb} {when}; Space g {key} again takes it back")
+        };
     }
 
     /// Send every track back to its start at the next line of the launch grid, or take back a

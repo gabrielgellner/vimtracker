@@ -640,6 +640,11 @@ impl Engine {
                 chain: track.playing,
                 started: track.started,
                 lane_offsets: track.lane_offsets,
+                mute: track.mute,
+                solo: track.solo,
+                mute_waiting: track.mute_waiting,
+                solo_waiting: track.solo_waiting,
+                switches_landed: track.switches_landed,
             })
     }
 
@@ -900,6 +905,8 @@ impl Engine {
             track.cued = None;
             track.mute = false;
             track.solo = false;
+            track.mute_waiting = false;
+            track.solo_waiting = false;
             track.give_back_memory(&mut self.memory);
         }
         self.follow_levels();
@@ -1329,6 +1336,8 @@ impl Engine {
         }
         for track in self.tracks.iter_mut() {
             track.realign_waiting = false;
+            track.mute_waiting = false;
+            track.solo_waiting = false;
         }
     }
 
@@ -1347,10 +1356,56 @@ impl Engine {
         self.scale = scale;
     }
 
-    /// Set whether a track is muted. A muted track's sounding note fades.
+    /// Set whether a track is muted, taking back a switch of its mute waiting for the grid. A
+    /// muted track's sounding note fades.
     pub fn set_mute(&mut self, track: usize, mute: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
             state.mute = mute;
+            state.mute_waiting = false;
+        }
+        self.apply_audibility();
+    }
+
+    /// Switch a track's mute at the next line of the launch grid, or take back a switch waiting
+    /// for it. Only while playing, as there's no grid coming round otherwise.
+    pub fn toggle_mute_on_grid(&mut self, track: usize) {
+        let playing = self.transport == Transport::Playing;
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.mute_waiting = playing && !state.mute_waiting;
+        }
+    }
+
+    /// Switch a track's solo at the next line of the launch grid, or take back a switch waiting
+    /// for it, as [`Engine::toggle_mute_on_grid`] does a mute.
+    pub fn toggle_solo_on_grid(&mut self, track: usize) {
+        let playing = self.transport == Transport::Playing;
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.solo_waiting = playing && !state.solo_waiting;
+        }
+    }
+
+    /// Whether a track's mute switches at the next line of the launch grid.
+    pub fn mute_waiting(&self, track: usize) -> bool {
+        self.tracks.get(track).is_some_and(|t| t.mute_waiting)
+    }
+
+    /// Whether a track's solo switches at the next line of the launch grid.
+    pub fn solo_waiting(&self, track: usize) -> bool {
+        self.tracks.get(track).is_some_and(|t| t.solo_waiting)
+    }
+
+    /// Switch every mute and solo waiting for this line of the grid, together, so they're heard
+    /// from the same sample.
+    fn switch_waiting(&mut self) {
+        for track in self.tracks.iter_mut() {
+            if !(track.mute_waiting || track.solo_waiting) {
+                continue;
+            }
+            track.mute ^= track.mute_waiting;
+            track.solo ^= track.solo_waiting;
+            track.mute_waiting = false;
+            track.solo_waiting = false;
+            track.switches_landed = track.switches_landed.wrapping_add(1);
         }
         self.apply_audibility();
     }
@@ -1362,6 +1417,7 @@ impl Engine {
     pub fn set_solo(&mut self, track: usize, solo: bool) {
         if let Some(state) = self.tracks.get_mut(track) {
             state.solo = solo;
+            state.solo_waiting = false;
         }
         self.apply_audibility();
     }
@@ -2064,9 +2120,15 @@ impl Engine {
             self.realign();
         }
         // A realign asked for, of every track or of one, lands here as a reset would, after the
-        // section has moved on.
-        let waiting = self.realign_waiting || self.tracks.iter().any(|t| t.realign_waiting);
+        // section has moved on, and so do mutes and solos waiting for the grid, before the line's
+        // notes, which they're heard or silenced with.
+        let switching = self.tracks.iter().any(|t| t.mute_waiting || t.solo_waiting);
+        let waiting =
+            self.realign_waiting || switching || self.tracks.iter().any(|t| t.realign_waiting);
         let line = waiting && self.on_grid_line(self.realign_grid());
+        if switching && line {
+            self.switch_waiting();
+        }
         if self.realign_waiting && line {
             self.realign_waiting = false;
             self.realign();
@@ -2476,8 +2538,10 @@ impl Engine {
                 let arp = self.arpeggiate(index, &pending, arpeggiates, played, tie, start_at);
                 self.tracks[index].arp = arp;
                 let note = arp.map_or(note, |arp| arp.cycle.note(arp.place));
-                // The groove's velocity for the step scales the note's own.
-                let own = u32::from(step.velocity.unwrap_or(MAX_VELOCITY));
+                // `VDLT` moves the note's own, after the FX have run so a lock on this step
+                // counts, and the groove's velocity for the step scales that.
+                let own = self.tracks[index].velocity(step.velocity.unwrap_or(MAX_VELOCITY));
+                let own = u32::from(own);
                 let percent = u32::from(pending.groove.velocity(running));
                 let velocity = if percent == u32::from(FULL_VELOCITY) {
                     own
@@ -2776,7 +2840,7 @@ impl Engine {
             };
             let note = (i16::from(midi) + i16::from(position.transpose))
                 .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-            let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
+            let velocity = self.tracks[index].velocity(step.velocity.unwrap_or(MAX_VELOCITY));
             let shape = self.note_shape(index);
             let Some(on) = self.note_on(index, note, velocity, shape) else {
                 continue;

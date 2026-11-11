@@ -332,8 +332,8 @@ pub(crate) fn grid_name(skip: u32) -> String {
 
 /// The transport as glyphs in place of words: play in the active colour, pause and stop dim, and a
 /// red record beside play while recording. Fill changes what the conditions play, so it's named
-/// while it's on, and a realign, a cued launch and a loop are named, with the glyph for waiting,
-/// until the launch grid comes round.
+/// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
+/// named, with the glyph for waiting, until the launch grid comes round.
 pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     let (glyph, style) = match app.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
@@ -353,9 +353,13 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     }
     let realigning = app.realigning || app.realigning_tracks.contains(&true);
     let cued = app.jam.iter().any(|jam| jam.cued.is_some());
+    let muting = app.jam.iter().any(|jam| jam.mute_waiting);
+    let soloing = app.jam.iter().any(|jam| jam.solo_waiting);
     for (waiting, name) in [
         (realigning, "REALIGN"),
         (cued, "LAUNCH"),
+        (muting, "MUTE"),
+        (soloing, "SOLO"),
         (app.loop_waiting, "LOOP"),
     ] {
         if waiting {

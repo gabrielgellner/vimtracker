@@ -304,14 +304,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Control::Solo => Some((group::soloed(app, index), glyphs::SOLO)),
                 _ => None,
             };
+            // One waiting for the launch grid is the glyph for waiting until it switches.
+            let jam = app.jam.get(index).copied().unwrap_or_default();
+            let waiting = match control {
+                Control::Mute => jam.mute_waiting,
+                Control::Solo => jam.solo_waiting,
+                _ => false,
+            };
             let text = match (control, switched) {
                 _ if !control.exists_on(track) => String::new(),
+                _ if waiting => glyphs::WAITING.to_string(),
                 (_, Some((Switched::Off, _))) => "-".to_owned(),
                 (_, Some((_, glyph))) => glyph.to_string(),
                 _ => setting::text(app, selected, || value(control, track, song)),
             };
             let style = match switched {
                 _ if selected => theme::cursor(app.mode),
+                _ if waiting => theme::dim(),
                 Some((why, _)) if why.is_on() => why.style(),
                 _ if muted.is_on() => theme::dim(),
                 _ if group::is_empty(song, index) => theme::faint(),

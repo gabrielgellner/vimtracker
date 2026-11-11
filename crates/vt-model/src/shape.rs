@@ -1,17 +1,105 @@
 //! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
-//! turn, or a short list of them in turn.
+//! turn, or a short list of them in turn, or reworking the values already there. On the Note
+//! column, the steps are the scale's degrees while it's on.
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::lfo::{Rate, Shape as Wave, wave};
+use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{FxCommand, FxSlot, MAX_VELOCITY, Mark, Note, Step};
+use crate::step::{
+    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_NUDGE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Mark, Note,
+    Step,
+};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
 /// The waves a column can follow, in the order `+` goes through them.
-pub const WAVES: [Wave; 5] = [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square];
+pub const WAVES: [Wave; 6] = [
+    Wave::Sine,
+    Wave::Tri,
+    Wave::Saw,
+    Wave::Ramp,
+    Wave::Square,
+    Wave::Smooth,
+];
 /// How long a wave's cycle is unless told otherwise: a half note.
-pub const DEFAULT_RATE: Rate = Rate::Note(TICKS_PER_QUARTER as u32 * 2);
+pub const DEFAULT_RATE: WaveRate = WaveRate::Time(Rate::Note(TICKS_PER_QUARTER as u32 * 2));
+/// The most cycles a wave can make across a selection.
+pub const MAX_CYCLES: u16 = 64;
+
+/// How long a wave's cycle is: a length in time, as an LFO's, or a whole number of cycles across
+/// the selection, so they fit it whatever its length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaveRate {
+    Time(Rate),
+    Cycles(u16),
+}
+
+impl WaveRate {
+    /// Faster or slower by a small step: a time as an LFO's moves, or one cycle more or fewer.
+    pub fn nudged(self, faster: bool) -> Self {
+        match self {
+            Self::Time(rate) => Self::Time(rate.nudged(faster)),
+            Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 1)),
+        }
+    }
+
+    /// Faster or slower by a large step: a time as an LFO's jumps, or four cycles more or fewer.
+    pub fn jumped(self, faster: bool) -> Self {
+        match self {
+            Self::Time(rate) => Self::Time(rate.jumped(faster)),
+            Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 4)),
+        }
+    }
+
+    fn moved(cycles: u16, more: bool, by: u16) -> u16 {
+        let moved = if more {
+            cycles.saturating_add(by)
+        } else {
+            cycles.saturating_sub(by)
+        };
+        moved.clamp(1, MAX_CYCLES)
+    }
+}
+
+/// A time as an LFO's rate shows, and cycles as `x3`.
+impl std::fmt::Display for WaveRate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Time(rate) => rate.fmt(f),
+            Self::Cycles(cycles) => write!(f, "x{cycles}"),
+        }
+    }
+}
+
+/// Why typed text isn't a wave's rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaveRateError;
+
+/// A time as an LFO's rate is typed, but in time with the rows, or `x` and a number of cycles.
+impl std::str::FromStr for WaveRate {
+    type Err = WaveRateError;
+
+    fn from_str(text: &str) -> Result<Self, WaveRateError> {
+        let text = text.trim();
+        if let Some(count) = text.strip_prefix(['x', 'X']) {
+            return match count.trim().parse::<u16>() {
+                Ok(cycles) if (1..=MAX_CYCLES).contains(&cycles) => Ok(Self::Cycles(cycles)),
+                _ => Err(WaveRateError),
+            };
+        }
+        match text.parse::<Rate>() {
+            Ok(Rate::Hertz(_)) | Err(_) => Err(WaveRateError),
+            Ok(rate) => Ok(Self::Time(rate)),
+        }
+    }
+}
+/// How many hits a Euclidean `Where` starts with: in eight rows, the tresillo.
+pub const EUCLID_HITS: u16 = 3;
+const EUCLID: Where = Where::Euclid {
+    hits: EUCLID_HITS,
+    rotate: 0,
+};
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -28,16 +116,31 @@ pub enum FillKind {
     Alternate,
     /// Each value of a short list in turn, on the rows it fills, then round again.
     List,
+    /// The values there, from their own lowest and highest onto the two values, along the curve.
+    Scale,
+    /// The values there, each flipped within their own range.
+    Invert,
+    /// The values there, dealt to the same rows in a new order.
+    Shuffle,
+    /// The values there, in the opposite order.
+    Reverse,
+    /// The notes there, each moved to the nearest in the scale.
+    Snap,
 }
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 10] = [
         Self::Ramp,
         Self::Random,
         Self::Wave,
         Self::Alternate,
         Self::List,
+        Self::Scale,
+        Self::Invert,
+        Self::Shuffle,
+        Self::Reverse,
+        Self::Snap,
     ];
 
     /// The name on screen.
@@ -48,6 +151,11 @@ impl FillKind {
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
             Self::List => "List",
+            Self::Scale => "Scale",
+            Self::Invert => "Invert",
+            Self::Shuffle => "Shuffle",
+            Self::Reverse => "Reverse",
+            Self::Snap => "Snap",
         }
     }
 
@@ -59,7 +167,20 @@ impl FillKind {
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
+            Self::Scale => "The values there onto the two",
+            Self::Invert => "The values there, upside down",
+            Self::Shuffle => "The values there, in a new order",
+            Self::Reverse => "The values there, the other way",
+            Self::Snap => "The notes there into the scale",
         }
+    }
+
+    /// Whether it reworks the values already in the rows, rather than making new ones.
+    pub fn reworks(self) -> bool {
+        matches!(
+            self,
+            Self::Scale | Self::Invert | Self::Shuffle | Self::Reverse | Self::Snap
+        )
     }
 }
 
@@ -78,6 +199,9 @@ pub enum Where {
     Every(u16),
     /// Each row with this percent chance.
     Chance(u8),
+    /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
+    /// those rows later, going round.
+    Euclid { hits: u16, rotate: u16 },
 }
 
 impl Where {
@@ -90,38 +214,141 @@ impl Where {
             Self::AllRows => "All rows",
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
+            Self::Euclid { .. } => "Euclid",
         }
     }
+}
+
+/// `hits` spread as evenly as they go over `rows`, by Bjorklund's algorithm, so 3 in 8 is the
+/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them.
+pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
+    if hits >= rows {
+        return vec![true; rows];
+    }
+    if hits == 0 {
+        return vec![false; rows];
+    }
+    // Pair the hits with the rests, then the pairs with what's left over, until one is left over.
+    let mut groups: Vec<Vec<bool>> = vec![vec![true]; hits];
+    let mut rest: Vec<Vec<bool>> = vec![vec![false]; rows - hits];
+    while rest.len() > 1 {
+        let pairs = groups.len().min(rest.len());
+        let left = if groups.len() > pairs {
+            groups.split_off(pairs)
+        } else {
+            rest.split_off(pairs)
+        };
+        for (group, tail) in groups.iter_mut().zip(rest) {
+            group.extend(tail);
+        }
+        rest = left;
+    }
+    groups.into_iter().chain(rest).flatten().collect()
 }
 
 /// The column being filled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeColumn {
+    /// The notes, re-pitched where they are, through the song's scale as it was when the panel
+    /// opened: in its degrees while it's on, and in semitones while it's off.
+    Note {
+        scale: Scale,
+    },
     Velocity,
-    Fx { slot: usize, command: FxCommand },
+    /// A note's nudge, held as `0` for the earliest to `22` for the latest, so it's a plain range.
+    Nudge,
+    /// A note's length, the gate cell's last two digits.
+    Length,
+    Fx {
+        slot: usize,
+        command: FxCommand,
+    },
 }
 
 impl ShapeColumn {
     /// The highest value this column takes.
     pub fn highest(self) -> u8 {
         match self {
+            Self::Note { .. } => MAX_NOTE,
             Self::Velocity => MAX_VELOCITY,
+            Self::Nudge => NUDGES,
+            Self::Length => u8::MAX,
             Self::Fx { command, .. } => command.highest(),
+        }
+    }
+
+    /// The lowest value this column takes.
+    pub fn lowest(self) -> u8 {
+        match self {
+            Self::Note { .. } => MIN_NOTE,
+            _ => 0,
         }
     }
 
     /// Which rows it fills unless told otherwise: the ones already holding such a value.
     pub fn default_where(self) -> Where {
         match self {
-            Self::Velocity => Where::Notes,
             Self::Fx { .. } => Where::Commands,
+            _ => Where::Notes,
         }
     }
 
-    /// The choices of rows. A velocity means nothing without a note, so those only narrow them.
+    /// The fills it offers: `Snap` only means something for notes.
+    pub fn fills(self) -> Vec<FillKind> {
+        FillKind::ALL
+            .into_iter()
+            .filter(|kind| *kind != FillKind::Snap || matches!(self, Self::Note { .. }))
+            .collect()
+    }
+
+    /// A value as the panel shows it: a note's name, a nudge with its sign as the grid shows it,
+    /// and anything else in hex.
+    pub fn show(self, value: u8) -> String {
+        match self {
+            Self::Note { .. } => Note::On(value.clamp(MIN_NOTE, MAX_NOTE)).to_string(),
+            Self::Nudge => match value as i8 - MAX_NUDGE {
+                0 => "0".to_owned(),
+                late if late > 0 => format!("+{late:X}"),
+                early => format!("-{:X}", early.unsigned_abs()),
+            },
+            _ => format!("{value:02X}"),
+        }
+    }
+
+    /// A list of values as the panel shows it, with a space between each.
+    pub fn show_list(self, values: &Values) -> String {
+        let shown: Vec<String> = values.as_slice().iter().map(|v| self.show(*v)).collect();
+        shown.join(" ")
+    }
+
+    /// A value typed for this column, kept in its range: a note's name, a nudge as a sign and a
+    /// hex digit, or anything else in hex.
+    pub fn parse(self, text: &str) -> Option<u8> {
+        let text = text.trim();
+        match self {
+            Self::Note { .. } => parse_note(text),
+            Self::Nudge => {
+                let (sign, digit) = match text.as_bytes().first()? {
+                    b'-' => (-1, &text[1..]),
+                    b'+' => (1, &text[1..]),
+                    _ => (1, text),
+                };
+                let size = i8::from_str_radix(digit, 16).ok()?;
+                Some(((sign * size).clamp(-MAX_NUDGE, MAX_NUDGE) + MAX_NUDGE) as u8)
+            }
+            _ => u8::from_str_radix(text, 16)
+                .ok()
+                .map(|v| v.min(self.highest())),
+        }
+    }
+
+    /// The choices of rows. A note's velocity, nudge or length means nothing without it, so those
+    /// only narrow them, as they do for the notes themselves.
     pub fn wheres(self) -> Vec<Where> {
         match self {
-            Self::Velocity => vec![Where::Notes, Where::Every(4), Where::Chance(50)],
+            Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
+                vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
+            }
             Self::Fx { .. } => vec![
                 Where::Commands,
                 Where::AllRows,
@@ -129,16 +356,23 @@ impl ShapeColumn {
                 Where::NoNotes,
                 Where::Every(4),
                 Where::Chance(50),
+                EUCLID,
             ],
         }
     }
 
-    /// This column's value on a step, if it has one: an FX value's coarse digits.
+    /// This column's value on a step, if it has one: an FX value's coarse digits. A row with no
+    /// length of its own has none.
     fn value(self, step: &Step) -> Option<u8> {
+        let note = matches!(step.note, Note::On(_));
         match self {
-            Self::Velocity => {
-                matches!(step.note, Note::On(_)).then(|| step.velocity.unwrap_or(MAX_VELOCITY))
-            }
+            Self::Note { .. } => match step.note {
+                Note::On(note) => Some(note),
+                _ => None,
+            },
+            Self::Velocity => note.then(|| step.velocity.unwrap_or(MAX_VELOCITY)),
+            Self::Nudge => note.then(|| (step.nudge + MAX_NUDGE) as u8),
+            Self::Length => step.length().filter(|_| note),
             Self::Fx { slot, command } => step
                 .fx
                 .get(slot)
@@ -147,10 +381,24 @@ impl ShapeColumn {
         }
     }
 
+    /// This column's value on a step with its fine part, if it has one. A velocity has none.
+    fn exact(self, step: &Step) -> Option<u16> {
+        match self {
+            Self::Fx { slot, command } => step
+                .fx
+                .get(slot)
+                .filter(|fx| fx.command == Some(command))
+                .map(|fx| fx.value),
+            _ => self.value(step).map(|value| u16::from(value) << 8),
+        }
+    }
+
     /// Whether a step could take a value at all. A row holding another command keeps it.
     fn can_take(self, step: &Step) -> bool {
         match self {
-            Self::Velocity => matches!(step.note, Note::On(_)),
+            Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
+                matches!(step.note, Note::On(_))
+            }
             Self::Fx { slot, command } => step
                 .fx
                 .get(slot)
@@ -165,8 +413,17 @@ impl ShapeColumn {
 
     /// Write a value with a fine part to a step. A velocity takes the whole value.
     pub fn write_exact(self, step: &mut Step, value: u16) {
+        let whole = (value >> 8) as u8;
         match self {
-            Self::Velocity => step.velocity = Some((value >> 8) as u8),
+            Self::Note { .. } => step.note = Note::On(whole.clamp(MIN_NOTE, MAX_NOTE)),
+            Self::Velocity => step.velocity = Some(whole),
+            Self::Nudge => step.nudge = whole.min(NUDGES) as i8 - MAX_NUDGE,
+            Self::Length => {
+                step.gate = Some(Gate {
+                    length: Some(whole),
+                    ..step.gate.unwrap_or_default()
+                });
+            }
             Self::Fx { slot, command } => {
                 if let Some(fx) = step.fx.get_mut(slot) {
                     *fx = FxSlot {
@@ -177,6 +434,88 @@ impl ShapeColumn {
                     .with_valid_mark();
                 }
             }
+        }
+    }
+}
+
+/// The values a nudge takes, held from 0: as many 24ths early as late, and on the grid.
+const NUDGES: u8 = 2 * MAX_NUDGE as u8;
+
+/// A note's name as the grid shows it, like `C-3` or `C#3`, or more loosely, like `c3`, `c-3` or
+/// `c#3`.
+fn parse_note(text: &str) -> Option<u8> {
+    if let Ok(Note::On(note)) = text.parse() {
+        return Some(note);
+    }
+    let mut chars = text.chars();
+    let letter = chars.next()?.to_ascii_uppercase();
+    let rest = chars.as_str();
+    let (mark, octave) = match rest.strip_prefix('#') {
+        Some(octave) => ('#', octave),
+        None => ('-', rest.strip_prefix('-').unwrap_or(rest)),
+    };
+    match format!("{letter}{mark}{octave}").parse() {
+        Ok(Note::On(note)) => Some(note),
+        _ => None,
+    }
+}
+
+/// The notes a Note column steps through: every one in range, or only those in the scale while
+/// it's on, so a step along it is a degree.
+struct Ladder {
+    scale: Scale,
+    notes: Vec<u8>,
+}
+
+impl Ladder {
+    fn new(scale: Scale) -> Self {
+        let notes = (MIN_NOTE..=MAX_NOTE)
+            .filter(|note| !scale.on || scale.contains(*note))
+            .collect();
+        Self { scale, notes }
+    }
+
+    /// Its last step.
+    fn top(&self) -> f64 {
+        (self.notes.len() - 1) as f64
+    }
+
+    /// The step a note given as an end is on: the nearest note in the scale's, the lower if two
+    /// are as near.
+    fn step(&self, note: u8) -> u8 {
+        let note = if self.scale.on {
+            self.scale.fitted(note)
+        } else {
+            note
+        };
+        self.position(note).round() as u8
+    }
+
+    /// Where a note falls along it: on a step, or between two for a note outside the scale, so
+    /// moving it and back finds the same note.
+    fn position(&self, note: u8) -> f64 {
+        match self.notes.binary_search(&note) {
+            Ok(step) => step as f64,
+            Err(0) => 0.0,
+            Err(above) if above == self.notes.len() => self.top(),
+            Err(above) => {
+                let (below, over) = (self.notes[above - 1], self.notes[above]);
+                (above - 1) as f64 + f64::from(note - below) / f64::from(over - below)
+            }
+        }
+    }
+
+    /// The note at a position along it.
+    fn note(&self, position: f64) -> u8 {
+        let position = position.clamp(0.0, self.top());
+        let step = position.floor() as usize;
+        let between = position - step as f64;
+        match self.notes.get(step + 1) {
+            Some(over) if between > 1e-9 => {
+                let below = self.notes[step];
+                below + (f64::from(over - below) * between).round() as u8
+            }
+            _ => self.notes[step],
         }
     }
 }
@@ -241,9 +580,10 @@ pub struct Shape {
     /// The wave a `Wave` follows, its length, and where in the cycle the first row selected falls,
     /// in degrees, as an LFO's are.
     pub wave: Wave,
-    pub rate: Rate,
+    pub rate: WaveRate,
     pub phase: u16,
-    /// How many rows in a row `Alternate` and `List` give each value.
+    /// How many of the rows it fills in a row take each value: `Alternate` and `List` give each
+    /// value that many, and a ramp, wave or random fill holds a value for that many.
     pub run: u16,
     /// What a `List` goes through, in place of `from` and `to`.
     pub values: Values,
@@ -291,26 +631,44 @@ pub fn targets(
     place: Where,
     seed: u64,
 ) -> Vec<usize> {
-    (range.first..=range.last)
+    let open: Vec<usize> = (range.first..=range.last)
+        .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
+        .collect();
+    if let Where::Euclid { hits, rotate } = place {
+        // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among
+        // the notes however they're spaced.
+        let pattern = euclid(usize::from(hits), open.len());
+        let later = usize::from(rotate) % open.len().max(1);
+        return open
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| pattern[(index + open.len() - later) % open.len()])
+            .map(|(_, row)| *row)
+            .collect();
+    }
+    open.into_iter()
         .filter(|row| {
-            let Some(step) = steps.get(*row) else {
-                return false;
-            };
-            if !column.can_take(step) {
-                return false;
-            }
+            let step = &steps[*row];
             let has_note = matches!(step.note, Note::On(_));
             let offset = row - range.first;
             match place {
                 Where::Notes => has_note,
                 Where::NoNotes => !has_note,
                 Where::Commands => column.value(step).is_some(),
-                Where::AllRows => true,
+                Where::AllRows | Where::Euclid { .. } => true,
                 Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
                 Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
             }
         })
         .collect()
+}
+
+/// How many rows of a range a column could change, which a Euclidean `Where` spreads its hits
+/// over.
+pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize {
+    (range.first..=range.last)
+        .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
+        .count()
 }
 
 /// The values a shape writes, by row. A ramp's ends are the first and last rows it fills, and rows
@@ -364,13 +722,94 @@ fn shaped(
     shape: &Shape,
 ) -> Vec<(usize, Shaped)> {
     let rows = targets(steps, range, column, shape.place, shape.seed);
-    let (Some(&first), Some(&last)) = (rows.first(), rows.last()) else {
+    let ShapeColumn::Note { scale } = column else {
+        let top = f64::from(column.highest());
+        return filled(steps, &rows, range, shape, top, |step| {
+            column.exact(step).map(|value| f64::from(value) / 256.0)
+        });
+    };
+    noted(steps, &rows, range, scale, shape)
+}
+
+/// A Note column's values. A ramp, a random fill, a wave and the transforms work along the
+/// `Ladder`, so they land on the scale's degrees while it's on; `Alternate` and `List` write their
+/// notes as they're given, and `Snap` moves each note to the nearest in the scale.
+fn noted(
+    steps: &[Step],
+    rows: &[usize],
+    range: StepRange,
+    scale: Scale,
+    shape: &Shape,
+) -> Vec<(usize, Shaped)> {
+    let note = |step: &Step| match step.note {
+        Note::On(note) => Some(note),
+        _ => None,
+    };
+    let as_note = |note: u8| Shaped {
+        exact: f64::from(note),
+        whole: note,
+    };
+    match shape.kind {
+        FillKind::Alternate | FillKind::List => {
+            filled(steps, rows, range, shape, f64::from(MAX_NOTE), |step| {
+                note(step).map(f64::from)
+            })
+        }
+        FillKind::Snap => rows
+            .iter()
+            .filter_map(|&row| {
+                let note = note(steps.get(row)?)?;
+                Some((
+                    row,
+                    as_note(if scale.on { scale.fitted(note) } else { note }),
+                ))
+            })
+            .collect(),
+        kind => {
+            let ladder = Ladder::new(scale);
+            let along = Shape {
+                from: ladder.step(shape.from),
+                to: ladder.step(shape.to),
+                ..*shape
+            };
+            // A transform that moves notes about keeps each as it was, in the scale or not.
+            let moved = kind.reworks() && kind != FillKind::Scale;
+            filled(steps, rows, range, &along, ladder.top(), |step| {
+                note(step).map(|note| ladder.position(note))
+            })
+            .into_iter()
+            .map(|(row, at)| {
+                let position = if moved { at.exact } else { f64::from(at.whole) };
+                (row, as_note(ladder.note(position)))
+            })
+            .collect()
+        }
+    }
+}
+
+/// The values on the rows chosen, for a column whose values run from 0 to `top` and are read off
+/// a step by `read`.
+fn filled(
+    steps: &[Step],
+    rows: &[usize],
+    range: StepRange,
+    shape: &Shape,
+    top: f64,
+    read: impl Fn(&Step) -> Option<f64>,
+) -> Vec<(usize, Shaped)> {
+    if shape.kind.reworks() {
+        return reworked(steps, rows, shape, top, read);
+    }
+    let Some(&first) = rows.first() else {
         return Vec::new();
     };
-    let top = f64::from(column.highest());
     let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
     let (low, high) = (from.min(to) as u64, from.max(to) as u64);
-    let across = (last - first).max(1) as f64;
+    let run = usize::from(shape.run.max(1));
+    // A ramp, a wave or a random fill holds for a run: each row takes the value of the first row
+    // of its run, and a ramp's ends are the first and last runs, so it climbs in even stairs.
+    let held = |index: usize| rows[index / run * run];
+    let across = (held(rows.len() - 1) - first).max(1) as f64;
     let whole = |value: f64| Shaped {
         exact: value,
         whole: value as u8,
@@ -380,23 +819,24 @@ fn shaped(
         .map(|(index, &row)| {
             let value = match shape.kind {
                 FillKind::Ramp => {
-                    let t = (row - first) as f64 / across;
-                    let along = curved(t, shape.curve, shape.s);
-                    // Rounding the distance travelled means falling mirrors rising exactly.
-                    let moved = ((to - from).abs() * along + 0.5).floor();
-                    Shaped {
-                        exact: from + (to - from) * along,
-                        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
-                    }
+                    let t = (held(index) - first) as f64 / across;
+                    along_line(from, to, curved(t, shape.curve, shape.s), top)
                 }
                 FillKind::Random => {
                     let span = high - low + 1;
-                    whole((low + mix(shape.seed, row - range.first) % span) as f64)
+                    whole((low + mix(shape.seed, held(index) - range.first) % span) as f64)
                 }
                 FillKind::Wave => {
-                    let ticks = (row - range.first) as u64 * TICKS_PER_STEP;
-                    let cycles =
-                        shape.rate.cycles(ticks as f64, 0.0) + f64::from(shape.phase) / 360.0;
+                    let offset = held(index) - range.first;
+                    let cycles = match shape.rate {
+                        WaveRate::Time(rate) => {
+                            rate.cycles((offset as u64 * TICKS_PER_STEP) as f64, 0.0)
+                        }
+                        // A cycle is the whole selection, so the next row after it starts again.
+                        WaveRate::Cycles(cycles) => {
+                            offset as f64 * f64::from(cycles) / range.len() as f64
+                        }
+                    } + f64::from(shape.phase) / 360.0;
                     let t = (f64::from(wave(shape.wave, cycles, shape.seed)) + 1.0) / 2.0;
                     let exact = from + (to - from) * t;
                     Shaped {
@@ -416,20 +856,108 @@ fn shaped(
                     let value = list.get(turn % list.len().max(1)).copied().unwrap_or(0);
                     whole(f64::from(value).min(top))
                 }
+                FillKind::Scale
+                | FillKind::Invert
+                | FillKind::Shuffle
+                | FillKind::Reverse
+                | FillKind::Snap => unreachable!("reworked above"),
             };
             (row, value)
         })
         .collect()
 }
 
+/// Where a line from one value to the other is, `along` of the way. Rounding the distance
+/// travelled means falling mirrors rising exactly.
+fn along_line(from: f64, to: f64, along: f64, top: f64) -> Shaped {
+    let moved = ((to - from).abs() * along + 0.5).floor();
+    Shaped {
+        exact: from + (to - from) * along,
+        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
+    }
+}
+
+/// A transform's values: the ones already on the rows chosen, reworked. A row chosen with no value
+/// of this column's is left as it is.
+fn reworked(
+    steps: &[Step],
+    rows: &[usize],
+    shape: &Shape,
+    top: f64,
+    read: impl Fn(&Step) -> Option<f64>,
+) -> Vec<(usize, Shaped)> {
+    let present: Vec<(usize, f64)> = rows
+        .iter()
+        .filter_map(|&row| Some((row, read(steps.get(row)?)?)))
+        .collect();
+    let lowest = present
+        .iter()
+        .map(|(_, value)| *value)
+        .fold(f64::MAX, f64::min);
+    let highest = present
+        .iter()
+        .map(|(_, value)| *value)
+        .fold(f64::MIN, f64::max);
+    let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
+    // A value moved whole keeps its fine part.
+    let kept = |value: f64| Shaped {
+        exact: value,
+        whole: value.floor().clamp(0.0, top) as u8,
+    };
+    let mut values: Vec<f64> = present.iter().map(|(_, value)| *value).collect();
+    match shape.kind {
+        FillKind::Reverse => values.reverse(),
+        FillKind::Shuffle => {
+            // Fisher and Yates, from the seed, so the same seed deals the same.
+            for index in (1..values.len()).rev() {
+                let other = (mix(shape.seed ^ 0xA5A5, index) % (index as u64 + 1)) as usize;
+                values.swap(index, other);
+            }
+        }
+        _ => {}
+    }
+    present
+        .iter()
+        .zip(values)
+        .map(|(&(row, _), value)| {
+            let shaped = match shape.kind {
+                FillKind::Scale => {
+                    // All one value has no range to scale, so it goes to `from`.
+                    let t = if highest > lowest {
+                        (value - lowest) / (highest - lowest)
+                    } else {
+                        0.0
+                    };
+                    along_line(from, to, curved(t, shape.curve, shape.s), top)
+                }
+                FillKind::Invert => kept(lowest + highest - value),
+                _ => kept(value),
+            };
+            (row, shaped)
+        })
+        .collect()
+}
+
 /// Where a shape starts and ends unless told otherwise: the first and last values in the selection,
-/// or if those match, the lowest and highest, or if those match, the column's whole range.
+/// or if those match, the lowest and highest, or if those match, the column's whole range. For
+/// notes, that's an octave up from the one note there.
 pub fn default_ends(steps: &[Step], range: StepRange, column: ShapeColumn) -> (u8, u8) {
     let present: Vec<u8> = (range.first..=range.last)
         .filter_map(|row| steps.get(row).and_then(|step| column.value(step)))
         .collect();
+    let whole_range = || match column {
+        ShapeColumn::Note { .. } => {
+            let low = present
+                .first()
+                .copied()
+                .unwrap_or(MIDDLE_C)
+                .min(MAX_NOTE - 12);
+            (low, low + 12)
+        }
+        _ => (0, column.highest()),
+    };
     let (Some(&first), Some(&last)) = (present.first(), present.last()) else {
-        return (0, column.highest());
+        return whole_range();
     };
     if first != last {
         return (first, last);
@@ -439,7 +967,7 @@ pub fn default_ends(steps: &[Step], range: StepRange, column: ShapeColumn) -> (u
     if lowest != highest {
         (lowest, highest)
     } else {
-        (0, column.highest())
+        whole_range()
     }
 }
 
@@ -649,6 +1177,68 @@ mod tests {
         assert_eq!(picked(100, 1).len(), 1000);
     }
 
+    /// A pattern as `x` and `.`.
+    fn drawn(pattern: &[bool]) -> String {
+        pattern
+            .iter()
+            .map(|hit| if *hit { 'x' } else { '.' })
+            .collect()
+    }
+
+    #[test]
+    fn euclid_gives_toussaints_patterns() {
+        assert_eq!(drawn(&euclid(3, 8)), "x..x..x.");
+        assert_eq!(drawn(&euclid(5, 8)), "x.xx.xx.");
+        assert_eq!(drawn(&euclid(5, 16)), "x..x..x..x..x...");
+        assert_eq!(drawn(&euclid(4, 12)), "x..x..x..x..");
+        assert_eq!(drawn(&euclid(7, 16)), "x..x.x.x..x.x.x.");
+        assert_eq!(drawn(&euclid(0, 4)), "....");
+        assert_eq!(drawn(&euclid(4, 4)), "xxxx");
+        assert_eq!(drawn(&euclid(9, 4)), "xxxx");
+        assert!(euclid(3, 0).is_empty());
+    }
+
+    #[test]
+    fn a_euclidean_where_rotates_later_and_goes_round() {
+        let steps = notes(8);
+        let picked = |hits, rotate| {
+            let rows = targets(&steps, all(&steps), VEL, Where::Euclid { hits, rotate }, 1);
+            let mut pattern = vec![false; 8];
+            for row in rows {
+                pattern[row] = true;
+            }
+            drawn(&pattern)
+        };
+        assert_eq!(picked(3, 0), "x..x..x.");
+        assert_eq!(picked(3, 1), ".x..x..x");
+        assert_eq!(picked(3, 2), "x.x..x..");
+        assert_eq!(picked(3, 8), "x..x..x.", "a whole turn");
+        assert_eq!(picked(5, 0), "x.xx.xx.");
+        assert_eq!(picked(5, 3), "xx.x.xx.");
+    }
+
+    #[test]
+    fn a_euclidean_where_counts_among_the_notes() {
+        // Notes on 6 of 16 rows: 3 hits among them fall on every other note.
+        let mut steps = rows(&vec!["--- -- --- --- ---"; 16]);
+        for row in [0, 3, 4, 8, 11, 14] {
+            steps[row] = "C-3 -- --- --- ---".parse().unwrap();
+        }
+        let place = Where::Euclid { hits: 3, rotate: 0 };
+        assert_eq!(targets(&steps, all(&steps), VEL, place, 1), [0, 4, 11]);
+        assert_eq!(open_rows(&steps, all(&steps), VEL), 6);
+        // On an FX column, among the rows that could hold the command: not the one with another.
+        let steps = rows(&[
+            "--- -- --- --- ---",
+            "--- -- res:10 --- ---",
+            "--- -- --- --- ---",
+            "--- -- --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let place = Where::Euclid { hits: 2, rotate: 0 };
+        assert_eq!(targets(&steps, all(&steps), CUT, place, 1), [0, 3]);
+    }
+
     #[test]
     fn random_stays_in_range_either_way_round_and_reaches_both_ends() {
         let steps = notes(500);
@@ -739,6 +1329,98 @@ mod tests {
         let later = StepRange::between(1, 4);
         let out = values(&steps, later, VEL, &waving(Wave::Tri, 0, 0x40));
         assert_eq!(out, [(1, 0x20), (3, 0x40), (4, 0x30)]);
+    }
+
+    #[test]
+    fn a_run_holds_a_ramp_a_wave_and_a_random_fill_in_stairs() {
+        let stairs = Shape {
+            run: 2,
+            ..ramp(0, 0x30, 0, 0)
+        };
+        assert_eq!(
+            written(&notes(8), stairs),
+            [0, 0, 0x10, 0x10, 0x20, 0x20, 0x30, 0x30]
+        );
+        // An odd count ends on a short stair, which still reaches To.
+        let stairs = Shape {
+            run: 3,
+            ..ramp(0, 0x30, 0, 0)
+        };
+        assert_eq!(
+            written(&notes(7), stairs),
+            [0, 0, 0, 0x18, 0x18, 0x18, 0x30]
+        );
+        // A wave is sampled on each run's first row and held.
+        let held = Shape {
+            run: 2,
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            written(&notes(8), held),
+            [0x20, 0x20, 0x40, 0x40, 0x20, 0x20, 0, 0]
+        );
+        let random = Shape {
+            kind: FillKind::Random,
+            run: 4,
+            ..ramp(0, 0x7F, 0, 0)
+        };
+        let out = written(&notes(64), random);
+        assert!(out.chunks(4).all(|run| run.iter().all(|v| *v == run[0])));
+        assert!(out.chunks(4).any(|run| run[0] != out[0]));
+    }
+
+    #[test]
+    fn a_rate_in_cycles_fits_that_many_into_the_selection() {
+        let twice = Shape {
+            rate: WaveRate::Cycles(2),
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            written(&notes(16), twice),
+            [
+                0x20, 0x30, 0x40, 0x30, 0x20, 0x10, 0, 0x10, 0x20, 0x30, 0x40, 0x30, 0x20, 0x10, 0,
+                0x10
+            ]
+        );
+        // Across the rows selected, not only those filled.
+        let steps = rows(&[
+            "C-3 -- --- --- ---",
+            "--- -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let once = Shape {
+            rate: WaveRate::Cycles(1),
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            values(&steps, all(&steps), VEL, &once),
+            [(0, 0x20), (2, 0x20)]
+        );
+        assert_eq!("x3".parse(), Ok(WaveRate::Cycles(3)));
+        assert_eq!("1/4".parse(), Ok(WaveRate::Time("1/4".parse().unwrap())));
+        assert!("x0".parse::<WaveRate>().is_err());
+        assert!("2hz".parse::<WaveRate>().is_err());
+        assert_eq!(WaveRate::Cycles(3).to_string(), "x3");
+        assert_eq!(WaveRate::Cycles(1).nudged(false), WaveRate::Cycles(1));
+        assert_eq!(WaveRate::Cycles(3).jumped(true), WaveRate::Cycles(7));
+    }
+
+    #[test]
+    fn a_smooth_wave_wanders_the_same_way_for_a_seed() {
+        let smooth = |seed| Shape {
+            seed,
+            rate: "1/4".parse().unwrap(),
+            ..waving(Wave::Smooth, 0, 0x7F)
+        };
+        let out = written(&notes(64), smooth(1));
+        assert_eq!(out, written(&notes(64), smooth(1)));
+        assert_ne!(out, written(&notes(64), smooth(2)));
+        // It eases from one value to the next, so neighbours stay close.
+        assert!(
+            out.windows(2).all(|pair| pair[0].abs_diff(pair[1]) < 0x40),
+            "{out:X?}"
+        );
     }
 
     fn alternating(run: u16, from: u8, to: u8) -> Shape {
@@ -847,6 +1529,365 @@ mod tests {
         };
         let out = values(&steps, all(&steps), vol, &shape);
         assert_eq!(out[1].1, 0xF8);
+    }
+
+    fn reworking(kind: FillKind, from: u8, to: u8) -> Shape {
+        Shape {
+            kind,
+            ..ramp(from, to, 0, 0)
+        }
+    }
+
+    fn on_cut(values: &[u8]) -> Vec<Step> {
+        values
+            .iter()
+            .map(|value| format!("C-3 -- cut:{value:02X} --- ---").parse().unwrap())
+            .collect()
+    }
+
+    fn cut_values(steps: &[Step], shape: Shape) -> Vec<u8> {
+        let shape = Shape {
+            place: Where::Commands,
+            ..shape
+        };
+        values(steps, all(steps), CUT, &shape)
+            .iter()
+            .map(|(_, value)| *value)
+            .collect()
+    }
+
+    #[test]
+    fn scale_maps_the_values_own_range_onto_the_ends_along_the_curve() {
+        let steps = on_cut(&[0x20, 0x40, 0x60]);
+        let scaled = |from, to, curve| {
+            cut_values(
+                &steps,
+                Shape {
+                    curve,
+                    ..reworking(FillKind::Scale, from, to)
+                },
+            )
+        };
+        assert_eq!(scaled(0, 0xFF, 0), [0x00, 0x80, 0xFF]);
+        assert_eq!(scaled(0x40, 0x60, 0), [0x40, 0x50, 0x60]);
+        assert_eq!(scaled(0xFF, 0, 0), [0xFF, 0x7F, 0x00], "upside down");
+        let bent = scaled(0, 0xFF, 60);
+        assert_eq!((bent[0], bent[2]), (0, 0xFF));
+        assert!(bent[1] > 0x80, "{bent:X?}");
+        // All one value has no range, so it goes to From.
+        assert_eq!(
+            cut_values(&on_cut(&[0x30; 3]), reworking(FillKind::Scale, 0x10, 0x70)),
+            [0x10; 3]
+        );
+    }
+
+    #[test]
+    fn invert_flips_each_value_within_their_range() {
+        let steps = on_cut(&[0x10, 0x30, 0x70]);
+        assert_eq!(
+            cut_values(&steps, reworking(FillKind::Invert, 0, 0)),
+            [0x70, 0x50, 0x10]
+        );
+        // A fine part is flipped too.
+        let steps: Vec<Step> = ["cut:1080", "cut:2000", "cut:3000"]
+            .iter()
+            .map(|fx| format!("C-3 -- {fx} --- ---").parse().unwrap())
+            .collect();
+        let shape = Shape {
+            place: Where::Commands,
+            ..reworking(FillKind::Invert, 0, 0)
+        };
+        let out: Vec<u16> = exact_values(&steps, all(&steps), CUT, &shape)
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(out, [0x3000, 0x2080, 0x1080]);
+    }
+
+    #[test]
+    fn shuffle_deals_the_same_values_again_from_its_seed() {
+        let list: Vec<u8> = (0..16).map(|value| value * 8).collect();
+        let steps = on_cut(&list);
+        let dealt = |seed| {
+            cut_values(
+                &steps,
+                Shape {
+                    seed,
+                    ..reworking(FillKind::Shuffle, 0, 0)
+                },
+            )
+        };
+        let first = dealt(1);
+        assert_ne!(first, list);
+        assert_eq!(first, dealt(1));
+        assert_ne!(first, dealt(2));
+        let mut sorted = first.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, list, "the same values");
+    }
+
+    #[test]
+    fn reverse_gives_the_rows_their_values_the_other_way_and_keeps_to_where() {
+        let steps = rows(&[
+            "C-3 10 --- --- ---",
+            "--- -- --- --- ---",
+            "C-3 20 --- --- ---",
+            "C-3 30 --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let out = values(
+            &steps,
+            all(&steps),
+            VEL,
+            &reworking(FillKind::Reverse, 0, 0),
+        );
+        assert_eq!(out, [(0, 0x30), (2, 0x20), (3, 0x10)]);
+        // On an FX column, the rows chosen without the command keep nothing.
+        let steps = rows(&[
+            "C-3 -- cut:10 --- ---",
+            "--- -- --- --- ---",
+            "C-3 -- cut:20 --- ---",
+            "--- -- cut:30 --- ---",
+        ]);
+        let shape = Shape {
+            place: Where::Notes,
+            ..reworking(FillKind::Reverse, 0, 0)
+        };
+        assert_eq!(
+            values(&steps, all(&steps), CUT, &shape),
+            [(0, 0x20), (2, 0x10)]
+        );
+        let shape = Shape {
+            place: Where::AllRows,
+            ..shape
+        };
+        assert_eq!(
+            values(&steps, all(&steps), CUT, &shape),
+            [(0, 0x30), (2, 0x20), (3, 0x10)]
+        );
+    }
+
+    fn in_key(kind: crate::scale::ScaleKind, root: u8) -> ShapeColumn {
+        ShapeColumn::Note {
+            scale: Scale {
+                on: true,
+                root,
+                kind,
+            },
+        }
+    }
+
+    const CHROMATIC: ShapeColumn = ShapeColumn::Note {
+        scale: Scale {
+            on: false,
+            root: 0,
+            kind: crate::scale::ScaleKind::Major,
+        },
+    };
+
+    /// The notes written, by name.
+    fn named(steps: &[Step], column: ShapeColumn, shape: Shape) -> Vec<String> {
+        values(steps, all(steps), column, &shape)
+            .iter()
+            .map(|(_, note)| Note::On(*note).to_string())
+            .collect()
+    }
+
+    const C3: u8 = MIDDLE_C;
+
+    #[test]
+    fn a_ramp_of_notes_walks_the_scale_or_semitones_with_it_off() {
+        let major = in_key(crate::scale::ScaleKind::Major, 0);
+        assert_eq!(
+            named(&notes(8), major, ramp(C3, C3 + 12, 0, 0)),
+            ["C-3", "D-3", "E-3", "F-3", "G-3", "A-3", "B-3", "C-4"]
+        );
+        assert_eq!(
+            named(&notes(8), CHROMATIC, ramp(C3, C3 + 12, 0, 0)),
+            ["C-3", "D-3", "D#3", "F-3", "G-3", "A-3", "A#3", "C-4"]
+        );
+        // Down, and from an end outside the scale, which counts from the nearest degree.
+        assert_eq!(
+            named(&notes(3), major, ramp(C3 + 5, C3 + 1, 0, 0)),
+            ["F-3", "D-3", "C-3"]
+        );
+    }
+
+    #[test]
+    fn random_notes_are_seeded_and_all_in_the_scale() {
+        let minor = in_key(crate::scale::ScaleKind::Minor, 9);
+        let ShapeColumn::Note { scale } = minor else {
+            unreachable!()
+        };
+        let random = |seed| Shape {
+            seed,
+            kind: FillKind::Random,
+            ..ramp(C3, C3 + 24, 0, 0)
+        };
+        let out = values(&notes(200), all(&notes(200)), minor, &random(1));
+        assert!(out.iter().all(|(_, note)| scale.contains(*note)));
+        assert!(out.iter().all(|(_, note)| (C3..=C3 + 24).contains(note)));
+        assert_eq!(
+            out,
+            values(&notes(200), all(&notes(200)), minor, &random(1))
+        );
+        assert_ne!(
+            out,
+            values(&notes(200), all(&notes(200)), minor, &random(2))
+        );
+    }
+
+    #[test]
+    fn a_wave_and_a_list_of_notes() {
+        let major = in_key(crate::scale::ScaleKind::Major, 0);
+        let wave = Shape {
+            rate: "1/4".parse().unwrap(),
+            ..waving(Wave::Tri, C3, C3 + 7)
+        };
+        // Four degrees either side of E, the middle of C to G.
+        assert_eq!(named(&notes(4), major, wave), ["E-3", "G-3", "E-3", "C-3"]);
+        // A motif is written as it's given, in the scale or not.
+        let motif = Shape {
+            values: Values::new(&[C3, C3 + 3, C3 + 7]),
+            ..listing(1, &[])
+        };
+        assert_eq!(named(&notes(4), major, motif), ["C-3", "D#3", "G-3", "C-3"]);
+    }
+
+    #[test]
+    fn re_pitching_keeps_the_rhythm_and_leaves_offs_and_rests() {
+        let steps = rows(&[
+            "C-3 40 --- --- ---",
+            "--- -- --- --- ---",
+            "OFF -- --- --- ---",
+            "C-3 20 SGL2 40 --- --- ---",
+        ]);
+        let major = in_key(crate::scale::ScaleKind::Major, 0);
+        let out = values(&steps, all(&steps), major, &ramp(C3, C3 + 2, 0, 0));
+        assert_eq!(out, [(0, C3), (3, C3 + 2)]);
+        let mut step = steps[3].clone();
+        major.write(&mut step, C3 + 2);
+        assert_eq!(step.to_string(), "D-3 20 SGL2 40 --- --- ---");
+    }
+
+    #[test]
+    fn transforms_on_notes_invert_in_degrees_and_move_notes_as_they_are() {
+        let major = in_key(crate::scale::ScaleKind::Major, 0);
+        let line = |names: &[&str]| -> Vec<Step> {
+            names
+                .iter()
+                .map(|name| format!("{name} -- --- --- ---").parse().unwrap())
+                .collect()
+        };
+        let tune = line(&["C-3", "E-3", "D-3", "G-3"]);
+        assert_eq!(
+            named(&tune, major, reworking(FillKind::Invert, 0, 0)),
+            ["G-3", "E-3", "F-3", "C-3"]
+        );
+        assert_eq!(
+            named(&tune, CHROMATIC, reworking(FillKind::Invert, 0, 0)),
+            ["G-3", "D#3", "F-3", "C-3"]
+        );
+        let chromatic = line(&["C-3", "C#3", "E-3"]);
+        assert_eq!(
+            named(&chromatic, major, reworking(FillKind::Reverse, 0, 0)),
+            ["E-3", "C#3", "C-3"]
+        );
+        let shuffled = named(&tune, major, reworking(FillKind::Shuffle, 0, 0));
+        let mut sorted = shuffled.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["C-3", "D-3", "E-3", "G-3"]);
+        // Scale lands on degrees between the two ends.
+        assert_eq!(
+            named(&tune, major, reworking(FillKind::Scale, C3, C3 + 12)),
+            ["C-3", "G-3", "E-3", "C-4"]
+        );
+    }
+
+    #[test]
+    fn snap_moves_a_note_to_the_nearest_degree_and_the_lower_of_two() {
+        let pentatonic = in_key(crate::scale::ScaleKind::MajorPentatonic, 0);
+        let steps: Vec<Step> = ["C#3", "F-3", "B-3", "G-3", "F#3"]
+            .iter()
+            .map(|name| format!("{name} -- --- --- ---").parse().unwrap())
+            .collect();
+        let snap = reworking(FillKind::Snap, 0, 0);
+        // C# is as near C as D, so it goes down; F is nearer E, B nearer C and F# nearer G.
+        assert_eq!(
+            named(&steps, pentatonic, snap),
+            ["C-3", "E-3", "C-4", "G-3", "G-3"]
+        );
+        let names: Vec<String> = steps.iter().map(|step| step.note.to_string()).collect();
+        assert_eq!(named(&steps, CHROMATIC, snap), names, "with the scale off");
+        assert!(CHROMATIC.fills().contains(&FillKind::Snap));
+        assert!(!VEL.fills().contains(&FillKind::Snap));
+    }
+
+    #[test]
+    fn a_nudge_and_a_length_fill_the_notes_and_keep_their_ranges() {
+        let steps = rows(&[
+            "C-3 -- --- --- ---",
+            "--- -- --- --- ---",
+            "C-3 -- +2 --- --- ---",
+            "C-3 -- SGL1 40 --- --- ---",
+        ]);
+        let nudge = ShapeColumn::Nudge;
+        let out = values(&steps, all(&steps), nudge, &ramp(8, 14, 0, 0));
+        assert_eq!(out, [(0, 8), (2, 12), (3, 14)]);
+        assert_eq!(nudge.show(8), "-3");
+        assert_eq!(nudge.show(11), "0");
+        assert_eq!(nudge.show(22), "+B");
+        assert_eq!(nudge.parse("-3"), Some(8));
+        assert_eq!(nudge.parse("+b"), Some(22));
+        assert_eq!(nudge.parse("+C"), Some(22), "kept at B");
+        assert_eq!(nudge.parse("x"), None);
+        let mut step = steps[0].clone();
+        nudge.write(&mut step, 8);
+        assert_eq!(step.nudge, -3);
+        assert_eq!(default_ends(&steps, all(&steps), nudge), (11, 13));
+
+        // A length fills every note, and a transform leaves `--` as it is.
+        let length = ShapeColumn::Length;
+        let out = values(&steps, all(&steps), length, &ramp(0x20, 0x80, 0, 0));
+        assert_eq!(out, [(0, 0x20), (2, 0x60), (3, 0x80)]);
+        let mut step = steps[0].clone();
+        length.write(&mut step, 0x20);
+        assert_eq!(step.to_string(), "C-3 -- SGL1 20 --- --- ---");
+        let lengths = rows(&[
+            "C-3 -- SGL1 20 --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- SGL1 80 --- --- ---",
+        ]);
+        let out = values(
+            &lengths,
+            all(&lengths),
+            length,
+            &reworking(FillKind::Reverse, 0, 0),
+        );
+        assert_eq!(out, [(0, 0x80), (2, 0x20)]);
+    }
+
+    #[test]
+    fn notes_are_shown_and_typed_by_name() {
+        assert_eq!(CHROMATIC.show(61), "C#3");
+        for (typed, note) in [
+            ("C-3", 60),
+            ("c3", 60),
+            ("c-3", 60),
+            ("c#3", 61),
+            ("G-8", 127),
+        ] {
+            assert_eq!(CHROMATIC.parse(typed), Some(note), "{typed}");
+        }
+        for typed in ["H3", "e#3", "C-9", ""] {
+            assert_eq!(CHROMATIC.parse(typed), None, "{typed}");
+        }
+        assert_eq!(
+            CHROMATIC.show_list(&Values::new(&[60, 64, 67])),
+            "C-3 E-3 G-3"
+        );
+        let one = rows(&["G-3 -- --- --- ---"; 2]);
+        assert_eq!(default_ends(&one, all(&one), CHROMATIC), (67, 79));
     }
 
     #[test]
