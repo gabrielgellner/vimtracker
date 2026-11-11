@@ -14,6 +14,8 @@
 //!     the Roto asks for them, live or as a stored setup with buttons, what changes sent back as
 //!     it changes,
 //!     and the track list FUNC chooses from.
+//! *   [`mix`]: MIX mode, the Roto as a mixer: banks of eight tracks or the returns and the
+//!     master, or one track's faders, with what changes sent back and the meters.
 //! *   [`store`]: vimtracker's own setups stored on the Roto, for devices with buttons, written
 //!     only under its own hashes and only when they change.
 //! *   [`transport`]: the ports, through `midir` and `serialport`.
@@ -32,6 +34,7 @@ pub mod layout;
 pub mod link;
 pub mod live;
 pub mod midi;
+pub mod mix;
 pub mod probe;
 pub mod serial;
 pub mod session;

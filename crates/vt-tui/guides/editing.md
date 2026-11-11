@@ -167,17 +167,24 @@ keyboard. Where the pointer is doesn't matter.
 
 | Wheel | Does |
 |---|---|
-| Up, down | As `=` `-`, in the setting's finest step |
-| Shift and up or down | As `+` `_` |
-| Right, left | As `+` `_` |
+| Fingers up or right | As `=`, in the setting's fine step |
+| Fingers down or left | As `-`, in the setting's fine step |
+| Shift and any way | As `+` `_` |
 
-Each tick is the finest step there is: on a value with fine digits, its fine
-digits, as if the cursor were on them; on the tempo, its hundredths; on the
-sample page, a point's frame, as Cmd-l and Cmd-h nudge it. Ticks that come
-quickly take more of the fine step at a time, up to one of `=`'s, so a slow turn
-lands on any value and a quick flick sweeps across. Everywhere else a tick is
-one of `=`'s steps: a semitone on a note, the next choice in a list. On a
-selection it moves every value, as `=` does, and keeps it selected.
+Up and down and sideways are the same knob, as a trackpad's fingers drift from
+one to the other. The value follows the fingers, as a level bar fills, whether
+or not macOS scrolls naturally; the audio page's `Direction` row turns it the
+other way.
+
+On a value with fine digits a tick is a 16th of `=`'s step, a step of the first
+fine digit, as if the cursor were on them; with the cursor on the fine digits
+themselves, a tick is their own `=`. On the tempo a tick is a tenth of a BPM,
+or a hundredth on its fine part, and on the sample page a 16th of a pixel, as
+Cmd-l and Cmd-h nudge a point. A slow or steady turn moves the same for every
+tick, so twice the swipe is twice the change; only a fast swipe takes more at a
+time, up to one of `=`'s steps, to sweep across. Everywhere else a tick is one
+of `=`'s steps: a semitone on a note, the next choice in a list. On a selection
+it moves every value, as `=` does, and keeps it selected.
 
 One turn is one undo: `u` takes back everything from the first tick until the
 wheel stops for a moment, or a key is pressed. `.` still repeats the last

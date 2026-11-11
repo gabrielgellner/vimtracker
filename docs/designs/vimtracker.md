@@ -21,7 +21,7 @@ their code, copy their appearance or read their files.
 The first goal was to find out whether this could become an instrument the author wants to
 pick up, and the author's jams answered it (G1, below). It has since grown from an M8 or
 Polyend-sized tool into one at about an Octatrack's scale (decision 138): sampler and synth
-machines, four effect slots, six mod slots a track (decision 163), groups, returns and a
+machines, four effect slots, six mod slots a track (decision 165), groups, returns and a
 master, used alongside Ableton Live rather than in place of it. It runs only in kitty and
 Ghostty (decisions 50 and 56).
 
@@ -271,8 +271,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
-| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
@@ -326,7 +326,9 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     it sends into events; midir's callback only copies bytes to it. The audio page's Roto setting
     starts it (off unless turned on, kept in `roto.ron`), and `App::tick` takes its events each
     frame and answers them from `vt-roto`'s `PluginView`, with the devices `roto/devices.rs` makes
-    of the song; turning it off sends `DAW STARTED` and stops it. `vimtracker roto-probe` starts
+    of the song, or in MIX mode its `MixView`, with the strips `roto/mix.rs` makes; turning it off
+    sends `DAW STARTED` and stops it. Only the vimtracker holding `roto.lock` in the cache folder
+    starts it. `vimtracker roto-probe` starts
     one of its own. It never touches the audio thread ([`roto-control.md`](roto-control.md) §7).
 *   **The Roto's setups thread** (`roto.rs`, named `roto setups`) opens the Roto's serial port
     each time it connects, checks vimtracker's own stored setups and writes those missing or
@@ -455,7 +457,7 @@ Song                               song.ron, refused unless format_version is FO
     slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, or a lock of any
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
-*   **Mod slots** (`modulation.rs`, decision 163). Each track has `MOD_SLOTS` (6) slots on its
+*   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
     Mod page, each a `ModSlot` of a type, `ModKind::Adsr` or `ModKind::Lfo`, with a destination
     setting, a depth and a switch, which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
@@ -622,12 +624,17 @@ only name Normal's keys on those pages, for the binding table.
     sends some repeats as presses.
 *   **`wheel.rs`** (beside `input/`): the mouse wheel as a knob on the cursor's setting, while its
     setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
-    reports only then. `App::mouse_event` turns a tick into a press of `=` `-` `+` `_`, or the
-    sample page's Cmd-l and Cmd-h, through `App::press`, in whatever mode binds them, so every
-    page and a locked selection take it as they take the key. Where the setting has a finer step
-    than `=`, the cursor is put on its fine part for the tick and back after. A gesture's ticks are
-    squashed into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a
-    selection `Adjustments::join_from` keeps its running total in step (decision 162).
+    reports only then. `App::mouse_event` reads both axes as one knob, flipped to follow the
+    fingers under macOS's natural scrolling (`wheel::natural_scrolling`, read at start) and by
+    the setting's `reversed`. A gesture drops a tick the other way that comes too soon, as a
+    bounce, and keeps a decaying speed that sizes each tick by `wheel::tick_size`, the constants
+    all in `wheel::feel`. Ticks are owed, and `App::wheel_frame`, each frame, or any key, makes
+    what's owed as one press of `=` `-` `+` `_`, or the sample page's Cmd-l and Cmd-h, with a
+    count, through `App::press`, in whatever mode binds them, so every page and a locked
+    selection take it as they take the key. Where the setting has a finer step than `=`, the
+    cursor is put on its fine part for the press and back after. A gesture's presses are squashed
+    into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
+    `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
@@ -697,7 +704,7 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     page a slot each (`DeviceSpec::slot`), and the Mod page each mod slot of the left column, then
     the one three after it beside it, `Mod 1`, `Mod 4`, `Mod 2` and so on, each with its type's
     grid and a title of its type, its mode and its destination, then the accumulator and the
-    arpeggio (decisions 151 and 163). A `DeviceSpec` is its
+    arpeggio (decisions 151 and 165). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're

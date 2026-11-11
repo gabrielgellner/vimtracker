@@ -1,7 +1,8 @@
 //! The audio page: which output plays, at what rate, and with what buffer. A change takes effect
 //! as it's made, as Ableton's audio preferences do: the main loop opens the new output. Its last
-//! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and the
-//! Roto-Control (`roto`), as Live's MIDI preferences choose its control surfaces.
+//! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and say
+//! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
+//! its control surfaces.
 
 use vt_model::selection::Motion;
 
@@ -20,16 +21,19 @@ pub enum AudioRow {
     Buffer,
     /// Whether the mouse wheel turns the cursor's setting.
     Wheel,
+    /// Whether the value it turns follows the fingers or goes against them.
+    WheelDirection,
     /// Whether vimtracker drives the Roto-Control, and how its link is.
     Roto,
 }
 
 impl AudioRow {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Device,
         Self::Rate,
         Self::Buffer,
         Self::Wheel,
+        Self::WheelDirection,
         Self::Roto,
     ];
 
@@ -40,6 +44,7 @@ impl AudioRow {
             Self::Buffer => "Buffer",
             Self::Roto => "Roto",
             Self::Wheel => "Wheel",
+            Self::WheelDirection => "Direction",
         }
     }
 }
@@ -136,8 +141,8 @@ impl App {
                     })
                     .collect()
             }),
-            // Off or on, which their own keys switch.
-            AudioRow::Roto | AudioRow::Wheel => Vec::new(),
+            // Off or on, or one way or the other, which their own keys switch.
+            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => Vec::new(),
         };
         let current = match row {
             AudioRow::Device => device.and_then(|device| {
@@ -153,7 +158,7 @@ impl App {
                 let size = self.audio.buffer.or(choice.buffer)?;
                 device.buffers.iter().position(|b| *b == size)
             }),
-            AudioRow::Roto | AudioRow::Wheel => None,
+            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => None,
         };
         (options, current)
     }
@@ -186,6 +191,23 @@ impl App {
         true
     }
 
+    /// What a key does on the wheel's direction row: `=`, `-`, `K`, `i` and Enter switch it, and
+    /// `x` puts it back with the fingers. Returns false for a key that means nothing there.
+    fn run_wheel_direction_row(&mut self, cmd: Cmd) -> bool {
+        let reversed = match cmd {
+            Cmd::Increase
+            | Cmd::IncreaseLarge
+            | Cmd::Decrease
+            | Cmd::DecreaseLarge
+            | Cmd::PickValue
+            | Cmd::EnterInsert => !self.wheel.setting.reversed,
+            Cmd::ClearField => false,
+            _ => return false,
+        };
+        self.set_wheel_reversed(reversed);
+        true
+    }
+
     /// Ask for another output, which the main loop opens.
     fn choose_audio(&mut self, choice: AudioChoice) {
         if choice != self.audio.choice || !self.audio.running {
@@ -202,6 +224,9 @@ impl App {
             return true;
         }
         if self.audio_row_here() == AudioRow::Wheel && self.run_wheel_row(cmd) {
+            return true;
+        }
+        if self.audio_row_here() == AudioRow::WheelDirection && self.run_wheel_direction_row(cmd) {
             return true;
         }
         match cmd {
@@ -238,7 +263,7 @@ impl App {
                         ..self.audio.choice.clone()
                     },
                     // The Roto's and the wheel's rows have their own keys, above.
-                    AudioRow::Roto | AudioRow::Wheel => return true,
+                    AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => return true,
                 };
                 self.choose_audio(choice);
             }

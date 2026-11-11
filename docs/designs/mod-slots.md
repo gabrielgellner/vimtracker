@@ -3,7 +3,7 @@
 **Status:** a design study for #422, step 1 of milestone M20, "Modulation slots". It covers
 #422 and the milestone's other issues, #235 (Steps), #86 (LFO fade and one-shot), #85 (envelope
 hold), #46 (stage curves) and #45 (LPG mode). The author's answers to §12 are at the end, as
-**Decided**. PR 1 of §11 (#427, decision 163) built the slots with ADSR and LFO; the rest
+**Decided**. PR 1 of §11 (#427, decision 165) built the slots with ADSR and LFO; the rest
 follows.
 
 **The author's decision (2026-11-11):** replace the fixed modulators (3 envelopes and 3 LFOs,
@@ -867,7 +867,7 @@ they go one at a time rather than in parallel. 2, 3 and 6 are small enough not t
 3. **On the Roto, Steps' values come before `Dest`,** which stays last.
 4. **The Track type is in M20,** as its last PR (#428).
 
-**As built in PR 1 (#427, decision 163):**
+**As built in PR 1 (#427, decision 165):**
 
 * **The mode:** `LfoMode` has `Free` and `Trig` for now, in the title, in place of `Retrig`, and
   #86 adds `Hold`, `One` and `Half`. While there are two, the Roto keeps its button under `Phase`

@@ -909,7 +909,7 @@ impl App {
         self.take_loaded();
         self.take_analyses();
         self.tick_roto();
-        self.end_paused_wheel(now);
+        self.wheel_frame(now);
         self.follow_recording();
         let working = self.loader.is_waiting() || self.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
@@ -1864,7 +1864,12 @@ impl App {
         if !self.can_silence() {
             return;
         }
-        let track = self.cursor.track;
+        self.switch_mute(self.cursor.track);
+    }
+
+    /// Mutes a track, or unmutes it, as the keys do: not an undo step, as it's how the song
+    /// plays that it changes, but saved with the song.
+    pub(crate) fn switch_mute(&mut self, track: usize) {
         if let Some(live) = self.levels.get_mut(track) {
             live.mute = !live.mute;
             let mute = live.mute;
@@ -1938,7 +1943,11 @@ impl App {
         if !self.can_silence() {
             return;
         }
-        let track = self.cursor.track;
+        self.switch_solo(self.cursor.track);
+    }
+
+    /// Solos a track, or takes its solo off, as the keys do.
+    pub(crate) fn switch_solo(&mut self, track: usize) {
         if let Some(live) = self.levels.get_mut(track) {
             live.solo = !live.solo;
             let solo = live.solo;
