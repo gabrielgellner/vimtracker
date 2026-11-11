@@ -190,7 +190,9 @@ lane row:   00   01   02   00         a new value every step, even mid-note
 `RET` and `CHA` in a lane are ratchet and probability lanes, as on Metropolix: they
 act on whatever step they land on, and do nothing on a step with no note. `LDLT` in a
 lane is a length lane: it moves each note's length up or down from its own, so the
-same row plays short one pass and long the next.
+same row plays short one pass and long the next. `VDLT` is its twin for velocity, so
+a lane of it is an accent pattern that drifts against the notes, and the notes keep
+the velocities they're written with.
 
 ### The two side by side
 

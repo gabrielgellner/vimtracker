@@ -421,10 +421,10 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
     );
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    for _ in 0..20 {
-        app.tick();
-        std::thread::sleep(Duration::from_millis(2));
-    }
+    assert!(tick_until_app(&mut app, |app| matches!(
+        app.roto.connection,
+        Connection::Connected { firmware: Some(_) }
+    )));
     let shown = text(&app);
     assert!(shown.contains("On, connected, firmware 3.3.0"), "{shown}");
 }
@@ -473,6 +473,26 @@ fn tick_until_song(app: &mut App, done: impl Fn(&Song) -> bool) -> bool {
         std::thread::sleep(Duration::from_millis(2));
     }
     false
+}
+
+/// Ticks the app until it's as wanted, for up to five seconds.
+fn tick_until_app(app: &mut App, done: impl Fn(&App) -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        app.tick();
+        if done(app) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    false
+}
+
+/// Where the first track's Level knob is, as the song has it.
+fn level_position(app: &App) -> u16 {
+    knob(Control::Level, &app.song().tracks[0], app.song())
+        .unwrap()
+        .position
 }
 
 /// Ticks the app for a while, for what's sent to settle.
@@ -544,21 +564,23 @@ fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
         app.history.undo_depth() > depth + 1,
         "each frame's move is an edit"
     );
+    // Held, nothing closes the step, so it's one only once the letting go has arrived.
     touch(&ports, LEVEL_KNOB, false);
-    settle(&mut app, 30);
-    assert_eq!(
-        app.history.undo_depth(),
-        depth + 1,
+    assert!(
+        tick_until_app(&mut app, |app| app.history.undo_depth() == depth + 1),
         "one step for the touch"
     );
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].level, was);
     // Turned without a touch, as a hard twist can be, it's a step of its own once it settles.
+    // The two moves may reach the app a frame or more apart, so the pause is long enough to
+    // join them however busy the machine is, and it's one step once the second has arrived.
+    app.roto.gesture_pause = Duration::from_secs(1);
     turn(&ports, LEVEL_KNOB, 3000);
     turn(&ports, LEVEL_KNOB, 4000);
-    assert!(tick_until_song(&mut app, |song| song.tracks[0].level != was));
-    settle(&mut app, 30);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(tick_until_app(&mut app, |app| {
+        level_position(app).abs_diff(4000) < 100 && app.history.undo_depth() == depth + 1
+    }));
 }
 
 #[test]
@@ -644,11 +666,14 @@ fn values_are_shown_at_most_twelve_times_a_second_and_the_last_always() {
         (1..=most as usize).contains(&shown),
         "{shown} values in {elapsed:?}"
     );
-    settle(&mut app, 200);
+    assert!(tick_until_app(&mut app, |app| level_position(app)
+        .abs_diff(400 * 39)
+        < 100));
     let last = value_text(Control::Level, &app.song().tracks[0], app.song());
-    assert_eq!(
-        ports.with(|fake| values_shown(fake, LEVEL_KNOB).last().cloned()),
-        Some(last),
+    assert!(
+        tick_until(&mut app, &ports, |fake| {
+            values_shown(fake, LEVEL_KNOB).last() == Some(&last)
+        }),
         "the last value is shown"
     );
 }

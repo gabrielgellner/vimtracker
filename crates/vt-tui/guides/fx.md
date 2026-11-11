@@ -46,6 +46,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
+| `VDLT` | Velocity up or down from a note's own: `80` none, `90` adds `10` |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
@@ -66,6 +67,21 @@ track's `Gate`, and `LDLT` adds to it as the note starts, as an LFO adds to what
 a step sets, from `1%` to `100%`. In an FX column with a lane of its own, its
 values drift against the notes, so the same row plays short on one pass and long
 on the next: an articulation that moves on its own. See **Note entry**.
+
+`VDLT` is its twin for velocity. It adds to each note's own velocity as the note
+starts, a step of `VDLT` a step of velocity, kept from `00` to `7F`, so `90` adds
+`10`, `70` takes `10` off, and `00` and `FF` play every note silent or full. The
+note keeps what's written, and a note that's sounding keeps the velocity it
+started with. On a step, `VDLT 90` makes one note louder without rewriting it. In
+a lane of its own, a column of `VDLT`s is an accent pattern that drifts against
+the notes. Glided, `VDLT 40g` to `VDLT C0` many rows on, it's a crescendo, each
+note on the way getting its own share. A mod slot's `Dest` lists it too, for an
+LFO's swells. It starts from the track's `Velocity`, on the Sound page's Play
+device, which the Roto has as a knob, for dynamics played live.
+
+On `Acid`, velocity only says whether a note is accented, at `70` or above, so a
+`VDLT` that takes a note across `70` switches its accent on or off, and does
+nothing else.
 
 A slot's settings can be set from a step, the same way as the rest, while the
 slot holds an effect. Each is its slot's digit and a short label, like `1AMNT`
