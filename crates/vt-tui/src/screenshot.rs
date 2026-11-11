@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn a_screen_becomes_an_svg_with_its_text_and_colours() {
         let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
-        buffer.set_string(0, 0, "C-4 <&>", Style::new().fg(theme::YELLOW));
+        buffer.set_string(0, 0, "C-3 <&>", Style::new().fg(theme::YELLOW));
         buffer.set_string(
             0,
             1,
@@ -395,7 +395,7 @@ mod tests {
         );
         let svg = to_svg(&buffer, &HashMap::new());
         assert!(svg.starts_with("<svg"), "{svg}");
-        assert!(svg.contains(">C-4 &lt;&amp;&gt;</text>"), "{svg}");
+        assert!(svg.contains(">C-3 &lt;&amp;&gt;</text>"), "{svg}");
         assert!(svg.contains("#e5c890"), "the yellow text");
         assert!(
             svg.contains(r##"fill="#f2d5cf""##),
@@ -410,7 +410,7 @@ mod tests {
         let ruled = Style::new()
             .add_modifier(Modifier::UNDERLINED)
             .underline_color(theme::SURFACE1);
-        buffer.set_string(2, 1, "C-4", ruled);
+        buffer.set_string(2, 1, "C-3", ruled);
         let svg = to_svg(&buffer, &HashMap::new());
         assert!(
             svg.contains(r##"<rect x="18" y="35" width="27" height="1" fill="#51576d"/>"##),

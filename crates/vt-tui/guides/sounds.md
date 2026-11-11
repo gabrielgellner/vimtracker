@@ -12,7 +12,7 @@ settings, named on the page below Machine. A track keeps each synth's settings, 
 trying another and coming back finds the first as you left it. One you haven't played on
 the track starts from its own defaults.
 
-`VA` is a square and a saw, for bass and leads. Try a note around `C-2`, and bring
+`VA` is a square and a saw, for bass and leads. Try a note around `C-1`, and bring
 `Cut` down.
 
 | Setting | Does |
@@ -22,7 +22,7 @@ the track starts from its own defaults.
 | `Saw` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
 
 `VA VCF` is a saw or a square, with a sub an octave down, through a resonant filter, for
-acid lines and fat bass. Try a note around `C-2`.
+acid lines and fat bass. Try a note around `C-1`.
 
 | Setting | Does |
 |---|---|
@@ -33,7 +33,7 @@ acid lines and fat bass. Try a note around `C-2`.
 `Acid` is our own take on Roland's TB-303, rather than one of Plaits': a saw or a square
 through a diode ladder filter, with the 303's accent and slide, for acid lines. It plays one
 note at a time, and each note carries on from the last one's filter, as a 303 does. Try
-notes around `C-2`, with `Resonance` well up.
+notes around `C-1`, with `Resonance` well up.
 
 - **Accent** comes from velocity, and it's all velocity does here, as a 303 has no
   velocity. A note at `70` or above is accented: louder, with more filter envelope and a
@@ -90,7 +90,7 @@ wave, for bass, keys and resonant sweeps.
 | `Skew` | Which way it's bent, for an edge like a saw or a pulse |
 
 `Fold` is a wave folded back on itself into harmonics, for bass and leads with a
-west-coast edge. Try a note around `C-2`.
+west-coast edge. Try a note around `C-1`.
 
 | Setting | Does |
 |---|---|
@@ -178,7 +178,7 @@ Each note starts a fresh burst of grains.
 | `Overlap` | How long grains are. Near `FF`, held tones that glide |
 
 `String` is a plucked string: a burst of noise ringing in a modelled string, which dies
-away by itself. Try a note around `C-3`.
+away by itself. Try a note around `C-2`.
 
 | Setting | Does |
 |---|---|
@@ -213,7 +213,7 @@ sounds until the note ends, shaped by the first envelope.
 | `Clock` | How fast the noise changes: grainy steps low, a hiss high |
 | `Ring` | How much the filter rings at the note |
 
-`Kick` is an 808-style bass drum. Its note tunes it, so try `C-2`, or lower.
+`Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
 
 | Setting | Does |
 |---|---|
@@ -221,7 +221,7 @@ sounds until the note ends, shaped by the first envelope.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
-`Snare` is an 808-style snare drum. Try `G-3`, or wherever it sits best.
+`Snare` is an 808-style snare drum. Try `G-2`, or wherever it sits best.
 
 | Setting | Does |
 |---|---|
@@ -229,7 +229,7 @@ sounds until the note ends, shaped by the first envelope.
 | `Tone` | The drum's overtones, with more of them near the top |
 | `Decay` | How long it rings |
 
-`Hat` is an 808-style hi-hat, of six square waves and noise. Try `C-5` for a closed
+`Hat` is an 808-style hi-hat, of six square waves and noise. Try `C-4` for a closed
 hat, and raise `Decay` for an open one.
 
 | Setting | Does |

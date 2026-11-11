@@ -1,4 +1,4 @@
-# Arturia's Acid V against our Acid: the diode ladder's response read from one held C-2's
+# Arturia's Acid V against our Acid: the diode ladder's response read from one held C-1's
 # harmonics, at three cutoffs and Res 0, 50% and 90%. The Acid's filter is inside the voice, where
 # the probe can't feed it a sweep, so its shape is read from the sawtooth it filters, a second
 # into the note, once the filter's envelope has decayed: Env Mod and Decay are at 0 on both, so the
@@ -12,7 +12,7 @@ duration = 2.5
 [[notes]]
 time = 0.05
 length = 2.4
-note = 36          # C-2 in the program, as MIDI numbers it
+note = 36          # C-1 in the program, as MIDI numbers it
 velocity = 99      # under an accent on both sides: Acid V accents from 100, ours from 0x70
 
 [ours]
@@ -52,7 +52,7 @@ column = "acid.cutoff"
 window = [1.0, 2.0]
 about = """
 The Acid voice's filter is a diode ladder inside the voice, where the probe can't feed it a sweep, \
-so its shape is read through the voice instead: one held C-2 sawtooth, whose harmonics fall as \
+so its shape is read through the voice instead: one held C-1 sawtooth, whose harmonics fall as \
 one over their number, so multiplying each by its number leaves the filter's shape. Our Acid and \
 Arturia's Acid V play the same note at three cutoffs, the knobs' bottom, middle and top, and at \
 Res 0, 50% and 90%.

@@ -1,4 +1,4 @@
-# Arturia's Acid V against our Acid: one held C-2 with the cutoff knob in sixteen steps, from the
+# Arturia's Acid V against our Acid: one held C-1 with the cutoff knob in sixteen steps, from the
 # knob's bottom to its top, with the other knobs at noon, for the knob-mapping view #295 needs.
 # Acid V's distortion and sub oscillator are turned off, as our Acid has neither, and its output
 # is at 0 dB.
@@ -11,7 +11,7 @@ duration = 1.0
 [[notes]]
 time = 0.05
 length = 0.6
-note = 36          # C-2 in the program, as MIDI numbers it
+note = 36          # C-1 in the program, as MIDI numbers it
 velocity = 99      # under an accent on both sides: Acid V accents from 100, ours from 0x70
 
 [ours]
@@ -52,7 +52,7 @@ knob = "acid.cutoff"
 reference_knob = "cutoff"
 about = """
 Our Acid's Cutoff and Arturia's Acid V's, each turned from bottom to top in sixteen even steps, \
-00 to FF on ours and 0 to 1 on Acid V, with the other knobs at noon. Each step plays one C-2 for \
+00 to FF on ours and 0 to 1 on Acid V, with the other knobs at noon. Each step plays one C-1 for \
 0.6 s, and the whole render's spectral centroid and peak level are measured: the centroid says \
 how bright the note is, the peak how loud its resonance gets.
 

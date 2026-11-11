@@ -19,8 +19,8 @@ const RATE: u32 = 48_000;
 const STEP: usize = 6000;
 /// The ramp the sample plays, so a note's pitch is how fast it climbs.
 const RAMP_FRAMES: usize = RATE as usize * 8;
-/// `C-4`, which plays the ramp at its own speed.
-const C4: i32 = 60;
+/// `C-3`, which plays the ramp at its own speed.
+const C3: i32 = 60;
 
 fn pool() -> Arc<SamplePool> {
     let mut pool = SamplePool::default();
@@ -78,7 +78,7 @@ fn note_at(out: &[f32], frame: usize) -> Option<i32> {
     let climb = out[frame + 1600] - out[frame + 600];
     let own = 1000.0 / RAMP_FRAMES as f32;
     let started = out[frame + 500] < STARTED && climb > own * 0.1;
-    started.then(|| C4 + (12.0 * (climb / own).log2()).round() as i32)
+    started.then(|| C3 + (12.0 * (climb / own).log2()).round() as i32)
 }
 
 /// The note each step starts with, for this many steps.
@@ -87,14 +87,14 @@ fn notes(song: &Song, steps: usize) -> Vec<Option<i32>> {
     (0..steps).map(|step| note_at(&out, step * STEP)).collect()
 }
 
-/// The notes of C major from `C-4` up, by name, for the steps to be read against.
+/// The notes of C major from `C-3` up, by name, for the steps to be read against.
 fn named(names: &str) -> Vec<Option<i32>> {
     names
         .split_whitespace()
         .map(|name| match name {
             "." => None,
-            "B3" => Some(59),
-            "A3" => Some(57),
+            "B2" => Some(59),
+            "A2" => Some(57),
             "C" => Some(60),
             "C#" => Some(61),
             "D" => Some(62),
@@ -104,7 +104,7 @@ fn named(names: &str) -> Vec<Option<i32>> {
             "G" => Some(67),
             "A" => Some(69),
             "B" => Some(71),
-            "C5" => Some(72),
+            "C4" => Some(72),
             other => panic!("no note {other}"),
         })
         .collect()
@@ -112,8 +112,8 @@ fn named(names: &str) -> Vec<Option<i32>> {
 
 /// The manual's four-stage sequence, `C D E F`, with this on its first row.
 fn manuals(fx: &str, accumulation: Accumulation) -> Song {
-    let first = format!("C-4 -- {fx}");
-    song(&[&first, "D-4 --", "E-4 --", "F-4 --"], accumulation)
+    let first = format!("C-3 -- {fx}");
+    song(&[&first, "D-3 --", "E-3 --", "F-3 --"], accumulation)
 }
 
 fn with(moves: Moves, at_limit: AtLimit, up: u8, down: u8) -> Accumulation {
@@ -147,47 +147,47 @@ fn track_mode_moves_every_row_as_the_manuals_example() {
 
 #[test]
 fn wrap_carries_on_from_the_note_as_written() {
-    let song = song(&["C-4 -- acu:01"], with(Moves::Row, AtLimit::Wrap, 3, 7));
+    let song = song(&["C-3 -- acu:01"], with(Moves::Row, AtLimit::Wrap, 3, 7));
     assert_eq!(notes(&song, 9), named("C D E F C D E F C"));
 }
 
 #[test]
 fn bounce_turns_back_at_the_limit_and_again_at_the_note() {
-    let song = song(&["C-4 -- acu:01"], with(Moves::Row, AtLimit::Bounce, 3, 7));
+    let song = song(&["C-3 -- acu:01"], with(Moves::Row, AtLimit::Bounce, 3, 7));
     assert_eq!(notes(&song, 9), named("C D E F E D C D E"));
 }
 
 #[test]
 fn hold_stays_at_the_limit() {
-    let song = song(&["C-4 -- acu:01"], with(Moves::Row, AtLimit::Hold, 3, 7));
+    let song = song(&["C-3 -- acu:01"], with(Moves::Row, AtLimit::Hold, 3, 7));
     assert_eq!(notes(&song, 6), named("C D E F F F"));
 }
 
 #[test]
 fn a_negative_amount_goes_down_to_the_lower_limit() {
-    let song = song(&["C-4 -- acu:FF"], with(Moves::Row, AtLimit::Wrap, 7, 2));
-    assert_eq!(notes(&song, 5), named("C B3 A3 C B3"));
+    let song = song(&["C-3 -- acu:FF"], with(Moves::Row, AtLimit::Wrap, 7, 2));
+    assert_eq!(notes(&song, 5), named("C B2 A2 C B2"));
 }
 
 #[test]
 fn degrees_with_the_scale_on_and_semitones_with_it_off() {
-    let mut chromatic = song(&["C-4 -- acu:01"], Accumulation::default());
+    let mut chromatic = song(&["C-3 -- acu:01"], Accumulation::default());
     chromatic.scale.on = false;
     assert_eq!(notes(&chromatic, 4), named("C C# D D#"));
     // Two degrees a time in C major goes through the thirds.
-    let thirds = song(&["C-4 -- acu:02"], Accumulation::default());
+    let thirds = song(&["C-3 -- acu:02"], Accumulation::default());
     assert_eq!(notes(&thirds, 4), named("C E G B"));
 }
 
 #[test]
 fn a_note_outside_the_scale_lands_on_the_next_one_in() {
-    let song = song(&["C#4 -- acu:01"], Accumulation::default());
+    let song = song(&["C#3 -- acu:01"], Accumulation::default());
     assert_eq!(notes(&song, 3), named("C# D E"));
 }
 
 #[test]
 fn the_scale_changed_while_playing_is_heard_from_the_next_note() {
-    let song = song(&["C-4 -- acu:01"], Accumulation::default());
+    let song = song(&["C-3 -- acu:01"], Accumulation::default());
     let mut engine = Engine::new(RATE, version(&song));
     engine.play_from(0);
     let mut out = vec![0.0; 3 * STEP * 2];
@@ -205,15 +205,15 @@ fn the_scale_changed_while_playing_is_heard_from_the_next_note() {
 
 #[test]
 fn a_row_skipped_by_a_condition_or_a_chance_doesnt_add() {
-    let condition = song(&["C-4 -- cnd:12 acu:01"], Accumulation::default());
+    let condition = song(&["C-3 -- cnd:12 acu:01"], Accumulation::default());
     assert_eq!(notes(&condition, 7), named("C . D . E . F"));
     // With a chance, each note that plays is one more than the one before.
-    let mut chance = song(&["C-4 -- cha:80 acu:01"], Accumulation::default());
+    let mut chance = song(&["C-3 -- cha:80 acu:01"], Accumulation::default());
     chance.scale.on = false;
     let heard: Vec<i32> = notes(&chance, 32).into_iter().flatten().collect();
     assert!(heard.len() > 4 && heard.len() < 28, "{heard:?}");
     let expected: Vec<i32> = (0..heard.len() as i32)
-        .map(|played| C4 + played % 8)
+        .map(|played| C3 + played % 8)
         .collect();
     assert_eq!(heard, expected);
 }
@@ -221,7 +221,7 @@ fn a_row_skipped_by_a_condition_or_a_chance_doesnt_add() {
 #[test]
 fn a_resting_row_doesnt_add() {
     let song = song(
-        &["C-4 -- acu:01", "C-4 -- RST1 acu:01"],
+        &["C-3 -- acu:01", "C-3 -- RST1 acu:01"],
         Accumulation::default(),
     );
     assert_eq!(notes(&song, 6), named("C . D . E ."));
@@ -229,7 +229,7 @@ fn a_resting_row_doesnt_add() {
 
 #[test]
 fn multi_adds_on_each_pulse_only_when_set_to() {
-    let rows = ["C-4 -- MLT4 acu:01"];
+    let rows = ["C-3 -- MLT4 acu:01"];
     let per_row = song(&rows, Accumulation::default());
     assert_eq!(notes(&per_row, 8), named("C C C C D D D D"));
     let per_pulse = song(
@@ -239,10 +239,10 @@ fn multi_adds_on_each_pulse_only_when_set_to() {
             ..Accumulation::default()
         },
     );
-    assert_eq!(notes(&per_pulse, 8), named("C D E F G A B C5"));
+    assert_eq!(notes(&per_pulse, 8), named("C D E F G A B C4"));
     // A `SGL` lasting the same adds once a row, either way.
     let single = song(
-        &["C-4 -- SGL4 acu:01"],
+        &["C-3 -- SGL4 acu:01"],
         Accumulation {
             adds: Adds::Pulse,
             ..Accumulation::default()
@@ -256,7 +256,7 @@ fn multi_adds_on_each_pulse_only_when_set_to() {
 #[test]
 fn a_retrigger_adds_on_each_hit_only_when_set_to() {
     // `RET 03` hits every half step, so twice a row.
-    let rows = ["C-4 -- ret:03 acu:01"];
+    let rows = ["C-3 -- ret:03 acu:01"];
     let hits = |accumulation| {
         let out = render(&song(&rows, accumulation), 3);
         (0..6)
@@ -273,7 +273,7 @@ fn a_retrigger_adds_on_each_hit_only_when_set_to() {
 
 #[test]
 fn every_row_with_an_acu_adds_to_the_tracks_in_track_mode() {
-    let rows = ["C-4 -- acu:01", "C-4 --", "C-4 -- acu:02", "C-4 --"];
+    let rows = ["C-3 -- acu:01", "C-3 --", "C-3 -- acu:02", "C-3 --"];
     let song = song(&rows, with(Moves::Track, AtLimit::Hold, 28, 7));
     // Each row's first play adds nothing, and after that, one and then two more each pass.
     assert_eq!(notes(&song, 12), named("C C C C  D D F F  G G B B"));
@@ -281,7 +281,7 @@ fn every_row_with_an_acu_adds_to_the_tracks_in_track_mode() {
 
 #[test]
 fn the_chain_starting_again_starts_them_again() {
-    let mut reset = song(&["C-4 -- acu:01"], Accumulation::default());
+    let mut reset = song(&["C-3 -- acu:01"], Accumulation::default());
     reset.sections[0].reset = Some(3);
     assert_eq!(notes(&reset, 7), named("C D E C D E C"));
 }
@@ -289,7 +289,7 @@ fn the_chain_starting_again_starts_them_again() {
 #[test]
 fn reset_on_play_carries_on_past_the_chain_starting_again() {
     let mut song = song(
-        &["C-4 -- acu:01"],
+        &["C-3 -- acu:01"],
         Accumulation {
             reset: Reset::Play,
             ..Accumulation::default()
@@ -305,10 +305,10 @@ fn reset_every_so_many_loops_counts_the_chains_loops() {
         reset: Reset::Loops(loops),
         ..Accumulation::default()
     };
-    let two = song(&["C-4 -- acu:01", "--- --"], loops(2));
+    let two = song(&["C-3 -- acu:01", "--- --"], loops(2));
     assert_eq!(notes(&two, 10), named("C . D . C . D . C ."));
     // A phrase in its chain twice is round the chain once for each two times the row plays.
-    let mut twice = song(&["C-4 -- acu:01"], loops(1));
+    let mut twice = song(&["C-3 -- acu:01"], loops(1));
     let entry = ChainEntry {
         phrase: 0,
         transpose: 0,
@@ -325,7 +325,7 @@ fn reset_every_so_many_loops_counts_the_chains_loops() {
 
 #[test]
 fn a_phrase_played_twice_in_its_chain_moves_on_each_time() {
-    let mut twice = song(&["C-4 -- acu:01"], Accumulation::default());
+    let mut twice = song(&["C-3 -- acu:01"], Accumulation::default());
     let entry = ChainEntry {
         phrase: 0,
         transpose: 0,
@@ -342,7 +342,7 @@ fn a_phrase_played_twice_in_its_chain_moves_on_each_time() {
 
 #[test]
 fn the_chains_transpose_goes_on_after() {
-    let mut song = song(&["C-4 -- acu:01"], Accumulation::default());
+    let mut song = song(&["C-3 -- acu:01"], Accumulation::default());
     song.tracks[0].chains.insert(
         0,
         Arc::new(Chain {
@@ -360,7 +360,7 @@ fn the_chains_transpose_goes_on_after() {
 #[test]
 fn playing_from_a_step_starts_them_from_the_notes_as_written() {
     // The phrase twice in its chain, so its row plays at steps 0 and 4.
-    let rows = ["C-4 -- acu:01", "--- --", "--- --", "--- --"];
+    let rows = ["C-3 -- acu:01", "--- --", "--- --", "--- --"];
     let mut song = song(&rows, Accumulation::default());
     let entry = ChainEntry {
         phrase: 0,
@@ -397,7 +397,7 @@ fn playing_from_a_step_starts_them_from_the_notes_as_written() {
 
 #[test]
 fn where_its_heard_says_the_note_it_moved_to() {
-    let song = song(&["C-4 -- acu:02", "D-4 --"], Accumulation::default());
+    let song = song(&["C-3 -- acu:02", "D-3 --"], Accumulation::default());
     let mut engine = Engine::new(RATE, version(&song));
     engine.play_from(0);
     let mut out = vec![0.0; STEP / 2 * 2];
@@ -414,17 +414,17 @@ fn where_its_heard_says_the_note_it_moved_to() {
 
 #[test]
 fn a_value_past_28_does_nothing() {
-    let song = song(&["C-4 -- acu:40"], Accumulation::default());
+    let song = song(&["C-3 -- acu:40"], Accumulation::default());
     assert_eq!(notes(&song, 3), named("C C C"));
 }
 
 #[test]
 fn renders_with_accumulators_repeat() {
     let rows = [
-        "C-4 -- cha:80 acu:01",
-        "E-4 -- MLT2 acu:FE",
-        "G-4 -- ret:02 acu:03",
-        "C-4 -- cnd:13",
+        "C-3 -- cha:80 acu:01",
+        "E-3 -- MLT2 acu:FE",
+        "G-3 -- ret:02 acu:03",
+        "C-3 -- cnd:13",
     ];
     for moves in [Moves::Row, Moves::Track] {
         for at_limit in AtLimit::ALL {

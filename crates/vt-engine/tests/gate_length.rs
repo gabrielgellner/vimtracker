@@ -84,7 +84,7 @@ fn lasted(out: &[f32], step: usize, value: usize) -> bool {
 
 #[test]
 fn multi_at_half_has_a_gap_in_each_pulse() {
-    let rows = ["C-4 -- MLT2", "--- --", "--- --"];
+    let rows = ["C-3 -- MLT2", "--- --", "--- --"];
     let full = render(&song(&rows), 3);
     let half = render(&gated(&rows, 0x80), 3);
     for pulse in 0..2 {
@@ -103,7 +103,7 @@ fn multi_at_half_has_a_gap_in_each_pulse() {
 #[test]
 fn single_closes_its_gate_in_its_rows_last_pulse() {
     let out = render(
-        &gated(&["C-4 -- SGL3", "--- --", "--- --", "--- --"], 0x80),
+        &gated(&["C-3 -- SGL3", "--- --", "--- --", "--- --"], 0x80),
         4,
     );
     for at in [NEAR, STEP + HALF, 2 * STEP + HALF - NEAR] {
@@ -119,7 +119,7 @@ fn single_closes_its_gate_in_its_rows_last_pulse() {
 #[test]
 fn a_gate_is_measured_from_a_delayed_notes_start() {
     // `DEL 03` starts the note half a step late, so it ends half a step later too.
-    let out = render(&gated(&["C-4 -- del:03", "--- --"], 0x80), 2);
+    let out = render(&gated(&["C-3 -- del:03", "--- --"], 0x80), 2);
     assert!(!sounding(&out, NEAR));
     assert!(sounding(&out, STEP / 2 + HALF - NEAR));
     assert!(!sounding(&out, STEP / 2 + HALF + NEAR));
@@ -127,7 +127,7 @@ fn a_gate_is_measured_from_a_delayed_notes_start() {
 
 #[test]
 fn hold_ignores_the_gate_and_the_note_it_ties_into_closes_its_own() {
-    let out = render(&gated(&["C-4 -- HLD2", "D-4 --", "--- --"], 0x80), 3);
+    let out = render(&gated(&["C-3 -- HLD2", "D-3 --", "--- --"], 0x80), 3);
     for at in [HALF + NEAR, STEP + HALF + NEAR, 2 * STEP + HALF - NEAR] {
         assert!(sounding(&out, at), "tied at {at}");
     }
@@ -140,11 +140,11 @@ fn hold_ignores_the_gate_and_the_note_it_ties_into_closes_its_own() {
 #[test]
 fn a_full_gate_plays_exactly_as_none() {
     let rows = [
-        "C-4 -- MLT3",
-        "D-4 -- SGL2",
+        "C-3 -- MLT3",
+        "D-3 -- SGL2",
         "--- -- ret:02",
-        "C-4 -- HLD1",
-        "E-4 --",
+        "C-3 -- HLD1",
+        "E-3 --",
     ];
     let mut none = song(&rows);
     none.tracks[0].envelopes[0] = Default::default();
@@ -155,7 +155,7 @@ fn a_full_gate_plays_exactly_as_none() {
 
 #[test]
 fn a_len_lock_sets_its_rows_gate_and_ends_with_its_note() {
-    let out = render(&song(&["C-4 -- gate:40", "C-4 --", "--- --"]), 3);
+    let out = render(&song(&["C-3 -- gate:40", "C-3 --", "--- --"]), 3);
     // `40` is a quarter of the pulse.
     let quarter = STEP * 0x40 / 0xFF;
     assert!(sounding(&out, quarter - NEAR));
@@ -168,7 +168,7 @@ fn a_len_lock_sets_its_rows_gate_and_ends_with_its_note() {
 #[test]
 fn an_lfo_moves_the_gate() {
     // A square at full depth takes `Gate` from `FF` right down for its second half.
-    let mut song = song(&["C-4 --", "C-4 --", "C-4 --", "C-4 --"]);
+    let mut song = song(&["C-3 --", "C-3 --", "C-3 --", "C-3 --"]);
     song.tracks[0].lfos[0] = Lfo {
         destination: Some(SettingId::GATE_LENGTH),
         shape: Shape::Square,
@@ -187,7 +187,7 @@ fn an_lfo_moves_the_gate() {
 #[test]
 fn closing_the_gate_releases_the_note_without_a_click() {
     // At the default envelope, which releases over 50 ms, as `OFF` does.
-    let mut song = gated(&["C-4 -- MLT4", "--- --"], 0x40);
+    let mut song = gated(&["C-3 -- MLT4", "--- --"], 0x40);
     song.tracks[0].envelopes[0] = Default::default();
     let out = render(&song, 5);
     let closes = STEP * 0x40 / 0xFF;
@@ -228,11 +228,11 @@ fn peak(out: &[f32], from: usize, to: usize) -> f32 {
 #[test]
 fn acid_starts_at_half_and_ends_its_note_about_16_ms_after_the_gate() {
     assert_eq!(acid(&[]).tracks[0].gate_length(), ACID_GATE);
-    let out = render(&acid(&["C-2 64", "--- --"]), 2);
+    let out = render(&acid(&["C-1 64", "--- --"]), 2);
     let held = peak(&out, HALF - 1000, HALF - 100);
     // Find where it has fallen 40 dB from where it was, a millisecond at a time, over a cycle of
     // the note, so the quiet stretch a resonant wave has between its peaks, as long as a
-    // millisecond on a C-2 with a 303's resonance, isn't taken for its end (decision 129).
+    // millisecond on a C-1 with a 303's resonance, isn't taken for its end (decision 129).
     let ms = RATE as usize / 1000;
     let cycle = (RATE as f32 / 65.406).round() as usize;
     let fallen = (HALF..STEP - cycle)
@@ -245,7 +245,7 @@ fn acid_starts_at_half_and_ends_its_note_about_16_ms_after_the_gate() {
         "{after} ms after the gate closed"
     );
     // Held at 100%, it's still sounding.
-    let mut full = acid(&["C-2 64", "--- --"]);
+    let mut full = acid(&["C-1 64", "--- --"]);
     full.tracks[0].gate_length = Some(0xFF);
     let full = render(&full, 2);
     assert!(peak(&full, STEP - 1000, STEP) > held / 4.0);
@@ -253,7 +253,7 @@ fn acid_starts_at_half_and_ends_its_note_about_16_ms_after_the_gate() {
 
 #[test]
 fn an_acid_slide_holds_its_gate_into_the_next_note() {
-    let out = render(&acid(&["C-2 64 HLD1", "C-3 64", "--- --"]), 3);
+    let out = render(&acid(&["C-1 64 HLD1", "C-2 64", "--- --"]), 3);
     let held = peak(&out, HALF - 1000, HALF - 100);
     // Through where a plain note's gate would close, and on into the note slid to.
     assert!(peak(&out, HALF + 1000, STEP) > held / 4.0);
@@ -266,7 +266,7 @@ fn an_acid_slide_holds_its_gate_into_the_next_note() {
 fn a_rows_own_length_overrides_the_tracks_gate() {
     let out = render(
         &gated(
-            &["C-4 -- SGL1 40", "C-4 --", "C-4 -- SGL2 C0", "--- --"],
+            &["C-3 -- SGL1 40", "C-3 --", "C-3 -- SGL2 C0", "--- --"],
             0x80,
         ),
         4,
@@ -281,10 +281,10 @@ fn a_rows_own_length_overrides_the_tracks_gate() {
 fn a_len_lock_only_moves_rows_without_a_length() {
     let out = render(
         &song(&[
-            "C-4 -- SGL1 C0 gate:40h",
-            "C-4 --",
-            "C-4 -- SGL1 C0 gate:20",
-            "C-4 -- gate:20",
+            "C-3 -- SGL1 C0 gate:40h",
+            "C-3 --",
+            "C-3 -- SGL1 C0 gate:20",
+            "C-3 -- gate:20",
             "--- --",
         ]),
         5,
@@ -300,11 +300,11 @@ fn ldlt_moves_both_kinds_of_row_up_or_down() {
     let out = render(
         &gated(
             &[
-                "C-4 -- SGL1 80 gatedelta:40",
-                "C-4 -- SGL1 40 gatedelta:C0",
-                "C-4 -- gatedelta:40",
-                "C-4 -- gatedelta:C0",
-                "C-4 --",
+                "C-3 -- SGL1 80 gatedelta:40",
+                "C-3 -- SGL1 40 gatedelta:C0",
+                "C-3 -- gatedelta:40",
+                "C-3 -- gatedelta:C0",
+                "C-3 --",
                 "--- --",
             ],
             0x80,
@@ -322,10 +322,10 @@ fn ldlt_moves_both_kinds_of_row_up_or_down() {
 #[test]
 fn ldlt_in_a_drifting_lane_gives_a_row_a_different_length_each_pass() {
     let rows = [
-        "C-4 -- gatedelta:40",
-        "C-4 -- gatedelta:80",
-        "C-4 -- gatedelta:C0",
-        "C-4 --",
+        "C-3 -- gatedelta:40",
+        "C-3 -- gatedelta:80",
+        "C-3 -- gatedelta:C0",
+        "C-3 --",
     ];
     let mut song = gated(&rows, 0x80);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
@@ -350,10 +350,10 @@ fn ldlt_in_a_drifting_lane_gives_a_row_a_different_length_each_pass() {
 #[test]
 fn an_lfo_on_gate_moves_a_rows_own_length() {
     let mut song = song(&[
-        "C-4 -- SGL1 80",
-        "C-4 -- SGL1 80",
-        "C-4 -- SGL1 80",
-        "C-4 -- SGL1 80",
+        "C-3 -- SGL1 80",
+        "C-3 -- SGL1 80",
+        "C-3 -- SGL1 80",
+        "C-3 -- SGL1 80",
     ]);
     song.tracks[0].lfos[0] = Lfo {
         destination: Some(SettingId::GATE_LENGTH),
@@ -371,10 +371,10 @@ fn an_lfo_on_gate_moves_a_rows_own_length() {
 fn a_moved_length_stays_between_1_and_100_percent() {
     let out = render(
         &song(&[
-            "C-4 -- SGL1 10 gatedelta:00",
-            "C-4 -- SGL1 C0 gatedelta:FF",
+            "C-3 -- SGL1 10 gatedelta:00",
+            "C-3 -- SGL1 C0 gatedelta:FF",
             "--- --",
-            "C-4 -- SGL1 01 gatedelta:00",
+            "C-3 -- SGL1 01 gatedelta:00",
             "--- --",
         ]),
         5,
@@ -398,7 +398,7 @@ fn a_moved_length_stays_between_1_and_100_percent() {
 #[test]
 fn hold_ignores_its_own_length_and_ldlt() {
     let out = render(
-        &gated(&["C-4 -- HLD2 20 gatedelta:00", "D-4 --", "--- --"], 0xFF),
+        &gated(&["C-3 -- HLD2 20 gatedelta:00", "D-3 --", "--- --"], 0xFF),
         4,
     );
     for at in [STEP / 2, STEP + STEP / 2, 2 * STEP + NEAR] {
@@ -413,18 +413,18 @@ fn hold_ignores_its_own_length_and_ldlt() {
 #[test]
 fn lengths_of_100_percent_and_an_ldlt_of_80_play_exactly_as_none() {
     let plain = [
-        "C-4 -- MLT3",
-        "D-4 -- SGL2",
+        "C-3 -- MLT3",
+        "D-3 -- SGL2",
         "--- -- ret:02",
-        "C-4 -- HLD1",
-        "E-4 --",
+        "C-3 -- HLD1",
+        "E-3 --",
     ];
     let full = [
-        "C-4 -- MLT3 FF gatedelta:80",
-        "D-4 -- SGL2 FF",
+        "C-3 -- MLT3 FF gatedelta:80",
+        "D-3 -- SGL2 FF",
         "--- -- ret:02",
-        "C-4 -- HLD1 FF gatedelta:80h",
-        "E-4 -- SGL1 FF",
+        "C-3 -- HLD1 FF gatedelta:80h",
+        "E-3 -- SGL1 FF",
     ];
     let mut none = song(&plain);
     none.tracks[0].envelopes[0] = Default::default();

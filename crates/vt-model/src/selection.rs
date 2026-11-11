@@ -739,16 +739,16 @@ mod tests {
 
     #[test]
     fn a_nudge_moves_alone_within_just_under_half_a_step() {
-        assert_eq!(nudged("C-4 64", 1, Shift::Nudge), "C-4 64 +1");
-        assert_eq!(nudged("C-4 64 +1", -2, Shift::Nudge), "C-4 64 -1");
+        assert_eq!(nudged("C-3 64", 1, Shift::Nudge), "C-3 64 +1");
+        assert_eq!(nudged("C-3 64 +1", -2, Shift::Nudge), "C-3 64 -1");
         assert_eq!(
-            nudged("C-4 64 -1", 1, Shift::Nudge),
-            "C-4 64",
+            nudged("C-3 64 -1", 1, Shift::Nudge),
+            "C-3 64",
             "0 is on the grid"
         );
-        assert_eq!(nudged("C-4 64", 1, Shift::NudgeLarge), "C-4 64 +4");
-        assert_eq!(nudged("C-4 64 +9", 1, Shift::NudgeLarge), "C-4 64 +B");
-        assert_eq!(nudged("C-4 64", -9, Shift::NudgeLarge), "C-4 64 -B");
+        assert_eq!(nudged("C-3 64", 1, Shift::NudgeLarge), "C-3 64 +4");
+        assert_eq!(nudged("C-3 64 +9", 1, Shift::NudgeLarge), "C-3 64 +B");
+        assert_eq!(nudged("C-3 64", -9, Shift::NudgeLarge), "C-3 64 -B");
         assert_eq!(
             nudged("--- -- cut:40", 1, Shift::Nudge),
             "--- -- cut:40",
@@ -760,24 +760,24 @@ mod tests {
             "but one it has moves"
         );
         // The velocity moves on its own part, and keeps the nudge.
-        assert_eq!(nudged("C-4 60 +2", 1, Shift::Increment), "C-4 61 +2");
+        assert_eq!(nudged("C-3 60 +2", 1, Shift::Increment), "C-3 61 +2");
     }
 
     #[test]
     fn the_velocity_group_copies_and_clears_the_nudge_with_it() {
-        let mut step: Step = "C-4 60 -3 SGL2".parse().unwrap();
-        let source: Step = "D-4 70 +5".parse().unwrap();
+        let mut step: Step = "C-3 60 -3 SGL2".parse().unwrap();
+        let source: Step = "D-3 70 +5".parse().unwrap();
         let velocity = Scope::column(VELOCITY_GROUP);
-        merge_step(&mut step, &"D-4 -- +5".parse().unwrap(), velocity, 1).unwrap();
+        merge_step(&mut step, &"D-3 -- +5".parse().unwrap(), velocity, 1).unwrap();
         assert_eq!(
             step.to_string(),
-            "C-4 60 +5 SGL2",
+            "C-3 60 +5 SGL2",
             "a merge keeps what's empty"
         );
         paste_step(&mut step, &source, velocity, 1).unwrap();
-        assert_eq!(step.to_string(), "C-4 70 +5 SGL2");
+        assert_eq!(step.to_string(), "C-3 70 +5 SGL2");
         clear_step(&mut step, velocity);
-        assert_eq!(step.to_string(), "C-4 -- SGL2");
+        assert_eq!(step.to_string(), "C-3 -- SGL2");
     }
 
     fn lengthened(text: &str, by: i32, kind: Shift, gate: u8) -> String {
@@ -789,24 +789,24 @@ mod tests {
     #[test]
     fn a_length_moves_alone_and_an_empty_one_starts_from_the_tracks_gate() {
         assert_eq!(
-            lengthened("C-4 -- SGL2 80", 1, Shift::Length, 0xFF),
-            "C-4 -- SGL2 81"
+            lengthened("C-3 -- SGL2 80", 1, Shift::Length, 0xFF),
+            "C-3 -- SGL2 81"
         );
         assert_eq!(
-            lengthened("C-4 -- SGL2 80", -1, Shift::LengthLarge, 0xFF),
-            "C-4 -- SGL2 70"
+            lengthened("C-3 -- SGL2 80", -1, Shift::LengthLarge, 0xFF),
+            "C-3 -- SGL2 70"
         );
         assert_eq!(
-            lengthened("C-4 --", -1, Shift::Length, 0x80),
-            "C-4 -- SGL1 7F"
+            lengthened("C-3 --", -1, Shift::Length, 0x80),
+            "C-3 -- SGL1 7F"
         );
         assert_eq!(
-            lengthened("C-4 -- SGL1 FF", 1, Shift::LengthLarge, 0x80),
-            "C-4 -- SGL1 FF"
+            lengthened("C-3 -- SGL1 FF", 1, Shift::LengthLarge, 0x80),
+            "C-3 -- SGL1 FF"
         );
         assert_eq!(
-            lengthened("C-4 -- SGL1 05", -1, Shift::LengthLarge, 0x80),
-            "C-4 -- SGL1 00"
+            lengthened("C-3 -- SGL1 05", -1, Shift::LengthLarge, 0x80),
+            "C-3 -- SGL1 00"
         );
         assert_eq!(
             lengthened("--- -- RST4", 1, Shift::Length, 0x80),
@@ -815,8 +815,8 @@ mod tests {
         );
         // The pulses move on the gate's own part, and keep the length.
         assert_eq!(
-            lengthened("C-4 -- SGL2 80", 1, Shift::Increment, 0xFF),
-            "C-4 -- SGL3 80"
+            lengthened("C-3 -- SGL2 80", 1, Shift::Increment, 0xFF),
+            "C-3 -- SGL3 80"
         );
     }
 

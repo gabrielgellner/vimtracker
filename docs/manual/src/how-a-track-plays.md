@@ -26,7 +26,7 @@ loop:                  [03 ............. 08]     only these play
 
 ```text
  Note  Vel     Gate      FX1         FX2         FX3
- C-4   40 -3   HLD3 --   CUT   40 .  ---   00    ---   00
+ C-3   40 -3   HLD3 --   CUT   40 .  ---   00    ---   00
  └─ what sounds          └─ what changes while it plays
               └─ how long it lasts
 ```
@@ -120,8 +120,8 @@ synth by its pitch and a sample by its speed, so a sample's pitch and its speed 
 together, as a tape's do.
 
 ```text
-rows:     00 C-4 HLD1          01 C-5
-pitch:    C-4 ─────────────────╱‾‾‾‾‾‾‾‾‾‾‾ C-5
+rows:     00 C-3 HLD1          01 C-4
+pitch:    C-3 ─────────────────╱‾‾‾‾‾‾‾‾‾‾‾ C-4
                                ├┤ Glide 60 ms
 ```
 
@@ -391,7 +391,7 @@ A `MLT`'s pulses are each a new note, so each starts it again; a `HLD` ties it i
 the next row's note, where it goes on round from that note:
 
 ```text
-rows:        C-4 ARP 40 HLD    D-4            Rate 1/32T, three to a step
+rows:        C-3 ARP 40 HLD    D-3            Rate 1/32T, three to a step
 heard:       C  E  C           F# D  F#
 ```
 

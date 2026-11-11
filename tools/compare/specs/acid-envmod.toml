@@ -1,4 +1,4 @@
-# Arturia's Acid V against our Acid: the Env Mod knob in sixteen steps on one C-2, with the
+# Arturia's Acid V against our Acid: the Env Mod knob in sixteen steps on one C-1, with the
 # other knobs at noon (#295, decision 117).
 #
 #   uv run run.py specs/acid-envmod.toml --report out/acid-envmod.html
@@ -51,7 +51,7 @@ reference_knob = "envelope_mod"
 measure = "note"
 about = """
 Our Acid's Env Mod and Acid V's, each turned from bottom to top in sixteen even steps, with the \
-other knobs at noon. Each step plays one C-2 for 0.6 s, and the whole render's spectral centroid \
+other knobs at noon. Each step plays one C-1 for 0.6 s, and the whole render's spectral centroid \
 and peak level are measured. A 303's Env Mod can't take the envelope's sweep down to nothing.
 
 Acid V opens with whatever preset it last had, so each case starts from its factory Default \

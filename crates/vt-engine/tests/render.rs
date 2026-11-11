@@ -54,17 +54,17 @@ fn peak(samples: &[f32]) -> f32 {
 }
 
 const FX_LOOP: [&str; 4] = [
-    "C-4 60 cut:60h res:40h pan:40h",
+    "C-3 60 cut:60h res:40h pan:40h",
     "--- -- sna:80h --- ---",
-    "G-4 40 snb:60h ret:14 ---",
-    "C-3 -- cha:80 del:02 kil:04",
+    "G-3 40 snb:60h ret:14 ---",
+    "C-2 -- cha:80 del:02 kil:04",
 ];
 
 #[test]
 fn golden_renders_stay_the_same() {
     golden(
         "plain",
-        &render(song(&["C-4 -- --- --- ---"]), RenderOptions::default()),
+        &render(song(&["C-3 -- --- --- ---"]), RenderOptions::default()),
     );
     // Swing at 66.7%, as a groove of the project's own, plays as swing did.
     let mut swung = song(&FX_LOOP);
@@ -92,7 +92,7 @@ fn rows_set_the_length_and_start_from_the_top() {
         tail: false,
         ..RenderOptions::default()
     };
-    let out = render(song(&["C-4 -- --- --- ---"]), options);
+    let out = render(song(&["C-3 -- --- --- ---"]), options);
     assert_eq!(out.len(), 24_000 * 2);
     assert!(
         peak(&out[..200]) > 0.0,
@@ -104,7 +104,7 @@ fn rows_set_the_length_and_start_from_the_top() {
 fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
     // A delay tail only sounds at the top if something came before it.
     let mut texts = vec!["--- -- --- --- ---"; 16];
-    texts[15] = "C-4 -- sna:F8 --- ---";
+    texts[15] = "C-3 -- sna:F8 --- ---";
     let out = render(song(&texts), RenderOptions::default());
     assert!(
         peak(&out[..2 * 18_000]) > 0.01,
@@ -117,7 +117,7 @@ fn the_first_pass_fills_effects_so_the_start_hears_the_end() {
 fn the_tail_extends_the_render_and_ends_at_silence() {
     // A hit on the last step is still ringing when the capture ends.
     let mut texts = vec!["--- -- --- --- ---"; 16];
-    texts[15] = "C-4 -- snb:F8 --- ---";
+    texts[15] = "C-3 -- snb:F8 --- ---";
     let plain = render(song(&texts), RenderOptions::default());
     let tailed = render(
         song(&texts),
@@ -154,7 +154,7 @@ fn with_the_limiter_off_a_render_keeps_levels_over_full() {
     }
     for id in 0..8 {
         let phrase = Arc::make_mut(loud.tracks[id as usize].phrases.get_mut(&0).unwrap());
-        *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+        *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
     let limited = peak(&render(loud.clone(), RenderOptions::default()));
     assert_eq!(limited, 1.0);
@@ -201,8 +201,8 @@ fn three_tracks() -> Song {
         track.send_b = 0x60;
     }
     for (id, text) in [
-        (1, "G-4 40 cha:80 sna:90h ---"),
-        (2, "C-3 7F cut:40 --- ---"),
+        (1, "G-3 40 cha:80 sna:90h ---"),
+        (2, "C-2 7F cut:40 --- ---"),
     ] {
         let phrase = Arc::make_mut(mix.tracks[id as usize].phrases.get_mut(&0).unwrap());
         for step in 0..4 {

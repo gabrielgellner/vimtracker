@@ -76,7 +76,7 @@ kind = "gate"
 title = "The gate's length, against Acid V and ABL3"
 columns = 3
 about = """
-One C-2 in each case, held for a 128th note at 120 BPM, about 16 ms, to a quarter, \
+One C-1 in each case, held for a 128th note at 120 BPM, about 16 ms, to a quarter, \
 500 ms. How far its level falls while it's held, and how quickly it dies once it's let \
 go, are the VCA's and the gate's timing. Knobs as in the slides.
 

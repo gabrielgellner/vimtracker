@@ -84,7 +84,7 @@ window = [1, 2]
 about = """
 Our Acid's Resonance and Acid V's, each turned from bottom to top in sixteen even steps, with
 the cutoff at the top and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a
-C-2 and reads the filter's shape from its harmonics a second in: where it peaks, how far the
+C-1 and reads the filter's shape from its harmonics a second in: where it peaks, how far the
 peak stands over the bass, and how much bass the resonance thins against the knob's bottom. A
 303's resonance thins its bass as it rises, and its peak climbs with the knob.
 

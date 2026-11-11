@@ -82,9 +82,9 @@ const UNITY: f32 = UNITY_LEVEL as f32;
 fn a_lock_lasts_until_the_next_note() {
     let out = render(
         song(&[
-            "C-4 -- vol:80 --- ---",
+            "C-3 -- vol:80 --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]),
         STEP * 3,
     );
@@ -97,10 +97,10 @@ fn a_lock_lasts_until_the_next_note() {
 fn a_lock_on_a_row_with_no_note_changes_the_note_and_ends_at_the_next() {
     let out = render(
         song(&[
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- vol:80 --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]),
         STEP * 4,
     );
@@ -113,7 +113,7 @@ fn a_lock_on_a_row_with_no_note_changes_the_note_and_ends_at_the_next() {
 #[test]
 fn a_lock_on_a_notes_own_row_survives_that_note() {
     let out = render(
-        song(&["C-4 -- vol:80 --- ---", "C-4 -- vol:40 --- ---"]),
+        song(&["C-3 -- vol:80 --- ---", "C-3 -- vol:40 --- ---"]),
         STEP * 2,
     );
     close(at_step(&out, 1), 64.0);
@@ -122,7 +122,7 @@ fn a_lock_on_a_notes_own_row_survives_that_note() {
 #[test]
 fn the_next_value_of_a_parameter_replaces_its_lock() {
     let out = render(
-        song(&["C-4 -- vol:80 --- ---", "--- -- vol:40 --- ---"]),
+        song(&["C-3 -- vol:80 --- ---", "--- -- vol:40 --- ---"]),
         STEP * 2,
     );
     close(at_step(&out, 1), 64.0);
@@ -131,7 +131,7 @@ fn the_next_value_of_a_parameter_replaces_its_lock() {
 #[test]
 fn another_parameters_value_leaves_a_lock_alone() {
     let out = render(
-        song(&["C-4 -- vol:80 --- ---", "--- -- cut:F0 --- ---"]),
+        song(&["C-3 -- vol:80 --- ---", "--- -- cut:F0 --- ---"]),
         STEP * 2,
     );
     assert!((at_step(&out, 1) - level_gain(128.0)).abs() < 0.05);
@@ -140,7 +140,7 @@ fn another_parameters_value_leaves_a_lock_alone() {
 #[test]
 fn a_note_a_failed_chance_skips_ends_nothing() {
     let out = render(
-        song(&["C-4 -- vol:80 --- ---", "C-4 -- cha:00 --- ---"]),
+        song(&["C-3 -- vol:80 --- ---", "C-3 -- cha:00 --- ---"]),
         STEP * 2,
     );
     close(at_step(&out, 1), 128.0);
@@ -148,7 +148,7 @@ fn a_note_a_failed_chance_skips_ends_nothing() {
 
 #[test]
 fn an_off_ends_nothing() {
-    let mut start = song(&["C-4 -- vol:80 --- ---", "OFF -- --- --- ---"]);
+    let mut start = song(&["C-3 -- vol:80 --- ---", "OFF -- --- --- ---"]);
     start.tracks[0].envelopes[0].release_ms = 2000;
     let out = render(start, STEP + 100);
     // Just into the release, it's still at the lock's level and hasn't jumped up.
@@ -160,7 +160,7 @@ fn an_off_ends_nothing() {
 #[test]
 fn a_delayed_note_ends_locks_at_its_row() {
     let out = render(
-        song(&["C-4 -- vol:80 --- ---", "C-4 -- del:05 --- ---"]),
+        song(&["C-3 -- vol:80 --- ---", "C-3 -- del:05 --- ---"]),
         STEP * 2,
     );
     // Before the delayed note starts, the old one is already back at the base.
@@ -169,9 +169,9 @@ fn a_delayed_note_ends_locks_at_its_row() {
 
 #[test]
 fn the_rightmost_slot_wins() {
-    let out = render(song(&["C-4 -- vol:40 vol:80 ---"]), STEP);
+    let out = render(song(&["C-3 -- vol:40 vol:80 ---"]), STEP);
     close(at_step(&out, 0), 128.0);
-    let out = render(song(&["C-4 -- vol:80h vol:40 ---"]), STEP);
+    let out = render(song(&["C-3 -- vol:80h vol:40 ---"]), STEP);
     close(at_step(&out, 0), 64.0);
 }
 
@@ -188,8 +188,8 @@ fn an_lfo_carries_on_around_a_lock_as_around_a_hold() {
         };
         render(start, STEP)
     };
-    let locked = with("C-4 -- vol:80 --- ---");
-    assert_eq!(locked, with("C-4 -- vol:80h --- ---"));
+    let locked = with("C-3 -- vol:80 --- ---");
+    assert_eq!(locked, with("C-3 -- vol:80h --- ---"));
     assert!(locked[1000] != locked[3000], "the LFO is moving it");
 }
 
@@ -198,7 +198,7 @@ fn wrapping_the_loop_leaves_a_lock_until_a_note() {
     let out = render(
         song(&[
             "--- -- --- --- ---",
-            "C-4 -- vol:80 --- ---",
+            "C-3 -- vol:80 --- ---",
             "--- -- --- --- ---",
         ]),
         STEP * 5,
@@ -213,7 +213,7 @@ fn realigning_leaves_a_lock_alone() {
         RATE,
         version(song(&[
             "--- -- --- --- ---",
-            "C-4 -- vol:80 --- ---",
+            "C-3 -- vol:80 --- ---",
             "--- -- --- --- ---",
         ])),
     );
@@ -229,7 +229,7 @@ fn realigning_leaves_a_lock_alone() {
 #[test]
 fn a_page_edit_waits_under_a_lock_and_replaces_a_hold() {
     let hear = |text: &str, after_note: bool| {
-        let start = song(&[text, "C-4 -- --- --- ---"]);
+        let start = song(&[text, "C-3 -- --- --- ---"]);
         let mut engine = Engine::new(RATE, version(start.clone()));
         engine.play_from(0);
         let mut out = vec![0.0; 2 * SETTLED];
@@ -246,13 +246,13 @@ fn a_page_edit_waits_under_a_lock_and_replaces_a_hold() {
         (last[0], last[1])
     };
     // Locked hard left, the edit to hard right isn't heard yet.
-    let (left, right) = hear("C-4 -- pan:00 --- ---", false);
+    let (left, right) = hear("C-3 -- pan:00 --- ---", false);
     assert!(left > 0.5 && right.abs() < 0.01, "{left} {right}");
     // The next note ends the lock, and there it is.
-    let (left, right) = hear("C-4 -- pan:00 --- ---", true);
+    let (left, right) = hear("C-3 -- pan:00 --- ---", true);
     assert!(left.abs() < 0.1 && right > 1.3, "{left} {right}");
     // A hold gives way to the edit straight away.
-    let (left, right) = hear("C-4 -- pan:00h --- ---", false);
+    let (left, right) = hear("C-3 -- pan:00h --- ---", false);
     assert!(left.abs() < 0.1 && right > 1.3, "{left} {right}");
 }
 
@@ -262,10 +262,10 @@ fn a_page_edit_waits_under_a_lock_and_replaces_a_hold() {
 fn a_hold_outlasts_notes_and_a_lock_returns_to_it() {
     let out = render(
         song(&[
-            "C-4 -- vol:80h --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- vol:40 --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- vol:80h --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- vol:40 --- ---",
+            "C-3 -- --- --- ---",
         ]),
         STEP * 4,
     );
@@ -276,11 +276,11 @@ fn a_hold_outlasts_notes_and_a_lock_returns_to_it() {
 
 #[test]
 fn a_hold_stays_until_playing_from_the_top() {
-    let held = song(&["C-4 -- vol:80h --- ---", "C-4 -- --- --- ---"]);
+    let held = song(&["C-3 -- vol:80h --- ---", "C-3 -- --- --- ---"]);
     let mut engine = Engine::new(RATE, version(held));
     engine.play_from(0);
     engine.process(&mut vec![0.0; 2 * STEP]);
-    let plain = song(&["C-4 -- --- --- ---"]);
+    let plain = song(&["C-3 -- --- --- ---"]);
     engine.swap(version(plain));
     engine.play_from(0);
     let mut out = vec![0.0; 2 * SETTLED];
@@ -294,7 +294,7 @@ fn a_hold_stays_until_playing_from_the_top() {
 fn a_glide_moves_in_a_line_and_lands_exactly() {
     let out = render(
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- --- ---",
             "--- -- --- --- ---",
             "--- -- --- --- ---",
@@ -315,10 +315,10 @@ fn a_glides_arrival_takes_the_mark_of_its_row() {
     let start = |end: &str| {
         let arrival = format!("--- -- {end} --- ---");
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- --- ---",
             arrival.as_str(),
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ])
     };
     let locked = render(start("vol:C0"), STEP * 4);
@@ -332,7 +332,7 @@ fn a_glides_arrival_takes_the_mark_of_its_row() {
 fn a_glide_wraps_through_the_loop() {
     let out = render(
         song(&[
-            "C-4 -- vol:C0 --- ---",
+            "C-3 -- vol:C0 --- ---",
             "--- -- --- --- ---",
             "--- -- vol:40g --- ---",
             "--- -- --- --- ---",
@@ -346,7 +346,7 @@ fn a_glide_wraps_through_the_loop() {
 fn a_glide_skips_other_commands_in_its_slot() {
     let out = render(
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- cha:FF --- ---",
             "--- -- vol:C0 --- ---",
         ]),
@@ -359,7 +359,7 @@ fn a_glide_skips_other_commands_in_its_slot() {
 fn a_value_in_another_slot_ends_a_glide() {
     let out = render(
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- vol:80 ---",
             "--- -- --- --- ---",
             "--- -- vol:C0 --- ---",
@@ -374,9 +374,9 @@ fn a_value_in_another_slot_ends_a_glide() {
 fn with_no_other_value_a_glide_stays_put_like_a_lock() {
     let out = render(
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ]),
         STEP * 3,
     );
@@ -388,9 +388,9 @@ fn with_no_other_value_a_glide_stays_put_like_a_lock() {
 fn a_note_doesnt_interrupt_a_glide() {
     let out = render(
         song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- --- --- ---",
             "--- -- vol:C0 --- ---",
         ]),
@@ -402,7 +402,7 @@ fn a_note_doesnt_interrupt_a_glide() {
 #[test]
 fn a_glide_keeps_up_with_a_tempo_change() {
     let start = song(&[
-        "C-4 -- vol:40g --- ---",
+        "C-3 -- vol:40g --- ---",
         "--- -- --- --- ---",
         "--- -- --- --- ---",
         "--- -- --- --- ---",
@@ -425,10 +425,10 @@ fn a_glide_stops_with_a_pause() {
     let mut engine = Engine::new(
         RATE,
         version(song(&[
-            "C-4 -- vol:40g --- ---",
+            "C-3 -- vol:40g --- ---",
             "--- -- --- --- ---",
             "--- -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- --- --- ---",
             "--- -- vol:C0 --- ---",
         ])),
     );
@@ -446,14 +446,14 @@ fn a_glide_stops_with_a_pause() {
 #[test]
 fn playing_from_the_top_ends_a_glide() {
     let gliding = song(&[
-        "C-4 -- vol:40g --- ---",
+        "C-3 -- vol:40g --- ---",
         "--- -- --- --- ---",
         "--- -- vol:C0 --- ---",
     ]);
     let mut engine = Engine::new(RATE, version(gliding));
     engine.play_from(0);
     engine.process(&mut vec![0.0; 2 * STEP]);
-    engine.swap(version(song(&["C-4 -- --- --- ---"])));
+    engine.swap(version(song(&["C-3 -- --- --- ---"])));
     engine.play_from(0);
     let mut out = vec![0.0; 2 * SETTLED];
     engine.process(&mut out);
@@ -464,14 +464,14 @@ fn playing_from_the_top_ends_a_glide() {
 #[test]
 fn a_glide_a_chain_moves_past_finishes_on_time() {
     let mut start = song(&[
-        "C-4 -- vol:C0 --- ---",
+        "C-3 -- vol:C0 --- ---",
         "--- -- --- --- ---",
         "--- -- vol:40g --- ---",
         "--- -- --- --- ---",
     ]);
     let quiet = Phrase::from_steps(vec![
         "--- -- --- --- ---".parse().unwrap(),
-        "C-4 -- --- --- ---".parse().unwrap(),
+        "C-3 -- --- --- ---".parse().unwrap(),
     ]);
     start.tracks[0].phrases.insert(1, Arc::new(quiet));
     let entry = |phrase| ChainEntry {
@@ -494,9 +494,9 @@ fn a_glide_a_chain_moves_past_finishes_on_time() {
 #[test]
 fn renders_with_marks_are_repeatable() {
     let start = song(&[
-        "C-4 -- vol:40g cut:40 ---",
+        "C-3 -- vol:40g cut:40 ---",
         "--- -- cha:80 --- ---",
-        "C-4 -- vol:C0h --- ---",
+        "C-3 -- vol:C0h --- ---",
     ]);
     assert_eq!(render(start.clone(), STEP * 8), render(start, STEP * 8));
 }

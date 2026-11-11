@@ -77,7 +77,7 @@ kind = "transition"
 title = "Legato against retriggered notes, against Acid V and ABL3"
 columns = 3
 about = """
-Two notes, a C-2 and then a D-2 starting at 0.3 s, with the first ending 60, 20, 5 and \
+Two notes, a C-1 and then a D-1 starting at 0.3 s, with the first ending 60, 20, 5 and \
 1 ms before the second, just as it starts, or overlapping it by 1 and 20 ms, and last \
 held into it with its slide on. On a 303, and in a MIDI-played one, notes that overlap \
 slide and keep the envelopes going, and notes that don't are played afresh: the gate \

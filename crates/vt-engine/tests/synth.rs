@@ -58,7 +58,7 @@ fn rms(out: &[f32], step: usize) -> f32 {
     (left.iter().map(|sample| sample * sample).sum::<f32>() / left.len() as f32).sqrt()
 }
 
-const NOTE: &str = "C-2 7F --- --- ---";
+const NOTE: &str = "C-1 7F --- --- ---";
 const REST: &str = "--- -- --- --- ---";
 
 #[test]
@@ -112,7 +112,7 @@ fn the_page_values_change_the_sound() {
 /// A step locking one of a voice's settings, by its place among them.
 fn lock(voice: SynthVoice, setting: usize, value: &str) -> String {
     let key = SettingId::voice(voice, setting).unwrap().key();
-    format!("C-2 7F {key}:{value} --- ---")
+    format!("C-1 7F {key}:{value} --- ---")
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn an_lfo_moves_its_settings() {
 #[test]
 fn notes_change_its_pitch() {
     let low = play(song(&[NOTE]), 2);
-    let high = play(song(&["C-4 7F --- --- ---"]), 2);
+    let high = play(song(&["C-3 7F --- --- ---"]), 2);
     let crossings = |out: &[f32]| {
         out.chunks(2)
             .collect::<Vec<_>>()
@@ -362,7 +362,7 @@ fn acid_ignores_velocity_but_for_the_accent() {
     // accent (decision 121). The voice's `Accent` starts at noon, where an accent is about 4 dB
     // louder over its first step, as Acid V's is (decision 124).
     let at = |velocity: &str| {
-        let note = format!("C-2 {velocity}");
+        let note = format!("C-1 {velocity}");
         play(on(SynthVoice::Acid, &[&note, REST]), 2)
     };
     let plain = at("10");
@@ -387,7 +387,7 @@ fn every_other_voice_is_as_loud_as_its_velocity() {
             continue;
         }
         let at = |velocity: &str| {
-            let note = format!("C-2 {velocity}");
+            let note = format!("C-1 {velocity}");
             play(on(voice, &[&note, REST]), 2)
         };
         let (soft, full) = (at("40"), at("7F"));
@@ -418,7 +418,7 @@ fn acid_retriggers_every_hit_at_the_notes_level_while_other_voices_fade() {
     // `Acid` note has no level but its accent, so each hit plays at the note's own, plain or
     // accented, and the fade and swell change nothing (decision 124).
     let with = |voice, velocity: &str, retrigger: &str| {
-        let note = format!("C-2 {velocity} ret:{retrigger}");
+        let note = format!("C-1 {velocity} ret:{retrigger}");
         play(on(voice, &[&note, REST]), 2)
     };
     for velocity in ["64", "7F"] {
@@ -469,8 +469,8 @@ fn acid_slides_into_the_note_after_a_hold() {
         song.tracks[0].gate_length = Some(FULL_GATE);
         play(song, 4)
     };
-    let slid = held(&["C-2 64 HLD1", "C-3 64", REST, REST]);
-    let struck = held(&["C-2 64", "C-3 64", REST, REST]);
+    let slid = held(&["C-1 64 HLD1", "C-2 64", REST, REST]);
+    let struck = held(&["C-1 64", "C-2 64", REST, REST]);
     // Both end on the second note's pitch.
     for out in [&slid, &struck] {
         let hertz = pitch_of(out, 2, 4);
@@ -490,7 +490,7 @@ fn acid_slides_into_the_note_after_a_hold() {
 fn acid_carries_its_accent_sweep_from_note_to_note() {
     // Accents in a row, at full resonance, swell more than a lone one does. Played with the
     // track's resonance, and the voice's own up.
-    let mut steps = vec!["C-2 7F"; 4];
+    let mut steps = vec!["C-1 7F"; 4];
     steps.push(REST);
     let mut song = on(SynthVoice::Acid, &steps);
     song.tracks[0].set_machine_value(2, 0xFF);

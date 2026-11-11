@@ -652,10 +652,10 @@ mod tests {
         }
     }
 
-    /// C-2, as the chirp's specs play it.
+    /// C-1, as the chirp's specs play it.
     const C2: f32 = 65.406;
 
-    /// The resonant peak in two cycles of a C-2 centred `ms` into a note: where the harmonic
+    /// The resonant peak in two cycles of a C-1 centred `ms` into a note: where the harmonic
     /// standing highest over the fundamental is, in Hz, how far it stands over the fundamental,
     /// and how far the harmonic an octave over it is under it, in dB, each harmonic times its
     /// number, as `tools/compare`'s `chirp` reports read them.
@@ -670,7 +670,7 @@ mod tests {
         ((top + 1) as f32 * C2, levels[top] - levels[0], octave)
     }
 
-    /// A plain C-2 held for half a second, at a share of each knob's turn: cutoff, resonance,
+    /// A plain C-1 held for half a second, at a share of each knob's turn: cutoff, resonance,
     /// env mod and decay, with `Accent` at noon.
     fn chirp(knobs: [f32; 4]) -> Vec<f32> {
         let [cutoff, resonance, envmod, decay] = knobs;

@@ -43,8 +43,8 @@ pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
 use vt_model::song::{ChainEntry, Lane, Launch, Phrase, Section, Song, Track, TrackKind};
 use vt_model::step::{
-    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
-    Mark, Note, Step,
+    FxCommand, FxSlot, Gate, GateKind, HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MAX_NUDGE,
+    MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, octave_start,
 };
 
 use crate::grammar::Change;
@@ -276,7 +276,9 @@ pub struct App {
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
     pub cursor: Cursor,
-    pub octave: u8,
+    /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
+    /// `C-3`, middle C.
+    pub octave: i8,
     /// The velocity new notes are written with, like the octave.
     pub note_velocity: u8,
     /// The field a replace started on, since typing an FX command moves on to its value.
@@ -489,7 +491,7 @@ impl App {
                 step: 0,
                 field: Field::Note,
             },
-            octave: 4,
+            octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
             command_line: String::new(),
@@ -1153,8 +1155,8 @@ impl App {
                 self.mode = Mode::Normal;
                 self.status.clear();
             }
-            KeyCode::Char('<') if plain => self.octave = self.octave.saturating_sub(1),
-            KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char('<') if plain => self.octave = (self.octave - 1).max(LOWEST_OCTAVE),
+            KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(HIGHEST_OCTAVE),
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
                     self.hold_note(key, note, self.note_velocity);
@@ -1177,8 +1179,8 @@ impl App {
             degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
         } else {
             note_key(c).map(|semitones| {
-                let midi = (u16::from(self.octave) + 1) * 12 + u16::from(semitones);
-                midi.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
+                let midi = octave_start(self.octave) + i16::from(semitones);
+                midi.clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8
             })
         }
     }
@@ -2083,8 +2085,8 @@ impl App {
                 self.back_for_clearing();
                 self.clear_note();
             }
-            KeyCode::Char('z') => self.octave = self.octave.saturating_sub(1),
-            KeyCode::Char('x') => self.octave = (self.octave + 1).min(9),
+            KeyCode::Char('z') => self.octave = (self.octave - 1).max(LOWEST_OCTAVE),
+            KeyCode::Char('x') => self.octave = (self.octave + 1).min(HIGHEST_OCTAVE),
             KeyCode::Char('c') => {
                 self.note_velocity = next_note_velocity(self.note_velocity, false)
             }

@@ -70,7 +70,7 @@ const STARTED: f32 = 0.005;
 
 #[test]
 fn single_plays_one_note_across_its_pulses() {
-    let out = render(&song(&["C-4 -- SGL3", "C-4 --"]), 4);
+    let out = render(&song(&["C-3 -- SGL3", "C-3 --"]), 4);
     assert!(into(&out, 0) < STARTED);
     assert!(into(&out, 1) > STARTED, "it carries on");
     assert!(into(&out, 2) > STARTED);
@@ -79,7 +79,7 @@ fn single_plays_one_note_across_its_pulses() {
 
 #[test]
 fn multi_plays_a_note_on_every_pulse() {
-    let out = render(&song(&["C-4 -- MLT3", "--- --"]), 4);
+    let out = render(&song(&["C-3 -- MLT3", "--- --"]), 4);
     for step in 0..3 {
         assert!(into(&out, step) < STARTED, "pulse {step}");
     }
@@ -88,18 +88,18 @@ fn multi_plays_a_note_on_every_pulse() {
 
 #[test]
 fn hold_ties_into_the_next_note_with_no_new_attack() {
-    let out = render(&song(&["C-4 -- HLD2", "C-5 --", "--- --"]), 3);
+    let out = render(&song(&["C-3 -- HLD2", "C-4 --", "--- --"]), 3);
     assert!(into(&out, 2) > STARTED, "no new attack");
     let ratio = slope(&out, 2) / slope(&out, 1);
     assert!((ratio - 2.0).abs() < 0.05, "an octave up: {ratio}");
     // Without the hold, the next note starts again.
-    let out = render(&song(&["C-4 -- SGL2", "C-5 --"]), 3);
+    let out = render(&song(&["C-3 -- SGL2", "C-4 --"]), 3);
     assert!(into(&out, 2) < STARTED);
 }
 
 #[test]
 fn a_hold_with_nothing_to_tie_into_carries_on_as_a_single() {
-    let out = render(&song(&["C-4 -- HLD2", "--- --", "C-5 --"]), 4);
+    let out = render(&song(&["C-3 -- HLD2", "--- --", "C-4 --"]), 4);
     assert!(into(&out, 2) > STARTED, "rings on through the empty row");
     assert!(
         into(&out, 3) < STARTED,
@@ -109,7 +109,7 @@ fn a_hold_with_nothing_to_tie_into_carries_on_as_a_single() {
 
 #[test]
 fn rest_plays_nothing_and_ends_what_is_sounding() {
-    let out = render(&song(&["C-4 --", "C-4 -- RST2", "C-4 --"]), 4);
+    let out = render(&song(&["C-3 --", "C-3 -- RST2", "C-3 --"]), 4);
     assert!(into(&out, 0) < STARTED);
     let quiet = out[STEP + 200..3 * STEP]
         .iter()
@@ -121,7 +121,7 @@ fn rest_plays_nothing_and_ends_what_is_sounding() {
 
 #[test]
 fn a_row_of_0_pulses_is_skipped_and_takes_no_time() {
-    let out = render(&song(&["--- --", "C-5 -- SGL0", "C-4 --"]), 3);
+    let out = render(&song(&["--- --", "C-4 -- SGL0", "C-3 --"]), 3);
     // Row 2 plays on step 1, and the skipped row never plays.
     assert_eq!(out[..STEP].iter().copied().fold(0.0, f32::max), 0.0);
     assert!(into(&out, 1) < STARTED && out[STEP + 2000] > 0.0);
@@ -129,13 +129,13 @@ fn a_row_of_0_pulses_is_skipped_and_takes_no_time() {
 
 #[test]
 fn a_loop_of_skipped_rows_is_silent_and_doesnt_hang() {
-    let out = render(&song(&["C-4 -- SGL0", "C-4 -- HLD0"]), 4);
+    let out = render(&song(&["C-3 -- SGL0", "C-3 -- HLD0"]), 4);
     assert!(out.iter().all(|level| *level == 0.0));
 }
 
 #[test]
 fn an_empty_row_with_a_gate_still_takes_its_time() {
-    let out = render(&song(&["C-4 --", "--- -- RST3", "C-4 --"]), 5);
+    let out = render(&song(&["C-3 --", "--- -- RST3", "C-3 --"]), 5);
     assert!(
         into(&out, 1) > STARTED,
         "the first note rings through the empty rest"
@@ -146,7 +146,7 @@ fn an_empty_row_with_a_gate_still_takes_its_time() {
 #[test]
 fn a_lane_runs_on_steps_and_a_column_without_one_follows_the_rows() {
     let rows = [
-        "C-4 -- MLT4 sna:10h --- ---",
+        "C-3 -- MLT4 sna:10h --- ---",
         "--- -- sna:20h --- ---",
         "--- -- sna:30h --- ---",
     ];
@@ -177,12 +177,12 @@ fn a_lane_runs_on_steps_and_a_column_without_one_follows_the_rows() {
 
 #[test]
 fn a_rows_pulses_changed_while_it_plays_keep_its_note_going() {
-    let long = song(&["C-4 -- HLD4", "--- --"]);
+    let long = song(&["C-3 -- HLD4", "--- --"]);
     let mut engine = Engine::new(RATE, version(&long));
     engine.play_from(0);
     let mut out = vec![0.0; (2 * STEP + 1) * 2];
     engine.process(&mut out);
-    let longer = song(&["C-4 -- HLD6", "--- --"]);
+    let longer = song(&["C-3 -- HLD6", "--- --"]);
     engine.swap(version(&longer));
     let mut out = vec![0.0; STEP * 2];
     engine.process(&mut out);

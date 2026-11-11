@@ -37,8 +37,10 @@ let go, so a chord is heard, though a row holds one note.
 | `Shift-Tab` | Play from the start, and stay in Insert |
 | `Esc` | Back to Normal mode |
 
-Our octave numbers are one above Live's: `a` starts on `C-4`, the same pitch
-Live calls C3.
+Notes are named as Live names them: `a` starts on `C-3`, middle C, which Live
+calls C3. Octaves go from -1 to 8. Below 0 a note is written with a small
+letter, `_` for a natural and `+` for a sharp, so it fits three characters:
+`c_1` is the C an octave under `C-0`, which Live calls C-1.
 
 Notes play the track's sample: see **Sounds, samples and kits**.
 
@@ -208,7 +210,7 @@ A row's nudge moves its note a little early or late, in 24ths of a step, up to
 `B`, just under half a step, either way, as Elektron's micro-timing does. The
 step is the track's own, so on a track at `1/8` a 24th is twice as long. It sits
 between the velocity and the gate, drawn dim, and is blank on a row that's on
-the grid: `C-4 40 -3 SGL1` plays three 24ths early.
+the grid: `C-3 40 -3 SGL1` plays three 24ths early.
 
 | Keys | Does |
 |---|---|

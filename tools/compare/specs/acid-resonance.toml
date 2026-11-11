@@ -1,4 +1,4 @@
-# Arturia's Acid V against our Acid: the Resonance knob in sixteen steps on one held C-2 with
+# Arturia's Acid V against our Acid: the Resonance knob in sixteen steps on one held C-1 with
 # the cutoff at the top, read from its harmonics once the filter's envelope has decayed: the
 # peak's frequency and height, and how much bass it thins (#295, decision 117).
 #
@@ -53,7 +53,7 @@ measure = "filter"
 window = [1, 2]
 about = """
 Our Acid's Resonance and Acid V's, each turned from bottom to top in sixteen even steps, with the \
-cutoff at the top and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-2 \
+cutoff at the top and Env Mod and Decay at 0, so the cutoff holds still. Each step holds a C-1 \
 and reads the filter's shape from its harmonics a second in: where it peaks, how far the peak \
 stands over the bass, and how much bass the resonance thins against the knob's bottom. A 303's \
 resonance thins its bass as it rises, and its peak climbs with the knob.

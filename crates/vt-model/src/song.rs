@@ -2251,7 +2251,7 @@ mod tests {
         Phrase::from_steps(
             gates
                 .iter()
-                .map(|gate| format!("C-4 -- {gate} --- --- ---").parse().unwrap())
+                .map(|gate| format!("C-3 -- {gate} --- --- ---").parse().unwrap())
                 .collect(),
         )
     }

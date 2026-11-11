@@ -270,7 +270,7 @@ def accents_spec() -> None:
     body = header(duration, ours, acid_v, abl3)
     body += report(
         {"kind": "notes", "title": "Accents in a row and apart, against Acid V and ABL3", "columns": 3, "step": SIXTEENTH},
-        "A plain C-2, then a pattern of accents twice through, a sixteenth a step at 120 BPM: \\\n"
+        "A plain C-1, then a pattern of accents twice through, a sixteenth a step at 120 BPM: \\\n"
         "`AAAA`, four accents in a row; `A.A.`, an accent every other step with a rest between; \\\n"
         "and `AA..`, two accents and two rests. Each pattern plays at Res 0, 50% and 90%, with \\\n"
         "Cutoff a quarter up and Env Mod, Decay and Accent at noon. A 303's accents build on each \\\n"
@@ -297,7 +297,7 @@ def slides_spec() -> None:
     body += report(
         {"kind": "transition", "title": "Slides up and down, against Acid V and ABL3", "columns": 3},
         "Two notes, the first held into the second with its slide on, so each side glides from one \\\n"
-        "to the other: up from C-2 and down to it, by a semitone, a fifth and an octave, a quarter \\\n"
+        "to the other: up from C-1 and down to it, by a semitone, a fifth and an octave, a quarter \\\n"
         "of a second each. Cutoff, Env Mod, Decay and Accent are at noon and Res at a quarter, so \\\n"
         "the pitch is easy to track. A 303's slide is an RC lag of a fixed time, so it should take \\\n"
         "as long by a semitone as by an octave.\n\n" + ABOUT_REFERENCES,
@@ -322,7 +322,7 @@ def legato_spec() -> None:
     body = header(0.8, ours, acid_v, abl3)
     body += report(
         {"kind": "transition", "title": "Legato against retriggered notes, against Acid V and ABL3", "columns": 3},
-        "Two notes, a C-2 and then a D-2 starting at 0.3 s, with the first ending 60, 20, 5 and \\\n"
+        "Two notes, a C-1 and then a D-1 starting at 0.3 s, with the first ending 60, 20, 5 and \\\n"
         "1 ms before the second, just as it starts, or overlapping it by 1 and 20 ms, and last \\\n"
         "held into it with its slide on. On a 303, and in a MIDI-played one, notes that overlap \\\n"
         "slide and keep the envelopes going, and notes that don't are played afresh: the gate \\\n"
@@ -350,7 +350,7 @@ def gate_spec() -> None:
     body = header(1.0, ours, acid_v, abl3)
     body += report(
         {"kind": "gate", "title": "The gate's length, against Acid V and ABL3", "columns": 3},
-        "One C-2 in each case, held for a 128th note at 120 BPM, about 16 ms, to a quarter, \\\n"
+        "One C-1 in each case, held for a 128th note at 120 BPM, about 16 ms, to a quarter, \\\n"
         "500 ms. How far its level falls while it's held, and how quickly it dies once it's let \\\n"
         "go, are the VCA's and the gate's timing. Knobs as in the slides.\n\n" + ABOUT_REFERENCES,
     )
@@ -411,7 +411,7 @@ def chirp_spec() -> None:
     body = header(0.75, *knobs(0.5, 0.75, 0.5, 0.5, 0.5))
     body += report(
         {"kind": "chirp", "title": "The resonant chirp at high Res, against Acid V and ABL3", "columns": 8, "tuning": CHIRP_TUNING},
-        CHIRP_ABOUT + "\n\nOne plain or accented C-2 from rest in each case, held for 0.45 s: Res at \\\n"
+        CHIRP_ABOUT + "\n\nOne plain or accented C-1 from rest in each case, held for 0.45 s: Res at \\\n"
         "75, 85, 95 and 100%, Env Mod at 50 and 100%, Cutoff low, 20%, and mid, 50%, and Decay \\\n"
         "short, 20%, and long, 80%, with Accent at noon. A case's name gives each: `R95-E100-Clow-\\\n"
         "Dlong-accent` has Res at 95%, Env Mod full, Cutoff low and Decay long, accented.\n\n"

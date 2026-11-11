@@ -197,7 +197,7 @@ fn play(app: &App, start: u8, length: u8, frames: usize) -> Vec<f32> {
     track.envelopes[0].attack_ms = 0;
     track.envelopes[0].release_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     let version = Published::new(Arc::new(song), Arc::clone(&app.samples));
     let out = render_frames(Arc::new(version), 48_000, frames);
     out.iter().step_by(2).copied().collect()

@@ -67,7 +67,7 @@ fn a_song_round_trips() {
         .unwrap()
         .label = "bass".to_owned();
     let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
-    *phrase.step_mut(2).unwrap() = "C-4 64 cut:40 --- ret:14".parse().unwrap();
+    *phrase.step_mut(2).unwrap() = "C-3 64 cut:40 --- ret:14".parse().unwrap();
     save_song(&dir, &song).unwrap();
     assert_eq!(load_song(&dir).unwrap(), song);
 }
@@ -119,7 +119,7 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
     song.tracks[1].set_setting(SettingId::SAMPLE_START, 0x40);
     song.tracks[1].set_setting(SettingId::PLAY, 2);
     let phrase = Arc::get_mut(song.tracks[0].phrases.get_mut(&0).unwrap()).unwrap();
-    *phrase.step_mut(1).unwrap() = "C-4 -- sampler.sample:FF --- ---".parse().unwrap();
+    *phrase.step_mut(1).unwrap() = "C-3 -- sampler.sample:FF --- ---".parse().unwrap();
     save_song(&dir, &song).unwrap();
     let text = fs::read_to_string(dir.join("song.ron")).unwrap();
     assert!(text.contains("sampler.sample"), "the setting by its key");

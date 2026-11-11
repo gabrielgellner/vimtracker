@@ -110,7 +110,7 @@ fn ends(song: &Song, frames: usize) -> usize {
 fn each_speed_plays_its_steps_that_long() {
     for speed in Speed::ALL {
         let length = speed.ticks() as usize * TICK;
-        let played = song(&[(speed, &["C-4 --"; 4])]);
+        let played = song(&[(speed, &["C-3 --"; 4])]);
         assert_eq!(
             hits(&played, 4 * length, 0),
             [0, length, 2 * length, 3 * length],
@@ -122,8 +122,8 @@ fn each_speed_plays_its_steps_that_long() {
 #[test]
 fn a_sixteenth_beside_a_slower_track_is_unchanged() {
     let played = song(&[
-        (Speed::Sixteenth, &["C-4 --"; 8]),
-        (Speed::EighthTriplet, &["C-4 --"; 6]),
+        (Speed::Sixteenth, &["C-3 --"; 8]),
+        (Speed::EighthTriplet, &["C-3 --"; 6]),
     ]);
     let sixteenths: Vec<usize> = (0..8).map(|step| step * STEP).collect();
     assert_eq!(hits(&played, 8 * STEP, 0), sixteenths);
@@ -137,8 +137,8 @@ fn a_track_at_an_eighth_swings_its_eighths() {
     // ticks of a sixteenth late, as the groove counts the track's own steps.
     let swung = with_own(
         song(&[
-            (Speed::Eighth, &["C-4 --"; 4]),
-            (Speed::Sixteenth, &["C-4 --"; 4]),
+            (Speed::Eighth, &["C-3 --"; 4]),
+            (Speed::Sixteenth, &["C-3 --"; 4]),
         ]),
         Groove::pattern(&[0, 77]),
     );
@@ -159,8 +159,8 @@ fn an_early_groove_on_a_quarter_works_its_steps_out_that_far_ahead() {
     // its steps worked out before the one heard has landed.
     let pushed = with_own(
         song(&[
-            (Speed::Quarter, &["C-4 --"; 2]),
-            (Speed::ThirtySecond, &["C-4 --"; 16]),
+            (Speed::Quarter, &["C-3 --"; 2]),
+            (Speed::ThirtySecond, &["C-3 --"; 16]),
         ]),
         Groove::pattern(&[0, -120]),
     );
@@ -179,7 +179,7 @@ fn a_rate_lock_plays_its_note_at_that_speed_until_the_next_note() {
     // `04` is an eighth. The next note ends the lock, so it's a sixteenth again.
     let locked = song(&[(
         Speed::Sixteenth,
-        &["C-4 -- speed:04", "C-4 --", "C-4 --", "C-4 --"],
+        &["C-3 -- speed:04", "C-3 --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(
         hits(&locked, 5 * STEP, 0),
@@ -188,13 +188,13 @@ fn a_rate_lock_plays_its_note_at_that_speed_until_the_next_note() {
     // With no note after it, the rows after go at its speed too.
     let held_on = song(&[(
         Speed::Sixteenth,
-        &["C-4 -- speed:04", "--- --", "C-4 --", "C-4 --"],
+        &["C-3 -- speed:04", "--- --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&held_on, 6 * STEP, 0), [0, 4 * STEP, 5 * STEP]);
     // A hold keeps it.
     let held = song(&[(
         Speed::Sixteenth,
-        &["C-4 -- speed:04h", "C-4 --", "C-4 --", "C-4 --"],
+        &["C-3 -- speed:04h", "C-3 --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&held, 8 * STEP, 0), [0, 2 * STEP, 4 * STEP, 6 * STEP]);
 }
@@ -205,20 +205,20 @@ fn a_step_at_a_new_speed_waits_for_that_speeds_grid() {
     // eighths' grid.
     let locked = song(&[(
         Speed::Sixteenth,
-        &["C-4 --", "C-4 -- speed:04h", "C-4 --", "C-4 --"],
+        &["C-3 --", "C-3 -- speed:04h", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&locked, 6 * STEP, 0), [0, STEP, 2 * STEP, 4 * STEP]);
     // From a triplet back to a sixteenth, the triplet's second step lasts to the next sixteenth.
     let back = song(&[(
         Speed::SixteenthTriplet,
-        &["C-4 --", "C-4 -- speed:02h", "C-4 --", "C-4 --"],
+        &["C-3 --", "C-3 -- speed:02h", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&back, 3 * STEP, 0), [0, 160 * TICK, STEP, 2 * STEP]);
 }
 
 #[test]
 fn a_track_page_change_of_speed_is_heard_from_the_next_step() {
-    let played = song(&[(Speed::Sixteenth, &["C-4 --"; 8])]);
+    let played = song(&[(Speed::Sixteenth, &["C-3 --"; 8])]);
     let mut engine = Engine::new(RATE, version(&played, hits_pool()));
     engine.play_from(0);
     let mut out = vec![0.0; (2 * STEP + 1) * 2];
@@ -244,7 +244,7 @@ fn a_track_page_change_of_speed_is_heard_from_the_next_step() {
 fn a_reset_lines_a_slower_track_up_again() {
     // Reset after 3 sixteenths: the eighth from the second has only one sixteenth before the
     // track starts again.
-    let mut reset = song(&[(Speed::Eighth, &["C-4 --", "D-4 --", "E-4 --", "F-4 --"])]);
+    let mut reset = song(&[(Speed::Eighth, &["C-3 --", "D-3 --", "E-3 --", "F-3 --"])]);
     reset.sections[0].reset = Some(3);
     assert_eq!(
         hits(&reset, 9 * STEP, 0),
@@ -256,7 +256,7 @@ fn a_reset_lines_a_slower_track_up_again() {
 fn a_new_section_lines_a_slower_track_up_with_its_start() {
     // A quarter track in a section 6 sixteenths long: its second step is cut short when the next
     // section starts it on another chain.
-    let mut played = song(&[(Speed::Quarter, &["C-4 --", "D-4 --"])]);
+    let mut played = song(&[(Speed::Quarter, &["C-3 --", "D-3 --"])]);
     let track = &mut played.tracks[0];
     track.chains.insert(1, Arc::clone(&track.chains[&0]));
     played.sections = vec![
@@ -281,12 +281,12 @@ fn a_new_section_lines_a_slower_track_up_with_its_start() {
 #[test]
 fn a_section_lasts_its_longest_chain_in_the_songs_steps() {
     let played = song(&[
-        (Speed::Eighth, &["C-4 --"; 4]),
-        (Speed::Sixteenth, &["C-4 --"; 4]),
+        (Speed::Eighth, &["C-3 --"; 4]),
+        (Speed::Sixteenth, &["C-3 --"; 4]),
     ]);
     assert_eq!(played.section_length(&played.sections[0]), 8);
     // Three 16th triplets are two sixteenths, and four don't end on one, so they round up.
-    let triplets = song(&[(Speed::SixteenthTriplet, &["C-4 --"; 4])]);
+    let triplets = song(&[(Speed::SixteenthTriplet, &["C-3 --"; 4])]);
     assert_eq!(triplets.section_length(&triplets.sections[0]), 3);
 }
 
@@ -294,7 +294,7 @@ fn a_section_lasts_its_longest_chain_in_the_songs_steps() {
 fn triplets_run_on_against_the_section_on_their_own_grid() {
     // Four 16th triplets in a section of 3 sixteenths: the track loops on its own, staying on the
     // triplets' grid from the start.
-    let triplets = song(&[(Speed::SixteenthTriplet, &["C-4 --"; 4])]);
+    let triplets = song(&[(Speed::SixteenthTriplet, &["C-3 --"; 4])]);
     let expected: Vec<usize> = (0..9).map(|step| step * 160 * TICK).collect();
     assert_eq!(hits(&triplets, 9 * 160 * TICK, 0), expected);
 }
@@ -302,22 +302,22 @@ fn triplets_run_on_against_the_section_on_their_own_grid() {
 #[test]
 fn timing_commands_are_shares_of_the_tracks_step() {
     // `DEL 3` is half a step, so half an eighth.
-    let delayed = song(&[(Speed::Eighth, &["C-4 --", "C-4 -- del:03"])]);
+    let delayed = song(&[(Speed::Eighth, &["C-3 --", "C-3 -- del:03"])]);
     assert_eq!(hits(&delayed, 4 * STEP, 0), [0, 3 * STEP]);
     // `RET 3` repeats every half step, so every eighth at a quarter.
-    let repeated = song(&[(Speed::Quarter, &["C-4 -- ret:03"])]);
+    let repeated = song(&[(Speed::Quarter, &["C-3 -- ret:03"])]);
     assert_eq!(hits(&repeated, 4 * STEP, 0), [0, 2 * STEP]);
     // A nudge is in 24ths of the track's step: 6 of an eighth is half a sixteenth.
-    let nudged = song(&[(Speed::Eighth, &["C-4 --", "C-4 -- +6"])]);
+    let nudged = song(&[(Speed::Eighth, &["C-3 --", "C-3 -- +6"])]);
     assert_eq!(hits(&nudged, 4 * STEP, 0), [0, 2 * STEP + STEP / 2]);
 }
 
 #[test]
 fn pulses_and_lengths_follow_the_tracks_step() {
-    let pulses = song(&[(Speed::Eighth, &["C-4 -- MLT2", "--- --"])]);
+    let pulses = song(&[(Speed::Eighth, &["C-3 -- MLT2", "--- --"])]);
     assert_eq!(hits(&pulses, 4 * STEP, 0), [0, 2 * STEP]);
     // A gate of 50% on an eighth lasts a sixteenth.
-    let mut gated = song(&[(Speed::Eighth, &["C-4 --", "--- --"])]);
+    let mut gated = song(&[(Speed::Eighth, &["C-3 --", "--- --"])]);
     gated.tracks[0].gate_length = Some(0x80);
     let end = ends(&gated, 4 * STEP);
     assert!(end.abs_diff(STEP) < NEAR, "{end}");
@@ -325,7 +325,7 @@ fn pulses_and_lengths_follow_the_tracks_step() {
 
 #[test]
 fn a_loop_renders_as_long_as_its_longest_chain_at_its_speed() {
-    let played = song(&[(Speed::Eighth, &["C-4 --"; 4])]);
+    let played = song(&[(Speed::Eighth, &["C-3 --"; 4])]);
     let out = render_loop(
         version(&played, hits_pool()),
         RATE,
@@ -337,8 +337,8 @@ fn a_loop_renders_as_long_as_its_longest_chain_at_its_speed() {
 #[test]
 fn each_track_is_heard_on_its_own_step() {
     let played = song(&[
-        (Speed::Eighth, &["C-4 --"; 4]),
-        (Speed::Sixteenth, &["C-4 --"; 8]),
+        (Speed::Eighth, &["C-3 --"; 4]),
+        (Speed::Sixteenth, &["C-3 --"; 8]),
     ]);
     let mut engine = Engine::new(RATE, version(&played, hits_pool()));
     engine.play_from(0);
@@ -357,8 +357,8 @@ fn each_track_is_heard_on_its_own_step() {
 #[test]
 fn playing_from_a_slower_tracks_row_starts_the_song_where_it_falls() {
     let played = song(&[
-        (Speed::Eighth, &["C-4 --", "D-4 --", "E-4 --", "F-4 --"]),
-        (Speed::Sixteenth, &["C-4 --"; 8]),
+        (Speed::Eighth, &["C-3 --", "D-3 --", "E-3 --", "F-3 --"]),
+        (Speed::Sixteenth, &["C-3 --"; 8]),
     ]);
     let mut engine = Engine::new(RATE, version(&played, hits_pool()));
     engine.play_section_at(0, 3, Some(0));

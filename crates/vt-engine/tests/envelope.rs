@@ -85,7 +85,7 @@ fn close(actual: f32, expected: f32) {
     assert!((actual - expected).abs() < 0.01, "{actual} and {expected}");
 }
 
-const NOTE: &str = "C-4 -- --- --- ---";
+const NOTE: &str = "C-3 -- --- --- ---";
 const OFF: &str = "OFF -- --- --- ---";
 const EMPTY: &str = "--- -- --- --- ---";
 
@@ -261,7 +261,7 @@ fn a_pitch_envelope_changes_speed_and_settles() {
 
 #[test]
 fn a_second_envelope_on_vol_moves_the_level_by_its_depth() {
-    let mut with = song(&["C-4 -- vol:80 --- ---"], adsr(0, 0, 100, 0));
+    let mut with = song(&["C-3 -- vol:80 --- ---"], adsr(0, 0, 100, 0));
     with.tracks[0].envelopes[1] = Envelope {
         destination: Some(SettingId::VOL),
         depth: 0x40,
@@ -325,7 +325,7 @@ fn a_tracks_filter_mode_and_a_lock_on_it_are_heard() {
     assert!(level(&high) > level(&low) * 20.0, "a buzz is all highs");
     // A step's lock plays its mode for the step, gliding there from the track's.
     let locked = with(
-        &["C-4 -- mode:06 --- ---"],
+        &["C-3 -- mode:06 --- ---"],
         FilterType::Ladder,
         FilterMode::LowPass24,
     );

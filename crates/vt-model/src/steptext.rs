@@ -1,9 +1,9 @@
 //! The readable text form of a step, used on disk and in tests.
 //!
-//! `NOTE VEL GATE FX FX FX`, such as `C-4 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
-//! leaves it out, as every row did before gates: `C-4 64 cut:40 --- ret:14`. A gate with a length
-//! of its own has it after the pulses, as the grid shows it: `C-4 64 SGL1 80 cut:40`. A row with
-//! a nudge has it after the velocity, a sign and a hex digit in 24ths of a step: `C-4 64 -3 SGL1`.
+//! `NOTE VEL GATE FX FX FX`, such as `C-3 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
+//! leaves it out, as every row did before gates: `C-3 64 cut:40 --- ret:14`. A gate with a length
+//! of its own has it after the pulses, as the grid shows it: `C-3 64 SGL1 80 cut:40`. A row with
+//! a nudge has it after the velocity, a sign and a hex digit in 24ths of a step: `C-3 64 -3 SGL1`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -13,7 +13,7 @@ use thiserror::Error;
 use crate::settings::SettingId;
 use crate::step::{
     FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
-    Mark, Note, Step,
+    Mark, NOTE_NAMES, NOTE_NAMES_BELOW_ZERO, Note, Step, octave_start,
 };
 
 /// Why a step's text could not be read.
@@ -114,26 +114,21 @@ impl FromStr for Note {
         if bytes.len() != 3 {
             return Err(bad());
         }
-        let class: i16 = match (bytes[0], bytes[1]) {
-            (b'C', b'-') => 0,
-            (b'C', b'#') => 1,
-            (b'D', b'-') => 2,
-            (b'D', b'#') => 3,
-            (b'E', b'-') => 4,
-            (b'F', b'-') => 5,
-            (b'F', b'#') => 6,
-            (b'G', b'-') => 7,
-            (b'G', b'#') => 8,
-            (b'A', b'-') => 9,
-            (b'A', b'#') => 10,
-            (b'B', b'-') => 11,
-            _ => return Err(bad()),
+        // A name from the octaves from 0 up, or from those below it, which count down.
+        let name = &bytes[..2];
+        let is = |known: &&str| known.as_bytes() == name;
+        let (class, sign) = match NOTE_NAMES.iter().position(is) {
+            Some(class) => (class, 1),
+            None => (
+                NOTE_NAMES_BELOW_ZERO.iter().position(is).ok_or_else(bad)?,
+                -1,
+            ),
         };
-        if !bytes[2].is_ascii_digit() {
+        if !bytes[2].is_ascii_digit() || (sign < 0 && bytes[2] == b'0') {
             return Err(bad());
         }
-        let octave = i16::from(bytes[2] - b'0');
-        let midi = (octave + 1) * 12 + class;
+        let octave = sign * (bytes[2] - b'0') as i8;
+        let midi = octave_start(octave) + class as i16;
         if midi > i16::from(MAX_NOTE) || midi < i16::from(MIN_NOTE) {
             return Err(bad());
         }
@@ -295,26 +290,27 @@ impl fmt::Display for Step {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MIDDLE_C, octave_of};
 
     #[test]
     fn every_field_form_round_trips() {
         for text in [
-            "C-4 64 --- ret:14",
+            "C-3 64 --- ret:14",
             "--- -- --- --- ---",
             "OFF 7F pan:80 cha:FF",
-            "C-0 00 kil:02 off:03",
-            "G-9 -- sna:20 snb:30",
-            "C#3 --",
-            "C-4 64 cut:40h sna:20g pan:80",
-            "C-4 64 cut:4080h 1.distort.bits:03 res:FF",
-            "C-4 64 HLD3 cut:40 --- ---",
+            "c_1 00 kil:02 off:03",
+            "G-8 -- sna:20 snb:30",
+            "C#2 --",
+            "C-3 64 cut:40h sna:20g pan:80",
+            "C-3 64 cut:4080h 1.distort.bits:03 res:FF",
+            "C-3 64 HLD3 cut:40 --- ---",
             "--- -- RST4 --- --- ---",
-            "E-4 -- MLT0",
-            "C-4 64 SGL1 80 cut:40 --- ---",
+            "E-3 -- MLT0",
+            "C-3 64 SGL1 80 cut:40 --- ---",
             "--- -- HLD3 FF",
-            "E-4 -- MLT2 00 ---",
-            "C-4 64 -3 SGL1 80 cut:40",
-            "C-4 -- +B",
+            "E-3 -- MLT2 00 ---",
+            "C-3 64 -3 SGL1 80 cut:40",
+            "C-3 -- +B",
             "OFF -- -1 --- ---",
         ] {
             let step: Step = text.parse().unwrap();
@@ -354,7 +350,7 @@ mod tests {
         ] {
             assert!(gate(text).is_err(), "{text} should be refused");
         }
-        let step: Step = "C-4 64 --- --- ---".parse().unwrap();
+        let step: Step = "C-3 64 --- --- ---".parse().unwrap();
         assert_eq!(step.gate, None, "a row from before gates has none");
         assert_eq!(step.pulses(), 1);
     }
@@ -362,14 +358,14 @@ mod tests {
     #[test]
     fn a_nudge_is_a_sign_and_up_to_b_24ths() {
         let nudge = |text: &str| text.parse::<Step>().map(|step| step.nudge);
-        assert_eq!(nudge("C-4 64 -3 SGL1"), Ok(-3));
-        assert_eq!(nudge("C-4 -- +B cut:40"), Ok(11));
+        assert_eq!(nudge("C-3 64 -3 SGL1"), Ok(-3));
+        assert_eq!(nudge("C-3 -- +B cut:40"), Ok(11));
         assert_eq!(
-            nudge("C-4 64 SGL1"),
+            nudge("C-3 64 SGL1"),
             Ok(0),
             "a row without one is on the grid"
         );
-        for text in ["C-4 -- +C", "C-4 -- -0", "C-4 -- +b", "C-4 -- ++"] {
+        for text in ["C-3 -- +C", "C-3 -- -0", "C-3 -- +b", "C-3 -- ++"] {
             let field = text.split(' ').nth(2).unwrap();
             assert_eq!(
                 text.parse::<Step>(),
@@ -381,45 +377,78 @@ mod tests {
 
     #[test]
     fn notes_map_to_midi() {
-        assert_eq!("C-4".parse(), Ok(Note::On(60)));
-        assert_eq!("C-0".parse(), Ok(Note::On(12)));
-        assert_eq!("G-9".parse(), Ok(Note::On(127)));
-        assert_eq!(Note::On(61).to_string(), "C#4");
+        assert_eq!("C-4".parse(), Ok(Note::On(72)));
+        assert_eq!("C-0".parse(), Ok(Note::On(24)));
+        assert_eq!("c_1".parse(), Ok(Note::On(12)));
+        assert_eq!("b_1".parse(), Ok(Note::On(23)));
+        assert_eq!("G-8".parse(), Ok(Note::On(127)));
+        assert_eq!(Note::On(61).to_string(), "C#3");
+        assert_eq!(Note::On(13).to_string(), "c+1");
+    }
+
+    #[test]
+    fn middle_c_is_c3_as_in_ableton_live() {
+        assert_eq!("C-3".parse(), Ok(Note::On(MIDDLE_C)));
+        assert_eq!(MIDDLE_C, 60);
+        assert_eq!(Note::On(60).to_string(), "C-3");
+        let hertz = 440.0 * ((f64::from(MIDDLE_C) - 69.0) / 12.0).exp2();
+        assert!((hertz - 261.63).abs() < 0.005, "{hertz}");
+        assert_eq!("A-3".parse(), Ok(Note::On(69)), "A440");
+    }
+
+    #[test]
+    fn every_note_in_range_round_trips_in_three_characters() {
+        for midi in MIN_NOTE..=MAX_NOTE {
+            let name = Note::On(midi).to_string();
+            assert_eq!(name.len(), 3, "{midi} is {name}");
+            assert_eq!(name.parse(), Ok(Note::On(midi)), "{name}");
+            assert_eq!(octave_start(octave_of(midi)), i16::from(midi / 12 * 12));
+        }
+        assert_eq!(Note::On(MIN_NOTE).to_string(), "c_1");
+        assert_eq!(Note::On(23).to_string(), "b_1");
+        assert_eq!(Note::On(24).to_string(), "C-0");
+        assert_eq!(Note::On(MAX_NOTE).to_string(), "G-8");
+        assert_eq!(octave_of(MIN_NOTE), LOWEST_OCTAVE);
+        assert_eq!(octave_of(MAX_NOTE), HIGHEST_OCTAVE);
+        // Out of range either way, and a sharp written with the other octaves' mark.
+        for name in ["b_2", "G#8", "c-1", "c#1", "C_1", "C+1", "c_0"] {
+            assert_eq!(name.parse::<Note>(), Err(StepTextError::Note(name.into())));
+        }
     }
 
     #[test]
     fn invalid_fields_give_errors() {
         for (text, expected) in [
-            ("G#9 --", StepTextError::Note("G#9".into())),
+            ("G#8 --", StepTextError::Note("G#8".into())),
             ("H-4 -- --", StepTextError::Note("H-4".into())),
             ("C-44 -- --", StepTextError::Note("C-44".into())),
-            ("C-4 6 --", StepTextError::Velocity("6".into())),
-            ("C-4 ab --", StepTextError::Velocity("ab".into())),
-            ("C-4 80", StepTextError::Velocity("80".into())),
-            ("C-4 -- cut:4", StepTextError::Slot("cut:4".into())),
-            ("C-4 -- CUT40", StepTextError::Slot("CUT40".into())),
-            ("C-4 -- ---01", StepTextError::Slot("---01".into())),
-            ("C-4 -- xyz:00", StepTextError::Command("xyz".into())),
-            ("C-4 -- del:00h", StepTextError::Slot("del:00h".into())),
-            ("C-4 -- cut:FF80", StepTextError::Slot("cut:FF80".into())),
-            ("C-4 -- vol:F900", StepTextError::Slot("vol:F900".into())),
-            ("C-4 -- del:1080", StepTextError::Slot("del:1080".into())),
+            ("C-3 6 --", StepTextError::Velocity("6".into())),
+            ("C-3 ab --", StepTextError::Velocity("ab".into())),
+            ("C-3 80", StepTextError::Velocity("80".into())),
+            ("C-3 -- cut:4", StepTextError::Slot("cut:4".into())),
+            ("C-3 -- CUT40", StepTextError::Slot("CUT40".into())),
+            ("C-3 -- ---01", StepTextError::Slot("---01".into())),
+            ("C-3 -- xyz:00", StepTextError::Command("xyz".into())),
+            ("C-3 -- del:00h", StepTextError::Slot("del:00h".into())),
+            ("C-3 -- cut:FF80", StepTextError::Slot("cut:FF80".into())),
+            ("C-3 -- vol:F900", StepTextError::Slot("vol:F900".into())),
+            ("C-3 -- del:1080", StepTextError::Slot("del:1080".into())),
             (
-                "C-4 -- 1.distort.bits:0B",
+                "C-3 -- 1.distort.bits:0B",
                 StepTextError::Slot("1.distort.bits:0B".into()),
             ),
             (
-                "C-4 -- 1.distort.bits:0380",
+                "C-3 -- 1.distort.bits:0380",
                 StepTextError::Slot("1.distort.bits:0380".into()),
             ),
-            ("C-4 -- cut:408", StepTextError::Slot("cut:408".into())),
+            ("C-3 -- cut:408", StepTextError::Slot("cut:408".into())),
             (
-                "C-4 -- 1.distort.bits:03g",
+                "C-3 -- 1.distort.bits:03g",
                 StepTextError::Slot("1.distort.bits:03g".into()),
             ),
-            ("C-4", StepTextError::TooFewFields("C-4".into())),
-            ("C-4 -- SGL1 8", StepTextError::Slot("8".into())),
-            ("C-4 -- 80", StepTextError::Slot("80".into())),
+            ("C-3", StepTextError::TooFewFields("C-3".into())),
+            ("C-3 -- SGL1 8", StepTextError::Slot("8".into())),
+            ("C-3 -- 80", StepTextError::Slot("80".into())),
         ] {
             assert_eq!(text.parse::<Step>(), Err(expected), "{text}");
         }

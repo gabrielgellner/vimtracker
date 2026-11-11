@@ -91,7 +91,7 @@ fn passes(song: &Song, count: usize) -> String {
 
 /// A four-row phrase with this on its first row's note.
 fn first_row(fx: &str) -> Song {
-    let row = format!("C-4 -- {fx}");
+    let row = format!("C-3 -- {fx}");
     song(&[&[&row, "--- --", "--- --", "--- --"]])
 }
 
@@ -176,8 +176,8 @@ fn a_track_at_another_speed_counts_its_own_passes() {
 #[test]
 fn tracks_count_passes_of_their_own_lengths() {
     // A phrase of two rows against one of four: each counts its own.
-    let two = ["C-4 -- cnd:12", "--- --"];
-    let four = ["C-4 -- cnd:12", "--- --", "--- --", "--- --"];
+    let two = ["C-3 -- cnd:12", "--- --"];
+    let four = ["C-3 -- cnd:12", "--- --", "--- --", "--- --"];
     let both = song(&[&two, &four]);
     assert_eq!(hits(&both, 16, 0), [0, 4, 8, 12]);
     assert_eq!(hits(&both, 16, 1), [0, 8]);
@@ -213,7 +213,7 @@ fn realigning_starts_the_passes_again() {
 #[test]
 fn playing_from_a_step_counts_the_passes_before_it() {
     // A longer track makes the section 16 steps long, so there's a step 4 to play from.
-    let rows = ["C-4 -- cnd:12", "--- --", "--- --", "--- --"];
+    let rows = ["C-3 -- cnd:12", "--- --", "--- --", "--- --"];
     let song = song(&[&rows, &["--- --"; 16]]);
     let mut engine = Engine::new(RATE, version(&song, hits_pool()));
     // Step 4 is the second pass, so it's silent, and step 8 the third.
@@ -227,14 +227,14 @@ fn playing_from_a_step_counts_the_passes_before_it() {
 #[test]
 fn previous_follows_the_last_condition_and_leaves_it_alone() {
     // `PRE` plays with the 1:2 and `!PRE` without, as `PRE` itself isn't counted.
-    let rows = ["C-4 -- cnd:12", "C-4 -- cnd:03", "C-4 -- cnd:04", "--- --"];
+    let rows = ["C-3 -- cnd:12", "C-3 -- cnd:03", "C-3 -- cnd:04", "--- --"];
     let heard = hits(&song(&[&rows]), 16, 0);
     assert_eq!(heard, [0, 1, 6, 8, 9, 14]);
 }
 
 #[test]
 fn previous_follows_a_chance() {
-    let rows = vec!["C-4 -- cha:80", "C-4 -- cnd:03", "C-4 -- cnd:04", "--- --"];
+    let rows = vec!["C-3 -- cha:80", "C-3 -- cnd:03", "C-3 -- cnd:04", "--- --"];
     let heard = hits(&song(&[&rows]), 64, 0);
     let mut played = 0;
     for pass in 0..16 {
@@ -248,25 +248,25 @@ fn previous_follows_a_chance() {
 
 #[test]
 fn previous_starts_from_nothing_passed() {
-    let heard = hits(&song(&[&["C-4 -- cnd:04", "C-4 -- cnd:03"]]), 2, 0);
+    let heard = hits(&song(&[&["C-3 -- cnd:04", "C-3 -- cnd:03"]]), 2, 0);
     assert_eq!(heard, [0]);
 }
 
 #[test]
 fn neighbour_follows_the_track_to_the_left() {
-    let left = ["C-4 -- cnd:13", "--- --"];
-    let right = ["C-4 -- cnd:05", "C-4 -- cnd:06"];
+    let left = ["C-3 -- cnd:13", "--- --"];
+    let right = ["C-3 -- cnd:05", "C-3 -- cnd:06"];
     let both = song(&[&left, &right]);
     assert_eq!(hits(&both, 12, 0), [0, 6]);
     assert_eq!(hits(&both, 12, 1), [0, 3, 5, 6, 9, 11]);
     // The first track has none to its left, so its `NEI` never plays.
-    let alone = song(&[&["C-4 -- cnd:05", "C-4 -- cnd:06"]]);
+    let alone = song(&[&["C-3 -- cnd:05", "C-3 -- cnd:06"]]);
     assert_eq!(hits(&alone, 4, 0), [1, 3]);
 }
 
 #[test]
 fn fill_plays_its_rows_only_while_on() {
-    let rows = ["C-4 -- cnd:01", "C-4 -- cnd:02"];
+    let rows = ["C-3 -- cnd:01", "C-3 -- cnd:02"];
     let song = song(&[&rows]);
     let mut engine = Engine::new(RATE, version(&song, hits_pool()));
     engine.play_from(0);
@@ -292,16 +292,16 @@ fn a_failed_condition_skips_the_rows_locks_and_events_but_not_its_lanes() {
         out[(step * STEP + STEP / 2) * 2].abs()
     };
     // A row with no note: its `VOL` locks only on the passes its condition holds.
-    let rows = ["C-4 -- ---", "--- -- cnd:22 vol:00"];
+    let rows = ["C-3 -- ---", "--- -- cnd:22 vol:00"];
     let locks = song(&[&rows]);
     assert!(level(&locks, 1) > 0.1, "the first pass skips the lock");
     assert!(level(&locks, 3) < 0.001, "the second locks it");
     // `KIL` is skipped with it.
-    let kills = song(&[&["C-4 -- ---", "--- -- cnd:22 kil:00"]]);
+    let kills = song(&[&["C-3 -- ---", "--- -- cnd:22 kil:00"]]);
     assert!(level(&kills, 1) > 0.1);
     assert!(level(&kills, 3) < 0.001);
     // A failed `CHA` skips only the note, as it always has.
-    let chance = song(&[&["C-4 -- ---", "--- -- cha:00 vol:00"]]);
+    let chance = song(&[&["C-3 -- ---", "--- -- cha:00 vol:00"]]);
     assert!(level(&chance, 1) < 0.001);
     // A column with a lane of its own keeps its own loop.
     let mut lane = locks.clone();
@@ -322,7 +322,7 @@ fn a_failed_condition_skips_the_rows_locks_and_events_but_not_its_lanes() {
 #[test]
 fn a_condition_in_a_lane_counts_the_lanes_own_loops() {
     // A lane of one step goes round on every step, so its 1:2 holds on every other one.
-    let mut lane = song(&[&["C-4 -- cnd:12"; 4]]);
+    let mut lane = song(&[&["C-3 -- cnd:12"; 4]]);
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_lane(
         0,
@@ -336,9 +336,9 @@ fn a_condition_in_a_lane_counts_the_lanes_own_loops() {
 
 #[test]
 fn a_chance_rolls_the_same_whatever_the_conditions() {
-    let mut alone = song(&[&["C-4 -- cha:80"]]);
+    let mut alone = song(&[&["C-3 -- cha:80"]]);
     alone.seed = 5;
-    let mut gated = song(&[&["C-4 -- cha:80 cnd:12"]]);
+    let mut gated = song(&[&["C-3 -- cha:80 cnd:12"]]);
     gated.seed = 5;
     let rolled = hits(&alone, 32, 0);
     let expected: Vec<usize> = rolled.iter().copied().filter(|s| s % 2 == 0).collect();
@@ -349,12 +349,12 @@ fn a_chance_rolls_the_same_whatever_the_conditions() {
 #[test]
 fn renders_with_conditions_repeat() {
     let rows = [
-        "C-4 -- cha:80 cnd:12",
-        "C-4 -- cnd:03",
-        "C-4 -- cnd:24",
-        "C-4 -- cnd:08",
+        "C-3 -- cha:80 cnd:12",
+        "C-3 -- cnd:03",
+        "C-3 -- cnd:24",
+        "C-3 -- cnd:08",
     ];
-    let song = song(&[&rows, &["C-4 -- cnd:05", "C-4 -- cnd:06"]]);
+    let song = song(&[&rows, &["C-3 -- cnd:05", "C-3 -- cnd:06"]]);
     let render = || render_frames(version(&song, hits_pool()), RATE, 32 * STEP);
     assert_eq!(render(), render());
 }

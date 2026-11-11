@@ -370,7 +370,7 @@ mod tests {
             root: 0,
             kind: ScaleKind::Major,
         };
-        // C-4 is 60: up two degrees of C major is E, and down one is B below.
+        // C-3 is 60: up two degrees of C major is E, and down one is B below.
         assert_eq!(moved_note(60, 2, major), 64);
         assert_eq!(moved_note(60, -1, major), 59);
         assert_eq!(moved_note(60, 7, major), 72);

@@ -107,7 +107,7 @@ pub struct LineNote {
     pub time: f64,
     /// How long it's held, in seconds.
     pub length: f64,
-    /// A MIDI note number, where 60 is the program's `C-4`, with the chain's transpose.
+    /// A MIDI note number, where 60 is the program's `C-3`, with the chain's transpose.
     pub note: u8,
     /// Its velocity, from 1 to 127.
     pub velocity: u8,

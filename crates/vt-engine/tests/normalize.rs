@@ -49,7 +49,7 @@ fn render(normalize: Option<f32>, analysed: bool) -> Vec<f32> {
     track.set_setting(SettingId::SAMPLE, 1);
     track.envelopes[0].attack_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     let version = Published::new(Arc::new(song), pool(analysed));
     render_frames(Arc::new(version), RATE, 4000)
 }

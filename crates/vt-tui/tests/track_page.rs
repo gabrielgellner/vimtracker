@@ -2009,7 +2009,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 4800) > 0.01, "a plays a note");
     press(&mut app, ">");
-    assert_eq!(app.octave, 5, "> goes up an octave");
+    assert_eq!(app.octave, 4, "> goes up an octave");
     assert!(Arc::ptr_eq(&before, app.song()), "nothing is written");
     // The page's own keys still work, so a setting changes while it plays.
     press(&mut app, "j");

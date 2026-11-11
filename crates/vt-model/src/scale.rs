@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::step::{MAX_NOTE, MIN_NOTE};
+use crate::step::{MAX_NOTE, MIN_NOTE, octave_start};
 
 /// The notes in an octave.
 const OCTAVE: u16 = 12;
@@ -154,13 +154,13 @@ impl Scale {
 
     /// The note for a degree counted from 0 at the root, going up through the scale from an octave
     /// on the status line.
-    pub fn degree(self, degree: usize, octave: u8) -> u8 {
+    pub fn degree(self, degree: usize, octave: i8) -> u8 {
         let intervals = self.kind.intervals();
-        let octaves = u16::from(octave) + 1 + (degree / intervals.len()) as u16;
-        let note = octaves * OCTAVE
-            + u16::from(self.root)
-            + u16::from(intervals[degree % intervals.len()]);
-        note.clamp(u16::from(MIN_NOTE), u16::from(MAX_NOTE)) as u8
+        let note = octave_start(octave)
+            + (degree / intervals.len()) as i16 * OCTAVE as i16
+            + i16::from(self.root)
+            + i16::from(intervals[degree % intervals.len()]);
+        note.clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8
     }
 
     /// A note moved some way through the scale. One step from a note outside it lands on the next
@@ -206,8 +206,8 @@ mod tests {
         }
     }
 
-    /// C-4 in this program's numbering, which is MIDI 60.
-    const C4: u8 = 60;
+    /// C-3 in this program's numbering, which is MIDI 60.
+    const C3: u8 = 60;
 
     #[test]
     fn every_kind_starts_on_its_root_and_rises_inside_an_octave() {
@@ -243,44 +243,44 @@ mod tests {
     fn degrees_go_up_from_the_root_in_the_octave_shown() {
         // C major is the white keys.
         let c_major = scale("c", ScaleKind::Major);
-        let notes: Vec<u8> = (0..10).map(|degree| c_major.degree(degree, 4)).collect();
+        let notes: Vec<u8> = (0..10).map(|degree| c_major.degree(degree, 3)).collect();
         assert_eq!(notes, [60, 62, 64, 65, 67, 69, 71, 72, 74, 76]);
         let d_dorian = scale("d", ScaleKind::Dorian);
-        assert_eq!(d_dorian.degree(0, 4), 62);
-        assert_eq!(d_dorian.degree(7, 4), 74, "an octave up");
+        assert_eq!(d_dorian.degree(0, 3), 62);
+        assert_eq!(d_dorian.degree(7, 3), 74, "an octave up");
         // A root late in the octave stays in the octave shown.
-        assert_eq!(scale("b", ScaleKind::Major).degree(0, 4), 71);
+        assert_eq!(scale("b", ScaleKind::Major).degree(0, 3), 71);
         // A short scale reaches further.
         let pentatonic = scale("a", ScaleKind::MinorPentatonic);
-        assert_eq!(pentatonic.degree(0, 4), 69);
-        assert_eq!(pentatonic.degree(5, 4), 81);
-        assert_eq!(pentatonic.degree(9, 4), 91);
+        assert_eq!(pentatonic.degree(0, 3), 69);
+        assert_eq!(pentatonic.degree(5, 3), 81);
+        assert_eq!(pentatonic.degree(9, 3), 91);
     }
 
     #[test]
     fn a_degree_stays_a_valid_note_at_the_top() {
-        assert_eq!(scale("b", ScaleKind::Major).degree(9, 9), MAX_NOTE);
+        assert_eq!(scale("b", ScaleKind::Major).degree(9, 8), MAX_NOTE);
     }
 
     #[test]
     fn moving_goes_through_the_scale_and_steps_on_from_outside_it() {
         let c_major = scale("c", ScaleKind::Major);
-        assert_eq!(c_major.moved(C4, 1), 62);
-        assert_eq!(c_major.moved(C4, 2), 64);
-        assert_eq!(c_major.moved(C4, 3), 65, "E to F is a semitone");
-        assert_eq!(c_major.moved(C4, -1), 59);
+        assert_eq!(c_major.moved(C3, 1), 62);
+        assert_eq!(c_major.moved(C3, 2), 64);
+        assert_eq!(c_major.moved(C3, 3), 65, "E to F is a semitone");
+        assert_eq!(c_major.moved(C3, -1), 59);
         assert_eq!(c_major.moved(61, 1), 62, "C# up lands on D");
         assert_eq!(c_major.moved(61, -1), 60, "C# down lands on C");
-        assert_eq!(c_major.moved(C4, 0), C4);
+        assert_eq!(c_major.moved(C3, 0), C3);
     }
 
     #[test]
     fn moving_stops_at_the_last_note_in_range() {
         let c_major = scale("c", ScaleKind::Major);
-        let top = c_major.moved(C4, 0xFFFF);
+        let top = c_major.moved(C3, 0xFFFF);
         assert!(c_major.contains(top));
         assert_eq!(c_major.moved(top, 1), top);
-        let bottom = c_major.moved(C4, -0xFFFF);
+        let bottom = c_major.moved(C3, -0xFFFF);
         assert!(c_major.contains(bottom));
         assert_eq!(c_major.moved(bottom, -1), bottom);
     }
@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn fitting_goes_to_the_nearest_and_down_on_a_tie() {
         let c_major = scale("c", ScaleKind::Major);
-        assert_eq!(c_major.fitted(C4), C4, "already in");
+        assert_eq!(c_major.fitted(C3), C3, "already in");
         assert_eq!(c_major.fitted(61), 60, "C# is as near C as D");
         assert_eq!(c_major.fitted(66), 65, "F# is as near F as G");
         let pentatonic = scale("c", ScaleKind::MinorPentatonic);

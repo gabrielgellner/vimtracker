@@ -32,9 +32,9 @@ fn song() -> Song {
     song.tracks[0].set_setting(SettingId::SAMPLE, 1);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     for (at, text) in [
-        "C-4 -- sampler.slice:'b --- ---",
-        "C-4 -- sampler.slice:02 --- ---",
-        "C-4 -- sampler.slice:'z --- ---",
+        "C-3 -- sampler.slice:'b --- ---",
+        "C-3 -- sampler.slice:02 --- ---",
+        "C-3 -- sampler.slice:'z --- ---",
     ]
     .iter()
     .enumerate()
@@ -231,15 +231,15 @@ fn marks_list_in_the_order_of_their_slices_and_save_with_the_entry() {
 
 #[test]
 fn an_sli_by_a_letter_reads_back_moves_through_the_letters_and_typing_makes_it_a_number() {
-    let step: Step = "C-4 -- sampler.slice:'ah --- ---".parse().unwrap();
+    let step: Step = "C-3 -- sampler.slice:'ah --- ---".parse().unwrap();
     assert_eq!(step.fx[0], FxSlot::slice_by_mark('a', Mark::Hold));
     assert_eq!(step.fx[0].slice_mark(), Some('a'));
-    assert_eq!(step.to_string(), "C-4 -- sampler.slice:'ah --- ---");
+    assert_eq!(step.to_string(), "C-3 -- sampler.slice:'ah --- ---");
     for bad in [
-        "C-4 -- sampler.slice:'A",
-        "C-4 -- sampler.slice:'ab",
-        "C-4 -- sampler.slice:'ag",
-        "C-4 -- cut:'a",
+        "C-3 -- sampler.slice:'A",
+        "C-3 -- sampler.slice:'ab",
+        "C-3 -- sampler.slice:'ag",
+        "C-3 -- cut:'a",
     ] {
         assert!(bad.parse::<Step>().is_err(), "{bad}");
     }

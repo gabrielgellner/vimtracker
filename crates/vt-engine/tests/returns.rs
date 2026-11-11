@@ -41,7 +41,7 @@ fn song(send: &str) -> Song {
     song.tracks[0].envelopes[0].release_ms = 0;
     song.tracks[0].send_a = 0xE0;
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = format!("C-4 -- {send} --- ---").parse().unwrap();
+    *phrase.step_mut(0).unwrap() = format!("C-3 -- {send} --- ---").parse().unwrap();
     song
 }
 
@@ -176,7 +176,7 @@ fn a_note_on_a_fixed_track_plays_nothing() {
         song.tracks[track].add_chain(0);
         song.sections[0].chains[track] = Some(0);
         let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
-        *phrase.step_mut(0).unwrap() = "C-4 -- --- --- ---".parse().unwrap();
+        *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
     assert!(render(song).iter().all(|frame| *frame == [0.0, 0.0]));
 }

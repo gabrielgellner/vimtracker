@@ -77,7 +77,7 @@ title = "Slides up and down, against Acid V and ABL3"
 columns = 3
 about = """
 Two notes, the first held into the second with its slide on, so each side glides from one \
-to the other: up from C-2 and down to it, by a semitone, a fifth and an octave, a quarter \
+to the other: up from C-1 and down to it, by a semitone, a fifth and an octave, a quarter \
 of a second each. Cutoff, Env Mod, Decay and Accent are at noon and Res at a quarter, so \
 the pitch is easy to track. A 303's slide is an RC lag of a fixed time, so it should take \
 as long by a semitone as by an octave.

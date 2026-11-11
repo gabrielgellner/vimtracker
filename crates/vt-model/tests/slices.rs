@@ -96,16 +96,16 @@ fn song() -> Song {
     }
     let rows = [
         [
-            "C-4 -- sampler.slice:01 --- ---",
-            "C-4 -- sampler.slice:03 --- ---",
-            "C-4 -- sampler.slice:09 --- ---",
-            "C-4 -- sampler.sample:02 sampler.slice:03 ---",
+            "C-3 -- sampler.slice:01 --- ---",
+            "C-3 -- sampler.slice:03 --- ---",
+            "C-3 -- sampler.slice:09 --- ---",
+            "C-3 -- sampler.sample:02 sampler.slice:03 ---",
         ],
         [
-            "C-4 -- sampler.slice:02 --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
-            "C-4 -- --- --- ---",
+            "C-3 -- sampler.slice:02 --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "C-3 -- --- --- ---",
         ],
     ];
     for (track, number) in [(0, 1), (1, 2)] {

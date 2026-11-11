@@ -127,7 +127,7 @@ edited.
 | `nuance-legato` | two notes 60 ms apart to 20 ms overlapping, and slid | Acid V and ABL3 | the same, for where legato turns to a retrigger |
 | `nuance-gate` | one note held from a 128th to a quarter | Acid V and ABL3 | its level as it's held and its release (`gate`) |
 | `nuance-extremes` | every knob at its bottom or top, 32 ways, two plain notes and two accents | Acid V and ABL3 | as `nuance-accents` |
-| `nuance-chirp` | one plain or accented C-2 at Res 75, 85, 95 and 100%, Env Mod 50 and 100%, Cutoff low and mid, Decay short and long, 64 ways | Acid V and ABL3 | the resonant peak over time: its place, its height over the fundamental and the passband, the skirt an octave over it, and the note's start (`chirp`) |
+| `nuance-chirp` | one plain or accented C-1 at Res 75, 85, 95 and 100%, Env Mod 50 and 100%, Cutoff low and mid, Decay short and long, 64 ways | Acid V and ABL3 | the resonant peak over time: its place, its height over the fundamental and the passband, the skirt an octave over it, and the note's start (`chirp`) |
 | `nuance-chirp-riff` | a song's Acid line, read from the song as it runs, once through ([A song's line](#a-songs-line)) | Acid V and ABL3 | the same, note by note along the line |
 | `pedal-distortion-harmonics` | Distort's `Distortion` at `Amount` `40`, `80` and `FF`, stepped levels at 110 Hz and 1 kHz | Dist OPAMP-21, `Modern`, at 25, 50 and 100% `Drive` | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `pedal-distortion-response` | `Distortion` given a sweep too quiet to clip, `Tone` open and at its default | Dist OPAMP-21, `Modern` and `Normal` | the EQ around the clip (`response`) |
@@ -450,7 +450,7 @@ duration = 1.0      # seconds; an effect's defaults to its input's length
 [[notes]]           # a voice's notes, held for their lengths
 time = 0.05         # seconds
 length = 0.6        # seconds
-note = 36           # MIDI note number; 60 is the program's C-4
+note = 36           # MIDI note number; 60 is the program's C-3
 velocity = 100      # 1 to 127, 100 if not given
 accent = true       # optional: raise the velocity to an accent's, 0x70, or with false keep it under
 slide = true        # optional: hold on into the next note, so a voice that slides glides there

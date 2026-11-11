@@ -20,9 +20,9 @@ const STEP: usize = 6000;
 const TICK: usize = STEP / 6;
 /// The ramp the sample plays, so a note's pitch is how fast it climbs.
 const RAMP_FRAMES: usize = RATE as usize * 8;
-/// `C-4`, which plays the samples at their own speed.
-const C4: i32 = 60;
-/// The sine's period at `C-4`, in frames: 375 Hz.
+/// `C-3`, which plays the samples at their own speed.
+const C3: i32 = 60;
+/// The sine's period at `C-3`, in frames: 375 Hz.
 const SINE_PERIOD: f64 = 128.0;
 
 fn pool() -> Arc<SamplePool> {
@@ -85,7 +85,7 @@ fn render(song: &Song, frames: usize) -> Vec<f32> {
 fn pitch(out: &[f32], from: usize, to: usize) -> Option<i32> {
     let climb = (out[to] - out[from]) / (to - from) as f32;
     let own = 1.0 / RAMP_FRAMES as f32;
-    (climb > own * 0.1).then(|| C4 + (12.0 * (climb / own).log2()).round() as i32)
+    (climb > own * 0.1).then(|| C3 + (12.0 * (climb / own).log2()).round() as i32)
 }
 
 /// The note heard through the middle of each of so many stretches this long, from a frame.
@@ -104,14 +104,14 @@ fn notes(song: &Song, each: usize, count: usize) -> Vec<Option<i32>> {
     heard(&out, 0, each, count)
 }
 
-/// Notes by name, `C-4` up, for the notes heard to be read against.
+/// Notes by name, `C-3` up, for the notes heard to be read against.
 fn named(names: &str) -> Vec<Option<i32>> {
     names
         .split_whitespace()
         .map(|name| {
             let semitones = match name {
                 "." => return None,
-                "B3" => -1,
+                "B2" => -1,
                 "C" => 0,
                 "C#" => 1,
                 "D" => 2,
@@ -124,13 +124,13 @@ fn named(names: &str) -> Vec<Option<i32>> {
                 "A" => 9,
                 "A#" => 10,
                 "B" => 11,
-                "C5" => 12,
-                "E5" => 16,
-                "G5" => 19,
-                "C6" => 24,
+                "C4" => 12,
+                "E4" => 16,
+                "G4" => 19,
+                "C5" => 24,
                 other => panic!("no note {other}"),
             };
-            Some(C4 + semitones)
+            Some(C3 + semitones)
         })
         .collect()
 }
@@ -144,7 +144,7 @@ fn sine_note(out: &[f32], from: usize, to: usize) -> i32 {
         .collect();
     let (first, last) = (crossings[0], crossings[crossings.len() - 1]);
     let period = (last - first) / (crossings.len() - 1) as f64;
-    C4 + (12.0 * (SINE_PERIOD / period).log2()).round() as i32
+    C3 + (12.0 * (SINE_PERIOD / period).log2()).round() as i32
 }
 
 /// Whether a note starts near a frame: the ramp starting again from nothing.
@@ -154,13 +154,13 @@ fn starts_near(out: &[f32], frame: usize) -> bool {
 
 #[test]
 fn at_tick_it_goes_round_six_notes_a_step() {
-    let song = song(&["C-4 -- arp:47", "--- --"], Arpeggio::default());
+    let song = song(&["C-3 -- arp:47", "--- --"], Arpeggio::default());
     assert_eq!(notes(&song, TICK, 12), named("C E G C E G  C E G C E G"));
 }
 
 #[test]
 fn a_division_is_its_share_of_the_step() {
-    let rows = ["C-4 -- SGL4 arp:47"];
+    let rows = ["C-3 -- SGL4 arp:47"];
     let rates = [
         (ArpRate::HundredTwentyEighth, STEP / 8),
         (ArpRate::SixtyFourth, STEP / 4),
@@ -174,7 +174,7 @@ fn a_division_is_its_share_of_the_step() {
         assert_eq!(notes(&song, each, 4), named("C E G C"), "{rate:?}");
     }
     let eighths = song(
-        &["C-4 -- SGL8 arp:47"],
+        &["C-3 -- SGL8 arp:47"],
         with(ArpRate::Eighth, ArpMode::Up, 1),
     );
     assert_eq!(notes(&eighths, 2 * STEP, 4), named("C E G C"));
@@ -183,7 +183,7 @@ fn a_division_is_its_share_of_the_step() {
 #[test]
 fn zero_crossings_hear_the_same_cycle() {
     let mut song = song(
-        &["C-4 -- SGL2 arp:47"],
+        &["C-3 -- SGL2 arp:47"],
         with(ArpRate::ThirtySecond, ArpMode::Up, 1),
     );
     song.sample_on(0, "sine");
@@ -199,17 +199,17 @@ fn zero_crossings_hear_the_same_cycle() {
 
 #[test]
 fn at_another_speed_each_note_is_as_long_against_the_tracks_step() {
-    let mut eighths = song(&["C-4 -- arp:47"], Arpeggio::default());
+    let mut eighths = song(&["C-3 -- arp:47"], Arpeggio::default());
     eighths.tracks[0].speed = Speed::Eighth;
     assert_eq!(notes(&eighths, 2 * TICK, 6), named("C E G C E G"));
-    let mut triplets = song(&["C-4 -- arp:47"], Arpeggio::default());
+    let mut triplets = song(&["C-3 -- arp:47"], Arpeggio::default());
     triplets.tracks[0].speed = Speed::SixteenthTriplet;
     assert_eq!(notes(&triplets, TICK * 2 / 3, 6), named("C E G C E G"));
 }
 
 #[test]
 fn with_the_scale_on_x_and_y_are_degrees() {
-    let mut major = song(&["C-4 -- arp:24"], Arpeggio::default());
+    let mut major = song(&["C-3 -- arp:24"], Arpeggio::default());
     major.scale = Scale {
         on: true,
         root: 0,
@@ -220,13 +220,13 @@ fn with_the_scale_on_x_and_y_are_degrees() {
     minor.scale.kind = ScaleKind::Minor;
     assert_eq!(notes(&minor, TICK, 3), named("C D# G"));
     // Off, the same value is semitones.
-    let chromatic = song(&["C-4 -- arp:24"], Arpeggio::default());
+    let chromatic = song(&["C-3 -- arp:24"], Arpeggio::default());
     assert_eq!(notes(&chromatic, TICK, 3), named("C D E"));
 }
 
 #[test]
 fn the_modes_go_round_in_their_orders() {
-    let rows = ["C-4 -- SGL2 arp:47"];
+    let rows = ["C-3 -- SGL2 arp:47"];
     let down = song(&rows, with(ArpRate::Tick, ArpMode::Down, 1));
     assert_eq!(notes(&down, TICK, 6), named("G E C G E C"));
     let up_down = song(&rows, with(ArpRate::Tick, ArpMode::UpDown, 1));
@@ -236,20 +236,20 @@ fn the_modes_go_round_in_their_orders() {
     let both_octaves = song(&rows, with(ArpRate::Tick, ArpMode::UpDown, 2));
     assert_eq!(
         notes(&both_octaves, TICK, 11),
-        named("C E G C5 E5 G5 E5 C5 G E C")
+        named("C E G C4 E4 G4 E4 C4 G E C")
     );
 }
 
 #[test]
 fn random_plays_any_of_its_notes_and_a_render_repeats() {
     let song = song(
-        &["C-4 -- SGL4 arp:47"],
+        &["C-3 -- SGL4 arp:47"],
         with(ArpRate::Tick, ArpMode::Random, 2),
     );
     let heard = notes(&song, TICK, 24);
     let notes: Vec<i32> = heard.iter().flatten().copied().collect();
     assert_eq!(notes.len(), 24);
-    let all = named("C E G C5 E5 G5");
+    let all = named("C E G C4 E4 G4");
     assert!(
         notes.iter().all(|note| all.contains(&Some(*note))),
         "{notes:?}"
@@ -257,7 +257,7 @@ fn random_plays_any_of_its_notes_and_a_render_repeats() {
     // It isn't going round in order, and over a long note it plays most of them.
     assert_ne!(
         heard,
-        named("C E G C5 E5 G5 C E G C5 E5 G5 C E G C5 E5 G5 C E G C5 E5 G5")
+        named("C E G C4 E4 G4 C E G C4 E4 G4 C E G C4 E4 G4 C E G C4 E4 G4")
     );
     let different = all.iter().filter(|note| heard.contains(note)).count();
     assert!(different >= 4, "{heard:?}");
@@ -278,8 +278,8 @@ fn random_leaves_chas_rolls_as_they_were() {
             .map(|step| starts_near(&out, step * STEP))
             .collect::<Vec<_>>()
     };
-    let arpeggiated = ["C-4 -- cha:80 arp:47"; 16];
-    let plain = ["C-4 -- cha:80"; 16];
+    let arpeggiated = ["C-3 -- cha:80 arp:47"; 16];
+    let plain = ["C-3 -- cha:80"; 16];
     let without = starts(&plain, Arpeggio::default());
     assert!(without.contains(&true) && without.contains(&false));
     for mode in ArpMode::ALL {
@@ -290,27 +290,27 @@ fn random_leaves_chas_rolls_as_they_were() {
 
 #[test]
 fn octaves_climb_before_it_starts_again() {
-    let two = song(&["C-4 -- SGL2 arp:47"], with(ArpRate::Tick, ArpMode::Up, 2));
-    assert_eq!(notes(&two, TICK, 7), named("C E G C5 E5 G5 C"));
+    let two = song(&["C-3 -- SGL2 arp:47"], with(ArpRate::Tick, ArpMode::Up, 2));
+    assert_eq!(notes(&two, TICK, 7), named("C E G C4 E4 G4 C"));
     // With nothing to go round, only the octaves.
-    let octaves = song(&["C-4 -- SGL2 arp:00"], with(ArpRate::Tick, ArpMode::Up, 3));
-    assert_eq!(notes(&octaves, TICK, 4), named("C C5 C6 C"));
+    let octaves = song(&["C-3 -- SGL2 arp:00"], with(ArpRate::Tick, ArpMode::Up, 3));
+    assert_eq!(notes(&octaves, TICK, 4), named("C C4 C5 C"));
     // And with one octave, `ARP 00` plays the note alone.
-    let none = song(&["C-4 -- arp:00"], Arpeggio::default());
+    let none = song(&["C-3 -- arp:00"], Arpeggio::default());
     assert_eq!(notes(&none, TICK, 3), named("C C C"));
 }
 
 #[test]
 fn a_zero_makes_a_two_note_arp() {
     for value in ["70", "07"] {
-        let song = song(&[&format!("C-4 -- arp:{value}")], Arpeggio::default());
+        let song = song(&[&format!("C-3 -- arp:{value}")], Arpeggio::default());
         assert_eq!(notes(&song, TICK, 4), named("C G C G"), "ARP {value}");
     }
 }
 
 #[test]
 fn legato_only_changes_the_pitch_and_retrig_starts_each_note_again() {
-    let rows = ["C-4 -- arp:47", "--- --"];
+    let rows = ["C-3 -- arp:47", "--- --"];
     let legato = render(&song(&rows, Arpeggio::default()), 2 * STEP);
     let retrig = render(
         &song(
@@ -334,7 +334,7 @@ fn legato_only_changes_the_pitch_and_retrig_starts_each_note_again() {
 fn on_acid_legato_slides_into_each_note_and_retrig_jumps_there() {
     let acid = |retrig| {
         let mut song = song(
-            &["C-4 -- SGL2 arp:07"],
+            &["C-3 -- SGL2 arp:07"],
             Arpeggio {
                 rate: ArpRate::ThirtySecond,
                 retrig,
@@ -367,18 +367,18 @@ fn on_acid_legato_slides_into_each_note_and_retrig_jumps_there() {
 
 #[test]
 fn the_next_note_ends_it() {
-    let song = song(&["C-4 -- arp:47", "D-4 --"], Arpeggio::default());
+    let song = song(&["C-3 -- arp:47", "D-3 --"], Arpeggio::default());
     assert_eq!(notes(&song, TICK, 12), named("C E G C E G  D D D D D D"));
 }
 
 #[test]
 fn it_lasts_its_note_through_its_pulses_and_the_empty_rows_after() {
-    let pulses = song(&["C-4 -- SGL2 arp:47", "D-4 --"], Arpeggio::default());
+    let pulses = song(&["C-3 -- SGL2 arp:47", "D-3 --"], Arpeggio::default());
     assert_eq!(
         notes(&pulses, TICK, 18),
         named("C E G C E G  C E G C E G  D D D D D D")
     );
-    let empty = song(&["C-4 -- arp:47", "--- --"], Arpeggio::default());
+    let empty = song(&["C-3 -- arp:47", "--- --"], Arpeggio::default());
     assert_eq!(notes(&empty, TICK, 9), named("C E G C E G C E G"));
 }
 
@@ -386,20 +386,20 @@ fn it_lasts_its_note_through_its_pulses_and_the_empty_rows_after() {
 fn hld_carries_it_on_into_the_note_it_ties_into() {
     // `ARP 40` goes round two notes, three to a step, so the D carries on with the cycle's second.
     let arp = with(ArpRate::ThirtySecondTriplet, ArpMode::Up, 1);
-    let tied = song(&["C-4 -- HLD1 arp:40", "D-4 --", "--- --"], arp);
+    let tied = song(&["C-3 -- HLD1 arp:40", "D-3 --", "--- --"], arp);
     assert_eq!(notes(&tied, STEP / 3, 6), named("C E C  F# D F#"));
     // A row tied into with an `ARP` of its own carries on with that.
-    let own = song(&["C-4 -- HLD1 arp:40", "D-4 -- arp:30", "--- --"], arp);
+    let own = song(&["C-3 -- HLD1 arp:40", "D-3 -- arp:30", "--- --"], arp);
     assert_eq!(notes(&own, STEP / 3, 6), named("C E C  F D F"));
     // Without the `HLD`, the D is a new note with no arpeggio.
-    let new_note = song(&["C-4 -- arp:40", "D-4 --", "--- --"], arp);
+    let new_note = song(&["C-3 -- arp:40", "D-3 --", "--- --"], arp);
     assert_eq!(notes(&new_note, STEP / 3, 6), named("C E C  D D D"));
 }
 
 #[test]
 fn a_new_note_starts_its_own_from_the_top() {
     let song = song(
-        &["C-4 -- arp:47", "D-4 -- SGL2 arp:47"],
+        &["C-3 -- arp:47", "D-3 -- SGL2 arp:47"],
         with(ArpRate::SixteenthTriplet, ArpMode::Up, 1),
     );
     // The C's second note is cut short, and the D starts from its own note.
@@ -410,7 +410,7 @@ fn a_new_note_starts_its_own_from_the_top() {
 
 #[test]
 fn the_gate_closing_ends_it() {
-    let mut song = song(&["C-4 -- arp:47", "--- --"], Arpeggio::default());
+    let mut song = song(&["C-3 -- arp:47", "--- --"], Arpeggio::default());
     song.sample_on(0, "sine");
     // `6B` closes the gate 42% of the way through the step, on the G.
     song.tracks[0].gate_length = Some(0x6B);
@@ -425,7 +425,7 @@ fn the_gate_closing_ends_it() {
 
 #[test]
 fn an_off_ends_it() {
-    let mut off = song(&["C-4 -- arp:47 off:03"], Arpeggio::default());
+    let mut off = song(&["C-3 -- arp:47 off:03"], Arpeggio::default());
     off.sample_on(0, "sine");
     off.tracks[0].envelopes[0].release_ms = 500;
     let out = render(&off, STEP);
@@ -439,10 +439,10 @@ fn an_off_ends_it() {
 fn each_pulse_of_a_mlt_starts_it_again() {
     let arp = with(ArpRate::SixteenthTriplet, ArpMode::Up, 1);
     let each = STEP * 2 / 3;
-    let single = song(&["C-4 -- SGL2 arp:40"], arp);
+    let single = song(&["C-3 -- SGL2 arp:40"], arp);
     let out = render(&single, 3 * STEP);
     assert_eq!(heard(&out, 0, each, 3), named("C E C"));
-    let multi = song(&["C-4 -- MLT2 arp:40"], arp);
+    let multi = song(&["C-3 -- MLT2 arp:40"], arp);
     let out = render(&multi, 3 * STEP);
     // The second pulse starts again from the C, and its E comes two thirds of a step in.
     assert_eq!(pitch(&out, 200, 3800), Some(60));
@@ -454,18 +454,18 @@ fn each_pulse_of_a_mlt_starts_it_again() {
 #[test]
 fn it_follows_a_nudged_or_delayed_note() {
     // Six 24ths late is a quarter of a step.
-    let nudged = song(&["C-4 -- +6 arp:47", "--- --"], Arpeggio::default());
+    let nudged = song(&["C-3 -- +6 arp:47", "--- --"], Arpeggio::default());
     let out = render(&nudged, 2 * STEP);
     assert_eq!(heard(&out, STEP / 4, TICK, 4), named("C E G C"));
     // `DEL 03` is half a step.
-    let delayed = song(&["C-4 -- del:03 arp:47", "--- --"], Arpeggio::default());
+    let delayed = song(&["C-3 -- del:03 arp:47", "--- --"], Arpeggio::default());
     let out = render(&delayed, 2 * STEP);
     assert_eq!(heard(&out, STEP / 2, TICK, 4), named("C E G C"));
 }
 
 #[test]
 fn an_accumulator_moves_its_root() {
-    let song = song(&["C-4 -- acu:01 arp:47"], Arpeggio::default());
+    let song = song(&["C-3 -- acu:01 arp:47"], Arpeggio::default());
     assert_eq!(
         notes(&song, TICK, 12),
         named("C E G C E G  C# F G# C# F G#")
@@ -475,7 +475,7 @@ fn an_accumulator_moves_its_root() {
 #[test]
 fn a_chains_transpose_moves_it_too() {
     use vt_model::song::{Chain, ChainEntry};
-    let mut song = song(&["C-4 -- arp:47"], Arpeggio::default());
+    let mut song = song(&["C-3 -- arp:47"], Arpeggio::default());
     song.tracks[0].chains.insert(
         0,
         Arc::new(Chain {
@@ -492,7 +492,7 @@ fn a_chains_transpose_moves_it_too() {
 #[test]
 fn a_ratchet_strikes_the_note_its_arpeggio_is_on() {
     // `RET 03` strikes every half step, on the arpeggio's fourth note, the C again.
-    let song = song(&["C-4 -- arp:47 ret:03", "--- --"], Arpeggio::default());
+    let song = song(&["C-3 -- arp:47 ret:03", "--- --"], Arpeggio::default());
     let out = render(&song, 2 * STEP);
     assert!(starts_near(&out, STEP / 2));
     assert_eq!(heard(&out, 0, TICK, 6), named("C E G C E G"));
@@ -501,10 +501,10 @@ fn a_ratchet_strikes_the_note_its_arpeggio_is_on() {
 #[test]
 fn renders_with_arpeggios_repeat() {
     let rows = [
-        "C-4 -- cha:80 arp:47",
-        "E-4 -- MLT2 arp:37",
-        "G-4 -- HLD1 arp:30 acu:01",
-        "C-4 -- ret:02 arp:47",
+        "C-3 -- cha:80 arp:47",
+        "E-3 -- MLT2 arp:37",
+        "G-3 -- HLD1 arp:30 acu:01",
+        "C-3 -- ret:02 arp:47",
     ];
     for mode in ArpMode::ALL {
         for retrig in [false, true] {

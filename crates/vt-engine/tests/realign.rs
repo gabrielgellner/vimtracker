@@ -59,7 +59,7 @@ fn version(song: &Song) -> Arc<Published> {
 }
 
 /// Three rows, each its own velocity, so a step's level says which row played.
-const ROWS: [&str; 3] = ["C-4 40", "C-4 20", "C-4 10"];
+const ROWS: [&str; 3] = ["C-3 40", "C-3 20", "C-3 10"];
 
 /// Play from the top, ask for a realign partway into this step, and give the level in each step
 /// up to this many.
@@ -155,16 +155,16 @@ fn it_waits_until_its_line_and_then_is_done() {
 fn drifting() -> Song {
     let mut song = song(&[
         &[
-            "C-4 40 cnd:07",
-            "C-4 20 acu:01",
-            "C-4 30",
+            "C-3 40 cnd:07",
+            "C-3 20 acu:01",
+            "C-3 30",
             "--- --",
-            "C-4 10",
+            "C-3 10",
         ],
         &[
-            "C-4 40", "D-4 20", "E-4 30", "F-4 10", "G-4 40", "A-4 20", "B-4 30",
+            "C-3 40", "D-3 20", "E-3 30", "F-3 10", "G-3 40", "A-3 20", "B-3 30",
         ],
-        &["C-4 40 acu:02", "--- --", "E-4 20"],
+        &["C-3 40 acu:02", "--- --", "E-3 20"],
     ]);
     song.groove = GrooveId::swing(60).unwrap();
     song.launch = Launch::every(16).unwrap();

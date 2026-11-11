@@ -82,7 +82,7 @@ reference_knob = { "Acid V" = "envelope_mod", ABL3 = "envmod" }
 measure = "note"
 about = """
 Our Acid's Env Mod and Acid V's, each turned from bottom to top in sixteen even steps, with the
-other knobs at noon. Each step plays one C-2 for 0.6 s, and the whole render's spectral centroid
+other knobs at noon. Each step plays one C-1 for 0.6 s, and the whole render's spectral centroid
 and peak level are measured. A 303's Env Mod can't take the envelope's sweep down to nothing.
 
 Acid V opens with whatever preset it last had, so each case starts from its factory Default

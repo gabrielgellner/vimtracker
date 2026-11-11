@@ -151,6 +151,35 @@ fn octave_keys_change_entered_notes() {
 }
 
 #[test]
+fn the_octave_is_numbered_as_live_numbers_it_from_c3_at_middle_c() {
+    let (mut app, _rt) = app();
+    entering_steps_down(&mut app);
+    assert!(
+        status_line(&app).contains("Oct 3 "),
+        "{}",
+        status_line(&app)
+    );
+    tap(&mut app, "ia");
+    assert_eq!(notes(&app)[0], Note::On(60), "`a` is middle C");
+    assert_eq!(Note::On(60).to_string(), "C-3");
+    // Down to the lowest octave, which is -1, and no further.
+    tap(&mut app, "zzzzzzzzza");
+    assert_eq!(app.octave, -1);
+    assert!(
+        status_line(&app).contains("Oct -1 "),
+        "{}",
+        status_line(&app)
+    );
+    assert_eq!(notes(&app)[1], Note::On(12));
+    assert_eq!(Note::On(12).to_string(), "c_1");
+    // And up to the highest, 8, where the keys stop at `G-8`.
+    tap(&mut app, "xxxxxxxxxxxxa");
+    assert_eq!(app.octave, 8);
+    assert_eq!(notes(&app)[2], Note::On(120));
+    assert_eq!(Note::On(120).to_string(), "C-8");
+}
+
+#[test]
 fn undo_and_redo_keys_restore_notes() {
     let (mut app, _rt) = app();
     press(&mut app, "ia");
@@ -1326,7 +1355,7 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     tap(&mut app, "xl");
     assert_eq!(notes(&app)[0], Note::On(86), "up to `l`, as in Ableton");
     tap(&mut app, "zz");
-    assert_eq!(app.octave, 3);
+    assert_eq!(app.octave, 2);
 
     let velocity = |app: &App| app.song().tracks[0].phrases[&0].steps()[0].velocity;
     tap(&mut app, "a");
@@ -2787,23 +2816,23 @@ fn other_tracks_show_their_own_length_and_playhead() {
     // Stopped, nothing is marked. The 2-step track ends early, and the 8-step one has rows past
     // the selected track's 4.
     let buffer = screen(&app);
-    assert_eq!(beside(&buffer, 0, 1), note(" C#4", dim));
+    assert_eq!(beside(&buffer, 0, 1), note(" C#3", dim));
     assert_eq!(beside(&buffer, 0, 2).0, "    ");
-    assert_eq!(beside(&buffer, 1, 3), note(" D#4", dim));
-    assert_eq!(beside(&buffer, 1, 7), note(" G-4", dim));
+    assert_eq!(beside(&buffer, 1, 3), note(" D#3", dim));
+    assert_eq!(beside(&buffer, 1, 7), note(" G-3", dim));
 
     on_the_row_being_edited(&mut app);
     // Each track marks where it is in its own loop.
     app.transport = Transport::Playing;
     app.set_playhead(5);
     let buffer = screen(&app);
-    assert_eq!(beside(&buffer, 0, 1), note(">C#4", green));
+    assert_eq!(beside(&buffer, 0, 1), note(">C#3", green));
     assert_eq!(beside(&buffer, 0, 3).0, "    ");
-    assert_eq!(beside(&buffer, 1, 5), note(">F-4", green));
-    assert_eq!(beside(&buffer, 1, 1), note(" C#4", dim));
+    assert_eq!(beside(&buffer, 1, 5), note(">F-3", green));
+    assert_eq!(beside(&buffer, 1, 1), note(" C#3", dim));
 
     app.transport = Transport::Paused;
-    assert_eq!(beside(&screen(&app), 1, 5), note(">F-4", green));
+    assert_eq!(beside(&screen(&app), 1, 5), note(">F-3", green));
 }
 
 #[test]
@@ -2835,17 +2864,17 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    assert_eq!(beside(&screen(&app), 0, 0).0, " C-4");
+    assert_eq!(beside(&screen(&app), 0, 0).0, " C-3");
 
     // Stopped, it follows the cursor, as that's where playing would start.
     app.cursor.step = 2;
-    assert_eq!(beside(&screen(&app), 0, 0).0, " E-4");
+    assert_eq!(beside(&screen(&app), 0, 0).0, " E-3");
     app.cursor.step = 0;
 
     on_the_row_being_edited(&mut app);
     app.transport = Transport::Playing;
     app.set_playhead(2);
-    assert_eq!(beside(&screen(&app), 0, 0).0, ">E-4");
+    assert_eq!(beside(&screen(&app), 0, 0).0, ">E-3");
 }
 
 #[test]
@@ -2863,8 +2892,8 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     assert!(text(3).contains('│'), "{}", text(3));
     assert!(text(4).contains('└'), "{}", text(4));
     assert!(text(5).contains(" 05"), "{}", text(5));
-    assert_eq!(beside(&buffer, 1, 4).0, " E-4");
-    assert_eq!(beside(&buffer, 1, 5).0, " F-4");
+    assert_eq!(beside(&buffer, 1, 4).0, " E-3");
+    assert_eq!(beside(&buffer, 1, 5).0, " F-3");
     app.key(Key::new(KeyCode::Esc), time);
 
     // A row above the selected track's loop start is above every other track's too.
@@ -2872,7 +2901,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     app.top = 0;
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 1, 0).0, "    ");
-    assert_eq!(beside(&buffer, 1, 1).0, " C-4");
+    assert_eq!(beside(&buffer, 1, 1).0, " C-3");
 }
 
 #[test]
@@ -3046,7 +3075,7 @@ fn cleaning_the_bank_removes_what_nothing_plays_and_keeps_the_numbers() {
         track: 2,
         sample: 0,
     });
-    let step: Step = "C-4 -- sampler.sample:03 --- ---".parse().unwrap();
+    let step: Step = "C-3 -- sampler.sample:03 --- ---".parse().unwrap();
     app.apply(&Action::SetStep {
         track: 0,
         phrase,
@@ -3251,8 +3280,8 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let mut song = Song::new(1);
     let step = |text: &str| text.parse::<Step>().unwrap();
     let phrase = Phrase::from_steps(vec![
-        step("C-4 40 cut:40 sna:20h res:10g"),
-        step("C-4 40 del:10 --- ---"),
+        step("C-3 40 cut:40 sna:20h res:10g"),
+        step("C-3 40 del:10 --- ---"),
     ]);
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     let samples = Arc::new(SamplePool::default());
@@ -3350,7 +3379,7 @@ fn app_with_a_lock_for_another_voice() -> (App, Realtime) {
     let mut song = Song::new(1);
     let decay = SettingId::voice(SynthVoice::String, 2).unwrap();
     assert_eq!(decay.name(), "Decay");
-    let text = format!("C-4 40 cut:40 {}:20 del:10", decay.key());
+    let text = format!("C-3 40 cut:40 {}:20 del:10", decay.key());
     let phrase = Phrase::from_steps(vec![text.parse::<Step>().unwrap()]);
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     let samples = Arc::new(SamplePool::default());
@@ -3446,9 +3475,9 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dashes() {
     use vt_tui::views::status::{column_name, value_shown};
     let mut song = Song::new(1);
     let steps = [
-        "C-4 40 SGL1 80 cut:40 --- ---",
-        "C-4 40 HLD2 --- --- ---",
-        "C-4 40 --- --- ---",
+        "C-3 40 SGL1 80 cut:40 --- ---",
+        "C-3 40 HLD2 --- --- ---",
+        "C-3 40 --- --- ---",
     ]
     .iter()
     .map(|text| text.parse().unwrap())
@@ -3463,14 +3492,14 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dashes() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).starts_with("C-4 40    SGL1 80 CUT   4000"),
+        row(2).starts_with("C-3 40    SGL1 80 CUT   4000"),
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-4 40    HLD2 -- ---"), "{}", row(3));
+    assert!(row(3).starts_with("C-3 40    HLD2 -- ---"), "{}", row(3));
     // The `HLD2` lasts two lines of the timeline.
     assert_eq!(row(4).trim_end(), " │", "{}", row(4));
-    assert!(row(5).starts_with("C-4 40    ---- -- ---"), "{}", row(5));
+    assert!(row(5).starts_with("C-3 40    ---- -- ---"), "{}", row(5));
     // The length is the cell's third part, after the gate and its pulses.
     let length = 9 + 15;
     assert_eq!(Some(buffer[(length, 2)].fg), theme::dim().fg);
@@ -3496,8 +3525,8 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     use vt_tui::views::status::{column_name, value_shown};
     let mut song = Song::new(1);
     let steps: Vec<Step> = [
-        "C-4 40 -3 SGL1 80 cut:40 --- ---",
-        "C-4 40 --- --- ---",
+        "C-3 40 -3 SGL1 80 cut:40 --- ---",
+        "C-3 40 --- --- ---",
         "--- -- +B --- --- ---",
     ]
     .iter()
@@ -3512,11 +3541,11 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).starts_with("C-4 40 -3 SGL1 80 CUT   4000"),
+        row(2).starts_with("C-3 40 -3 SGL1 80 CUT   4000"),
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-4 40    ---- -- ---"), "{}", row(3));
+    assert!(row(3).starts_with("C-3 40    ---- -- ---"), "{}", row(3));
     assert!(row(4).starts_with("--- -- +B ---- -- ---"), "{}", row(4));
     let nudge = 9 + 7;
     assert_eq!(Some(buffer[(nudge, 2)].fg), theme::dim().fg);
@@ -3548,13 +3577,13 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(
         app.phrase_here().unwrap().steps()[1].to_string(),
-        "C-4 40 -2 --- --- ---"
+        "C-3 40 -2 --- --- ---"
     );
 
     // It's saved in the step's text, and a row without one is written as before.
     let saved = ron::to_string(&phrase).unwrap();
-    assert!(saved.contains("C-4 40 -3 SGL1 80 cut:40"), "{saved}");
-    assert!(saved.contains("\"C-4 40 --- --- ---\""), "{saved}");
+    assert!(saved.contains("C-3 40 -3 SGL1 80 cut:40"), "{saved}");
+    assert!(saved.contains("\"C-3 40 --- --- ---\""), "{saved}");
     assert_eq!(ron::from_str::<Phrase>(&saved).unwrap(), phrase);
 }
 
@@ -5984,7 +6013,7 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
     // Two keys holding the same note, an octave apart, hold it until both are let go.
     press(&mut app, "kxa");
     assert_eq!(written_notes(&app)[3], Note::On(72));
-    assert_eq!(voices(&mut realtime), 1, "C-5 twice is one note");
+    assert_eq!(voices(&mut realtime), 1, "C-4 twice is one note");
     let_go(&mut app, &mut realtime, "k");
     assert_eq!(voices(&mut realtime), 1);
     let_go(&mut app, &mut realtime, "a");
@@ -6352,7 +6381,7 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     let rows = rows_of(&app, 1);
     assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))), "{rows:?}");
     assert!(
-        rows[1].to_string().starts_with("C-4 64 +6 SGL1 FF "),
+        rows[1].to_string().starts_with("C-3 64 +6 SGL1 FF "),
         "{}",
         rows[1]
     );
@@ -6454,7 +6483,7 @@ fn a_recorded_note_on_a_long_row_keeps_its_pulses_and_lasts_into_the_last() {
 
 #[test]
 fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo() {
-    let rows: Vec<Step> = ["E-4 7F", "C-3 10 RST1 cut:40", "--- --", "--- --"]
+    let rows: Vec<Step> = ["E-3 7F", "C-2 10 RST1 cut:40", "--- --", "--- --"]
         .iter()
         .map(|text| text.parse().unwrap())
         .collect();
@@ -6517,7 +6546,7 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    *phrase.step_mut(0).unwrap() = "C-3 64 --- --- ---".parse().unwrap();
+    *phrase.step_mut(0).unwrap() = "C-2 64 --- --- ---".parse().unwrap();
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
@@ -8453,7 +8482,7 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
 #[test]
 fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
     use vt_tui::views::status::value_shown;
-    let rows = vec!["C-4 -- acu:02".parse().unwrap(), "D-4 --".parse().unwrap()];
+    let rows = vec!["C-3 -- acu:02".parse().unwrap(), "D-3 --".parse().unwrap()];
     let (mut app, mut rt) = recording_app(rows);
     let row_text = |app: &App, row: u16| {
         let buffer = screen(app);
@@ -8464,19 +8493,19 @@ fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
     let mut at = play_from_the_top(&mut app, &mut rt);
     // The first time round, it plays as written.
     play_to(&mut app, &mut rt, &mut at, 0.5);
-    assert!(row_text(&app, 0).contains("C-4"), "{}", row_text(&app, 0));
+    assert!(row_text(&app, 0).contains("C-3"), "{}", row_text(&app, 0));
     assert_eq!(value_shown(&app), None);
     // The second time, two semitones up, as the scale is off.
     play_to(&mut app, &mut rt, &mut at, 2.5);
     assert!(row_text(&app, 0).contains(">"), "{}", row_text(&app, 0));
-    assert!(row_text(&app, 0).contains("D-4"), "{}", row_text(&app, 0));
+    assert!(row_text(&app, 0).contains("D-3"), "{}", row_text(&app, 0));
     assert_eq!(
         value_shown(&app).as_deref(),
-        Some("the row playing is heard as D-4")
+        Some("the row playing is heard as D-3")
     );
     // The row after, which has none, plays as written.
     play_to(&mut app, &mut rt, &mut at, 3.5);
-    assert!(row_text(&app, 1).contains("D-4"), "{}", row_text(&app, 1));
+    assert!(row_text(&app, 1).contains("D-3"), "{}", row_text(&app, 1));
     assert_eq!(value_shown(&app), None);
 }
 
@@ -8799,7 +8828,7 @@ fn sample_sets_where_the_tracks_sample_plays_in_its_files_own_frames() {
 }
 
 /// A first track whose rows last these pulses, each with a note, beside a second track of this
-/// many rows at this speed, numbered by their notes from `C-4`: the shape of an acid line of 7
+/// many rows at this speed, numbered by their notes from `C-3`: the shape of an acid line of 7
 /// rows over 16 pulses beside drums of 16 rows.
 fn timeline_song(pulses: &[u8], rows: usize, speed: vt_model::speed::Speed) -> (App, Realtime) {
     use vt_model::step::{Gate, GateKind};
@@ -8834,7 +8863,7 @@ fn timeline_song(pulses: &[u8], rows: usize, speed: vt_model::speed::Speed) -> (
 /// An acid line's rows of uneven lengths, 16 pulses in all.
 const UNEVEN: [u8; 7] = [2, 1, 3, 4, 3, 1, 2];
 
-/// The second track's note on a row, as its rows are numbered from `C-4`.
+/// The second track's note on a row, as its rows are numbered from `C-3`.
 fn note_name(row: usize) -> String {
     Note::On(60 + row as u8).to_string()
 }

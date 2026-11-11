@@ -148,7 +148,7 @@ pub struct NoteSpec {
     pub time: f64,
     /// How long it's held, in seconds.
     pub length: f64,
-    /// A MIDI note number, where 60 is the program's `C-4`.
+    /// A MIDI note number, where 60 is the program's `C-3`.
     pub note: u8,
     /// From 1 to 127, as MIDI's and the program's `00` to `7F` are.
     pub velocity: Option<u8>,

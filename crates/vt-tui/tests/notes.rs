@@ -75,13 +75,13 @@ fn assert_notes(found: &[LineNote], expected: &[LineNote]) {
 #[test]
 fn a_line_is_timed_as_the_sequencer_plays_it() {
     let song = acid_song(&[
-        "C-3 7F SGL2",
+        "C-2 7F SGL2",
         "--- --",
-        "D-3 64 HLD1",
-        "E-3 64",
+        "D-2 64 HLD1",
+        "E-2 64",
         "OFF --",
-        "G-3 64 MLT2",
-        "A-3 64 RST1",
+        "G-2 64 MLT2",
+        "A-2 64 RST1",
     ]);
     let line = acid(&song);
     assert_eq!(line.track, "AC");
@@ -107,7 +107,7 @@ fn a_line_is_timed_as_the_sequencer_plays_it() {
 
 #[test]
 fn a_full_gate_holds_to_the_next_note_and_a_chain_transposes() {
-    let mut song = acid_song(&["C-3 64", "--- --", "D-3 --"]);
+    let mut song = acid_song(&["C-2 64", "--- --", "D-2 --"]);
     let track = &mut song.tracks[0];
     track.gate_length = Some(0xFF);
     track.chains.insert(
@@ -143,7 +143,7 @@ fn a_full_gate_holds_to_the_next_note_and_a_chain_transposes() {
 
 #[test]
 fn a_track_is_chosen_by_its_name_or_its_machine() {
-    let mut song = acid_song(&["C-3 64"]);
+    let mut song = acid_song(&["C-2 64"]);
     song.tracks[1].name = "BD".to_owned();
     let named = Choice {
         track: Some("bd".to_owned()),
@@ -161,7 +161,7 @@ fn a_track_is_chosen_by_its_name_or_its_machine() {
 
 #[test]
 fn the_machine_settings_come_with_their_defaults() {
-    let mut song = acid_song(&["C-3 64"]);
+    let mut song = acid_song(&["C-2 64"]);
     let cutoff = vt_model::settings::SettingId::from_key("acid.cutoff").unwrap();
     song.tracks[0].set_setting(cutoff, 0x85);
     let line = acid(&song);
@@ -172,7 +172,7 @@ fn the_machine_settings_come_with_their_defaults() {
 
 #[test]
 fn rows_the_line_cant_read_are_refused() {
-    let mut song = acid_song(&["C-3 64", "D-3 64"]);
+    let mut song = acid_song(&["C-2 64", "D-2 64"]);
     let mut steps = song.tracks[0].phrases[&0].steps().to_vec();
     steps[1].fx = vec![FxSlot {
         command: Some(FxCommand::Del),
@@ -185,7 +185,7 @@ fn rows_the_line_cant_read_are_refused() {
     let refused = line(&song, &Choice::default()).unwrap_err().to_string();
     assert!(refused.contains("FX on phrase 00's row 01"), "{refused}");
 
-    let mut nudged = acid_song(&["C-3 64 +2"]);
+    let mut nudged = acid_song(&["C-2 64 +2"]);
     nudged.tracks[0].name.clear();
     let refused = line(&nudged, &Choice::default()).unwrap_err().to_string();
     assert!(refused.contains("track 1 nudges"), "{refused}");
@@ -193,7 +193,7 @@ fn rows_the_line_cant_read_are_refused() {
 
 #[test]
 fn the_written_notes_play_in_a_probe_spec() {
-    let song = acid_song(&["C-3 7F SGL2", "D-3 64 HLD1", "E-3 64"]);
+    let song = acid_song(&["C-2 7F SGL2", "D-2 64 HLD1", "E-2 64"]);
     let out = std::env::temp_dir().join(format!("vt-notes-{}.toml", std::process::id()));
     write(&acid(&song), &out).unwrap();
     let text = std::fs::read_to_string(&out).unwrap();

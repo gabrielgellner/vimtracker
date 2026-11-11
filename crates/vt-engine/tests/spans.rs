@@ -91,7 +91,7 @@ fn left(out: &[f32]) -> Vec<f32> {
 /// What the track does to a level: a steady sample's level through it, over the steady 0.5.
 fn through() -> f32 {
     let out = left(&render(
-        song("steady", |_| {}, &["C-4 -- --- --- ---"]),
+        song("steady", |_| {}, &["C-3 -- --- --- ---"]),
         1000,
     ));
     out[500] / 0.5
@@ -124,7 +124,7 @@ fn points(entry: &mut BankEntry) {
 fn a_span_plays_from_its_start_to_its_end() {
     let through = through();
     let out = left(&render(
-        song("ramp", points, &["C-4 -- --- --- ---"]),
+        song("ramp", points, &["C-3 -- --- --- ---"]),
         5 * STEP,
     ));
     let at = |frame: usize| read_at(out[frame], through);
@@ -138,9 +138,9 @@ fn a_span_plays_from_its_start_to_its_end() {
 fn sta_and_slen_cut_the_span_on_a_step() {
     let through = through();
     let rows = [
-        "C-4 -- sampler.start:80 --- ---",
+        "C-3 -- sampler.start:80 --- ---",
         "--- -- --- --- ---",
-        "C-4 -- sampler.length:40 --- ---",
+        "C-3 -- sampler.length:40 --- ---",
     ];
     let out = left(&render(song("ramp", points, &rows), 6 * STEP));
     // Half-way into the span, which is 24000 frames long.
@@ -158,7 +158,7 @@ fn sta_and_slen_cut_the_span_on_a_step() {
 #[test]
 fn a_loop_goes_round_the_entrys_loop_and_ping_pong_back_and_forth() {
     let through = through();
-    let mut looped = song("ramp", points, &["C-4 -- --- --- ---"]);
+    let mut looped = song("ramp", points, &["C-3 -- --- --- ---"]);
     play(&mut looped, 1);
     let out = left(&render(looped, 12 * STEP));
     // Long after the first pass, it's in the loop, round every 6000 frames.
@@ -167,7 +167,7 @@ fn a_loop_goes_round_the_entrys_loop_and_ping_pong_back_and_forth() {
         assert!((24_000.0 - 64.0..30_000.0).contains(&at), "{at}");
         assert!((out[frame] - out[frame + 6000]).abs() < 1e-4);
     }
-    let mut ping_pong = song("ramp", points, &["C-4 -- --- --- ---"]);
+    let mut ping_pong = song("ramp", points, &["C-3 -- --- --- ---"]);
     play(&mut ping_pong, 2);
     let out = left(&render(ping_pong, 14 * STEP));
     // Up to the loop's end, then back down to its start, every 12000 frames.
@@ -189,11 +189,11 @@ fn reversed_it_plays_from_its_end_back_to_its_start() {
     };
     let rest = "--- -- --- --- ---";
     let rows = [
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
         rest,
         rest,
         rest,
-        "C-4 -- sampler.start:40 --- ---",
+        "C-3 -- sampler.start:40 --- ---",
     ];
     let out = left(&render(song("ramp", reversed, &rows), 8 * STEP));
     let at = |frame: usize| read_at(out[frame], through);
@@ -215,7 +215,7 @@ fn fades_shape_the_span_and_its_gain_and_tune_are_its_own() {
         };
     };
     let out = left(&render(
-        song("steady", faded, &["C-4 -- --- --- ---"]),
+        song("steady", faded, &["C-3 -- --- --- ---"]),
         4 * STEP,
     ));
     let level = |frame: usize| out[frame] / through / 0.5;
@@ -232,7 +232,7 @@ fn fades_shape_the_span_and_its_gain_and_tune_are_its_own() {
         entry.edit.play.gain_db = -6.0;
     };
     let out = left(&render(
-        song("ramp", tuned, &["C-4 -- --- --- ---"]),
+        song("ramp", tuned, &["C-3 -- --- --- ---"]),
         2 * STEP,
     ));
     let at = read_at(out[1000] / 10_f32.powf(-6.0 / 20.0), through);
@@ -250,7 +250,7 @@ fn a_spans_edges_never_step_further_than_a_declick() {
     // over the declick's length.
     let most = 0.5 * through / DECLICK_FRAMES as f32 * 1.01;
     for mode in 0..3 {
-        let mut cut = song("steady", points, &["C-4 -- sampler.start:20 --- ---"]);
+        let mut cut = song("steady", points, &["C-3 -- sampler.start:20 --- ---"]);
         play(&mut cut, mode);
         let out = left(&render(cut, 14 * STEP));
         assert!(largest_step(&out) <= most, "{mode}: {}", largest_step(&out));
@@ -260,7 +260,7 @@ fn a_spans_edges_never_step_further_than_a_declick() {
         entry.edit.play.reverse = true;
     };
     let out = left(&render(
-        song("steady", reversed, &["C-4 -- --- --- ---"]),
+        song("steady", reversed, &["C-3 -- --- --- ---"]),
         14 * STEP,
     ));
     assert!(largest_step(&out) <= most, "{}", largest_step(&out));
@@ -277,7 +277,7 @@ fn a_forward_loops_crossfade_runs_into_its_start() {
             crossfade: 2400,
         });
     };
-    let mut looped = song("ramp", crossfaded, &["C-4 -- --- --- ---"]);
+    let mut looped = song("ramp", crossfaded, &["C-3 -- --- --- ---"]);
     play(&mut looped, 1);
     let out = left(&render(looped, 12 * STEP));
     // The ramp jumps from the loop's end to its start, which a crossfade turns into a slope.
@@ -320,7 +320,7 @@ impl Playing {
 #[test]
 fn moving_a_point_while_it_plays_is_heard_at_once_without_a_click() {
     let through = through();
-    let mut looped = song("ramp", points, &["C-4 -- --- --- ---"]);
+    let mut looped = song("ramp", points, &["C-3 -- --- --- ---"]);
     play(&mut looped, 1);
     let mut playing = Playing::new(looped);
     let mut out = playing.frames(40_000);
@@ -349,7 +349,7 @@ fn moving_a_point_while_it_plays_is_heard_at_once_without_a_click() {
     assert!(largest_step(&out) < jump / 32.0, "{}", largest_step(&out));
 
     // Its end moves before where a one-shot is, which fades out.
-    let mut once = Playing::new(song("ramp", points, &["C-4 -- --- --- ---"]));
+    let mut once = Playing::new(song("ramp", points, &["C-3 -- --- --- ---"]));
     let mut out = once.frames(10_000);
     once.edit(|song| {
         let mut moved = song.bank.get(1).unwrap().clone();
@@ -428,7 +428,7 @@ fn points_at_a_files_own_rate_play_the_same_frames_at_the_programs() {
         entry.edit.points.end = Some(22_050);
     };
     let version = Published::new(
-        Arc::new(song("ramp", at_file_rate, &["C-4 -- --- --- ---"])),
+        Arc::new(song("ramp", at_file_rate, &["C-3 -- --- --- ---"])),
         Arc::new(pool),
     );
     let out = left(&render_frames(Arc::new(version), RATE, 4 * STEP));
@@ -442,13 +442,13 @@ fn points_at_a_files_own_rate_play_the_same_frames_at_the_programs() {
 #[test]
 fn golden_spans_stay_the_same() {
     let rows = [
-        "C-4 -- --- --- ---",
+        "C-3 -- --- --- ---",
         "--- -- --- --- ---",
-        "C-4 -- sampler.start:40 --- ---",
+        "C-3 -- sampler.start:40 --- ---",
         "--- -- --- --- ---",
-        "G-4 -- sampler.length:60 --- ---",
+        "G-3 -- sampler.length:60 --- ---",
         "--- -- --- --- ---",
-        "C-3 -- sampler.start:20 sampler.length:C0 ---",
+        "C-2 -- sampler.start:20 sampler.length:C0 ---",
     ];
     let frames = 16 * STEP;
     for (name, mode, reverse) in [
@@ -474,7 +474,7 @@ fn golden_spans_stay_the_same() {
 
 #[test]
 fn a_tracks_note_says_where_it_is_in_its_entry_for_the_playhead() {
-    let song = song("ramp", points, &["C-4 -- --- --- ---"]);
+    let song = song("ramp", points, &["C-3 -- --- --- ---"]);
     let version = Arc::new(Published::new(Arc::new(song), pool()));
     let mut engine = Engine::new(RATE, version);
     assert!(engine.playheads(0).iter().all(Option::is_none), "stopped");
