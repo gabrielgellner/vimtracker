@@ -35,6 +35,11 @@ for spec in specs/*.toml; do uv run run.py "$spec" --report "out/$(basename "$sp
 
 The pages are about 0.1 to 2 MB each, so they stay in `out/`, which git ignores.
 
+`run.py --suite NAME` runs every `specs/NAME-*.toml`, writes each one's report into `out/NAME/`,
+and writes an `index.html` beside them linking each page and ranking our gaps from the references'
+consensus. The suites in use are `nuance`, below, and `live`, Ableton Live's devices
+([below](#ableton-lives-devices)), but any prefix works, such as `filter-refs` or `pedal`.
+
 ### The nuance suite
 
 M27's specs, `specs/nuance-*.toml`, render the Acid against two references at once, Arturia's
@@ -139,6 +144,7 @@ edited.
 | `live-glue-release` | `Glue`'s six set releases and its Auto | Glue Compressor | release after short and long bursts |
 | `live-glue-range` | `Glue`'s `Range` at 3, 6, 12, 20 and 40 dB, at 10:1 | Glue Compressor | static curve |
 | `live-glue-detector` | `Glue` at 4:1 from a 100 Hz tone | Glue Compressor | static curve, unfitted |
+| `live-glue-clip` | `Glue`'s `Peak Clip` on and off, a 1 kHz sine stepped from -12 to +12 dBFS, with the output 12 dB up and at half dry, and a 2311 Hz sine for its aliases (#338) | Glue Compressor's `Peak Clip In` | THD and the 2nd and 3rd harmonics (`distortion`), which `Peak Clip` is fitted to |
 | `live-pedal-overdrive` | Distort's `Overdrive`, stepped levels at 110 Hz and 1 kHz | Live's Pedal, Overdrive | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
 | `live-pedal-riff` | the same song line through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
@@ -207,7 +213,14 @@ the same ladder given a sweep, in `filter-ours`.
 ## The plugins
 
 Reference plugins are read where they're installed, such as `/Library/Audio/Plug-Ins/VST3`, and
-nothing here writes in their folders or their preferences. Plugins write their own files as they
+nothing here writes in their folders or their preferences.
+
+**Buffers of 512.** Arturia's plugins put out silence at pedalboard's default buffer of 8192
+frames, so every plugin is played in a host's buffer size: `render_reference.py` and
+`check_plugin.py` use 512 frames unless a spec's `buffer_size` says otherwise, and the specs that
+`nuance_specs.py` and `filter_refs.py` write give 512 themselves. Keep an Arturia plugin at 512.
+
+Plugins write their own files as they
 load, which is theirs to do: Arturia's update `/Library/Arturia/Presets/db.db3`, the preset tags
 beside it and `/Library/Arturia/<plugin>/tmp/plugin.pref.xml`, and print their logging settings
 (`## LogInRelease : 0` and so on); u-he's write a cache.
@@ -319,9 +332,6 @@ with its manual's word for its settings:
   help it cut through, which a 303 hasn't (2 dB on a note's first 5 ms), and `OutputClipping = 0`,
   as our limiter is off, though nothing measured reached it.
 - It loads in about a tenth of a second and renders the same samples every time.
-
-Always give pedalboard a host's buffer size: Arturia's plugins put out silence at its default of
-8192, so a spec's `buffer_size` is 512 unless it says otherwise.
 
 An Arturia plugin opens with the preset it last had. Acid V opened with "Carbon Based", a sequence
 whose sequencer plays its own pattern from a held key, so a spec can start a plugin from a factory
@@ -531,5 +541,6 @@ it.
 
 ## Left for later
 
-The 303's slide set, saturation, and voices'
-envelopes, each in its own PR (#186).
+The 303's slide set and saturation, which #186 listed, are measured now, by `nuance-slides` and
+`nuance-legato` and by the `pedal-*` and `live-pedal-*` specs. Still to come: other voices'
+envelopes (#186), and a blind listening page for the Acid against its references (#349).

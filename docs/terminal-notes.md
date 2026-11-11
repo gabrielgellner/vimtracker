@@ -11,7 +11,8 @@ runs in any terminal.
 Run it with:
 
 ```sh
-cargo run -p vt-tui --bin vimtracker -- probe-keys
+vimtracker probe-keys
+cargo run --release -p vt-tui --bin vimtracker -- probe-keys    # from a checkout
 ```
 
 ## In kitty
@@ -81,8 +82,8 @@ everywhere.
 
 Ghostty's equivalent is `keybind = super+k=unbind` and so on, from its keybind docs, which pass
 the key to the program. Ghostty has no condition on the window title, so that frees the key in
-every window. Unchecked: Ghostty isn't installed here, its docs say an unbound key is sent through
-"if it is printable", and whether that covers a key with Cmd isn't known.
+every window. Unchecked: its docs say an unbound key is sent through "if it is printable", and
+whether that covers a key with Cmd isn't known.
 
 `Option-1`, `Option-2` and `Option-s` work in kitty, on 2026-11-06, with `macos_option_as_alt`
 set. `scripts/live.sh` sets it.
@@ -101,13 +102,13 @@ What `kitty.rs` uses of the protocol:
 | Part | Used as |
 |---|---|
 | Transmit and place | `a=T,U=1,f=100,i=<id>,c=<columns>,r=<rows>,q=2`, a virtual placement of a PNG |
-| PNG | 1, 2 or 4 bits deep, as a picture's colours need, with a palette whose first entry is see-through (`tRNS`); the small drawings are 1 bit with one colour. Pixels that fit in one stored zlib block, as every small drawing's do, are stored; bigger ones are compressed inside the PNG |
+| PNG | 1, 2 or 4 bits deep, as a picture's colours need, with a palette whose first entry is see-through (`tRNS`); the scope and the pickers' waveforms are 1 bit with one colour. Pixels that fit in one stored zlib block are stored, and bigger ones compressed inside the PNG. The curves `kitty::plot` draws (decision 141) give each palette entry an alpha of its own, for their smooth edges, and are always compressed, about 1 to 2 KB |
 | Chunking | Base64 in pieces of at most 4096 bytes, `m=1` on all but the last |
 | Unicode placeholders | `U+10EEEE` with row and column diacritics, all 297 of them, so an image covers up to 297 characters across and down; the image id in the 24-bit foreground colour, no placement id and no third diacritic, as ids fit in 24 bits |
 | Delete | `a=d,d=I,i=<id>,q=2`, by id, freeing the data, when an image is replaced and on quitting |
 | Query | `a=q,i=31,f=100` at start, as above |
-| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, its playhead as a line, and its ruler's marks, one image for each kind of point, which the program places itself |
-| Place directly | `a=p,i=<id>,p=<placement>,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`). Placing again with the same `p` moves it. The cursor's line is `p=1`, each playhead's line `p=1` to `p=4` of the playhead's image, and each of a kind's marks has a `p` of its own |
+| Store, to place directly | `a=t,f=100,i=<id>,q=2`: the sample page's cursor as a line, its playhead as a line, and its ruler's marks, one image for each kind of point; and the Mod page's LFO dot, in two shades (decision 154). The program places them itself |
+| Place directly | `a=p,i=<id>,p=<placement>,X=<pixels>,h=<pixels>,C=1,z=1,q=2` at the cursor, moved there with `CSI row;column H` between a save and a restore of the cursor (`ESC 7`, `ESC 8`), with `Y=<pixels>` too for an LFO's dot, which moves down as well as across. Placing again with the same `p` moves it. The cursor's line is `p=1`, each playhead's line `p=1` to `p=4` of the playhead's image, and each of a kind's marks and each LFO's dot has a `p` of its own |
 | Take off | `a=d,d=i,i=<id>,p=<placement>,q=2` for one placement, or without `p` for all of an image's, which keeps the data to place again |
 
 In kitty 0.50 on 2026-11-08, `scripts/live.sh` with the program run under `script` to record what
@@ -116,8 +117,8 @@ track page, and the replaced ones deleted by id.
 
 ### Big images
 
-The sample page's waveform is to be 160 characters by 14, which at the author's 15 by 39 pixels a
-character (kitty full screen on a MacBook, 163 by 42 characters at 2560×1664) is 2400 by 546
+The sample page's waveform was to be 160 characters by 14 when this was measured; it's 161 by 28
+now (decision 102). 160 by 14 at the author's 15 by 39 pixels a character (kitty full screen on a MacBook, 163 by 42 characters at 2560×1664) is 2400 by 546
 pixels. `cargo run --release -p vt-tui --example big_image` draws one, in four colours, sends it
 ten times each way the protocol offers, and times each from starting to write it to the terminal's
 `OK`, so the time counts the terminal's decoding too. In kitty 0.50 on macOS, on 2026-11-09, with
@@ -190,8 +191,9 @@ again, about 56 bytes a mark: 224 bytes for the 4 in view there at 512 frames a 
 
 ### Ghostty
 
-Ghostty isn't installed here, so this is from its source and issues, read on 2026-11-08, and not
-tried:
+This is from Ghostty's source and issues, read on 2026-11-08, before it was tried here. Since
+then, the big images, cell backgrounds and lines placed directly above were checked in Ghostty 1.4.0
+on 2026-11-09:
 
 *   Unicode placeholders came in Ghostty's PR #2015, in July 2024, before 1.0. Issue #13056 shows
     a `U=1` placement over `U+10EEEE` cells rendering full width outside tmux on 1.3.1. One
@@ -219,9 +221,10 @@ A `symbol_map` in `kitty.conf` that sends those codepoints to a font without the
 glyph is a constant in `glyphs.rs` named after its Nerd Font name and codepoint, such as
 `nf-fa-toggle_on`, U+F205.
 
-The manual's screenshots name ordinary monospace fonts first, then `Symbols Nerd Font Mono` and
-a few patched Nerd Fonts, which a browser falls back to a character at a time, so the icons show
-where any of those is installed and are boxes elsewhere. The explorer's screenshot has them.
+A browser has no Nerd Font, so the web manual carries its own (decision 156): Symbols Nerd Font
+Mono cut down to the symbols `glyphs.rs` names, which its CSS uses for the private use areas only,
+and the screenshots draw each symbol as its outline from the same font, as an SVG shown as an image
+can't use the page's fonts. `just symbols-font` makes both again after a symbol is added.
 
 ### Width
 
@@ -252,7 +255,10 @@ the cursor's background over both cells as well. `nf-md-toggle_switch` and
 `nf-md-toggle_switch_off` (U+F0521 and U+F0522) were tried with the same plain space and stayed
 small in both, as Material Design's square box leaves the pill a third of it.
 
-### Glyphs for the transport, tracks, LFOs, warnings and work (decision 104)
+### Glyphs for the transport, tracks, warnings and work (decision 104)
+
+Decision 104 also gave each LFO's wave a glyph, `nf-md-sine_wave` and the rest; decision 151 took
+them away, as the Mod page draws each LFO's cycle.
 
 | Glyph | Name | Codepoint | Where |
 |---|---|---|---|
@@ -262,14 +268,13 @@ small in both, as Material Design's square box leaves the pill a third of it.
 | `󰑊` | `nf-md-record` | U+F044A | Status line, recording, red |
 | `󰔟` | `nf-md-timer_sand` | U+F051F | Status line, before `REALIGN` or `LAUNCH` while one waits for the grid |
 | `󰀦` | `nf-md-alert` | U+F0026 | Right of the status line, in the warning colour, with the count of dropouts |
+| `󰌪` | `nf-md-leaf` | U+F032A | Dim, before the CPU figure, while the system runs the audio thread slowly to save power (decision 150) |
 | `` to `` | Fira Code's spinner | U+EE06 to U+EE0B | Right of the status line, before `Analysing` or `Loading`, once work has taken 300 ms |
-| `󰥛` | `nf-md-sine_wave` | U+F095B | After an LFO's `Sine` |
-| `󱑼` | `nf-md-triangle_wave` | U+F147C | After an LFO's `Tri` |
-| `󱑺` | `nf-md-sawtooth_wave` | U+F147A | After an LFO's `Ramp`, which rises as the glyph does |
-| `󱑻` | `nf-md-square_wave` | U+F147B | After an LFO's `Square` |
 | `󱑽` | `nf-md-waveform` | U+F147D | A sampler track's heading, and the machine list |
 | `󰙽` | `nf-md-piano` | U+F067D | A synth track's heading, and the machine list |
 | `` | `nf-fa-drum` | U+EE32 | A drum track's heading (`Kick`, `Snare`, `Hat`), and the machine list |
+| `󰃸` | `nf-md-call_merge` | U+F00F8 | A group's icon, where its tracks are summed (decision 126) |
+| `󰡌` | `nf-md-arrow_collapse_horizontal` | U+F084C | After a group's name while its tracks are folded into it (decision 128) |
 | `󱞳` | `nf-md-arrow_u_left_top` | U+F17B3 | A return's heading |
 | `󰓃` | `nf-md-speaker` | U+F04C3 | The master's heading |
 | `󰝟` | `nf-md-volume_mute` | U+F075F | A muted track's heading and its overview column, and the mixer's `Mute` |
@@ -280,7 +285,7 @@ small in both, as Material Design's square box leaves the pill a third of it.
 
 | Glyph | Name | Codepoint | Where |
 |---|---|---|---|
-|   | `nf-fa-toggle_on`, `nf-fa-toggle_off` | U+F205, U+F204 | The explorer's `H`, `P`, `A` |
+|   | `nf-fa-toggle_on`, `nf-fa-toggle_off` | U+F205, U+F204 | The explorer's `H`, `P`, `A`, and since decisions 140 and 152 every on and off: a device's switch and a two-state setting's value |
 | 󰉋 󰝰 | `nf-md-folder`, `nf-md-folder_open` | U+F024B, U+F0770 | Explorer folders |
 | 󱍙 | `nf-md-folder_music` | U+F1359 | Explorer projects |
 | 󰕰 | `nf-md-view_grid` | U+F0570 | Explorer kits |
@@ -313,8 +318,9 @@ two pixels under the text.
 *   Ghostty 1.4: `ghostty +show-face --config-default-files=false` said each of those, and
     `┃ ┅ ╍ ━ ─`, "is handled by Ghostty's internal sprites".
 
-Nothing uses them. Every curve, the envelopes, the filter, the EQ, the compressor, the scope and
-the waveforms, is already a kitty image, the track page's drawn on 6×12 dots a cell and the
+Nothing uses them. Every curve, the envelopes, the LFOs, the filter, the EQ, the compressor, the
+scope and the waveforms, is already a kitty image: the track page's curves at the screen's own
+pixels since decision 141, the scope and the pickers' waveforms on 6×12 dots a cell, and the
 sample page's at the screen's own pixels, so an octant's 2×4 would be coarser. The meters' eighth
 blocks are finer up and down than an octant's quarters too.
 
@@ -325,8 +331,8 @@ blocks are finer up and down than an octant's quarters too.
 *   The same in Ghostty, with `macos-option-as-alt`: shifted keys, held keys, the Option keys,
     `Ctrl-I` apart from `Tab`, `Ctrl` with digits, and which `Cmd` keys Ghostty's own shortcuts take.
 *   In Ghostty, that the program starts, so its answer to the image query is `OK`, and that the
-    track page's filter curve, envelopes and LFO shapes show, change with their settings and the
-    cursor, and leave nothing behind when another view is drawn over them.
+    track page's filter curve, envelopes, LFO cycles and their dots show, change with their
+    settings and the cursor, and leave nothing behind when another view is drawn over them.
 *   Whether a real keyboard in kitty sends the shifted key as well, and whether a non-US layout's
     shifted characters read right.
 *   A key held while the window loses focus: whether its release still comes, as a held note on the
