@@ -19,3 +19,9 @@ G7: on the author's laptop, 16 active tracks run for 10 minutes while editing an
 *   Why the live CPU figure is four or five times the 6% the same project takes to render offline (7.6 s for 120 s of audio). Live load should be planned from the readout, not from render times.
 
 This project has no FX inserts or machines, which don't exist yet, so run this again at M9.
+
+*Since then:* `vimtracker bench` (decision 142) measures a project's load offline, by track and
+slot, and through the device's own callback, and it found why the live figure reads high: the
+figure is the callback's time over the buffer's, and at buffers of 512 frames and more macOS runs
+the light callback on slower cores or clocks, which the leaf before the CPU figure now shows
+(decision 150). No G7 run with inserts and machines is recorded here.
