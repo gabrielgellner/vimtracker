@@ -379,6 +379,14 @@ pub struct Lfo {
     pub phase: u16,
     /// Whether each note on the track restarts it. Otherwise only playing from the top does.
     pub retrig: bool,
+    /// Whether it's switched out, to hear the track without it. It keeps running underneath, so
+    /// it comes back in phase.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bypassed: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Default for Lfo {
@@ -390,6 +398,7 @@ impl Default for Lfo {
             depth: 0,
             phase: 0,
             retrig: false,
+            bypassed: false,
         }
     }
 }

@@ -73,6 +73,28 @@ fn a_song_round_trips() {
 }
 
 #[test]
+fn a_switched_out_modulator_is_saved_and_only_then() {
+    let dir = folder();
+    let mut song = Song::new(1);
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert!(
+        !text.contains("bypassed"),
+        "nothing switched out, nothing written"
+    );
+    song.tracks[0].lfos[1].bypassed = true;
+    song.tracks[0].envelopes[2].bypassed = true;
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert_eq!(text.matches("bypassed: true").count(), 2, "{text}");
+    let loaded = load_song(&dir).unwrap();
+    assert!(loaded.tracks[0].lfos[1].bypassed);
+    assert!(loaded.tracks[0].envelopes[2].bypassed);
+    assert!(!loaded.tracks[0].lfos[0].bypassed);
+    assert_eq!(loaded, song);
+}
+
+#[test]
 fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
     let dir = folder();
     let mut song = Song::new(2);

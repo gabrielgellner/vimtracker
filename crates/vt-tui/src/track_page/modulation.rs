@@ -1,12 +1,16 @@
 //! The Mod page: a rack of half-width devices, each envelope beside the LFO of its number, and the
 //! accumulator beside the arpeggio under them (the track pages study,
 //! `docs/designs/track-pages.md`, §2.2). An envelope or an LFO has its destination in its title,
-//! as what it's for, and each states its grid here, by what its settings mean.
+//! as what it's for, and a switch, which `b` flips to hear the track without it. Each states its
+//! grid here, by what its settings mean.
 
+use vt_model::action::Action;
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::grid::Grid;
 use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::song::Track;
+
+use crate::app::App;
 
 use super::{
     AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec, EnvelopeField, LfoField,
@@ -66,24 +70,32 @@ fn titled(control: Control) -> [Option<Control>; DEVICE_COLUMNS] {
     title
 }
 
-/// An envelope as a half-width device, `Env 1` to `Env 3`, with its destination in its title.
+/// An envelope as a half-width device, `Env 1` to `Env 3`, with its switch and its destination in
+/// its title.
 fn envelope_device(slot: usize) -> DeviceSpec {
     let title = titled(Control::Envelope(slot, EnvelopeField::Destination));
     let grid = Grid::from_columns(&ENVELOPE_GRID);
-    DeviceSpec::new(format!("Env {}", slot + 1), title, grid, |at| {
+    let device = DeviceSpec::new(format!("Env {}", slot + 1), title, grid, |at| {
         Control::Envelope(slot, ENVELOPE_SETTINGS[at])
-    })
-    .half()
+    });
+    DeviceSpec {
+        switchable: true,
+        ..device.half()
+    }
 }
 
-/// An LFO as a half-width device, `LFO 1` to `LFO 3`, with its destination in its title.
+/// An LFO as a half-width device, `LFO 1` to `LFO 3`, with its switch and its destination in its
+/// title.
 fn lfo_device(slot: usize) -> DeviceSpec {
     let title = titled(Control::Lfo(slot, LfoField::Destination));
     let grid = Grid::from_columns(&LFO_GRID);
-    DeviceSpec::new(format!("LFO {}", slot + 1), title, grid, |at| {
+    let device = DeviceSpec::new(format!("LFO {}", slot + 1), title, grid, |at| {
         Control::Lfo(slot, LFO_SETTINGS[at])
-    })
-    .half()
+    });
+    DeviceSpec {
+        switchable: true,
+        ..device.half()
+    }
 }
 
 /// The accumulator as a half-width device, with nothing in its title.
@@ -121,4 +133,53 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
         devices.extend([accumulator_device(), arpeggio_device()]);
     }
     devices
+}
+
+/// Whether the envelope or LFO a control is in is switched out, if it's in one.
+pub(crate) fn modulator_bypassed(control: Control, track: &Track) -> Option<bool> {
+    match control {
+        Control::Envelope(slot, _) => Some(track.envelopes[slot].bypassed),
+        Control::Lfo(slot, _) => Some(track.lfos[slot].bypassed),
+        _ => None,
+    }
+}
+
+impl App {
+    /// `b`: switch the cursor's envelope or LFO out, to hear the track without it, or back in. Its
+    /// settings stay as they are, and it keeps running underneath.
+    pub(super) fn toggle_modulator(&mut self) {
+        let mut track = self.page_track();
+        let (name, bypassed, action) = match self.track_control() {
+            Control::Envelope(slot, _) => {
+                let envelope = &mut track.envelopes[slot];
+                envelope.bypassed = !envelope.bypassed;
+                let action = Action::SetEnvelope {
+                    track: self.cursor.track,
+                    slot,
+                    envelope: *envelope,
+                };
+                (format!("Env {}", slot + 1), envelope.bypassed, action)
+            }
+            Control::Lfo(slot, _) => {
+                let lfo = &mut track.lfos[slot];
+                lfo.bypassed = !lfo.bypassed;
+                let action = Action::SetLfo {
+                    track: self.cursor.track,
+                    slot,
+                    lfo: *lfo,
+                };
+                (format!("LFO {}", slot + 1), lfo.bypassed, action)
+            }
+            _ => {
+                self.status = "b switches an envelope or an LFO, and this has no switch".to_owned();
+                return;
+            }
+        };
+        self.apply(&action);
+        self.status = if bypassed {
+            format!("Switched {name} out: b brings it back")
+        } else {
+            format!("{name} is back in")
+        };
+    }
 }

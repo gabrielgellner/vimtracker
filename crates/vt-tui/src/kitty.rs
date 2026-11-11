@@ -1482,12 +1482,13 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the Mod page's envelopes, if the terminal lacks them. The LFOs' shapes are glyphs.
+    /// Send the Mod page's envelopes, if the terminal lacks them, each faint while it's switched
+    /// out.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let edited = envelope_being_edited(app);
         let mut envelope_ids = [0; TRACK_ENVELOPES];
         for (slot, envelope) in track.envelopes.iter().enumerate() {
-            let shade = Shade::of(edited == Some(slot), false);
+            let shade = Shade::of(edited == Some(slot), envelope.bypassed);
             envelope_ids[slot] = self.panel(
                 out,
                 (PanelKey::Envelope(slot), shade),

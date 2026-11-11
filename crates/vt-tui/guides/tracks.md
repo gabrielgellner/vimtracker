@@ -704,10 +704,10 @@ the accumulator beside the arpeggio under them. A return, a group and the master
 no notes to move, so their page ends with the LFOs.
 
 Each envelope and LFO has its `Dest` in its title, as a slot has its effect, so
-`LFO 1     Cut` reads as what it's for. `---` there is dim, as it goes nowhere. The
-room between the name and the `Dest` is for the switch that will turn it off. Its
-settings are in two columns of three, and an envelope's shape is in a box on its
-right. The device with the cursor has the brighter frame.
+`LFO 1     Cut` reads as what it's for. `---` there is dim, as it goes nowhere.
+Between the name and the `Dest` is its switch, green while it's in. Its settings
+are in two columns of three, and an envelope's shape is in a box on its right. The
+device with the cursor has the brighter frame.
 
 | Keys | Does |
 |---|---|
@@ -716,6 +716,15 @@ right. The device with the cursor has the brighter frame.
 | `{` `}` | Up or down a device in the column, on the same setting |
 | `0` `$` | The first or last setting on the row, in the device |
 | `gg` `G` | The top or bottom of the column |
+| `b` | Switch this envelope or LFO out, to hear without it, or back in |
+
+`b` works from any row of an envelope or an LFO, as it does in a slot. Switched out,
+it goes faint, its switch too, and what it moves glides back to where it would be
+without it over 5 ms, so it doesn't click. Its settings stay as they are, and it
+keeps running underneath, so an LFO comes back in phase and an envelope where the
+note has it. It's saved with the song. `Env 1` on `Vol` switched out leaves notes
+the plain shape a new track's have, from the next one. A step can't switch one, as
+a step can a slot, but `DEP1 80` on a step takes `LFO 1` to no depth for its note.
 
 So `}` goes from `Env 1` to `Env 2`, and `3}` from `LFO 1` to the arpeggio. Where the
 screen has room for fewer than four rows of devices, the page moves by whole rows of
