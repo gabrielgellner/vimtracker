@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
+use vt_model::lfo::Shape as Wave;
 use vt_model::shape::{FillKind, ShapeColumn, Where, values};
 
 use crate::app::App;
@@ -108,6 +109,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     }
     let hint = match panel.shape.kind {
         FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
+        FillKind::Wave if panel.shape.wave == Wave::Smooth && app.mode == Mode::Shape => {
+            "~ swap  r reroll"
+        }
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::List => "~ reverse the list",
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",

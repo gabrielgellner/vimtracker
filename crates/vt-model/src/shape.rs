@@ -9,9 +9,86 @@ use crate::step::{FxCommand, FxSlot, MAX_VELOCITY, Mark, Note, Step};
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
 /// The waves a column can follow, in the order `+` goes through them.
-pub const WAVES: [Wave; 5] = [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square];
+pub const WAVES: [Wave; 6] = [
+    Wave::Sine,
+    Wave::Tri,
+    Wave::Saw,
+    Wave::Ramp,
+    Wave::Square,
+    Wave::Smooth,
+];
 /// How long a wave's cycle is unless told otherwise: a half note.
-pub const DEFAULT_RATE: Rate = Rate::Note(TICKS_PER_QUARTER as u32 * 2);
+pub const DEFAULT_RATE: WaveRate = WaveRate::Time(Rate::Note(TICKS_PER_QUARTER as u32 * 2));
+/// The most cycles a wave can make across a selection.
+pub const MAX_CYCLES: u16 = 64;
+
+/// How long a wave's cycle is: a length in time, as an LFO's, or a whole number of cycles across
+/// the selection, so they fit it whatever its length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaveRate {
+    Time(Rate),
+    Cycles(u16),
+}
+
+impl WaveRate {
+    /// Faster or slower by a small step: a time as an LFO's moves, or one cycle more or fewer.
+    pub fn nudged(self, faster: bool) -> Self {
+        match self {
+            Self::Time(rate) => Self::Time(rate.nudged(faster)),
+            Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 1)),
+        }
+    }
+
+    /// Faster or slower by a large step: a time as an LFO's jumps, or four cycles more or fewer.
+    pub fn jumped(self, faster: bool) -> Self {
+        match self {
+            Self::Time(rate) => Self::Time(rate.jumped(faster)),
+            Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 4)),
+        }
+    }
+
+    fn moved(cycles: u16, more: bool, by: u16) -> u16 {
+        let moved = if more {
+            cycles.saturating_add(by)
+        } else {
+            cycles.saturating_sub(by)
+        };
+        moved.clamp(1, MAX_CYCLES)
+    }
+}
+
+/// A time as an LFO's rate shows, and cycles as `x3`.
+impl std::fmt::Display for WaveRate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Time(rate) => rate.fmt(f),
+            Self::Cycles(cycles) => write!(f, "x{cycles}"),
+        }
+    }
+}
+
+/// Why typed text isn't a wave's rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaveRateError;
+
+/// A time as an LFO's rate is typed, but in time with the rows, or `x` and a number of cycles.
+impl std::str::FromStr for WaveRate {
+    type Err = WaveRateError;
+
+    fn from_str(text: &str) -> Result<Self, WaveRateError> {
+        let text = text.trim();
+        if let Some(count) = text.strip_prefix(['x', 'X']) {
+            return match count.trim().parse::<u16>() {
+                Ok(cycles) if (1..=MAX_CYCLES).contains(&cycles) => Ok(Self::Cycles(cycles)),
+                _ => Err(WaveRateError),
+            };
+        }
+        match text.parse::<Rate>() {
+            Ok(Rate::Hertz(_)) | Err(_) => Err(WaveRateError),
+            Ok(rate) => Ok(Self::Time(rate)),
+        }
+    }
+}
 /// How many hits a Euclidean `Where` starts with: in eight rows, the tresillo.
 pub const EUCLID_HITS: u16 = 3;
 const EUCLID: Where = Where::Euclid {
@@ -319,9 +396,10 @@ pub struct Shape {
     /// The wave a `Wave` follows, its length, and where in the cycle the first row selected falls,
     /// in degrees, as an LFO's are.
     pub wave: Wave,
-    pub rate: Rate,
+    pub rate: WaveRate,
     pub phase: u16,
-    /// How many rows in a row `Alternate` and `List` give each value.
+    /// How many of the rows it fills in a row take each value: `Alternate` and `List` give each
+    /// value that many, and a ramp, wave or random fill holds a value for that many.
     pub run: u16,
     /// What a `List` goes through, in place of `from` and `to`.
     pub values: Values,
@@ -463,13 +541,17 @@ fn shaped(
     if shape.kind.reworks() {
         return reworked(steps, &rows, column, shape);
     }
-    let (Some(&first), Some(&last)) = (rows.first(), rows.last()) else {
+    let Some(&first) = rows.first() else {
         return Vec::new();
     };
     let top = f64::from(column.highest());
     let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
     let (low, high) = (from.min(to) as u64, from.max(to) as u64);
-    let across = (last - first).max(1) as f64;
+    let run = usize::from(shape.run.max(1));
+    // A ramp, a wave or a random fill holds for a run: each row takes the value of the first row
+    // of its run, and a ramp's ends are the first and last runs, so it climbs in even stairs.
+    let held = |index: usize| rows[index / run * run];
+    let across = (held(rows.len() - 1) - first).max(1) as f64;
     let whole = |value: f64| Shaped {
         exact: value,
         whole: value as u8,
@@ -479,17 +561,24 @@ fn shaped(
         .map(|(index, &row)| {
             let value = match shape.kind {
                 FillKind::Ramp => {
-                    let t = (row - first) as f64 / across;
+                    let t = (held(index) - first) as f64 / across;
                     along_line(from, to, curved(t, shape.curve, shape.s), top)
                 }
                 FillKind::Random => {
                     let span = high - low + 1;
-                    whole((low + mix(shape.seed, row - range.first) % span) as f64)
+                    whole((low + mix(shape.seed, held(index) - range.first) % span) as f64)
                 }
                 FillKind::Wave => {
-                    let ticks = (row - range.first) as u64 * TICKS_PER_STEP;
-                    let cycles =
-                        shape.rate.cycles(ticks as f64, 0.0) + f64::from(shape.phase) / 360.0;
+                    let offset = held(index) - range.first;
+                    let cycles = match shape.rate {
+                        WaveRate::Time(rate) => {
+                            rate.cycles((offset as u64 * TICKS_PER_STEP) as f64, 0.0)
+                        }
+                        // A cycle is the whole selection, so the next row after it starts again.
+                        WaveRate::Cycles(cycles) => {
+                            offset as f64 * f64::from(cycles) / range.len() as f64
+                        }
+                    } + f64::from(shape.phase) / 360.0;
                     let t = (f64::from(wave(shape.wave, cycles, shape.seed)) + 1.0) / 2.0;
                     let exact = from + (to - from) * t;
                     Shaped {
@@ -971,6 +1060,98 @@ mod tests {
         let later = StepRange::between(1, 4);
         let out = values(&steps, later, VEL, &waving(Wave::Tri, 0, 0x40));
         assert_eq!(out, [(1, 0x20), (3, 0x40), (4, 0x30)]);
+    }
+
+    #[test]
+    fn a_run_holds_a_ramp_a_wave_and_a_random_fill_in_stairs() {
+        let stairs = Shape {
+            run: 2,
+            ..ramp(0, 0x30, 0, 0)
+        };
+        assert_eq!(
+            written(&notes(8), stairs),
+            [0, 0, 0x10, 0x10, 0x20, 0x20, 0x30, 0x30]
+        );
+        // An odd count ends on a short stair, which still reaches To.
+        let stairs = Shape {
+            run: 3,
+            ..ramp(0, 0x30, 0, 0)
+        };
+        assert_eq!(
+            written(&notes(7), stairs),
+            [0, 0, 0, 0x18, 0x18, 0x18, 0x30]
+        );
+        // A wave is sampled on each run's first row and held.
+        let held = Shape {
+            run: 2,
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            written(&notes(8), held),
+            [0x20, 0x20, 0x40, 0x40, 0x20, 0x20, 0, 0]
+        );
+        let random = Shape {
+            kind: FillKind::Random,
+            run: 4,
+            ..ramp(0, 0x7F, 0, 0)
+        };
+        let out = written(&notes(64), random);
+        assert!(out.chunks(4).all(|run| run.iter().all(|v| *v == run[0])));
+        assert!(out.chunks(4).any(|run| run[0] != out[0]));
+    }
+
+    #[test]
+    fn a_rate_in_cycles_fits_that_many_into_the_selection() {
+        let twice = Shape {
+            rate: WaveRate::Cycles(2),
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            written(&notes(16), twice),
+            [
+                0x20, 0x30, 0x40, 0x30, 0x20, 0x10, 0, 0x10, 0x20, 0x30, 0x40, 0x30, 0x20, 0x10, 0,
+                0x10
+            ]
+        );
+        // Across the rows selected, not only those filled.
+        let steps = rows(&[
+            "C-3 -- --- --- ---",
+            "--- -- --- --- ---",
+            "C-3 -- --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let once = Shape {
+            rate: WaveRate::Cycles(1),
+            ..waving(Wave::Tri, 0, 0x40)
+        };
+        assert_eq!(
+            values(&steps, all(&steps), VEL, &once),
+            [(0, 0x20), (2, 0x20)]
+        );
+        assert_eq!("x3".parse(), Ok(WaveRate::Cycles(3)));
+        assert_eq!("1/4".parse(), Ok(WaveRate::Time("1/4".parse().unwrap())));
+        assert!("x0".parse::<WaveRate>().is_err());
+        assert!("2hz".parse::<WaveRate>().is_err());
+        assert_eq!(WaveRate::Cycles(3).to_string(), "x3");
+        assert_eq!(WaveRate::Cycles(1).nudged(false), WaveRate::Cycles(1));
+        assert_eq!(WaveRate::Cycles(3).jumped(true), WaveRate::Cycles(7));
+    }
+
+    #[test]
+    fn a_smooth_wave_wanders_the_same_way_for_a_seed() {
+        let smooth = |seed| Shape {
+            seed,
+            rate: "1/4".parse().unwrap(),
+            ..waving(Wave::Smooth, 0, 0x7F)
+        };
+        let out = written(&notes(64), smooth(1));
+        assert_eq!(out, written(&notes(64), smooth(1)));
+        assert_ne!(out, written(&notes(64), smooth(2)));
+        // It eases from one value to the next, so neighbours stay close.
+        assert!(
+            out.windows(2).all(|pair| pair[0].abs_diff(pair[1]) < 0x40),
+            "{out:X?}"
+        );
     }
 
     fn alternating(run: u16, from: u8, to: u8) -> Shape {
